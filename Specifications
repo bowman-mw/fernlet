@@ -1,0 +1,1624 @@
+# Fernlet — Specification (v3)
+
+*Working name. Domain: fernlet.com (also owned: dewpip.com)*
+
+A tamagotchi-of-yourself iOS health app emphasizing gentle, consistent self-care over optimization and streaks.
+
+---
+
+## Table of Contents
+
+1. [Overview and Design Philosophy](#1-overview-and-design-philosophy)
+2. [Identity and Cryptography](#2-identity-and-cryptography)
+3. [Data Model and Storage Architecture](#3-data-model-and-storage-architecture)
+4. [HealthKit and Sensor Integration](#4-healthkit-and-sensor-integration)
+5. [Scoring and Wellness Formula](#5-scoring-and-wellness-formula)
+6. [AI Layer and On-Device Intelligence](#6-ai-layer-and-on-device-intelligence)
+7. [Memory System (Core and Sensitive Tiers)](#7-memory-system-core-and-sensitive-tiers)
+8. [Proximity Handshake Protocol](#8-proximity-handshake-protocol)
+9. [Friend System and State Sharing](#9-friend-system-and-state-sharing)
+10. [Photowall](#10-photowall)
+11. [Ambient Features](#11-ambient-features)
+12. [Onboarding and Permissions](#12-onboarding-and-permissions)
+13. [Milestones, Unlocks, and Customization](#13-milestones-unlocks-and-customization)
+14. [Screens and Navigation](#14-screens-and-navigation)
+15. [Privacy Architecture and Data Flow](#15-privacy-architecture-and-data-flow)
+16. [Third-Party Integrations and Cloud Fallbacks](#16-third-party-integrations-and-cloud-fallbacks)
+17. [App Store Compliance](#17-app-store-compliance)
+
+---
+
+## 1. Overview and Design Philosophy
+
+### Core thesis
+
+Fernlet is a tamagotchi-of-yourself: a small persistent character on your home screen whose state reflects how you've been treating yourself over the rolling 24 hours. It's a health app that refuses the optimization frame. The goal is **consistent-enough self-care**, not daily optimization, not streaks, not numeric self-improvement.
+
+### Design axioms
+
+These are testable principles that every feature in the spec must be auditable against. If a feature violates one, it doesn't ship.
+
+- **Enough, not everything.** The goal is consistent-enough health, not daily optimization.
+- **No streaks.** Missing a day lowers that day's score and nothing else. Every unlock condition must be cumulative and non-resettable. If it can be "broken" by missing a day, it's a streak in disguise.
+- **No calorie targets.** Macro goals (protein/carbs/fat) only. No weight targets, no body composition tracking, no aesthetic goals.
+- **Privacy by architecture.** Sensitive data is walled off at the module/type level, not by convention. Compile-time enforcement, not code review.
+- **Fuzzy social signals.** Friends see vibes, never numbers.
+- **Gentle gamification.** The tamagotchi reacts; it doesn't punish.
+- **Real connections, in person.** Friend-related primitives require physical co-location. The app does not facilitate remote-only social features.
+- **Gentlest exactly when life is hardest.** No "you haven't logged in 3 days, get back on track." Sickness softens scoring. Difficult journal tags still count.
+
+### Platform requirements
+
+- **iOS 26 or later.** Required for Foundation Models framework.
+- **iPhone 15 Pro or later** for full AI features (Foundation Models requires A17 Pro or M-series silicon). On older devices, AI features degrade gracefully or are disabled with a clear explanation; all non-AI features remain functional.
+- **iPhone 11 or later** for proximity handshake features (requires U1/U2 chip for NearbyInteraction). Excludes iPhone SE (all generations) and iPhone 16e/17e, which lack UWB hardware. Users on excluded devices can still use the app solo and see a clear "requires iPhone 11 or newer (excluding SE/e models)" message for peer features.
+- **Apple Watch optional** but recommended for sleep stage data and continuous heart rate.
+
+### Explicitly not building
+
+To protect the core thesis:
+
+- **No chat interface.** The app is about doing things in the real world, not talking to a bot about them.
+- **No year-in-review data story.** These become social media content rather than private reflection.
+- **No predictive scoring.** "Tomorrow you'll likely score X" invites optimization against predictions.
+- **No compare-to-others.** Percentiles, leaderboards, "top 20% of users your age" — all rejected. Your only reference is yourself.
+- **No data-gap shaming.** "You haven't logged in 3 days" is a streak mechanic in disguise.
+- **No face recognition.** Photos are tagged via handshake metadata only, never via Vision face matching.
+- **No remote friend features.** Browsing friend shops, joining activities, and sharing photos all require an in-person handshake first.
+
+---
+
+## 2. Identity and Cryptography
+
+This section comes early because identity is a foundational primitive that the data model, proximity handshake, friend system, and AI layer all depend on.
+
+### Identity keypair
+
+On first install, the app generates an **Ed25519 signing keypair** and an **X25519 key agreement keypair** using CryptoKit (`Curve25519.Signing.PrivateKey` and `Curve25519.KeyAgreement.PrivateKey`). The Ed25519 key is the user's durable identity for all peer handshakes; the X25519 key is reserved for future end-to-end encrypted payloads between friends.
+
+The Ed25519 public key is the **only persistent identifier** shared with other devices. The private key never leaves the Keychain.
+
+### Keychain storage
+
+CryptoKit Curve25519 keys cannot be stored as native `SecKey` items because the Keychain's `SecKey` API does not support Curve25519. Instead, they are stored as `kSecClassGenericPassword` items with the 32-byte `rawRepresentation` as the value data, following Apple's documented pattern for storing CryptoKit keys in the Keychain.
+
+Storage attributes:
+- `kSecClass`: `kSecClassGenericPassword`
+- `kSecAttrService`: `"com.fernlet.identity"`
+- `kSecAttrAccount`: `"primary-ed25519"` / `"primary-x25519"`
+- `kSecAttrAccessible`: `kSecAttrAccessibleAfterFirstUnlock`
+- `kSecAttrSynchronizable`: `true` (enables iCloud Keychain sync)
+- `kSecValueData`: the 32-byte raw key
+
+**Secure Enclave is not used.** The Secure Enclave only supports NIST P-256 keys, not Curve25519. Identity keys are protected by iOS Data Protection in the regular Keychain — strong, but not hardware-backed. This is an acceptable tradeoff because Curve25519's security model and the rest of the app's privacy posture (E2EE peer exchange, no cloud-side identity) do not require a hardware enclave.
+
+### iCloud Keychain sync
+
+Identity keypairs are marked synchronizable so they survive reinstalls and device migrations. iCloud Keychain is end-to-end encrypted and Apple cannot read it, so this is consistent with the privacy posture.
+
+**Behavior when iCloud Keychain is disabled.** The keypair stays local-only. Reinstalls trigger a re-pair flow with all existing friends, who will see "this doesn't look like Sam's phone — did they get a new device?" and a re-pair option. Users with iCloud Keychain off should be warned during onboarding that reinstalling will require re-pairing all friends.
+
+### Trust on first use (TOFU)
+
+When a friend is added, their public key is stored on the local `Friend` entity. From then on, every future handshake with that person must be signed by the same key. If the key changes, the handshake is rejected with a re-pair prompt. With iCloud Keychain sync enabled, key rotation is rare in practice — it only happens after a full identity reset or when sync is disabled.
+
+### IdentityKeypair *(device, Keychain-stored, iCloud Keychain sync'd)*
+
+```
+IdentityKeypair {
+  signingPrivateKey: Ed25519 (Keychain reference, never in app memory longer than necessary)
+  signingPublicKey: Ed25519
+  agreementPrivateKey: X25519 (Keychain reference)
+  agreementPublicKey: X25519
+  createdAt: Date
+}
+```
+
+---
+
+## 3. Data Model and Storage Architecture
+
+### Storage zones
+
+Four zones with strict boundaries enforced by the Swift module import graph:
+
+1. **Device — encrypted local store.** Standard SwiftData/CoreData with file protection. Most app data lives here.
+2. **Device-sealed — separate store, AI layer cannot import directly.** Period tracking, sensitive memory, photo bytes. The `OHTTPProvider` and any third-party-bound module physically cannot import these types. On-device AI may access **abstracted signals derived from sealed data** via the `PeriodContextBridge` module, but never the raw entries.
+3. **Cloud — minimal.** Friend links, fuzzy state, ephemeral hearts, activity rosters. Public keys and short-lived metadata only. No content, no personal data, no health metrics.
+4. **Transient — inference context.** Exists only for the duration of a Foundation Models or CoreML inference call. Apple's Foundation Models framework is stateless: each call receives input, produces output, and the context window is discarded. No on-device fine-tuning occurs, no data persists in the model between calls, and no training data is retained. CoreML classifiers are similarly inference-only. The only persistence is what the app code explicitly writes to its own stores.
+
+### Core types
+
+#### User *(device)*
+`id, displayName, goalType, macroGoals {protein, carbs, fat}, createdAt, aiProvidersEnabled {perFeatureTier}`
+
+Visible appearance lives in `UserCustomization`, not on `User`.
+
+#### MealDefinition *(device)* — reusable meal template
+`id, name, sourceType (photo | recipe | restaurant | manual), macros {protein, carbs, fat}, qualitySignal {variety, healthiness, sufficiency}, ingredients (optional, for recipes), sourceMetadata (chain id, recipe text, or photo ref), createdAt, lastUsedAt, useCount, userCorrected`
+
+#### MealLog *(device)* — timestamped "I ate this" record
+`id, definitionId → MealDefinition, timestamp, servings (multiplier, default 1.0), notes (optional)`
+
+Logging a repeat meal = `new MealLog` pointing at an existing `MealDefinition`. No re-parsing, no re-searching.
+
+#### Workout *(device)*
+`id, timestamp, type, exercises [{name, sets, reps, weight}], durationMin, healthKitRef, healthKitWorkoutId (nullable — set when written back to HealthKit), heartRateAvg, activeEnergy, source (fernlet | healthKit | both)`
+
+The `source` field tracks whether a workout was logged in-app, imported from HealthKit, or reconciled from both. See [Section 4](#4-healthkit-and-sensor-integration) for the bidirectional sync.
+
+#### JournalEntry *(device)*
+`id, date, colorTag, text (≤100 words), derivedEmotions [keys], attachedPhotoId (nullable → Photo)`
+
+The `derivedEmotions` field is the abstracted form the AI layer is allowed to see; raw `text` is never included in AI context by default. The ~100-word limit (~500–700 characters) balances expressiveness with low-friction journaling — enough to capture a real thought, short enough that opening the journal never feels like a writing assignment.
+
+#### HygieneLog *(device)*
+`date, shower, teethAM, teethPM, other {extensible dict}`
+
+#### HydrationLog *(device)*
+`date, containerUnits, containerType`
+
+#### SleepRecord *(device, mirrored from HealthKit)*
+`date, hoursAsleep, stageBreakdown {core, deep, rem, awake, inBed}, derivedQualityScore (0–1), source`
+
+See [Section 4](#4-healthkit-and-sensor-integration) for derivation of `derivedQualityScore` — HealthKit does not provide a native quality metric.
+
+#### SicknessFlag *(device)*
+`startDate, endDate (nullable), selfReported`
+
+#### PeriodEntry *(device-sealed)*
+`id, date, flow (none | spotting | light | moderate | heavy), symptoms [{key, severity}], notes, sexualActivity (bool, optional), sexualActivityNotes (optional)`
+
+**Lives in the `PrivateHealthStore` Swift module. Not importable by `ContextBuilder`, `OHTTPProvider`, or any AI-bound module directly.** On-device AI accesses period-related context only through the `PeriodContextBridge` module, which exports abstracted signals — never raw entries. See [Period Context Bridge](#period-context-bridge) below.
+
+#### PeriodCycleHistory *(device-sealed)*
+`id, cycleStartDate, cycleEndDate (nullable), cycleLengthDays (derived), periodLengthDays, avgFlowIntensity, symptomSummary [{key, avgSeverity}]`
+
+One row per completed cycle. Computed when a new period starts (closing the previous cycle). Source data for predictions.
+
+#### PeriodPrediction *(device-sealed, recomputed)*
+`predictedStartDate, confidenceWindowDays (±), predictedFlowIntensity (light | moderate | heavy), predictedDurationDays, basedOnCycleCount (how many historical cycles informed this), computedAt`
+
+Pure calendar math — no AI. See [Period Predictions](#period-predictions) below.
+
+#### PeriodHealthTrend *(device-sealed, recomputed)*
+`id, trendType (sleepByPhase | moodByPhase | exerciseByPhase | nutritionByPhase | symptomCorrelation), cyclePhase (menstrual | follicular | ovulatory | luteal), metric, baselineValue, phaseValue, delta, confidenceLevel (low | medium | high), sampleSize, computedAt`
+
+Statistical correlations between cycle phases and other health dimensions. Computed by a `BGProcessingTask` overnight — no AI needed. See [Period Health Trends](#period-health-trends) below.
+
+#### DailyHealthScore *(device, stored snapshot)*
+`date, snapshotTakenAt, windowStart, windowEnd, goalTypeAtTime, weightsAtTime, componentScores {food, exercise, sleep, hydration, hygiene, journal}, weightedTotal, avatarState, sicknessOverride, periodPhaseAtTime (nullable), isDefaultSeed`
+
+Now includes `periodPhaseAtTime` so historical scores can be contextualized by cycle phase in trend views. This field is populated from `PeriodContextBridge` signals at snapshot time and is a simple enum, not a reference to raw period data.
+
+#### ScheduledSnapshot *(device, transient per day)*
+`localDate, rolledSnapshotTime (within 2pm–10pm local), fired`
+
+#### Friend *(cloud, minimal)*
+`id, displayName, publicKey (Ed25519), fuzzyState (thriving|okay|struggling), lastSeenActive`
+
+Note the absence of any appearance field. Full appearance is exchanged peer-to-peer during proximity handshakes and cached in `FriendAvatarCache` on each friend's device.
+
+#### FriendLink *(cloud)*
+`userA, userB, establishedAt, establishedVia`
+
+#### FriendAvatarCache *(device)*
+`friendId, cachedAvatarConfig {body, hair, eyes, skin, glasses, equippedItems, equippedBottle, accessibilityItems}, lastSyncedInPersonAt`
+
+Updated only during in-person proximity handshakes. Fuzzy state is NOT cached here — it's read live from `Friend`.
+
+#### CustomizationItem *(device, static catalog shipped with the app)*
+`id, category, name, assetRef, colorOptions, unlockCondition, isStarter`
+
+Categories: hair, eyes, skin, glasses, bottle, shirt, pants, shoes, hat, accessory, accessibility, backgroundElement.
+
+#### UserCustomization *(device)*
+`userId, ownedItemIds [set], equippedItems {category: itemId}, equippedColors {category: colorId}, unlockedAt {itemId: date}, background {user-composed layout}`
+
+#### MilestoneProgress *(device, derived but cached)*
+`milestoneId, currentValue, targetValue, achievedAt (nullable)`
+
+Recomputable from raw logs — never a source of truth.
+
+#### DerivedSignal *(device, cached)*
+`signalName, value (enum specific to signal), computedAt, windowStart, windowEnd, sourceFields [which data fed into this]`
+
+First-class signals: `moodTrend`, `energyTrend`, `progressionTrend`, `intensityReadiness`, `eatingPattern`. Each defined in [Section 6](#6-ai-layer-and-on-device-intelligence).
+
+#### CoreMemory *(device, user-visible and editable)*
+`id, category (people | work | places | pursuits | preferences | themes | physicalLimitations), text, sourceJournalEntryId (nullable), extractedAt, userEdited (bool), active (bool), pairedSensitiveMemoryId (nullable)`
+
+#### SensitiveMemory *(device-sealed, opaque to user, never transmitted)*
+`id, text, sourceJournalEntryId (nullable), extractedAt, active (bool), pairedCoreMemoryId (nullable), category (emotionalContext | relationshipFriction | financialStress | grief | intimacy | photoSurfacingExclusion | other)`
+
+**Lives in the `PrivateMemoryStore` Swift module alongside `PeriodEntry`. Not importable by `OHTTPProvider`. Compile-time enforced.** No browse UI of any kind, including biometric-gated reveals.
+
+The `intimacy` category stores sexual activity context that may inform mood, energy, relationship dynamics, and scheduling-related suggestions. Like all Sensitive Memory, it is never browsable, never transmitted off-device, and only accessible to on-device Foundation Models via the Memory Agent. See [Section 7](#7-memory-system-core-and-sensitive-tiers) for the full treatment.
+
+#### UserMemoryDenyList *(device)*
+`userId, forgottenPhrases [set], forgottenCategories [set]`
+
+#### CoachingToneProfile *(device)*
+`userId, genericWeight (0–1), userWeight (0–1), lastExtractedAt, toneSignals {formality, warmth, length, humor, selfDeprecation, register}, blendCapOverride (nullable), enabled (bool)`
+
+Starts at `genericWeight=1.0, userWeight=0.0`. Shifts toward user tone over ~30 journal entries, capped at 0.6/0.4 by default.
+
+#### UserCreation *(device, peer-exchanged on meetup)*
+`id, creatorUserId, slotCategory, guideBoxId, canvasData, name, state (draft | published), createdAt, publishedAt (nullable), moderationPassedAt (nullable)`
+
+#### CreationCredit *(device)*
+`userId, creditsAvailable (capped at 3), totalCreditsEarned, lastAccrualCheckAt, activeDaysCount`
+
+#### Activity *(cloud)*
+`id, creatorId, title, type, startedAt, participants [userIds], location (optional, coarse)`
+
+#### ClosenessScore *(device, derived from Activity)*
+`friendId, rollingCount30d, lastActivityAt`
+
+#### HeartSent *(cloud, ephemeral)*
+`fromUserId, toUserId, sentAt, expiresAt (~24h)` — rate-limited server-side to one per pair per day.
+
+#### Photo *(device-sealed)*
+`id, imageData (encrypted blob), capturedAt, source (handshake | journal), sourceHandshakeEventId (nullable), sourceJournalEntryId (nullable), peopleTags [friendPublicKeys], lastSurfacedAt (nullable), timesSurfaced (int), userCopiedToPhotosLibraryAt (nullable)`
+
+**Lives in the `PrivateMediaStore` Swift module. Not importable by `OHTTPProvider` or any AI provider module — photos are never sent to any model, on-device or cloud.** Hard cap of 1000 photos; oldest evicted first.
+
+#### PhotoBoothCard *(device, transient)*
+`id, handshakeEventId, sourceFriendPublicKey, photoIds [Photo], createdAt, expiresAt (createdAt + 24h), seenByUser (bool)`
+
+#### PreventiveCare *(device)*
+`id, category (physical | dental | eyeExam | skinCheck | vaccination | custom), customLabel (nullable), cadenceDays, lastLoggedAt (nullable), nextDueAt (derived), userEnabled (bool)`
+
+#### AIContextPayload *(transient, never stored)*
+The only type the AI layer may construct. Unit-tested to assert raw `PeriodEntry` data, `SensitiveMemory` (for OHTTP destinations), raw journal text (unless explicitly requested per-entry), `Photo` data, friend data, and location are absent. Period-derived signals from `PeriodContextBridge` are permitted in on-device payloads only.
+
+### Period Context Bridge
+
+The `PeriodContextBridge` module is the **only pathway** through which period-related information can reach any AI or scoring system. It sits between `PrivateHealthStore` (which it imports) and the rest of the app (which imports only the bridge's output types, never the raw entries).
+
+```swift
+// PeriodContextBridge module — exports only these types
+
+struct PeriodPhaseSignal {
+  currentPhase: CyclePhase  // .menstrual | .follicular | .ovulatory | .luteal | .unknown
+  dayInPhase: Int
+  dayInCycle: Int
+  predictedPeriodStart: Date?
+  predictedPeriodStartConfidence: Int  // ± days
+  isCurrentlyMenstruating: Bool
+  predictedFlowIntensity: FlowIntensity?  // for upcoming or current period
+}
+
+struct PeriodNutritionSignal {
+  suggestedNutrientBoosts: [NutrientBoost]  // e.g., .iron, .magnesium, .omega3, .vitaminB6
+  hydrationAdjustment: Float  // multiplier on daily target (e.g., 1.15 during luteal)
+  calorieContext: CycleCalorieContext  // .slightlyHigherNeed | .normal | .noData
+}
+
+struct PeriodExerciseSignal {
+  intensityAdjustment: IntensityModifier  // .reduceIntensity | .maintainNormal | .noData
+  exercisePreferences: [ExercisePreference]  // e.g., .preferYoga, .avoidHighImpact, .preferSwimming
+  basedOnHistoricalPatterns: Bool
+  sampleSize: Int  // how many cycles informed this
+}
+```
+
+**What the bridge does NOT export:** raw `PeriodEntry` rows, specific dates of periods, symptom details, flow specifics for past entries, sexual activity data, or anything that would let the consuming module reconstruct a period log. The bridge produces only forward-looking, actionable signals.
+
+**Data lifecycle:** Bridge signals are recomputed from source data on demand (when the workout planner or meal planner requests them). They are not cached independently. **Deleting period data from `PrivateHealthStore` immediately makes the bridge return `.unknown` / `.noData` for all signals** — there is nothing to clean up because the signals have no independent storage.
+
+**Foundation Models data persistence (important clarification):** Apple's Foundation Models framework is stateless inference. Each call receives a prompt, generates output, and the context window is discarded. There is no on-device fine-tuning, no training on user data, no persistent memory between calls. When period-derived signals enter a workout suggestion prompt, the model processes them and produces a workout plan; the input is then gone. The model cannot be queried later to extract what it was previously told. The only persistence is what the app explicitly writes to its own stores — and the memory extraction pipeline is explicitly forbidden from processing period-derived signals (enforced by the `MemoryExtractionContext` type's import graph, which does not import `PeriodContextBridge`).
+
+### Period Predictions
+
+Cycle predictions use pure calendar math — no AI, no Foundation Models, no CoreML.
+
+**Algorithm:**
+1. Compute rolling mean cycle length from the last 6–12 completed cycles (stored in `PeriodCycleHistory`)
+2. Compute standard deviation for the confidence window
+3. Predicted next start = last period start + mean cycle length
+4. Confidence window = ±1 standard deviation (displayed as a date range)
+5. Predicted flow intensity = weighted average of recent cycles' `avgFlowIntensity`, with recency weighting
+6. Predicted duration = weighted average of recent `periodLengthDays`
+
+**Minimum data:** predictions require at least 3 completed cycles. Before that, the app shows "tracking — predictions will appear after a few cycles."
+
+**Approaching-period notification.** When the predicted start date is within 3 days, a gentle thought bubble appears on the tamagotchi (same mechanism as preventive care thought bubbles — ambient, dismissible, no push notification). The bubble says something neutral like "your period may start soon" with a tap-to-open action to the period screen.
+
+**Strength estimate.** After 6+ cycles with symptom data logged, the prediction includes an expected symptom profile: "based on your history, this period is likely moderate with cramping on days 1–2." This is displayed on the period screen only — never in any shared context.
+
+### Period Health Trends
+
+Statistical correlations between cycle phases and other health dimensions, computed without AI.
+
+**Computation.** A `BGProcessingTask` runs overnight (or on-demand when the user opens the trends view) and produces `PeriodHealthTrend` entries:
+
+- **Sleep by phase** — average `derivedQualityScore` per cycle phase over the last 3–6 cycles. Common finding: sleep quality drops in the luteal phase.
+- **Mood by phase** — average journal color-tag valence per cycle phase. Identifies phases with consistently lower mood.
+- **Exercise by phase** — average workout intensity and frequency per cycle phase. Identifies phases where the user naturally trains lighter.
+- **Nutrition by phase** — macro hit rates and meal patterns per cycle phase. Identifies phases where eating patterns shift.
+- **Symptom correlation** — which logged symptoms co-occur with specific food, exercise, or sleep patterns. E.g., "cramping tends to be lower on days you did yoga" or "headaches correlate with lower hydration."
+
+**Confidence levels:** `low` (<3 cycles of data), `medium` (3–6 cycles), `high` (6+ cycles with consistent patterns). Low-confidence trends are shown with appropriate hedging ("early pattern — may change with more data").
+
+**Surfacing:**
+- Period Trends screen (dedicated view) shows all computed trends with confidence indicators
+- Loading-screen companions can draw from high-confidence trends for observations: "You tend to sleep lighter the week before your period."
+- The workout planner's `PeriodExerciseSignal` is informed by these trends (if the user historically does lighter workouts during menstruation, the planner learns this)
+- The meal planner's `PeriodNutritionSignal` can suggest iron-rich meals during menstruation and magnesium during the luteal phase, informed by the user's own symptom patterns
+
+**Privacy:** All trend computation happens on-device in the `PrivateHealthStore` module. Trend outputs flow through `PeriodContextBridge` only as abstracted signals. Raw period data never leaves the sealed module.
+
+### Module boundaries (compile-time enforced)
+
+```
+PrivateHealthStore module
+├── PeriodEntry
+├── PeriodCycleHistory
+├── PeriodPrediction
+├── PeriodHealthTrend
+└── (no imports from ContextBuilder, OHTTPProvider, or any AI module)
+
+PeriodContextBridge module
+├── imports: PrivateHealthStore (read-only)
+├── exports: PeriodPhaseSignal, PeriodNutritionSignal, PeriodExerciseSignal
+└── (importable by ContextBuilder for on-device payloads ONLY)
+     OHTTPProvider CANNOT import this module.
+
+PrivateMemoryStore module
+├── SensitiveMemory
+└── (no imports from OHTTPProvider)
+
+PrivateMediaStore module
+├── Photo
+└── (no imports from any AIProvider, including on-device)
+
+MemoryExtractionContext module
+├── imports: JournalEntry (raw text), CoreMemory, SensitiveMemory
+├── does NOT import: PeriodContextBridge, PrivateHealthStore
+└── (memory extraction pipeline cannot see or store period-derived signals)
+
+ContextBuilder module
+├── imports: User, Workout, MealLog, MealDefinition, JournalEntry (digest only),
+│           CoreMemory (filtered via Memory Agent), DerivedSignal,
+│           CoachingToneProfile, PeriodContextBridge (for on-device payloads only)
+├── may import SensitiveMemory ONLY when destination is OnDeviceProvider
+└── never imports: PeriodEntry (raw), Photo
+
+OHTTPProvider module
+├── imports: AIContextPayload
+└── never imports: PeriodEntry, PeriodContextBridge, SensitiveMemory, Photo, JournalEntry (raw)
+```
+
+The compile-time guarantee is the privacy story. Anything not in this graph cannot be in an AI payload because the type literally isn't reachable from the builder.
+
+---
+
+## 4. HealthKit and Sensor Integration
+
+### HealthKit reads
+
+The app requests read authorization for these HealthKit data types via `HKHealthStore.requestAuthorization()`:
+
+- `HKQuantityTypeIdentifier.heartRate` — for workout heart rate averages and intensity inference
+- `HKQuantityTypeIdentifier.activeEnergyBurned` — for movement baseline detection and exercise scoring
+- `HKCategoryTypeIdentifier.sleepAnalysis` — for sleep stage data (iOS 16+)
+- `HKQuantityTypeIdentifier.stepCount` — for the movement baseline floor
+- `HKWorkoutType.workoutType()` — for importing workouts logged on Apple Watch or other apps
+
+`NSHealthShareUsageDescription` in Info.plist explains why each is needed in plain language.
+
+### HealthKit write-back
+
+Fernlet writes workouts back to HealthKit so they appear in Apple Health, contribute to Apple Watch activity rings, and are visible to any other app the user has authorized. This is critical for users who rely on Apple Health as their central health dashboard — workouts logged in Fernlet shouldn't be invisible to the rest of the ecosystem.
+
+**What is written:**
+- `HKWorkout` samples for each Fernlet-logged workout, including type, duration, active energy (if available from the session), and start/end timestamps
+- `HKQuantityType.activeEnergyBurned` samples associated with the workout, if Fernlet has enough data to estimate (from HealthKit heart rate during the workout window)
+
+**What is NOT written:**
+- No sleep data (Fernlet reads sleep, doesn't generate it)
+- No hydration data (HealthKit's hydration type exists but isn't widely used and would create confusing duplicates)
+- No journal, mood, or hygiene data (no corresponding HealthKit types)
+- No period data (Fernlet's period tracker is intentionally separate from HealthKit's menstrual cycle data types to maintain the `PrivateHealthStore` wall)
+
+**Write authorization:** Requires `NSHealthUpdateUsageDescription` ("Fernlet writes your logged workouts to Apple Health so they count toward your activity rings and are visible in other health apps.") and a separate `HKHealthStore.requestAuthorization(toShare:)` call. Users can deny write permission while still allowing reads — workouts just won't appear in Apple Health.
+
+### Bidirectional workout sync
+
+**Fernlet → HealthKit:** When the user logs a workout in Fernlet, the app writes it to HealthKit and stores the resulting `HKWorkout` UUID in `Workout.healthKitWorkoutId` to prevent duplicates.
+
+**HealthKit → Fernlet:** When the user opens the Exercise screen or when a daily score is computed, Fernlet queries HealthKit for recent `HKWorkout` samples not already linked to a Fernlet `Workout` record. New external workouts (from Apple Watch, Peloton, Strava, etc.) are imported as `Workout` records with `source: .healthKit`, using the workout type, duration, active energy, and heart rate data from HealthKit. These imported workouts contribute to the exercise component score just like manually logged ones.
+
+**Deduplication:** The `healthKitWorkoutId` field and HealthKit's `HKSource` metadata prevent double-counting. A workout logged in Fernlet and written to HealthKit will not be re-imported as a separate entry. A workout logged on Apple Watch and imported into Fernlet will not be re-written to HealthKit.
+
+**User control:** A toggle in Settings → HealthKit controls write-back. Default is on (if write permission is granted). Users who prefer Fernlet to be read-only can disable write-back without losing any in-app functionality.
+
+### Sleep quality derivation
+
+HealthKit does not provide a native sleep quality score. Fernlet derives one from the raw sleep stage data using a defined formula:
+
+```
+qualityScore = (
+  0.40 × (totalAsleepHours / ageTargetHours, capped at 1.0) +
+  0.25 × (deepSleepRatio normalized to typical 13–23% range) +
+  0.20 × (remSleepRatio normalized to typical 20–25% range) +
+  0.15 × (1 - awakeningsPenalty)
+)
+
+awakeningsPenalty = min(awakeCount / 6, 1.0)
+```
+
+If sleep stage data is unavailable (e.g., user doesn't wear an Apple Watch to bed and only has time-in-bed from iPhone autodetect), the score falls back to:
+
+```
+qualityScore = (totalSleepHours / ageTargetHours), capped at 1.0
+```
+
+The presence of stage data is recorded in `SleepRecord.source` so the UI can subtly indicate "richer data available with Apple Watch" without nagging.
+
+### WeatherKit
+
+Used for the Gentle Mood-Recovery Prompts feature ([Section 11](#11-ambient-features)). WeatherKit is included in the Apple Developer Program at 500,000 calls per month free, with paid tiers for higher volume. Fernlet's expected call volume (one weather check per mood-recovery prompt evaluation, rate-limited per user) is well under the free tier.
+
+WeatherKit requires only coordinates (no user identifier), and Apple states location data is not associated with personal information or tracked between requests. Coarse location (city-level) is sufficient for the use case.
+
+---
+
+## 5. Scoring and Wellness Formula
+
+### Formula
+
+```
+weightedTotal = Σ(weight_i × componentScore_i)
+```
+
+Components: `food, exercise, sleep, hydration, hygiene, journal` — each normalized 0–1. Weights per goal sum to 1.0, so the weighted total is also 0–1.
+
+### Goal → Weight Vectors
+
+| Component | Wellness | Strength | Weight Mgmt | Mental Health | Recovery | Exploring |
+|---|---|---|---|---|---|---|
+| Food | 0.20 | 0.25 | 0.30 | 0.10 | 0.10 | 0.18 |
+| Exercise | 0.20 | 0.30 | 0.25 | 0.10 | 0.05 | 0.18 |
+| Sleep | 0.20 | 0.20 | 0.20 | 0.25 | 0.30 | 0.18 |
+| Hydration | 0.10 | 0.10 | 0.10 | 0.05 | 0.10 | 0.12 |
+| Hygiene | 0.10 | 0.05 | 0.05 | 0.20 | 0.25 | 0.12 |
+| Journal | 0.20 | 0.10 | 0.10 | 0.30 | 0.20 | 0.22 |
+
+Notes on the shape:
+
+- **Wellness** spreads evenly with a slight lean toward the four "big" inputs.
+- **Strength** leads with exercise; food and sleep carry the recovery side.
+- **Weight Management** leads with food and exercise, with meaningful sleep weighting.
+- **Mental Health Focus** puts journal and sleep at nearly half the total; hygiene elevated; food and exercise gentler.
+- **Recovery** leads with sleep and hygiene; exercise nearly zero. Plays extra well with the sickness flag.
+- **Exploring** is almost even, slightly favoring journal. Reasonable default.
+
+### Period-aware scoring adjustments
+
+When the user has period tracking enabled and sufficient cycle history (3+ cycles), the scoring system applies subtle per-phase adjustments that make the score more forgiving during historically harder phases. These adjustments are informed by the user's own `PeriodHealthTrend` data, not generic assumptions.
+
+**Mechanism:** During the menstrual and late luteal phases, if the user's `PeriodHealthTrend` data shows consistently lower exercise intensity or sleep quality during those phases (confidence level medium or high), the exercise and sleep component scores receive a small floor boost — up to 0.1 added to the raw component score before weighting, capped so it never exceeds 1.0. This prevents "the week before my period tanks my score every month" without making the adjustment so large that it's gameable.
+
+**What this is NOT:** This is not a blanket "women get easier scoring." It's pattern-matched to the individual user's own history across their specific cycle phases. A user who doesn't experience exercise or sleep disruption during their period gets no adjustment. A user who consistently sleeps worse during the luteal phase but exercises fine gets only a sleep adjustment.
+
+**Transparency:** The period trends screen shows which adjustments are active: "your score is slightly more forgiving for sleep during your luteal phase, based on your last 6 cycles." Users can disable period-aware scoring adjustments without disabling period tracking.
+
+### Avatar State Thresholds
+
+| State | Range |
+|---|---|
+| Thriving | ≥ 0.75 |
+| Okay | 0.50 – 0.74 |
+| Tired | 0.25 – 0.49 |
+| Fainted | < 0.25 |
+| Sick | override (manual flag) |
+
+Thresholds are deliberately generous — 0.50 is "okay," not "barely passing."
+
+### Component Score Calculations
+
+**Food** (0–1) — four sub-signals averaged with goal-specific internal weighting:
+- *Macro hit rate* — `min(actual/target, 1.0)` averaged across protein/carbs/fat. Overshooting doesn't punish.
+- *Variety* — rolling 7-day count of distinct MealDefinitions used, plateauing around 10–12.
+- *Healthiness* — from photo vision signal or inherited from MealDefinition metadata.
+- *Sufficiency* — did you eat enough meals? Uses the learned "typical meals per day" from passive Tier 3 onboarding.
+
+Internal weighting shifts by goal: Strength weights macros heaviest; Weight Mgmt weights healthiness + variety; Mental Health weights sufficiency heaviest.
+
+**Period-aware food scoring:** When `PeriodNutritionSignal.suggestedNutrientBoosts` includes `.iron` (typically during menstruation), meals high in iron-rich ingredients receive a small bonus to the healthiness sub-signal. This is a nudge, not a requirement — the user is never penalized for not eating iron-rich foods.
+
+**Exercise** (0–1):
+- *Movement baseline* — any logged workout or HealthKit active-energy above personal baseline hits a 0.5 floor.
+- *Intensity match* — did the session match your activity level from onboarding? **When `PeriodExerciseSignal.intensityAdjustment` is `.reduceIntensity`, the intensity-match target is lowered** so a lighter workout still scores well.
+- *Progression signal* (Strength goal only) — did you meet or exceed your recent weight/rep baseline?
+
+Recovery goal short-circuits this: any movement at all = full score.
+
+**Sleep** (0–1) — uses `SleepRecord.derivedQualityScore` directly. Derivation is documented in [Section 4](#4-healthkit-and-sensor-integration).
+
+Age-bracket targets used inside the derivation:
+
+| Age bracket | Target hours |
+|---|---|
+| <18 | 9 |
+| 18–25 | 8 |
+| 26–40 | 7.5 |
+| 41–60 | 7.5 |
+| 60+ | 7 |
+
+**Hydration** (0–1) — `min(containerUnits / dailyTarget, 1.0)`. Sick flag raises target by 20%. `PeriodNutritionSignal.hydrationAdjustment` can raise the target during the luteal phase (typically 10–15% increase).
+
+**Hygiene** (0–1) — simple fraction of toggles completed. Shower + teeth AM + teeth PM = 3 toggles, each worth 1/3.
+
+**Journal** (0–1):
+- *Entry logged today* — 0.5 floor for any entry, regardless of tag color
+- *Color tag quality* — remaining 0.5 distributed across tag color
+
+The 0.5 floor protects against creating pressure to only journal on good days. **Logging a hard day must still count for something.**
+
+### Sickness Override
+
+When the sickness flag is active:
+1. Avatar appearance switches to sick regardless of score
+2. Exercise component weight is **redistributed** proportionally to sleep and hygiene
+3. Hydration target is raised 20%
+4. Scoring continues normally otherwise
+
+### Snapshot Rules
+
+- One snapshot per local calendar date
+- Rolled at a random moment in a **2pm–10pm local-time** window
+- Rolling 24h absolute-time window (survives travel cleanly)
+- If app is closed at snapshot time, fires on next open with the intended timestamp
+- Skipped dates (date-line crossings) get no entry
+- When the window contains <12h of real app history (first day, reinstall), a "high but not perfect" default seed is used
+- Live score continues updating in the UI at all times; only the stored historical value is fixed
+- `periodPhaseAtTime` is populated from `PeriodContextBridge` if period tracking is enabled
+
+### Worked Example
+
+User: 30yo, "Build Strength" goal, 180lb, active. Currently in follicular phase (no period-aware adjustments active).
+
+Day inputs:
+- Food: protein 0.95, carbs 0.7, fat 0.85; variety 0.8, healthiness 0.75, sufficiency 1.0 → **0.85**
+- Exercise: logged lifts, hit baselines → **0.95**
+- Sleep: 6.5h vs 7.5h target, decent stages → **0.87**
+- Hydration: 5 of 8 units → **0.625**
+- Hygiene: all three toggles → **1.0**
+- Journal: entry logged, mid-range tag → **0.75**
+
+Weighted total (Strength):
+```
+0.25(0.85) + 0.30(0.95) + 0.20(0.87) + 0.10(0.625) + 0.05(1.0) + 0.10(0.75)
+= 0.213 + 0.285 + 0.174 + 0.063 + 0.050 + 0.075
+= 0.860
+```
+
+Avatar state: **Thriving**.
+
+---
+
+## 6. AI Layer and On-Device Intelligence
+
+### Two AI tiers
+
+1. **Apple Foundation Models (on-device)** — default. Runs entirely on-device on iPhone 15 Pro and later. No network, no cloud, no escalation.
+2. **Third-party AI (Claude / OpenAI)** — opt-in, off by default, routed through OHTTP. See [Section 16](#16-third-party-integrations-and-cloud-fallbacks).
+
+**Important:** Apple's Foundation Models framework does **not** escalate to Private Cloud Compute for third-party apps. PCC is reserved for Apple's own first-party features (Siri, Writing Tools). When an on-device call exceeds the model's capability, the result is lower-quality output, not invisible escalation. Features that need more capability than the on-device model can deliver must explicitly route to the third-party tier (with user consent) or degrade gracefully.
+
+### Foundation Models capabilities and constraints
+
+**Hardware requirement.** Foundation Models requires Apple Intelligence-eligible devices: iPhone 15 Pro and later, iPads with M-series chips, Macs with Apple silicon. On older hardware, Foundation Models is unavailable. The app checks `SystemLanguageModel.default.availability` at startup and routes accordingly.
+
+**Context window.** ~4,096 tokens combined input + output. This is a hard constraint that shapes prompt design throughout the app. Each AI feature has a defined token budget (see below).
+
+**Latency.** Time-to-first-token is ~0.6ms per prompt token; generation runs at ~30 tokens/sec on iPhone 15 Pro. A typical Fernlet call (200-token prompt, 100-token output) lands around 3.5 seconds. **Cold-start latency can be 10–20 seconds** without prewarming. The app calls `session.prewarm()` on every screen that may trigger a Foundation Models call.
+
+**Modality.** Text-only. The framework does not accept image input from third-party apps (Apple's underlying models have a vision encoder, but it's gated to first-party features). **All image analysis in Fernlet uses Vision framework + Core ML, not Foundation Models.**
+
+**Structured generation.** Foundation Models supports `@Generable` and `@Guide` macros for typed Swift output with constrained decoding. All Fernlet structured outputs use this mechanism.
+
+**Data persistence: none.** Foundation Models is stateless inference. Each call receives a prompt, generates output, and the context window is discarded. No on-device fine-tuning occurs, no data persists in the model between calls, and no training data is retained. CoreML classifiers are similarly inference-only. This is critical for the period data architecture — period-derived signals that enter a workout suggestion prompt are processed and then gone. The model cannot be queried later to extract what it was previously told.
+
+### Feature-by-feature use of on-device intelligence
+
+**Foundation Models is used for:**
+- Journal emotion extraction (raw text → emotion keys, structured)
+- Journal memory extraction (raw text → Core + Sensitive proposals in a single structured call)
+- Sensitive memory rewriting (when a paired Core entry is edited)
+- Memory agent retrieval and filtering
+- Natural-language forget and edit parsing
+- Workout suggestions (text generation with structured fields; may include `PeriodExerciseSignal` from the bridge)
+- Meal suggestions (may include `PeriodNutritionSignal` from the bridge)
+- Recipe parsing from text
+- Coaching tone wrapper copy
+- Mental-health diagnostic-language classifier on memory extraction output
+
+**Vision framework + Core ML is used for:**
+- Meal photo analysis. A custom Core ML food classifier loaded via `VNCoreMLRequest` extracts food categories and visual quality signals. Results are summarized into text and may then be passed to Foundation Models for nutritional interpretation if needed.
+- Moderation classifier on user-created clothing designs at publish time.
+
+**Natural Language framework is used for:**
+- The mental-health diagnostic-language classifier (small `MLTextClassifier`)
+
+**No AI is used for:**
+- Period predictions (calendar math)
+- Period health trends (statistical correlations via `BGProcessingTask`)
+- Scoring formula (arithmetic)
+- Milestone progress (counters)
+- Closeness scores (activity count)
+
+### Token budgets per AI feature
+
+Each AI request type has an assigned token budget. The context builder enforces this — if a payload exceeds the budget, the builder either truncates lower-priority fields or drops the request with a logged warning.
+
+| Feature | Budget (input + output) |
+|---|---|
+| Journal emotion extraction | 1,200 |
+| Journal memory extraction | 2,500 |
+| Memory agent query | 1,500 |
+| Workout suggestion | 3,000 |
+| Meal suggestion / nutrition interpretation | 2,000 |
+| Recipe parsing | 2,000 |
+| Coaching tone wrapper | 800 |
+| Tamagotchi reaction | 400 |
+| Forget/edit parsing | 600 |
+
+Total context window is 4,096 tokens; budgets account for prompt scaffolding overhead.
+
+### Derived signals
+
+The on-device layer computes a set of **first-class derived signals** that condense raw data into compact interpretations the AI layer can use without touching the underlying detail. Signals are recomputed on a schedule and cached in `DerivedSignal`.
+
+- **moodTrend** — from journal color tags and emotion keys over rolling 3/7/14-day windows. Values: `improving | stable | declining | volatile`.
+- **energyTrend** — from sleep + hydration + macro sufficiency over the rolling 7-day window. Values: `high | steady | low | depleted`.
+- **progressionTrend** (per key lift) — from logged workouts over the rolling 30-day window. Values: `progressing | plateau | regressing | insufficient data`.
+- **intensityReadiness** — combined signal of recovery state from sleep, mood, sickness flag, recent workout intensity, and (if available) `PeriodExerciseSignal.intensityAdjustment`. Values: `ready for hard | ready for moderate | needs light | needs rest`.
+- **eatingPattern** — from meal logs over rolling 7-day window. Values: `varied | repetitive | insufficient | on track`.
+
+Derived signals are the primary way context payloads stay small.
+
+### Per-request context payloads
+
+Every AI request type has a dedicated builder function in `ContextBuilder` with a strictly defined payload shape, an explicit import allowlist, and a unit test fixture.
+
+#### `.workoutSuggestionRich` payload
+
+```
+WorkoutSuggestionContext {
+  // Goal context
+  goal: enum
+  activityLevel: enum
+  equipment: enum
+  injuriesAreasToAvoid: [key]
+  availableMinutesToday: int?
+
+  // Recent exercise (last 7 days, from Fernlet logs + HealthKit imports)
+  recentWorkouts: [{
+    daysAgo: int
+    type: enum
+    exercises: [{name, sets, reps, topWeight}]
+    durationMin: int
+    intensityFromHR: enum
+    source: enum (fernlet | healthKit | both)
+  }]
+
+  // Derived signals (precomputed)
+  progressionTrends: [{exercise, trendDirection, lastTopWeight}]
+  intensityReadiness: enum
+  energyTrend: enum
+  moodTrend: enum
+  eatingPattern: enum
+
+  // Recovery & fuel
+  sleepLast3Nights: [hours]
+  sicknessActive: bool
+  macroGoals: {protein, carbs, fat}
+  macrosHitRateLast3Days: avg 0–1
+  hydrationTodaySoFar: {units, target}
+
+  // Period context (on-device only, from PeriodContextBridge)
+  periodExerciseSignal: PeriodExerciseSignal?  // nil if period tracking disabled or no data
+  periodPhase: CyclePhase?  // nil if not tracking
+
+  // Relevant memory (filtered, two-tier, on-device only for sensitive)
+  relevantCoreMemory: [...]
+  relevantSensitiveContext: [...]   // stripped at module level if dest is OHTTP
+
+  // Tone profile (blended)
+  coachingToneBlend: { genericWeight, userWeight, signals }
+}
+```
+
+Deliberately excluded:
+- Raw journal text
+- Raw period entries (only bridge signals)
+- Meal names or specifics (quality signals and macros only)
+- Friend data, activities, location
+- Photo data
+
+**Period signals in OHTTP payloads:** The `periodExerciseSignal` and `periodPhase` fields are **automatically stripped** when the destination is OHTTP, because `OHTTPProvider` cannot import `PeriodContextBridge`. This is compile-time enforced. When a user has opted into third-party AI for workout suggestions, the workout planner still works — it just doesn't have period-aware adjustments, and falls back to the derived signals (intensityReadiness, energyTrend) which already partially capture the same information without period-specific framing.
+
+#### `.mealSuggestion` payload (new)
+
+```
+MealSuggestionContext {
+  macroGoals: {protein, carbs, fat}
+  macrosLoggedToday: {protein, carbs, fat}
+  macroGap: {protein, carbs, fat}  // what's still needed
+  eatingPattern: enum
+  dietaryPattern: [keys]
+  recentMealDefinitions: [{name, macros, lastUsedDaysAgo}]  // top 10 most relevant
+
+  // Period context (on-device only, from PeriodContextBridge)
+  periodNutritionSignal: PeriodNutritionSignal?
+  periodPhase: CyclePhase?
+
+  coachingToneBlend: { genericWeight, userWeight, signals }
+}
+```
+
+#### Other request types
+
+- `.mealPhotoAnalysis` — **Vision/Core ML, not Foundation Models.** Image bytes go directly to `VNCoreMLRequest`. Text summary may enter a `.mealNutritionInterpretation` payload.
+- `.mealNutritionInterpretation` — Vision-extracted food labels + dietary pattern + eating pattern + `PeriodNutritionSignal` (on-device only)
+- `.recipeParsing` — raw recipe text + unit preferences
+- `.journalReflection` — the specific entry's raw text (opt-in, explicit user action) + moodTrend + relevant memory entries
+- `.coachingTone` — the event being reacted to + current CoachingToneProfile + moodTrend
+- `.memoryExtraction` — a single journal entry's raw text + existing memory store (for deduplication) + category allowlist. **Does NOT import `PeriodContextBridge`** — period signals never enter the memory extraction pipeline and cannot be stored as memory entries.
+
+### Loading-screen latency padding
+
+Foundation Models inferences average 2–4 seconds. The Loading-Screen Companions feature ([Section 11](#11-ambient-features)) turns this into a feature moment. Sessions are prewarmed via `session.prewarm()` on screen load to avoid cold starts.
+
+### Provider protocol
+
+```swift
+protocol AIProvider {
+  func send(_ payload: AIContextPayload,
+            for request: AIRequestType) async throws -> AIResponse
+}
+```
+
+Two implementations:
+- `OnDeviceProvider` — wraps Foundation Models. Direct Swift calls, no network.
+- `OHTTPProvider` — wraps the OHTTP client. See [Section 16](#16-third-party-integrations-and-cloud-fallbacks).
+
+### Coaching tone profile
+
+Separate from content, the app maintains a `CoachingToneProfile` that shapes the voice of user-facing AI prose.
+
+**Starts as a generic trainer.** Warm, encouraging, plainspoken, non-preachy.
+
+**Shifts toward the user's tone over time.** As journal entries accumulate, an on-device Foundation Models call periodically extracts tone signals. These blend into the coaching prompt.
+
+**Blending is capped.** Starts at 0/100, moves toward 40/60 over ~30 journal entries. Never fully takes over.
+
+**Scope.** Tone matching applies to *how* coaching reads, not *what* it says. Safety messaging bypasses the tone profile.
+
+**User control.** Preview, reset, turn off entirely, or cap lower than the default.
+
+---
+
+## 7. Memory System (Core and Sensitive Tiers)
+
+### Why two tiers
+
+Some facts are safe to show the user on a browse screen and include in AI context freely — your dog's name, your job, your training goals. Others are useful context for on-device AI to reason well but would feel invasive staring back at the user on a list — ambient emotional patterns, relationship friction, grief, financial stress, intimacy patterns. Splitting them lets the AI reason richly without turning the app into a surveillance mirror.
+
+### Tier 1 — Core Memory (user-visible)
+
+Durable, low-sensitivity facts. Browsable, editable, deletable on the Memory screen. Can be included in third-party AI context **only** when the user opts in per-feature.
+
+Categories:
+- **People** — name, relationship ("Sam, partner"; "Bella, dog")
+- **Work and school**
+- **Places of significance**
+- **Ongoing pursuits** — training for an event, learning a language
+- **Preferences and habits** explicitly mentioned
+- **Recurring themes** worth remembering
+- **Physical limitations and injuries** — explicitly included because the workout planner needs them.
+
+### Tier 2 — Sensitive Memory (opaque to user, never transmitted)
+
+Context the on-device AI can use but the user doesn't browse. Examples: "recently mentioned feeling overwhelmed at work," "going through a breakup," "lost a grandparent last month," "money has been tight," "mentioned intimacy has been important for their mood lately."
+
+Categories:
+- **emotionalContext** — ambient mood patterns, stress mentions
+- **relationshipFriction** — difficulties with named people
+- **financialStress** — money worries
+- **grief** — loss and mourning
+- **intimacy** — sexual activity context relevant to mood, energy, and relationship dynamics. Stored because it genuinely affects food planning (timing, energy), workout intensity, mental health, and relationship context in coaching. Like all Sensitive Memory, it is never browsable, never transmitted off-device, and only accessible to on-device Foundation Models via the Memory Agent.
+- **photoSurfacingExclusion** — people to filter from photowall
+- **other** — catchall
+
+**The sensitive tier never leaves the device. Ever. Not even with opt-in.** Enforced by the module import graph: `OHTTPProvider` does not import `SensitiveMemory` and cannot reference the type.
+
+### Extraction
+
+**Single inference per journal entry.** When a user saves a journal entry, one on-device Foundation Models call reads the raw text and produces a `@Generable` structured output with two labeled sections: `coreMemoryProposals` and `sensitiveMemoryProposals`. Both sets are written directly to their respective stores. No per-entry review flow.
+
+### Hard deny list (applied to both tiers)
+
+- **Mental health diagnostic language is prohibited regardless of tier.** No "depressed," "anxious," "ADHD," "bipolar," "traumatized," "burned out," "codependent," "avoidant," or any other clinical or pseudo-clinical label. Facts and events only: "user mentioned trouble sleeping last week" is fine; "user has insomnia" is not.
+- **Exception:** if the user explicitly uses a mental health term to describe themselves ("my anxiety has been bad"), that phrase may be stored verbatim in Sensitive Memory as a direct quote, attributed to the user. The extractor never generates diagnostic labels on its own.
+- Period data is handled by `PrivateHealthStore` and is not reachable by the memory extraction pipeline regardless (the `MemoryExtractionContext` module does not import `PeriodContextBridge` or `PrivateHealthStore`).
+
+**Sexual and intimacy content is allowed in Sensitive Memory.** Earlier spec drafts excluded it, but intimacy patterns are real inputs to mood, energy, relationship dynamics, nutrition timing, and workout planning. The `intimacy` category in Sensitive Memory captures this context while maintaining the strongest privacy guarantee the app offers: never browsable, never transmitted, only used by on-device AI. If a user journals "things with Sam have been really good lately" and the extractor infers intimacy context, it lands in Sensitive Memory where the coaching tone and workout planner can use it without it appearing on any screen or leaving the device.
+
+**Post-extraction classifier.** After the extraction call, a small on-device `MLTextClassifier` runs over every proposed entry and rejects anything matching mental health diagnostic patterns. Defense in depth.
+
+### Editing and syncing tiers
+
+**Editing Core Memory.** Tap an entry, edit, save. If the entry has a `pairedSensitiveMemoryId`, the paired Sensitive entry is automatically updated via a Foundation Models rewrite call.
+
+**Editing Sensitive Memory via natural language.** Since the sensitive tier has no browse UI, the user edits it by talking to the memory agent:
+- "Forget anything about my job situation"
+- "I'm not going through a breakup anymore, we got back together"
+- "Stop remembering anything about my personal life with Sam"
+
+The agent finds matching entries and updates or soft-deletes them. Confirmation never quotes the original entries back.
+
+### User control
+
+- **Browse Core Memory** — Memory screen shows every Core entry with category, source date, and edit/delete controls
+- **Natural-language forget (both tiers)** — routes to the memory agent
+- **Wipe everything** — one action clears both tiers entirely
+- **Wipe Sensitive only** — separate one-tap action
+- **Turn extraction off** — existing entries remain; no new ones are added
+- **Export Core Memory** — one-tap export
+- **Sensitive Memory cannot be exported or viewed.** No biometric reveal, no debug screen, no developer escape hatch.
+
+**Audit log.** The AI audit log records "workout planner queried memory for physical limitations and training goals" without recording the specific facts returned.
+
+### Memory Agent
+
+The memory store has exactly one reader: the **Memory Agent**. No other code path touches raw memory entries directly.
+
+```swift
+struct MemoryQuery {
+  requestingFeature: AIRequestType
+  neededContextTypes: [MemoryContextType]
+  recencyFilter: RecencyWindow?
+  maxFacts: Int  // hard cap, default 5
+  includeSensitiveTier: Bool  // forced false for non-on-device destinations
+}
+
+struct MemoryQueryResponse {
+  facts: [RelevantFact]
+  note: String?
+}
+```
+
+**Request-type enforcement.** Each `AIRequestType` declares an allowed set of `MemoryContextType` values. The workout planner can ask for `physicalLimitations`, `trainingGoals`, `preferences`, `pursuits`, `sensitiveEmotionalContext`, and `intimacy` — but **not** `relationships` or `workContext`. The coaching-tone feature gets `relationships`, `recurringThemes`, `intimacy`, and `preferences` but not `physicalLimitations`. Violations are compile-time errors.
+
+**Privacy properties:**
+1. The workout AI never sees "Sam is my partner" even if it's in Core Memory
+2. The OHTTP path cannot see any Sensitive Memory entries
+3. The calling AI never sees the full memory store; only the filtered subset
+4. Raw memory is reachable by exactly one function per tier
+5. Period-derived signals never enter the memory store (the extraction pipeline can't see them)
+
+---
+
+## 8. Proximity Handshake Protocol
+
+The proximity handshake is the foundational primitive for four features: adding a friend, joining a shared activity, refreshing a friend's cached appearance, and unlocking access to a friend's creation shop. All four flow through the same core mechanism.
+
+### Two-layer architecture: BLE for transport, NearbyInteraction for ranging
+
+Apple's `NearbyInteraction` framework provides centimeter-scale distance and direction measurements via UWB, but it cannot discover peers, exchange application data, or carry any payload. Its only output is `NINearbyObject.distance`, `.direction`, and `.horizontalAngle`. Discovery and data exchange must happen over a separate transport.
+
+Fernlet uses **Core Bluetooth (BLE)** as the transport layer and **NearbyInteraction** for ranging. This is the same pattern AirDrop uses internally.
+
+**Why BLE specifically:**
+- Truly peer-to-peer with no shared network requirement
+- Low power, long battery life for the foreground discovery scenario
+- Reliable cold-start discovery between strangers' phones
+- Modern, actively maintained framework
+- Bandwidth is more than sufficient for handshake packets (a few hundred bytes)
+
+### Layer 1: BLE discovery and data exchange
+
+Each phone in handshake mode runs as both a `CBPeripheralManager` and a `CBCentralManager`:
+
+- **Peripheral role:** advertises a Fernlet service UUID with two characteristics:
+  - `EphemeralIdentifierCharacteristic` (read) — contains a rotating ephemeral ID, not the user's persistent public key
+  - `HandshakePacketCharacteristic` (write) — receives signed `HandshakePacket` writes from peers
+- **Central role:** scans for nearby Fernlet service UUIDs and presents discovered peers in the UI
+
+Both phones see each other within 1–3 seconds of opening the handshake screen.
+
+**Foreground only.** BLE advertising in the background is heavily restricted by iOS. Since the handshake flow requires both users to actively open the app and tap a button, this is fine.
+
+### Layer 2: NearbyInteraction ranging
+
+Once two phones have discovered each other over BLE and the user has tapped to initiate:
+
+1. Each phone creates an `NISession` and obtains its `discoveryToken`
+2. Discovery tokens are exchanged over the BLE characteristic write
+3. Each phone calls `NISession.run(NINearbyPeerConfiguration(peerToken:))`
+4. Centimeter-scale distance updates start streaming via the `NISessionDelegate`
+5. The UI shows the live distance and pulses when phones are within ~30 cm
+
+**Concurrent session limits.** Roughly 2 simultaneous sessions on iPhone 11 (U1) and 3–4 on iPhone 12+ (U2).
+
+**Device exclusions.** iPhone SE (all generations) and iPhone 16e/17e lack U1/U2 hardware. `NISession.isSupported` checked at runtime.
+
+### Handshake packet
+
+```
+HandshakePacket {
+  protocolVersion: int
+  intent: enum (.addFriend | .joinActivity | .openShop | .genericPresence)
+  senderUserId: UUID
+  senderPublicKey: Ed25519 public key
+  senderDisplayName: string
+  senderAvatarConfigSnapshot: {body, hair, eyes, skin, glasses, equippedItems, equippedBottle, accessibilityItems}
+  niDiscoveryToken: encoded NIDiscoveryToken
+  activityContext: optional { activityId if joining }
+  nonce: 16 bytes (random, per-handshake)
+  timestamp: int (unix epoch)
+  signature: Ed25519 signature over the entire packet
+}
+```
+
+For payloads exceeding the BLE characteristic write limit, the packet is chunked and reassembled.
+
+### The core flow
+
+1. **Initiation.** User taps "Add Friend," "Create Activity," "Join Activity," or "Open Shop." The app starts BLE advertising + scanning.
+2. **BLE discovery.** Both phones see each other within a few seconds. A card appears on each.
+3. **Mutual confirmation.** Both users must tap. A phone in a pocket cannot silently authorize anything.
+4. **Packet exchange (BLE).** Each side writes its signed `HandshakePacket` to the peer's characteristic. Signatures verified, nonces checked, timestamps confirmed.
+5. **NearbyInteraction ranging starts.** Both phones launch `NISession.run()`. Live distance appears. Physical confirmation at ≤30 cm.
+6. **Commit side effects.** Based on `intent`:
+   - `addFriend` → create `FriendLink`, add `Friend` and `FriendAvatarCache`
+   - `joinActivity` → append to `Activity.participants`, increment `ClosenessScore` for all present pairs
+   - `openShop` → mark a 6-hour shop session open
+   - `genericPresence` → update `FriendAvatarCache.lastSyncedInPersonAt` and refresh cached appearance
+7. **Optional photo capture.** While session is open, "take a moment" camera button. One photo per participant. See [Section 10](#10-photowall).
+8. **Appearance sync always runs as a side effect.** Any successful handshake between existing friends refreshes both appearance caches.
+9. **Disconnect.** NISession ends, BLE advertising stops. No persistent connection.
+
+Total handshake time: typically 5–10 seconds.
+
+### Group activities: hybrid local/cloud cascading trust
+
+For small groups (2–3), every join is a direct BLE+NI handshake with the host.
+
+For larger groups (4+), **cloud-assisted cascading trust**:
+1. Host creates activity. First 2 joiners handshake directly.
+2. At 3+ participants, roster published to cloud as `ActivityJoinToken`, signed by host.
+3. Newcomers handshake with any current participant. That participant uploads a signed vouch. Cloud admits newcomer.
+4. **Maximum two taps to join any group activity.**
+
+**`ActivityJoinToken`** *(cloud, ephemeral)*
+`activityId, hostPublicKey, roster [{userId, publicKey, joinedViaVouchBy, joinedAt}], hostSignature, expiresAt`
+
+### 10-minute activity trust window
+
+Within a specific activity, once you've handshaken with someone, further handshakes within 10 minutes are skipped. Handles "phone went to sleep" without forcing a re-tap. Per-activity, per-peer.
+
+### Shop access window
+
+After any successful handshake with a friend, a **6-hour shop access window** opens. Browse their creation shop from anywhere within that window.
+
+**ShopAccessSession** *(device, transient)*
+`friendPublicKey, openedAt, expiresAt (openedAt + 6h)`
+
+### Data model additions
+
+**HandshakeEvent** *(device, log)*
+`id, peerPublicKey, intent, nonce, occurredAt, distanceCm, resultingEntityIds`
+
+Local-only, aged out after ~90 days.
+
+**ActivityHostSession** *(device, transient)*
+`activityId, hostUserId, openedAt, confirmedParticipants [userId], cloudTokenPublished, status`
+
+### Privacy considerations
+
+- BLE only advertises while a flow is actively open
+- Ephemeral IDs before confirmation
+- Public key is the only persistent peer identifier
+- iOS handles BLE address randomization automatically
+- Cloud sees only public keys and rosters, not content
+
+### UI moment
+
+```
+┌──────────────────────────┐
+│  🟢  Looking for friends │
+│                          │
+│       ○ ← Alex           │
+│        15 cm              │
+│                          │
+│  [  Tap when ready  ]    │
+│                          │
+│  Both of you need to     │
+│  tap to connect          │
+└──────────────────────────┘
+```
+
+---
+
+## 9. Friend System and State Sharing
+
+### 8 core + 4 close
+
+Each user has 8 core friend slots and 4 close friend slots, totaling 12. Core slots are user-managed; close slots auto-fill from trailing 30-day `ClosenessScore`.
+
+### What friends see about each other
+
+- **Fuzzy state** (live, via cloud) — `thriving | okay | struggling`. Never the numeric score, component breakdown, goal type, or cycle phase.
+- **Visible appearance** (cached, from last in-person handshake) — body, hair, equipped items, equipped bottle, accessibility items. **Background scenes are never synced.**
+- **Send-heart button** — rate-limited to one per friend per day, server-enforced.
+
+### Appearance syncs on meetup; fuzzy state is live
+
+A friend's appearance is cached from your last proximity handshake. Fuzzy state updates live via the cloud so hearts-for-low-health still work.
+
+**Appearance is about presence; state is about care — different cadences on purpose.**
+
+### Activities with friends
+
+One person creates an activity, others tap-to-join via the proximity handshake. Each logged activity increments closeness. Sole input to close-friend ranking.
+
+### Close-friend demotion
+
+Before auto-demotion, a soft notice appears: *"Sam hasn't been a close friend lately, mostly because you haven't done anything together in three weeks. Send them a heart or make plans?"* Demotion still happens on schedule; the notice is a chance to act. Non-repeating per friend per cycle.
+
+### Hearts
+
+Decaying bonus segments on the receiver's health bar (Minecraft golden-apple style). Decay over ~24h. Rate limit enforced server-side.
+
+---
+
+## 10. Photowall
+
+A place for photos of real moments. Sits behind the avatar as a fixed background element shaped like Polaroids on a string. Opens into a full gallery on tap. Photos occasionally surface on loading screens as ambient memory moments.
+
+### Design goals
+
+- Photos of presence, not curation
+- Memory-surfacing that feels kind (filtered when the user has written negatively about someone in the photo)
+- On-device only (encrypted, never in cloud)
+
+### Placement on home screen
+
+Fixed position in the background. 3–5 Polaroids in slow rotation, cross-fading every few minutes. Enable/disable but cannot move.
+
+### Adding photos — proximity handshakes
+
+One photo per participant during active handshake. Auto-tagged with handshake participants. Shared via Photo Booth card for 24 hours.
+
+### Photo Booth (handshake after-party)
+
+`PhotoBoothCard` appears on friend's profile. 24-hour lifetime. Keep/dismiss per photo. Passive presence, not a push notification.
+
+### Adding photos — journal entries
+
+One photo per entry. Camera opens by default; "choose from library…" behind an extra tap. Manual people tagging only (handshake metadata doesn't apply).
+
+### People tagging — metadata only, never face recognition
+
+Handshake metadata only. No Vision face matching, no face database.
+
+### Memory-aware exclusion rules
+
+`photoSurfacingExclusion` in Sensitive Memory. Negative journal text about a person triggers exclusion. Reversible via positive writing or natural language command. Falling off friend list is NOT an exclusion (mild surfacing preference for rekindling).
+
+### Surfacing logic
+
+1. **Hard filters:** excluded people, last 7 days, shown in last 30 days on same surface
+2. **Preference weights:** positive journal days (strong), closeness-building activities (strong), ex-friends not excluded (mild), >1 year old (mild), never surfaced (mild)
+3. **Random weighted pick**
+
+### Loading-screen Polaroids
+
+Normally ~1 in 10 loading screens. Bumped to ~1 in 4 when `moodTrend` is declining.
+
+### Gallery view
+
+Grid/scroll, filter by source/person, full-screen with metadata, copy to Photos Library via `PHPhotoLibrary`, delete from Fernlet.
+
+### Storage and eviction
+
+`PrivateMediaStore` with file-level encryption + CryptoKit key. 1000 photo hard cap. Warning banner at 900. FIFO eviction at 1000. Manual deletion anytime.
+
+### Privacy and AI interaction
+
+- Photos never sent to any AI model (Foundation Models is text-only anyway)
+- Never transmitted off-device
+- `Photo` type in `PrivateMediaStore`, unimportable by AI modules (compile-time enforced)
+
+---
+
+## 11. Ambient Features
+
+Features that emerge from the data already collected. Nothing in this section surfaces dashboards, charts, percentiles, or comparisons.
+
+### Loading-screen companions (Skyrim-style)
+
+During Foundation Models inference (2–4 seconds), the tamagotchi runs across the screen with a text callout. Padded to 2-second minimum.
+
+**Ambient pattern observations:**
+- "You tend to sleep better the weeks you see friends."
+- "Your yellow days often follow good workouts."
+- "You've been drinking more water since switching bottles."
+- (With period tracking, high-confidence trends): "You tend to sleep lighter the week before your period."
+
+**Gentle reappearance of forgotten good things:**
+- "You haven't made your lentil soup in a while."
+- "It's been six weeks since your last yoga session — you used to love it."
+
+Max once per month per category. Nagging is disallowed.
+
+### Seasonal rhythm recognition
+
+After roughly a year: scoring weights adjust for historically-harder months, coaching tone softens, workout intensity suggestions bias lower. No UI announces this.
+
+### Friend activity suggestions (symmetric, privacy-clean)
+
+Each phone runs its own local suggestion pass using its own Core Memory, then exchanges only the resulting suggestions. Neither phone sees the other's memory.
+
+### Matched tamagotchi moods
+
+When two friends both show "struggling," a gentle nudge: *"Alex is also having a hard day, want to send hearts?"* Once per friend per week max.
+
+### Meal suggestions from your own history
+
+**Underused favorites.** **Macro-gap suggestions.** **Restaurant mood pairing** (cross-reference meal timestamps with journal tags). Recency rules for restaurants: ≥2 weeks old, or part of a repeat pattern.
+
+### Gentle mood-recovery prompts
+
+When `moodTrend` is declining. Only suggests activities from user's own history. Weather integration via WeatherKit. Non-repeating.
+
+### Shopping lists → share sheet
+
+`UIActivityViewController` for sharing formatted ingredient lists. Secondary option: Apple Reminders via EventKit (`EKReminder`) for true checklist support. Multiple scheduled meals merge into one shopping list.
+
+### Tamagotchi reactions to logged events
+
+Small cheer (all macros hit), flexing (strength), sprint (cardio), sipping (hydration), yawn (sleep logged), sleepy wave (sickness), tiny dance (friend activity). 1–2 seconds, dismissible.
+
+### Wardrobe unlocks from activity patterns
+
+Headband (N cardio), apron (N recipes), cold-weather jacket (N winter outdoor), hiking boots (N hikes with friends), chef's hat (variety threshold).
+
+### Background auto-decorations (temporary)
+
+Optional "auto-add" mode. Running shoes, coffee cups, books, dumbbells, plants. Each fades after ~1 month. Pinnable. Off by default.
+
+### Preventive care thought bubbles
+
+`PreventiveCare` tracking. Ambient thought bubble when overdue. Dismissible, no push notifications. Custom categories with custom cadences.
+
+### Year-ago journal card
+
+On the journal screen, shows entry from exactly one year ago today. Color tag and text only, no interpretation. Only appears when a year-old entry exists.
+
+---
+
+## 12. Onboarding and Permissions
+
+### Onboarding screens (6 max)
+
+1. **Welcome + privacy promise**
+2. **Goal selection**
+3. **Starter customization** — hair, eyes, skin, glasses, clothing color, water bottle, accessibility items
+4. **Optional personal details** — age bracket, sex, height, weight (all skippable)
+5. **Dietary pattern** — multi-select, skippable
+6. **HealthKit + notification permissions**
+
+### Tier 1 — Essential (asked at onboarding)
+
+| Field | Required | Purpose |
+|---|---|---|
+| Goal | Yes | Sets weighting coefficients |
+| Age bracket (<18, 18–25, 26–40, 41–60, 60+) | Yes | Sleep target, macro defaults, workout suggestions |
+| Biological sex | Optional | Macro defaults, period tracker availability |
+| Height | Optional | Macro target calculation |
+| Current weight | Optional | Macro target calculation (never tracked over time in v1) |
+| Dietary pattern (multi-select) | Optional | Meal analysis, future recipe features |
+
+### Tier 2 — Contextual (asked on first use of each feature)
+
+| Feature | Data collected |
+|---|---|
+| Exercise (first open) | Activity level, equipment access, injuries/areas to avoid |
+| Food (first log) | Preferred units, typical meals per day |
+| Hydration (first use) | Container choice, daily target |
+| Period (first use) | Typical cycle length, last period start, option to enable period-aware scoring and meal/workout adjustments — all optional |
+| Journal (first use) | Nothing — keep friction at zero |
+| Friends (first add) | Nothing — just the proximity handshake |
+
+### Tier 3 — Learned passively
+
+- Meal timing patterns (from logged meals)
+- Workout frequency baseline (HealthKit + logs)
+- Sleep pattern (HealthKit)
+- Journal cadence
+- Closeness scores (from activities)
+- Cycle phase correlations (from period + health data, computed by `BGProcessingTask`)
+
+### Deliberately NOT collected
+
+Exact weight goals, target weight, weight history, body fat %, medical conditions beyond minimal dietary/injury context, mental health diagnoses, medications, social-demographic data.
+
+### Permissions requested at first use (not all at onboarding)
+
+- **HealthKit reads** — heart rate, active energy, sleep analysis, step count, workout type. Requested at first exercise log or first home screen render that needs sleep data.
+- **HealthKit writes** — workout samples. Requested alongside read permission with a separate explanation.
+- **Bluetooth** — requested at first proximity handshake attempt.
+- **Camera** — requested at first journal photo or first handshake photo capture.
+- **Photo Library Add** — requested only when the user taps "copy to Photos library."
+- **Notifications** — requested during onboarding screen 6.
+- **Location (coarse)** — requested at first WeatherKit feature trigger.
+- **Background App Refresh** — requested for `BGProcessingTask` (period health trend computation, seasonal rhythm analysis). System-managed scheduling, no user-facing friction.
+
+---
+
+## 13. Milestones, Unlocks, and Customization
+
+### Starter customization (onboarding)
+
+Hair (style + color), eyes (shape + color), skin (tone), glasses (optional), clothing color (palette), water bottle (starter container), accessibility items (always available, never a milestone unlock). No body-type selection. One silhouette.
+
+### Unlockable categories
+
+Shirts, pants, shoes, hats, accessories, alternate water bottles, background scene elements.
+
+### Background scenes
+
+MySpace-level customizable. Place, scale, rotate, layer, color freely. Visible only to the user. Never synced.
+
+### Milestone rules
+
+**Every unlock condition must be cumulative and non-resettable.** Direct application of the "no streaks" axiom.
+
+Good shapes: totals (50 meals ever), breadth (tried all 3 meal inputs), social (first friend, first activity), longevity (30 total days used), variety (all 3 macro rings on 10 different days ever).
+
+Disallowed: anything "in a row" or "in a single week," anything tied to weight/calories/body composition, friend count as a target.
+
+### Unlock pacing
+
+First week: 2–3 early unlocks. Middle tenure: steady trickle. Last ~20%: months-long chases. Small subset: friend-activity milestones only.
+
+### User-created items
+
+One credit per 30 days of app use (cumulative, non-resettable). Cap at 3. Freeform drawing on a guide-box canvas. Save (unlimited revisions, draft) vs Publish (permanent, costs 1 credit, runs classifier, names item).
+
+**Publish-time moderation:** Custom Core ML NSFW classifier via `VNCoreMLRequest` for images. `MLTextClassifier` for item names. On-device only.
+
+**Sharing:** In-person only via shop access window (6 hours after handshake). Buy with 1 credit. No reselling. Creator signature preserved.
+
+**Moderation constraints:** On-device classifier + small social graph (12 friends max, in-person-verified). Local hide/block supported. No report button (no centralized distribution).
+
+---
+
+## 14. Screens and Navigation
+
+### Home / Tamagotchi
+- Avatar, health bar (base + heart bonus), equipped container
+- Photowall background element (fixed position)
+- Quick-log row
+- Live score indicator (subtle)
+- Preventive-care thought bubble (when overdue)
+- Approaching-period thought bubble (when predicted start within 3 days, if period tracking enabled)
+
+### Food
+- Today's macro rings (protein / carbs / fat) — no calorie number
+- Period-aware nutrition nudges (e.g., "iron-rich meal ideas" during menstruation) — subtle, dismissible
+- "Add meal" → photo / recipe / search / from history
+- Meal history
+- Meal detail
+
+### Exercise
+- Today's suggestion (period-aware intensity adjustments noted when applicable)
+- "Log workout" → exercise picker with sets/reps/weight
+- Per-exercise progress (weight over time)
+- HealthKit summary (heart rate, active energy, imported workouts)
+
+### Journal
+- Calendar heatmap (color per day)
+- Today's entry (color tag + ≤100 words + optional one photo)
+- Photo button opens camera by default; "choose from library…" behind an extra tap
+- Year-ago card (when applicable)
+- Entry detail (tap a past day)
+
+### Hygiene
+- Today's toggles (shower, teeth AM/PM, + extensible)
+- Simple weekly overview
+
+### Period (walled off)
+- Cycle calendar with predicted next period highlighted
+- Log entry (flow, symptoms, sexual activity toggle, notes)
+- **Predictions panel** — predicted next start date ± confidence window, expected flow intensity, expected symptom profile (6+ cycles)
+- **Trends view** — sleep/mood/exercise/nutrition by cycle phase with confidence indicators
+- Period-aware scoring adjustment status ("your score is slightly more forgiving for sleep during your luteal phase")
+- Toggle: enable/disable period-aware meal and workout adjustments
+- Toggle: enable/disable period-aware scoring adjustments
+- Privacy reaffirmation banner ("period data never leaves your device, never sent to third-party AI")
+
+### Hydration
+- Today's container fill state (period-aware target adjustment noted when applicable)
+- Tap to add unit
+- Container picker
+
+### Sleep
+- HealthKit summary
+- Trend view
+- Subtle indicator if richer data (sleep stages) is available
+
+### Friends
+- 8 core + 4 close slots
+- Each friend: fuzzy state (live), cached appearance from last meetup, send-heart button
+- Add friend (proximity handshake flow)
+- Photo Booth cards from recent hangouts
+
+### Photo Gallery
+- Grid of all photos, sorted by capture date
+- Filter by source or tagged person
+- Tap for full view with metadata
+- Copy to Photos library; delete from Fernlet
+
+### Activities
+- Create activity → others tap-to-join
+- Activity history
+- Closeness view
+
+### Wardrobe & Background
+- Owned items, milestone progress, background composer
+- Creation credits, drafts
+
+### Creation Studio
+- Slot picker, guide-box canvas, save vs publish
+
+### Friend Shops *(6-hour window after handshake)*
+- View friend's published creations
+- Buy with 1 credit
+
+### Memory
+- Browse Core Memory by category
+- Natural-language forget/edit
+- Enable/disable extraction
+- Wipe everything / wipe Sensitive only
+- Export Core Memory
+- No export/view/reveal for Sensitive Memory
+
+### Coaching Tone
+- Preview, reset, toggle, cap
+
+### Settings
+- Goal, macro goals
+- AI settings (per-feature, on-device vs OHTTP)
+- AI audit log
+- HealthKit permissions (read + write toggles)
+- HealthKit write-back toggle
+- Memory store link
+- Coaching tone link
+- Privacy center (period tracker reaffirmation, data export, delete)
+- Sickness toggle
+- Bluetooth permission status
+
+---
+
+## 15. Privacy Architecture and Data Flow
+
+### What stays on-device
+
+- All raw journal text
+- All sensitive memory entries
+- All period entries, predictions, and health trends
+- All photo bytes
+- All AI inferences when using the on-device tier
+- All scoring computation
+- All meal definitions and logs
+- All workout logs (also written to HealthKit if user permits)
+- Background scene composition
+- User-created clothing designs (until in-person shared)
+
+### What syncs via iCloud Keychain
+
+- Identity keypairs (Ed25519 + X25519). End-to-end encrypted.
+
+### What goes to HealthKit (local, user-controlled)
+
+- Workout samples (written back so they count toward Apple Watch rings and appear in Apple Health)
+- No period data, no mood data, no journal data, no hydration data
+
+### What goes to the cloud (minimal, public-key-keyed only)
+
+- `Friend` (id, displayName, publicKey, fuzzyState, lastSeenActive)
+- `FriendLink` (userA, userB, establishedAt, establishedVia)
+- `Activity` (id, creatorId, title, type, startedAt, participants, optional coarse location)
+- `ActivityJoinToken` (ephemeral)
+- `HeartSent` (ephemeral, ~24h)
+
+No content, no health metrics, no scores, no journal data, no photos, no period data, no memory.
+
+### What goes to third-party AI providers (explicit per-feature opt-in only)
+
+See [Section 16](#16-third-party-integrations-and-cloud-fallbacks). Routed through OHTTP. Payloads constructed by `ContextBuilder` with strict allowlists. `OHTTPProvider` **cannot import** `PeriodEntry`, `PeriodContextBridge`, `SensitiveMemory`, or `Photo` — compile-time enforced. Period-aware workout and meal adjustments are only available when using the on-device AI tier.
+
+### Compile-time enforcement diagram
+
+```
+                    ┌─────────────────────────────────┐
+                    │  PrivateHealthStore module       │
+                    │  - PeriodEntry                   │
+                    │  - PeriodCycleHistory            │
+                    │  - PeriodPrediction              │
+                    │  - PeriodHealthTrend             │
+                    │  (no exports to AI modules)      │
+                    └──────────┬──────────────────────┘
+                               │ (read-only import)
+                    ┌──────────▼──────────────────────┐
+                    │  PeriodContextBridge module      │
+                    │  - PeriodPhaseSignal             │
+                    │  - PeriodNutritionSignal         │
+                    │  - PeriodExerciseSignal          │
+                    │  (importable by ContextBuilder   │
+                    │   for on-device payloads ONLY)   │
+                    └─────────────────────────────────┘
+
+                    ┌─────────────────────────────────┐
+                    │  PrivateMemoryStore module       │
+                    │  - SensitiveMemory               │
+                    │  (no exports to OHTTPProvider)   │
+                    └─────────────────────────────────┘
+
+                    ┌─────────────────────────────────┐
+                    │  PrivateMediaStore module        │
+                    │  - Photo                         │
+                    │  (no exports to any AIProvider)  │
+                    └─────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│ Feature code (meal, workout, journal, period screen, etc.)       │
+│   calls: ai.request(.workoutSuggestion, …)                       │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │
+              ┌──────────────▼──────────────┐
+              │   ContextBuilder            │
+              │  - assembles payload         │
+              │  - strips forbidden fields   │
+              │  - filters memory via agent  │
+              │  - includes PeriodContext     │
+              │    signals for on-device only │
+              └──────────────┬──────────────┘
+                             │
+              ┌──────────────▼──────────────┐
+              │   AIProvider                │
+              │  .onDevice (Foundation       │ ← Full context including
+              │             Models)          │   period signals + sensitive memory
+              │                              │
+              │  .thirdPartyOHTTP            │ ← Stripped: no period signals,
+              │                              │   no sensitive memory, no photos
+              └──────────────────────────────┘
+```
+
+### Audit log
+
+Every AI call records (locally): request type, provider, field names (not values), whether period context was included, response success. Visible in Settings.
+
+### Period data deletion
+
+Deleting period data from `PrivateHealthStore`:
+- Removes all `PeriodEntry`, `PeriodCycleHistory`, `PeriodPrediction`, and `PeriodHealthTrend` records
+- `PeriodContextBridge` immediately returns `.unknown` / `.noData` for all signals (signals are recomputed from source data, not cached independently)
+- `DailyHealthScore.periodPhaseAtTime` entries in historical snapshots are **not** retroactively cleared (the field is a simple enum value already frozen in the snapshot — it reveals only "what phase you were in" on that date, not period-specific detail)
+- No period-derived data exists in Foundation Models or CoreML (inference is stateless)
+- No period-derived data exists in the memory store (`MemoryExtractionContext` does not import `PeriodContextBridge`)
+
+---
+
+## 16. Third-Party Integrations and Cloud Fallbacks
+
+### Why this exists separately from the on-device AI layer
+
+Apple Foundation Models is on-device only and does **not** escalate to Private Cloud Compute for third-party apps. If a feature needs more capability, the only option is a third-party LLM API. This must be explicit, opt-in, per-feature, and routed through OHTTP.
+
+### Default state
+
+**Every feature defaults to the Apple on-device tier.** Third-party AI is off for every feature on every install.
+
+### Oblivious HTTP (OHTTP)
+
+OHTTP splits the request path so no single party sees both "who" and "what":
+1. App encrypts payload with the gateway's public key
+2. Encrypted blob sent to relay (sees IP, not content)
+3. Relay forwards to gateway (sees content, not IP)
+4. Response takes the same path in reverse
+
+### Implementation note
+
+There is no built-in iOS OHTTP client. Apple released `swift-nio-oblivious-http` (August 2024) for server-side use. Building a client requires custom HPKE encapsulation (CryptoKit), binary HTTP message format, HTTP transport, and response decoding. **This is a multi-week implementation task with security review required.**
+
+### Operational choices
+
+- **Relay:** managed OHTTP relay (e.g., Cloudflare), operator distinct from gateway
+- **Gateway:** small Fernlet-operated service, no logging, no persistence, no user-identifying headers
+- **No user accounts on the gateway.** Rate limiting via proof-of-work or per-relay quotas.
+- **Open-source the gateway.**
+
+### Honest limits
+
+- ~50–200ms additional latency
+- Timing correlation possible for sophisticated observers
+- Gateway is a US legal entity (subpoena surface)
+
+### What is sent to third-party providers
+
+Only structured `AIContextPayload`. **Never:** raw journal text (unless explicit "reflect" action), Sensitive Memory, period data (period signals stripped at compile time), photos, friend data, location.
+
+### What is NOT available via third-party AI
+
+Period-aware workout and meal adjustments are only available on the on-device tier. When a user opts into third-party AI for workout suggestions, the planner still works — it just loses period-specific context and falls back to derived signals (intensityReadiness, energyTrend) which partially capture the same information without period-specific framing.
+
+---
+
+## 17. App Store Compliance
+
+### Privacy manifest (`PrivacyInfo.xcprivacy`)
+
+Declares: Health & Fitness (HealthKit reads + writes), User Content (photos, journal), Identifiers (public key only), Diagnostics. All marked as not linked to identity, not used for tracking. No tracking domains.
+
+### App Privacy nutrition labels
+
+- **Data Used to Track You:** None
+- **Data Linked to You:** None (HealthKit write-back goes to the user's own Health database, not to Fernlet's servers)
+- **Data Not Linked to You:** Health & Fitness, User Content, Diagnostics
+
+### Health data (Guideline 5.1.3)
+
+- HealthKit data not used for advertising or data mining ✓
+- Personal health information not stored in iCloud ✓
+- Privacy policy with explicit health data section ✓
+- Per-data-type consent via HealthKit authorization sheet ✓
+- Period tracking walled off in `PrivateHealthStore` ✓
+- HealthKit write-back limited to workout samples with explicit user consent ✓
+
+### User-generated content (Guideline 1.2)
+
+On-device NSFW classifier + text classifier at publish time. Local hide/block supported. No report button (justified by architecture: no centralized distribution, peer-shared in-person only with 12 friends max).
+
+### Third-party AI disclosure (Guideline 5.1.2(i))
+
+Per-feature opt-in. Clear disclosure of provider, data types, exclusions, OHTTP mechanism. Privacy policy section. Privacy manifest declaration.
+
+### Usage descriptions
+
+- `NSBluetoothAlwaysUsageDescription`: Fernlet uses Bluetooth to find nearby friends.
+- `NSNearbyInteractionUsageDescription`: Ultra-wideband for physical proximity confirmation.
+- `NSCameraUsageDescription`: Journal photos and in-person hangout photos.
+- `NSPhotoLibraryAddUsageDescription`: Save photos from Fernlet to Photos library.
+- `NSHealthShareUsageDescription`: Read sleep, heart rate, active energy, workouts.
+- `NSHealthUpdateUsageDescription`: Write your logged workouts to Apple Health.
+- `NSLocationWhenInUseUsageDescription`: Weather-based suggestions only. Never tracked.
+
+---
+
+## Guardrails (recap)
+
+- **No streaks** on anything.
+- **No calorie goals** or deficits.
+- **Fuzzy friend visibility** — state only, never numbers, components, or cycle phase.
+- **Hearts rate-limited** to one per friend per day.
+- **Period data walled off** at the module boundary. Period-derived signals flow through `PeriodContextBridge` only for on-device AI; never sent to third-party providers.
+- **Soft mental-health nudge** on extended low-mood patterns: dismissible, non-repeating, 988 link.
+- **No aesthetic goals.**
+- **Sickness softens scoring.**
+- **Period-aware scoring softens** historically harder cycle phases, based on the user's own data — never generic assumptions.
+- **AI off by default for third-party providers.**
+- **No face recognition.**
+- **No PCC escalation for third-party apps.**
+- **BLE + NearbyInteraction** for proximity.
+- **Vision + Core ML** for image analysis.
+- **Foundation Models and CoreML are stateless** — no data persists in the model between inference calls.
+- **Sexual content allowed in Sensitive Memory** — important context for mood, energy, and relationship dynamics; strongest privacy guarantee in the app.
