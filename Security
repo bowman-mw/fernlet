@@ -1,0 +1,148 @@
+# Security Policy
+
+Fernlet handles sensitive personal health data — period tracking, mental health context, intimate journal entries, photos of real people. Security issues in this codebase have real potential for personal harm, not just technical inconvenience. Please read this document before reporting.
+
+---
+
+## Supported Versions
+
+| Version | Supported |
+|---|---|
+| Latest release | ✅ |
+| Previous minor | ✅ (critical fixes only) |
+| Older | ❌ |
+
+---
+
+## Reporting a Vulnerability
+
+**Do not open a public GitHub issue for security vulnerabilities.**
+
+Report privately via GitHub's [Security Advisories](../../security/advisories/new) feature. This creates an encrypted channel between you and the maintainers and keeps details out of public view until a fix is shipped.
+
+If you are unable to use GitHub Security Advisories, email **security@fernlet.com** with the subject line `[SECURITY]`. PGP key available on request.
+
+### What to include
+
+- A clear description of the vulnerability and its potential impact
+- Steps to reproduce or a proof-of-concept (even a rough one is helpful)
+- Which data category is at risk (see priority tiers below)
+- The iOS version, device model, and Fernlet version where you observed it
+
+### What to expect
+
+- **Acknowledgement within 48 hours**
+- **Initial triage within 5 business days**
+- We will keep you updated on progress and coordinate a disclosure timeline with you
+- We credit researchers by name in release notes unless you prefer to remain anonymous
+
+---
+
+## Data Categories and Priority Tiers
+
+Not all vulnerabilities carry equal weight here. We triage based on which data is at risk.
+
+### Tier 1 — Critical (respond within 24 hours)
+
+Any vulnerability that could expose or transmit:
+
+- **Period tracking data** — `PeriodEntry`, `PeriodCycleHistory`, `PeriodPrediction`, `PeriodHealthTrend`, or any data that would allow reconstruction of a menstrual history
+- **Sensitive Memory** — emotional context, relationship friction, grief, intimacy, financial stress stored in `PrivateMemoryStore`
+- **Photos** — image bytes from `PrivateMediaStore`
+- **Identity keypair** — Ed25519 or X25519 private keys from the Keychain
+
+These are the most sensitive categories in the app. A bug that causes any of these to leak into an AI payload, sync to the cloud, or become accessible to another app is treated as critical regardless of exploitability.
+
+### Tier 2 — High (respond within 72 hours)
+
+- **Journal text** reaching an AI provider without explicit user action
+- **Core Memory** being transmitted to third-party AI without opt-in
+- **Proximity handshake** spoofing — adding a friend without mutual physical confirmation
+- **Replay attacks** on `HandshakePacket` (nonce/timestamp bypass)
+- **Shop access session** being opened without a legitimate handshake
+
+### Tier 3 — Medium
+
+- Scoring or milestone manipulation that doesn't involve health data exposure
+- `HeartSent` rate-limit bypass
+- Friend fuzzy state spoofing (displaying a false state)
+- Cloud activity roster tampering
+
+### Tier 4 — Low
+
+- UI-only issues with no data exposure
+- Informational leaks that don't involve health data
+
+---
+
+## Architecture Context for Researchers
+
+Understanding the intended security model will help you identify where violations are most impactful.
+
+### Module boundary enforcement
+
+The primary defense for sensitive data is **Swift module import graph isolation**, not runtime checks. The following types are structurally unreachable from the listed modules — a vulnerability in this area means a module boundary has been broken or bypassed:
+
+| Protected type | Lives in | Must never reach |
+|---|---|---|
+| `PeriodEntry` and related | `PrivateHealthStore` | `ContextBuilder`, `OHTTPProvider`, any AI module |
+| `PeriodPhaseSignal` and bridge outputs | `PeriodContextBridge` | `OHTTPProvider` (on-device AI only) |
+| `SensitiveMemory` | `PrivateMemoryStore` | `OHTTPProvider`, any UI layer |
+| `Photo` | `PrivateMediaStore` | Any `AIProvider`, any network layer |
+
+If you find a code path where these types — or data derived from them — reach a module they shouldn't, that is a Tier 1 or Tier 2 issue regardless of whether it is currently triggerable by a user.
+
+### Identity and handshake
+
+- Identity keypairs are Ed25519 (signing) and X25519 (key agreement), stored in the Keychain as `kSecClassGenericPassword` items with `kSecAttrSynchronizable: true` for iCloud Keychain sync
+- `HandshakePacket` is signed over the full payload including a 16-byte random nonce and unix timestamp; replays and tampering should be rejected at verification
+- Trust-on-first-use (TOFU): a friend's public key is stored on first handshake; subsequent handshakes with a different key for the same friend must trigger a re-pair prompt, not silent acceptance
+- BLE advertising is foreground-only; background discovery is not supported and should not be possible
+
+### Oblivious HTTP
+
+When third-party AI is enabled, payloads are routed through OHTTP. The relay sees the source IP but not the payload content; the gateway sees the payload but not the source IP. A vulnerability that allows correlation of these two (linking identity to content at the network layer) is a Tier 2 issue. A vulnerability that causes `SensitiveMemory` or period data to appear in an OHTTP payload is Tier 1.
+
+### AI payload construction
+
+`AIContextPayload` is the only type the AI layer constructs. Unit tests assert that forbidden fields are absent from every payload shape. If you find a payload shape that includes period data, raw journal text without explicit user action, `SensitiveMemory`, or photo data, that is a security issue — report it here rather than as a regular bug.
+
+### HealthKit write-back
+
+Fernlet writes workout samples to HealthKit but is explicitly scoped to not write period data, mood data, or journal data. A bug that causes any non-workout data to be written to HealthKit would be a Tier 2 issue.
+
+---
+
+## Out of Scope
+
+The following are not in scope for this security policy:
+
+- Vulnerabilities in Apple's own frameworks (Foundation Models, HealthKit, NearbyInteraction, CryptoKit) — report those to Apple via [reportanissue.apple.com](https://reportanissue.apple.com)
+- Attacks that require physical access to an unlocked, jailbroken device
+- Social engineering attacks against users outside the app
+- Theoretical vulnerabilities without a plausible attack path
+- Issues already publicly known and tracked in open issues
+
+---
+
+## Disclosure Policy
+
+We follow **coordinated disclosure**. Once a fix is ready:
+
+1. We release the fix
+2. We publish a security advisory crediting the reporter
+3. We add a note in the release changelog
+
+For Tier 1 issues we aim for a fix within **14 days** of confirmation. For Tier 2, **30 days**. We'll communicate honestly if those timelines aren't achievable.
+
+We do not pursue legal action against researchers acting in good faith under this policy.
+
+---
+
+## A Note on Sensitivity
+
+The data this app handles — menstrual cycles, emotional patterns, intimate journal entries — is the kind of data that can cause real harm to real people if exposed. In some jurisdictions, period tracking data has legal implications. We take that seriously. If you find something, please tell us privately. We will take it seriously too.
+
+---
+
+*security@fernlet.com — fernlet.com*
