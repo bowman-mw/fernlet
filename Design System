@@ -1,0 +1,240 @@
+# Fernlet — Design System Brief
+*For use with AI design tools (Claude, Figma AI, etc.)*
+
+---
+
+## Concept & Aesthetic Direction
+
+Fernlet is a tamagotchi-of-yourself: a small, living character on your phone that reflects how you've been treating yourself. The design should feel like **a warm pocket object** — something you'd carry with you, something that grows alongside you. Think: a Polaroid camera, a worn field journal, a terrarium on a windowsill. Alive, textured, a little imperfect, never clinical.
+
+The tone is **soft botanical maximalism**: layered warmth over technical restraint. There is real data under the hood but the surface should never feel like a dashboard. The app should feel like you're tending something, not tracking something.
+
+**One sentence to hold onto while designing:** *The app is a little creature that lives in your phone — design every screen like you're decorating its home.*
+
+---
+
+## Color Palette
+
+### Base Palette
+
+| Name | Hex | Usage |
+|---|---|---|
+| Parchment | `#F5EFE0` | Primary background, cards |
+| Cream | `#FBF7EE` | Elevated surfaces, modals |
+| Bark | `#3D2E1E` | Primary text, strong contrast |
+| Moss | `#5A7A52` | Primary brand accent, CTAs |
+| Fern | `#8AAD7E` | Secondary accent, progress fills |
+| Lichen | `#C8DBC2` | Muted fills, tinted backgrounds |
+| Terracotta | `#C0674A` | Alert, sickness state, warnings |
+| Goldenrod | `#D4A843` | Hearts, warmth, celebration moments |
+| Slate | `#7B8B99` | Secondary text, disabled states |
+| Midnight | `#1A1F2E` | Dark mode background |
+
+### Avatar State Colors
+
+These are used for health bar fills and the fuzzy friend state chips. They are **never shown as raw numbers** — only as these named states.
+
+| State | Color | Hex |
+|---|---|---|
+| Thriving | Deep fern | `#5A7A52` |
+| Okay | Warm amber | `#C9964A` |
+| Tired | Dusty lavender | `#8B7B9E` |
+| Fainted | Muted slate | `#9BA8B4` |
+| Sick | Terracotta | `#C0674A` |
+
+### Journal Tag Colors
+
+Journal entries use color as emotional shorthand. These are intentionally soft — they represent a range of feeling, not a traffic-light judgment system.
+
+| Tag | Color | Hex |
+|---|---|---|
+| Bright / Great | Warm yellow | `#EDD87A` |
+| Good / Okay | Soft green | `#A8C89C` |
+| Neutral | Stone | `#B8B0A4` |
+| Quiet / Reflective | Dusty blue | `#94AEBF` |
+| Tired / Low | Muted plum | `#A08898` |
+| Hard / Difficult | Terracotta | `#C88070` |
+
+*Note: No tag is "bad." Hard days still count.*
+
+---
+
+## Typography
+
+### Type Scale
+
+| Role | Typeface | Weight | Size | Notes |
+|---|---|---|---|---|
+| App Wordmark | Playfair Display | Italic 400 | — | Logo use only |
+| Display / Avatar State | Fraunces | 600 | 28–36pt | Organic, a little imperfect |
+| Section Headers | DM Serif Display | 400 | 20–24pt | Warm, editorial |
+| Body / Primary UI | Instrument Serif | 400 | 15–17pt | Readable, characterful |
+| Labels / Secondary | DM Sans | 400–500 | 12–14pt | Clean, unfussy |
+| Numbers / Stats | Tabular variant of DM Sans | 500 | varies | Mono-numeral for alignment |
+| Thought Bubbles / Ambient | Instrument Serif, italic | 400 | 14pt | The tamagotchi's voice |
+
+**Key rule:** Serif for the companion's world (headers, avatar state, ambient observations). Sans-serif for the user's interface layer (labels, toggles, settings). The boundary is the character's vs. the app's voice.
+
+---
+
+## Spacing & Layout
+
+Fernlet uses an 8pt base grid. Corner radii are generous — nothing sharp, nothing that feels punishing.
+
+| Token | Value | Notes |
+|---|---|---|
+| `--radius-sm` | 10pt | Chips, tags |
+| `--radius-md` | 18pt | Cards, modals |
+| `--radius-lg` | 28pt | Bottom sheets, floating panels |
+| `--radius-xl` | 40pt | Full-bleed cards, avatar container |
+| `--space-xs` | 4pt | — |
+| `--space-sm` | 8pt | — |
+| `--space-md` | 16pt | Default internal padding |
+| `--space-lg` | 24pt | Section gaps |
+| `--space-xl` | 40pt | Major layout divisions |
+
+---
+
+## Textures & Surface Treatment
+
+### Parchment Grain
+All primary surfaces use a subtle noise texture (opacity ~4–6%) layered over the base color. This prevents surfaces from reading as flat digital rectangles — they should feel slightly warm, slightly physical. Think: recycled paper, not glass.
+
+### Card Shadows
+Cards use warm-tinted shadows, not cold gray ones.
+`box-shadow: 0 2px 8px rgba(61, 46, 30, 0.08), 0 6px 24px rgba(61, 46, 30, 0.05)`
+
+### Layering
+The home screen has three visual layers:
+1. **Background layer** — photowall Polaroids (fixed, slow-fading)
+2. **Midground layer** — the tamagotchi and health bar
+3. **Foreground layer** — quick-log row, thought bubbles
+
+Always design with these layers in mind. Content should breathe, not stack.
+
+---
+
+## Iconography
+
+Icons use a **slightly rounded, 1.5pt stroke weight** style — not perfectly geometric, not too sketchy. Think a careful hand drawing with a fine-tip pen. Avoid filled/solid icons on primary surfaces; use outlines with selective accent fills.
+
+Custom icon categories to commission:
+- Food items (illustrated, not generic fork/knife)
+- Exercise types (small gesture silhouettes)
+- Hygiene items (toothbrush, shower head, etc. in the same hand-drawn style)
+- Companion accessories (bottle types, hats, accessories for the avatar wardrobe)
+- Period/cycle glyphs (moon phases, flower, wave — nothing clinical)
+
+System SF Symbols are acceptable for purely functional UI elements (navigation, settings, toggles).
+
+---
+
+## The Companion (Avatar)
+
+The tamagotchi character is the emotional center of the app. A few hard rules:
+
+- **One silhouette.** No body-type variation. The character reads as a small round creature — not a human body.
+- **Expression over posture.** Emotional states are communicated via face (eyes, mouth, blush marks) and small particle effects, not body shape.
+- **Reactions are brief.** 1–2 second animations, then idle. Never looping frantically.
+- **Gentle idle animations.** The character should breathe softly, blink occasionally, look around. At rest, it should feel alive, not frozen.
+- **State degradation is gradual and gentle.** Tired looks sleepy, not haggard. Fainted looks napping, not distressed. The character is never alarming.
+- **Sick state.** Small pink blush marks, slightly drooped eyes, perhaps a tiny thermometer. Sympathetic, not gross.
+
+### Companion Voice (Loading Screen Observations)
+Thought bubbles use Instrument Serif italic, set against a soft cream card with a `--radius-xl` corner. The bubble should feel handwritten-adjacent. Max 2 lines. Never punishing, never mentioning what the user *didn't* do.
+
+---
+
+## Motion Principles
+
+Fernlet's motion language is **unhurried and gentle**. Nothing should feel urgent or demanding.
+
+| Principle | Implementation |
+|---|---|
+| Ease curves | Always ease-out or custom spring curves. No linear motion. |
+| Duration | UI transitions: 200–280ms. Avatar reactions: 300–500ms. Loading transitions: 600–800ms. |
+| Entry | Elements float in softly (translateY 8–12pt + opacity). Never snap. |
+| Exit | Elements dissolve (opacity only). Don't slide out aggressively. |
+| Celebration | Gentle particle burst (goldenrod + fern). Small scale bounce (1.0 → 1.06 → 1.0). |
+| No punishing motion | Nothing shakes, nothing flashes red, nothing demands attention. |
+
+### Loading Screen Companions
+The tamagotchi walks across the screen during AI inference. The walk cycle should be charming and slightly bouncy — this is a *feature moment*, not a spinner. A soft vignette fades in behind it. The text callout appears 300ms after the character enters frame.
+
+---
+
+## Data Visualization Rules
+
+Fernlet shows very little raw data. When it does appear:
+
+- **Macro rings** (food screen) — donut rings for protein/carbs/fat only. No calorie ring. Ever.
+- **Journal heatmap** — calendar grid using journal tag colors. Low opacity for empty days (not gray, not absent — just quiet).
+- **Health bar** — segmented strip with colored state fill + goldenrod heart bonus segments at the right end. Never shows a percentage number.
+- **Hydration fill** — the container fills from bottom to top as a liquid. Gentle wave animation at the surface.
+- **Trend views** — soft area charts, not bar charts. Curves, not angles. No grid lines (or extremely faint ones). No Y-axis labels unless critical.
+- **Period trends** — phase-labeled arc or ribbon layout. Confidence level shown as text hedging, not as error bars.
+
+**Never show:** calorie counts, weight, numeric score (only the avatar state), comparison to any baseline or average outside the user's own history.
+
+---
+
+## Photowall
+
+The Polaroid aesthetic is specific and intentional:
+
+- Photos have a slightly off-white border (thicker at the bottom, like real Polaroids)
+- Each card has a ~1–2 degree random rotation (seeded per photo, not truly random per render)
+- A thin string or line element connects them across the background
+- Soft drop shadow beneath each card
+- On the gallery screen, photos un-rotate and grid up cleanly
+- Full-screen view adds a subtle vignette
+
+---
+
+## Component Library Notes
+
+### Thought Bubbles
+Used for: preventive care reminders, approaching-period nudges, companion observations. Always dismissible with a gentle swipe. Never uses push notification patterns (no red badges, no alert styling).
+
+### Friend State Chips
+Small pill shape. Color-filled background matching the state color (low opacity). State label in Bark text. No numbers. No percentages.
+
+### Heart Button
+The send-heart button should feel physical — a slight press scale (0.92) on tap, a brief goldenrod pulse, then a soft "sent" state. Rate-limit state is communicated as a gentle opacity reduction with a tooltip, never a red error.
+
+### Toggles
+Use iOS-native toggles where possible, tinted with Moss for enabled state.
+
+### Empty States
+When a screen has no data yet (no journal entries, no workout history), the companion sits there looking curious or content. Never "No data found." Never a sad empty-box illustration. The companion *is* the empty state character.
+
+---
+
+## Accessibility Notes
+
+- All avatar accessory items (glasses, mobility aids, etc.) are always available in the starter customization — never gated behind milestones.
+- Color is never the *only* indicator of state (companion expression and text label always accompany color fills).
+- Dynamic Type supported throughout. Layouts reflow at accessibility text sizes without breaking avatar placement.
+- Reduce Motion mode: avatar reactions become instant opacity transitions; the loading screen walk becomes a fade-in-place.
+- High Contrast mode: surface textures are reduced; color fills are replaced with higher-contrast alternatives from the palette.
+
+---
+
+## What to Avoid
+
+| Avoid | Use instead |
+|---|---|
+| Hard white backgrounds | Parchment (`#F5EFE0`) or Cream (`#FBF7EE`) |
+| Purple/blue gradient hero sections | Warm moss and fern tones |
+| Thin system fonts (SF Pro Regular) | Instrument Serif for body, DM Sans for labels |
+| Red for low health/bad days | Terracotta, used sparingly and never punitively |
+| Progress bars with a "fail" state | Fills that simply reflect where you are, not where you should be |
+| Notification badges | Thought bubbles, dismissible ambient nudges |
+| "You haven't logged in X days" copy | Silence, or a gentle companion animation |
+| Streaks, flames, or calendar chains | Cumulative milestones only |
+| Confetti for major milestones | Goldenrod particle burst, quiet animation |
+| Clinical iconography | Illustrated, hand-drawn-adjacent icons |
+
+---
+
+*Last updated: v3 spec alignment. Cross-reference with `Fernlet — Specifications` for feature context and `Fernlet — Build Phases` for implementation sequence.*
