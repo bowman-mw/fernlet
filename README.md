@@ -76,9 +76,9 @@ See [Build Phases](./docs/Fernlet___Build_Phases.md) for the full breakdown.
  
 ## Documentation
  
-- [`Fernlet — Specifications`](./docs/Fernlet___Specifications.md) — full product specification including data model, scoring formula, privacy architecture, AI layer, and every feature
-- [`Fernlet — Build Phases`](./docs/Fernlet___Build_Phases.md) — phased implementation plan
-- [`Fernlet — Design System`](./docs/Fernlet_Design_System.md) — visual design language, color palette, typography, component notes
+- [`Fernlet — Specifications`](./docs/Felet/pecifications) — full product specification including data model, scoring formula, privacy architecture, AI layer, and every feature
+- [`Fernlet — Build Phases`] — phased implementation plan
+- [`Fernlet — Design System`](./docs/Fernlet/Design_System) — visual design language, color palette, typography, component notes
 ## Status
  
 Early development. Phase 1 in progress.
