@@ -1,0 +1,253 @@
+import CloudKit
+import Foundation
+import Testing
+@testable import Fernlet
+
+@MainActor
+@Suite(.serialized)
+struct CloudKitDataServiceTests {
+    @Test func detectionReturnsCorrectCounts() async throws {
+        let audit = AuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        database.recordsByType["CD_FernletDatabaseRecord"] = [aggregateRecord(zoneID: zoneID)]
+        database.recordsByType["MealLogRecord"] = [record(type: "MealLogRecord", name: "meal-direct", zoneID: zoneID)]
+        database.recordsByType["JournalLogRecord"] = [
+            record(type: "JournalLogRecord", name: "journal-direct-1", zoneID: zoneID),
+            record(type: "JournalLogRecord", name: "journal-direct-2", zoneID: zoneID)
+        ]
+        let service = makeService(database: database, zoneID: zoneID)
+
+        let summary = try #require(try await service.detectExistingData())
+
+        #expect(summary.mealLogCount == 2)
+        #expect(summary.journalEntryCount == 3)
+        #expect(summary.workoutCount == 1)
+        #expect(summary.hygieneLogCount == 2)
+        #expect(summary.hydrationLogCount == 1)
+        #expect(summary.sleepRecordCount == 1)
+        #expect(audit.contains("cloudkit.detect.attempt"))
+        #expect(audit.contains("cloudkit.detect.completed"))
+    }
+
+    @Test func detectionReturnsNilWhenNoCloudDataExists() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let service = makeService(database: database)
+
+        let summary = try await service.detectExistingData()
+
+        #expect(summary == nil)
+    }
+
+    @Test func deletionRemovesAllRecordsAndReportsSyncImpact() async throws {
+        let audit = AuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        database.recordsByType["CD_FernletDatabaseRecord"] = [aggregateRecord(zoneID: zoneID)]
+        database.recordsByType["SealedBackupRecord"] = [record(type: "SealedBackupRecord", name: "sealed-1", zoneID: zoneID)]
+        database.recordsByType["SleepRecord"] = [record(type: "SleepRecord", name: "sleep-1", zoneID: zoneID)]
+        let service = makeService(database: database, zoneID: zoneID, syncEnabled: true)
+
+        let result = try await service.deleteAllCloudKitData(
+            confirmation: DeletionConfirmation(userTypedConfirmation: "DELETE")
+        )
+
+        #expect(result.deletedRecordCount == 3)
+        #expect(result.mayAffectOtherDevices)
+        #expect(database.allRecords.isEmpty)
+        #expect(audit.contains("cloudkit.delete.attempt"))
+        #expect(audit.contains("cloudkit.delete.completed"))
+    }
+
+    @Test func deletionAllowsRecentBiometricConfirmation() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        database.recordsByType["SealedBackupRecord"] = [record(type: "SealedBackupRecord", name: "sealed-1", zoneID: zoneID)]
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let service = makeService(database: database, zoneID: zoneID, now: { now })
+
+        let result = try await service.deleteAllCloudKitData(
+            confirmation: DeletionConfirmation(biometricVerifiedAt: now.addingTimeInterval(-30))
+        )
+
+        #expect(result.deletedRecordCount == 1)
+    }
+
+    @Test func deletionWithoutConfirmationThrows() async throws {
+        let audit = AuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        let database = MockCloudKitRecordDatabase()
+        let service = makeService(database: database)
+
+        await #expect(throws: CloudKitDataServiceError.confirmationRequired) {
+            _ = try await service.deleteAllCloudKitData(confirmation: DeletionConfirmation())
+        }
+        #expect(audit.contains("cloudkit.delete.attempt"))
+        #expect(audit.contains("cloudkit.delete.failed"))
+    }
+
+    @Test func notSignedInStateThrowsRightErrorForBothMethods() async throws {
+        let detectService = makeService(accountStatus: .noAccount, database: MockCloudKitRecordDatabase())
+        await #expect(throws: CloudKitDataServiceError.notSignedIn) {
+            _ = try await detectService.detectExistingData()
+        }
+
+        let deleteService = makeService(accountStatus: .noAccount, database: MockCloudKitRecordDatabase())
+        await #expect(throws: CloudKitDataServiceError.notSignedIn) {
+            _ = try await deleteService.deleteAllCloudKitData(
+                confirmation: DeletionConfirmation(userTypedConfirmation: "DELETE")
+            )
+        }
+    }
+
+    @Test func auditLogEntriesAreCreatedForDetectionFailure() async throws {
+        let audit = AuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        let service = makeService(accountStatus: .restricted, database: MockCloudKitRecordDatabase())
+
+        await #expect(throws: CloudKitDataServiceError.notSignedIn) {
+            _ = try await service.detectExistingData()
+        }
+
+        #expect(audit.contains("cloudkit.detect.attempt"))
+        #expect(audit.contains("cloudkit.detect.failed"))
+    }
+
+    private func makeService(
+        accountStatus: CKAccountStatus = .available,
+        database: MockCloudKitRecordDatabase,
+        zoneID: CKRecordZone.ID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName),
+        syncEnabled: Bool = false,
+        now: @escaping () -> Date = Date.init
+    ) -> CloudKitDataService {
+        CloudKitDataService(
+            accountProvider: MockCloudKitAccountProvider(status: accountStatus),
+            database: database,
+            zoneID: zoneID,
+            isCloudKitSyncEnabled: { syncEnabled },
+            now: now
+        )
+    }
+
+    private func aggregateRecord(zoneID: CKRecordZone.ID) -> CKRecord {
+        var localDatabase = LocalFernletDatabase()
+        localDatabase.days = [
+            "2026-05-22": FernletDay(
+                date: "2026-05-22",
+                meals: [sampleMeal()],
+                workouts: [sampleWorkout()],
+                journals: [JournalEntry(text: "Good day", tag: .good)],
+                sleep: SleepLog(hours: 7.5, quality: .good, note: "solid"),
+                bottleCount: 3,
+                hygiene: [.teethAM, .floss]
+            )
+        ]
+        localDatabase.rebuildDerivedTables(todayKey: "2026-05-22")
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let cloudRecord = record(type: "CD_FernletDatabaseRecord", name: "primary", zoneID: zoneID)
+        cloudRecord["payloadData"] = try! encoder.encode(localDatabase) as CKRecordValue
+        return cloudRecord
+    }
+
+    private func sampleMeal() -> Meal {
+        Meal(
+            name: "Eggs",
+            mealType: .breakfast,
+            macros: Macros(protein: 18, carbs: 2, fat: 12),
+            quality: .good,
+            confidence: "test",
+            note: "",
+            source: MealLogSource.manual
+        )
+    }
+
+    private func sampleWorkout() -> Workout {
+        Workout(
+            name: "Walk",
+            type: .cardio,
+            exercises: "walk",
+            rpe: nil,
+            notes: "",
+            duration: 20,
+            intensity: .light
+        )
+    }
+
+    private func record(type: String, name: String, zoneID: CKRecordZone.ID) -> CKRecord {
+        CKRecord(recordType: type, recordID: CKRecord.ID(recordName: name, zoneID: zoneID))
+    }
+}
+
+private final class MockCloudKitAccountProvider: CloudKitAccountStatusProviding {
+    let status: CKAccountStatus
+
+    init(status: CKAccountStatus) {
+        self.status = status
+    }
+
+    func accountStatus() async throws -> CKAccountStatus {
+        status
+    }
+}
+
+private final class MockCloudKitRecordDatabase: CloudKitRecordDatabase {
+    var recordsByType: [String: [CKRecord]] = [:]
+
+    var allRecords: [CKRecord] {
+        recordsByType.values.flatMap { $0 }
+    }
+
+    func recordZoneIDs() async throws -> [CKRecordZone.ID] {
+        var seen = Set<String>()
+        return allRecords.compactMap { record in
+            let zoneID = record.recordID.zoneID
+            let key = "\(zoneID.ownerName):\(zoneID.zoneName)"
+            return seen.insert(key).inserted ? zoneID : nil
+        }
+    }
+
+    func recordIDs(matching recordType: String, in zoneID: CKRecordZone.ID) async throws -> [CKRecord.ID] {
+        recordsByType[recordType, default: []]
+            .filter { $0.recordID.zoneID == zoneID }
+            .map(\.recordID)
+    }
+
+    func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] {
+        let requested = Set(recordIDs.map(\.recordName))
+        return allRecords.filter { requested.contains($0.recordID.recordName) }
+    }
+
+    func deleteRecords(with recordIDs: [CKRecord.ID]) async throws {
+        let deletedNames = Set(recordIDs.map(\.recordName))
+        for recordType in recordsByType.keys {
+            recordsByType[recordType] = recordsByType[recordType, default: []]
+                .filter { !deletedNames.contains($0.recordID.recordName) }
+        }
+    }
+}
+
+private final class AuditCapture {
+    private(set) var events: [(event: String, context: [String: String])] = []
+
+    func install() {
+        FernletAuditLog.captureHandler = { [weak self] event, context in
+            self?.events.append((event, context))
+        }
+    }
+
+    func uninstall() {
+        FernletAuditLog.captureHandler = nil
+    }
+
+    func contains(_ event: String) -> Bool {
+        events.contains { $0.event == event }
+    }
+}

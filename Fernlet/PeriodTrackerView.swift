@@ -1,0 +1,424 @@
+import SwiftUI
+
+struct PeriodTrackerView: View {
+    @ObservedObject var store: FernletStore
+    @ObservedObject var periodStore: PeriodTrackerStore
+    @Binding var activeSheet: FernletSheet?
+    var isInHub: Bool = false
+    @EnvironmentObject private var lockService: FernletLockService
+    @StateObject private var authorization = HealthKitAuthorizationViewModel()
+    @State private var selectedDay: SelectedPeriodDay?
+    @State private var displayedMonth: Date = .now
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    privacyBanner
+                    header
+                    if showsPrediction {
+                        PredictionsCard(prediction: periodStore.prediction)
+                    }
+                    SectionLabel("Cycle calendar")
+                    PeriodCalendarCard(
+                        displayedMonth: $displayedMonth,
+                        entriesByKey: entriesByKey,
+                        todayKey: FernletDate.dayKey(for: Date()),
+                        prediction: showsPrediction ? periodStore.prediction : nil,
+                        onDayTapped: { date in selectedDay = SelectedPeriodDay(date: date) }
+                    )
+                    recentEvents
+                    if showsPrediction, let prediction = periodStore.prediction {
+                        TrendsCard(prediction: prediction)
+                    }
+                }
+                .padding(20)
+            }
+            .background(Color.parchment)
+            .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)
+            .navigationDestination(item: $selectedDay) { day in
+                let dayEntry = entry(for: day.date)
+                PeriodDayDetailView(
+                    entry: dayEntry,
+                    onEdit: { activeSheet = .logPeriod(targetDate: day.date) },
+                    onDelete: {
+                        Task {
+                            try? await periodStore.deleteEntry(dayEntry)
+                            selectedDay = nil
+                        }
+                    }
+                )
+            }
+            .task(id: lockService.state) { await loadIfUnlocked() }
+        }
+    }
+
+    var showsPrediction: Bool {
+        !store.settings.hidePredictions
+    }
+
+    private var privacyBanner: some View {
+        Text("Your period data stays on this device, behind your app lock.")
+            .font(.caption.italic())
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+    }
+
+    private var header: some View {
+        HStack(alignment: .top) {
+            ScreenHeader(title: "Period", subtitle: periodStore.currentPhase.title)
+            Spacer()
+            HeaderActionButton(systemImage: "plus") { activeSheet = .logPeriod(targetDate: nil) }
+        }
+    }
+
+    private var entriesByKey: [String: CycleDayEntry] {
+        Dictionary(uniqueKeysWithValues: periodStore.entries.map { ($0.dateKey, $0) })
+    }
+
+    private var recentEvents: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel("Recent events")
+            FernletCard {
+                let events = periodStore.entries.filter(\.hasObservedEvent).reversed().prefix(10)
+                if events.isEmpty {
+                    EmptyState(text: "No cycle events in the last 90 days.")
+                } else {
+                    ForEach(Array(events.enumerated()), id: \.element.id) { index, entry in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(entry.date.formatted(.dateTime.month(.abbreviated).day()))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color.bark)
+                            HStack(spacing: 6) {
+                                Text(entry.flowLabel)
+                                ForEach(entry.narrative?.symptomFlags.sorted() ?? []) { symptom in
+                                    Text(symptom.title)
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(Color.slate)
+                            .lineLimit(2)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if index < events.count - 1 { FernletRowDivider() }
+                    }
+                }
+            }
+        }
+    }
+
+    private func loadIfUnlocked() async {
+        periodStore.attachLockService(lockService)
+        guard case .unlocked = lockService.state, let contentKey = lockService.contentKey() else { return }
+        if !authorization.hasRequested(.cycleTracking) {
+            await authorization.request(.cycleTracking)
+        }
+        await periodStore.loadEntries(unlockedContentKey: contentKey)
+    }
+
+    private func entry(for date: Date) -> CycleDayEntry {
+        let key = FernletDate.dayKey(for: date)
+        return periodStore.entries.first { $0.dateKey == key } ?? CycleDayEntry(date: date, dateKey: key, samples: [], narrative: nil, phase: .unknown)
+    }
+}
+
+// MARK: - Prediction Cards
+
+private struct PredictionsCard: View {
+    var prediction: CyclePrediction?
+
+    var body: some View {
+        FernletCard {
+            if let prediction {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Likely next period")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.slate)
+                            Text(formattedRange(prediction.likelyStartRange))
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(Color.bark)
+                        }
+                        Spacer(minLength: 8)
+                        Text(confidenceLabel(for: prediction.confidence))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Color.bark)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(Color.moss.opacity(0.14), in: Capsule())
+                    }
+
+                    Text("Cycles tracked: \(prediction.cyclesObserved)")
+                        .font(.caption)
+                        .foregroundStyle(Color.slate)
+                }
+            } else {
+                EmptyState(text: "Log at least 3 cycles to see predictions.")
+            }
+        }
+    }
+
+    private func formattedRange(_ range: ClosedRange<Date>) -> String {
+        if Calendar.current.isDate(range.lowerBound, inSameDayAs: range.upperBound) {
+            return range.lowerBound.formatted(.dateTime.month(.abbreviated).day())
+        }
+        return "\(range.lowerBound.formatted(.dateTime.month(.abbreviated).day())) – \(range.upperBound.formatted(.dateTime.month(.abbreviated).day()))"
+    }
+
+    private func confidenceLabel(for confidence: Double) -> String {
+        if confidence < 0.4 { return "Low confidence" }
+        if confidence < 0.7 { return "Building confidence" }
+        return "High confidence"
+    }
+}
+
+private struct TrendsCard: View {
+    var prediction: CyclePrediction
+
+    var body: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Average cycle length: \(prediction.averageCycleLength) days")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.bark)
+                Text("Your cycles vary by about ±\(prediction.variationDays) days.")
+                    .font(.caption)
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+        }
+    }
+}
+
+// MARK: - Calendar Card
+
+private struct PeriodCalendarCard: View {
+    @Binding var displayedMonth: Date
+    var entriesByKey: [String: CycleDayEntry]
+    var todayKey: String
+    var prediction: CyclePrediction?
+    var onDayTapped: (Date) -> Void
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+    private var cal: Calendar { .current }
+
+    var body: some View {
+        let model = PeriodMonthModel(date: displayedMonth, entriesByKey: entriesByKey, todayKey: todayKey, prediction: prediction)
+        return FernletCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center) {
+                    Button {
+                        displayedMonth = cal.date(byAdding: .month, value: -1, to: displayedMonth) ?? displayedMonth
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Color.slate)
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+
+                    Text(model.monthTitle)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Color.bark)
+                        .frame(maxWidth: .infinity)
+
+                    let isCurrentMonth = cal.isDate(displayedMonth, equalTo: .now, toGranularity: .month)
+                    Button {
+                        if !isCurrentMonth {
+                            displayedMonth = cal.date(byAdding: .month, value: 1, to: displayedMonth) ?? displayedMonth
+                        }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(isCurrentMonth ? Color.slate.opacity(0.25) : Color.slate)
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isCurrentMonth)
+                }
+
+                LazyVGrid(columns: columns, spacing: 4) {
+                    ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
+                        Text(day).font(.caption2.weight(.semibold)).foregroundStyle(Color.slate)
+                    }
+                    ForEach(model.cells) { cell in
+                        PeriodCalendarCell(cell: cell) {
+                            if let date = cell.date, !cell.isFuture {
+                                onDayTapped(date)
+                            }
+                        }
+                    }
+                }
+
+                flowLegend
+            }
+        }
+    }
+
+    private var flowLegend: some View {
+        HStack(spacing: 12) {
+            ForEach([
+                (Color.dustyRose.opacity(0.22), "Light"),
+                (Color.dustyRose.opacity(0.40), "Medium"),
+                (Color.dustyRose.opacity(0.60), "Heavy")
+            ], id: \.1) { color, label in
+                HStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(color)
+                        .frame(width: 10, height: 10)
+                    Text(label).font(.caption2).foregroundStyle(Color.slate)
+                }
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+}
+
+// MARK: - Calendar Cell
+
+private struct PeriodCalendarCell: View {
+    var cell: PeriodMonthCell
+    var onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(cell.fill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5)
+                            .stroke(cell.isToday ? Color.moss : Color.clear, lineWidth: 1.5)
+                    )
+                if let day = cell.day {
+                    Text("\(day)")
+                        .font(.caption2.weight(cell.isToday ? .bold : .medium))
+                        .foregroundStyle(
+                            cell.isFuture ? Color.bark.opacity(0.28)
+                                : cell.isToday ? Color.moss
+                                : Color.bark.opacity(0.68)
+                        )
+                        .padding(.bottom, 2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .aspectRatio(1, contentMode: .fit)
+        .disabled(cell.day == nil || cell.isFuture)
+        .accessibilityLabel(cell.accessibilityLabel)
+    }
+}
+
+// MARK: - Month Models
+
+struct PeriodMonthCell: Identifiable {
+    let id = UUID()
+    var day: Int?
+    var date: Date?
+    var dateKey: String?
+    var entry: CycleDayEntry?
+    var projectedLevel: PredictedFlowLevel?
+    var isToday: Bool
+    var isFuture: Bool
+
+    var fill: Color {
+        guard day != nil else { return Color.softTaupe.opacity(0.05) }
+        switch entry?.flowLevel {
+        case .some(.heavy): return Color.dustyRose.opacity(0.60)
+        case .some(.medium): return Color.dustyRose.opacity(0.40)
+        case .some(.light): return Color.dustyRose.opacity(0.22)
+        case .some(PeriodFlowLevel.none): return Color.bark.opacity(0.10)
+        case .some(.unspecified): return Color.bark.opacity(0.14)
+        case nil:
+            if isFuture, let projectedLevel {
+                return projectedFill(for: projectedLevel)
+            }
+            if isFuture { return Color.softTaupe.opacity(0.05) }
+            return isToday ? Color.moss.opacity(0.18) : Color.softTaupe.opacity(0.16)
+        }
+    }
+
+    private func projectedFill(for level: PredictedFlowLevel) -> Color {
+        switch level {
+        case .heavy: return Color.dustyRose.opacity(0.35)
+        case .medium: return Color.dustyRose.opacity(0.35)
+        case .light, .spotting: return Color.dustyRose.opacity(0.35)
+        case .none: return Color.bark.opacity(0.35)
+        }
+    }
+
+    var accessibilityLabel: String {
+        guard let day else { return "Empty calendar cell" }
+        if isFuture { return "Day \(day)" }
+        if isToday { return "Today, day \(day)" }
+        if let entry, entry.hasObservedEvent { return "Day \(day), \(entry.flowLabel)" }
+        return "Day \(day)"
+    }
+}
+
+struct PeriodMonthModel {
+    let monthTitle: String
+    let weekdaySymbols: [String]
+    let cells: [PeriodMonthCell]
+
+    init(date: Date, entriesByKey: [String: CycleDayEntry], todayKey: String, prediction: CyclePrediction?, calendar: Calendar = .current) {
+        let monthInterval = calendar.dateInterval(of: .month, for: date)
+        let start = monthInterval?.start ?? date
+        let range = calendar.range(of: .day, in: .month, for: date) ?? 1..<2
+        let firstWeekday = calendar.component(.weekday, from: start)
+
+        self.monthTitle = date.formatted(.dateTime.month(.wide).year())
+        self.weekdaySymbols = calendar.veryShortWeekdaySymbols
+
+        let ymFormatter = DateFormatter()
+        ymFormatter.dateFormat = "yyyy-MM"
+        ymFormatter.calendar = Calendar(identifier: .gregorian)
+        let yearMonth = ymFormatter.string(from: date)
+
+        let projectedLevelsByDay = Self.projectedLevelsByDay(for: prediction, calendar: calendar)
+        let blanks = (0..<(firstWeekday - 1)).map { _ in
+            PeriodMonthCell(day: nil, date: nil, dateKey: nil, entry: nil, projectedLevel: nil, isToday: false, isFuture: false)
+        }
+        let year = calendar.component(.year, from: start)
+        let month = calendar.component(.month, from: start)
+        let days = range.map { d -> PeriodMonthCell in
+            let key = "\(yearMonth)-\(String(format: "%02d", d))"
+            let cellDate = calendar.date(from: DateComponents(year: year, month: month, day: d))
+            let entry = entriesByKey[key]
+            return PeriodMonthCell(
+                day: d,
+                date: cellDate,
+                dateKey: key,
+                entry: entry,
+                projectedLevel: entry == nil ? projectedLevelsByDay[key] : nil,
+                isToday: key == todayKey,
+                isFuture: key > todayKey
+            )
+        }
+        self.cells = blanks + days
+    }
+
+    private static func projectedLevelsByDay(for prediction: CyclePrediction?, calendar: Calendar) -> [String: PredictedFlowLevel] {
+        guard let prediction else { return [:] }
+        let flowByDay = Dictionary(uniqueKeysWithValues: prediction.predictedFlow.map { day in
+            (FernletDate.dayKey(for: day.date), day.level)
+        })
+        var result: [String: PredictedFlowLevel] = [:]
+        var day = calendar.startOfDay(for: prediction.likelyStartRange.lowerBound)
+        let end = calendar.startOfDay(for: prediction.likelyStartRange.upperBound)
+        while day <= end {
+            let key = FernletDate.dayKey(for: day)
+            result[key] = flowByDay[key] ?? .medium
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? day.addingTimeInterval(86_400)
+        }
+        return result
+    }
+}
+
+// MARK: - Supporting Types
+
+private struct SelectedPeriodDay: Identifiable, Hashable {
+    var date: Date
+    var id: TimeInterval { date.timeIntervalSinceReferenceDate }
+}

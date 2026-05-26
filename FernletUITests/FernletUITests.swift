@@ -23,14 +23,52 @@ final class FernletUITests: XCTestCase {
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
-        let app = XCUIApplication()
-        app.launch()
+    func testKindToggleChangesSearchPlaceholder() throws {
+        let app = launchCompletedApp()
+        openWorkoutSheet(in: app)
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+        let exerciseSearch = app.textFields["exercise.search"]
+        XCTAssertTrue(exerciseSearch.waitForExistence(timeout: 3))
+        XCTAssertEqual(exerciseSearch.value as? String, "Search exercise or muscle")
+
+        app.buttons["workout.kind.activity"].tap()
+        let activitySearch = app.textFields["activity.search"]
+        XCTAssertTrue(activitySearch.waitForExistence(timeout: 3))
+        XCTAssertEqual(activitySearch.value as? String, "Search workout type")
+    }
+
+    @MainActor
+    func testFocusTagFieldNoLongerVisible() throws {
+        let app = launchCompletedApp()
+        openWorkoutSheet(in: app)
+
+        XCTAssertFalse(app.staticTexts["Focus tag"].exists)
+    }
+
+    @MainActor
+    func testActivityModeRequiresTypeBeforeSave() throws {
+        let app = launchCompletedApp()
+        openWorkoutSheet(in: app)
+
+        app.buttons["workout.kind.activity"].tap()
+        XCTAssertTrue(app.textFields["activity.search"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Save"].isEnabled)
+
+        app.buttons["activity.row.running"].tap()
+        XCTAssertTrue(app.buttons["Save"].isEnabled)
+    }
+
+    @MainActor
+    func testSettingsMoveTabHasNoFocusTagsSection() throws {
+        let app = launchSettingsApp()
+
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 6))
+        XCTAssertTrue(app.buttons["settings.move"].waitForExistence(timeout: 3))
+        app.buttons["settings.move"].tap()
+        XCTAssertTrue(app.navigationBars["Move"].waitForExistence(timeout: 3))
+
+        XCTAssertTrue(app.staticTexts["APPLE FITNESS SYNC"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Workout focus tags"].exists)
     }
 
     @MainActor
@@ -40,4 +78,33 @@ final class FernletUITests: XCTestCase {
             XCUIApplication().launch()
         }
     }
+
+    @MainActor
+    private func launchCompletedApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-completeOnboarding"]
+        app.launch()
+        return app
+    }
+
+    @MainActor
+    private func launchSettingsApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-completeOnboarding"]
+        app.launchEnvironment["FERNLET_UI_TEST_OPEN_SETTINGS"] = "1"
+        app.launch()
+        return app
+    }
+
+    @MainActor
+    private func openWorkoutSheet(in app: XCUIApplication) {
+        let moveButton = app.buttons["Move"].firstMatch
+        XCTAssertTrue(moveButton.waitForExistence(timeout: 6))
+        moveButton.tap()
+        let logButton = app.buttons["Log"].firstMatch
+        XCTAssertTrue(logButton.waitForExistence(timeout: 4))
+        logButton.tap()
+        XCTAssertTrue(app.staticTexts["Log workout"].waitForExistence(timeout: 3))
+    }
+
 }

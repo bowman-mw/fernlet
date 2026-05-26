@@ -1,10 +1,42 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
+	<dict>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>remote-notification</string>
+			<string>bluetooth-central</string>
+			<string>bluetooth-peripheral</string>
+		</array>
+		<key>NSLocalNetworkUsageDescription</key>
+		<string>Fernlet uses your local network to connect with nearby trainers and friends for workout sharing.</string>
+		<key>NSBonjourServices</key>
+		<array>
+				<string>_fernlet-coach._tcp</string>
+				<string>_fernlet-coach._udp</string>
+				<string>_fernlet-friend._tcp</string>
+				<string>_fernlet-friend._udp</string>
+			</array>
+			<key>NSNearbyInteractionUsageDescription</key>
+			<string>Fernlet uses Ultra Wideband to precisely measure distance when connecting with a nearby trainer or friend.</string>
+			<key>NSSupportsLiveActivities</key>
+			<true/>
+			<key>NSCameraUsageDescription</key>
+	<string>Fernlet uses your camera to scan nutrition labels.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Fernlet accesses your photo library to scan nutrition labels from saved photos.</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>Fernlet saves the shared pictures you choose after a friend session.</string>
+		<key>NSFaceIDUsageDescription</key>
+	<string>Fernlet uses Face ID to unlock your private health data.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Fernlet reads your workouts, body metrics, and (optionally) cycle data from Apple Health to give you a complete picture of your activity.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Fernlet writes the workouts you log into Apple Health so they appear in Apple Fitness and across your devices.</string>
+	<key>UILaunchScreen</key>
+		<dict>
+			<key>UIColorName</key>
+		<string>LaunchParchment</string>
+	</dict>
 </dict>
 </plist>

@@ -6,6 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		684018BA2FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 684018B92FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md */; };
+		684018CB2FBE9AD400EFC6D6 /* CryptoSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 684018CA2FBE9AD400EFC6D6 /* CryptoSwift */; };
+		684018E42FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md in Resources */ = {isa = PBXBuildFile; fileRef = 684018E32FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md */; };
+		684019122FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md in Resources */ = {isa = PBXBuildFile; fileRef = 684019112FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md */; };
+		68B9EBCE2FC296F200AF8FB6 /* codex-implementation-prompts.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EBCD2FC296F100AF8FB6 /* codex-implementation-prompts.md */; };
+		68B9EBDC2FC2AA1800AF8FB6 /* phase7-proximity-implementation-plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EBDB2FC2AA1800AF8FB6 /* phase7-proximity-implementation-plan.md */; };
+		68B9EC082FC352D000AF8FB6 /* proximity-handshake-process-map.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC072FC352D000AF8FB6 /* proximity-handshake-process-map.md */; };
+		68B9EC122FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC112FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md */; };
+		68B9EC142FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC132FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		6869C2F72FB8D39D0098A0F3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,9 +36,21 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		684018B92FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "fernlet-period-intimacy-plan.md"; sourceTree = "<group>"; };
+		684018E02FBFAC4500EFC6D6 /* FileIndex.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FileIndex.md; sourceTree = "<group>"; };
+		684018E32FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PeriodAlgorithimResearch.md; sourceTree = "<group>"; };
+		684019112FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = StartupAndBiometricFixPlan.md; sourceTree = "<group>"; };
 		6869C2E22FB8D39D0098A0F3 /* Fernlet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Fernlet.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6869C2F62FB8D39D0098A0F3 /* FernletTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FernletTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6869C3002FB8D39D0098A0F3 /* FernletUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FernletUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6869C37C2FBBF4AF0098A0F3 /* FernletSpecificationV3.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FernletSpecificationV3.md; sourceTree = "<group>"; };
+		6869C37D2FBBF4AF0098A0F3 /* healthkit-integration-plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "healthkit-integration-plan.md"; sourceTree = "<group>"; };
+		6869C37E2FBBF4AF0098A0F3 /* ImplementationPlan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ImplementationPlan.md; sourceTree = "<group>"; };
+		68B9EBCD2FC296F100AF8FB6 /* codex-implementation-prompts.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "codex-implementation-prompts.md"; sourceTree = "<group>"; };
+		68B9EBDB2FC2AA1800AF8FB6 /* phase7-proximity-implementation-plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "phase7-proximity-implementation-plan.md"; sourceTree = "<group>"; };
+		68B9EC072FC352D000AF8FB6 /* proximity-handshake-process-map.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "proximity-handshake-process-map.md"; sourceTree = "<group>"; };
+		68B9EC112FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = MeshNetworkImplementationPlan.md; sourceTree = "<group>"; };
+		68B9EC132FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "FernletStore-Refactor-Plan-v2.md"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -65,6 +89,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				684018CB2FBE9AD400EFC6D6 /* CryptoSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -92,6 +117,7 @@
 				6869C2F92FB8D39D0098A0F3 /* FernletTests */,
 				6869C3032FB8D39D0098A0F3 /* FernletUITests */,
 				6869C2E32FB8D39D0098A0F3 /* Products */,
+				6869C37B2FBBF3450098A0F3 /* Docs */,
 			);
 			sourceTree = "<group>";
 		};
@@ -103,6 +129,25 @@
 				6869C3002FB8D39D0098A0F3 /* FernletUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		6869C37B2FBBF3450098A0F3 /* Docs */ = {
+			isa = PBXGroup;
+			children = (
+				6869C37C2FBBF4AF0098A0F3 /* FernletSpecificationV3.md */,
+				684018E32FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md */,
+				68B9EC132FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md */,
+				6869C37D2FBBF4AF0098A0F3 /* healthkit-integration-plan.md */,
+				68B9EC112FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md */,
+				6869C37E2FBBF4AF0098A0F3 /* ImplementationPlan.md */,
+				68B9EBCD2FC296F100AF8FB6 /* codex-implementation-prompts.md */,
+				68B9EBDB2FC2AA1800AF8FB6 /* phase7-proximity-implementation-plan.md */,
+				684018B92FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md */,
+				684018E02FBFAC4500EFC6D6 /* FileIndex.md */,
+				684019112FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md */,
+				68B9EC072FC352D000AF8FB6 /* proximity-handshake-process-map.md */,
+			);
+			path = Docs;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -125,6 +170,7 @@
 			);
 			name = Fernlet;
 			packageProductDependencies = (
+				684018CA2FBE9AD400EFC6D6 /* CryptoSwift */,
 			);
 			productName = Fernlet;
 			productReference = 6869C2E22FB8D39D0098A0F3 /* Fernlet.app */;
@@ -208,6 +254,9 @@
 			);
 			mainGroup = 6869C2D92FB8D39D0098A0F3;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				684018C92FBE9AD400EFC6D6 /* XCRemoteSwiftPackageReference "CryptoSwift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6869C2E32FB8D39D0098A0F3 /* Products */;
 			projectDirPath = "";
@@ -225,6 +274,14 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				68B9EC122FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md in Resources */,
+				68B9EBCE2FC296F200AF8FB6 /* codex-implementation-prompts.md in Resources */,
+				684019122FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md in Resources */,
+				68B9EC142FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md in Resources */,
+				684018E42FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md in Resources */,
+				684018BA2FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md in Resources */,
+				68B9EC082FC352D000AF8FB6 /* proximity-handshake-process-map.md in Resources */,
+				68B9EBDC2FC2AA1800AF8FB6 /* phase7-proximity-implementation-plan.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -287,13 +344,18 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Fernlet/Fernlet.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3RTUPF8FFH;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Fernlet/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Fernlet reads selected Health data only when you enable it, including body profile, cycle, recovery, sleep, and activity context for on-device guidance.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Fernlet writes only health observations you explicitly log, such as cycle entries or mindful sessions.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -330,13 +392,18 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Fernlet/Fernlet.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3RTUPF8FFH;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Fernlet/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Fernlet reads selected Health data only when you enable it, including body profile, cycle, recovery, sleep, and activity context for on-device guidance.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Fernlet writes only health observations you explicitly log, such as cycle entries or mindful sessions.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -488,6 +555,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3RTUPF8FFH;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
@@ -513,6 +581,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3RTUPF8FFH;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
@@ -537,6 +606,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3RTUPF8FFH;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
@@ -561,6 +631,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3RTUPF8FFH;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
@@ -620,6 +691,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		684018C92FBE9AD400EFC6D6 /* XCRemoteSwiftPackageReference "CryptoSwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krzyzanowskim/CryptoSwift";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 1.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		684018CA2FBE9AD400EFC6D6 /* CryptoSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 684018C92FBE9AD400EFC6D6 /* XCRemoteSwiftPackageReference "CryptoSwift" */;
+			productName = CryptoSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6869C2DA2FB8D39D0098A0F3 /* Project object */;
 }

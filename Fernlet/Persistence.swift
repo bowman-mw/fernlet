@@ -5,53 +5,399 @@
 //  Created by Michael Bowman on 5/16/26.
 //
 
+import Combine
 import CoreData
+import Foundation
 
-struct PersistenceController {
-    static let shared = PersistenceController()
+final class PersistenceController: ObservableObject {
+    static let shared: PersistenceController = {
+        let store = StoragePreferencesStore()
+        var startupPreferences = store.preferences
+        startupPreferences.iCloudSyncEnabled = false
+        return PersistenceController(preferences: startupPreferences)
+    }()
 
     @MainActor
     static let preview: PersistenceController = {
-        let result = PersistenceController(inMemory: true)
-        let viewContext = result.container.viewContext
-        for _ in 0..<10 {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-        }
-        do {
-            try viewContext.save()
-        } catch {
-            // Replace this implementation with code to handle the error appropriately.
-            // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-            let nsError = error as NSError
-            fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-        }
+        let result = PersistenceController(inMemory: true, preferences: StoragePreferences(iCloudSyncEnabled: false))
         return result
     }()
 
-    let container: NSPersistentCloudKitContainer
+    @Published private(set) var isReloading = false
 
-    init(inMemory: Bool = false) {
-        container = NSPersistentCloudKitContainer(name: "Fernlet")
-        if inMemory {
-            container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
-        }
-        container.loadPersistentStores(completionHandler: { (storeDescription, error) in
-            if let error = error as NSError? {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
+    private(set) var container: NSPersistentCloudKitContainer
+    private(set) var didFailToLoad = false
+    /// Fires when iCloud pushes a remote change to the local store.
+    let remoteChangePublisher: AnyPublisher<Notification, Never>
 
-                /*
-                 Typical reasons for an error here include:
-                 * The parent directory does not exist, cannot be created, or disallows writing.
-                 * The persistent store is not accessible, due to permissions or data protection when the device is locked.
-                 * The device is out of space.
-                 * The store could not be migrated to the current model version.
-                 Check the error message to determine what the actual problem was.
-                 */
-                fatalError("Unresolved error \(error), \(error.userInfo)")
+    private let inMemory: Bool
+    private let storeURL: URL?
+    /// When non-nil, overrides the real `FileManager.ubiquityIdentityToken` check. Injected by tests
+    /// so CloudKit configuration logic can be exercised without a real iCloud account present.
+    private let iCloudAvailabilityOverride: Bool?
+    private let remoteChangeSubject = PassthroughSubject<Notification, Never>()
+    private var remoteChangeCancellable: AnyCancellable?
+
+    init(
+        inMemory: Bool = false,
+        preferences: StoragePreferences = StoragePreferences(),
+        storeURL: URL? = nil,
+        iCloudAvailable: Bool? = nil
+    ) {
+        self.inMemory = inMemory
+        self.storeURL = storeURL
+        self.iCloudAvailabilityOverride = iCloudAvailable
+        self.remoteChangePublisher = remoteChangeSubject.eraseToAnyPublisher()
+
+        let configuration = Self.makeContainer(inMemory: inMemory, preferences: preferences, storeURL: storeURL, iCloudAvailabilityOverride: iCloudAvailable)
+        self.container = configuration.container
+        self.didFailToLoad = Self.loadPersistentStores(
+            for: configuration.container,
+            preferences: preferences,
+            inMemory: inMemory,
+            recoverOnFailure: true
+        )
+        configureViewContext(for: configuration.container)
+        bindRemoteChanges(to: configuration.container)
+    }
+
+    @MainActor
+    func reload(with preferences: StoragePreferences) async throws {
+        FernletAuditLog.log("persistence.reload.started", context: [
+            "iCloudSync": preferences.iCloudSyncEnabled ? "enabled" : "disabled"
+        ])
+        let start = Date()
+        isReloading = true
+        defer {
+            isReloading = false
+            let duration = Date().timeIntervalSince(start)
+            if duration > 3 {
+                print("[Fernlet] Persistence reload took \(String(format: "%.2f", duration)) seconds")
             }
-        })
+        }
+
+        do {
+            let oldContainer = container
+            let oldContext = oldContainer.viewContext
+            try saveAndLockViewContext(oldContext)
+            try removePersistentStores(from: oldContainer.persistentStoreCoordinator)
+
+            let configuration = Self.makeContainer(inMemory: inMemory, preferences: preferences, storeURL: storeURL, iCloudAvailabilityOverride: iCloudAvailabilityOverride)
+            try await Self.loadPersistentStoresAsync(
+                for: configuration.container,
+                preferences: preferences,
+                inMemory: inMemory
+            )
+            configureViewContext(for: configuration.container)
+
+            container = configuration.container
+            didFailToLoad = false
+            bindRemoteChanges(to: configuration.container)
+            remoteChangeSubject.send(Notification(
+                name: .NSPersistentStoreRemoteChange,
+                object: configuration.container.persistentStoreCoordinator
+            ))
+            FernletAuditLog.log("persistence.reload.completed")
+        } catch {
+            FernletAuditLog.log("persistence.reload.failed", context: ["errorType": "\(type(of: error))"])
+            throw error
+        }
+    }
+
+    var activeStoreDescription: NSPersistentStoreDescription? {
+        container.persistentStoreDescriptions.first
+    }
+
+    var activeStoreURL: URL? {
+        activeStoreDescription?.url
+    }
+
+    private static func makeContainer(
+        inMemory: Bool,
+        preferences: StoragePreferences,
+        storeURL: URL?,
+        iCloudAvailabilityOverride: Bool? = nil
+    ) -> (container: NSPersistentCloudKitContainer, storeDescription: NSPersistentStoreDescription) {
+        let container = NSPersistentCloudKitContainer(name: "Fernlet", managedObjectModel: makeManagedObjectModel())
+        let storeDescription = container.persistentStoreDescriptions.first ?? NSPersistentStoreDescription()
+        configure(storeDescription, inMemory: inMemory, preferences: preferences, storeURL: storeURL, iCloudAvailabilityOverride: iCloudAvailabilityOverride)
+        container.persistentStoreDescriptions = [storeDescription]
+        return (container, storeDescription)
+    }
+
+    private static func configure(
+        _ storeDescription: NSPersistentStoreDescription,
+        inMemory: Bool,
+        preferences: StoragePreferences,
+        storeURL: URL?,
+        iCloudAvailabilityOverride: Bool? = nil
+    ) {
+        storeDescription.setOption(FileProtectionType.complete as NSString, forKey: NSPersistentStoreFileProtectionKey)
+        storeDescription.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+        storeDescription.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+        storeDescription.shouldMigrateStoreAutomatically = true
+        storeDescription.shouldInferMappingModelAutomatically = true
+
+        if inMemory {
+            storeDescription.url = URL(fileURLWithPath: "/dev/null")
+            storeDescription.cloudKitContainerOptions = nil
+        } else {
+            if let storeURL {
+                storeDescription.url = storeURL
+            }
+            // Only enable CloudKit when an iCloud account is present. Attempting to
+            // configure CloudKit without an account causes NSCloudKitMirroringDelegate
+            // to spam error logs and triggers a "account info cache" performance fault.
+            // iCloudAvailabilityOverride lets tests exercise this path without a real account.
+            let iCloudAvailable = iCloudAvailabilityOverride ?? (FileManager.default.ubiquityIdentityToken != nil)
+            storeDescription.cloudKitContainerOptions = (preferences.iCloudSyncEnabled && iCloudAvailable)
+                ? NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.MBO.Fernlet")
+                : nil
+        }
+    }
+
+    // NSCocoaErrorDomain 134400 = CKAccountStatusNoAccount — CloudKit can't sync but
+    // the local SQLite store is healthy. Never destroy data for this error.
+    private static let cloudKitNoAccountErrorCode = 134400
+
+    private static func loadPersistentStores(
+        for container: NSPersistentCloudKitContainer,
+        preferences: StoragePreferences,
+        inMemory: Bool,
+        recoverOnFailure: Bool
+    ) -> Bool {
+        var loadFailed = false
+        let signpostID = StartupTiming.begin("PersistenceController.loadPersistentStores")
+        func endSignpost() {
+            StartupTiming.end("PersistenceController.loadPersistentStores", signpostID: signpostID)
+        }
+
+        container.loadPersistentStores { storeDescription, error in
+            if let error = error as NSError? {
+                print("[Fernlet] Persistent store failed to load: \(error), \(error.userInfo)")
+
+                // CloudKit "no account" — store is fine, just disable CloudKit and retry.
+                if error.domain == NSCocoaErrorDomain && error.code == cloudKitNoAccountErrorCode {
+                    storeDescription.cloudKitContainerOptions = nil
+                    container.loadPersistentStores { retryDescription, retryError in
+                        if let retryError {
+                            loadFailed = true
+                            print("[Fernlet] Local-only fallback load failed: \(retryError)")
+                        } else {
+                            applyBackupExclusionIfNeeded(
+                                preferences: preferences,
+                                storeDescription: retryDescription,
+                                inMemory: inMemory
+                            )
+                        }
+                        endSignpost()
+                    }
+                    return
+                }
+
+                guard recoverOnFailure, let storeURL = storeDescription.url else {
+                    loadFailed = true
+                    endSignpost()
+                    return
+                }
+
+                do {
+                    try container.persistentStoreCoordinator.destroyPersistentStore(
+                        at: storeURL,
+                        ofType: storeDescription.type
+                    )
+                    container.loadPersistentStores { retryDescription, retryError in
+                        if let retryError {
+                            loadFailed = true
+                            assertionFailure("Persistent store recovery failed: \(retryError)")
+                        } else {
+                            applyBackupExclusionIfNeeded(
+                                preferences: preferences,
+                                storeDescription: retryDescription,
+                                inMemory: inMemory
+                            )
+                        }
+                        endSignpost()
+                    }
+                } catch {
+                    loadFailed = true
+                    assertionFailure("Failed to destroy corrupt store: \(error)")
+                    endSignpost()
+                }
+            } else {
+                applyBackupExclusionIfNeeded(
+                    preferences: preferences,
+                    storeDescription: storeDescription,
+                    inMemory: inMemory
+                )
+                endSignpost()
+            }
+        }
+        return loadFailed
+    }
+
+    private static func loadPersistentStoresAsync(
+        for container: NSPersistentCloudKitContainer,
+        preferences: StoragePreferences,
+        inMemory: Bool
+    ) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            container.loadPersistentStores { storeDescription, error in
+                if let error {
+                    let nsError = error as NSError
+                    // CloudKit "no account" — disable CloudKit and retry without throwing.
+                    if nsError.domain == NSCocoaErrorDomain && nsError.code == cloudKitNoAccountErrorCode {
+                        storeDescription.cloudKitContainerOptions = nil
+                        container.loadPersistentStores { retryDescription, retryError in
+                            if let retryError {
+                                continuation.resume(throwing: retryError)
+                            } else {
+                                applyBackupExclusionIfNeeded(
+                                    preferences: preferences,
+                                    storeDescription: retryDescription,
+                                    inMemory: inMemory
+                                )
+                                continuation.resume()
+                            }
+                        }
+                        return
+                    }
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                applyBackupExclusionIfNeeded(
+                    preferences: preferences,
+                    storeDescription: storeDescription,
+                    inMemory: inMemory
+                )
+                continuation.resume()
+            }
+        }
+    }
+
+    private static func applyBackupExclusionIfNeeded(
+        preferences: StoragePreferences,
+        storeDescription: NSPersistentStoreDescription,
+        inMemory: Bool
+    ) {
+        guard preferences.localBackupExcludedFromiOSBackup,
+              inMemory == false,
+              let storeURL = storeDescription.url else {
+            return
+        }
+
+        do {
+            try (storeURL as NSURL).setResourceValue(true, forKey: URLResourceKey.isExcludedFromBackupKey)
+        } catch {
+            print("[Fernlet] Failed to exclude persistent store from iOS backup: \(error)")
+        }
+    }
+
+    private func configureViewContext(for container: NSPersistentCloudKitContainer) {
+        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
         container.viewContext.automaticallyMergesChangesFromParent = true
+    }
+
+    private func bindRemoteChanges(to container: NSPersistentCloudKitContainer) {
+        remoteChangeCancellable = NotificationCenter.default
+            .publisher(for: .NSPersistentStoreRemoteChange, object: container.persistentStoreCoordinator)
+            .sink { [remoteChangeSubject] notification in
+                remoteChangeSubject.send(notification)
+            }
+    }
+
+    @MainActor
+    private func saveAndLockViewContext(_ context: NSManagedObjectContext) throws {
+        try context.performAndWait {
+            if context.hasChanges {
+                try context.save()
+            }
+            context.reset()
+        }
+    }
+
+    private func removePersistentStores(from coordinator: NSPersistentStoreCoordinator) throws {
+        for store in coordinator.persistentStores {
+            try coordinator.remove(store)
+        }
+    }
+
+    private static func makeManagedObjectModel() -> NSManagedObjectModel {
+        let model = NSManagedObjectModel()
+        model.entities = [
+            makeFernletDatabaseRecordEntity(),
+            makeSavedRecipeRecordEntity(),
+            makeMenstrualNarrativeEntity()
+        ]
+        return model
+    }
+
+    private static func makeFernletDatabaseRecordEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "FernletDatabaseRecord"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            makeAttribute("recordID", type: .stringAttributeType),
+            makeAttribute("payloadData", type: .binaryDataAttributeType),
+            makeAttribute("updatedAt", type: .dateAttributeType)
+        ]
+        return entity
+    }
+
+    private static func makeSavedRecipeRecordEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "SavedRecipeRecord"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            makeAttribute("idString", type: .stringAttributeType),
+            makeAttribute("sourceURLString", type: .stringAttributeType),
+            makeAttribute("name", type: .stringAttributeType),
+            makeAttribute("ingredientsText", type: .stringAttributeType),
+            makeAttribute("summary", type: .stringAttributeType),
+            makeAttribute("servings", type: .integer64AttributeType, defaultValue: 1),
+            makeAttribute("protein", type: .integer64AttributeType, defaultValue: 0),
+            makeAttribute("carbs", type: .integer64AttributeType, defaultValue: 0),
+            makeAttribute("fat", type: .integer64AttributeType, defaultValue: 0),
+            makeAttribute("savedAt", type: .dateAttributeType)
+        ]
+        return entity
+    }
+
+    private static func makeMenstrualNarrativeEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "MenstrualNarrative"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            makeAttribute("id", type: .UUIDAttributeType),
+            makeAttribute("hkExternalUUID", type: .stringAttributeType),
+            makeAttribute("dateKey", type: .stringAttributeType),
+            makeAttribute("noteCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
+            makeAttribute("symptomFlagsCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
+            makeAttribute("customSymptomScalesCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
+            makeAttribute("createdAt", type: .dateAttributeType),
+            makeAttribute("updatedAt", type: .dateAttributeType)
+        ]
+        if let dateKeyProp = entity.propertiesByName["dateKey"] {
+            entity.indexes = [NSFetchIndexDescription(name: "byDateKey", elements: [
+                NSFetchIndexElementDescription(property: dateKeyProp, collationType: .binary)
+            ])]
+        }
+        return entity
+    }
+
+    private static func makeAttribute(
+        _ name: String,
+        type: NSAttributeType,
+        defaultValue: Any? = nil,
+        allowsExternalBinaryDataStorage: Bool = false
+    ) -> NSAttributeDescription {
+        let attribute = NSAttributeDescription()
+        attribute.name = name
+        attribute.attributeType = type
+        attribute.isOptional = true
+        attribute.defaultValue = defaultValue
+        attribute.allowsExternalBinaryDataStorage = allowsExternalBinaryDataStorage
+        return attribute
     }
 }
