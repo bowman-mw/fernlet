@@ -1,8 +1,9 @@
 import Foundation
-import Combine
+import Observation
 
 @MainActor
-final class TrainerProximityService: ObservableObject {
+@Observable
+final class TrainerProximityService {
     private let store: FernletStore
     private weak var coordinator: ProximityCoordinator?
 
