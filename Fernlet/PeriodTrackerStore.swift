@@ -1,4 +1,4 @@
-import Combine
+import Observation
 import CryptoKit
 import Foundation
 import HealthKit
@@ -210,15 +210,16 @@ extension HealthKitService: PeriodHealthKitServicing {
 }
 
 @MainActor
-final class PeriodTrackerStore: ObservableObject {
-    @Published var entries: [CycleDayEntry] = []
-    @Published var currentPhase: CyclePhase = .unknown
-    @Published var prediction: CyclePrediction?
+@Observable
+final class PeriodTrackerStore {
+    var entries: [CycleDayEntry] = []
+    var currentPhase: CyclePhase = .unknown
+    var prediction: CyclePrediction?
 
-    private let healthService: PeriodHealthKitServicing
-    private let narrativeRepository: MenstrualNarrativeRepository
-    private var lockService: FernletLockServicing?
-    private let calendar: Calendar
+    @ObservationIgnored private let healthService: PeriodHealthKitServicing
+    @ObservationIgnored private let narrativeRepository: MenstrualNarrativeRepository
+    @ObservationIgnored private var lockService: FernletLockServicing?
+    @ObservationIgnored private let calendar: Calendar
 
     init(
         healthService: PeriodHealthKitServicing? = nil,

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct PeriodTrackerView: View {
     @ObservedObject var store: FernletStore
-    @ObservedObject var periodStore: PeriodTrackerStore
+    var periodStore: PeriodTrackerStore
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
     @EnvironmentObject private var lockService: FernletLockService

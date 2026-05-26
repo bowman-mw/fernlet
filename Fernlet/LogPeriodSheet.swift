@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct LogPeriodSheet: View {
-    @ObservedObject var periodStore: PeriodTrackerStore
+    var periodStore: PeriodTrackerStore
     @EnvironmentObject private var lockService: FernletLockService
     @Environment(\.dismiss) private var dismiss
     @State private var authorization = HealthKitAuthorizationViewModel()

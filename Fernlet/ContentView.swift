@@ -10,7 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var store: FernletStore
     @StateObject private var launcher = LaunchPreparationService()
-    @StateObject private var periodStore = PeriodTrackerStore()
+    @State private var periodStore = PeriodTrackerStore()
     @EnvironmentObject private var lockService: FernletLockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
