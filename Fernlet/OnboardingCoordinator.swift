@@ -1,4 +1,4 @@
-import Combine
+import Observation
 import SwiftUI
 
 protocol ExistingCloudDataDetecting {
@@ -44,7 +44,8 @@ struct OnboardingCloudDataDetectorFactory {
 }
 
 @MainActor
-final class OnboardingCoordinatorModel: ObservableObject {
+@Observable
+final class OnboardingCoordinatorModel {
     enum Step: Int, CaseIterable {
         case welcome
         case lockSetup
@@ -58,15 +59,15 @@ final class OnboardingCoordinatorModel: ObservableObject {
         var indexText: String { "\(rawValue + 1) of \(Self.allCases.count)" }
     }
 
-    @Published private(set) var step: Step = .welcome
-    @Published var goal: GoalType
-    @Published var profile: UserNutritionProfile
-    @Published var nutritionPreferences: UserNutritionPreferences
-    @Published var starterName = "Fernlet"
-    @Published var starterColor = "Fern"
+    private(set) var step: Step = .welcome
+    var goal: GoalType
+    var profile: UserNutritionProfile
+    var nutritionPreferences: UserNutritionPreferences
+    var starterName = "Fernlet"
+    var starterColor = "Fern"
 
-    private let store: FernletStore
-    private let onComplete: () -> Void
+    @ObservationIgnored private let store: FernletStore
+    @ObservationIgnored private let onComplete: () -> Void
 
     init(store: FernletStore, onComplete: @escaping () -> Void) {
         self.store = store
@@ -104,7 +105,7 @@ final class OnboardingCoordinatorModel: ObservableObject {
 }
 
 struct OnboardingCoordinator: View {
-    @StateObject private var model: OnboardingCoordinatorModel
+    @State private var model: OnboardingCoordinatorModel
     private let detector: any ExistingCloudDataDetecting
 
     init(
@@ -112,7 +113,7 @@ struct OnboardingCoordinator: View {
         detector: any ExistingCloudDataDetecting,
         onComplete: @escaping () -> Void
     ) {
-        _model = StateObject(wrappedValue: OnboardingCoordinatorModel(store: store, onComplete: onComplete))
+        _model = State(initialValue: OnboardingCoordinatorModel(store: store, onComplete: onComplete))
         self.detector = detector
     }
 
