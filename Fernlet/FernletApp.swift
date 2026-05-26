@@ -6,7 +6,7 @@ import UIKit
 @main
 struct FernletApp: App {
     @StateObject private var lockService = FernletLockService()
-    @StateObject private var storagePreferencesStore = StoragePreferencesStore()
+    @State private var storagePreferencesStore = StoragePreferencesStore()
     @StateObject private var loader = FernletStoreLoader()
     @AppStorage(OnboardingDefaults.hasCompletedOnboardingKey) private var hasCompletedOnboarding = false
     @State private var didScheduleStartupCloudSync = false
@@ -85,7 +85,7 @@ struct FernletApp: App {
         NavigationStack {
             PrivacyDataSettingsView()
                 .environmentObject(lockService)
-                .environmentObject(storagePreferencesStore)
+                .environment(storagePreferencesStore)
         }
     }
 
@@ -95,7 +95,7 @@ struct FernletApp: App {
             if hasCompletedOnboarding {
                 ContentView(store: store)
                     .environmentObject(lockService)
-                    .environmentObject(storagePreferencesStore)
+                    .environment(storagePreferencesStore)
             } else {
                 OnboardingCoordinator(
                     store: store,
@@ -104,7 +104,7 @@ struct FernletApp: App {
                     hasCompletedOnboarding = true
                 }
                 .environmentObject(lockService)
-                .environmentObject(storagePreferencesStore)
+                .environment(storagePreferencesStore)
                 .onAppear {
                     StartupTiming.endAppLaunch()
                 }

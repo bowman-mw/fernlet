@@ -1,5 +1,5 @@
 import Foundation
-import Combine
+import Observation
 
 struct StoragePreferences: Codable, Equatable {
     var iCloudSyncEnabled: Bool
@@ -34,12 +34,17 @@ struct StoragePreferences: Codable, Equatable {
 }
 
 @MainActor
-final class StoragePreferencesStore: ObservableObject {
-    @Published private(set) var preferences: StoragePreferences
+@Observable
+final class StoragePreferencesStore {
+    private(set) var preferences: StoragePreferences
 
+    @ObservationIgnored
     private let keychainService: String
+    @ObservationIgnored
     private let now: () -> Date
+    @ObservationIgnored
     private let encoder = JSONEncoder()
+    @ObservationIgnored
     private let decoder = JSONDecoder()
 
     init(

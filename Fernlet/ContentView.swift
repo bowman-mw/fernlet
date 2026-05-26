@@ -12,7 +12,7 @@ struct ContentView: View {
     @StateObject private var launcher = LaunchPreparationService()
     @StateObject private var periodStore = PeriodTrackerStore()
     @EnvironmentObject private var lockService: FernletLockService
-    @EnvironmentObject private var storagePreferencesStore: StoragePreferencesStore
+    @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
@@ -235,7 +235,7 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
                 .environmentObject(lockService)
-                .environmentObject(storagePreferencesStore)
+                .environment(storagePreferencesStore)
         case .recipeBook:
             RecipeBookSheet(store: store, editingRecipe: $editingRecipeFromHome, editingSavedRecipe: $editingSavedRecipeFromHome)
                 .presentationDetents([.large])

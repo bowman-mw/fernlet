@@ -27,7 +27,7 @@ extension HealthKitService: PrivacyHealthKitServicing {}
 
 struct PrivacyDataSettingsView: View {
     @EnvironmentObject private var lockService: FernletLockService
-    @EnvironmentObject private var storagePreferencesStore: StoragePreferencesStore
+    @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
 
     @State private var hasFreshVerification = ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_AUTH"] == "1"
     @State private var isVerifying = false

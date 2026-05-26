@@ -5,7 +5,7 @@ struct OnboardingStorageChoiceView: View {
     let detector: any ExistingCloudDataDetecting
     var continueAction: () -> Void
 
-    @EnvironmentObject private var storagePreferencesStore: StoragePreferencesStore
+    @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @State private var selectedStorage: OnboardingStorageChoice?
     @State private var existingDataSummary: ExistingDataSummary?
     @State private var isDetecting = true
