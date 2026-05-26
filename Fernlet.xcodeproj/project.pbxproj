@@ -16,6 +16,7 @@
 		68B9EC082FC352D000AF8FB6 /* proximity-handshake-process-map.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC072FC352D000AF8FB6 /* proximity-handshake-process-map.md */; };
 		68B9EC122FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC112FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md */; };
 		68B9EC142FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC132FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md */; };
+		68B9EC1E2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC1D2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -51,6 +52,7 @@
 		68B9EC072FC352D000AF8FB6 /* proximity-handshake-process-map.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "proximity-handshake-process-map.md"; sourceTree = "<group>"; };
 		68B9EC112FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = MeshNetworkImplementationPlan.md; sourceTree = "<group>"; };
 		68B9EC132FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "FernletStore-Refactor-Plan-v2.md"; sourceTree = "<group>"; };
+		68B9EC1D2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "PR0-Incremental-Migration-Plan.md"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -143,6 +145,7 @@
 				68B9EBCD2FC296F100AF8FB6 /* codex-implementation-prompts.md */,
 				68B9EBDB2FC2AA1800AF8FB6 /* phase7-proximity-implementation-plan.md */,
 				684018B92FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md */,
+				68B9EC1D2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md */,
 				684018E02FBFAC4500EFC6D6 /* FileIndex.md */,
 				684019112FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md */,
 				68B9EC072FC352D000AF8FB6 /* proximity-handshake-process-map.md */,
@@ -274,6 +277,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				68B9EC1E2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md in Resources */,
 				68B9EC122FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md in Resources */,
 				68B9EBCE2FC296F200AF8FB6 /* codex-implementation-prompts.md in Resources */,
 				684019122FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md in Resources */,
