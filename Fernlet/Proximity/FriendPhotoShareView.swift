@@ -1,5 +1,5 @@
 import SwiftUI
-import Combine
+import Observation
 import Photos
 import PhotosUI
 import UIKit
@@ -66,16 +66,16 @@ struct FriendPhotoCacheStore {
 }
 
 @MainActor
-final class FriendPhotoSharingService: ObservableObject, ProximityPayloadHandling {
-    @Published private(set) var sharedPhotos: [FriendPhotoPayload] = []
-    @Published var lastError: String?
+@Observable
+final class FriendPhotoSharingService: ProximityPayloadHandling {
+    private(set) var sharedPhotos: [FriendPhotoPayload] = []
+    var lastError: String?
 
     let coordinator: ProximityCoordinator
-    private let store: FernletStore
-    private let identity: IdentityService
-    private let cacheStore: FriendPhotoCacheStore
-    private var cancellables = Set<AnyCancellable>()
-    private var lastSyncedPeerFingerprint: String?
+    @ObservationIgnored private let store: FernletStore
+    @ObservationIgnored private let identity: IdentityService
+    @ObservationIgnored private let cacheStore: FriendPhotoCacheStore
+    @ObservationIgnored private var lastSyncedPeerFingerprint: String?
 
     init(store: FernletStore) {
         let cacheStore = FriendPhotoCacheStore()
@@ -98,11 +98,6 @@ final class FriendPhotoSharingService: ObservableObject, ProximityPayloadHandlin
         )
         self.coordinator = coordinator
         self.coordinator.attachPayloadHandler(self)
-        self.coordinator.objectWillChange
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-            .store(in: &cancellables)
     }
 
     var isConnected: Bool {
@@ -320,7 +315,7 @@ struct FriendPhotoShareView: View {
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
 
-    @StateObject private var service: FriendPhotoSharingService
+    @State private var service: FriendPhotoSharingService
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var reviewPresented = false
     @State private var selectedForSave: Set<UUID> = []
@@ -329,7 +324,7 @@ struct FriendPhotoShareView: View {
         self.store = store
         self._activeSheet = activeSheet
         self.isInHub = isInHub
-        self._service = StateObject(wrappedValue: FriendPhotoSharingService(store: store))
+        self._service = State(initialValue: FriendPhotoSharingService(store: store))
     }
 
     var body: some View {
