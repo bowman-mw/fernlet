@@ -4,7 +4,7 @@ import UIKit
 #endif
 
 struct ConnectionInspectorHistoryView: View {
-    @ObservedObject var inspector: ConnectionInspector
+    var inspector: ConnectionInspector
     @State private var exportPayload: ExportPayload?
 
     var body: some View {

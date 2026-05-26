@@ -1,16 +1,17 @@
 import Foundation
-import Combine
+import Observation
 import SwiftUI
 
 @MainActor
-final class ConnectionInspector: ObservableObject, ProximityInspectorRecording {
-    @Published private(set) var liveLog: ConnectionSessionLog?
-    @Published private(set) var historicalLogs: [ConnectionSessionLog] = []
+@Observable
+final class ConnectionInspector: ProximityInspectorRecording {
+    private(set) var liveLog: ConnectionSessionLog?
+    private(set) var historicalLogs: [ConnectionSessionLog] = []
 
-    weak var store: FernletStore?
-    private var sampleSubsamplingCounter = 0
-    private let sampleSubsamplingStride = 3
-    private let now: () -> Date
+    @ObservationIgnored weak var store: FernletStore?
+    @ObservationIgnored private var sampleSubsamplingCounter = 0
+    @ObservationIgnored private let sampleSubsamplingStride = 3
+    @ObservationIgnored private let now: () -> Date
 
     init(store: FernletStore? = nil, now: @escaping () -> Date = Date.init) {
         self.store = store

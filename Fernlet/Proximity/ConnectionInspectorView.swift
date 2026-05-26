@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ConnectionInspectorView: View {
-    @ObservedObject var inspector: ConnectionInspector
+    var inspector: ConnectionInspector
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
