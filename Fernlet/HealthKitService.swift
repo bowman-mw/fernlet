@@ -1,4 +1,4 @@
-import Combine
+import Observation
 import CoreData
 import Foundation
 import HealthKit
@@ -1028,12 +1028,14 @@ final class HealthKitService: HealthKitServicing {
 }
 
 @MainActor
-final class HealthKitAuthorizationViewModel: ObservableObject {
-    @Published private(set) var snapshot: AuthorizationSnapshot
-    @Published private(set) var statusMessage: String = ""
-    @Published private(set) var isRequesting = false
-    @Published private(set) var requestedCapabilities: Set<HealthCapability>
+@Observable
+final class HealthKitAuthorizationViewModel {
+    private(set) var snapshot: AuthorizationSnapshot
+    private(set) var statusMessage: String = ""
+    private(set) var isRequesting = false
+    private(set) var requestedCapabilities: Set<HealthCapability>
 
+    @ObservationIgnored
     private let service: HealthKitServicing
 
     init(service: HealthKitServicing? = nil) {

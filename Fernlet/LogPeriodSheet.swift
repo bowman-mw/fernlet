@@ -4,7 +4,7 @@ struct LogPeriodSheet: View {
     @ObservedObject var periodStore: PeriodTrackerStore
     @EnvironmentObject private var lockService: FernletLockService
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var authorization = HealthKitAuthorizationViewModel()
+    @State private var authorization = HealthKitAuthorizationViewModel()
 
     @State private var eventDate: Date
     @State private var flowLevel: PeriodFlowLevel = .unspecified

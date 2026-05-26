@@ -18,7 +18,7 @@ struct SettingsSheet: View {
     @State private var memorySearch = ""
     @State private var newCareTaskName = ""
     @State private var newCareTaskGroup = "Anytime"
-    @StateObject private var healthKit = HealthKitAuthorizationViewModel()
+    @State private var healthKit = HealthKitAuthorizationViewModel()
 
     var body: some View {
         NavigationStack {

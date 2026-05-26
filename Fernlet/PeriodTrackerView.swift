@@ -6,7 +6,7 @@ struct PeriodTrackerView: View {
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
     @EnvironmentObject private var lockService: FernletLockService
-    @StateObject private var authorization = HealthKitAuthorizationViewModel()
+    @State private var authorization = HealthKitAuthorizationViewModel()
     @State private var selectedDay: SelectedPeriodDay?
     @State private var displayedMonth: Date = .now
 
