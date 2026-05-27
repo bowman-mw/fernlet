@@ -5,7 +5,7 @@ import UIKit
 #endif
 
 struct FoodView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @Binding var activeSheet: FernletSheet?
     @State private var retryNotice: String?
     @State private var editingRecipe: RecipeDefinition?
@@ -253,7 +253,7 @@ struct MicronutrientSummaryView: View {
 
 struct RecipeImportSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @State private var importText = ""
     @State private var notice: String?
     @State private var isImportingURL = false
@@ -402,7 +402,7 @@ struct SavedRecipeRow: View {
 
 struct SavedRecipeNotesSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @State private var recipe: SavedRecipe
     @State private var showingSafari = false
 
@@ -513,7 +513,7 @@ enum MealFlowDestination: Hashable {
 
 struct RecipeSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     private var editingRecipe: RecipeDefinition?
     private var isEmbeddedInNavigationStack: Bool
     private var startsWithScanner: Bool
@@ -1039,7 +1039,7 @@ struct LockedMacroSummary: View {
 
 struct MealSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     var onLogged: ([Meal]) -> Void = { _ in }
     @State private var description = ""
     @State private var mealType: MealType?
@@ -1305,7 +1305,7 @@ struct MacroInputRow: View {
 }
 
 struct RecipeCreationOptionsView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
 
     var body: some View {
         ScrollView {
@@ -1413,7 +1413,7 @@ private struct RecipeMealTypeMenu: View {
 
 struct RecipeBookSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @Binding var editingRecipe: RecipeDefinition?
     @Binding var editingSavedRecipe: SavedRecipe?
     @State private var searchText = ""

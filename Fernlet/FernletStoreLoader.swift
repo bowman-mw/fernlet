@@ -1,18 +1,19 @@
-import Combine
-import SwiftUI
+import Foundation
+import Observation
 
 @MainActor
-final class FernletStoreLoader: ObservableObject {
+@Observable
+final class FernletStoreLoader {
     enum Phase {
         case preparing
         case ready(FernletStore)
         case failed(Error)
     }
 
-    @Published private(set) var phase: Phase = .preparing
-    @Published private(set) var statusMessage: String = LaunchPreparationService.initialStatusMessage
+    private(set) var phase: Phase = .preparing
+    private(set) var statusMessage: String = LaunchPreparationService.initialStatusMessage
 
-    private var didStart = false
+    @ObservationIgnored private var didStart = false
 
     func startIfNeeded() async {
         guard !didStart else { return }

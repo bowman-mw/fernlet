@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct WorkshopView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
     @State private var tab = WorkshopTab.texture

@@ -2,7 +2,7 @@ import HealthKit
 import SwiftUI
 
 struct HomeView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @Binding var activeSheet: FernletSheet?
     @Binding var selectedTab: FernletTab
     @Binding var privateHubSection: PrivateHubSection
@@ -790,7 +790,7 @@ struct MacroRing: View {
 }
 
 struct HygieneCard: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @Binding var activeSheet: FernletSheet?
 
     var body: some View {

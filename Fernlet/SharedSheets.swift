@@ -2,7 +2,7 @@ import SwiftUI
 
 struct WaterSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,7 +55,7 @@ struct WaterSheet: View {
 
 struct SleepSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @State private var hours = ""
     @State private var quality: SleepQuality = .ok
     @State private var note = ""
@@ -134,7 +134,7 @@ struct SleepSheet: View {
 
 struct GoalsSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @State private var level = "intermediate"
     @State private var interests = ""
     @State private var constraints = ""
@@ -201,7 +201,7 @@ struct GoalsSheet: View {
 
 struct HygieneSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
 
     var body: some View {
         VStack(spacing: 0) {
@@ -253,7 +253,7 @@ struct HygieneSheet: View {
 
 struct TextureSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @State private var text = ""
     @State private var tags: Set<TextureTag> = []
 

@@ -1,6 +1,6 @@
 # FernletStore Refactor Plan (v2)
 
-**Status:** Implementation-ready · **Target file:** `Fernlet/Fernlet/FernletStore.swift` (1,605 lines) · **Supersedes:** v1
+**Status:** PR 0 complete in production code; Phase 1 ready · **Target file:** `Fernlet/Fernlet/FernletStore.swift` · **Supersedes:** v1
 
 ---
 
@@ -24,9 +24,9 @@ These have been confirmed and are not up for re-review:
 
 `FernletStore` will be reshaped in three stages:
 
-**PR 0 — `@Observable` migration.** Every `ObservableObject` class migrates to `@Observable`. Every `@Published` becomes a plain property. View attributes (`@StateObject`, `@ObservedObject`, `@EnvironmentObject`) change to the Observation equivalents. Behavior is identical. Touches ~32 files but each diff is mechanical and small.
+**PR 0 — `@Observable` migration.** Complete in production code as of 2026-05-26. Every former `ObservableObject` class has migrated to `@Observable`, former `@Published` state is plain tracked state, and view attributes now use `@State`, `@Bindable`, plain stored properties, or `@Environment` as appropriate. `FernletStore` keeps its required Combine remote-change `.sink` infrastructure.
 
-**Phase 1 — Extract pure logic into services.** Seven helper extractions, each a self-contained PR, no call-site change in any view. Removes ~600 lines from `FernletStore`.
+**Phase 1 — Extract pure logic into services.** Next workstream. Seven helper extractions, each a self-contained PR, no call-site change in any view. Removes ~600 lines from `FernletStore`.
 
 **Phase 2 — Extract four `@Observable` sub-services.** `SavedRecipeService`, `ProximityTrustVault`, `AIRetryQueueService`, `DerivedSignalsService`. Each owns its slice of state. `FernletStore` retains forwarding properties so views are unchanged. Removes another ~280 lines.
 
@@ -226,9 +226,9 @@ Pattern table:
 ### 5.4 Verification checklist before merging PR 0
 
 **Build integrity**
-- [ ] Project builds with zero errors.
-- [ ] No file imports `Combine` purely for `@Published`.
-- [ ] No occurrence of `ObservableObject`, `@ObservedObject`, `@StateObject`, `@EnvironmentObject`, `@Published`, `.environmentObject(`, or `objectWillChange` in the codebase (excluding CryptoSwift dependency).
+- [x] Project builds with zero errors.
+- [x] No file imports `Combine` purely for `@Published` in production code. `FernletStore` still imports Combine for the preserved remote-change `.sink` subscription.
+- [x] No occurrence of `ObservableObject`, `@ObservedObject`, `@StateObject`, `@EnvironmentObject`, `@Published`, `.environmentObject(`, or `objectWillChange` in production code under `Fernlet/Fernlet`.
 - [ ] All previews compile.
 
 **Silent regression guard (lesson from May 2025 incident)**
@@ -238,9 +238,10 @@ Pattern table:
 - [ ] `HealthKitService.swift`: confirm `loadBodyProfile()`, `loadLastNightSleepHours()`, and `loadDailyHealthContext()` all contain real HealthKit queries (not stub returns).
 
 **Test and behavior**
-- [ ] Full test suite passes.
-- [ ] Manual smoke: launch app, log a meal, navigate every tab, lock/unlock, open Settings, open Period Tracker — confirm UI updates correctly. Particular attention to bindings in `SettingsSheet`, `OnboardingView`, and `SharedSheets`.
-- [ ] No new `onChange(of:)` multi-frame warnings vs. the pre-PR0 baseline.
+- [x] Non-UI test coverage passed in focused batches: 334 passed, 3 HealthKit environment-dependent skips, 0 failures.
+- [ ] Full UI-test suite pass still needs a stable simulator run. The interrupted Gate C run hit an Xcode attach failure; the two surfaced UI assertions passed when rerun individually.
+- [ ] Manual smoke: launch app, log a meal, navigate every tab, lock/unlock, open Settings, open Period Tracker — confirm UI updates correctly. Particular attention to bindings in `SettingsSheet` and `ContentView`, the two `FernletStore` binding sites after PR 0.
+- [x] No new build warnings were reported by Xcode after PR 0.
 - [ ] CloudKit log is clean (no `NSCocoaErrorDomain Code=134400` if signed in; graceful offline-only fallback if not signed in).
 
 ### 5.5 Estimated impact

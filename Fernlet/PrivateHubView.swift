@@ -12,7 +12,7 @@ enum PrivateHubSection: String, CaseIterable, Identifiable {
 }
 
 struct PrivateHubView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     var periodStore: PeriodTrackerStore
     @Binding var activeSheet: FernletSheet?
     @Binding var section: PrivateHubSection

@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 #if canImport(FoundationModels)
 import FoundationModels
@@ -17,9 +17,10 @@ struct PhotowallSeed: Identifiable {
 // MARK: - Launch preparation service
 
 @MainActor
-final class LaunchPreparationService: ObservableObject {
-    @Published private(set) var isDone = false
-    @Published private(set) var statusMessage = initialStatusMessage
+@Observable
+final class LaunchPreparationService {
+    private(set) var isDone = false
+    private(set) var statusMessage = initialStatusMessage
 
     static let initialStatusMessage = "Checking in with your body..."
 

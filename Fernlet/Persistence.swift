@@ -8,8 +8,10 @@
 import Combine
 import CoreData
 import Foundation
+import Observation
 
-final class PersistenceController: ObservableObject {
+@Observable
+final class PersistenceController {
     static let shared: PersistenceController = {
         let data = KeychainItem.load(for: .storagePreferences, service: KeychainItem.storagePreferencesService)
         var startupPreferences = data.flatMap { try? JSONDecoder().decode(StoragePreferences.self, from: $0) } ?? StoragePreferences()
@@ -23,20 +25,20 @@ final class PersistenceController: ObservableObject {
         return result
     }()
 
-    @Published private(set) var isReloading = false
+    private(set) var isReloading = false
 
-    private(set) var container: NSPersistentContainer
+    @ObservationIgnored private(set) var container: NSPersistentContainer
     private(set) var didFailToLoad = false
     /// Fires when iCloud pushes a remote change to the local store.
-    let remoteChangePublisher: AnyPublisher<Notification, Never>
+    @ObservationIgnored let remoteChangePublisher: AnyPublisher<Notification, Never>
 
     private let inMemory: Bool
     private let storeURL: URL?
     /// When non-nil, overrides the real `FileManager.ubiquityIdentityToken` check. Injected by tests
     /// so CloudKit configuration logic can be exercised without a real iCloud account present.
     private let iCloudAvailabilityOverride: Bool?
-    private let remoteChangeSubject = PassthroughSubject<Notification, Never>()
-    private var remoteChangeCancellable: AnyCancellable?
+    @ObservationIgnored private let remoteChangeSubject = PassthroughSubject<Notification, Never>()
+    @ObservationIgnored private var remoteChangeCancellable: AnyCancellable?
 
     init(
         inMemory: Bool = false,

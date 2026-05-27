@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct MoveRefactorTests {
     @Test func parseFernletMetadataHandlesMissingKeys() {
-        let parsed = FernletStore.parseFernletMetadata(nil)
+        let parsed = WorkoutHealthKitSync.parseFernletMetadata(nil)
 
         #expect(parsed.muscleGroups.isEmpty)
         #expect(parsed.exercises.isEmpty)
@@ -24,7 +24,7 @@ struct MoveRefactorTests {
             "fernlet.plannedWorkoutID": plannedID.uuidString
         ]
 
-        let parsed = FernletStore.parseFernletMetadata(metadata)
+        let parsed = WorkoutHealthKitSync.parseFernletMetadata(metadata)
 
         #expect(parsed.muscleGroups == [.chest, .triceps])
         #expect(parsed.exercises == "Bench press 3x8")
@@ -34,7 +34,7 @@ struct MoveRefactorTests {
     }
 
     @Test func parseFernletMetadataSkipsUnknownMuscleGroups() {
-        let parsed = FernletStore.parseFernletMetadata(["fernlet.muscleGroups": "chest,unknownGroup,triceps"])
+        let parsed = WorkoutHealthKitSync.parseFernletMetadata(["fernlet.muscleGroups": "chest,unknownGroup,triceps"])
 
         #expect(parsed.muscleGroups == [.chest, .triceps])
     }

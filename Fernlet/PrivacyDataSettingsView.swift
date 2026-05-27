@@ -26,7 +26,7 @@ protocol PrivacyHealthKitServicing {
 extension HealthKitService: PrivacyHealthKitServicing {}
 
 struct PrivacyDataSettingsView: View {
-    @EnvironmentObject private var lockService: FernletLockService
+    @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
 
     @State private var hasFreshVerification = ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_AUTH"] == "1"
@@ -71,7 +71,7 @@ struct PrivacyDataSettingsView: View {
         .navigationTitle("Privacy & Data")
         .sheet(isPresented: $showLockSetup) {
             FernletLockSetupView()
-                .environmentObject(lockService)
+                .environment(lockService)
         }
         .sheet(isPresented: $isShowingDisableConfirmation) {
             disableICloudConfirmationSheet

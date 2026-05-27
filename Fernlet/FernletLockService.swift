@@ -11,6 +11,7 @@ import LocalAuthentication
 import Combine
 import OSLog
 import CryptoSwift
+import Observation
 
 // MARK: - Public types
 
@@ -405,20 +406,26 @@ enum FernletAuditLog {
 }
 
 @MainActor
-final class FernletLockService: ObservableObject, FernletLockServicing {
-    @Published private(set) var state: FernletLockState = .notConfigured
-    @Published private(set) var hasAutoPromptedBiometricForCurrentLockSession = false
-    @Published private(set) var isPerformingBiometricUnlock = false
+@Observable
+final class FernletLockService: FernletLockServicing {
+    @ObservationIgnored
+    private let stateSubject = PassthroughSubject<FernletLockState, Never>()
 
-    var statePublisher: AnyPublisher<FernletLockState, Never> { $state.eraseToAnyPublisher() }
+    private(set) var state: FernletLockState = .notConfigured {
+        didSet { stateSubject.send(state) }
+    }
+    private(set) var hasAutoPromptedBiometricForCurrentLockSession = false
+    private(set) var isPerformingBiometricUnlock = false
+
+    var statePublisher: AnyPublisher<FernletLockState, Never> { stateSubject.eraseToAnyPublisher() }
 
     let keychainService: String
-    private let dateProvider: FernletDateProviding
-    private let uptimeProvider: FernletUptimeProviding
-    private let cryptoProvider: FernletLockCryptoProviding
-    private let biometricBypassLoader: ((String, String) throws -> Data)?
-    private var _contentKey: SymmetricKey?
-    private let buffer = PendingNarrativeBuffer()
+    @ObservationIgnored private let dateProvider: FernletDateProviding
+    @ObservationIgnored private let uptimeProvider: FernletUptimeProviding
+    @ObservationIgnored private let cryptoProvider: FernletLockCryptoProviding
+    @ObservationIgnored private let biometricBypassLoader: ((String, String) throws -> Data)?
+    @ObservationIgnored private var _contentKey: SymmetricKey?
+    @ObservationIgnored private let buffer = PendingNarrativeBuffer()
 
     init(
         keychainService: String = KeychainItem.productionService,

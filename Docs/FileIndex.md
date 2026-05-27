@@ -59,6 +59,12 @@ This index maps the main project files to their responsibilities. It is intended
 | --- | --- |
 | `Fernlet/Fernlet/Models.swift` | Core domain models for days, settings, nutrition, meals, recipes, workouts, journal entries, sleep, hygiene, goals, workshop data, and companion state. |
 | `Fernlet/Fernlet/FernletStore.swift` | Main observable app store that coordinates repository data and app-level state changes. |
+| `Fernlet/Fernlet/ProximityTrustVault.swift` | Trusted proximity peer records and trainer audit event vault; implements `ProximityTrustPolicy`. Extracted sub-service of `FernletStore`. |
+| `Fernlet/Fernlet/AIRetryQueueService.swift` | AI analysis retry queue; stores pending retry records and calls `onChange` on each mutation. Extracted sub-service of `FernletStore`. |
+| `Fernlet/Fernlet/DerivedSignalsService.swift` | Derived signal computation and deferred post-launch rebuild scheduling. Extracted sub-service of `FernletStore`. |
+| `Fernlet/Fernlet/DerivedSignalsRebuilder.swift` | Pure helper that rebuilds derived signals from a historical day window; used by `DerivedSignalsService`. |
+| `Fernlet/Fernlet/SavedRecipeService.swift` | Observable saved recipe list manager; loads, adds, deletes, and persists saved recipes. Extracted sub-service of `FernletStore`. |
+| `Fernlet/Fernlet/SnapshotSaveCoordinator.swift` | Debounced snapshot persistence coordinator and remote-change reload handler. Extracted sub-service of `FernletStore`. |
 | `Fernlet/Fernlet/FernletStoreLoader.swift` | Async store bootstrap coordinator that manages `preparing → ready → failed` phase transitions at launch. |
 | `Fernlet/Fernlet/LocalFernletRepository.swift` | Local JSON-style repository contract and implementation, snapshot/database records, derived signal creation, limits, and memory engine logic. |
 | `Fernlet/Fernlet/CoreDataFernletRepository.swift` | Core Data-backed repository implementation. |
@@ -83,6 +89,9 @@ This index maps the main project files to their responsibilities. It is intended
 | `Fernlet/Fernlet/NutritionLabelCameraSheet.swift` | Camera and image picker UI for capturing nutrition labels and reviewing scan results. |
 | `Fernlet/Fernlet/RecipeWebImporter.swift` | Recipe import pipeline for extracting structured recipes from web content and metadata. |
 | `Fernlet/Fernlet/RecipeShareCodec.swift` | Encodes and decodes recipes into a shareable text format for peer-to-peer recipe sharing. |
+| `Fernlet/Fernlet/MealBuilder.swift` | Converts a `FoodSelectionPlan` and food candidates into structured `Meal` records and inline recipe definitions, with good-protein threshold logic. |
+| `Fernlet/Fernlet/CustomIngredientUpsert.swift` | Resolves manual recipe ingredient inputs into `FoodItem` records, creating or updating custom food entries in the catalog. |
+| `Fernlet/Fernlet/BundledFoodSeedingService.swift` | Observable service for seeding the food catalog from the bundled USDA dataset on first launch. |
 | `Fernlet/Fernlet/Scoring.swift` | Health scoring, goal weights, meal parsing, workout planning, workout suggestions, and date helpers. |
 
 ## Health And Launch Services
@@ -90,9 +99,19 @@ This index maps the main project files to their responsibilities. It is intended
 | File | Purpose |
 | --- | --- |
 | `Fernlet/Fernlet/HealthKitService.swift` | HealthKit service protocol and implementation, capability metadata, authorization snapshots, body/activity/cycle/mindfulness context, and authorization view model. |
+| `Fernlet/Fernlet/WorkoutHealthKitSync.swift` | HealthKit workout import pipeline; reads `HKWorkout` samples and upserts matching `Workout` records via a `WorkoutSyncContext`. |
 | `Fernlet/Fernlet/CyclePredictionEngine.swift` | Statistical cycle prediction engine using historical period data to forecast next period start, flow patterns, confidence level, and predicted flow days. |
 | `Fernlet/Fernlet/LaunchPreparationService.swift` | Launch preparation state and photo wall seed loading. |
 | `Fernlet/Fernlet/StartupTiming.swift` | `os_signpost`-based startup timing probes for measuring and instrumenting app launch phases. |
+
+## Social And Mesh Networking
+
+| File | Purpose |
+| --- | --- |
+| `Fernlet/Fernlet/MeshNetworkManager.swift` | Observable mesh network coordinator managing active/lightweight peer slots, mesh creation/joining, slot promotion/demotion, member tracking, and admission request handling. |
+| `Fernlet/Fernlet/MeshLobbyView.swift` | Mesh lobby UI for browsing, creating, and joining meshes; manages the active mesh name, member list, and in-mesh photo sharing. |
+| `Fernlet/Fernlet/MeshAdmissionPromptSheet.swift` | Sheet UI for reviewing and approving/declining peer join requests to a named mesh. |
+| `Fernlet/Fernlet/FriendListView.swift` | Friend list screen for browsing trusted proximity peers with all/friends/blocked filters and block management. |
 
 ## Proximity
 
@@ -100,6 +119,8 @@ This index maps the main project files to their responsibilities. It is intended
 | --- | --- |
 | `Fernlet/Fernlet/Proximity/ProximityCoordinator.swift` | High-level coordinator for proximity sessions; orchestrates MultipeerConnectivity transport, signed identity/ranging-token handshake, UWB startup, heartbeat RTT, payload dispatch, and inspector recording. |
 | `Fernlet/Fernlet/Proximity/MultipeerSession.swift` | MultipeerConnectivity peer model (`MultipeerPeer`), persistent `MCPeerID` storage, and session transport layer. |
+| `Fernlet/Fernlet/Proximity/MeshMultipeerSession.swift` | Shared `MCSession` host for multi-peer mesh; `PeerChannelTransport` adapts per-peer state and data routing without managing the MC lifecycle directly. |
+| `Fernlet/Fernlet/Proximity/MeshNameGenerator.swift` | Generates random human-readable two-word mesh names from adjective/noun word lists. |
 | `Fernlet/Fernlet/Proximity/NIRangingSession.swift` | NearbyInteraction UWB ranging session for measuring real-time distance and direction between Fernlet devices. |
 | `Fernlet/Fernlet/Proximity/FernletIdentityEnvelope.swift` | Ed25519-signed wire envelope for all peer-to-peer transfers; defines `PayloadType` classification and canonical JSON encoding. |
 | `Fernlet/Fernlet/Proximity/IdentityService.swift` | Per-device Ed25519 signing identity and X25519 key-agreement, with keys stored in Keychain under `AfterFirstUnlockThisDeviceOnly`. |
@@ -145,6 +166,17 @@ This index maps the main project files to their responsibilities. It is intended
 | `Fernlet/FernletTests/FriendPhotoSharingServiceTests.swift` | Friend photo sharing via proximity session tests. |
 | `Fernlet/FernletTests/RecipeShareCodecTests.swift` | Recipe share codec encoding and round-trip tests. |
 | `Fernlet/FernletTests/FernletSnapshotRoundTripTests.swift` | Snapshot serialization round-trip integrity tests. |
+| `Fernlet/FernletTests/ProximityTrustVaultTests.swift` | ProximityTrustVault trust/revoke idempotency, audit ring-buffer cap, onChange callback, and apply atomicity tests. |
+| `Fernlet/FernletTests/AIRetryQueueServiceTests.swift` | AIRetryQueueService queue, clear, apply, reset, and onChange callback tests. |
+| `Fernlet/FernletTests/DerivedSignalsServiceTests.swift` | DerivedSignalsService rebuild accuracy and deferred-rebuild single-run guard tests. |
+| `Fernlet/FernletTests/DerivedSignalsRebuilderTests.swift` | Derived signals rebuilder accuracy and day-window boundary tests. |
+| `Fernlet/FernletTests/MeshNetworkManagerTests.swift` | Mesh network manager slot allocation, peer admission, and lifecycle tests. |
+| `Fernlet/FernletTests/MealBuilderTests.swift` | Meal builder food plan to meal/recipe conversion tests. |
+| `Fernlet/FernletTests/SavedRecipeServiceTests.swift` | Saved recipe service load, add, delete, and persistence tests. |
+| `Fernlet/FernletTests/SnapshotSaveCoordinatorTests.swift` | Snapshot save coordinator debounce and remote-reload tests. |
+| `Fernlet/FernletTests/WorkoutHealthKitSyncTests.swift` | HealthKit workout import and upsert logic tests. |
+| `Fernlet/FernletTests/BundledFoodSeedingServiceTests.swift` | Bundled food seeding state machine and catalog population tests. |
+| `Fernlet/FernletTests/CustomIngredientUpsertTests.swift` | Custom ingredient resolution and food item creation tests. |
 
 ### Test Mocks
 
@@ -162,23 +194,32 @@ This index maps the main project files to their responsibilities. It is intended
 | `Fernlet/FernletUITests/OnboardingFlowUITests.swift` | End-to-end UI tests for the onboarding flow. |
 | `Fernlet/FernletUITests/PrivacyDataSettingsUITests.swift` | UI tests for the privacy and data settings screen. |
 | `Fernlet/FernletUITests/StoragePrivacyUITests.swift` | UI tests for storage and privacy preference flows. |
+| `Fernlet/FernletUITests/MeshNetworkUITests.swift` | UI automation tests for mesh network discovery and joining flows. |
 
 ## Documentation
+
+### Active
 
 | File | Purpose |
 | --- | --- |
 | `Docs/FernletSpecificationV3.md` | Product specification. |
 | `Docs/ImplementationPlan.md` | Implementation planning notes. |
-| `Docs/healthkit-integration-plan.md` | HealthKit integration plan. |
-| `Docs/fernlet-period-intimacy-plan.md` | Period and intimacy feature plan. |
-| `Docs/PeriodAlgorithimResearch.md` | Research notes on period/cycle prediction algorithms. |
 | `Docs/MeshNetworkImplementationPlan.md` | Mesh network and MultipeerConnectivity implementation plan. |
-| `Docs/phase7-proximity-implementation-plan.md` | Phase 7 proximity feature implementation plan. |
-| `Docs/proximity-handshake-process-map.md` | Process map for the proximity identity handshake flow. |
-| `Docs/StartupAndBiometricFixPlan.md` | Plan for startup sequence and biometric authentication fixes. |
-| `Docs/codex-implementation-prompts.md` | Codex-style prompts used to guide feature implementation. |
 | `Docs/FernletStore-Refactor-Plan-v2.md` | Refactor plan for the FernletStore architecture (v2). |
 | `Docs/FileIndex.md` | This file index. |
+
+### Completed Implementations
+
+| File | Purpose |
+| --- | --- |
+| `Docs/Completed Implemtations/PR0-Incremental-Migration-Plan.md` | PR0 incremental @Observable migration plan. |
+| `Docs/Completed Implemtations/healthkit-integration-plan.md` | HealthKit integration plan. |
+| `Docs/Completed Implemtations/fernlet-period-intimacy-plan.md` | Period and intimacy feature plan. |
+| `Docs/Completed Implemtations/PeriodAlgorithimResearch.md` | Research notes on period/cycle prediction algorithms. |
+| `Docs/Completed Implemtations/phase7-proximity-implementation-plan.md` | Phase 7 proximity feature implementation plan. |
+| `Docs/Completed Implemtations/proximity-handshake-process-map.md` | Process map for the proximity identity handshake flow. |
+| `Docs/Completed Implemtations/StartupAndBiometricFixPlan.md` | Plan for startup sequence and biometric authentication fixes. |
+| `Docs/Completed Implemtations/codex-implementation-prompts.md` | Codex-style prompts used to guide feature implementation. |
 
 ## Dependency
 

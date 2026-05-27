@@ -1,52 +1,66 @@
 import SwiftUI
-import Combine
 import HealthKit
+import Observation
 
 @MainActor
-final class FernletStore: ObservableObject {
-    @Published var day: FernletDay
-    @Published var settings: FernletSettings
-    @Published var recentMeals: [Meal]
-    @Published var previousJournals: [JournalEntry]
-    @Published var memories: [MemoryNote]
-    @Published var goals: [FitnessGoal]
-    @Published var workshop: WorkshopData
-    @Published var retryQueue: [AIAnalysisRetryRecord]
-    @Published var foodItems: [FoodItem]
-    @Published var recipes: [RecipeDefinition]
-    @Published var dailyScores: [DailyHealthScore]
-    @Published var connectionSessionLogs: [ConnectionSessionLog]
-    @Published var trustedProximityPeers: [ProximityTrustedPeerRecord]
-    @Published var trainerAuditEvents: [TrainerAuditEvent]
-    @Published var showConnectionInspector = false
-    @Published var connectionInspector = ConnectionInspector()
-    @Published var savedRecipes: [SavedRecipe]
-    @Published var companionThought: String?
-    @Published var photowallSeeds: [PhotowallSeed] = []
-    @Published private(set) var derivedSignals: [DerivedSignalRecord] = []
-    @Published private(set) var bundledFoodSeedingState: SeedingState = .notStarted
-    @Published var lockState: FernletLockState = .notConfigured
-
-    enum SeedingState {
-        case notStarted
-        case seeding
-        case done
-        case failed
+@Observable
+final class FernletStore {
+    var day: FernletDay
+    var settings: FernletSettings
+    var recentMeals: [Meal]
+    var previousJournals: [JournalEntry]
+    var memories: [MemoryNote]
+    var goals: [FitnessGoal]
+    var workshop: WorkshopData
+    var foodItems: [FoodItem]
+    var recipes: [RecipeDefinition]
+    var dailyScores: [DailyHealthScore]
+    var connectionSessionLogs: [ConnectionSessionLog]
+    var showConnectionInspector = false
+    var connectionInspector = ConnectionInspector()
+    var savedRecipes: [SavedRecipe] {
+        savedRecipeService.savedRecipes
     }
+    var trustedProximityPeers: [ProximityTrustedPeerRecord] {
+        proximityTrustVault.trustedPeers
+    }
+    var trainerAuditEvents: [TrainerAuditEvent] {
+        proximityTrustVault.auditEvents
+    }
+    var retryQueue: [AIAnalysisRetryRecord] {
+        aiRetryQueueService.retryQueue
+    }
+    var derivedSignals: [DerivedSignalRecord] {
+        derivedSignalsService.derivedSignals
+    }
+    var companionThought: String?
+    var photowallSeeds: [PhotowallSeed] = []
+    var bundledFoodSeedingState: BundledFoodSeedingService.State {
+        bundledFoodSeedingService.state
+    }
+    var lockState: FernletLockState = .notConfigured
 
     private static let goodProteinThreshold = 25
-    let todayKey: String
-    private let repository: FernletRepository
-    private let savedRecipeRepository: SavedRecipeRepository
-    private let healthKitService: (any HealthKitServicing)?
-    private var snapshotSaveTask: Task<Void, Never>?
-    private var savedRecipeSaveScheduled = false
-    private var deferredPostLaunchTasksStarted = false
-    private var launchScreenDismissed = false
-    private var bundledFoodSeedSavePending = false
-    private var remoteReloadTask: Task<Void, Never>?
-    private var isReloadingFromRepository = false
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored let todayKey: String
+    @ObservationIgnored private let repository: FernletRepository
+    @ObservationIgnored let savedRecipeService: SavedRecipeService
+    @ObservationIgnored let proximityTrustVault: ProximityTrustVault
+    @ObservationIgnored let aiRetryQueueService: AIRetryQueueService
+    @ObservationIgnored let derivedSignalsService = DerivedSignalsService()
+    @ObservationIgnored private let healthKitService: (any HealthKitServicing)?
+    @ObservationIgnored private lazy var workoutHealthKitSync = WorkoutHealthKitSync(
+        context: self,
+        service: healthKitService ?? HealthKitService()
+    )
+    @ObservationIgnored private lazy var snapshotSaveCoordinator = SnapshotSaveCoordinator(
+        repository: repository,
+        buildSnapshot: { [unowned self] in self.currentSnapshot() },
+        onAfterSave: { [weak self] in self?.rebuildDerivedSignals() }
+    )
+    @ObservationIgnored private let bundledFoodSeedingService = BundledFoodSeedingService()
+    @ObservationIgnored private var launchScreenDismissed = false
+    @ObservationIgnored private var bundledFoodSeedSavePending = false
+    @ObservationIgnored private var isReloadingFromRepository = false
 
     init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, healthKitService: (any HealthKitServicing)? = nil) {
         let initSignpostID = StartupTiming.begin("FernletStore.init")
@@ -57,15 +71,16 @@ final class FernletStore: ObservableObject {
         let activeRepository = StartupTiming.timed("CoreDataFernletRepository.init") {
             repository ?? CoreDataFernletRepository()
         }
-        let savedRecipeRepository = StartupTiming.timed("SavedRecipeRepository.init") {
-            savedRecipeRepository ?? SavedRecipeRepository()
+        let savedRecipeService = StartupTiming.timed("SavedRecipeService.init") {
+            SavedRecipeService(repository: savedRecipeRepository ?? SavedRecipeRepository())
         }
         let snapshot = StartupTiming.timed("FernletRepository.loadSnapshot") {
             activeRepository.loadSnapshot(todayKey: key)
         }
+        savedRecipeService.loadSync()
         self.todayKey = key
         self.repository = activeRepository
-        self.savedRecipeRepository = savedRecipeRepository
+        self.savedRecipeService = savedRecipeService
         self.healthKitService = healthKitService
         self.day = snapshot.day
         self.settings = snapshot.settings
@@ -74,32 +89,34 @@ final class FernletStore: ObservableObject {
         self.memories = snapshot.memories
         self.goals = snapshot.goals
         self.workshop = snapshot.workshop
-        self.retryQueue = snapshot.retryQueue
         self.foodItems = snapshot.foodItems
         self.recipes = snapshot.recipes
         self.dailyScores = snapshot.dailyScores
         self.connectionSessionLogs = snapshot.connectionSessionLogs
-        self.trustedProximityPeers = snapshot.trustedProximityPeers
-        self.trainerAuditEvents = snapshot.trainerAuditEvents
-        self.savedRecipes = StartupTiming.timed("SavedRecipeRepository.load") {
-            savedRecipeRepository.load()
-        }
+        self.proximityTrustVault = ProximityTrustVault(
+            initialPeers: snapshot.trustedProximityPeers,
+            initialAudit: snapshot.trainerAuditEvents
+        )
+        self.aiRetryQueueService = AIRetryQueueService(initial: snapshot.retryQueue)
         self.connectionInspector.attachStore(self)
+        proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
+        aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         rebuildDerivedSignals()
-        subscribeToRemoteChangesIfNeeded()
+        snapshotSaveCoordinator.subscribeRemote { [weak self] in
+            await self?.reloadFromRepository()
+        }
     }
 
     private init(
         snapshot: FernletSnapshot,
-        savedRecipes: [SavedRecipe],
         todayKey: String,
         repository: FernletRepository,
-        savedRecipeRepository: SavedRecipeRepository,
+        savedRecipeService: SavedRecipeService,
         healthKitService: (any HealthKitServicing)? = nil
     ) {
         self.todayKey = todayKey
         self.repository = repository
-        self.savedRecipeRepository = savedRecipeRepository
+        self.savedRecipeService = savedRecipeService
         self.healthKitService = healthKitService
         self.day = snapshot.day
         self.settings = snapshot.settings
@@ -108,26 +125,23 @@ final class FernletStore: ObservableObject {
         self.memories = snapshot.memories
         self.goals = snapshot.goals
         self.workshop = snapshot.workshop
-        self.retryQueue = snapshot.retryQueue
         self.foodItems = snapshot.foodItems
         self.recipes = snapshot.recipes
         self.dailyScores = snapshot.dailyScores
         self.connectionSessionLogs = snapshot.connectionSessionLogs
-        self.trustedProximityPeers = snapshot.trustedProximityPeers
-        self.trainerAuditEvents = snapshot.trainerAuditEvents
-        self.savedRecipes = savedRecipes
+        self.proximityTrustVault = ProximityTrustVault(
+            initialPeers: snapshot.trustedProximityPeers,
+            initialAudit: snapshot.trainerAuditEvents
+        )
+        self.aiRetryQueueService = AIRetryQueueService(initial: snapshot.retryQueue)
         self.connectionInspector.attachStore(self)
-        subscribeToRemoteChangesIfNeeded()
+        proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
+        aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
+        snapshotSaveCoordinator.subscribeRemote { [weak self] in
+            await self?.reloadFromRepository()
+        }
     }
 
-    private func subscribeToRemoteChangesIfNeeded() {
-        guard let coreDataRepo = repository as? CoreDataFernletRepository else { return }
-        coreDataRepo.remoteChangeSubject
-            .sink { [weak self] in
-                self?.scheduleRemoteRepositoryReload()
-            }
-            .store(in: &cancellables)
-    }
 
     var score: Double {
         FernletScoring.compute(for: self)
@@ -218,7 +232,7 @@ final class FernletStore: ObservableObject {
         assert(!dateKey.isEmpty, "date key required")
         guard let index = dailyScores.firstIndex(where: { $0.dateKey == dateKey }) else { return }
         dailyScores[index].daySummaryText = nil
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func storeCompanionThought(_ text: String) {
@@ -232,7 +246,7 @@ final class FernletStore: ObservableObject {
     }
 
     var pendingRetryCount: Int {
-        retryQueue.count
+        aiRetryQueueService.pendingCount
     }
 
     var isIntimateLoggingAllowed: Bool {
@@ -241,12 +255,12 @@ final class FernletStore: ObservableObject {
 
     func setHidePredictions(_ hidePredictions: Bool) {
         settings.hidePredictions = hidePredictions
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func setHideFertileWindow(_ hideFertileWindow: Bool) {
         settings.hideFertileWindow = hideFertileWindow
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func setConnectionInspectorMode(_ mode: ConnectionInspectorMode) {
@@ -254,94 +268,55 @@ final class FernletStore: ObservableObject {
         if mode != .live {
             showConnectionInspector = false
         }
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func setProximityDisplayName(_ name: String) {
         settings.proximityDisplayName = name.trimmingCharacters(in: .whitespaces)
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func replaceConnectionSessionLogs(_ logs: [ConnectionSessionLog]) {
         connectionSessionLogs = Array(logs.sorted { $0.startedAt > $1.startedAt }.prefix(50))
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func trustedProximityPeer(fingerprint: String) -> ProximityTrustedPeerRecord? {
-        trustedProximityPeers.first { $0.fingerprint == fingerprint }
+        proximityTrustVault.peer(fingerprint: fingerprint)
     }
 
     func trustedProximityPeer(displayName: String) -> ProximityTrustedPeerRecord? {
-        trustedProximityPeers
-            .filter { $0.displayName == displayName }
-            .sorted { $0.lastSeenAt > $1.lastSeenAt }
-            .first
+        proximityTrustVault.peer(displayName: displayName)
     }
 
     func trustProximityPeer(_ peer: ProximityCoordinator.PeerIdentity, mode: ProximityCoordinator.Mode) {
-        batchSnapshotPersistence {
-            if let index = trustedProximityPeers.firstIndex(where: { $0.fingerprint == peer.fingerprint }) {
-                trustedProximityPeers[index].displayName = peer.displayName
-                trustedProximityPeers[index].keyAgreementPublicKey = peer.keyAgreementPublicKey
-                trustedProximityPeers[index].mode = mode
-                trustedProximityPeers[index].lastSeenAt = Date()
-                trustedProximityPeers[index].revokedAt = nil
-            } else {
-                trustedProximityPeers.append(ProximityTrustedPeerRecord(
-                    displayName: peer.displayName,
-                    fingerprint: peer.fingerprint,
-                    signingPublicKey: peer.signingPublicKey,
-                    keyAgreementPublicKey: peer.keyAgreementPublicKey,
-                    mode: mode
-                ))
-            }
-        }
+        proximityTrustVault.trust(peer, mode: mode)
     }
 
     func revokeTrustedProximityPeer(fingerprint: String) {
-        batchSnapshotPersistence {
-            if let index = trustedProximityPeers.firstIndex(where: { $0.fingerprint == fingerprint }) {
-                trustedProximityPeers[index].revokedAt = Date()
-                recordTrainerAuditWithoutSaving(TrainerAuditEvent(
-                    kind: .trainerRevoked,
-                    peerFingerprint: trustedProximityPeers[index].fingerprint,
-                    peerDisplayName: trustedProximityPeers[index].displayName,
-                    message: "Revoked \(trustedProximityPeers[index].displayName)"
-                ))
-            }
-        }
+        proximityTrustVault.revoke(fingerprint: fingerprint)
     }
 
     func isRevokedProximitySigningKey(_ publicKey: Data) -> Bool {
-        let fingerprint = IdentityService.fingerprint(of: publicKey)
-        return trustedProximityPeers.contains { record in
-            record.fingerprint == fingerprint && record.revokedAt != nil
-        }
+        proximityTrustVault.isRevokedProximitySigningKey(publicKey)
     }
 
     func isTrustedProximityPeer(fingerprint: String) -> Bool {
-        trustedProximityPeers.contains { $0.fingerprint == fingerprint && $0.revokedAt == nil }
+        proximityTrustVault.isTrustedProximityPeer(fingerprint: fingerprint)
     }
 
     func recordTrainerAudit(_ event: TrainerAuditEvent) {
-        batchSnapshotPersistence {
-            recordTrainerAuditWithoutSaving(event)
-        }
-    }
-
-    private func recordTrainerAuditWithoutSaving(_ event: TrainerAuditEvent) {
-        trainerAuditEvents.insert(event, at: 0)
-        trainerAuditEvents = Array(trainerAuditEvents.prefix(500))
+        proximityTrustVault.recordTrainerAudit(event)
     }
 
     func setHomeWidgets(_ widgets: [HomeWidget]) {
         settings.homeWidgets = HomeWidget.normalized(widgets)
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func setQuickLogItems(_ items: [FernletShortcut]) {
         settings.quickLogItems = FernletShortcut.normalizedQuickLog(items)
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func allowedHealthCapabilities(from capabilities: Set<HealthCapability>) -> Set<HealthCapability> {
@@ -385,18 +360,36 @@ final class FernletStore: ObservableObject {
             do {
                 if let plan = try await FoundationFoodSelectionModel.resolve(description: description, candidates: candidates, fallbackType: type),
                    plan.items.count >= MealItemSplitter.items(from: description).count,
-                   let meals = meals(from: plan, candidates: candidates, originalDescription: description), meals.isEmpty == false {
-                    meals.forEach { appendMeal($0, date: targetDate) }
-                    return meals
+                   let result = MealBuilder.meals(
+                    from: plan,
+                    candidates: candidates,
+                    recipes: recipes,
+                    foodItems: foodItems,
+                    originalDescription: description
+                   ), result.meals.isEmpty == false {
+                    for newRecipe in result.createdRecipes {
+                        recipes.insert(newRecipe, at: 0)
+                    }
+                    result.meals.forEach { appendMeal($0, date: targetDate) }
+                    return result.meals
                 }
             } catch {
                 // The local parser below keeps logging available when model generation fails.
             }
         }
         if let plan = FoundationFoodSelectionModel.deterministicPlan(description: description, candidates: candidates, fallbackType: type),
-           let meals = meals(from: plan, candidates: candidates, originalDescription: description), meals.isEmpty == false {
-            meals.forEach { appendMeal($0, date: targetDate) }
-            return meals
+           let result = MealBuilder.meals(
+            from: plan,
+            candidates: candidates,
+            recipes: recipes,
+            foodItems: foodItems,
+            originalDescription: description
+           ), result.meals.isEmpty == false {
+            for newRecipe in result.createdRecipes {
+                recipes.insert(newRecipe, at: 0)
+            }
+            result.meals.forEach { appendMeal($0, date: targetDate) }
+            return result.meals
         }
         let fallback = addMeal(from: description, type: type, date: targetDate)
         queueMealRetry(fallback)
@@ -406,184 +399,11 @@ final class FernletStore: ObservableObject {
     private func appendMeal(_ meal: Meal, date: String) {
         assert(!date.isEmpty, "meal date required")
         batchSnapshotPersistence {
-            if date == todayKey {
-                day.meals.append(meal)
-            } else {
-                mutatePastDay(date) { $0.meals.append(meal) }
-            }
+            mutateDay(date: date) { $0.meals.append(meal) }
             invalidateDaySummary(for: date)
             recentMeals.insert(meal.copyForToday(), at: 0)
             recentMeals = Array(recentMeals.prefix(50))
         }
-    }
-
-    private func meals(from plan: FoodSelectionPlan, candidates: [FoodSelectionCandidate], originalDescription: String) -> [Meal]? {
-        let meals = plan.items.compactMap { item -> Meal? in
-            if let recipe = bestRecipeMatch(for: item.name, recipes: recipes) {
-                return meal(from: recipe, mealType: plan.mealType)
-            }
-
-            let relevantIngredients = item.ingredients.filter { ingredient in
-                guard let foodItem = candidates.first(where: { $0.id == ingredient.candidateId })?.foodItem else { return false }
-                return isRelevant(foodItem: foodItem, to: item.name)
-            }
-            let sourceIngredients = relevantIngredients.isEmpty
-                ? FoundationFoodSelectionModel.deterministicPlan(description: item.name, candidates: candidates, fallbackType: plan.mealType)?.ingredients ?? []
-                : relevantIngredients
-            let resolved = sourceIngredients.compactMap { ingredient -> (FoodSelectionIngredient, FoodItem)? in
-                guard let foodItem = candidates.first(where: { $0.id == ingredient.candidateId })?.foodItem else { return nil }
-                return (ingredient, foodItem)
-            }
-            guard resolved.isEmpty == false else { return nil }
-
-            if resolved.count > 1 {
-                let recipe = createRecipeIfNeeded(for: item.name, resolvedIngredients: resolved)
-                return meal(from: recipe, mealType: plan.mealType)
-            }
-
-            return meal(from: item.name, resolvedIngredients: resolved, mealType: plan.mealType)
-        }
-        return meals.isEmpty ? nil : meals
-    }
-
-    private func makeMealFromRecipe(_ recipe: RecipeDefinition, mealType: MealType) -> Meal {
-        let totals = macroTotals(for: recipe)
-        let micronutrients = micronutrientTotals(for: recipe)
-        let divisor = max(recipe.servings, 1)
-        let perServing = Macros(
-            protein: Int((Double(totals.protein) / Double(divisor)).rounded()),
-            carbs: Int((Double(totals.carbs) / Double(divisor)).rounded()),
-            fat: Int((Double(totals.fat) / Double(divisor)).rounded())
-        )
-        return Meal(
-            name: recipe.name,
-            mealType: mealType,
-            macros: perServing,
-            macroSnapshot: perServing,
-            micronutrientSnapshot: micronutrients.scaled(by: 1 / Double(divisor)),
-            mealSource: .recipe,
-            isAIFallback: false,
-            quality: perServing.protein >= Self.goodProteinThreshold ? .good : .ok,
-            confidence: "Recipe",
-            note: "Logged from saved recipe.",
-            source: mealLogSource(for: recipe)
-        )
-    }
-
-    private func meal(from recipe: RecipeDefinition, mealType: MealType) -> Meal {
-        makeMealFromRecipe(recipe, mealType: mealType)
-    }
-
-    private func meal(from itemName: String, resolvedIngredients: [(FoodSelectionIngredient, FoodItem)], mealType: MealType) -> Meal {
-        let totals = totals(for: resolvedIngredients)
-        let ingredientText = resolvedIngredients
-            .prefix(3)
-            .map { "\($0.0.quantity.formatted(.number.precision(.fractionLength(0...1)))) \($0.0.unit) \($0.1.name)" }
-            .joined(separator: ", ")
-
-        return Meal(
-            name: itemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? resolvedIngredients[0].1.name : itemName.capitalized,
-            mealType: mealType,
-            macros: Macros(protein: totals.macros.protein, carbs: totals.macros.carbs, fat: totals.macros.fat),
-            macroSnapshot: Macros(protein: totals.macros.protein, carbs: totals.macros.carbs, fat: totals.macros.fat),
-            micronutrientSnapshot: totals.micronutrients,
-            mealSource: .manual,
-            isAIFallback: false,
-            quality: totals.macros.protein >= Self.goodProteinThreshold ? .good : .ok,
-            confidence: "Food match",
-            note: "Matched locally from food selection: \(ingredientText).",
-            source: MealLogSource.foundationModelFoodSelection
-        )
-    }
-
-    private func mealLogSource(for recipe: RecipeDefinition) -> String {
-        if recipe.source == MealLogSource.webImport || recipe.source == "imported" {
-            return MealLogSource.webImport
-        }
-
-        let recipeFoodItems = recipe.ingredients.compactMap { ingredient in
-            foodItems.first(where: { $0.id == ingredient.foodItemId })
-        }
-        if recipeFoodItems.contains(where: { $0.source == .usda }) {
-            return MealLogSource.usdaRecipe
-        }
-        if recipeFoodItems.contains(where: { $0.micronutrients.populatedFieldCount >= 5 }) {
-            return MealLogSource.labelScan
-        }
-        return MealLogSource.manual
-    }
-
-    private func createRecipeIfNeeded(for itemName: String, resolvedIngredients: [(FoodSelectionIngredient, FoodItem)]) -> RecipeDefinition {
-        if let existing = bestRecipeMatch(for: itemName, recipes: recipes) {
-            return existing
-        }
-        let now = Date()
-        let recipeIngredients = resolvedIngredients.map { resolvedIngredient in
-            RecipeIngredient(
-                foodItemId: resolvedIngredient.1.id,
-                quantity: resolvedIngredient.0.quantity,
-                unit: resolvedIngredient.0.unit
-            )
-        }
-        let recipe = RecipeDefinition(
-            name: itemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Meal item" : itemName.capitalized,
-            servings: 1,
-            ingredients: recipeIngredients,
-            notes: "Created from meal logging.",
-            source: "meal-log",
-            createdAt: now,
-            updatedAt: now
-        )
-        recipes.insert(recipe, at: 0)
-        return recipe
-    }
-
-    private func totals(for resolvedIngredients: [(FoodSelectionIngredient, FoodItem)]) -> (macros: MacroTotals, micronutrients: Micronutrients) {
-        resolvedIngredients.reduce(into: (macros: MacroTotals(), micronutrients: Micronutrients())) { totals, resolvedIngredient in
-            let ingredient = RecipeIngredient(
-                foodItemId: resolvedIngredient.1.id,
-                quantity: resolvedIngredient.0.quantity,
-                unit: resolvedIngredient.0.unit
-            )
-            let scaled = ingredient.scaledMacros(using: resolvedIngredient.1)
-            totals.macros.protein += scaled.protein
-            totals.macros.carbs += scaled.carbs
-            totals.macros.fat += scaled.fat
-            totals.micronutrients.add(ingredient.scaledMicronutrients(using: resolvedIngredient.1))
-        }
-    }
-
-    private func bestRecipeMatch(for itemName: String, recipes: [RecipeDefinition]) -> RecipeDefinition? {
-        let normalizedItem = FoodItemSearch.normalized(itemName)
-        guard normalizedItem.count >= 3 else { return nil }
-        let itemTokens = Set(normalizedItem.split(separator: " ").map(String.init))
-        return recipes
-            .map { recipe -> (recipe: RecipeDefinition, score: Int)? in
-                let normalizedRecipe = FoodItemSearch.normalized(recipe.name)
-                let recipeTokens = Set(normalizedRecipe.split(separator: " ").map(String.init))
-                if normalizedRecipe == normalizedItem { return (recipe, 1_000) }
-                if normalizedRecipe.contains(normalizedItem) || normalizedItem.contains(normalizedRecipe) { return (recipe, 700) }
-                let overlap = itemTokens.intersection(recipeTokens).count
-                guard overlap >= max(1, min(itemTokens.count, recipeTokens.count) - 1) else { return nil }
-                return (recipe, overlap * 100)
-            }
-            .compactMap { $0 }
-            .sorted { first, second in
-                if first.score != second.score { return first.score > second.score }
-                return first.recipe.updatedAt > second.recipe.updatedAt
-            }
-            .first?.recipe
-    }
-
-    private func isRelevant(foodItem: FoodItem, to itemName: String) -> Bool {
-        let itemTokens = Set(FoodItemSearch.normalized(itemName).split(separator: " ").map(String.init).filter { $0.count >= 3 })
-        let foodText = FoodItemSearch.normalized("\(foodItem.name) \(foodItem.category) \(foodItem.tags.joined(separator: " "))")
-        let foodTokens = Set(foodText.split(separator: " ").map(String.init).filter { $0.count >= 3 })
-        guard itemTokens.isEmpty == false else { return true }
-        if itemTokens.intersection(foodTokens).isEmpty == false { return true }
-        if itemTokens.contains("sandwich") && (foodTokens.contains("bread") || foodTokens.contains("cheese")) { return true }
-        if itemTokens.contains("grilled") && itemTokens.contains("cheese") && (foodTokens.contains("bread") || foodTokens.contains("sourdough")) { return true }
-        return false
     }
 
     @discardableResult func copyMeal(_ meal: Meal) -> Meal {
@@ -603,13 +423,13 @@ final class FernletStore: ObservableObject {
     @discardableResult func logRecipe(_ recipe: RecipeDefinition, mealType: MealType? = nil, date: String? = nil) -> Meal {
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "recipe meal date required")
-        let meal = makeMealFromRecipe(recipe, mealType: mealType ?? MealParser.classifyMealType(recipe.name))
+        let meal = MealBuilder.mealFromRecipe(
+            recipe,
+            mealType: mealType ?? MealParser.classifyMealType(recipe.name),
+            foodItems: foodItems
+        )
         batchSnapshotPersistence {
-            if targetDate == todayKey {
-                day.meals.append(meal)
-            } else {
-                mutatePastDay(targetDate) { $0.meals.append(meal) }
-            }
+            mutateDay(date: targetDate) { $0.meals.append(meal) }
             invalidateDaySummary(for: targetDate)
             recentMeals.insert(meal.copyForToday(), at: 0)
             recentMeals = Array(recentMeals.prefix(50))
@@ -620,66 +440,25 @@ final class FernletStore: ObservableObject {
     @discardableResult func logSavedRecipe(_ recipe: SavedRecipe, mealType: MealType? = nil, date: String? = nil) -> Meal {
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "saved recipe meal date required")
-        let macros = Macros(protein: recipe.protein, carbs: recipe.carbs, fat: recipe.fat)
-        let hasMacros = recipe.protein > 0 || recipe.carbs > 0 || recipe.fat > 0
-        let meal = Meal(
-            name: recipe.name,
-            mealType: mealType ?? MealParser.classifyMealType(recipe.name),
-            macros: macros,
-            macroSnapshot: macros,
-            micronutrientSnapshot: recipe.micronutrients,
-            mealSource: .recipe,
-            isAIFallback: false,
-            quality: macros.protein >= Self.goodProteinThreshold ? .good : .ok,
-            confidence: hasMacros ? "Recipe" : "Recipe (no macros)",
-            note: hasMacros ? "Logged from URL recipe." : "Logged from URL recipe. Macros not available.",
-            source: MealLogSource.webImport
-        )
-        batchSnapshotPersistence {
-            if targetDate == todayKey {
-                day.meals.append(meal)
-            } else {
-                mutatePastDay(targetDate) { $0.meals.append(meal) }
-            }
-            invalidateDaySummary(for: targetDate)
-            recentMeals.insert(meal.copyForToday(), at: 0)
-            recentMeals = Array(recentMeals.prefix(50))
-        }
+        let meal = SavedRecipeService.makeMeal(from: recipe, mealType: mealType)
+        appendMeal(meal, date: targetDate)
         return meal
     }
 
     func savedRecipeShareText(for recipe: SavedRecipe) -> String {
-        var lines: [String] = [recipe.name, ""]
-        if recipe.protein > 0 || recipe.carbs > 0 || recipe.fat > 0 {
-            let servingNote = recipe.servings > 1 ? " (per serving, \(recipe.servings) servings)" : ""
-            lines += ["Macros\(servingNote): P \(recipe.protein)g · C \(recipe.carbs)g · F \(recipe.fat)g", ""]
-        }
-        if !recipe.summary.isEmpty {
-            lines += [recipe.summary, ""]
-        }
-        lines += ["Ingredients:"]
-        lines += recipe.ingredients.map { "- \($0)" }
-        lines += ["", "Source: \(recipe.sourceURL.absoluteString)"]
-        return lines.joined(separator: "\n")
+        savedRecipeService.shareText(for: recipe)
     }
 
     func addSavedRecipe(_ recipe: SavedRecipe) {
-        batchSnapshotPersistence {
-            savedRecipes.removeAll { $0.sourceURLString == recipe.sourceURLString }
-            savedRecipes.insert(recipe, at: 0)
-        }
-        scheduleSavedRecipeSave()
+        savedRecipeService.add(recipe)
     }
 
     func updateSavedRecipe(_ recipe: SavedRecipe) {
-        guard let index = savedRecipes.firstIndex(where: { $0.id == recipe.id }) else { return }
-        savedRecipes[index] = recipe
-        scheduleSavedRecipeSave()
+        savedRecipeService.update(recipe)
     }
 
     func deleteSavedRecipe(_ recipe: SavedRecipe) {
-        savedRecipes.removeAll { $0.id == recipe.id }
-        scheduleSavedRecipeSave()
+        savedRecipeService.delete(recipe)
     }
 
     func addWorkout(_ workout: Workout) {
@@ -689,182 +468,21 @@ final class FernletStore: ObservableObject {
     func addWorkout(_ workout: Workout, date: String) {
         assert(!date.isEmpty, "workout date required")
         batchSnapshotPersistence {
-            if date == todayKey {
-                day.workouts.append(workout)
-            } else {
-                mutatePastDay(date) { $0.workouts.append(workout) }
-            }
+            mutateDay(date: date) { $0.workouts.append(workout) }
             invalidateDaySummary(for: date)
         }
         guard workout.healthKitUUID == nil else { return }
         Task { [weak self] in
-            await self?.saveWorkoutToHealthIfAuthorized(workout, date: date)
-        }
-    }
-
-    private func saveWorkoutToHealthIfAuthorized(_ workout: Workout, date: String) async {
-        let service = healthKitService ?? HealthKitService()
-        let snapshot = service.currentAuthorizationSnapshot()
-        guard isWorkoutLoggingAuthorized(snapshot) else { return }
-        do {
-            let hkUUID = try await service.saveWorkout(workout)
-            updateWorkoutHealthKitUUID(workoutID: workout.id, hkUUID: hkUUID, date: date)
-        } catch {
-            FernletAuditLog.log("healthkit.workout.save.failed", context: ["error": error.localizedDescription])
-        }
-    }
-
-    private func updateWorkoutHealthKitUUID(workoutID: UUID, hkUUID: UUID, date: String) {
-        batchSnapshotPersistence {
-            if date == todayKey {
-                if let index = day.workouts.firstIndex(where: { $0.id == workoutID }) {
-                    day.workouts[index].healthKitUUID = hkUUID
-                }
-            } else {
-                mutatePastDay(date) { targetDay in
-                    if let index = targetDay.workouts.firstIndex(where: { $0.id == workoutID }) {
-                        targetDay.workouts[index].healthKitUUID = hkUUID
-                    }
-                }
-            }
+            await self?.workoutHealthKitSync.saveIfAuthorized(workout, date: date)
         }
     }
 
     func refreshWorkoutsFromHealth() async {
-        let service = healthKitService ?? HealthKitService()
-        let snapshot = service.currentAuthorizationSnapshot()
-        guard isWorkoutLoggingAuthorized(snapshot) else { return }
-
-        do {
-            try await service.startObservingWorkouts { [weak self] workouts in
-                self?.reconcileWorkouts(workouts)
-            }
-        } catch {
-            FernletAuditLog.log("healthkit.workouts.refresh.failed", context: ["error": error.localizedDescription])
-        }
+        await workoutHealthKitSync.refreshFromHealth()
     }
 
     func backfillWorkoutsFromHealthIfNeeded(defaults: UserDefaults = .standard) async {
-        guard HealthKitService.shouldRunWorkoutBackfill(defaults: defaults) else { return }
-        let service = healthKitService ?? HealthKitService()
-        let snapshot = service.currentAuthorizationSnapshot()
-        guard isWorkoutLoggingAuthorized(snapshot) else { return }
-
-        do {
-            let workouts = try await service.backfillWorkoutsFromHealth(referenceDate: .now)
-            reconcileWorkouts(workouts)
-            HealthKitService.markWorkoutBackfillCompleted(defaults: defaults)
-        } catch {
-            FernletAuditLog.log("healthkit.workouts.backfill.failed", context: ["error": error.localizedDescription])
-        }
-    }
-
-    private func isWorkoutLoggingAuthorized(_ snapshot: AuthorizationSnapshot) -> Bool {
-        snapshot.status(for: HKObjectType.workoutType().identifier) == .sharingAuthorized
-            || snapshot.status(for: HealthCapability.workoutLogging.rawValue) == .sharingAuthorized
-    }
-
-    private func reconcileWorkouts(_ hkWorkouts: [HKWorkout]) {
-        for hk in hkWorkouts {
-            let externalID = hk.metadata?["fernlet.workoutID"] as? String
-            let syncID = hk.metadata?[HKMetadataKeySyncIdentifier] as? String
-            let knownID = externalID ?? syncID
-            if let knownID, let uuid = UUID(uuidString: knownID), workoutExists(id: uuid) {
-                updateWorkoutHealthKitUUIDIfNeeded(id: uuid, healthKitUUID: hk.uuid)
-                continue
-            }
-            if workoutExists(healthKitUUID: hk.uuid) {
-                continue
-            }
-
-            let workout = Self.makeWorkout(from: hk)
-            let dayKey = FernletDate.dayKey(for: hk.endDate)
-            addWorkout(workout, date: dayKey)
-        }
-    }
-
-    private func workoutExists(id: UUID) -> Bool {
-        loadDays().values.contains { day in
-            day.workouts.contains { $0.id == id }
-        }
-    }
-
-    private func workoutExists(healthKitUUID: UUID) -> Bool {
-        loadDays().values.contains { day in
-            day.workouts.contains { $0.healthKitUUID == healthKitUUID }
-        }
-    }
-
-    private func updateWorkoutHealthKitUUIDIfNeeded(id: UUID, healthKitUUID: UUID) {
-        if let index = day.workouts.firstIndex(where: { $0.id == id }) {
-            guard day.workouts[index].healthKitUUID == nil else { return }
-            day.workouts[index].healthKitUUID = healthKitUUID
-            scheduleSnapshotSave()
-            return
-        }
-
-        for (dateKey, pastDay) in repository.loadAllDays() where dateKey != todayKey {
-            guard pastDay.workouts.contains(where: { $0.id == id && $0.healthKitUUID == nil }) else { continue }
-            mutatePastDay(dateKey) { targetDay in
-                if let index = targetDay.workouts.firstIndex(where: { $0.id == id && $0.healthKitUUID == nil }) {
-                    targetDay.workouts[index].healthKitUUID = healthKitUUID
-                }
-            }
-            return
-        }
-    }
-
-    static func makeWorkout(from hk: HKWorkout) -> Workout {
-        let activityType = ActivityTypeCatalog.fernletType(for: hk.workoutActivityType)
-        let durationMin = Int(hk.duration / 60)
-        let kcal = hk.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()?.doubleValue(for: .kilocalorie())
-        let distanceMiles: Double? = {
-            let types: [HKQuantityTypeIdentifier] = [.distanceWalkingRunning, .distanceCycling, .distanceSwimming]
-            for typeID in types {
-                if let quantity = hk.statistics(for: HKQuantityType(typeID))?.sumQuantity()?.doubleValue(for: .mile()), quantity > 0 {
-                    return quantity
-                }
-            }
-            return nil
-        }()
-        let name = (hk.metadata?["fernlet.activityName"] as? String) ?? activityType.displayName
-        let mode: WorkoutMode = {
-            if hk.workoutActivityType == .traditionalStrengthTraining || hk.workoutActivityType == .functionalStrengthTraining {
-                return .strengthTraining
-            }
-            return .activity
-        }()
-        let metadata = parseFernletMetadata(hk.metadata)
-        return Workout(
-            name: name,
-            type: activityType.fernletCategory,
-            mode: mode,
-            activityType: mode == .activity ? activityType : nil,
-            exercises: metadata.exercises,
-            rpe: nil,
-            notes: metadata.notes,
-            duration: durationMin,
-            distanceMiles: distanceMiles,
-            activeEnergyKcal: kcal,
-            effort: metadata.effort,
-            muscleGroups: metadata.muscleGroups,
-            healthKitUUID: hk.uuid,
-            plannedWorkoutID: metadata.plannedWorkoutID,
-            intensity: .moderate,
-            completedAt: hk.endDate
-        )
-    }
-
-    static func parseFernletMetadata(_ metadata: [String: Any]?) -> (muscleGroups: Set<MuscleGroup>, exercises: String, notes: String, effort: Int?, plannedWorkoutID: UUID?) {
-        let muscleGroupsRaw = (metadata?["fernlet.muscleGroups"] as? String) ?? ""
-        let muscleGroups = Set(muscleGroupsRaw.split(separator: ",").compactMap { rawValue in
-            MuscleGroup(rawValue: String(rawValue).trimmingCharacters(in: .whitespacesAndNewlines))
-        })
-        let exercises = (metadata?["fernlet.exercises"] as? String) ?? ""
-        let notes = (metadata?["fernlet.notes"] as? String) ?? ""
-        let effort = (metadata?["fernlet.effort"] as? NSNumber)?.intValue
-        let plannedWorkoutID = (metadata?["fernlet.plannedWorkoutID"] as? String).flatMap(UUID.init(uuidString:))
-        return (muscleGroups, exercises, notes, effort, plannedWorkoutID)
+        await workoutHealthKitSync.backfillIfNeeded(defaults: defaults)
     }
 
     func addJournal(text: String, tag: FeelingTag) {
@@ -882,7 +500,7 @@ final class FernletStore: ObservableObject {
 
     func setSleep(hours: Double?, quality: SleepQuality, note: String) {
         day.sleep = SleepLog(hours: hours, quality: quality, note: note.trimmingCharacters(in: .whitespacesAndNewlines))
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func setHealthSleepHours(_ hours: Double) {
@@ -894,7 +512,7 @@ final class FernletStore: ObservableObject {
             quality: current?.quality ?? .ok,
             note: current?.note ?? ""
         )
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func updateHealthContext(_ context: HealthDailyContext) {
@@ -907,17 +525,17 @@ final class FernletStore: ObservableObject {
         if let sleepHours = context.body?.sleepHours {
             setHealthSleepHours(sleepHours)
         }
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func addBottle() {
         day.bottleCount = min(day.bottleCount + 1, 30)
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func removeBottle() {
         day.bottleCount = max(day.bottleCount - 1, 0)
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func toggleHygiene(_ item: HygieneItem) {
@@ -1016,9 +634,16 @@ final class FernletStore: ObservableObject {
 
     func addJournal(text: String, tag: FeelingTag, date: String) {
         assert(!date.isEmpty, "journal date required")
-        if date == todayKey { addJournal(text: text, tag: tag); return }
         let entry = JournalEntry(text: text, tag: tag)
-        mutatePastDay(date) { $0.journals.append(entry) }
+        mutateDay(date: date) { $0.journals.append(entry) }
+        if date == todayKey {
+            previousJournals.insert(entry, at: 0)
+            previousJournals = Array(previousJournals.prefix(30))
+            if let memory = MemoryNote.fromJournal(text: text, tag: tag) {
+                memories.append(memory)
+                memories = Array(memories.suffix(300))
+            }
+        }
     }
 
     func updateJournal(_ entry: JournalEntry, text: String, tag: FeelingTag, date: String) {
@@ -1030,14 +655,9 @@ final class FernletStore: ObservableObject {
         updatedEntry.tag = tag
 
         batchSnapshotPersistence {
-            if date == todayKey {
-                guard let index = day.journals.firstIndex(where: { $0.id == entry.id }) else { return }
-                day.journals[index] = updatedEntry
-            } else {
-                mutatePastDay(date) { targetDay in
-                    guard let index = targetDay.journals.firstIndex(where: { $0.id == entry.id }) else { return }
-                    targetDay.journals[index] = updatedEntry
-                }
+            mutateDay(date: date) { targetDay in
+                guard let index = targetDay.journals.firstIndex(where: { $0.id == entry.id }) else { return }
+                targetDay.journals[index] = updatedEntry
             }
 
             if let index = previousJournals.firstIndex(where: { $0.id == entry.id }) {
@@ -1049,26 +669,22 @@ final class FernletStore: ObservableObject {
     func deleteJournal(_ entry: JournalEntry, date: String) {
         assert(!date.isEmpty, "journal date required")
         batchSnapshotPersistence {
-            if date == todayKey {
-                day.journals.removeAll { $0.id == entry.id }
-            } else {
-                mutatePastDay(date) { $0.journals.removeAll { $0.id == entry.id } }
-            }
+            mutateDay(date: date) { $0.journals.removeAll { $0.id == entry.id } }
             previousJournals.removeAll { $0.id == entry.id }
         }
     }
 
     func setSleep(hours: Double?, quality: SleepQuality, note: String, date: String) {
         assert(!date.isEmpty, "sleep date required")
-        if date == todayKey { setSleep(hours: hours, quality: quality, note: note); return }
-        mutatePastDay(date) { $0.sleep = SleepLog(hours: hours, quality: quality, note: note.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        mutateDay(date: date) {
+            $0.sleep = SleepLog(hours: hours, quality: quality, note: note.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
     }
 
     func setBottleCount(_ count: Int, date: String) {
         assert(!date.isEmpty, "water date required")
         let clamped = min(max(count, 0), 30)
-        if date == todayKey { day.bottleCount = clamped; scheduleSnapshotSave(); return }
-        mutatePastDay(date) { $0.bottleCount = clamped }
+        mutateDay(date: date) { $0.bottleCount = clamped }
     }
 
     func setHygiene(_ hygiene: Set<HygieneItem>, date: String) {
@@ -1079,13 +695,7 @@ final class FernletStore: ObservableObject {
     func setPersonalCareTaskIDs(_ ids: Set<String>, date: String) {
         assert(!date.isEmpty, "personal care date required")
         let defaultItems = Set(ids.compactMap(HygieneItem.init(rawValue:)))
-        if date == todayKey {
-            day.completedPersonalCareTaskIDs = ids
-            day.hygiene = defaultItems
-            scheduleSnapshotSave()
-            return
-        }
-        mutatePastDay(date) {
+        mutateDay(date: date) {
             $0.completedPersonalCareTaskIDs = ids
             $0.hygiene = defaultItems
         }
@@ -1093,7 +703,7 @@ final class FernletStore: ObservableObject {
 
     func replaceGoals(_ newGoals: [FitnessGoal]) {
         goals = Array(newGoals.prefix(12))
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {
@@ -1111,7 +721,11 @@ final class FernletStore: ObservableObject {
         assert(!trimmedName.isEmpty, "recipe name required")
         let now = Date()
         batchSnapshotPersistence {
-            let recipeIngredients = makeRecipeIngredients(from: inputIngredients, verifiedAt: now)
+            let recipeIngredients = CustomIngredientUpsert.recipeIngredients(
+                from: inputIngredients,
+                in: &foodItems,
+                verifiedAt: now
+            )
             recipes.insert(
                 RecipeDefinition(
                     name: trimmedName,
@@ -1132,7 +746,11 @@ final class FernletStore: ObservableObject {
         assert(!trimmedName.isEmpty, "recipe name required")
         guard let index = recipes.firstIndex(where: { $0.id == recipe.id }) else { return }
         batchSnapshotPersistence {
-            let recipeIngredients = makeRecipeIngredients(from: inputIngredients, verifiedAt: Date())
+            let recipeIngredients = CustomIngredientUpsert.recipeIngredients(
+                from: inputIngredients,
+                in: &foodItems,
+                verifiedAt: Date()
+            )
             assert(!recipeIngredients.isEmpty, "recipe ingredients required")
             recipes[index].name = trimmedName
             recipes[index].servings = max(servings, 1)
@@ -1145,13 +763,17 @@ final class FernletStore: ObservableObject {
     @discardableResult func saveCustomIngredient(_ ingredient: ManualRecipeIngredientInput) -> FoodItem? {
         guard !ingredient.trimmedName.isEmpty else { return nil }
         return batchSnapshotPersistence {
-            upsertCustomFoodItem(from: ingredient, verifiedAt: Date())
+            CustomIngredientUpsert.resolve(
+                ingredient: ingredient,
+                in: &foodItems,
+                verifiedAt: Date()
+            )
         }
     }
 
     func deleteRecipe(_ recipe: RecipeDefinition) {
         recipes.removeAll { $0.id == recipe.id }
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
     }
 
     func macroTotals(for recipe: RecipeDefinition) -> MacroTotals {
@@ -1172,27 +794,11 @@ final class FernletStore: ObservableObject {
     }
 
     func recipeShareText(for recipe: RecipeDefinition) -> String {
-        let payload = sharedRecipePayload(for: recipe)
-        var lines: [String] = [
-            payload.name,
-            "Servings: \(payload.servings)",
-            "",
-            "Ingredients:"
-        ]
-        lines += payload.ingredients.map { ingredient in
-            "- \(String(format: "%g", ingredient.quantity)) \(ingredient.unit) \(ingredient.name) (P\(ingredient.protein) C\(ingredient.carbs) F\(ingredient.fat))"
-        }
-        if !payload.notes.isEmpty {
-            lines += ["", "Notes:", payload.notes]
-        }
-        if let json = sharedRecipeJSON(for: payload) {
-            lines += ["", "Fernlet recipe data:", json]
-        }
-        return lines.joined(separator: "\n")
+        RecipeShareCodec.shareText(for: recipe, foodItems: foodItems)
     }
 
     @discardableResult func importRecipe(from text: String) throws -> RecipeDefinition {
-        let payload = try sharedRecipePayload(from: text)
+        let payload = try RecipeShareCodec.decodePayload(from: text)
         let trimmedName = payload.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty, payload.servings > 0, !payload.ingredients.isEmpty else {
             throw RecipeImportError.emptyRecipe
@@ -1234,103 +840,6 @@ final class FernletStore: ObservableObject {
         }
     }
 
-    private func sharedRecipePayload(for recipe: RecipeDefinition) -> SharedRecipePayload {
-        SharedRecipePayload(
-            name: recipe.name,
-            servings: recipe.servings,
-            notes: recipe.notes,
-            ingredients: recipe.ingredients.compactMap { ingredient in
-                guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }) else { return nil }
-                let macros = ingredient.scaledMacros(using: foodItem)
-                return SharedRecipeIngredient(
-                    name: foodItem.name,
-                    quantity: ingredient.quantity,
-                    unit: ingredient.unit,
-                    protein: macros.protein,
-                    carbs: macros.carbs,
-                    fat: macros.fat
-                )
-            }
-        )
-    }
-
-    private func sharedRecipeJSON(for payload: SharedRecipePayload) -> String? {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(payload) else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    private func sharedRecipePayload(from text: String) throws -> SharedRecipePayload {
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let jsonText: String
-        if trimmedText.hasPrefix("{") {
-            jsonText = trimmedText
-        } else if let markerRange = text.range(of: "Fernlet recipe data:") {
-            let payloadText = text[markerRange.upperBound...]
-            guard let firstJSONLine = payloadText
-                .split(whereSeparator: \.isNewline)
-                .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
-                .first(where: { $0.hasPrefix("{") }) else {
-                throw RecipeImportError.missingPayload
-            }
-            jsonText = firstJSONLine
-        } else {
-            throw RecipeImportError.missingPayload
-        }
-
-        guard let data = jsonText.data(using: .utf8),
-              let payload = try? JSONDecoder().decode(SharedRecipePayload.self, from: data) else {
-            throw RecipeImportError.invalidPayload
-        }
-        guard payload.format == "fernlet.recipe", payload.version == 1 else {
-            throw RecipeImportError.unsupportedFormat
-        }
-        return payload
-    }
-
-    private func makeRecipeIngredients(from inputIngredients: [ManualRecipeIngredientInput], verifiedAt: Date) -> [RecipeIngredient] {
-        let validIngredients = inputIngredients.filter { !$0.trimmedName.isEmpty }
-        assert(!validIngredients.isEmpty, "recipe ingredients required")
-        var recipeIngredients: [RecipeIngredient] = []
-        for ingredient in validIngredients {
-            let foodItem = ingredient.selectedFoodItem(in: foodItems) ?? upsertCustomFoodItem(from: ingredient, verifiedAt: verifiedAt)
-            recipeIngredients.append(RecipeIngredient(
-                foodItemId: foodItem.id,
-                quantity: max(ingredient.quantity, 0.01),
-                unit: ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "serving" : ingredient.unit
-            ))
-        }
-        return recipeIngredients
-    }
-
-    private func upsertCustomFoodItem(from ingredient: ManualRecipeIngredientInput, verifiedAt: Date) -> FoodItem {
-        let servingUnit = ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RecipeUnit.serving.rawValue : ingredient.unit
-        let foodItem = FoodItem(
-            name: ingredient.trimmedName,
-            brandSource: "Custom ingredient",
-            servingSize: max(ingredient.quantity, 0.01),
-            servingUnit: servingUnit,
-            macros: ingredient.macros,
-            micronutrients: ingredient.scannedMicronutrients ?? Micronutrients(),
-            category: "custom ingredient",
-            source: .manual,
-            lastVerified: verifiedAt,
-            tags: ["recipe", "custom"]
-        )
-        let normalizedName = FoodItemSearch.normalized(foodItem.name)
-        if let existingIndex = foodItems.firstIndex(where: { existing in
-            existing.source == .manual && FoodItemSearch.normalized(existing.name) == normalizedName
-        }) {
-            var updatedFoodItem = foodItem
-            updatedFoodItem.id = foodItems[existingIndex].id
-            foodItems[existingIndex] = updatedFoodItem
-            return updatedFoodItem
-        }
-        foodItems.append(foodItem)
-        return foodItem
-    }
-
     func addTexture(_ body: String, tags: Set<TextureTag>) {
         batchSnapshotPersistence {
             workshop.textureEntries.insert(TextureEntry(body: body, tags: tags), at: 0)
@@ -1355,13 +864,11 @@ final class FernletStore: ObservableObject {
     }
 
     func queueMealRetry(_ meal: Meal) {
-        retryQueue.append(AIAnalysisRetryRecord(payloadType: "meal", sourceId: meal.id, note: FernletVoice.message(for: .mealAnalysisFailed)))
-        scheduleSnapshotSave()
+        aiRetryQueueService.queueMealRetry(meal)
     }
 
     func clearRetryItem(_ id: UUID) {
-        retryQueue.removeAll { $0.id == id }
-        scheduleSnapshotSave()
+        aiRetryQueueService.clear(id: id)
     }
 
     func resetAll() {
@@ -1373,61 +880,29 @@ final class FernletStore: ObservableObject {
             memories = []
             goals = []
             workshop = WorkshopData()
-            retryQueue = []
             foodItems = []
             recipes = []
             dailyScores = []
             connectionSessionLogs = []
-            trustedProximityPeers = []
-            trainerAuditEvents = []
-            savedRecipes = []
         }
-        scheduleSavedRecipeSave()
+        savedRecipeService.reset()
+        aiRetryQueueService.reset()
+        proximityTrustVault.apply(peers: [], audit: [])
     }
 
     private func rebuildDerivedSignals() {
-        StartupTiming.timed("FernletStore.rebuildDerivedSignals") {
-            let orderedDays = loadDays().sorted { first, second in first.key < second.key }
-            let recent = Array(orderedDays.suffix(FernletLimits.signalWindowDays))
-            derivedSignals = DerivedSignalFactory.makeSignals(from: recent, todayKey: todayKey)
-        }
+        derivedSignalsService.rebuild(allDays: loadDays(), todayKey: todayKey)
     }
 
     func deferredPostLaunchTasks() {
-        guard !deferredPostLaunchTasksStarted else { return }
-        deferredPostLaunchTasksStarted = true
-
-        Task(priority: .utility) { @MainActor [weak self] in
-            await Task.yield()
-            self?.rebuildDerivedSignals()
-        }
-    }
-
-    private func scheduleSnapshotSave() {
-        snapshotSaveTask?.cancel()
-        snapshotSaveTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            guard !Task.isCancelled else { return }
-            self?.snapshotSaveTask = nil
-            self?.performSnapshotSave()
-        }
+        derivedSignalsService.scheduleDeferredRebuild(
+            allDaysProvider: { [weak self] in self?.loadDays() ?? [:] },
+            todayKey: todayKey
+        )
     }
 
     func flushPendingSnapshotSave() {
-        guard snapshotSaveTask != nil else { return }
-        snapshotSaveTask?.cancel()
-        snapshotSaveTask = nil
-        performSnapshotSave()
-    }
-
-    private func scheduleRemoteRepositoryReload() {
-        remoteReloadTask?.cancel()
-        remoteReloadTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(750))
-            guard !Task.isCancelled, let self else { return }
-            self.remoteReloadTask = nil
-            await self.reloadFromRepository()
-        }
+        snapshotSaveCoordinator.flushPending()
     }
 
     private func reloadFromRepository() async {
@@ -1452,19 +927,18 @@ final class FernletStore: ObservableObject {
         memories = snapshot.memories
         goals = snapshot.goals
         workshop = snapshot.workshop
-        retryQueue = snapshot.retryQueue
         foodItems = snapshot.foodItems
         recipes = snapshot.recipes
         dailyScores = snapshot.dailyScores
         connectionSessionLogs = snapshot.connectionSessionLogs
-        trustedProximityPeers = snapshot.trustedProximityPeers
-        trainerAuditEvents = snapshot.trainerAuditEvents
+        aiRetryQueueService.apply(snapshot.retryQueue)
+        proximityTrustVault.apply(peers: snapshot.trustedProximityPeers, audit: snapshot.trainerAuditEvents)
         connectionInspector.attachStore(self)
         rebuildDerivedSignals()
     }
 
-    private func performSnapshotSave() {
-        let snapshot = FernletSnapshot(
+    private func currentSnapshot() -> FernletSnapshot {
+        FernletSnapshot(
             todayKey: todayKey,
             day: day,
             settings: settings,
@@ -1476,32 +950,19 @@ final class FernletStore: ObservableObject {
             foodItems: foodItems,
             recipes: recipes,
             dailyScores: dailyScores,
-            retryQueue: retryQueue,
+            retryQueue: aiRetryQueueService.retryQueue,
             connectionSessionLogs: connectionSessionLogs,
-            trustedProximityPeers: trustedProximityPeers,
-            trainerAuditEvents: trainerAuditEvents
+            trustedProximityPeers: proximityTrustVault.trustedPeers,
+            trainerAuditEvents: proximityTrustVault.auditEvents
         )
-        let saved = repository.saveSnapshot(snapshot)
-        assert(saved, "snapshot should save")
-        rebuildDerivedSignals()
     }
 
     private func batchSnapshotPersistence<T>(_ updates: () throws -> T) rethrows -> T {
         let result = try updates()
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
         return result
     }
 
-    private func scheduleSavedRecipeSave() {
-        guard !savedRecipeSaveScheduled else { return }
-        savedRecipeSaveScheduled = true
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            self.savedRecipeSaveScheduled = false
-            let saved = self.savedRecipeRepository.save(self.savedRecipes)
-            assert(saved, "saved recipes should save")
-        }
-    }
 
     func markLaunchScreenDismissed() {
         guard !launchScreenDismissed else { return }
@@ -1510,33 +971,23 @@ final class FernletStore: ObservableObject {
     }
 
     func ensureBundledFoodItemsSeeded() {
-        guard bundledFoodSeedingState == .notStarted else { return }
-        bundledFoodSeedingState = .seeding
+        guard bundledFoodSeedingService.state == .notStarted else { return }
 
         Task { @MainActor [weak self] in
-            let bundledItems = await Task.detached(priority: .utility) {
-                FoodDataCatalog.bundledFoodItems()
-            }.value
-
             guard let self else { return }
-            guard !bundledItems.isEmpty else {
-                self.bundledFoodSeedingState = .done
-                return
-            }
-
-            let existingIds = Set(self.foodItems.map(\.id))
-            let missingItems = bundledItems.filter { !existingIds.contains($0.id) }
-            if !missingItems.isEmpty {
-                self.foodItems.append(contentsOf: missingItems)
+            let newItems = await self.bundledFoodSeedingService.ensureSeeded(
+                existing: self.foodItems
+            )
+            if !newItems.isEmpty {
+                self.foodItems.append(contentsOf: newItems)
                 self.queueBundledFoodSeedSaveAfterLaunch()
             }
-            self.bundledFoodSeedingState = .done
         }
     }
 
     private func queueBundledFoodSeedSaveAfterLaunch() {
         if launchScreenDismissed {
-            scheduleSnapshotSave()
+            snapshotSaveCoordinator.schedule()
         } else {
             bundledFoodSeedSavePending = true
         }
@@ -1545,7 +996,76 @@ final class FernletStore: ObservableObject {
     private func flushPendingBundledFoodSeedSaveIfNeeded() {
         guard bundledFoodSeedSavePending else { return }
         bundledFoodSeedSavePending = false
-        scheduleSnapshotSave()
+        snapshotSaveCoordinator.schedule()
+    }
+}
+
+extension FernletStore {
+    /// Mutates the day for the given date key. Today mutates the in-memory day;
+    /// past dates round-trip through the repository.
+    @discardableResult
+    func mutateDay(date: String, _ change: (inout FernletDay) -> Void) -> Bool {
+        assert(!date.isEmpty, "date key required")
+        if date == todayKey {
+            change(&day)
+            snapshotSaveCoordinator.schedule()
+            return true
+        }
+        return mutatePastDay(date, change)
+    }
+}
+
+extension FernletStore: WorkoutSyncContext {
+    func workoutExists(id: UUID) -> Bool {
+        loadDays().values.contains { day in
+            day.workouts.contains { $0.id == id }
+        }
+    }
+
+    func workoutExists(healthKitUUID: UUID) -> Bool {
+        loadDays().values.contains { day in
+            day.workouts.contains { $0.healthKitUUID == healthKitUUID }
+        }
+    }
+
+    func setWorkoutHealthKitUUID(workoutID: UUID, hkUUID: UUID, date: String) {
+        batchSnapshotPersistence {
+            if date == todayKey {
+                if let index = day.workouts.firstIndex(where: { $0.id == workoutID }) {
+                    day.workouts[index].healthKitUUID = hkUUID
+                    return
+                }
+            } else {
+                let targetDay = repository.loadDay(for: date, todayKey: todayKey)
+                if targetDay.workouts.contains(where: { $0.id == workoutID }) {
+                    mutatePastDay(date) { day in
+                        if let index = day.workouts.firstIndex(where: { $0.id == workoutID }) {
+                            day.workouts[index].healthKitUUID = hkUUID
+                        }
+                    }
+                    return
+                }
+            }
+
+            if let index = day.workouts.firstIndex(where: { $0.id == workoutID }) {
+                day.workouts[index].healthKitUUID = hkUUID
+                return
+            }
+
+            for (dateKey, pastDay) in repository.loadAllDays() where dateKey != todayKey {
+                guard pastDay.workouts.contains(where: { $0.id == workoutID && $0.healthKitUUID == nil }) else { continue }
+                mutatePastDay(dateKey) { targetDay in
+                    if let index = targetDay.workouts.firstIndex(where: { $0.id == workoutID && $0.healthKitUUID == nil }) {
+                        targetDay.workouts[index].healthKitUUID = hkUUID
+                    }
+                }
+                return
+            }
+        }
+    }
+
+    func upsertWorkout(_ workout: Workout, date: String) {
+        addWorkout(workout, date: date)
     }
 }
 
@@ -1567,8 +1087,8 @@ extension FernletStore {
         let activeRepository = StartupTiming.timed("CoreDataFernletRepository.init") {
             repository ?? CoreDataFernletRepository()
         }
-        let savedRecipeRepository = StartupTiming.timed("SavedRecipeRepository.init") {
-            SavedRecipeRepository()
+        let savedRecipeService = StartupTiming.timed("SavedRecipeService.init") {
+            SavedRecipeService()
         }
 
         statusUpdate("Reading recent days...")
@@ -1582,14 +1102,13 @@ extension FernletStore {
         }
 
         statusUpdate("Loading saved recipes...")
-        let savedRecipes = await savedRecipeRepository.loadAsync()
+        await savedRecipeService.loadAsync()
 
         return FernletStore(
             snapshot: snapshot,
-            savedRecipes: savedRecipes,
             todayKey: key,
             repository: activeRepository,
-            savedRecipeRepository: savedRecipeRepository,
+            savedRecipeService: savedRecipeService,
             healthKitService: nil
         )
     }

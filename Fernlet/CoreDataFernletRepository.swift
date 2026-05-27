@@ -3,7 +3,7 @@ import CoreData
 import Foundation
 
 @MainActor
-final class CoreDataFernletRepository: FernletRepository {
+final class CoreDataFernletRepository: FernletRepository, RemoteChangePublishingRepository {
     private static let primaryRecordID = "primary"
 
     private let controller: PersistenceController
@@ -18,6 +18,10 @@ final class CoreDataFernletRepository: FernletRepository {
 
     /// Fires after the local cache is invalidated due to a remote change.
     let remoteChangeSubject = PassthroughSubject<Void, Never>()
+
+    var remoteChangePublisher: AnyPublisher<Void, Never> {
+        remoteChangeSubject.eraseToAnyPublisher()
+    }
 
     init(controller: PersistenceController? = nil, legacyRepository: LocalFernletRepository? = nil) {
         self.controller = controller ?? .shared

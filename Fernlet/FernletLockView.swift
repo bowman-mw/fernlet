@@ -12,7 +12,7 @@ import Combine
 // MARK: - Setup view
 
 struct FernletLockSetupView: View {
-    @EnvironmentObject private var lockService: FernletLockService
+    @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
 
     @State private var step: SetupStep = .kindPicker
@@ -386,7 +386,7 @@ struct FernletLockSetupView: View {
 // MARK: - Unlock view
 
 struct FernletLockView: View {
-    @EnvironmentObject private var lockService: FernletLockService
+    @Environment(FernletLockService.self) private var lockService
     var onUnlocked: () -> Void
     var onResetRequested: (() -> Void)?
 

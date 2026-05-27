@@ -1,0 +1,95 @@
+import Foundation
+import Observation
+
+@MainActor
+@Observable
+final class SavedRecipeService {
+    private(set) var savedRecipes: [SavedRecipe] = []
+
+    @ObservationIgnored private let repository: SavedRecipeRepository
+    @ObservationIgnored private var saveScheduled = false
+
+    convenience init() {
+        self.init(repository: SavedRecipeRepository())
+    }
+
+    init(repository: SavedRecipeRepository, initialRecipes: [SavedRecipe] = []) {
+        self.repository = repository
+        self.savedRecipes = initialRecipes
+    }
+
+    func loadAsync() async {
+        savedRecipes = await repository.loadAsync()
+    }
+
+    func loadSync() {
+        savedRecipes = repository.load()
+    }
+
+    func add(_ recipe: SavedRecipe) {
+        savedRecipes.removeAll { $0.sourceURLString == recipe.sourceURLString }
+        savedRecipes.insert(recipe, at: 0)
+        scheduleSave()
+    }
+
+    func update(_ recipe: SavedRecipe) {
+        guard let index = savedRecipes.firstIndex(where: { $0.id == recipe.id }) else { return }
+        savedRecipes[index] = recipe
+        scheduleSave()
+    }
+
+    func delete(_ recipe: SavedRecipe) {
+        savedRecipes.removeAll { $0.id == recipe.id }
+        scheduleSave()
+    }
+
+    func reset() {
+        savedRecipes = []
+        scheduleSave()
+    }
+
+    func shareText(for recipe: SavedRecipe) -> String {
+        var lines: [String] = [recipe.name, ""]
+        if recipe.protein > 0 || recipe.carbs > 0 || recipe.fat > 0 {
+            let servingNote = recipe.servings > 1 ? " (per serving, \(recipe.servings) servings)" : ""
+            lines += ["Macros\(servingNote): P \(recipe.protein)g · C \(recipe.carbs)g · F \(recipe.fat)g", ""]
+        }
+        if !recipe.summary.isEmpty {
+            lines += [recipe.summary, ""]
+        }
+        lines += ["Ingredients:"]
+        lines += recipe.ingredients.map { "- \($0)" }
+        lines += ["", "Source: \(recipe.sourceURL.absoluteString)"]
+        return lines.joined(separator: "\n")
+    }
+
+    static func makeMeal(from recipe: SavedRecipe, mealType: MealType?) -> Meal {
+        let macros = Macros(protein: recipe.protein, carbs: recipe.carbs, fat: recipe.fat)
+        let hasMacros = recipe.protein > 0 || recipe.carbs > 0 || recipe.fat > 0
+        return Meal(
+            name: recipe.name,
+            mealType: mealType ?? MealParser.classifyMealType(recipe.name),
+            macros: macros,
+            macroSnapshot: macros,
+            micronutrientSnapshot: recipe.micronutrients,
+            mealSource: .recipe,
+            isAIFallback: false,
+            quality: macros.protein >= 25 ? .good : .ok,
+            confidence: hasMacros ? "Recipe" : "Recipe (no macros)",
+            note: hasMacros ? "Logged from URL recipe." : "Logged from URL recipe. Macros not available.",
+            source: MealLogSource.webImport
+        )
+    }
+
+    private func scheduleSave() {
+        guard !saveScheduled else { return }
+        saveScheduled = true
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self else { return }
+            saveScheduled = false
+            let saved = repository.save(savedRecipes)
+            assert(saved, "saved recipes should save")
+        }
+    }
+}

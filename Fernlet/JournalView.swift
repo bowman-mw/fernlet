@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct JournalView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
     @State private var path = NavigationPath()
@@ -92,7 +92,7 @@ struct JournalView: View {
 struct JournalSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @State private var text = ""
     @State private var tag: FeelingTag = .neutral
     @State private var promptedReasons: Set<JournalPromptReason> = []
@@ -308,7 +308,7 @@ struct JournalEntryEditTarget: Identifiable {
 struct JournalEntryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     var dateKey: String
     var entry: JournalEntry
 
@@ -661,7 +661,7 @@ struct JournalRow: View {
 // MARK: - Day Detail View
 
 struct DayDetailView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     var dateKey: String
     @State private var day: FernletDay
     @State private var showEditSheet = false
@@ -1100,7 +1100,7 @@ struct DayMicronutrientRow: View {
 struct DayEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     var dateKey: String
     let initialDay: FernletDay
 

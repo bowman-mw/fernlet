@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MoveView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @Binding var activeSheet: FernletSheet?
     @State private var path = NavigationPath()
     @State private var displayedWeek: Date = .now
@@ -63,7 +63,7 @@ struct MoveView: View {
 
 struct WorkoutSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     var dateKey: String?
     @State private var name = ""
     @State private var exerciseRows: [WorkoutExerciseEntry] = []
@@ -323,7 +323,7 @@ enum WorkoutSheetRules {
 
 struct QuickExerciseSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @State private var selectedExercise: ExerciseTarget?
     @State private var sets = ""
     @State private var reps = ""
@@ -407,7 +407,7 @@ enum QuickExerciseWorkoutFactory {
 
 struct WorkoutSuggestionSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @State private var energy: WorkoutIntensity = .moderate
     @State private var context = ""
     @State private var suggestion: WorkoutSuggestion?
@@ -1030,7 +1030,7 @@ struct WorkoutWeekModel {
 }
 
 struct MoveDayDetailView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     var dateKey: String
     @State private var showWorkoutSheet = false
 
@@ -1094,7 +1094,7 @@ struct MoveDayDetailView: View {
 }
 
 struct GoalsCard: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @Binding var activeSheet: FernletSheet?
 
     var body: some View {

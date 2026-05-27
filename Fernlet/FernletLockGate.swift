@@ -20,7 +20,7 @@ import SwiftUI
 
 struct FernletLockGateModifier: ViewModifier {
     let active: Bool
-    @EnvironmentObject private var lockService: FernletLockService
+    @Environment(FernletLockService.self) private var lockService
     @Environment(\.scenePhase) private var scenePhase
 
     // Tracks whether the gated view is the active top-level view.
@@ -54,7 +54,7 @@ struct FernletLockGateModifier: ViewModifier {
         }
         .sheet(isPresented: $showSetup) {
             FernletLockSetupView()
-                .environmentObject(lockService)
+                .environment(lockService)
         }
         .confirmationDialog(
             "Reset app lock?",
@@ -122,10 +122,10 @@ struct FernletLockGateModifier: ViewModifier {
     @ViewBuilder private var lockOverlay: some View {
         Color.parchment.ignoresSafeArea()
         FernletLockView(
-            onUnlocked: { /* state transitions automatically via @Published */ },
+            onUnlocked: { },
             onResetRequested: { showReset = true }
         )
-        .environmentObject(lockService)
+        .environment(lockService)
     }
 
     @ViewBuilder private var setupCTAOverlay: some View {

@@ -4,6 +4,10 @@
 
 **Anchor document.** This plan assumes the `@Observable Migration Audit` you produced (the one inventorying all 13 classes, 9 `@StateObject` sites, 30+ `@ObservedObject` sites, 12 `@EnvironmentObject` sites, 13 `.environmentObject()` sites, and the four §3–§6 special-concern sections). Each prompt references audit findings inline so the assistant doesn't need to consult it directly.
 
+**Implementation status (2026-05-26).** PR 0 has been implemented in production code. The app target is Observation-native: no production-code `ObservableObject`, `@Published`, `@ObservedObject`, `@StateObject`, `@EnvironmentObject`, or `.environmentObject(` references remain under `Fernlet/Fernlet`. `FernletStore` is now `@MainActor @Observable`; its former published state remains tracked; repository/task/bookkeeping fields are `@ObservationIgnored`; and the Combine `remoteChangeSubject` `.sink` subscription remains intact through `cancellables`.
+
+**Verification status (2026-05-26).** The project builds cleanly with zero warnings. Non-UI tests passed in focused batches: 334 passed, 3 HealthKit environment-dependent skips, 0 failures. The full UI-test batch hit a simulator/debugger attach interruption; the two UI assertions surfaced afterward passed when rerun individually. Manual smoke testing, optional two-device iCloud sync, tagging, and PR creation remain final release tasks.
+
 ---
 
 ## 1. Operating Principles
@@ -1085,7 +1089,8 @@ If any view file fails to compile after migration:
     grep -rn "@ObservedObject" Fernlet/Fernlet/     # expect: zero
     grep -rn "@StateObject" Fernlet/Fernlet/        # expect: zero
     grep -rn "@EnvironmentObject" Fernlet/Fernlet/  # expect: zero
-    grep -rn "\.environmentObject(" Fernlet/        # expect: zero
+    grep -rn "\.environmentObject(" Fernlet/Fernlet/ # expect: zero
+  Note: historical planning docs under Fernlet/Docs may still mention legacy tokens.
 □ Cold-launch smoke test:
   □ Delete and reinstall on the simulator.
   □ Walk full onboarding.

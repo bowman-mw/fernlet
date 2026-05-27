@@ -1,5 +1,5 @@
-import Combine
 import CoreData
+import Observation
 import Testing
 import Foundation
 @testable import Fernlet
@@ -216,23 +216,31 @@ struct FernletPersistenceTests {
 
     // MARK: - Test 8
 
-    /// Verifies that reload publishes true during the swap and false after completion.
+    /// Verifies that reload reports true during the swap and false after completion.
     @MainActor
-    @Test func test_reload_publishesReloadingState() async throws {
+    @Test func test_reload_updatesReloadingState() async throws {
         let storeURL = makeTemporaryStoreURL()
         defer { removeTemporaryStore(at: storeURL) }
         let controller = PersistenceController(
             preferences: preferences(iCloudSyncEnabled: false),
             storeURL: storeURL
         )
-        var observedStates: [Bool] = []
-        let cancellable = controller.$isReloading.sink { observedStates.append($0) }
+        let recorder = ReloadingObservationRecorder(initialState: controller.isReloading)
+
+        withObservationTracking {
+            _ = controller.isReloading
+        } onChange: {
+            Task { @MainActor in
+                recorder.recordWillChange(from: controller)
+            }
+        }
 
         try await controller.reload(with: preferences(iCloudSyncEnabled: false))
+        await Task.yield()
+        recorder.record(controller.isReloading)
 
-        #expect(observedStates.contains(true))
-        #expect(observedStates.last == false)
-        _ = cancellable
+        #expect(recorder.observedStates.contains(true))
+        #expect(recorder.observedStates.last == false)
     }
 
     // MARK: - Test 9
@@ -286,6 +294,26 @@ struct FernletPersistenceTests {
         #expect(savedIngredient != nil)
         #expect(matchingItems.count == 1)
         #expect(store.recipes.first?.ingredients.first?.foodItemId == savedIngredient?.id)
+    }
+}
+
+// MARK: - Observation Helpers
+
+@MainActor
+private final class ReloadingObservationRecorder {
+    private(set) var observedStates: [Bool]
+
+    init(initialState: Bool) {
+        self.observedStates = [initialState]
+    }
+
+    func recordWillChange(from controller: PersistenceController) {
+        // Observation reports before mutation; for this Bool toggle, the next state is the inverse.
+        observedStates.append(!controller.isReloading)
+    }
+
+    func record(_ state: Bool) {
+        observedStates.append(state)
     }
 }
 

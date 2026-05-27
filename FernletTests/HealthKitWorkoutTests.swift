@@ -93,7 +93,7 @@ struct HealthKitWorkoutTests {
     @Test func makeWorkoutParsesMuscleGroupsMetadata() {
         let metadata: [String: Any] = ["fernlet.muscleGroups": "chest,triceps"]
 
-        let parsed = FernletStore.parseFernletMetadata(metadata)
+        let parsed = WorkoutHealthKitSync.parseFernletMetadata(metadata)
 
         #expect(parsed.muscleGroups == [.chest, .triceps])
     }

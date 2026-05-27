@@ -311,7 +311,7 @@ final class FriendPhotoSharingService: ProximityPayloadHandling {
 }
 
 struct FriendPhotoShareView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
 

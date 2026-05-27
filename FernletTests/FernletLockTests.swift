@@ -413,14 +413,14 @@ struct FernletLockTests {
 
         let hostingController = UIHostingController(
             rootView: HubMovementLockHarness(showChild: true)
-                .environmentObject(service)
+                .environment(service)
         )
         window?.rootViewController = hostingController
         window?.makeKeyAndVisible()
         try await Task.sleep(nanoseconds: 100_000_000)
 
         hostingController.rootView = HubMovementLockHarness(showChild: false)
-            .environmentObject(service)
+            .environment(service)
         try await Task.sleep(nanoseconds: 100_000_000)
 
         #expect(service.state == .unlocked)
@@ -452,7 +452,7 @@ struct FernletLockTests {
         window?.rootViewController = UIHostingController(
             rootView: Text("hi")
                 .fernletLockGate(active: false)
-                .environmentObject(service)
+                .environment(service)
         )
         window?.makeKeyAndVisible()
         await Task.yield()

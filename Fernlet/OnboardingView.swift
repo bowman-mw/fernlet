@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
     @State private var goal: GoalType
     @State private var profile: UserNutritionProfile

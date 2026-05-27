@@ -1,11 +1,11 @@
 import SwiftUI
 
 struct PeriodTrackerView: View {
-    @ObservedObject var store: FernletStore
+    var store: FernletStore
     var periodStore: PeriodTrackerStore
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
-    @EnvironmentObject private var lockService: FernletLockService
+    @Environment(FernletLockService.self) private var lockService
     @State private var authorization = HealthKitAuthorizationViewModel()
     @State private var selectedDay: SelectedPeriodDay?
     @State private var displayedMonth: Date = .now

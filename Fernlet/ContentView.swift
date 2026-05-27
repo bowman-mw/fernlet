@@ -8,10 +8,10 @@
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject var store: FernletStore
-    @StateObject private var launcher = LaunchPreparationService()
+    @Bindable var store: FernletStore
+    @State private var launcher = LaunchPreparationService()
     @State private var periodStore = PeriodTrackerStore()
-    @EnvironmentObject private var lockService: FernletLockService
+    @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
@@ -234,7 +234,7 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
-                .environmentObject(lockService)
+                .environment(lockService)
                 .environment(storagePreferencesStore)
         case .recipeBook:
             RecipeBookSheet(store: store, editingRecipe: $editingRecipeFromHome, editingSavedRecipe: $editingSavedRecipeFromHome)
@@ -251,7 +251,7 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
-                .environmentObject(lockService)
+                .environment(lockService)
         }
     }
 
@@ -330,7 +330,7 @@ struct ContentView: View {
 
 struct PersonalScreenView: View {
     var screen: FernletScreen
-    @ObservedObject var store: FernletStore
+    @Bindable var store: FernletStore
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
 
@@ -457,7 +457,7 @@ struct PersonalScreenView: View {
 struct PersonalMemoryList: View {
     var category: String
     var emptyText: String
-    @ObservedObject var store: FernletStore
+    @Bindable var store: FernletStore
 
     private var memories: [MemoryNote] {
         store.memories.filter { $0.category.localizedCaseInsensitiveContains(category) }

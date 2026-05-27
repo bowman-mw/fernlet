@@ -136,21 +136,29 @@
 		6869C37B2FBBF3450098A0F3 /* Docs */ = {
 			isa = PBXGroup;
 			children = (
+				68B9EC1F2FC67DE800AF8FB6 /* Completed Implemtations */,
 				6869C37C2FBBF4AF0098A0F3 /* FernletSpecificationV3.md */,
-				684018E32FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md */,
 				68B9EC132FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md */,
-				6869C37D2FBBF4AF0098A0F3 /* healthkit-integration-plan.md */,
 				68B9EC112FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md */,
 				6869C37E2FBBF4AF0098A0F3 /* ImplementationPlan.md */,
-				68B9EBCD2FC296F100AF8FB6 /* codex-implementation-prompts.md */,
-				68B9EBDB2FC2AA1800AF8FB6 /* phase7-proximity-implementation-plan.md */,
-				684018B92FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md */,
-				68B9EC1D2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md */,
 				684018E02FBFAC4500EFC6D6 /* FileIndex.md */,
-				684019112FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md */,
-				68B9EC072FC352D000AF8FB6 /* proximity-handshake-process-map.md */,
 			);
 			path = Docs;
+			sourceTree = "<group>";
+		};
+		68B9EC1F2FC67DE800AF8FB6 /* Completed Implemtations */ = {
+			isa = PBXGroup;
+			children = (
+				684018E32FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md */,
+				68B9EBCD2FC296F100AF8FB6 /* codex-implementation-prompts.md */,
+				68B9EC1D2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md */,
+				684019112FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md */,
+				6869C37D2FBBF4AF0098A0F3 /* healthkit-integration-plan.md */,
+				68B9EC072FC352D000AF8FB6 /* proximity-handshake-process-map.md */,
+				684018B92FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md */,
+				68B9EBDB2FC2AA1800AF8FB6 /* phase7-proximity-implementation-plan.md */,
+			);
+			path = "Completed Implemtations";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

@@ -8,8 +8,8 @@ import SwiftUI
 struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @ObservedObject var store: FernletStore
-    @EnvironmentObject private var lockService: FernletLockService
+    @Bindable var store: FernletStore
+    @Environment(FernletLockService.self) private var lockService
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
@@ -103,13 +103,13 @@ struct SettingsSheet: View {
                 Section("Privacy") {
                     NavigationLink("Privacy & Data") {
                         PrivacyDataSettingsView()
-                            .environmentObject(lockService)
+                            .environment(lockService)
                     }
                     NavigationLink("App lock") {
                         AppLockSettingsView()
-                            .environmentObject(lockService)
+                            .environment(lockService)
                             .fernletLockGate(active: lockService.state != .notConfigured)
-                            .environmentObject(lockService)
+                            .environment(lockService)
                     }
                 }
                 .listRowBackground(Color.cream)
@@ -1163,7 +1163,7 @@ struct SettingsSheet: View {
 
 struct MemoryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: FernletStore
+    @Bindable var store: FernletStore
     var memory: MemoryNote
     @State private var category: String
     @State private var text: String
@@ -1249,7 +1249,7 @@ struct MemoryEditorSheet: View {
 // MARK: - App Lock settings view
 
 struct AppLockSettingsView: View {
-    @EnvironmentObject private var lockService: FernletLockService
+    @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
 
     @State private var showSetup = false
@@ -1281,11 +1281,11 @@ struct AppLockSettingsView: View {
         .navigationTitle("App lock")
         .sheet(isPresented: $showSetup) {
             FernletLockSetupView()
-                .environmentObject(lockService)
+                .environment(lockService)
         }
         .sheet(isPresented: $showChangePasscode) {
             FernletLockChangePasscodeView()
-                .environmentObject(lockService)
+                .environment(lockService)
         }
         .sheet(isPresented: $showBiometricPasscodeVerify) {
             biometricVerifySheet
@@ -1553,7 +1553,7 @@ struct AppLockSettingsView: View {
 // MARK: - Change passcode view (presented as sheet from AppLockSettingsView)
 
 private struct FernletLockChangePasscodeView: View {
-    @EnvironmentObject private var lockService: FernletLockService
+    @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
 
     @State private var currentPasscode = ""
