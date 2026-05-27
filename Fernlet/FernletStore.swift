@@ -48,7 +48,7 @@ final class FernletStore: ObservableObject {
     private var isReloadingFromRepository = false
     private var cancellables = Set<AnyCancellable>()
 
-    init(date: Date = .now, repository: FernletRepository? = nil, healthKitService: (any HealthKitServicing)? = nil) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, healthKitService: (any HealthKitServicing)? = nil) {
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
 
@@ -58,7 +58,7 @@ final class FernletStore: ObservableObject {
             repository ?? CoreDataFernletRepository()
         }
         let savedRecipeRepository = StartupTiming.timed("SavedRecipeRepository.init") {
-            SavedRecipeRepository()
+            savedRecipeRepository ?? SavedRecipeRepository()
         }
         let snapshot = StartupTiming.timed("FernletRepository.loadSnapshot") {
             activeRepository.loadSnapshot(todayKey: key)

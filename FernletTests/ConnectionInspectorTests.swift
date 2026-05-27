@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import Fernlet
 
-@Suite(.serialized) @MainActor
+@Suite(.serialized, .timeLimit(.minutes(2))) @MainActor
 struct ConnectionInspectorTests {
     private func makeStore() -> FernletStore {
         makeTestStore(date: Date(timeIntervalSince1970: 1_800_000_000))

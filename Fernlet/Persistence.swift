@@ -11,8 +11,8 @@ import Foundation
 
 final class PersistenceController: ObservableObject {
     static let shared: PersistenceController = {
-        let store = StoragePreferencesStore()
-        var startupPreferences = store.preferences
+        let data = KeychainItem.load(for: .storagePreferences, service: KeychainItem.storagePreferencesService)
+        var startupPreferences = data.flatMap { try? JSONDecoder().decode(StoragePreferences.self, from: $0) } ?? StoragePreferences()
         startupPreferences.iCloudSyncEnabled = false
         return PersistenceController(preferences: startupPreferences)
     }()
@@ -25,7 +25,7 @@ final class PersistenceController: ObservableObject {
 
     @Published private(set) var isReloading = false
 
-    private(set) var container: NSPersistentCloudKitContainer
+    private(set) var container: NSPersistentContainer
     private(set) var didFailToLoad = false
     /// Fires when iCloud pushes a remote change to the local store.
     let remoteChangePublisher: AnyPublisher<Notification, Never>
@@ -117,8 +117,13 @@ final class PersistenceController: ObservableObject {
         preferences: StoragePreferences,
         storeURL: URL?,
         iCloudAvailabilityOverride: Bool? = nil
-    ) -> (container: NSPersistentCloudKitContainer, storeDescription: NSPersistentStoreDescription) {
-        let container = NSPersistentCloudKitContainer(name: "Fernlet", managedObjectModel: makeManagedObjectModel())
+    ) -> (container: NSPersistentContainer, storeDescription: NSPersistentStoreDescription) {
+        // Use plain NSPersistentContainer for in-memory stores — NSPersistentCloudKitContainer
+        // dispatches its loadPersistentStores completion via the main actor on iOS 26+, which
+        // deadlocks when the caller is already holding the main actor synchronously (e.g. tests).
+        let container: NSPersistentContainer = inMemory
+            ? NSPersistentContainer(name: "Fernlet", managedObjectModel: makeManagedObjectModel())
+            : NSPersistentCloudKitContainer(name: "Fernlet", managedObjectModel: makeManagedObjectModel())
         let storeDescription = container.persistentStoreDescriptions.first ?? NSPersistentStoreDescription()
         configure(storeDescription, inMemory: inMemory, preferences: preferences, storeURL: storeURL, iCloudAvailabilityOverride: iCloudAvailabilityOverride)
         container.persistentStoreDescriptions = [storeDescription]
@@ -161,7 +166,7 @@ final class PersistenceController: ObservableObject {
     private static let cloudKitNoAccountErrorCode = 134400
 
     private static func loadPersistentStores(
-        for container: NSPersistentCloudKitContainer,
+        for container: NSPersistentContainer,
         preferences: StoragePreferences,
         inMemory: Bool,
         recoverOnFailure: Bool
@@ -237,7 +242,7 @@ final class PersistenceController: ObservableObject {
     }
 
     private static func loadPersistentStoresAsync(
-        for container: NSPersistentCloudKitContainer,
+        for container: NSPersistentContainer,
         preferences: StoragePreferences,
         inMemory: Bool
     ) async throws {
@@ -294,12 +299,12 @@ final class PersistenceController: ObservableObject {
         }
     }
 
-    private func configureViewContext(for container: NSPersistentCloudKitContainer) {
+    private func configureViewContext(for container: NSPersistentContainer) {
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
         container.viewContext.automaticallyMergesChangesFromParent = true
     }
 
-    private func bindRemoteChanges(to container: NSPersistentCloudKitContainer) {
+    private func bindRemoteChanges(to container: NSPersistentContainer) {
         remoteChangeCancellable = NotificationCenter.default
             .publisher(for: .NSPersistentStoreRemoteChange, object: container.persistentStoreCoordinator)
             .sink { [remoteChangeSubject] notification in

@@ -14,7 +14,13 @@ func makeTestStore(date: Date = .now) -> FernletStore {
         controller: controller,
         legacyRepository: LocalFernletRepository(fileURL: legacyURL)
     )
-    return FernletStore(date: date, repository: repository)
+    // Pass a SavedRecipeRepository backed by the same in-memory controller so
+    // tests never touch PersistenceController.shared (a real SQLite store).
+    let savedRecipeRepository = SavedRecipeRepository(
+        controller: controller,
+        legacyRepository: LegacySavedRecipeJSONRepository(fileURL: legacyURL)
+    )
+    return FernletStore(date: date, repository: repository, savedRecipeRepository: savedRecipeRepository)
 }
 
 /// Creates a FernletStore pre-populated with N meals, a journal entry,

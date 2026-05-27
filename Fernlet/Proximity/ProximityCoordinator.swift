@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import MultipeerConnectivity
+import Observation
 import UIKit
 
 @MainActor
@@ -64,7 +65,8 @@ private struct SessionHeartbeatPayload: Codable {
 }
 
 @MainActor
-final class ProximityCoordinator: ObservableObject {
+@Observable
+final class ProximityCoordinator {
     enum Role: String, Codable, Equatable {
         case advertiser
         case browser
@@ -75,39 +77,39 @@ final class ProximityCoordinator: ObservableObject {
         case friend
     }
 
-    @Published private(set) var state: State = .idle
-    @Published private(set) var lastKnownDistance: RangingDistance?
+    private(set) var state: State = .idle
+    private(set) var lastKnownDistance: RangingDistance?
 
-    private let identity: IdentityService
-    private let transport: any MultipeerTransport
-    private let ranging: any RangingProvider
-    private weak var inspector: (any ProximityInspectorRecording)?
-    private weak var payloadHandler: (any ProximityPayloadHandling)?
-    private weak var trustPolicy: (any ProximityTrustPolicy)?
-    private let replayCache: ReplayCache
-    private let foregroundAnchor: any ProximityForegroundAnchoring
-    private let displayName: String
-    private let timeoutSeconds: TimeInterval
-    private let now: () -> Date
+    @ObservationIgnored private let identity: IdentityService
+    @ObservationIgnored private let transport: any MultipeerTransport
+    @ObservationIgnored private let ranging: any RangingProvider
+    @ObservationIgnored private weak var inspector: (any ProximityInspectorRecording)?
+    @ObservationIgnored private weak var payloadHandler: (any ProximityPayloadHandling)?
+    @ObservationIgnored private weak var trustPolicy: (any ProximityTrustPolicy)?
+    @ObservationIgnored private let replayCache: ReplayCache
+    @ObservationIgnored private let foregroundAnchor: any ProximityForegroundAnchoring
+    @ObservationIgnored private let displayName: String
+    @ObservationIgnored private let timeoutSeconds: TimeInterval
+    @ObservationIgnored private let now: () -> Date
 
-    private var cancellables: Set<AnyCancellable> = []
-    private var timeoutTask: Task<Void, Never>?
-    private var heartbeatTask: Task<Void, Never>?
-    private let tapDetector = TapConfirmedDetector()
-    private var currentRole: Role?
-    private var currentMode: Mode?
-    private var currentTransportPeer: MultipeerPeer?
-    private var pendingInvite: MultipeerSession.PendingInvite?
-    private var pendingPeerIdentity: PeerIdentity?
-    private var connectedPeerIdentity: PeerIdentity?
-    private var rangingMode: RangingMode = .none
-    private var lastInboundHeartbeatAt: Date?
-    private var lastTransferCompletedAt: Date?
-    private var bytesSent = 0
-    private var bytesReceived = 0
-    private var heartbeatSendFailures = 0
-    private var pendingHeartbeatSentAtByID: [UUID: Date] = [:]
-    private var autoReconnect = false
+    @ObservationIgnored private var cancellables: Set<AnyCancellable> = []
+    @ObservationIgnored private var timeoutTask: Task<Void, Never>?
+    @ObservationIgnored private var heartbeatTask: Task<Void, Never>?
+    @ObservationIgnored private let tapDetector = TapConfirmedDetector()
+    @ObservationIgnored private var currentRole: Role?
+    @ObservationIgnored private var currentMode: Mode?
+    @ObservationIgnored private var currentTransportPeer: MultipeerPeer?
+    @ObservationIgnored private var pendingInvite: MultipeerSession.PendingInvite?
+    @ObservationIgnored private var pendingPeerIdentity: PeerIdentity?
+    @ObservationIgnored private var connectedPeerIdentity: PeerIdentity?
+    @ObservationIgnored private var rangingMode: RangingMode = .none
+    @ObservationIgnored private var lastInboundHeartbeatAt: Date?
+    @ObservationIgnored private var lastTransferCompletedAt: Date?
+    @ObservationIgnored private var bytesSent = 0
+    @ObservationIgnored private var bytesReceived = 0
+    @ObservationIgnored private var heartbeatSendFailures = 0
+    @ObservationIgnored private var pendingHeartbeatSentAtByID: [UUID: Date] = [:]
+    @ObservationIgnored private var autoReconnect = false
 
     init(
         identity: IdentityService,
