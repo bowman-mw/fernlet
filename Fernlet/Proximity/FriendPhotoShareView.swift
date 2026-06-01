@@ -1,43 +1,167 @@
 import SwiftUI
-import Observation
 import Photos
-import PhotosUI
 import UIKit
 
 struct FriendPhotoPayload: Codable, Equatable, Identifiable {
     let id: UUID
-    let imageData: Data
+    let imageData: Data?               // non-nil for epoch-0 unencrypted or locally-decrypted photos
+    let encryptedImageData: Data?      // AES-256-GCM ciphertext + 16-byte tag; non-nil when transmitted encrypted
+    let nonce: Data?                   // 12-byte GCM nonce; paired with encryptedImageData
+    let keyEpoch: Int                  // 0 = unencrypted legacy; ≥1 = encrypted
     let addedAt: Date
     let senderName: String
     let senderFingerprint: String?
     let senderSigningPublicKey: Data?
+    let session: FriendPhotoSessionMetadata?
 
+    // Epoch-0 / already-decrypted initialiser
     init(id: UUID = UUID(), imageData: Data, addedAt: Date = Date(), senderName: String,
-         senderFingerprint: String? = nil, senderSigningPublicKey: Data? = nil) {
+         senderFingerprint: String? = nil, senderSigningPublicKey: Data? = nil,
+         session: FriendPhotoSessionMetadata? = nil) {
         self.id = id
         self.imageData = imageData
+        self.encryptedImageData = nil
+        self.nonce = nil
+        self.keyEpoch = 0
         self.addedAt = addedAt
         self.senderName = senderName
         self.senderFingerprint = senderFingerprint
         self.senderSigningPublicKey = senderSigningPublicKey
+        self.session = session
+    }
+
+    // Encrypted initialiser (epoch ≥ 1); used when transmitting over the wire
+    init(id: UUID = UUID(), encryptedImageData: Data, nonce: Data, keyEpoch: Int,
+         addedAt: Date = Date(), senderName: String,
+         senderFingerprint: String? = nil, senderSigningPublicKey: Data? = nil,
+         session: FriendPhotoSessionMetadata? = nil) {
+        self.id = id
+        self.imageData = nil
+        self.encryptedImageData = encryptedImageData
+        self.nonce = nonce
+        self.keyEpoch = keyEpoch
+        self.addedAt = addedAt
+        self.senderName = senderName
+        self.senderFingerprint = senderFingerprint
+        self.senderSigningPublicKey = senderSigningPublicKey
+        self.session = session
+    }
+
+    // Returns a copy with imageData set and encryption fields cleared, for local caching after decryption.
+    func withDecryptedImageData(_ data: Data) -> FriendPhotoPayload {
+        return FriendPhotoPayload(
+            id: id,
+            imageData: data,
+            addedAt: addedAt,
+            senderName: senderName,
+            senderFingerprint: senderFingerprint,
+            senderSigningPublicKey: senderSigningPublicKey,
+            session: session
+        )
+    }
+
+    func withSession(_ session: FriendPhotoSessionMetadata) -> FriendPhotoPayload {
+        FriendPhotoPayload(
+            id: id,
+            imageData: imageData,
+            encryptedImageData: encryptedImageData,
+            nonce: nonce,
+            keyEpoch: keyEpoch,
+            addedAt: addedAt,
+            senderName: senderName,
+            senderFingerprint: senderFingerprint,
+            senderSigningPublicKey: senderSigningPublicKey,
+            session: session
+        )
+    }
+
+    func withoutImageData() -> FriendPhotoPayload {
+        FriendPhotoPayload(
+            id: id,
+            imageData: nil,
+            encryptedImageData: encryptedImageData,
+            nonce: nonce,
+            keyEpoch: keyEpoch,
+            addedAt: addedAt,
+            senderName: senderName,
+            senderFingerprint: senderFingerprint,
+            senderSigningPublicKey: senderSigningPublicKey,
+            session: session
+        )
+    }
+
+    private init(
+        id: UUID,
+        imageData: Data?,
+        encryptedImageData: Data?,
+        nonce: Data?,
+        keyEpoch: Int,
+        addedAt: Date,
+        senderName: String,
+        senderFingerprint: String?,
+        senderSigningPublicKey: Data?,
+        session: FriendPhotoSessionMetadata?
+    ) {
+        self.id = id
+        self.imageData = imageData
+        self.encryptedImageData = encryptedImageData
+        self.nonce = nonce
+        self.keyEpoch = keyEpoch
+        self.addedAt = addedAt
+        self.senderName = senderName
+        self.senderFingerprint = senderFingerprint
+        self.senderSigningPublicKey = senderSigningPublicKey
+        self.session = session
+    }
+}
+
+struct FriendPhotoSessionParticipant: Codable, Equatable, Identifiable {
+    var id: String { fingerprint }
+
+    let fingerprint: String
+    let displayName: String
+}
+
+struct FriendPhotoSessionMetadata: Codable, Equatable, Identifiable {
+    let id: UUID
+    let meshID: UUID?
+    let meshName: String?
+    let startedAt: Date
+    let participants: [FriendPhotoSessionParticipant]
+}
+
+struct FriendPhotoManifestEntry: Codable, Equatable {
+    let id: UUID
+    let senderFingerprint: String
+    let keyEpoch: Int   // receiver skips requesting photos from epochs it cannot decrypt
+
+    init(id: UUID, senderFingerprint: String, keyEpoch: Int = 0) {
+        self.id = id
+        self.senderFingerprint = senderFingerprint
+        self.keyEpoch = keyEpoch
     }
 }
 
 struct FriendPhotoManifestPayload: Codable, Equatable {
-    let photoIDs: [UUID]
+    let entries: [FriendPhotoManifestEntry]
 }
 
 struct FriendPhotoRequestPayload: Codable, Equatable {
     let missingPhotoIDs: [UUID]
 }
 
-struct FriendPhotoCacheStore {
-    private let fileURL: URL
+struct MeshPhotoCacheStore {
+    private let indexURL: URL
+    private let imageDirectoryURL: URL
+    private let thumbnailDirectoryURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    init(fileURL: URL? = nil) {
-        self.fileURL = fileURL ?? Self.defaultFileURL()
+    init(indexURL: URL) {
+        self.indexURL = indexURL
+        let baseURL = indexURL.deletingLastPathComponent()
+        self.imageDirectoryURL = baseURL.appendingPathComponent("MeshPhotos", isDirectory: true)
+        self.thumbnailDirectoryURL = baseURL.appendingPathComponent("MeshPhotoThumbnails", isDirectory: true)
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
         self.encoder.dateEncodingStrategy = .iso8601
@@ -45,492 +169,75 @@ struct FriendPhotoCacheStore {
     }
 
     func load() -> [FriendPhotoPayload] {
-        guard let data = try? Data(contentsOf: fileURL), !data.isEmpty else { return [] }
-        return (try? decoder.decode([FriendPhotoPayload].self, from: data)) ?? []
+        guard let data = try? Data(contentsOf: indexURL), !data.isEmpty,
+              let photos = try? decoder.decode([FriendPhotoPayload].self, from: data) else { return [] }
+        save(photos)
+        return photos.map { $0.withoutImageData() }
     }
 
     func save(_ photos: [FriendPhotoPayload]) {
         let capped = Array(photos.sorted { $0.addedAt > $1.addedAt }.prefix(200))
-        guard let data = try? encoder.encode(capped) else { return }
-        try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: [.atomic, .completeFileProtection])
+        createDirectories()
+        for photo in capped {
+            guard let imageData = photo.imageData else { continue }
+            try? imageData.write(to: imageURL(for: photo.id), options: [.atomic, .completeFileProtection])
+            if let thumbnailData = UIImage(data: imageData)?.friendPhotoThumbnailData() {
+                try? thumbnailData.write(to: thumbnailURL(for: photo.id), options: [.atomic, .completeFileProtection])
+            }
+        }
+        guard let data = try? encoder.encode(capped.map { $0.withoutImageData() }) else { return }
+        try? data.write(to: indexURL, options: [.atomic, .completeFileProtection])
+        removeOrphanedFiles(keeping: Set(capped.map(\.id)))
     }
 
-    private static func defaultFileURL() -> URL {
-        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return directory
-            .appendingPathComponent("Fernlet", isDirectory: true)
-            .appendingPathComponent("FriendPhotoCache.json")
+    func imageData(for photo: FriendPhotoPayload) -> Data? {
+        photo.imageData ?? (try? Data(contentsOf: imageURL(for: photo.id)))
     }
-}
 
-@MainActor
-@Observable
-final class FriendPhotoSharingService: ProximityPayloadHandling {
-    private(set) var sharedPhotos: [FriendPhotoPayload] = []
-    var lastError: String?
+    func thumbnailData(for photo: FriendPhotoPayload) -> Data? {
+        if let data = try? Data(contentsOf: thumbnailURL(for: photo.id)) {
+            return data
+        }
+        guard let data = imageData(for: photo),
+              let thumbnailData = UIImage(data: data)?.friendPhotoThumbnailData() else { return nil }
+        try? thumbnailData.write(to: thumbnailURL(for: photo.id), options: [.atomic, .completeFileProtection])
+        return thumbnailData
+    }
 
-    let coordinator: ProximityCoordinator
-    @ObservationIgnored private let store: FernletStore
-    @ObservationIgnored private let identity: IdentityService
-    @ObservationIgnored private let cacheStore: FriendPhotoCacheStore
-    @ObservationIgnored private var lastSyncedPeerFingerprint: String?
-
-    init(store: FernletStore) {
-        let cacheStore = FriendPhotoCacheStore()
-        self.store = store
-        self.cacheStore = cacheStore
-        self.sharedPhotos = cacheStore.load()
-        let identity = IdentityService()
-        try? identity.ensureProvisioned()
-        self.identity = identity
-        let name = store.settings.proximityDisplayName.trimmingCharacters(in: .whitespaces)
-        let coordinator = ProximityCoordinator(
-            identity: identity,
-            transport: MultipeerSession(),
-            ranging: NIRangingSession(),
-            inspector: store.connectionInspector,
-            trustPolicy: store,
-            replayCache: ReplayCache(),
-            displayName: name.isEmpty ? UIDevice.current.name : name,
-            timeoutSeconds: 180
+    func hydrated(_ photo: FriendPhotoPayload) -> FriendPhotoPayload? {
+        guard let data = imageData(for: photo) else { return nil }
+        return FriendPhotoPayload(
+            id: photo.id,
+            imageData: data,
+            addedAt: photo.addedAt,
+            senderName: photo.senderName,
+            senderFingerprint: photo.senderFingerprint,
+            senderSigningPublicKey: photo.senderSigningPublicKey,
+            session: photo.session
         )
-        self.coordinator = coordinator
-        self.coordinator.attachPayloadHandler(self)
     }
 
-    var isConnected: Bool {
-        if case .connected = coordinator.state { return true }
-        if case .transferring = coordinator.state { return true }
-        return false
+    private func createDirectories() {
+        try? FileManager.default.createDirectory(at: imageDirectoryURL, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: thumbnailDirectoryURL, withIntermediateDirectories: true)
     }
 
-    var statusText: String {
-        switch coordinator.state {
-        case .idle:
-            return "Ready to connect"
-        case .starting:
-            return "Starting nearby session"
-        case .discovering:
-            return "Looking for friends nearby"
-        case .peerInRange(let peer, _):
-            return "Found \(peer.displayName)"
-        case .pendingInvite(let invite):
-            return "\(invite.peer.displayName) wants to connect"
-        case .awaitingTapConfirmation(let peer):
-            return "Connecting with \(peer.displayName)"
-        case .awaitingIdentityIntroduction(let peer):
-            return "Verifying \(peer.displayName)"
-        case .awaitingUserConfirmation(let peer):
-            return "Add \(peer.displayName) as a friend"
-        case .connected(let peer):
-            return "Connected with \(peer.displayName)"
-        case .transferring(let peer, _):
-            return "Sharing with \(peer.displayName)"
-        case .ended:
-            return "Disconnected"
-        case .failed(let reason):
-            return "Connection failed: \(reason)"
-        }
+    private func imageURL(for id: UUID) -> URL {
+        imageDirectoryURL.appendingPathComponent("\(id.uuidString).jpg")
     }
 
-    func joinGroup() {
-        Task { await coordinator.beginFriendJoin() }
+    private func thumbnailURL(for id: UUID) -> URL {
+        thumbnailDirectoryURL.appendingPathComponent("\(id.uuidString).jpg")
     }
 
-    func acceptInvite() {
-        Task { await coordinator.acceptPendingInvite() }
-    }
-
-    func rejectInvite() {
-        Task { await coordinator.rejectPendingInvite() }
-    }
-
-    func confirmTap() {
-        Task { await coordinator.tapToConfirm() }
-    }
-
-    func trustPeer(_ peer: ProximityCoordinator.PeerIdentity) {
-        store.trustProximityPeer(peer, mode: .friend)
-        Task { await coordinator.confirmPeerIdentity() }
-    }
-
-    func rejectPeer() {
-        Task { await coordinator.rejectPendingInvite() }
-    }
-
-    func disconnect() {
-        Task { await coordinator.cancel() }
-    }
-
-    func addPhotoData(_ data: Data) {
-        guard let image = UIImage(data: data),
-              let normalizedData = image.resizedForFriendSharing().jpegData(compressionQuality: 0.82) else {
-            lastError = "That image could not be prepared."
-            return
-        }
-        let photo = FriendPhotoPayload(
-            imageData: normalizedData,
-            senderName: UIDevice.current.name,
-            senderFingerprint: identity.localFingerprint,
-            senderSigningPublicKey: identity.localSigningPublicKey
-        )
-        cache(photo)
-        guard isConnected else { return }
-        Task { await send(photo) }
-    }
-
-    func saveSelectedAndClear(ids selectedIDs: Set<UUID>) async {
-        let selectedPhotos = sharedPhotos.filter { selectedIDs.contains($0.id) }
-        do {
-            try await FriendPhotoLibrarySaver.save(selectedPhotos)
-            sharedPhotos.removeAll()
-            persistCache()
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    func deleteAllCachedPhotos() {
-        sharedPhotos.removeAll()
-        persistCache()
-    }
-
-    func syncCacheIfConnected(_ state: ProximityCoordinator.State) {
-        guard markCacheSyncNeeded(for: state) else { return }
-        Task { await sendManifest() }
-    }
-
-    @discardableResult
-    func markCacheSyncNeeded(for state: ProximityCoordinator.State) -> Bool {
-        switch state {
-        case .connected(let peer):
-            guard lastSyncedPeerFingerprint != peer.fingerprint else { return false }
-            lastSyncedPeerFingerprint = peer.fingerprint
-            return true
-        case .transferring:
-            return false
-        case .idle, .starting, .discovering, .peerInRange, .pendingInvite,
-             .awaitingTapConfirmation, .awaitingIdentityIntroduction, .awaitingUserConfirmation,
-             .ended, .failed:
-            lastSyncedPeerFingerprint = nil
-            return false
-        }
-    }
-
-    func proximityCoordinator(
-        _ coordinator: ProximityCoordinator,
-        didReceive envelope: FernletIdentityEnvelope,
-        plaintext: Data,
-        from peer: ProximityCoordinator.PeerIdentity?
-    ) {
-        do {
-            switch envelope.payloadType {
-            case .friendPhoto:
-                let photo = try JSONDecoder().decode(FriendPhotoPayload.self, from: plaintext)
-                cache(photo)
-            case .friendPhotoManifest:
-                let manifest = try JSONDecoder().decode(FriendPhotoManifestPayload.self, from: plaintext)
-                requestMissingPhotos(from: manifest)
-            case .friendPhotoRequest:
-                let request = try JSONDecoder().decode(FriendPhotoRequestPayload.self, from: plaintext)
-                Task { await sendRequestedPhotos(request.missingPhotoIDs) }
-            default:
-                return
+    private func removeOrphanedFiles(keeping ids: Set<UUID>) {
+        for directoryURL in [imageDirectoryURL, thumbnailDirectoryURL] {
+            guard let urls = try? FileManager.default.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil) else { continue }
+            for url in urls {
+                guard let id = UUID(uuidString: url.deletingPathExtension().lastPathComponent),
+                      !ids.contains(id) else { continue }
+                try? FileManager.default.removeItem(at: url)
             }
-        } catch {
-            lastError = "A friend photo sync message could not be opened."
-        }
-    }
-
-    private func sendManifest() async {
-        do {
-            let data = try JSONEncoder().encode(FriendPhotoManifestPayload(photoIDs: sharedPhotos.map(\.id)))
-            try await coordinator.sendPayload(
-                type: .friendPhotoManifest,
-                summary: PayloadSummary(title: "Photo cache", itemCount: sharedPhotos.count),
-                payload: data
-            )
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    private func requestMissingPhotos(from manifest: FriendPhotoManifestPayload) {
-        let localIDs = Set(sharedPhotos.map(\.id))
-        let missingIDs = manifest.photoIDs.filter { !localIDs.contains($0) }
-        guard !missingIDs.isEmpty else { return }
-        Task { await sendPhotoRequest(missingIDs) }
-    }
-
-    private func sendPhotoRequest(_ missingIDs: [UUID]) async {
-        do {
-            let data = try JSONEncoder().encode(FriendPhotoRequestPayload(missingPhotoIDs: missingIDs))
-            try await coordinator.sendPayload(
-                type: .friendPhotoRequest,
-                summary: PayloadSummary(title: "Missing photos", itemCount: missingIDs.count),
-                payload: data
-            )
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    private func sendRequestedPhotos(_ ids: [UUID]) async {
-        let requestedIDs = Set(ids)
-        let photos = sharedPhotos.filter { requestedIDs.contains($0.id) }
-        for photo in photos {
-            await send(photo)
-        }
-    }
-
-    private func send(_ photo: FriendPhotoPayload) async {
-        do {
-            let data = try JSONEncoder().encode(photo)
-            try await coordinator.sendPayload(
-                type: .friendPhoto,
-                summary: PayloadSummary(title: "Shared photo", itemCount: 1),
-                payload: data
-            )
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    private func cache(_ photo: FriendPhotoPayload) {
-        guard !sharedPhotos.contains(where: { $0.id == photo.id }) else { return }
-        sharedPhotos.insert(photo, at: 0)
-        sharedPhotos = Array(sharedPhotos.sorted { $0.addedAt > $1.addedAt }.prefix(200))
-        persistCache()
-    }
-
-    private func persistCache() {
-        cacheStore.save(sharedPhotos)
-    }
-}
-
-struct FriendPhotoShareView: View {
-    var store: FernletStore
-    @Binding var activeSheet: FernletSheet?
-    var isInHub: Bool = false
-
-    @State private var service: FriendPhotoSharingService
-    @State private var pickerItems: [PhotosPickerItem] = []
-    @State private var reviewPresented = false
-    @State private var selectedForSave: Set<UUID> = []
-
-    init(store: FernletStore, activeSheet: Binding<FernletSheet?>, isInHub: Bool = false) {
-        self.store = store
-        self._activeSheet = activeSheet
-        self.isInHub = isInHub
-        self._service = State(initialValue: FriendPhotoSharingService(store: store))
-    }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top) {
-                        ScreenHeader(title: "Friends", subtitle: "Nearby photo sharing.")
-                        Spacer()
-                        if store.settings.connectionInspectorMode != .disabled {
-                            HeaderActionButton(systemImage: "antenna.radiowaves.left.and.right") {
-                                store.showConnectionInspector = true
-                            }
-                        }
-                        HeaderActionButton(systemImage: service.isConnected ? "xmark" : "person.2.badge.plus") {
-                            handleHeaderAction()
-                        }
-                    }
-                    .padding(.top, 4)
-
-                    FernletScrollSection("Connection") {
-                        connectionControls
-                    }
-
-                    FernletScrollSection("Shared pictures") {
-                        photoCache
-                    }
-                }
-                .padding(20)
-            }
-            .background(Color.parchment)
-            .navigationTitle("")
-            .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)
-        }
-        .onChange(of: pickerItems) { _, newValue in
-            loadPickerItems(newValue)
-        }
-        .onChange(of: service.coordinator.state) { _, newState in
-            service.syncCacheIfConnected(newState)
-            if shouldReviewAfterDisconnect(newState) {
-                selectedForSave = Set(service.sharedPhotos.map(\.id))
-                reviewPresented = true
-            }
-        }
-        .sheet(isPresented: $reviewPresented) {
-            FriendPhotoReviewSheet(
-                photos: service.sharedPhotos,
-                selectedIDs: $selectedForSave,
-                saveSelected: {
-                    await service.saveSelectedAndClear(ids: selectedForSave)
-                    service.disconnect()
-                    reviewPresented = false
-                },
-                discardAll: {
-                    service.deleteAllCachedPhotos()
-                    service.disconnect()
-                    reviewPresented = false
-                }
-            )
-        }
-        .alert("Friends", isPresented: Binding(
-            get: { service.lastError != nil },
-            set: { if !$0 { service.lastError = nil } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(service.lastError ?? "")
-        }
-    }
-
-    @ViewBuilder
-    private var connectionControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(service.statusText, systemImage: statusIcon)
-                .font(.body.weight(.medium))
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
-
-            if let distanceText = proximityDistanceText {
-                Label(distanceText, systemImage: "dot.radiowaves.up.forward")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(Color.slate)
-            }
-
-            switch service.coordinator.state {
-            case .idle, .ended, .failed:
-                Button("Join") { service.joinGroup() }
-                    .buttonStyle(ChipButtonStyle(selected: true))
-            case .pendingInvite(let invite):
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(invite.peer.displayName)
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(Color.bark)
-                    HStack(spacing: 10) {
-                        Button("Accept") { service.acceptInvite() }
-                            .buttonStyle(ChipButtonStyle(selected: true))
-                        Button("Decline") { service.rejectInvite() }
-                            .buttonStyle(ChipButtonStyle(selected: false))
-                    }
-                }
-            case .awaitingTapConfirmation:
-                ProgressView()
-                    .tint(Color.moss)
-            case .awaitingUserConfirmation(let peer):
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(peer.displayName)
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(Color.bark)
-                    Text("Fingerprint \(peer.fingerprint)")
-                        .font(.caption)
-                        .foregroundStyle(Color.slate)
-                    HStack(spacing: 10) {
-                        Button("Add friend") { service.trustPeer(peer) }
-                            .buttonStyle(ChipButtonStyle(selected: true))
-                        Button("Reject") { service.rejectPeer() }
-                            .buttonStyle(ChipButtonStyle(selected: false))
-                    }
-                }
-            case .connected(let peer), .transferring(let peer, _):
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(peer.displayName)
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(Color.bark)
-                    HStack(spacing: 10) {
-                        PhotosPicker(selection: $pickerItems, maxSelectionCount: 10, matching: .images) {
-                            Label("Add pictures", systemImage: "photo.badge.plus")
-                        }
-                        .buttonStyle(ChipButtonStyle(selected: true))
-
-                        Button("Disconnect") {
-                            beginReviewOrDisconnect()
-                        }
-                        .buttonStyle(ChipButtonStyle(selected: false))
-                    }
-                }
-            default:
-                Button("Cancel") { service.disconnect() }
-                    .buttonStyle(ChipButtonStyle(selected: false))
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private var proximityDistanceText: String? {
-        guard let distance = service.coordinator.lastKnownDistance,
-              case .meters(let m, _) = distance else { return nil }
-        if m < 1.0 {
-            return String(format: "%.0f cm away", m * 100)
-        } else {
-            return String(format: "%.1f m away", m)
-        }
-    }
-
-    @ViewBuilder
-    private var photoCache: some View {
-        if service.sharedPhotos.isEmpty {
-            EmptyState(text: "No shared pictures yet.")
-        } else {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
-                ForEach(service.sharedPhotos) { photo in
-                    FriendPhotoTile(photo: photo, selected: false)
-                }
-            }
-        }
-    }
-
-    private var statusIcon: String {
-        service.isConnected ? "person.2.fill" : "dot.radiowaves.left.and.right"
-    }
-
-    private func handleHeaderAction() {
-        if service.isConnected {
-            beginReviewOrDisconnect()
-        } else {
-            service.joinGroup()
-        }
-    }
-
-    private func beginReviewOrDisconnect() {
-        guard !service.sharedPhotos.isEmpty else {
-            service.disconnect()
-            return
-        }
-        selectedForSave = Set(service.sharedPhotos.map(\.id))
-        reviewPresented = true
-    }
-
-    private func shouldReviewAfterDisconnect(_ state: ProximityCoordinator.State) -> Bool {
-        guard !reviewPresented, !service.sharedPhotos.isEmpty else { return false }
-        switch state {
-        case .ended, .failed:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private func loadPickerItems(_ items: [PhotosPickerItem]) {
-        guard !items.isEmpty else { return }
-        Task {
-            for item in items {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    service.addPhotoData(data)
-                }
-            }
-            pickerItems = []
         }
     }
 }
@@ -538,10 +245,13 @@ struct FriendPhotoShareView: View {
 struct FriendPhotoTile: View {
     let photo: FriendPhotoPayload
     let selected: Bool
+    var loadImageData: (() -> Data?)? = nil
+
+    @State private var loadedImageData: Data?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            if let image = UIImage(data: photo.imageData) {
+            if let data = photo.imageData ?? loadedImageData, let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -565,6 +275,10 @@ struct FriendPhotoTile: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(selected ? Color.moss : Color.bark.opacity(0.08), lineWidth: selected ? 2 : 1)
         )
+        .task(id: photo.id) {
+            guard photo.imageData == nil else { return }
+            loadedImageData = loadImageData?()
+        }
     }
 }
 
@@ -636,14 +350,14 @@ enum FriendPhotoLibrarySaver {
 
         try await PHPhotoLibrary.shared().performChanges {
             for photo in photos {
-                guard let image = UIImage(data: photo.imageData) else { continue }
+                guard let imgData = photo.imageData, let image = UIImage(data: imgData) else { continue }
                 PHAssetChangeRequest.creationRequestForAsset(from: image)
             }
         }
     }
 }
 
-private extension UIImage {
+extension UIImage {
     func resizedForFriendSharing(maxDimension: CGFloat = 1400) -> UIImage {
         let largestSide = max(size.width, size.height)
         guard largestSide > maxDimension else { return self }
@@ -653,5 +367,9 @@ private extension UIImage {
         return renderer.image { _ in
             draw(in: CGRect(origin: .zero, size: targetSize))
         }
+    }
+
+    func friendPhotoThumbnailData(maxDimension: CGFloat = 320) -> Data? {
+        resizedForFriendSharing(maxDimension: maxDimension).jpegData(compressionQuality: 0.72)
     }
 }

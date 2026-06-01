@@ -66,6 +66,14 @@ struct NutritionLabelResult: Equatable, Hashable {
     }
 }
 
+// Returned when the label has two side-by-side columns (e.g. "dry mix" vs "as prepared").
+struct DualColumnScanResult {
+    var col1Header: String
+    var col2Header: String
+    var col1: NutritionLabelResult
+    var col2: NutritionLabelResult
+}
+
 enum NutritionLabelScanError: LocalizedError {
     case noTextFound
     case imageConversionFailed
@@ -86,6 +94,14 @@ final class NutritionLabelScanner {
         let lines = try await recognizeText(in: image)
         guard lines.isEmpty == false else { throw NutritionLabelScanError.noTextFound }
         return parse(lines: lines)
+    }
+
+    // Returns the primary result plus dual-column info when the label has two columns.
+    static func scanAll(image: UIImage) async throws -> (primary: NutritionLabelResult, dualColumn: DualColumnScanResult?) {
+        let lines = try await recognizeText(in: image)
+        guard lines.isEmpty == false else { throw NutritionLabelScanError.noTextFound }
+        let dual = detectAndParseDualColumn(from: lines)
+        return (dual?.col1 ?? parse(lines: lines), dual)
     }
 
     private static func recognizeText(in image: UIImage) async throws -> [String] {
@@ -178,7 +194,33 @@ final class NutritionLabelScanner {
         CGPoint(x: normalizedPoint.x * width, y: normalizedPoint.y * height)
     }
 
-    static func parse(lines: [String]) -> NutritionLabelResult {
+    // Detects "as prepared" dual-column format and returns both column results.
+    private static func detectAndParseDualColumn(from lines: [String]) -> DualColumnScanResult? {
+        let lower = lines.map { $0.lowercased() }
+        guard lower.contains(where: { $0.contains("as prepared") }) else { return nil }
+
+        let col1Header: String = {
+            guard let servingLine = lower.first(where: { $0.hasPrefix("serving size") }) else { return "Per serving" }
+            let suffix = servingLine.dropFirst("serving size".count).trimmingCharacters(in: .whitespaces)
+            return suffix.isEmpty ? "Per serving" : String(suffix.prefix(30)).capitalized
+        }()
+
+        let col2Header: String = {
+            guard let line = lower.first(where: { $0.contains("as prepared") }) else { return "As prepared" }
+            return String(line.trimmingCharacters(in: .whitespaces).prefix(30)).capitalized
+        }()
+
+        return DualColumnScanResult(
+            col1Header: col1Header,
+            col2Header: col2Header,
+            col1: parse(lines: lines, matchIndex: 0),
+            col2: parse(lines: lines, matchIndex: 1)
+        )
+    }
+
+    // matchIndex: 0 = first (left) column, 1 = second (right) column.
+    // Defaults to 0 so all existing callers are unaffected.
+    static func parse(lines: [String], matchIndex: Int = 0) -> NutritionLabelResult {
         var result = NutritionLabelResult()
         let normalized = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -191,90 +233,90 @@ final class NutritionLabelScanner {
             }
 
             if lower.contains("servings per container") || lower.contains("servings per package") {
-                result.servingsPerContainer = extractInt(from: lower)
+                result.servingsPerContainer = extractInt(from: lower, matchIndex: matchIndex)
                 continue
             }
 
             if lower.hasPrefix("calories") && lower.contains("from fat") == false {
-                result.calories = extractInt(from: lower)
+                result.calories = extractInt(from: lower, matchIndex: matchIndex)
                 continue
             }
 
             if matchesLabel(lower, "total fat") {
-                result.fat = extractGrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 78).map { Int($0.rounded()) }
+                result.fat = extractGrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 78, matchIndex: matchIndex).map { Int($0.rounded()) }
             } else if matchesLabel(lower, "saturated fat") {
-                result.saturatedFat = extractGramsDouble(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 20)
+                result.saturatedFat = extractGramsDouble(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 20, matchIndex: matchIndex)
             } else if matchesLabel(lower, "trans fat") {
-                result.transFat = extractGramsDouble(from: lower)
+                result.transFat = extractGramsDouble(from: lower, matchIndex: matchIndex)
             } else if matchesLabel(lower, "total carbohydrate") || matchesLabel(lower, "total carb") {
-                result.carbs = extractGrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 275).map { Int($0.rounded()) }
+                result.carbs = extractGrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 275, matchIndex: matchIndex).map { Int($0.rounded()) }
             } else if matchesLabel(lower, "dietary fiber") {
-                result.fiber = extractGramsDouble(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 28)
+                result.fiber = extractGramsDouble(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 28, matchIndex: matchIndex)
             } else if matchesLabel(lower, "added sugars") || matchesLabel(lower, "added sugar") {
-                result.addedSugar = extractGramsDouble(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 50)
+                result.addedSugar = extractGramsDouble(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 50, matchIndex: matchIndex)
             } else if matchesLabel(lower, "total sugars") || matchesLabel(lower, "sugars") {
-                result.sugar = extractGramsDouble(from: lower)
+                result.sugar = extractGramsDouble(from: lower, matchIndex: matchIndex)
             } else if matchesLabel(lower, "protein") {
-                result.protein = extractGrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 50).map { Int($0.rounded()) }
+                result.protein = extractGrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 50, matchIndex: matchIndex).map { Int($0.rounded()) }
             } else if matchesLabel(lower, "cholesterol") {
-                result.cholesterol = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 300)
+                result.cholesterol = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 300, matchIndex: matchIndex)
             } else if matchesLabel(lower, "sodium") {
-                result.sodium = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 2300)
+                result.sodium = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 2300, matchIndex: matchIndex)
             } else if matchesLabel(lower, "vitamin d") {
-                result.vitaminD = extractMicrogramsOrMg(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 20)
+                result.vitaminD = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 20, matchIndex: matchIndex)
             } else if matchesLabel(lower, "vitamin a") {
-                result.vitaminA = extractMicrogramsOrMg(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 900)
+                result.vitaminA = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 900, matchIndex: matchIndex)
             } else if matchesLabel(lower, "vitamin c") {
-                result.vitaminC = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 90)
+                result.vitaminC = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 90, matchIndex: matchIndex)
             } else if matchesLabel(lower, "vitamin e") {
-                result.vitaminE = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 15)
+                result.vitaminE = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 15, matchIndex: matchIndex)
             } else if matchesLabel(lower, "vitamin b12") || matchesLabel(lower, "vitamin b-12") {
-                result.vitaminB12 = extractMicrogramsOrMg(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 2.4)
+                result.vitaminB12 = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 2.4, matchIndex: matchIndex)
             } else if matchesLabel(lower, "thiamin") || matchesLabel(lower, "thiamine") {
-                result.thiamin = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 1.2)
+                result.thiamin = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 1.2, matchIndex: matchIndex)
             } else if matchesLabel(lower, "riboflavin") {
-                result.riboflavin = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 1.3)
+                result.riboflavin = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 1.3, matchIndex: matchIndex)
             } else if matchesLabel(lower, "niacin") {
-                result.niacin = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 16)
+                result.niacin = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 16, matchIndex: matchIndex)
             } else if matchesLabel(lower, "folate") || matchesLabel(lower, "folic acid") {
-                result.folate = extractMicrogramsOrMg(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 400)
+                result.folate = extractMicrogramsOrMg(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 400, matchIndex: matchIndex)
             } else if matchesLabel(lower, "calcium") {
-                result.calcium = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 1300)
+                result.calcium = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 1300, matchIndex: matchIndex)
             } else if matchesLabel(lower, "iron") {
-                result.iron = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 18)
+                result.iron = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 18, matchIndex: matchIndex)
             } else if matchesLabel(lower, "potassium") {
-                result.potassium = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 4700)
+                result.potassium = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 4700, matchIndex: matchIndex)
             } else if matchesLabel(lower, "magnesium") {
-                result.magnesium = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 420)
+                result.magnesium = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 420, matchIndex: matchIndex)
             } else if matchesLabel(lower, "phosphorus") {
-                result.phosphorus = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 1250)
+                result.phosphorus = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 1250, matchIndex: matchIndex)
             } else if matchesLabel(lower, "zinc") {
-                result.zinc = extractMilligrams(from: lower)
-                    ?? extractFromDailyValue(from: lower, dvReference: 11)
+                result.zinc = extractMilligrams(from: lower, matchIndex: matchIndex)
+                    ?? extractFromDailyValue(from: lower, dvReference: 11, matchIndex: matchIndex)
             } else if matchesLabel(lower, "omega-3") || matchesLabel(lower, "omega 3") || matchesLabel(lower, "dha") || matchesLabel(lower, "epa") {
-                result.omega3 = extractGramsOrMilligramsAsGrams(from: lower)
+                result.omega3 = extractGramsOrMilligramsAsGrams(from: lower, matchIndex: matchIndex)
             }
         }
 
@@ -443,89 +485,107 @@ final class NutritionLabelScanner {
         return after.isEmpty ? nil : after
     }
 
-    private static func extractInt(from text: String) -> Int? {
-        guard let value = extractFirstBareNumber(from: text) else { return nil }
+    private static func extractInt(from text: String, matchIndex: Int = 0) -> Int? {
+        guard let value = extractFirstBareNumber(from: text, matchIndex: matchIndex) else { return nil }
         return Int(value.rounded())
     }
 
-    private static func extractGrams(from text: String) -> Int? {
-        guard let value = extractGramsDouble(from: text) else { return nil }
+    private static func extractGrams(from text: String, matchIndex: Int = 0) -> Int? {
+        guard let value = extractGramsDouble(from: text, matchIndex: matchIndex) else { return nil }
         return Int(value.rounded())
     }
 
-    private static func extractGramsDouble(from text: String) -> Double? {
-        extractNumericBeforeUnit(from: text, unitPattern: #"g(?!\w)"#, excludePattern: #"m\s*g|mc\s*g|u\s*g"#)
-            ?? extractFirstNumericWithUnit(from: text, unit: "g")
+    private static func extractGramsDouble(from text: String, matchIndex: Int = 0) -> Double? {
+        extractNumericBeforeUnit(from: text, unitPattern: #"g(?!\w)"#, excludePattern: #"m\s*g|mc\s*g|u\s*g"#, matchIndex: matchIndex)
+            ?? extractFirstNumericWithUnit(from: text, unit: "g", matchIndex: matchIndex)
     }
 
-    private static func extractMilligrams(from text: String) -> Double? {
-        extractFirstNumericWithUnit(from: text, unit: "mg")
+    private static func extractMilligrams(from text: String, matchIndex: Int = 0) -> Double? {
+        extractFirstNumericWithUnit(from: text, unit: "mg", matchIndex: matchIndex)
     }
 
-    private static func extractMicrogramsOrMg(from text: String) -> Double? {
-        if let mcg = extractFirstNumericWithUnit(from: text, unit: "mcg") {
+    private static func extractMicrogramsOrMg(from text: String, matchIndex: Int = 0) -> Double? {
+        if let mcg = extractFirstNumericWithUnit(from: text, unit: "mcg", matchIndex: matchIndex) {
             return mcg
         }
-        if let ug = extractFirstNumericWithUnit(from: text, unit: "ug") {
+        if let ug = extractFirstNumericWithUnit(from: text, unit: "ug", matchIndex: matchIndex) {
             return ug
         }
-        if let mg = extractFirstNumericWithUnit(from: text, unit: "mg") {
+        if let mg = extractFirstNumericWithUnit(from: text, unit: "mg", matchIndex: matchIndex) {
             return mg
         }
-        return text.contains("%") ? nil : extractFirstBareNumber(from: text)
+        return text.contains("%") ? nil : extractFirstBareNumber(from: text, matchIndex: matchIndex)
     }
 
-    private static func extractGramsOrMilligramsAsGrams(from text: String) -> Double? {
-        if let grams = extractGramsDouble(from: text) {
+    private static func extractGramsOrMilligramsAsGrams(from text: String, matchIndex: Int = 0) -> Double? {
+        if let grams = extractGramsDouble(from: text, matchIndex: matchIndex) {
             return grams
         }
-        if let milligrams = extractMilligrams(from: text) {
+        if let milligrams = extractMilligrams(from: text, matchIndex: matchIndex) {
             return milligrams / 1000
         }
         return nil
     }
 
-    private static func extractFromDailyValue(from text: String, dvReference: Double) -> Double? {
+    private static func extractFromDailyValue(from text: String, dvReference: Double, matchIndex: Int = 0) -> Double? {
         let pattern = #"(\d+\.?\d*)\s*%"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let range = Range(match.range(at: 1), in: text),
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
+        let nsRange = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, range: nsRange)
+        guard matches.count > matchIndex,
+              let range = Range(matches[matchIndex].range(at: 1), in: text),
               let percent = Double(text[range]) else { return nil }
         return dvReference * percent / 100
     }
 
-    private static func extractFirstNumericWithUnit(from text: String, unit: String) -> Double? {
+    private static func extractFirstNumericWithUnit(from text: String, unit: String, matchIndex: Int = 0) -> Double? {
         let escaped = NSRegularExpression.escapedPattern(for: unit)
         let pattern = #"(\d+\.?\d*)\s*"# + escaped
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let range = Range(match.range(at: 1), in: text) else { return nil }
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
+        let nsRange = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, range: nsRange)
+        guard matches.count > matchIndex,
+              let range = Range(matches[matchIndex].range(at: 1), in: text) else { return nil }
         return Double(text[range])
     }
 
-    private static func extractNumericBeforeUnit(from text: String, unitPattern: String, excludePattern: String) -> Double? {
+    // Only counts matches that don't satisfy excludePattern toward matchIndex.
+    private static func extractNumericBeforeUnit(from text: String, unitPattern: String, excludePattern: String, matchIndex: Int = 0) -> Double? {
         let pattern = #"(\d+\.?\d*)\s*"# + unitPattern
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let numberRange = Range(match.range(at: 1), in: text),
-              let fullRange = Range(match.range, in: text) else { return nil }
-        let fullMatch = String(text[fullRange])
-        if let excludeRegex = try? NSRegularExpression(pattern: excludePattern, options: .caseInsensitive),
-           excludeRegex.firstMatch(in: fullMatch, range: NSRange(fullMatch.startIndex..., in: fullMatch)) != nil {
-            return nil
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
+        let nsRange = NSRange(text.startIndex..., in: text)
+        let allMatches = regex.matches(in: text, range: nsRange)
+        let excludeRegex = try? NSRegularExpression(pattern: excludePattern, options: .caseInsensitive)
+
+        var validCount = 0
+        for match in allMatches {
+            guard let numberRange = Range(match.range(at: 1), in: text),
+                  let fullRange = Range(match.range, in: text) else { continue }
+            let fullMatch = String(text[fullRange])
+            if let excludeRegex,
+               excludeRegex.firstMatch(in: fullMatch, range: NSRange(fullMatch.startIndex..., in: fullMatch)) != nil {
+                continue
+            }
+            if validCount == matchIndex {
+                return Double(text[numberRange])
+            }
+            validCount += 1
         }
-        return Double(text[numberRange])
+        return nil
     }
 
-    private static func extractFirstBareNumber(from text: String) -> Double? {
+    // Forward iteration; matchIndex selects which non-percentage numeric token to return.
+    private static func extractFirstBareNumber(from text: String, matchIndex: Int = 0) -> Double? {
         let pattern = #"(\d+\.?\d*)"#
         let components = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-        for component in components.reversed() {
+        var count = 0
+        for component in components {
             guard component.contains("%") == false,
                   let regex = try? NSRegularExpression(pattern: pattern),
                   let match = regex.firstMatch(in: component, range: NSRange(component.startIndex..., in: component)),
                   let range = Range(match.range(at: 1), in: component) else { continue }
-            return Double(component[range])
+            if count == matchIndex { return Double(component[range]) }
+            count += 1
         }
         return nil
     }

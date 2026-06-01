@@ -28,7 +28,7 @@ Current prototype priorities:
 - Add a trainer/nutritionist sharing surface that can share workouts, nutrients, derived trends, and other explicitly selected relevant data over local Bluetooth/proximity only. Whether this is an in-app view or a companion app is an open product decision.
 - Add three to five low-cost ambient features before larger systems.
 
-Prototype implementation status as of 2026-05-17:
+Prototype implementation status as of 2026-05-28:
 - Local JSON repository is active for current app state (`LocalFernletRepository`) and persists days, settings, meals, journals, workouts, retry queue, food items, recipes, daily scores, memories, goals, and workshop data. The Core Data shell remains present, but current feature state is backed by the local repository.
 - Food and recipe work now uses a bundled USDA FoodData Central subset in `USDAFoodItems.json`, generated from Foundation Foods April 2026, SR Legacy April 2018, and a curated Branded Foods April 2026 subset. The bundled file is a reduced read-only JSON resource, not SQLite, and currently contains 13,104 foods; 13,078 include at least one micronutrient and 12,302 include USDA portion or serving gram weights. No USDA API is used at runtime.
 - Ingredient search is local and indexed in memory for the recipe sheet. It normalizes punctuation/case, token-matches out-of-order USDA names, and does not show suggestions until at least 3 characters are entered.
@@ -36,6 +36,10 @@ Prototype implementation status as of 2026-05-17:
 - Recipe unit selection uses a fixed picker (`g`, `oz`, `cup`, `tbsp`, `tsp`, `each`, `serving`). USDA `foodPortions` gram weights are used for mass/volume conversion when available; generic conversions are fallback only.
 - Recipes are create/edit capable, searchable by recipe name and ingredient names/categories, and support optional notes.
 - Recipe export is implemented through the iOS share sheet as readable text plus an embedded `fernlet.recipe` JSON payload for future import support. Import is not implemented yet.
+- App lock is implemented: passcode and biometric gates (`FernletLockService`) with scrypt key derivation, monotonic anchor, and reboot detection. Period tracker with sealed menstrual narrative (ChaChaPoly per-column storage, HKDF column keys) is implemented.
+- Mesh networking Phase 1 through group-encryption hardening are implemented: `MeshMultipeerSession`, `MeshNetworkManager`, admission tokens, open/closed mode, block model, `MeshAdmissionPromptSheet`, and `FriendListView` all exist. The legacy `MeshLobbyView` has been removed; the active flow is the single-Join `ConnectView` / `DisposableCameraView` surface.
+- **Life-tab redesign (workstreams B + C) is implemented:** The Connect surface uses a single **Join** button; peers are committed via a 15 cm / 0.8 s UWB proximity gate (manual confirm fallback on non-UWB). One committed peer = pairwise; two or more = mesh (auto-promoted in place). In session, `ConnectView` shows `DisposableCameraView`: small live viewfinder, 27-shot film counter, shutter gated behind a thumbwheel wind gesture, photos hidden until "Develop" triggers the existing review-and-save flow (`FriendPhotoReviewSheet`).
+- Foundation Models is wired for meal-candidate selection (`FoundationFoodSelection`), overnight day summaries, and thought bubbles. No third-party or OHTTP AI path exists yet; all AI is on-device.
 
 Stretch goals (not yet prioritized):
 - Historical data import from external sources (Apple Health XML export, CSV from apps such as MyFitnessPal or Cronometer, manual paste). Foundation Models maps imported rows to Fernlet data types so new users can seed historical data at setup.
@@ -100,6 +104,8 @@ Keychain storage:
 - Accessible after first unlock.
 - Synchronizable enabled for iCloud Keychain.
 
+> **Decision needed (identity key sync):** The specification states identity keys are synchronizable, but the current implementation stores them with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` — device-local, not synchronizable. This means the sealed-backup iCloud Keychain recovery story does not hold on a new device. Choose: (a) make identity keys synchronizable to match the spec's recovery design, or (b) change the spec to "device-local keys; recovery via the deferred recovery-code mechanism only." Document the chosen direction before enabling encrypted backup in production.
+
 Secure Enclave is not used because Secure Enclave does not support Curve25519 keys.
 
 Sealed store encryption key derivation:
@@ -112,15 +118,17 @@ Trust model:
 - Trust on first use for friend public keys.
 - Future handshakes must be signed by the same key.
 - Key changes trigger a re-pair prompt.
+- Trust, block, and revoke decisions key on the **full 32-byte Ed25519 signing public key**, not a short fingerprint prefix. The displayed fingerprint (≥16 hex characters) is a human-readable verification aid only — never the primary key for trust decisions.
+- Friend handshakes require a physical-proximity confirmation: a UWB ≤-threshold tap when hardware supports it, or an explicit user confirmation step on non-UWB devices. Auto-proceeding on transport connect alone is not sufficient for friend mode.
 
 ## 3. Data Model and Storage Architecture
 
 Storage zones:
 1. Device encrypted local store: most app data. Synced to CloudKit private database (opt-in, default on).
-2. Device-sealed store: period data, sensitive memory, and photo bytes. AI/cloud modules cannot import raw types. Sealed types may be backed up to CloudKit as client-side AES-GCM encrypted blobs (see Section 19); period data backup is a separate hard opt-in.
+2. Device-sealed store: period data, sensitive memory, and photo bytes. AI/cloud modules cannot import raw types. Sealed types may be backed up to CloudKit as client-side AES-GCM encrypted blobs (see Section 19); period data backup is a separate hard opt-in. Once Phase S2 is complete, journal text/emotions and local intimacy notes also join this sealed store. Sealed Core Data entities must be in a **non-CloudKit-mirrored** store configuration; period date metadata (dateKey, createdAt) must not appear in the CloudKit-synced store.
 3. Cloud minimal store: friend links, fuzzy state, ephemeral hearts, activity rosters.
 4. Transient inference context: exists only during Foundation Models or Core ML calls.
-5. Bundled read-only reference store: production target remains a compact USDA FoodData Central reference store plus curated entries for major restaurant chains. Current prototype ships a reduced JSON resource generated from Foundation Foods April 2026 and SR Legacy April 2018 (`USDAFoodItems.json`, 8,114 records, macros plus USDA portion gram weights where available). This resource is never written to by the app; user-added/manual `FoodItem` records go into local app storage. Lookup checks the local food table seeded from the bundle plus user-added records.
+5. Bundled read-only reference store: production target remains a compact USDA FoodData Central reference store plus curated entries for major restaurant chains. Current prototype ships a reduced JSON resource generated from Foundation Foods April 2026, SR Legacy April 2018, and a curated Branded Foods April 2026 subset (`USDAFoodItems.json`, 13,104 foods; 13,078 include at least one micronutrient and 12,302 include USDA portion or serving gram weights). This resource is never written to by the app; user-added/manual `FoodItem` records go into local app storage. Lookup checks the local food table seeded from the bundle plus user-added records.
 
 Core device types:
 - `User`: display name, goal type, macro goals, AI provider settings, and AI mode/status preference.
@@ -320,6 +328,8 @@ AI tiers:
 1. Apple Foundation Models on-device by default.
 2. Third-party AI via OHTTP, explicit per-feature opt-in, off by default.
 
+> **Implementation status (Phase S3 required before any OHTTP path):** Module boundaries (`PrivateHealthStore`, `PeriodContextBridge`, `PrivateMemoryStore`, `PrivateMediaStore`, `ContextBuilder`, `AIProviders`), typed per-request `AIContextPayload` allowlists, the local AI audit log, and the Memory Agent diagnostic filter are **required but not yet implemented**. Tier-2 memory must not reach any prompt except through the Memory Agent. No third-party or OHTTP AI path may be introduced until Phase S3 is complete and import-boundary build checks pass.
+
 Foundation Models notes from Apple documentation:
 - `SystemLanguageModel.default.availability` must be checked at runtime.
 - Availability depends on Apple Intelligence support and user settings.
@@ -462,7 +472,7 @@ Prototype direction:
 - Trainer/nutritionist sharing uses the same local-first transport and should not require cloud.
 
 Core architecture:
-- BLE handles discovery and packet transport.
+- **MultipeerConnectivity** (Wi-Fi, peer-to-peer Wi-Fi, and Bluetooth) handles discovery and packet transport via `MCSession`. All `MCSession` instances must use `encryptionPreference: .required`. Sensitive 1:1 payloads (friend photos, trainer attachments) must use `payloadEncryption: .sealedTo(recipientKeyAgreementPublicKey:)` via the existing `IdentityService.seal/open` ChaCha20-Poly1305 path.
 - NearbyInteraction handles UWB ranging.
 
 Apple documentation notes:
@@ -763,6 +773,8 @@ Privacy manifest declares:
 App privacy labels:
 - Data Used to Track You: None.
 - Data Linked to You: Health and Fitness (meals, workouts, sleep, hydration, hygiene — synced to user's own CloudKit private database), User Content (journal entries — synced to user's own CloudKit private database).
+
+> **Label review needed after Phase S2:** If Phase S2 seals journal text and excludes it from plaintext CloudKit sync, the "User Content (journal entries — synced to CloudKit)" label must be revised. Review labels with legal before shipping.
 - Data Not Linked to You: Diagnostics.
 
 Note: CloudKit private database sync means health and journal data is associated with the user's Apple ID in Apple's infrastructure, changing the "Not Linked to You" classification for those types. Encrypted sealed backup (period data, sensitive memory) may be considered separately — review with legal before shipping.

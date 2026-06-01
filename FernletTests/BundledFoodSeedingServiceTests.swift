@@ -4,17 +4,17 @@ import Testing
 
 @MainActor
 struct BundledFoodSeedingServiceTests {
-    @Test func firstCallReturnsBundledItemsMinusExistingAndFinishesDone() async {
-        let existing = makeFoodItem(id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, name: "Existing")
-        let newItem = makeFoodItem(id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!, name: "New")
+    @Test func firstCallReturnsBundledItemsAndFinishesDone() async {
+        let item1 = makeFoodItem(id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, name: "Apple")
+        let item2 = makeFoodItem(id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!, name: "Banana")
         let service = BundledFoodSeedingService(loadBundledItems: {
-            [existing, newItem]
+            [item1, item2]
         })
 
-        let returnedItems = await service.ensureSeeded(existing: [existing])
+        let returned = await service.load()
 
         #expect(service.state == .done)
-        #expect(returnedItems == [newItem])
+        #expect(returned == [item1, item2])
     }
 
     @Test func secondCallAfterDoneReturnsEmptyAndStaysDone() async {
@@ -25,8 +25,8 @@ struct BundledFoodSeedingServiceTests {
             return [bundledItem]
         })
 
-        let firstItems = await service.ensureSeeded(existing: [])
-        let secondItems = await service.ensureSeeded(existing: [])
+        let firstItems = await service.load()
+        let secondItems = await service.load()
 
         #expect(firstItems == [bundledItem])
         #expect(secondItems.isEmpty)
@@ -37,9 +37,9 @@ struct BundledFoodSeedingServiceTests {
     @Test func emptyBundledItemsReturnsEmptyAndFinishesDone() async {
         let service = BundledFoodSeedingService(loadBundledItems: { [] })
 
-        let returnedItems = await service.ensureSeeded(existing: [])
+        let returned = await service.load()
 
-        #expect(returnedItems.isEmpty)
+        #expect(returned.isEmpty)
         #expect(service.state == .done)
     }
 

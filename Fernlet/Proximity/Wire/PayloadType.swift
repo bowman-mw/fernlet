@@ -1,0 +1,72 @@
+import Foundation
+
+// MARK: - Payload classification
+
+enum PayloadType: String, Codable, CaseIterable {
+    // Handshake
+    case identityIntroduction  = "fernlet.identity.intro.v1"
+    case identityAcknowledge   = "fernlet.identity.ack.v1"
+    // Trainer
+    case trainerPlan           = "fernlet.trainer.plan.v1"
+    case trainerPlanDelta      = "fernlet.trainer.plan.delta.v1"
+    case workoutCompletion     = "fernlet.workout.completion.v1"
+    case workoutLiveUpdate     = "fernlet.workout.live.v1"
+    // Session control
+    case sessionHeartbeat      = "fernlet.session.ping.v1"
+    case sessionGoodbye        = "fernlet.session.bye.v1"
+    // Friends
+    case friendPhoto           = "fernlet.friend.photo.v1"
+    case friendPhotoManifest   = "fernlet.friend.photo.manifest.v1"
+    case friendPhotoRequest    = "fernlet.friend.photo.request.v1"
+    // Mesh
+    case meshDescriptor        = "fernlet.mesh.descriptor.v1"
+    case meshAdmissionGrant    = "fernlet.mesh.admission.grant.v1"
+    case meshAdmissionToken    = "fernlet.mesh.admission.token.v1"
+    case meshAdmissionRequest  = "fernlet.mesh.admission.request.v1"
+    case meshStateChange       = "fernlet.mesh.state.v1"
+    case meshFriendVouchList   = "fernlet.mesh.vouch.v1"
+    case meshRemovalProposal   = "fernlet.mesh.removal.proposal.v1"
+    case meshRemovalSecond     = "fernlet.mesh.removal.second.v1"
+    // Group encryption (Phase 3)
+    case meshKeyRotation       = "fernlet.mesh.key.rotation.v1"
+    case meshKeyAck            = "fernlet.mesh.key.ack.v1"
+    case meshRotationSync      = "fernlet.mesh.rotation.sync.v1"
+    case meshEncryptedMetadata = "fernlet.mesh.encrypted.meta.v1"
+    case meshCoordinatorBeacon = "fernlet.mesh.coordinator.beacon.v1"
+    // Diagnostic
+    case inspectorEcho         = "fernlet.diagnostic.echo.v1"
+}
+
+enum PayloadEncryption: Codable, Equatable {
+    case none
+    case sealedTo(recipientKeyAgreementPublicKey: Data)
+}
+
+/// A contiguous date interval used in PayloadSummary.
+/// Using a plain struct rather than ClosedRange<Date> to sidestep retroactive Codable conformance.
+struct DateRange: Codable, Equatable {
+    let start: Date
+    let end: Date
+}
+
+struct PayloadSummary: Codable, Equatable {
+    let title: String
+    let subtitle: String?
+    let itemCount: Int
+    let dateRange: DateRange?
+    let extraDetails: [String: String]
+
+    init(
+        title: String,
+        subtitle: String? = nil,
+        itemCount: Int = 0,
+        dateRange: DateRange? = nil,
+        extraDetails: [String: String] = [:]
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.itemCount = itemCount
+        self.dateRange = dateRange
+        self.extraDetails = extraDetails
+    }
+}
