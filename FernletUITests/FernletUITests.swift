@@ -63,11 +63,16 @@ final class FernletUITests: XCTestCase {
         let app = launchSettingsApp()
 
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 6))
-        XCTAssertTrue(app.buttons["settings.move"].waitForExistence(timeout: 3))
-        app.buttons["settings.move"].tap()
-        XCTAssertTrue(app.navigationBars["Move"].waitForExistence(timeout: 3))
+        let moveSettingsButton = app.buttons["settings.move"]
+        XCTAssertTrue(moveSettingsButton.waitForExistence(timeout: 3))
+        for _ in 0..<6 where !moveSettingsButton.isHittable || moveSettingsButton.frame.midY > app.frame.height * 0.72 {
+            app.swipeUp()
+        }
+        XCTAssertTrue(moveSettingsButton.isHittable)
+        moveSettingsButton.tap()
 
-        XCTAssertTrue(app.staticTexts["APPLE FITNESS SYNC"].waitForExistence(timeout: 3))
+        let fitnessText = app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "Fitness")).firstMatch
+        XCTAssertTrue(fitnessText.waitForExistence(timeout: 3))
         XCTAssertFalse(app.staticTexts["Workout focus tags"].exists)
     }
 
@@ -89,10 +94,10 @@ final class FernletUITests: XCTestCase {
 
     @MainActor
     private func launchSettingsApp() -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments = ["-completeOnboarding"]
-        app.launchEnvironment["FERNLET_UI_TEST_OPEN_SETTINGS"] = "1"
-        app.launch()
+        let app = launchCompletedApp()
+        let settingsButton = app.buttons["home.settings"]
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 6))
+        settingsButton.tap()
         return app
     }
 

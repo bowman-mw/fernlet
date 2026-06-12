@@ -31,12 +31,15 @@ final class SnapshotSaveCoordinator {
 
     func schedule() {
         snapshotSaveTask?.cancel()
-        snapshotSaveTask = Task { @MainActor [weak self] in
-            guard let self else { return }
+        let debounce = debounce
+        snapshotSaveTask = Task { [weak self] in
             try? await ContinuousClock().sleep(for: debounce)
             guard !Task.isCancelled else { return }
-            snapshotSaveTask = nil
-            performSnapshotSave()
+            await MainActor.run {
+                guard let self else { return }
+                self.snapshotSaveTask = nil
+                self.performSnapshotSave()
+            }
         }
     }
 
@@ -73,11 +76,12 @@ final class SnapshotSaveCoordinator {
         handler: @escaping @MainActor () async -> Void
     ) {
         remoteReloadTask?.cancel()
-        remoteReloadTask = Task { @MainActor [weak self] in
-            guard let self else { return }
+        remoteReloadTask = Task { [weak self] in
             try? await ContinuousClock().sleep(for: debounce)
             guard !Task.isCancelled else { return }
-            remoteReloadTask = nil
+            await MainActor.run {
+                self?.remoteReloadTask = nil
+            }
             await handler()
         }
     }

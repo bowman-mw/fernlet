@@ -272,7 +272,7 @@ struct PeriodTrackerTests {
     }
 
     private func makeRepository() -> MenstrualNarrativeRepository {
-        MenstrualNarrativeRepository(context: PersistenceController(inMemory: true).container.viewContext)
+        MenstrualNarrativeRepository(context: PrivatePersistenceController(inMemory: true).container.viewContext)
     }
 }
 

@@ -20,7 +20,12 @@ func makeTestStore(date: Date = .now) -> FernletStore {
         controller: controller,
         legacyRepository: LegacySavedRecipeJSONRepository(fileURL: legacyURL)
     )
-    return FernletStore(date: date, repository: repository, savedRecipeRepository: savedRecipeRepository)
+    // Use an in-memory JournalNarrativeRepository so tests never touch
+    // PrivatePersistenceController.shared (a real on-device store).
+    let journalNarrativeRepository = JournalNarrativeRepository(
+        controller: PrivatePersistenceController(inMemory: true)
+    )
+    return FernletStore(date: date, repository: repository, savedRecipeRepository: savedRecipeRepository, journalNarrativeRepository: journalNarrativeRepository)
 }
 
 /// Creates a FernletStore pre-populated with N meals, a journal entry,

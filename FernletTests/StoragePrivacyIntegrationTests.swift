@@ -366,6 +366,15 @@ private final class MockCloudKitDatabase: CloudKitRecordDatabase {
         return allRecords.filter { requested.contains($0.recordID.recordName) }
     }
 
+    func saveRecords(_ records: [CKRecord]) async throws {
+        for record in records {
+            var existing = recordsByType[record.recordType, default: []]
+            existing.removeAll { $0.recordID == record.recordID }
+            existing.append(record)
+            recordsByType[record.recordType] = existing
+        }
+    }
+
     func deleteRecords(with recordIDs: [CKRecord.ID]) async throws {
         let names = Set(recordIDs.map(\.recordName))
         for type in recordsByType.keys {

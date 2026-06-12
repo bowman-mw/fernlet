@@ -18,12 +18,17 @@ enum FoodSelectionAvailability {
 }
 
 enum FoundationFoodSelectionModel {
-    static func resolve(description: String, candidates: [FoodSelectionCandidate], fallbackType: MealType?) async throws -> FoodSelectionPlan? {
+    static func resolve(_ payload: FoodSelectionPayload) async throws -> FoodSelectionPlan? {
+        let description = payload.mealDescription
+        let candidates = payload.candidates
+        let fallbackType = payload.fallbackMealType
         guard candidates.isEmpty == false else { return nil }
 
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             guard FoodSelectionAvailability.isFoundationModelAvailable else { return nil }
+            let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
+            Task { await AIAuditLog.shared.record(payloadKind: auditKind, destination: .onDeviceFoundationModels, includedFields: auditFields) }
             let instructions = """
             First split a meal description into meal items, like "grilled cheese" and "tomato soup".
             Then turn each meal item into food selections from the numbered candidate list only.
@@ -67,7 +72,8 @@ enum FoundationFoodSelectionModel {
             foodItems: candidates.map(\.foodItem),
             limit: 4
         )
-        return itemCandidates.prefix(3).compactMap { localCandidate in
+        let candidateLimit = CompositeFoodLexicon.isComposite(itemName) ? 3 : 1
+        return itemCandidates.prefix(candidateLimit).compactMap { localCandidate in
             guard let candidate = candidates.first(where: { $0.foodItem.id == localCandidate.foodItem.id }) else { return nil }
             let unit = defaultUnit(for: candidate.foodItem, itemName: itemName)
             let quantity = defaultQuantity(for: candidate.foodItem, itemName: itemName, unit: unit)
@@ -92,6 +98,9 @@ enum FoundationFoodSelectionModel {
     }
 
     private static func defaultQuantity(for foodItem: FoodItem, itemName: String, unit: RecipeUnit) -> Double {
+        if let explicitQuantity = explicitQuantity(in: itemName) {
+            return explicitQuantity
+        }
         let normalizedItem = FoodItemSearch.normalized(itemName)
         let normalizedFood = FoodItemSearch.normalized(foodItem.name)
         if normalizedItem.contains("sandwich") || normalizedItem.contains("grilled cheese") {
@@ -100,6 +109,13 @@ enum FoundationFoodSelectionModel {
             }
         }
         return foodItem.defaultRecipeQuantity(for: unit)
+    }
+
+    private static func explicitQuantity(in itemName: String) -> Double? {
+        FoodItemSearch.normalized(itemName)
+            .split(separator: " ")
+            .compactMap { Double($0) }
+            .first
     }
 }
 

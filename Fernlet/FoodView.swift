@@ -2,15 +2,20 @@ import SwiftUI
 
 #if canImport(UIKit)
 import UIKit
+import PhotosUI
 #endif
 
 struct FoodView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
+    @Binding var isTabBarCompact: Bool
+    @Binding var tabResetToken: Int
     @State private var retryNotice: String?
     @State private var editingRecipe: RecipeDefinition?
     @State private var editingSavedRecipe: SavedRecipe?
+    @State private var correctingMeal: Meal?
     @State private var showingRecipeBook = false
+    @State private var recipeShareDraft: ProximityRecipeShareDraft?
 
     var body: some View {
         NavigationStack {
@@ -58,7 +63,13 @@ struct FoodView: View {
                             EmptyState(text: "Nothing yet. Describe a meal when you are ready.")
                         } else {
                             ForEach(Array(store.day.meals.enumerated()), id: \.element.id) { index, meal in
-                                MealRow(meal: meal, showCalories: store.settings.showCalories) { store.deleteMeal(meal) }
+                                MealRow(
+                                meal: meal,
+                                showCalories: store.settings.showCalories,
+                                onDelete: { store.deleteMeal(meal) },
+                                onCorrect: { correctingMeal = meal },
+                                loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } }
+                            )
                                 if index < store.day.meals.count - 1 {
                                     FernletRowDivider()
                                 }
@@ -93,13 +104,13 @@ struct FoodView: View {
                                                 RecipeMealTypeMenu { mealType in
                                                     store.logRecipe(recipe, mealType: mealType)
                                                 }
-                                                ShareLink(item: store.recipeShareText(for: recipe)) {
-                                                    Image(systemName: "square.and.arrow.up")
-                                                        .font(.body.weight(.semibold))
-                                                        .foregroundStyle(Color.moss)
-                                                        .frame(width: 36, height: 36)
+                                                RecipeShareButton {
+                                                    recipeShareDraft = ProximityRecipeShareDraft(
+                                                        title: recipe.name,
+                                                        shareText: store.recipeShareText(for: recipe),
+                                                        payload: store.proximityRecipeSharePayload(for: recipe)
+                                                    )
                                                 }
-                                                .buttonStyle(.plain)
                                             }
                                         case .saved(let recipe):
                                             HStack(spacing: 12) {
@@ -110,13 +121,13 @@ struct FoodView: View {
                                                 RecipeMealTypeMenu { mealType in
                                                     store.logSavedRecipe(recipe, mealType: mealType)
                                                 }
-                                                ShareLink(item: store.savedRecipeShareText(for: recipe)) {
-                                                    Image(systemName: "square.and.arrow.up")
-                                                        .font(.body.weight(.semibold))
-                                                        .foregroundStyle(Color.moss)
-                                                        .frame(width: 36, height: 36)
+                                                RecipeShareButton {
+                                                    recipeShareDraft = ProximityRecipeShareDraft(
+                                                        title: recipe.name,
+                                                        shareText: store.savedRecipeShareText(for: recipe),
+                                                        payload: store.proximityRecipeSharePayload(for: recipe)
+                                                    )
                                                 }
-                                                .buttonStyle(.plain)
                                             }
                                         }
                                     }
@@ -128,6 +139,7 @@ struct FoodView: View {
                 .padding(20)
                 .padding(.bottom, 24)
             }
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
             .navigationTitle("")
         }
@@ -143,9 +155,21 @@ struct FoodView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
+        .sheet(item: $correctingMeal) { meal in
+            MealCorrectionSheet(store: store, meal: meal)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
         .sheet(isPresented: $showingRecipeBook) {
             RecipeBookSheet(store: store, editingRecipe: $editingRecipe, editingSavedRecipe: $editingSavedRecipe)
                 .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
+        .sheet(item: $recipeShareDraft) { draft in
+            ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager)
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
@@ -201,53 +225,6 @@ struct NutritionPill: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
-    }
-}
-
-struct MicronutrientSummaryView: View {
-    var micronutrients: Micronutrients
-
-    private var rows: [(String, String)] {
-        [
-            nutrientRow("Fiber", micronutrients.fiber, "g"),
-            nutrientRow("Vitamin C", micronutrients.vitaminC, "mg"),
-            nutrientRow("Calcium", micronutrients.calcium, "mg"),
-            nutrientRow("Iron", micronutrients.iron, "mg"),
-            nutrientRow("Magnesium", micronutrients.magnesium, "mg"),
-            nutrientRow("Potassium", micronutrients.potassium, "mg"),
-            nutrientRow("Sodium", micronutrients.sodium, "mg"),
-            nutrientRow("Zinc", micronutrients.zinc, "mg")
-        ].compactMap { $0 }
-    }
-
-    var body: some View {
-        if rows.isEmpty {
-            EmptyState(text: "No micronutrient details yet.")
-        } else {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 128), spacing: 10)], spacing: 10) {
-                ForEach(rows, id: \.0) { name, value in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(name)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color.slate)
-                        Text(value)
-                            .font(.headline)
-                            .foregroundStyle(Color.bark)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                }
-            }
-            .padding(.vertical, 4)
-        }
-    }
-
-    private func nutrientRow(_ name: String, _ value: Double?, _ unit: String) -> (String, String)? {
-        guard let value else { return nil }
-        let formatted = value >= 10 ? String(format: "%.0f", value) : String(format: "%.1f", value)
-        return (name, "\(formatted) \(unit)")
     }
 }
 
@@ -325,18 +302,8 @@ struct RecipeImportSheet: View {
 
         Task {
             do {
-                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, foodItems: store.foodItems)
-                store.addSavedRecipe(SavedRecipe(
-                    sourceURL: importedRecipe.sourceURL,
-                    name: importedRecipe.name,
-                    ingredients: importedRecipe.ingredients,
-                    summary: importedRecipe.summary,
-                    servings: importedRecipe.servings,
-                    protein: importedRecipe.protein,
-                    carbs: importedRecipe.carbs,
-                    fat: importedRecipe.fat,
-                    micronutrients: importedRecipe.micronutrients
-                ))
+                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, foodItems: store.allFoodItems)
+                store.addSavedRecipe(SavedRecipe(importedRecipe: importedRecipe))
                 notice = "\(importedRecipe.name) added to your recipes."
                 isImportingURL = false
                 try? await Task.sleep(for: .seconds(1.2))
@@ -509,6 +476,8 @@ enum MealFlowDestination: Hashable {
     case scanLabel
     case reviewScan(NutritionLabelResult)
     case recipeSearch
+    case productPageImport
+    case productSearch(String)
 }
 
 struct RecipeSheet: View {
@@ -532,7 +501,7 @@ struct RecipeSheet: View {
         self.isEmbeddedInNavigationStack = isEmbeddedInNavigationStack
         self.startsWithScanner = startsWithScanner
         if let recipe {
-            let loadedIngredients = Self.inputs(for: recipe, foodItems: store.foodItems)
+            let loadedIngredients = Self.inputs(for: recipe, foodItems: store.allFoodItems)
             _name = State(initialValue: recipe.name)
             _servings = State(initialValue: recipe.servings)
             _notes = State(initialValue: recipe.notes)
@@ -580,7 +549,7 @@ struct RecipeSheet: View {
                                 if expandedId == ingredient.id || ingredient.trimmedName.isEmpty {
                                     RecipeIngredientEditor(
                                         ingredient: $ingredients[index],
-                                        foodItems: store.foodItems,
+                                        foodItems: store.allFoodItems,
                                         foodSearchIndex: foodSearchIndex,
                                         onSaveCustomIngredient: { store.saveCustomIngredient($0) },
                                         onCollapse: ingredient.trimmedName.isEmpty ? nil : { expandedId = nil },
@@ -592,7 +561,7 @@ struct RecipeSheet: View {
                                 } else {
                                     CollapsedIngredientRow(
                                         ingredient: ingredient,
-                                        foodItems: store.foodItems,
+                                        foodItems: store.allFoodItems,
                                         onExpand: { expandedId = ingredient.id },
                                         onRemove: { removeIngredient(ingredient.id) }
                                     )
@@ -656,20 +625,49 @@ struct RecipeSheet: View {
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(disabled: !canSave) {
-                if let editingRecipe {
-                    store.updateRecipe(editingRecipe, name: name, servings: servings, notes: notes, ingredients: ingredients)
-                } else {
-                    store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients)
+            if editingRecipe == nil {
+                HStack(spacing: 12) {
+                    Button("Save recipe") {
+                        store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients)
+                        dismiss()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.headline)
+                    .foregroundStyle(Color.moss)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.moss.opacity(0.3), lineWidth: 1))
+                    .disabled(!canSave)
+                    .opacity(canSave ? 1 : 0.4)
+
+                    Button("Log & save") {
+                        let recipe = store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients)
+                        store.logRecipe(recipe)
+                        dismiss()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(canSave ? Color.moss : Color.moss.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
+                    .disabled(!canSave)
                 }
-                dismiss()
+                .padding(20)
+                .background(Color.parchment)
+            } else {
+                SheetSaveBar(disabled: !canSave) {
+                    store.updateRecipe(editingRecipe!, name: name, servings: servings, notes: notes, ingredients: ingredients)
+                    dismiss()
+                }
             }
         }
         .background(Color.parchment)
         .onAppear {
-            foodSearchIndex = FoodItemSearch.Index(foodItems: store.foodItems)
+            foodSearchIndex = FoodItemSearch.Index(foodItems: store.allFoodItems)
         }
-        .onChange(of: store.foodItems) { _, newValue in
+        .onChange(of: store.allFoodItems) { _, newValue in
             foodSearchIndex = FoodItemSearch.Index(foodItems: newValue)
         }
         .navigationDestination(isPresented: $scannerPath) {
@@ -692,7 +690,7 @@ struct RecipeSheet: View {
     private var perServingTotals: MacroTotals {
         let totals = ingredients.reduce(into: MacroTotals()) { partial, ingredient in
             guard !ingredient.trimmedName.isEmpty else { return }
-            let macros = ingredient.resolvedMacros(foodItems: store.foodItems)
+            let macros = ingredient.resolvedMacros(foodItems: store.allFoodItems)
             partial.protein += macros.protein
             partial.carbs += macros.carbs
             partial.fat += macros.fat
@@ -763,64 +761,6 @@ struct RecipeSheet: View {
             )
         }
         return inputs.isEmpty ? [ManualRecipeIngredientInput()] : inputs
-    }
-}
-
-private struct NutritionLabelScanReviewView: View {
-    @Environment(\.dismiss) private var dismiss
-    let result: NutritionLabelResult
-    let onUse: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Review the values before applying them to the first ingredient.")
-                        .font(.callout)
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-
-                    if let servingSize = result.servingSize {
-                        scanReviewRow("Serving size", servingSize)
-                    }
-                    if let calories = result.calories {
-                        scanReviewRow("Calories", "\(calories)")
-                    }
-                    if let protein = result.protein {
-                        scanReviewRow("Protein", "\(protein)g")
-                    }
-                    if let carbs = result.carbs {
-                        scanReviewRow("Carbs", "\(carbs)g")
-                    }
-                    if let fat = result.fat {
-                        scanReviewRow("Fat", "\(fat)g")
-                    }
-                }
-                .padding(20)
-            }
-
-            SheetSaveBar(label: "Use values") {
-                onUse()
-                dismiss()
-            }
-        }
-        .background(Color.parchment)
-        .navigationTitle("Review scan")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func scanReviewRow(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(Color.bark)
-            Spacer()
-            Text(value)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.moss)
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -1046,6 +986,11 @@ struct MealSheet: View {
     @State private var notice: String?
     @State private var path: [MealFlowDestination] = []
     @State private var isResolvingMeal = false
+    #if canImport(UIKit)
+    @State private var mealPhoto: UIImage?
+    @State private var showingCamera = false
+    @State private var selectedMealPhotoItem: PhotosPickerItem?
+    #endif
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -1058,6 +1003,18 @@ struct MealSheet: View {
                         NutritionLabelCameraSheet { _ in }
                     case .reviewScan:
                         EmptyView()
+                    case .productPageImport:
+                        FoodProductPageImportView(store: store) { product in
+                            description = product.name
+                            notice = "\(product.name) was saved. Review the meal description, then save your meal."
+                            path.removeLast()
+                        }
+                    case .productSearch(let query):
+                        FoodProductPageImportView(store: store, initialLookup: query) { product in
+                            description = product.name
+                            notice = "\(product.name) was saved. Review the meal description, then save your meal."
+                            path.removeLast()
+                        }
                     }
                 }
         }
@@ -1066,6 +1023,24 @@ struct MealSheet: View {
             store.markLaunchScreenDismissed()
             store.ensureBundledFoodItemsSeeded()
         }
+        #if canImport(UIKit)
+        .fullScreenCover(isPresented: $showingCamera) {
+            ImagePickerView(sourceType: .camera) { image in
+                mealPhoto = image
+            }
+            .ignoresSafeArea()
+        }
+        .onChange(of: selectedMealPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    mealPhoto = image
+                }
+                selectedMealPhotoItem = nil
+            }
+        }
+        #endif
     }
 
     private var mealContent: some View {
@@ -1076,28 +1051,38 @@ struct MealSheet: View {
                         .font(.system(size: 28, weight: .bold, design: .serif))
                         .foregroundStyle(Color.bark)
 
-                    if !store.recentMeals.isEmpty {
-                        Menu {
-                            ForEach(store.recentMeals.prefix(8)) { meal in
-                                Button(meal.name) {
-                                    let copiedMeal = store.copyMeal(meal)
-                                    onLogged([copiedMeal])
-                                    dismiss()
-                                }
-                            }
-                        } label: {
-                            Label("Copy recent meal", systemImage: "clock.arrow.circlepath")
-                                .font(.callout.weight(.semibold))
-                                .foregroundStyle(Color.moss)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(14)
-                                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                        }
+                    #if canImport(UIKit)
+                    if let photo = mealPhoto {
+                        mealPhotoPreview(photo)
                     }
+                    #endif
 
                     SheetField("What did you eat?") {
                         SheetTextEditor(text: $description, placeholder: "scrambled eggs and toast", minHeight: 100)
+                    }
+
+                    HStack(spacing: 8) {
+                        #if canImport(UIKit)
+                        mealSecondaryButton("Photo", icon: "camera") {
+                            showingCamera = true
+                        }
+                        if !store.recentMeals.isEmpty {
+                            Menu {
+                                ForEach(store.recentMeals.prefix(8)) { meal in
+                                    Button(meal.name) {
+                                        let copiedMeal = store.copyMeal(meal)
+                                        onLogged([copiedMeal])
+                                        dismiss()
+                                    }
+                                }
+                            } label: {
+                                mealSecondaryLabel("Recent", icon: "clock.arrow.circlepath")
+                            }
+                        }
+                        #endif
+                        mealSecondaryButton("Import", icon: "link.badge.plus") {
+                            path.append(.productPageImport)
+                        }
                     }
 
                     SheetField("Meal type") {
@@ -1110,11 +1095,6 @@ struct MealSheet: View {
                             }
                         }
                     }
-
-                    Text(foodSelectionStatusText)
-                        .font(.caption.italic())
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
 
                     if let notice {
                         Text(notice)
@@ -1130,9 +1110,33 @@ struct MealSheet: View {
             SheetSaveBar(label: isResolvingMeal ? "Matching" : "Save", disabled: description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isResolvingMeal) {
                 let mealDescription = description
                 let selectedMealType = mealType
+                #if canImport(UIKit)
+                let capturedPhoto = mealPhoto
+                #endif
+                if FoodProductWebSearch.shouldSearch(for: mealDescription, foodItems: store.allFoodItems) {
+                    if let cachedProduct = store.cachedWebImportedFoodProduct(for: mealDescription) {
+                        let meal = store.logWebImportedFoodProduct(cachedProduct, mealType: selectedMealType)
+                        onLogged([meal])
+                        dismiss()
+                        return
+                    }
+                    if store.allowsWebNutritionLookup {
+                        auditWebNutritionLookup(mealDescription)
+                        path.append(.productSearch(mealDescription))
+                        return
+                    }
+                }
                 isResolvingMeal = true
                 Task {
                     let meals = await store.addResolvedMeals(from: mealDescription, type: selectedMealType)
+                    #if canImport(UIKit)
+                    if let photo = capturedPhoto {
+                        let photoID = store.saveMealPhoto(photo)
+                        for meal in meals {
+                            store.attachMealPhoto(mealID: meal.id, photoID: photoID)
+                        }
+                    }
+                    #endif
                     isResolvingMeal = false
                     if meals.contains(where: \.isAIFallback) {
                         notice = FernletVoice.message(for: .mealAnalysisFailed)
@@ -1145,12 +1149,351 @@ struct MealSheet: View {
         .background(Color.parchment)
     }
 
-    private var foodSelectionStatusText: String {
-        if FoodSelectionAvailability.isFoundationModelAvailable {
-            "Fernlet can match your words to local food selections before saving."
-        } else {
-            FernletVoice.message(for: .aiUnavailable)
+    private var webNutritionLookupDisabledMessage: String {
+        store.settings.aiStatus == .off
+            ? "Turn off Manual off mode before using web nutrition lookup."
+            : "Turn on Web nutrition lookup in Settings to search the web for chain or packaged-food nutrition."
+    }
+
+    private func auditWebNutritionLookup(_ mealDescription: String) {
+        let payload = WebNutritionLookupPayload(mealDescription: mealDescription)
+        Task {
+            await AIAuditLog.shared.record(
+                payloadKind: payload.payloadKind,
+                destination: .webNutritionLookup,
+                includedFields: payload.includedFieldNames
+            )
         }
+    }
+
+    private func mealSecondaryButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            mealSecondaryLabel(title, icon: icon)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func mealSecondaryLabel(_ title: String, icon: String) -> some View {
+        Label(title, systemImage: icon)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(Color.moss)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+    }
+
+    #if canImport(UIKit)
+    private func mealPhotoPreview(_ image: UIImage) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            Button { mealPhoto = nil } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(Color.bark)
+                    .background(Color.cream, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(8)
+        }
+    }
+    #endif
+}
+
+struct FoodProductPageImportView: View {
+    var store: FernletStore
+    var onSaved: (ImportedFoodProduct) -> Void
+    private var initialLookup: String
+    @State private var lookupText: String
+    @State private var preview: ProductPagePreview?
+    @State private var importedProduct: ImportedFoodProduct?
+    @State private var notice: String?
+    @State private var isLoading = false
+    @State private var showingProductReview = false
+    @State private var didStartInitialLookup = false
+
+    init(store: FernletStore, initialLookup: String = "", onSaved: @escaping (ImportedFoodProduct) -> Void) {
+        self.store = store
+        self.onSaved = onSaved
+        self.initialLookup = initialLookup
+        _lookupText = State(initialValue: initialLookup)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text("Import product")
+                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .foregroundStyle(Color.bark)
+
+                    urlEntry
+
+                    if isLoading {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                                .tint(Color.moss)
+                            Text(importedProduct == nil && preview != nil ? "Reading nutrition label..." : "Finding product page...")
+                                .font(.callout.italic())
+                                .foregroundStyle(Color.slate)
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    }
+
+                    if let notice {
+                        Text(notice)
+                            .font(.caption.italic())
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
+                }
+                .padding(20)
+                .padding(.bottom, 10)
+            }
+
+        }
+        .background(Color.parchment)
+        .sheet(isPresented: $showingProductReview) {
+            if let preview {
+                FoodProductReviewSheet(
+                    preview: preview,
+                    product: importedProduct,
+                    onSearchAgain: searchAgain,
+                    onConfirm: saveConfirmedProduct
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+            }
+        }
+        .onAppear {
+            guard !initialLookup.isEmpty, !didStartInitialLookup else { return }
+            didStartInitialLookup = true
+            loadPreview()
+        }
+    }
+
+    private var urlEntry: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SheetField("Product search or page URL") {
+                TextField("Costco chicken melts or https://example.com/product", text: $lookupText)
+                    .textInputAutocapitalization(.never)
+                    .sheetTextInput()
+            }
+            Text("Search for a specific packaged food or paste its product page. Fernlet will read the nutrition label and show the source and extracted values together before saving.")
+                .font(.caption.italic())
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            actionButton(label: isLoading ? "Finding page" : "Find product page", systemImage: "magnifyingglass") {
+                loadPreview()
+            }
+            .disabled(isLoading || lookupText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+
+    private var webNutritionLookupDisabledMessage: String {
+        store.settings.aiStatus == .off
+            ? "Turn off Manual off mode before using web nutrition lookup."
+            : "Turn on Web nutrition lookup in Settings before searching the web for nutrition."
+    }
+
+    private func auditWebNutritionLookup(_ mealDescription: String) {
+        let payload = WebNutritionLookupPayload(mealDescription: mealDescription)
+        Task {
+            await AIAuditLog.shared.record(
+                payloadKind: payload.payloadKind,
+                destination: .webNutritionLookup,
+                includedFields: payload.includedFieldNames
+            )
+        }
+    }
+
+    private func actionButton(label: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: systemImage)
+                .font(.headline)
+                .foregroundStyle(Color.cream)
+                .frame(maxWidth: .infinity)
+                .padding(14)
+                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func loadPreview() {
+        guard store.allowsWebNutritionLookup else {
+            notice = webNutritionLookupDisabledMessage
+            return
+        }
+        if let cachedProduct = store.cachedWebImportedFoodProduct(for: lookupText) {
+            onSaved(ImportedFoodProduct(foodItem: cachedProduct, lookupQuery: lookupText))
+            return
+        }
+        isLoading = true
+        notice = nil
+        auditWebNutritionLookup(lookupText)
+        Task {
+            do {
+                if let url = normalizedURL {
+                    preview = try await FoodProductWebImporter.preview(from: url)
+                } else {
+                    preview = try await FoodProductWebSearch.preview(for: lookupText)
+                }
+                if let preview {
+                    var product = try await FoodProductWebImporter.importProduct(from: preview)
+                    product.lookupQuery = lookupText
+                    importedProduct = product
+                    showingProductReview = true
+                }
+            } catch {
+                notice = (error as? LocalizedError)?.errorDescription ?? "Could not import that product page."
+            }
+            isLoading = false
+        }
+    }
+
+    private func saveConfirmedProduct() {
+        guard let importedProduct else { return }
+        showingProductReview = false
+        store.saveWebImportedFoodProduct(importedProduct)
+        onSaved(importedProduct)
+    }
+
+    private func searchAgain() {
+        showingProductReview = false
+        preview = nil
+        importedProduct = nil
+        notice = nil
+    }
+
+    private var normalizedURL: URL? {
+        let trimmed = lookupText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.contains(".") && !trimmed.contains(" ") else { return nil }
+        return FoodProductWebImporter.normalizedWebURL(from: trimmed)
+    }
+}
+
+struct FoodProductReviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var preview: ProductPagePreview
+    var product: ImportedFoodProduct?
+    var onSearchAgain: () -> Void
+    var onConfirm: () -> Void
+    @State private var showingSafari = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Confirm product")
+                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .foregroundStyle(Color.bark)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        detail(label: "Product", value: preview.title)
+                        detail(label: "Website", value: preview.sourceName)
+                        detail(label: "Source URL", value: preview.sourceURL.absoluteString)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+
+                    if let product {
+                        nutritionSummary(product)
+                    }
+
+                    Button {
+                        showingSafari = true
+                    } label: {
+                        Label("Open page", systemImage: "safari")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button {
+                        dismiss()
+                        onSearchAgain()
+                    } label: {
+                        Label("Search again", systemImage: "magnifyingglass")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(20)
+                .padding(.bottom, 10)
+            }
+
+            SheetSaveBar(label: "Confirm & save product", disabled: product == nil) {
+                dismiss()
+                onConfirm()
+            }
+        }
+        .background(Color.parchment)
+        #if canImport(SafariServices)
+        .sheet(isPresented: $showingSafari) {
+            SafariView(url: preview.sourceURL)
+                .ignoresSafeArea()
+        }
+        #endif
+    }
+
+    private func detail(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label.uppercased())
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.slate)
+                .tracking(0.8)
+            Text(value)
+                .font(label == "Product" ? .body.weight(.semibold) : .caption)
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+        }
+    }
+
+    private func nutritionSummary(_ product: ImportedFoodProduct) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("SERVING SIZE")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.slate)
+                    .tracking(0.8)
+                Text(product.servingSize)
+                    .font(.headline)
+                    .foregroundStyle(Color.bark)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+
+            HStack(spacing: 8) {
+                NutritionPill(title: "Calories", value: "\(calories(for: product))")
+                NutritionPill(title: "Protein", value: "\(product.macros.protein)g")
+            }
+            HStack(spacing: 8) {
+                NutritionPill(title: "Carbs", value: "\(product.macros.carbs)g")
+                NutritionPill(title: "Fat", value: "\(product.macros.fat)g")
+            }
+
+            Text("Check the serving size and nutrition values before saving. Fernlet will add this product to your local food catalog only after confirmation.")
+                .font(.caption.italic())
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+    }
+
+    private func calories(for product: ImportedFoodProduct) -> Int {
+        product.calories ?? (product.macros.protein * 4 + product.macros.carbs * 4 + product.macros.fat * 9)
     }
 }
 
@@ -1158,44 +1501,267 @@ struct MealRow: View {
     var meal: Meal
     var showCalories: Bool
     var onDelete: () -> Void
+    var onCorrect: () -> Void
+    var loadPhotoData: (() -> Data?)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(meal.name).font(.headline)
-                        Text(meal.mealType.rawValue)
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(meal.mealType.color.opacity(0.25), in: Capsule())
+        HStack(alignment: .top, spacing: 10) {
+            #if canImport(UIKit)
+            if let loadData = loadPhotoData {
+                MealPhotoThumb(loadData: loadData)
+            }
+            #endif
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(meal.name).font(.headline)
+                            Text(meal.mealType.rawValue)
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(meal.mealType.color.opacity(0.25), in: Capsule())
+                        }
+                        Text(displayNote)
+                            .font(.caption.italic())
+                            .foregroundStyle(Color.slate)
                     }
-                    Text(meal.note)
-                        .font(.caption.italic())
+                    Spacer()
+                    VStack(alignment: .trailing) {
+                        if showCalories {
+                            Text("\(meal.calories) cal").font(.subheadline.weight(.semibold))
+                        }
+                        Button(role: .destructive, action: onDelete) { Image(systemName: "xmark") }
+                            .buttonStyle(.plain)
+                    }
+                }
+                if let breakdownText {
+                    Text(breakdownText)
+                        .font(.caption)
                         .foregroundStyle(Color.slate)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.cream.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.bark.opacity(0.08), lineWidth: 1))
                 }
-                Spacer()
-                VStack(alignment: .trailing) {
-                    if showCalories {
-                        Text("\(meal.calories) cal").font(.subheadline.weight(.semibold))
-                    }
-                    Button(role: .destructive, action: onDelete) { Image(systemName: "xmark") }
+                HStack(spacing: 14) {
+                    Text("P \(meal.macros.protein)g").foregroundStyle(Color.moss)
+                    Text("C \(meal.macros.carbs)g")
+                    Text("F \(meal.macros.fat)g")
+                    Text(meal.confidence).foregroundStyle(Color.goldenrod)
+                    Spacer(minLength: 0)
+                    Button("Looks off?", action: onCorrect)
                         .buttonStyle(.plain)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.fern)
                 }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.slate)
             }
-            HStack(spacing: 14) {
-                Text("P \(meal.macros.protein)g").foregroundStyle(Color.moss)
-                Text("C \(meal.macros.carbs)g")
-                Text("F \(meal.macros.fat)g")
-                Text(meal.confidence).foregroundStyle(Color.goldenrod)
-            }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(Color.slate)
         }
         .padding(.vertical, 4)
     }
+
+    private var displayNote: String {
+        breakdownText == nil ? meal.note : "Matched from local foods."
+    }
+
+    private var breakdownText: String? {
+        if meal.componentSnapshots.isEmpty == false {
+            let text = meal.componentSnapshots
+                .map { "\($0.quantity.formatted(.number.precision(.fractionLength(0...1)))) \($0.unit) \($0.name)" }
+                .joined(separator: ", ")
+            return text.isEmpty ? nil : text
+        }
+        let prefix = "Matched locally from food selection: "
+        guard meal.note.hasPrefix(prefix) else { return nil }
+        let trimmed = meal.note
+            .dropFirst(prefix.count)
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        return trimmed.isEmpty ? nil : trimmed
+    }
 }
+
+private struct MealComponentCorrectionInput: Identifiable {
+    let id: UUID
+    let foodItemId: UUID?
+    let name: String
+    var quantity: Double
+    let unit: String
+    let baseQuantity: Double
+    let baseMacros: Macros
+    let baseMicronutrients: Micronutrients
+
+    nonisolated init(snapshot: MealComponentSnapshot) {
+        id = snapshot.id
+        foodItemId = snapshot.foodItemId
+        name = snapshot.name
+        quantity = snapshot.quantity
+        unit = snapshot.unit
+        baseQuantity = max(snapshot.quantity, 0.01)
+        baseMacros = snapshot.macros
+        baseMicronutrients = snapshot.micronutrients
+    }
+
+    var snapshot: MealComponentSnapshot {
+        let scale = max(quantity, 0) / baseQuantity
+        return MealComponentSnapshot(
+            id: id,
+            foodItemId: foodItemId,
+            name: name,
+            quantity: quantity,
+            unit: unit,
+            macros: baseMacros.scaled(by: scale),
+            micronutrients: baseMicronutrients.scaled(by: scale)
+        )
+    }
+}
+
+struct MealCorrectionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var store: FernletStore
+    var meal: Meal
+    @State private var name: String
+    @State private var mealType: MealType
+    @State private var protein: Int
+    @State private var carbs: Int
+    @State private var fat: Int
+    @State private var components: [MealComponentCorrectionInput]
+
+    init(store: FernletStore, meal: Meal) {
+        self.store = store
+        self.meal = meal
+        _name = State(initialValue: meal.name)
+        _mealType = State(initialValue: meal.mealType)
+        _protein = State(initialValue: meal.macros.protein)
+        _carbs = State(initialValue: meal.macros.carbs)
+        _fat = State(initialValue: meal.macros.fat)
+        _components = State(initialValue: meal.componentSnapshots.map(MealComponentCorrectionInput.init(snapshot:)))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Adjust meal")
+                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .foregroundStyle(Color.bark)
+
+                    SheetField("Meal name") {
+                        TextField("Meal", text: $name)
+                            .sheetTextInput()
+                    }
+
+                    SheetField("Meal type") {
+                        FlowLayout(spacing: 8) {
+                            ForEach(MealType.allCases) { type in
+                                Button(type.rawValue) { mealType = type }
+                                    .buttonStyle(ChipButtonStyle(selected: mealType == type))
+                            }
+                        }
+                    }
+
+                    if components.isEmpty {
+                        SheetField("Macros") {
+                            VStack(spacing: 10) {
+                                MacroInputRow(label: "Protein", unit: "g", value: $protein, range: 0...300)
+                                MacroInputRow(label: "Carbs", unit: "g", value: $carbs, range: 0...500)
+                                MacroInputRow(label: "Fat", unit: "g", value: $fat, range: 0...300)
+                            }
+                            .padding(14)
+                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                    } else {
+                        SheetField("Matched items") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                ForEach($components) { $component in
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack(alignment: .firstTextBaseline) {
+                                            Text(component.name)
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(Color.bark)
+                                            Spacer()
+                                            Text("\(component.quantity.formatted(.number.precision(.fractionLength(0...1)))) \(component.unit)")
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundStyle(Color.moss)
+                                        }
+                                        Stepper("", value: $component.quantity, in: 0...2000, step: component.unit == RecipeUnit.gram.rawValue ? 5 : 0.25)
+                                            .labelsHidden()
+                                        let macros = component.snapshot.macros
+                                        Text("P \(macros.protein)g  C \(macros.carbs)g  F \(macros.fat)g")
+                                            .font(.caption)
+                                            .foregroundStyle(Color.slate)
+                                    }
+                                    .padding(12)
+                                    .background(Color.parchment.opacity(0.7), in: RoundedRectangle(cornerRadius: 10))
+                                }
+
+                                HStack(spacing: 14) {
+                                    Text("P \(componentMacros.protein)g").foregroundStyle(Color.moss)
+                                    Text("C \(componentMacros.carbs)g")
+                                    Text("F \(componentMacros.fat)g")
+                                    Spacer(minLength: 0)
+                                }
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.slate)
+                            }
+                            .padding(14)
+                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+                }
+                .padding(20)
+                .padding(.bottom, 10)
+            }
+
+            SheetSaveBar(label: "Save correction", disabled: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                store.updateMealCorrection(
+                    mealID: meal.id,
+                    name: name,
+                    mealType: mealType,
+                    macros: components.isEmpty ? Macros(protein: protein, carbs: carbs, fat: fat) : componentMacros,
+                    componentSnapshots: components.isEmpty ? nil : components.map(\.snapshot)
+                )
+                dismiss()
+            }
+        }
+        .background(Color.parchment)
+    }
+
+    private var componentMacros: Macros {
+        let totals = MealBuilder.totals(for: components.map(\.snapshot))
+        return Macros(protein: totals.macros.protein, carbs: totals.macros.carbs, fat: totals.macros.fat)
+    }
+}
+
+#if canImport(UIKit)
+private struct MealPhotoThumb: View {
+    var loadData: () -> Data?
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 54, height: 54)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.cream)
+                    .frame(width: 54, height: 54)
+                    .overlay(Image(systemName: "fork.knife").font(.caption).foregroundStyle(Color.slate))
+            }
+        }
+        .task {
+            if let data = loadData(), let img = UIImage(data: data) {
+                image = img
+            }
+        }
+    }
+}
+#endif
 
 struct RecipeRow: View {
     var recipe: RecipeDefinition
@@ -1390,6 +1956,21 @@ struct RecipeCreationOptionRow: View {
     }
 }
 
+private struct RecipeShareButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "square.and.arrow.up")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.moss)
+                .frame(width: 36, height: 36)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Share recipe")
+    }
+}
+
 private struct RecipeMealTypeMenu: View {
     var onSelect: (MealType) -> Void
 
@@ -1411,18 +1992,59 @@ private struct RecipeMealTypeMenu: View {
     }
 }
 
+private struct WebImportedFoodRow: View {
+    var foodItem: FoodItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "shippingbox")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color.moss)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(foodItem.name)
+                        .font(.headline)
+                        .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
+                    Text(foodItem.brandSource ?? foodItem.sourceURL?.host() ?? "Saved web product")
+                        .font(.caption)
+                        .foregroundStyle(Color.slate)
+                        .lineLimit(1)
+                }
+            }
+            if let servingDescription = foodItem.servingDescription, !servingDescription.isEmpty {
+                Text("Serving: \(servingDescription)")
+                    .font(.caption)
+                    .foregroundStyle(Color.slate)
+            }
+            HStack(spacing: 14) {
+                Text("P \(foodItem.macros.protein)g").foregroundStyle(Color.moss)
+                Text("C \(foodItem.macros.carbs)g")
+                Text("F \(foodItem.macros.fat)g")
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Color.slate)
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Saved product \(foodItem.name)")
+    }
+}
+
 struct RecipeBookSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     @Binding var editingRecipe: RecipeDefinition?
     @Binding var editingSavedRecipe: SavedRecipe?
     @State private var searchText = ""
+    @State private var recipeShareDraft: ProximityRecipeShareDraft?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    ScreenHeader(title: "Recipe book", subtitle: "All recipes, A\u{2013}Z.", subtitleFirst: false)
+                    ScreenHeader(title: "Recipe book", subtitle: "Recipes and saved products, A\u{2013}Z.", subtitleFirst: false)
                     NavigationLink {
                         RecipeCreationOptionsView(store: store)
                     } label: {
@@ -1435,7 +2057,7 @@ struct RecipeBookSheet: View {
                     }
                     .buttonStyle(.plain)
 
-                    TextField("Search recipes", text: $searchText)
+                    TextField("Search recipes and products", text: $searchText)
                         .sheetTextInput()
                     let allManual = filteredManualRecipes
                     if !allManual.isEmpty {
@@ -1452,13 +2074,13 @@ struct RecipeBookSheet: View {
                                             store.logRecipe(recipe, mealType: mealType)
                                             dismiss()
                                         }
-                                        ShareLink(item: store.recipeShareText(for: recipe)) {
-                                            Image(systemName: "square.and.arrow.up")
-                                                .font(.body.weight(.semibold))
-                                                .foregroundStyle(Color.moss)
-                                                .frame(width: 36, height: 36)
+                                        RecipeShareButton {
+                                            recipeShareDraft = ProximityRecipeShareDraft(
+                                                title: recipe.name,
+                                                shareText: store.recipeShareText(for: recipe),
+                                                payload: store.proximityRecipeSharePayload(for: recipe)
+                                            )
                                         }
-                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
@@ -1479,20 +2101,40 @@ struct RecipeBookSheet: View {
                                             store.logSavedRecipe(recipe, mealType: mealType)
                                             dismiss()
                                         }
-                                        ShareLink(item: store.savedRecipeShareText(for: recipe)) {
-                                            Image(systemName: "square.and.arrow.up")
-                                                .font(.body.weight(.semibold))
-                                                .foregroundStyle(Color.moss)
-                                                .frame(width: 36, height: 36)
+                                        RecipeShareButton {
+                                            recipeShareDraft = ProximityRecipeShareDraft(
+                                                title: recipe.name,
+                                                shareText: store.savedRecipeShareText(for: recipe),
+                                                payload: store.proximityRecipeSharePayload(for: recipe)
+                                            )
                                         }
-                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
                         }
                     }
-                    if allManual.isEmpty && allSaved.isEmpty && !searchText.isEmpty {
-                        EmptyState(text: "No recipes match \u{201C}\(searchText)\u{201D}.")
+                    let allProducts = filteredWebImportedProducts
+                    if !allProducts.isEmpty {
+                        Text("Imported products")
+                            .font(.headline)
+                            .foregroundStyle(Color.bark)
+                        FernletCard {
+                            VStack(spacing: 0) {
+                                ForEach(Array(allProducts.enumerated()), id: \.element.id) { index, product in
+                                    if index > 0 { FernletRowDivider() }
+                                    HStack(spacing: 12) {
+                                        WebImportedFoodRow(foodItem: product)
+                                        RecipeMealTypeMenu { mealType in
+                                            store.logWebImportedFoodProduct(product, mealType: mealType)
+                                            dismiss()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if allManual.isEmpty && allSaved.isEmpty && allProducts.isEmpty && !searchText.isEmpty {
+                        EmptyState(text: "No recipes or products match \u{201C}\(searchText)\u{201D}.")
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -1503,6 +2145,12 @@ struct RecipeBookSheet: View {
             .navigationTitle("")
         }
         .background(Color.parchment)
+        .sheet(item: $recipeShareDraft) { draft in
+            ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
     }
 
     private var filteredManualRecipes: [RecipeDefinition] {
@@ -1515,6 +2163,15 @@ struct RecipeBookSheet: View {
         let sorted = store.savedRecipes.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         guard !searchText.isEmpty else { return sorted }
         return sorted.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    private var filteredWebImportedProducts: [FoodItem] {
+        let sorted = store.webImportedFoodItems.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        guard !searchText.isEmpty else { return sorted }
+        return sorted.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+                || $0.brandSource?.localizedCaseInsensitiveContains(searchText) == true
+        }
     }
 }
 

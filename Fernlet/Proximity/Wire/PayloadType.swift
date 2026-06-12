@@ -18,6 +18,7 @@ enum PayloadType: String, Codable, CaseIterable {
     case friendPhoto           = "fernlet.friend.photo.v1"
     case friendPhotoManifest   = "fernlet.friend.photo.manifest.v1"
     case friendPhotoRequest    = "fernlet.friend.photo.request.v1"
+    case recipeShare           = "fernlet.recipe.share.v1"
     // Mesh
     case meshDescriptor        = "fernlet.mesh.descriptor.v1"
     case meshAdmissionGrant    = "fernlet.mesh.admission.grant.v1"

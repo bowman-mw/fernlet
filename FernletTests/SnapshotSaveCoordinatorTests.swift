@@ -39,7 +39,7 @@ struct SnapshotSaveCoordinatorTests {
         coordinator.schedule()
         snapshot = makeSnapshot(dateKey: "2026-05-27")
         coordinator.schedule()
-        try? await ContinuousClock().sleep(for: .milliseconds(60))
+        await waitUntil { repository.savedSnapshots.count == 1 }
 
         #expect(repository.savedSnapshots.count == 1)
         #expect(repository.savedSnapshots.first?.day.date == "2026-05-27")
@@ -60,7 +60,7 @@ struct SnapshotSaveCoordinatorTests {
             handlerCalls += 1
         }
         repository.remoteChangeSubject.send()
-        try? await ContinuousClock().sleep(for: .milliseconds(60))
+        await waitUntil { handlerCalls == 1 }
 
         #expect(handlerCalls == 1)
     }
@@ -76,6 +76,17 @@ struct SnapshotSaveCoordinatorTests {
             goals: [],
             workshop: WorkshopData()
         )
+    }
+
+    private func waitUntil(
+        timeout: Duration = .seconds(1),
+        condition: @escaping @MainActor () -> Bool
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition(), clock.now < deadline {
+            try? await clock.sleep(for: .milliseconds(10))
+        }
     }
 }
 

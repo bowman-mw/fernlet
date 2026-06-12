@@ -1,3 +1,4 @@
+import CoreData
 import CryptoKit
 import Foundation
 import Testing
@@ -17,7 +18,8 @@ struct PrivateHistoryPruningTests {
         try repository.insert(narrative, contentKey: contentKey)
         try repository.delete(id: narrative.id)
 
-        #expect(try repository.narrative(forHKUUID: narrative.hkExternalUUID, contentKey: contentKey) == nil)
+        let deletedNarrative = try repository.narrative(forHKUUID: narrative.hkExternalUUID, contentKey: contentKey)
+        #expect(deletedNarrative?.id == nil)
     }
 
     @Test func intimacyDeletionPrunesWithoutLeavingRecord() throws {

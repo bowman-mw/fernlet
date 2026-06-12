@@ -23,6 +23,7 @@ final class MeshNetworkUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        throw XCTSkip("Legacy mesh-lobby UI was removed from the Friends tab. Replace this suite with current Friends-session coverage.")
     }
 
     // MARK: - Phase 2 · Join

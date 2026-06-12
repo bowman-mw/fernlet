@@ -6,11 +6,11 @@ import Combine
 @MainActor
 final class MockMultipeerTransport: MultipeerTransport {
 
-    private let stateSubject = CurrentValueSubject<MultipeerSession.State, Never>(.idle)
-    private let inboundSubject = PassthroughSubject<MultipeerSession.InboundMessage, Never>()
+    private let stateSubject = CurrentValueSubject<MultipeerTransportState, Never>(.idle)
+    private let inboundSubject = PassthroughSubject<MultipeerInboundMessage, Never>()
 
-    var state: AnyPublisher<MultipeerSession.State, Never> { stateSubject.eraseToAnyPublisher() }
-    var inbound: AnyPublisher<MultipeerSession.InboundMessage, Never> { inboundSubject.eraseToAnyPublisher() }
+    var state: AnyPublisher<MultipeerTransportState, Never> { stateSubject.eraseToAnyPublisher() }
+    var inbound: AnyPublisher<MultipeerInboundMessage, Never> { inboundSubject.eraseToAnyPublisher() }
     var connectedPeers: [MultipeerPeer] = []
 
     // Recorded calls
@@ -21,7 +21,7 @@ final class MockMultipeerTransport: MultipeerTransport {
     var disconnectCalled = false
     var sendDelayNanoseconds: UInt64 = 0
     var sentData: [(Data, MultipeerPeer, MCSessionSendDataMode)] = []
-    var acceptedInvites: [MultipeerSession.PendingInvite] = []
+    var acceptedInvites: [MultipeerPendingInvite] = []
 
     // MARK: MultipeerTransport
 
@@ -42,7 +42,7 @@ final class MockMultipeerTransport: MultipeerTransport {
         stateSubject.send(.awaitingPeerAcceptance(peer))
     }
 
-    func accept(_ invite: MultipeerSession.PendingInvite) async throws {
+    func accept(_ invite: MultipeerPendingInvite) async throws {
         acceptedInvites.append(invite)
         invite.respond(true)
     }
@@ -77,7 +77,7 @@ final class MockMultipeerTransport: MultipeerTransport {
     }
 
     func simulateInvite(from peer: MultipeerPeer, info: [String: String] = [:]) {
-        let invite = MultipeerSession.PendingInvite(
+        let invite = MultipeerPendingInvite(
             peer: peer,
             advertisedInfo: info,
             context: nil,
@@ -95,7 +95,7 @@ final class MockMultipeerTransport: MultipeerTransport {
     }
 
     func simulateInboundData(_ data: Data, from peer: MultipeerPeer) {
-        let msg = MultipeerSession.InboundMessage(peer: peer, data: data, receivedAt: Date(), bytesReceived: data.count)
+        let msg = MultipeerInboundMessage(peer: peer, data: data, receivedAt: Date(), bytesReceived: data.count)
         inboundSubject.send(msg)
     }
 

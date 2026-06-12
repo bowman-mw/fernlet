@@ -23,15 +23,11 @@ final class BundledFoodSeedingService {
         self.loadBundledItems = loadBundledItems
     }
 
-    /// Returns the bundled items that are not already present in `existingFoodItems`.
-    func ensureSeeded(existing existingFoodItems: [FoodItem]) async -> [FoodItem] {
+    func load() async -> [FoodItem] {
         guard state == .notStarted else { return [] }
         state = .seeding
-
-        let bundledItems = await loadBundledItems()
-        let existingIds = Set(existingFoodItems.map(\.id))
-        let newItems = bundledItems.filter { !existingIds.contains($0.id) }
+        let items = await loadBundledItems()
         state = .done
-        return newItems
+        return items
     }
 }

@@ -27,7 +27,8 @@ This index maps the main project files to their responsibilities. It is intended
 | `Fernlet/Fernlet/PeriodDayDetailView.swift` | Detail view for a specific period/cycle day. |
 | `Fernlet/Fernlet/LogPeriodSheet.swift` | Sheet for logging period events. |
 | `Fernlet/Fernlet/PrivateHubView.swift` | Private hub screen with private-section navigation. |
-| `Fernlet/Fernlet/SocialHubView.swift` | Social hub screen with social-section navigation. |
+| `Fernlet/Fernlet/SocialHubView.swift` | Social hub entry point for the Friends photo wall and active disposable-camera session flow. |
+| `Fernlet/Fernlet/ConnectView.swift` | Friends tab photo wall, nearby-discovery status, connection-success transition, session photo review, and full-screen saved-photo feed. Presents `DisposableCameraView` while a Friends session is active. |
 | `Fernlet/Fernlet/WorkshopView.swift` | Workshop screen for texture-related tracking and tabbed workshop UI. |
 | `Fernlet/Fernlet/OnboardingView.swift` | First-run profile setup, nutrition profile editing, and nutrition preview UI. |
 | `Fernlet/Fernlet/SettingsSheet.swift` | Settings sheet and user preferences UI. |
@@ -59,7 +60,6 @@ This index maps the main project files to their responsibilities. It is intended
 | --- | --- |
 | `Fernlet/Fernlet/Models.swift` | Core domain models for days, settings, nutrition, meals, recipes, workouts, journal entries, sleep, hygiene, goals, workshop data, and companion state. |
 | `Fernlet/Fernlet/FernletStore.swift` | Main observable app store that coordinates repository data and app-level state changes. |
-| `Fernlet/Fernlet/ProximityTrustVault.swift` | Trusted proximity peer records and trainer audit event vault; implements `ProximityTrustPolicy`. Extracted sub-service of `FernletStore`. |
 | `Fernlet/Fernlet/AIRetryQueueService.swift` | AI analysis retry queue; stores pending retry records and calls `onChange` on each mutation. Extracted sub-service of `FernletStore`. |
 | `Fernlet/Fernlet/DerivedSignalsService.swift` | Derived signal computation and deferred post-launch rebuild scheduling. Extracted sub-service of `FernletStore`. |
 | `Fernlet/Fernlet/DerivedSignalsRebuilder.swift` | Pure helper that rebuilds derived signals from a historical day window; used by `DerivedSignalsService`. |
@@ -108,31 +108,41 @@ This index maps the main project files to their responsibilities. It is intended
 
 | File | Purpose |
 | --- | --- |
-| `Fernlet/Fernlet/MeshNetworkManager.swift` | Observable mesh network coordinator managing active/lightweight peer slots, mesh creation/joining, slot promotion/demotion, member tracking, and admission request handling. |
-| `Fernlet/Fernlet/MeshLobbyView.swift` | Mesh lobby UI for browsing, creating, and joining meshes; manages the active mesh name, member list, and in-mesh photo sharing. |
-| `Fernlet/Fernlet/MeshAdmissionPromptSheet.swift` | Sheet UI for reviewing and approving/declining peer join requests to a named mesh. |
+| `Fernlet/Fernlet/Proximity/Mesh/MeshNetworkManager.swift` | Observable mesh network coordinator managing active/lightweight peer slots, proximity-join (15 cm commit gate), pairwise/mesh promotion, session open/closed state, member removal proposals, admission requests, friend-of-friend vouchers, photo session metadata, encrypted mesh payloads, coordinator beacons, and key rotation. Its observation loop explicitly finishes cancelled streams so repeated Friends-tab discovery sessions do not retain suspended observers. |
+| `Fernlet/DisposableCameraView.swift` | Active Friends-session disposable-camera UI: `CameraCaptureController` (`@Observable`, queued `AVCaptureSession` lifecycle, rotation handling, and arm/wind gate), `CameraPreviewView`, and the full-screen camera. The session-info sheet exposes the 10-shot film count, open/closed access, mesh rename, participant options, friend-of-friend labels, diagnostics, removal requests, and end-session flow; admission requests and mesh errors are presented as popups. |
+| `Fernlet/Fernlet/MeshAdmissionPromptSheet.swift` | Reusable sheet for reviewing and approving/declining peer join requests to a named mesh. Presented by the active disposable-camera session flow. |
 | `Fernlet/Fernlet/FriendListView.swift` | Friend list screen for browsing trusted proximity peers with all/friends/blocked filters and block management. |
 
 ## Proximity
 
 | File | Purpose |
 | --- | --- |
-| `Fernlet/Fernlet/Proximity/ProximityCoordinator.swift` | High-level coordinator for proximity sessions; orchestrates MultipeerConnectivity transport, signed identity/ranging-token handshake, UWB startup, heartbeat RTT, payload dispatch, and inspector recording. |
-| `Fernlet/Fernlet/Proximity/MultipeerSession.swift` | MultipeerConnectivity peer model (`MultipeerPeer`), persistent `MCPeerID` storage, and session transport layer. |
-| `Fernlet/Fernlet/Proximity/MeshMultipeerSession.swift` | Shared `MCSession` host for multi-peer mesh; `PeerChannelTransport` adapts per-peer state and data routing without managing the MC lifecycle directly. |
-| `Fernlet/Fernlet/Proximity/MeshNameGenerator.swift` | Generates random human-readable two-word mesh names from adjective/noun word lists. |
-| `Fernlet/Fernlet/Proximity/NIRangingSession.swift` | NearbyInteraction UWB ranging session for measuring real-time distance and direction between Fernlet devices. |
-| `Fernlet/Fernlet/Proximity/FernletIdentityEnvelope.swift` | Ed25519-signed wire envelope for all peer-to-peer transfers; defines `PayloadType` classification and canonical JSON encoding. |
-| `Fernlet/Fernlet/Proximity/IdentityService.swift` | Per-device Ed25519 signing identity and X25519 key-agreement, with keys stored in Keychain under `AfterFirstUnlockThisDeviceOnly`. |
-| `Fernlet/Fernlet/Proximity/ReplayCache.swift` | Rolling 24-hour envelope-ID cache for replay-attack prevention; injectable clock for deterministic testing. |
-| `Fernlet/Fernlet/Proximity/ConnectionInspector.swift` | Live and historical proximity session logging, ranging mode/distance samples, RTT samples, event subsampling, and session lifecycle recording (`ProximityInspectorRecording`). |
-| `Fernlet/Fernlet/Proximity/ConnectionSessionLog.swift` | Structured session log model capturing peer info, ranging state, transport counters, envelope records, and error events. |
-| `Fernlet/Fernlet/Proximity/ConnectionInspectorView.swift` | On-demand live connection inspector UI for real-time proximity diagnostics, distance, RTT, and fallback status. |
-| `Fernlet/Fernlet/Proximity/ConnectionInspectorHistoryView.swift` | View for browsing and reviewing historical proximity connection session logs. |
-| `Fernlet/Fernlet/Proximity/TrainerAuditLog.swift` | Trusted peer records and trainer audit event log for proximity trainer sessions. |
-| `Fernlet/Fernlet/Proximity/TrainerProximityService.swift` | Trainer-mode proximity service driving workout plan sharing and disclosure card generation. |
-| `Fernlet/Fernlet/Proximity/FriendPhotoShareView.swift` | UI for sharing photos with friends over a proximity session. |
-| `Fernlet/Fernlet/Proximity/ProximityForegroundAnchor.swift` | Live Activity anchor that keeps proximity sessions alive when the app moves to the background. |
+| `Fernlet/Fernlet/Proximity/Engine/ProximityCoordinator.swift` | High-level coordinator for proximity sessions; orchestrates MultipeerConnectivity transport, signed identity/ranging-token handshake, UWB startup, heartbeat RTT, payload dispatch, and inspector recording. |
+| `Fernlet/Fernlet/Proximity/Transport/MultipeerPeer.swift` | MultipeerConnectivity peer model plus persistent `MCPeerID` storage shared by active mesh transport and future trainer transport work. |
+| `Fernlet/Fernlet/Proximity/Transport/MultipeerTransport.swift` | Neutral MultipeerConnectivity transport protocol, state, invite, inbound-message, error, and reserved trainer-service definitions. |
+| `Fernlet/Fernlet/Proximity/Engine/ProximityCommitDetector.swift` | Rolling distance-window detector used by proximity commit and trainer tap gates. |
+| `Fernlet/Fernlet/Proximity/Ranging/RangingProvider.swift` | Ranging provider contract plus shared distance and state models. |
+| `Fernlet/Fernlet/Proximity/Transport/MeshMultipeerSession.swift` | Shared `MCSession` host for multi-peer mesh; `PeerChannelTransport` adapts per-peer state and data routing without managing the MC lifecycle directly. |
+| `Fernlet/Fernlet/Proximity/Mesh/MeshSessionTypes.swift` | Mesh session slot, group-key, ranking-window sample, participant, and encryption-error support models extracted from the manager. |
+| `Fernlet/Fernlet/Proximity/Mesh/MeshNameGenerator.swift` | Generates random human-readable two-word mesh names from adjective/noun word lists. |
+| `Fernlet/Fernlet/Proximity/Ranging/NIRangingSession.swift` | NearbyInteraction UWB ranging session for measuring real-time distance and direction between Fernlet devices. |
+| `Fernlet/Fernlet/Proximity/Wire/FernletIdentityEnvelope.swift` | Ed25519-signed wire envelope for all peer-to-peer transfers, including canonical JSON encoding and verification. |
+| `Fernlet/Fernlet/Proximity/Wire/PayloadType.swift` | Peer-to-peer payload classification, envelope encryption mode, and payload summary models. |
+| `Fernlet/Fernlet/Proximity/Wire/MeshPayloads.swift` | Mesh descriptor, admission, removal, voucher, group-encryption, and coordinator-beacon wire models plus admission-token signing and verification. |
+| `Fernlet/Fernlet/Proximity/Wire/FriendPhotoPayloads.swift` | Friend-photo payload, session metadata, manifest, and missing-photo request wire models. |
+| `Fernlet/Fernlet/Proximity/Photos/MeshPhotoCacheStore.swift` | Disk-backed mesh photo index, full-image storage, thumbnail generation, hydration, and orphan cleanup. |
+| `Fernlet/Fernlet/Proximity/Photos/FriendPhotoImageHelpers.swift` | `UIImage` resizing and thumbnail JPEG helpers for friend-photo sharing. |
+| `Fernlet/Fernlet/Proximity/Identity/IdentityService.swift` | Per-device Ed25519 signing identity and X25519 key-agreement, with keys stored in Keychain under `AfterFirstUnlockThisDeviceOnly`. |
+| `Fernlet/Fernlet/Proximity/Identity/ReplayCache.swift` | Rolling 24-hour envelope-ID cache for replay-attack prevention; injectable clock for deterministic testing. |
+| `Fernlet/Fernlet/Proximity/Audit/ConnectionInspector.swift` | Live and historical proximity session logging, ranging mode/distance samples, RTT samples, event subsampling, and session lifecycle recording (`ProximityInspectorRecording`). |
+| `Fernlet/Fernlet/Proximity/Audit/ConnectionSessionLog.swift` | Structured session log model capturing peer info, ranging state, transport counters, envelope records, and error events. |
+| `Fernlet/Fernlet/Proximity/UI/ConnectionInspectorView.swift` | On-demand live connection inspector UI for real-time proximity diagnostics, distance, RTT, and fallback status. |
+| `Fernlet/Fernlet/Proximity/UI/ConnectionInspectorHistoryView.swift` | View for browsing and reviewing historical proximity connection session logs. |
+| `Fernlet/Fernlet/Proximity/Trust/TrainerAuditLog.swift` | Trusted peer records, `ProximityTrustPolicy`, and trainer-named audit event vocabulary shared by proximity sessions. |
+| `Fernlet/Fernlet/Proximity/Trust/FriendSessionTrustPolicy.swift` | Friend-session trust-policy wrapper over `ProximityTrustVault`; blocked, revoked, and audit operations delegate to the vault while proximity-gated sessions remain permissive for remembered-trust checks. |
+| `Fernlet/Fernlet/Proximity/Trust/ProximityTrustVault.swift` | Trusted proximity peer records and trainer audit event vault; implements `ProximityTrustPolicy`. Extracted sub-service of `FernletStore`. |
+| `Fernlet/Fernlet/Proximity/Photos/FriendPhotoReviewSheet.swift` | Review tile, review sheet, and photo-library saver for shared friend photos. |
+| `Fernlet/Fernlet/Proximity/ForegroundAnchor/ProximityForegroundAnchor.swift` | Live Activity anchor that keeps proximity sessions alive when the app moves to the background. |
 
 ## Tests
 
@@ -158,19 +168,20 @@ This index maps the main project files to their responsibilities. It is intended
 | `Fernlet/FernletTests/StoragePrivacyIntegrationTests.swift` | Integration tests for storage preference changes propagating through the app. |
 | `Fernlet/FernletTests/IdentityServiceTests.swift` | Ed25519/X25519 identity provisioning, signing, and key-agreement tests. |
 | `Fernlet/FernletTests/FernletIdentityEnvelopeTests.swift` | Envelope signing, verification, canonical encoding, and payload type tests. |
-| `Fernlet/FernletTests/MultipeerSessionTests.swift` | MultipeerConnectivity session transport and peer model tests. |
+| `Fernlet/FernletTests/MultipeerPeerTests.swift` | Extracted MultipeerConnectivity peer-ID persistence tests. |
 | `Fernlet/FernletTests/NearbyRangingSessionTests.swift` | NearbyInteraction ranging session state machine and distance update tests. |
 | `Fernlet/FernletTests/ConnectionInspectorTests.swift` | Connection inspector session recording, subsampling, and purge-old logic tests. |
 | `Fernlet/FernletTests/ProximityCoordinatorTests.swift` | Proximity coordinator handshake, payload dispatch, and error recovery tests. |
 | `Fernlet/FernletTests/TrainerProximityServiceTests.swift` | Trainer proximity service disclosure card and audit event tests. |
-| `Fernlet/FernletTests/FriendPhotoSharingServiceTests.swift` | Friend photo sharing via proximity session tests. |
+| `Fernlet/FernletTests/FriendPhotoManifestPayloadTests.swift` | Friend-photo manifest payload round-trip and blocked-sender request filtering tests. |
 | `Fernlet/FernletTests/RecipeShareCodecTests.swift` | Recipe share codec encoding and round-trip tests. |
 | `Fernlet/FernletTests/FernletSnapshotRoundTripTests.swift` | Snapshot serialization round-trip integrity tests. |
 | `Fernlet/FernletTests/ProximityTrustVaultTests.swift` | ProximityTrustVault trust/revoke idempotency, audit ring-buffer cap, onChange callback, and apply atomicity tests. |
 | `Fernlet/FernletTests/AIRetryQueueServiceTests.swift` | AIRetryQueueService queue, clear, apply, reset, and onChange callback tests. |
 | `Fernlet/FernletTests/DerivedSignalsServiceTests.swift` | DerivedSignalsService rebuild accuracy and deferred-rebuild single-run guard tests. |
 | `Fernlet/FernletTests/DerivedSignalsRebuilderTests.swift` | Derived signals rebuilder accuracy and day-window boundary tests. |
-| `Fernlet/FernletTests/MeshNetworkManagerTests.swift` | Mesh network manager slot allocation, peer admission, and lifecycle tests. |
+| `Fernlet/FernletTests/MeshNetworkManagerTests.swift` | Mesh network manager discovery visibility, session open/closed transitions, slot allocation, peer admission, lifecycle, session-photo retention, and film-quota tests (10-shot limit, `filmRemaining`, `leaveSession` reset). |
+| `Fernlet/FernletTests/DisposableCameraControllerTests.swift` | Pure state-machine unit tests for `CameraCaptureController`: initial armed state, disarm, wind progress, arm-on-full-wind, re-arm cycle, and no-op guards. |
 | `Fernlet/FernletTests/MealBuilderTests.swift` | Meal builder food plan to meal/recipe conversion tests. |
 | `Fernlet/FernletTests/SavedRecipeServiceTests.swift` | Saved recipe service load, add, delete, and persistence tests. |
 | `Fernlet/FernletTests/SnapshotSaveCoordinatorTests.swift` | Snapshot save coordinator debounce and remote-reload tests. |
@@ -194,7 +205,7 @@ This index maps the main project files to their responsibilities. It is intended
 | `Fernlet/FernletUITests/OnboardingFlowUITests.swift` | End-to-end UI tests for the onboarding flow. |
 | `Fernlet/FernletUITests/PrivacyDataSettingsUITests.swift` | UI tests for the privacy and data settings screen. |
 | `Fernlet/FernletUITests/StoragePrivacyUITests.swift` | UI tests for storage and privacy preference flows. |
-| `Fernlet/FernletUITests/MeshNetworkUITests.swift` | UI automation tests for mesh network discovery and joining flows. |
+| `Fernlet/FernletUITests/MeshNetworkUITests.swift` | Legacy mesh-lobby UI automation suite. Currently skipped pending replacement with coverage for the active Friends-session disposable-camera flow. |
 
 ## Documentation
 
@@ -206,7 +217,10 @@ This index maps the main project files to their responsibilities. It is intended
 | `Docs/ImplementationPlan.md` | Implementation planning notes. |
 | `Docs/MeshNetworkImplementationPlan.md` | Mesh network and MultipeerConnectivity implementation plan. |
 | `Docs/FernletStore-Refactor-Plan-v2.md` | Refactor plan for the FernletStore architecture (v2). |
+| `Docs/Fernlet-Review-and-Plan-Updates.md` | 2026-05-28 architecture review: security/privacy findings (SEC-1 through SEC-8), progress-vs-spec audit, French-fries meal bug root-cause, new phases S1/S2/M1/S3 and Mesh Phase 4, settings consolidation IA, and friction-reduction features. |
 | `Docs/FileIndex.md` | This file index. |
+| `Docs/ProximityFunctionIndex.md` | Function-level map for proximity, mesh, transport, identity, trust, audit, friend-photo, recipe-share, and related UI code. Use this before adding proximity or mesh behavior to avoid duplicating existing helpers and flows. |
+| `Docs/StoreRepositoryFunctionIndex.md` | Function-level map for `FernletStore`, models, repositories, persistence controllers, storage preferences, snapshot saves, launch preparation, and extracted store services. Use this before adding data mutation, save/load, derived-signal, retry, saved-recipe, or sealed-buffer behavior. |
 
 ### Completed Implementations
 

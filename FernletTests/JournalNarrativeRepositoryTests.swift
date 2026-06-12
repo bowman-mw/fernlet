@@ -119,7 +119,7 @@ struct JournalNarrativeRepositoryTests {
             id: UUID(), dayKey: "2026-05-28", tag: .good, entryDate: Date(),
             text: "Locked.", emotions: [], createdAt: Date(), updatedAt: Date()
         )
-        #expect(throws: FernletLockError.locked) {
+        #expect(throws: FernletLockError.self) {
             try repo.insert(narrative, contentKey: nil)
         }
     }

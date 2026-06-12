@@ -207,6 +207,18 @@ struct NutritionLabelScannerTests {
     }
 
     @MainActor
+    @Test func recoversSplitCaloriesValue() {
+        let result = NutritionLabelScanner.parse(lines: [
+            "Calories",
+            "Total Fat 7g",
+            "Total Carbohydrate 18g",
+            "180"
+        ])
+
+        #expect(result.calories == 180)
+    }
+
+    @MainActor
     @Test func capsSaturatedFatAtTotalFat() {
         let result = NutritionLabelScanner.parse(lines: [
             "Total Fat 10g",

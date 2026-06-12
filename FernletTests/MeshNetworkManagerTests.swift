@@ -49,7 +49,43 @@ struct MeshNetworkManagerTests {
                 "discoveryInfo must omit meshID after switching to closed mode")
     }
 
-    // MARK: - Per-sender send quota
+    @Test func sessionAccess_pairwiseSessionCanCloseAndReopen() {
+        let manager = MeshNetworkManager(store: store)
+
+        manager.setSessionOpen(false)
+        #expect(manager.isSessionOpen == false)
+        #expect(manager.currentMesh == nil)
+
+        manager.setSessionOpen(true)
+        #expect(manager.isSessionOpen)
+    }
+
+    @Test func sessionAccess_meshToggleUpdatesDescriptorAndDiscoveryInfo() {
+        let manager = MeshNetworkManager(store: store)
+        manager.currentMesh = makeTestMesh(mode: .open)
+
+        manager.setSessionOpen(false)
+        #expect(manager.isSessionOpen == false)
+        #expect(manager.currentMesh?.mode == .closed)
+        #expect(manager.currentDiscoveryInfo()["meshID"] == nil)
+
+        manager.setSessionOpen(true)
+        #expect(manager.isSessionOpen)
+        #expect(manager.currentMesh?.mode == .open)
+        #expect(manager.currentDiscoveryInfo()["meshID"] != nil)
+    }
+
+    @Test func sessionAccess_leaveMeshResetsOpenState() {
+        let manager = MeshNetworkManager(store: store)
+        manager.currentMesh = makeTestMesh(mode: .open)
+        manager.setSessionOpen(false)
+
+        manager.leaveMesh()
+
+        #expect(manager.isSessionOpen)
+    }
+
+    // MARK: - Per-sender send quota (film = 10 per session)
 
     /// The first 10 calls to addPhoto succeed; the 11th sets meshError.
     @Test func photoQuota_blocksEleventhPhoto() {
@@ -115,6 +151,64 @@ struct MeshNetworkManagerTests {
                 #expect(manager.meshError != nil, "Photo 11 should fail")
             }
         }
+    }
+
+    /// filmRemaining starts at 10 and decrements with each photo.
+    @Test func filmRemaining_decrementsWithEachPhoto() {
+        let manager = MeshNetworkManager(store: store)
+        manager.currentMesh = makeTestMesh()
+        let imageData = makeTinyJPEG()
+
+        #expect(manager.filmRemaining == 10, "Full roll should start at 10")
+        manager.addPhoto(imageData)
+        manager.addPhoto(imageData)
+        #expect(manager.filmRemaining == 8, "Two shots used — 8 remaining")
+    }
+
+    /// filmRemaining resets to 10 after leaveSession.
+    @Test func filmRemaining_resetsAfterLeaveSession() {
+        let manager = MeshNetworkManager(store: store)
+        manager.currentMesh = makeTestMesh()
+        let imageData = makeTinyJPEG()
+        for _ in 0..<5 { manager.addPhoto(imageData) }
+
+        manager.leaveSession()
+        manager.currentMesh = makeTestMesh()
+        manager.meshError = nil
+        #expect(manager.filmRemaining == 10, "Film should reset to 10 after leaveSession")
+    }
+
+    @Test func deleteAllSessionPhotosClearsCurrentRollFromAlbum() {
+        let manager = MeshNetworkManager(store: store)
+        manager.currentMesh = makeTestMesh()
+        let existingAlbumIDs = Set(manager.meshPhotos.map(\.id))
+        manager.addPhoto(makeTinyJPEG())
+        let sessionPhotoID = manager.sessionPhotos[0].id
+
+        #expect(manager.sessionPhotos.isEmpty == false)
+
+        manager.deleteAllSessionPhotos()
+
+        #expect(manager.meshPhotos.contains(where: { $0.id == sessionPhotoID }) == false)
+        #expect(Set(manager.meshPhotos.map(\.id)).isSubset(of: existingAlbumIDs))
+        #expect(manager.sessionPhotos.isEmpty)
+    }
+
+    @Test func finishSessionPhotosKeepsOnlySelectedCurrentRollPhotos() throws {
+        let manager = MeshNetworkManager(store: store)
+        manager.currentMesh = makeTestMesh()
+        let existingAlbumIDs = Set(manager.meshPhotos.map(\.id))
+        manager.addPhoto(makeTinyJPEG())
+        manager.addPhoto(makeTinyJPEG())
+        let keptID = try #require(manager.sessionPhotos.first?.id)
+        let discardedID = try #require(manager.sessionPhotos.dropFirst().first?.id)
+
+        manager.finishSessionPhotos(keeping: [keptID])
+
+        #expect(manager.meshPhotos.contains(where: { $0.id == keptID }))
+        #expect(manager.meshPhotos.contains(where: { $0.id == discardedID }) == false)
+        #expect(Set(manager.meshPhotos.map(\.id)).isSubset(of: existingAlbumIDs.union([keptID])))
+        #expect(manager.sessionPhotos.isEmpty)
     }
 }
 

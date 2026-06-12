@@ -661,7 +661,7 @@ struct DisposableCameraView: View {
                                             Label("Ask to remove", systemImage: "person.badge.minus")
                                         }
                                         Button(role: .destructive) {
-                                            store.blockProximityPeer(fingerprint: participant.fingerprint)
+                                            manager.block(participant)
                                         } label: {
                                             Label("Block", systemImage: "hand.raised")
                                         }

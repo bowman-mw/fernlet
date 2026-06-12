@@ -151,7 +151,7 @@ enum FernletLockError: Error, LocalizedError {
 // MARK: - Cryptographic primitives
 
 enum FernletLockCrypto {
-    nonisolated static let scryptN: Int = 32768
+    nonisolated static let scryptN: Int = 65536
     nonisolated static let scryptR: Int = 8
     nonisolated static let scryptP: Int = 1
     nonisolated static let keyLength: Int = 32
@@ -159,11 +159,11 @@ enum FernletLockCrypto {
     nonisolated static let aeadNonceLength: Int = 12
     nonisolated static let aeadTagLength: Int = 16
 
-    nonisolated static func deriveVerifier(passcode: String, salt: Data) async throws -> Data {
+    nonisolated static func deriveVerifier(passcode: String, salt: Data, n: Int = scryptN) async throws -> Data {
         let password = Array(passcode.utf8)
         let saltBytes = Array(salt)
         let dkLen = keyLength
-        let N = scryptN
+        let N = n
         let r = scryptR
         let p = scryptP
         return try await Task.detached(priority: .userInitiated) {
@@ -216,7 +216,7 @@ enum FernletLockCrypto {
 
 protocol FernletLockCryptoProviding: AnyObject {
     func generateSalt() throws -> Data
-    func deriveVerifier(passcode: String, salt: Data) async throws -> Data
+    func deriveVerifier(passcode: String, salt: Data, n: Int) async throws -> Data
     func generateContentKey() -> Data
     func wrapContentKey(_ contentKey: Data, using wrappingKeyData: Data) throws -> Data
     func unwrapContentKey(_ wrappedContentKey: Data, using wrappingKeyData: Data) throws -> Data
@@ -227,8 +227,8 @@ final class SystemFernletLockCryptoProvider: FernletLockCryptoProviding {
         try FernletLockCrypto.generateSalt()
     }
 
-    func deriveVerifier(passcode: String, salt: Data) async throws -> Data {
-        try await FernletLockCrypto.deriveVerifier(passcode: passcode, salt: salt)
+    func deriveVerifier(passcode: String, salt: Data, n: Int) async throws -> Data {
+        try await FernletLockCrypto.deriveVerifier(passcode: passcode, salt: salt, n: n)
     }
 
     func generateContentKey() -> Data {
@@ -267,6 +267,7 @@ enum LockKeychainKey: String {
     case attemptCount = "com.fernlet.lock.attemptCount"
     case cooldownLevel = "com.fernlet.lock.cooldownLevel"
     case requiresReset = "com.fernlet.lock.requiresReset"
+    case scryptN = "com.fernlet.lock.scryptN"
 }
 
 protocol FernletDateProviding: AnyObject {
@@ -486,7 +487,7 @@ final class FernletLockService: FernletLockServicing {
         try credential.validate()
 
         let saltData = try cryptoProvider.generateSalt()
-        let derivedKey = try await cryptoProvider.deriveVerifier(passcode: credential.rawValue, salt: saltData)
+        let derivedKey = try await cryptoProvider.deriveVerifier(passcode: credential.rawValue, salt: saltData, n: FernletLockCrypto.scryptN)
         let contentKeyData = cryptoProvider.generateContentKey()
         let wrappedContentKey = try cryptoProvider.wrapContentKey(contentKeyData, using: derivedKey)
 
@@ -494,6 +495,8 @@ final class FernletLockService: FernletLockServicing {
         KeychainItem.store(derivedKey, for: .verifier, service: keychainService)
         KeychainItem.store(Data(credential.kind.rawValue.utf8), for: .kind, service: keychainService)
         KeychainItem.store(wrappedContentKey, for: .wrappedContentKey, service: keychainService)
+        var configuredN = Int32(FernletLockCrypto.scryptN)
+        KeychainItem.store(Data(bytes: &configuredN, count: MemoryLayout<Int32>.size), for: .scryptN, service: keychainService)
         KeychainItem.delete(for: .biometricBypass, service: keychainService)
         KeychainItem.delete(for: .biometricEnabledFlag, service: keychainService)
         KeychainItem.delete(for: .cooldownDeadline, service: keychainService)
@@ -517,20 +520,22 @@ final class FernletLockService: FernletLockServicing {
             throw FernletLockError.notConfigured
         }
 
-        let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: current, salt: saltData)
+        let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: current, salt: saltData, n: storedScryptN())
         guard constantTimeEqual(computedVerifier, storedVerifier) else {
             throw FernletLockError.invalidPasscode
         }
 
         let contentKeyData = try cryptoProvider.unwrapContentKey(wrappedData, using: computedVerifier)
         let newSalt = try cryptoProvider.generateSalt()
-        let newDerivedKey = try await cryptoProvider.deriveVerifier(passcode: new.rawValue, salt: newSalt)
+        let newDerivedKey = try await cryptoProvider.deriveVerifier(passcode: new.rawValue, salt: newSalt, n: FernletLockCrypto.scryptN)
         let newWrappedContentKey = try cryptoProvider.wrapContentKey(contentKeyData, using: newDerivedKey)
 
         KeychainItem.store(newSalt, for: .salt, service: keychainService)
         KeychainItem.store(newDerivedKey, for: .verifier, service: keychainService)
         KeychainItem.store(Data(new.kind.rawValue.utf8), for: .kind, service: keychainService)
         KeychainItem.store(newWrappedContentKey, for: .wrappedContentKey, service: keychainService)
+        var newN = Int32(FernletLockCrypto.scryptN)
+        KeychainItem.store(Data(bytes: &newN, count: MemoryLayout<Int32>.size), for: .scryptN, service: keychainService)
 
         if KeychainItem.load(for: .biometricEnabledFlag, service: keychainService) != nil {
             KeychainItem.storeBiometricBypass(contentKeyData, service: keychainService)
@@ -555,7 +560,7 @@ final class FernletLockService: FernletLockServicing {
             throw FernletLockError.notConfigured
         }
 
-        let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData)
+        let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData, n: storedScryptN())
         guard constantTimeEqual(computedVerifier, storedVerifier) else {
             recordFailedAttempt()
             FernletAuditLog.log("lock.failedAttempt", context: ["cooldownLevel": "\(loadCooldownLevel())"])
@@ -631,7 +636,7 @@ final class FernletLockService: FernletLockServicing {
                 throw FernletLockError.notConfigured
             }
 
-            let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData)
+            let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData, n: storedScryptN())
             guard constantTimeEqual(computedVerifier, storedVerifier) else {
                 throw FernletLockError.invalidPasscode
             }
@@ -759,6 +764,14 @@ final class FernletLockService: FernletLockServicing {
         KeychainItem.store(Data([UInt8(min(count, 255))]), for: .attemptCount, service: keychainService)
     }
 
+    private func storedScryptN() -> Int {
+        guard let data = KeychainItem.load(for: .scryptN, service: keychainService),
+              data.count == MemoryLayout<Int32>.size else {
+            return 32768  // pre-NEW-3 installs stored no N; 32768 was the only value used
+        }
+        return Int(data.withUnsafeBytes { $0.load(as: Int32.self) })
+    }
+
     private func clearAttemptState() {
         KeychainItem.delete(for: .attemptCount, service: keychainService)
         KeychainItem.delete(for: .cooldownDeadline, service: keychainService)
@@ -783,7 +796,8 @@ extension LockKeychainKey: CaseIterable {
             .cooldownDurationSeconds,
             .attemptCount,
             .cooldownLevel,
-            .requiresReset
+            .requiresReset,
+            .scryptN
         ]
     }
 }

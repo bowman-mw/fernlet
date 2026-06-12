@@ -47,9 +47,7 @@ struct DerivedSignalsServiceTests {
             todayKey: todayKey
         )
 
-        // Yield to let the utility task execute.
-        await Task.yield()
-        await Task.yield()
+        service.flushDeferredRebuild()
 
         #expect(providerCallCount == 1)
     }

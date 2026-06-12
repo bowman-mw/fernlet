@@ -1,10 +1,10 @@
 # Fernlet — Meal Estimation Overhaul (Restaurant & Composite Dishes)
 
 **Date:** 2026-06-02
-**Scope:** Replace the lexical, candidate-constrained quick-log matcher with **on-device AI dish decomposition** as the primary route (model determines primary ingredients + per-component grams from its own knowledge, catalog supplies macros). Back it with deterministic fallbacks (dish lexicon JSON + dish-aware portions + preparation-aware scoring). Fix the USDA portion data by reverting to the original FoodData Central format (per-100 g nutrients + rich `foodPortions`). Fold in the already-built web product importer and extend it to chain restaurants behind a privacy gate.
+**Scope:** Replace the lexical, candidate-constrained quick-log matcher with **on-device AI dish decomposition** as the primary route (model determines primary ingredients + per-component grams from its own knowledge, catalog supplies macros). Back it with deterministic fallbacks (dish lexicon JSON + dish-aware portions + preparation-aware scoring). Fix the USDA portion data by reverting to the original FoodData Central format (per-100 g nutrients + rich `foodPortions`). Fold in the already-built web product importer, extend it to chain restaurants behind a privacy gate, and replace hardcoded nutrition-label image URLs with dynamic product-page image discovery.
 **Method:** Source audit of the current meal pipeline against the uploaded files. Findings cite `file:line`. This is a planning document — it specifies *what to build and in what order*; it does not change code.
 
-> **How to use this doc.** §1 is the diagnosis (why restaurant/composite estimates fail today, and what the recent web-importer work does and doesn't cover). §2 is the target architecture and the routing decision. §3–§7 are the build phases (M1–M5) in dependency order — each is self-contained enough to hand to a coding assistant. §8 is open decisions with recommended defaults. §9 holds the JSON and `@Generable` schemas. Build order is **M1a → M1 → M2 → M3 → M4 → M5**; rationale in §2.4.
+> **How to use this doc.** §1 is the diagnosis (why restaurant/composite estimates fail today, and what the recent web-importer work does and doesn't cover). §2 is the target architecture and the routing decision. §3–§8 are the build phases (M1–M6) in dependency order — each is self-contained enough to hand to a coding assistant. §9 is open decisions with recommended defaults. §10 holds the JSON and `@Generable` schemas. Build order is **M1a → M1 → M2 → M3 → M4 → M5 → M6**; rationale in §2.4.
 
 ---
 
@@ -63,7 +63,7 @@ Save tapped
 
 Invert the model contract. Instead of "pick from this lexical candidate list," the model **decomposes the dish using its own world knowledge** into primary components with estimated edible grams; the catalog then supplies the macros.
 
-1. **Decompose.** Model returns `DecomposedDish { name, mealType, components: [{ ingredient, preparation, grams }] }` (schema §9.1). For "6 pieces salmon nigiri" → `[{salmon, raw, ~102}, {sushi rice, steamed, ~108}]`. No candidate list is sent; the model is free.
+1. **Decompose.** Model returns `DecomposedDish { name, mealType, components: [{ ingredient, preparation, grams }] }` (schema §10.1). For "6 pieces salmon nigiri" → `[{salmon, raw, ~102}, {sushi rice, steamed, ~108}]`. No candidate list is sent; the model is free.
 2. **Resolve each component to the catalog.** `FoodItemSearch.results(for: "\(preparation) \(ingredient)")` with the **preparation bias** from §5.1, take the top match, and scale its macros/micros by `grams` over the per-100 g basis (reuse `scale()` with a gram `RecipeIngredient`). This is where canned-vs-raw is finally disambiguated.
 3. **Fallback per component.** No catalog hit → consult the dish lexicon (§5.2) for a typical component food; still nothing → synthesize a **bounded** `.aiResolved` FoodItem from a model macro estimate, flagged low-confidence (§8-D).
 4. **Bound and sanity-check.** Clamp per-component grams (e.g. 1–1500 g) and total dish grams; reject implausible post-resolution macro density. Never trust raw model macros over a catalog match.
@@ -82,6 +82,7 @@ Decomposition is on-device Foundation Models, so it stays within the existing po
 - **M3 (per-100 g catalog data)** — makes the gram-based scaling in M1/M2 accurate and unlocks household units; larger data lift, sequence with the catalog-extraction refactor already on the roadmap.
 - **M4 (web lane: chains + privacy gate)** — extends the built importer and closes the egress gap.
 - **M5 (low-friction correction)** — optional inline edit; keeps quick-log one-tap.
+- **M6 (dynamic nutrition-label image discovery)** — replaces one-off image URL hacks with product-page image discovery + OCR for nutrition facts photos.
 
 ---
 
@@ -115,7 +116,7 @@ Add `FoodDataType.survey` (alongside `foundation/srLegacy/branded/restaurant`, `
 ## 4. Phase M1 — On-device AI dish decomposition (primary)
 
 ### 4.1 New model contract
-Add `FoundationDishDecomposition` (`@Generable`, schema §9.1) and a `MealDecompositionModel.decompose(_:) async throws -> DecomposedDish?` in `FoundationFoodSelection.swift` (or a sibling file). Instructions emphasize: split into **primary edible components**, include staples the dish implies (rice, oil, sauce, dressing, tortilla), give a **preparation** word, estimate **edible grams per component for the whole dish as described**, honor explicit counts ("6 pieces", "2 tacos"). No candidate list in the prompt.
+Add `FoundationDishDecomposition` (`@Generable`, schema §10.1) and a `MealDecompositionModel.decompose(_:) async throws -> DecomposedDish?` in `FoundationFoodSelection.swift` (or a sibling file). Instructions emphasize: split into **primary edible components**, include staples the dish implies (rice, oil, sauce, dressing, tortilla), give a **preparation** word, estimate **edible grams per component for the whole dish as described**, honor explicit counts ("6 pieces", "2 tacos"). No candidate list in the prompt.
 
 ### 4.2 Resolution + scaling
 `MealDecompositionResolver` (new): for each `DishComponent`, query `FoodItemSearch.results(for: "\(preparation) \(ingredient)", in: index)` with the M1a bias, take the top, build a gram `RecipeIngredient(quantity: grams, unit: "g")`, and use `scaledMacros`/`scaledMicronutrients` (`Models.swift`). Assemble into a `Meal` (reuse `MealBuilder.mealFromIngredients`-style assembly; create a `RecipeDefinition` when >1 component, mirroring `MealBuilder.swift:40-48`). Per-component fallbacks per §2.2-3 and bounds per §2.2-4.
@@ -140,7 +141,7 @@ Add `MealDecompositionPayload` (§2.3) and an `AIAuditLog.shared.record(payloadK
 Add a `preparationBias(queryTokens:candidate:)` modifier inside `FoodItemSearch.score` (`FoodDataCatalog.swift:327-346`). Maintain a small preparation token set (`raw`, `grilled`, `baked`, `fried`, `breaded`, `canned`, `in oil`, `in water`, `smoked`, `dried`). When the query implies a preparation (explicit word, or dish context e.g. sushi/sashimi/poke ⇒ raw), **reward** matching candidate tokens and **penalize** mismatched ones. Additive modifier, **not** a hard filter (a missing fresh entry should degrade to *something*).
 
 ### 5.2 Dish lexicon as JSON
-Add `DishTemplates.json` (bundled, loaded like the food catalog) + `DishTemplateLexicon` (schema §9.2). Each entry: dish name/aliases, `isComposite`, component search terms, per-unit typical grams, and default unit/count. Two uses:
+Add `DishTemplates.json` (bundled, loaded like the food catalog) + `DishTemplateLexicon` (schema §10.2). Each entry: dish name/aliases, `isComposite`, component search terms, per-unit typical grams, and default unit/count. Two uses:
 - **Fallback decomposition** when the model is unavailable: expand a known dish into component search terms (so rice becomes eligible) and apply typical portions.
 - **Seed/bound M1**: pass typical portions for recognized dishes to clamp implausible model grams.
 Mark these dishes composite (supersedes the hardcoded `CompositeFoodLexicon`, `FoodDataCatalog.swift:215-234`).
@@ -183,7 +184,56 @@ Acceptance: logging stays a single tap; a wrong match is correctable in ≤2 tap
 
 ---
 
-## 8. Open decisions (recommended defaults)
+## 8. Phase M6 — Dynamic nutrition-label image discovery
+
+### 8.1 Replace hardcoded supplemental image URLs
+
+`FoodProductWebImporter.supplementalNutritionLabelURLs(for:)` is currently a SKU-specific hardcoded Costco fallback. Replace it with dynamic discovery from the product page HTML. The goal is to find product-gallery or supplemental images that contain nutrition facts, then reuse the existing `NutritionLabelScanner.scanAll(image:)` OCR path.
+
+Do not keep product-specific production URL hacks. If a known product URL is useful, keep it only as a fixture in tests.
+
+### 8.2 Candidate image sources
+
+Build candidates from all reasonable page sources:
+- `<img>` attributes: `src`, `data-src`, `data-original`, lazy-load attributes, and `srcset`.
+- `<picture><source srcset>` entries.
+- social metadata: `og:image`, `twitter:image`, and equivalent image meta tags.
+- JSON-LD/Product `image` values.
+- embedded image URLs inside page scripts/JSON, especially same-site CDN URLs such as `costco-static.com`.
+
+Normalize each URL relative to the product page, discard non-http(s), dedupe, and ignore obvious logos/icons/tracking pixels.
+
+### 8.3 Scoring and fetch budget
+
+Score candidates before fetching:
+- High score: URL/alt/title/class/nearby HTML contains `nutrition`, `nutrition facts`, `facts`, `label`, `ingredients`, or similar terms.
+- Medium score: product-gallery images from the same host or official CDN.
+- Low/discard: logos, icons, thumbnails, sprites, badges, tracking pixels, tiny dimensions, or unrelated promo images.
+
+Fetch only the top bounded set, e.g. 8-12 images. Keep the existing image byte cap and fail closed when download or decoding fails. Accept a candidate only when `isCompleteNutritionLabelScan(_:)` succeeds.
+
+### 8.4 Import flow placement
+
+Dynamic image discovery needs page HTML, so the import order should be:
+1. Direct image URL: scan it immediately.
+2. Fetch product HTML.
+3. Try structured JSON nutrition.
+4. Try visible nutrition text.
+5. Try dynamic nutrition-label image candidates from the HTML.
+6. Fall back to FoundationModels text extraction when available.
+
+This moves the supplemental image pass after HTML fetch and changes the helper shape to something like `supplementalNutritionLabelURLs(from html: String, sourceURL: URL) -> [URL]`, or folds it into a broader `candidateImageURLs(from:sourceURL:)` with richer extraction/scoring.
+
+### 8.5 Acceptance
+
+- `supplementalNutritionLabelURLs` no longer returns SKU-specific hardcoded URLs in production code.
+- A product page whose nutrition facts appear only in a gallery image can import successfully through OCR.
+- Product pages with no nutrition-label image still fall through to structured text/model extraction without extra user work.
+- The fetch budget is bounded and deduped; repeated or tiny non-label assets do not create unbounded network requests.
+
+---
+
+## 9. Open decisions (recommended defaults)
 
 - **A — Model macros vs catalog-only when no match.** *Default:* resolve to catalog first; only when no catalog/lexicon match exists, accept a **bounded** model macro estimate, flagged low-confidence and surfaced for M5 correction. Rationale: catalog data carries micronutrients and is consistent; small on-device models drift on absolute macros.
 - **B — FNDDS/survey now or later.** *Default:* add the `.survey` type and seed a **curated** dish set in M3; full FNDDS ingestion later with the catalog-extraction refactor. Rationale: a handful of survey dishes gives high-value single-entry matches without bloating the snapshot.
@@ -194,9 +244,9 @@ Acceptance: logging stays a single tap; a wrong match is correctable in ≤2 tap
 
 ---
 
-## 9. Schemas
+## 10. Schemas
 
-### 9.1 `@Generable` decomposition (M1)
+### 10.1 `@Generable` decomposition (M1)
 ```swift
 @available(iOS 26.0, *)
 @Generable
@@ -221,7 +271,7 @@ struct FoundationDishComponent {
 ```
 Resolution maps each component to a catalog `FoodItem` via `FoodItemSearch` (+ §5.1 bias), scales by `grams` over the per-100 g basis, applies §2.2 fallback/bounds.
 
-### 9.2 `DishTemplates.json` (M2)
+### 10.2 `DishTemplates.json` (M2)
 ```json
 {
   "version": 1,
@@ -234,6 +284,26 @@ Resolution maps each component to a catalog `FoodItem` via `FoodItemSearch` (+ �
       "components": [
         { "search": "fish raw",   "gramsPerUnit": 17, "preparation": "raw" },
         { "search": "sushi rice", "gramsPerUnit": 18, "preparation": "steamed" }
+      ]
+    },
+    {
+      "name": "burger",
+      "aliases": ["hamburger", "beef burger"],
+      "aliasOverrides": [
+        {
+          "alias": "cheeseburger",
+          "componentOverrides": [
+            { "search": "cheese american", "gramsPerUnit": 21 }
+          ]
+        }
+      ],
+      "isComposite": true,
+      "unit": "burger",
+      "components": [
+        { "search": "beef patty ground", "gramsPerUnit": 113, "preparation": "grilled" },
+        { "search": "hamburger bun", "gramsPerUnit": 50 },
+        { "search": "lettuce", "gramsPerUnit": 15 },
+        { "search": "tomato", "gramsPerUnit": 30 }
       ]
     },
     {
@@ -252,7 +322,9 @@ Resolution maps each component to a catalog `FoodItem` via `FoodItemSearch` (+ �
 }
 ```
 
-### 9.3 `MealDecompositionPayload` (M1)
+`aliasOverrides` are additive and optional. Use them when one alias should keep the base dish shape but add variant-specific components, such as `cheeseburger` adding American cheese to the generic `burger` template. Prefer this over duplicating entire generic dishes.
+
+### 10.3 `MealDecompositionPayload` (M1)
 ```swift
 struct MealDecompositionPayload: AIContextPayload {
     let payloadKind = "meal-decomposition"

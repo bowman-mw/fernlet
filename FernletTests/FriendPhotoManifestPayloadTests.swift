@@ -32,12 +32,14 @@ import Foundation
     // before any network traffic is initiated.
     @Test func blockedSenderPhotosAreNotRequested() {
         let store = makeTestStore()
-        store.blockProximityPeer(fingerprint: "blocked-fp")
+        let blockedKey = Data([1, 2, 3])
+        let blockedFingerprint = IdentityService.fingerprint(of: blockedKey)
+        store.blockProximityPeer(signingPublicKey: blockedKey)
 
         let blockedID = UUID()
         let allowedID = UUID()
         let manifest = FriendPhotoManifestPayload(entries: [
-            FriendPhotoManifestEntry(id: blockedID, senderFingerprint: "blocked-fp"),
+            FriendPhotoManifestEntry(id: blockedID, senderFingerprint: blockedFingerprint),
             FriendPhotoManifestEntry(id: allowedID, senderFingerprint: "allowed-fp"),
         ])
 
@@ -73,11 +75,13 @@ import Foundation
     // When every entry is from a blocked sender, nothing is requested.
     @Test func allBlockedSendersProducesEmptyRequest() {
         let store = makeTestStore()
-        store.blockProximityPeer(fingerprint: "blocked-fp")
+        let blockedKey = Data([1, 2, 3])
+        let blockedFingerprint = IdentityService.fingerprint(of: blockedKey)
+        store.blockProximityPeer(signingPublicKey: blockedKey)
 
         let manifest = FriendPhotoManifestPayload(entries: [
-            FriendPhotoManifestEntry(id: UUID(), senderFingerprint: "blocked-fp"),
-            FriendPhotoManifestEntry(id: UUID(), senderFingerprint: "blocked-fp"),
+            FriendPhotoManifestEntry(id: UUID(), senderFingerprint: blockedFingerprint),
+            FriendPhotoManifestEntry(id: UUID(), senderFingerprint: blockedFingerprint),
         ])
 
         let haveIDs: Set<UUID> = []

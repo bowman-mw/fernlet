@@ -202,6 +202,18 @@ struct FernletIdentityEnvelopeTests {
         }
     }
 
+    @Test func verifyAcceptsLegacyEightCharacterRecipientFingerprint() throws {
+        let (alice, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (bob, bid) = try makeIdentity()
+        defer { cleanup(bid) }
+
+        let legacyRecipient = String(bob.localFingerprint.prefix(8))
+        let env = try signedEnvelope(sender: alice, recipientFingerprint: legacyRecipient)
+
+        #expect(try env.verify(identityService: bob, replayCache: ReplayCache()) == env.payload)
+    }
+
     @Test func verifyRejectsReplay() throws {
         let (alice, aid) = try makeIdentity()
         defer { cleanup(aid) }
@@ -261,6 +273,25 @@ struct FernletIdentityEnvelopeTests {
         }
     }
 
+    @Test func recipeShareEnvelopeRejectsUnsealedPayload() throws {
+        let (alice, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (bob, bid) = try makeIdentity()
+        defer { cleanup(bid) }
+
+        let env = try signedEnvelope(
+            sender: alice,
+            payload: Data("recipe payload".utf8),
+            payloadType: .recipeShare,
+            payloadEncryption: .none,
+            recipientFingerprint: bob.localFingerprint
+        )
+
+        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+            try env.verify(identityService: bob, replayCache: ReplayCache())
+        }
+    }
+
     // MARK: - Canonical bytes
 
     @Test func canonicalBytesAreDeterministic() throws {
@@ -292,8 +323,7 @@ struct FernletIdentityEnvelopeTests {
             .meshAdmissionToken,
             .meshAdmissionRequest,
             .meshStateChange,
-            .meshFriendVouchList,
-            .trainerAttachment
+            .meshFriendVouchList
         ]
 
         for payloadType in meshPayloadTypes {
@@ -333,22 +363,77 @@ struct FernletIdentityEnvelopeTests {
     @Test func meshAdmissionTokenSignsVerifiesAndRejectsTampering() throws {
         let (admitter, aid) = try makeIdentity()
         defer { cleanup(aid) }
+        let (joiner, jid) = try makeIdentity()
+        defer { cleanup(jid) }
         let grantedAt = Date(timeIntervalSince1970: 1_700_000_000)
         let expiresAt = grantedAt.addingTimeInterval(2 * 60 * 60)
         var token = try MeshAdmissionToken.signed(
             meshID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
-            joinerFingerprint: "feedbeef",
+            joinerFingerprint: joiner.localFingerprint,
+            joinerSigningPublicKey: joiner.localSigningPublicKey,
             admitterIdentity: admitter,
             grantedAt: grantedAt,
             expiresAt: expiresAt
         )
 
-        try token.verify(now: grantedAt.addingTimeInterval(60))
+        try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey, now: grantedAt.addingTimeInterval(60))
         let canonicalBefore = canonicalBytes(for: token)
         token.admitterSignature = Data("tampered".utf8)
         #expect(canonicalBytes(for: token) == canonicalBefore)
         #expect(throws: MeshAdmissionToken.VerifyError.signatureInvalid) {
-            try token.verify(now: grantedAt.addingTimeInterval(60))
+            try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey, now: grantedAt.addingTimeInterval(60))
+        }
+    }
+
+    @Test func meshAdmissionTokenRejectsWrongJoinerKey() throws {
+        let (admitter, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (joiner, jid) = try makeIdentity()
+        defer { cleanup(jid) }
+        let (attacker, attackid) = try makeIdentity()
+        defer { cleanup(attackid) }
+        let grantedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let token = try MeshAdmissionToken.signed(
+            meshID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+            joinerFingerprint: joiner.localFingerprint,
+            joinerSigningPublicKey: joiner.localSigningPublicKey,
+            admitterIdentity: admitter,
+            grantedAt: grantedAt
+        )
+        #expect(throws: MeshAdmissionToken.VerifyError.joinerKeyMismatch) {
+            try token.verify(joinerSigningPublicKey: attacker.localSigningPublicKey,
+                             now: grantedAt.addingTimeInterval(60))
+        }
+    }
+
+    @Test func meshAdmissionTokenAcceptsLegacyEightCharacterJoinerFingerprint() throws {
+        let (admitter, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (joiner, jid) = try makeIdentity()
+        defer { cleanup(jid) }
+        let grantedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let token = try MeshAdmissionToken.signed(
+            meshID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+            joinerFingerprint: String(joiner.localFingerprint.prefix(8)),
+            joinerSigningPublicKey: joiner.localSigningPublicKey,
+            admitterIdentity: admitter,
+            grantedAt: grantedAt
+        )
+
+        try token.verify(
+            joinerSigningPublicKey: joiner.localSigningPublicKey,
+            now: grantedAt.addingTimeInterval(60)
+        )
+    }
+
+    @Test func verifyRejectsFriendPhotoWithoutSealing() throws {
+        let (sender, sid) = try makeIdentity()
+        defer { cleanup(sid) }
+        let (recipient, rid) = try makeIdentity()
+        defer { cleanup(rid) }
+        let envelope = try signedEnvelope(sender: sender, payloadType: .friendPhoto, payloadEncryption: .none)
+        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+            try envelope.verify(identityService: recipient, replayCache: ReplayCache())
         }
     }
 

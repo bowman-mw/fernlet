@@ -1,13 +1,24 @@
 import HealthKit
 import SwiftUI
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 struct HomeView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
     @Binding var selectedTab: FernletTab
     @Binding var privateHubSection: PrivateHubSection
-    @Binding var socialHubSection: SocialHubSection
+    @Binding var isTabBarCompact: Bool
+    @Binding var tabResetToken: Int
     @State private var hasRecentPeriodEvent = false
+    @State private var isCompanionThoughtVisible = true
+    @State private var companionTapThought: String?
+    @State private var isCompanionSheetPresented = false
+    @State private var companionPetCount = 0
+    @State private var companionTapCount = 0
+    @State private var isCompanionJumping = false
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -20,10 +31,26 @@ struct HomeView: View {
                 }
                 .padding(20)
             }
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
             .navigationTitle("")
         }
-        .task { await refreshRecentPeriodActivity() }
+        .sheet(isPresented: $isCompanionSheetPresented) {
+            CompanionCustomizationSheet(
+                store: store,
+                petCount: $companionPetCount
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
+        }
+        .task {
+            await refreshRecentPeriodActivity()
+            try? await Task.sleep(for: .seconds(6))
+            withAnimation(.easeInOut(duration: 0.35)) {
+                isCompanionThoughtVisible = false
+            }
+        }
     }
 
     @ViewBuilder
@@ -66,14 +93,40 @@ struct HomeView: View {
     }
 
     private var photowallStrip: some View {
-        HStack(spacing: -8) {
-            ForEach(photowallTiles) { tile in
-                PolaroidTile(color: tile.color, caption: tile.caption, rotation: tile.rotation)
+        ZStack(alignment: .bottom) {
+            GeometryReader { geometry in
+                let tiles = photowallTiles
+                let horizontalInset: CGFloat = 46
+                let finalIndex = max(tiles.count - 1, 1)
+
+                ZStack {
+                    ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
+                        PolaroidTile(
+                            color: tile.color,
+                            caption: tile.caption,
+                            rotation: tile.rotation,
+                            imageData: tile.photoID.flatMap { store.meshNetworkManager.thumbnailData(forPhotoID: $0) },
+                            imageWidth: 104,
+                            imageHeight: 92
+                        )
+                        .position(
+                            x: horizontalInset
+                                + (geometry.size.width - horizontalInset * 2)
+                                * CGFloat(index) / CGFloat(finalIndex),
+                            y: geometry.size.height / 2
+                        )
+                        .zIndex(Double(index))
+                    }
+                }
             }
+
+            ThoughtBubble(text: companionTapThought ?? ambientThought)
+                .padding(.bottom, 8)
+                .opacity(isCompanionThoughtVisible ? 1 : 0)
+                .zIndex(100)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .opacity(0.58)
-        .padding(.top, -4)
+        .frame(height: 132, alignment: .bottom)
+        .padding(.top, 4)
         .padding(.bottom, -8)
         .allowsHitTesting(false)
     }
@@ -82,22 +135,41 @@ struct HomeView: View {
         let seeds = store.photowallSeeds
         guard seeds.count == 4 else {
             return [
-                PhotowallTile(caption: "park walk", rotation: -3, color: .fern.opacity(0.45)),
-                PhotowallTile(caption: "dinner",    rotation:  2, color: .goldenrod.opacity(0.45)),
-                PhotowallTile(caption: "morning",   rotation: -1, color: .slate.opacity(0.32)),
-                PhotowallTile(caption: "music",     rotation:  3, color: .dustyRose.opacity(0.38)),
+                PhotowallTile(caption: "park walk", rotation: -3, color: .fern.opacity(0.45), photoID: nil),
+                PhotowallTile(caption: "dinner",    rotation:  2, color: .goldenrod.opacity(0.45), photoID: nil),
+                PhotowallTile(caption: "morning",   rotation: -1, color: .slate.opacity(0.32), photoID: nil),
+                PhotowallTile(caption: "music",     rotation:  3, color: .dustyRose.opacity(0.38), photoID: nil),
             ]
         }
         let palette: [Color] = [.fern.opacity(0.45), .goldenrod.opacity(0.45), .slate.opacity(0.32), .dustyRose.opacity(0.38)]
         return seeds.map { seed in
-            PhotowallTile(caption: seed.caption, rotation: seed.rotation, color: palette[seed.colorIndex % palette.count])
+            PhotowallTile(
+                caption: seed.caption,
+                rotation: seed.rotation,
+                color: palette[seed.colorIndex % palette.count],
+                photoID: seed.photoID
+            )
         }
     }
 
     private var companionSection: some View {
         VStack(spacing: 10) {
-            ThoughtBubble(text: ambientThought)
-            CompanionView(state: store.companionState, size: 132)
+            CompanionView(
+                state: store.companionState,
+                appearance: store.settings.companionAppearance,
+                size: 132,
+                interactionLevel: companionPetCount
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                interactWithCompanion()
+            }
+            .onLongPressGesture(minimumDuration: 0.45) {
+                isCompanionSheetPresented = true
+            }
+            .accessibilityLabel("Fernlet companion")
+            .accessibilityHint("Tap to interact. Press and hold to edit.")
+
             Text(store.companionState.rawValue)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(store.companionState.color)
@@ -122,6 +194,60 @@ struct HomeView: View {
             return "Start with one small thing. Enough, not everything."
         }
         return "A few ordinary care notes are already here. Keep the day simple."
+    }
+
+    private var companionTapThoughts: [String] {
+        [
+            "Fernlet notices you.",
+            "A little check-in counts.",
+            "Still here with you.",
+            "Small care is still care."
+        ]
+    }
+
+    private func interactWithCompanion() {
+        guard !isCompanionJumping else { return }
+        isCompanionJumping = true
+        companionTapCount += 1
+        let tapID = companionTapCount
+
+        withAnimation(.easeInOut(duration: 0.44)) {
+            companionPetCount += 1
+        }
+
+        Task {
+            try? await Task.sleep(for: .milliseconds(440))
+            await MainActor.run {
+                guard companionTapCount == tapID else { return }
+                withAnimation(.easeInOut(duration: 0.46)) {
+                    companionPetCount += 1
+                }
+            }
+            try? await Task.sleep(for: .milliseconds(460))
+            await MainActor.run {
+                guard companionTapCount == tapID else { return }
+                isCompanionJumping = false
+            }
+        }
+
+        let shouldShowThought = companionTapCount.isMultiple(of: 3)
+        companionTapThought = shouldShowThought ? companionTapThoughts[companionTapCount % companionTapThoughts.count] : nil
+
+        withAnimation(.easeInOut(duration: 0.22)) {
+            isCompanionThoughtVisible = shouldShowThought
+        }
+
+        guard shouldShowThought else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            await MainActor.run {
+                guard companionTapCount == tapID else { return }
+                withAnimation(.easeInOut(duration: 0.30)) {
+                    isCompanionThoughtVisible = false
+                }
+                companionTapThought = nil
+            }
+        }
     }
 
     private var signalThought: String? {
@@ -235,7 +361,7 @@ struct HomeView: View {
             "Journal"
         case .care:
             "Care"
-        case .logPeriod, .periodTracking, .intimacyTracking, .friends, .photos, .hobbyNotes:
+        case .logPeriod, .periodTracking, .intimacyTracking, .friends:
             item.title
         }
     }
@@ -262,10 +388,6 @@ struct HomeView: View {
             store.day.healthContext?.intimate != nil
         case .friends:
             store.memories.contains { $0.category.localizedCaseInsensitiveContains("friend") }
-        case .photos:
-            false
-        case .hobbyNotes:
-            store.memories.contains { $0.category.localizedCaseInsensitiveContains("hobby") }
         }
     }
 
@@ -318,14 +440,6 @@ struct HomeView: View {
             privateHubSection = .intimacy
             selectedTab = .personal
         case .friends:
-            socialHubSection = .friends
-            selectedTab = .social
-        case .photos:
-            // TODO: Route to a dedicated photos section if the social hub grows one.
-            socialHubSection = .hobbies
-            selectedTab = .social
-        case .hobbyNotes:
-            socialHubSection = .hobbies
             selectedTab = .social
         }
     }
@@ -336,6 +450,302 @@ struct HomeView: View {
         let range = DateInterval(start: start, end: Date())
         hasRecentPeriodEvent = ((try? await service.loadPeriodEvents(in: range)) ?? []).contains { sample in
             (sample as? HKCategorySample)?.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue
+        }
+    }
+}
+
+private struct CompanionCustomizationSheet: View {
+    enum Section: String, CaseIterable, Identifiable {
+        case style = "Style"
+        case slots = "Customization"
+
+        var id: String { rawValue }
+    }
+
+    var store: FernletStore
+    @Binding var petCount: Int
+    @Environment(\.dismiss) private var dismiss
+    @State private var section: Section = .style
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                companionPreview
+
+                ScrollView {
+                    VStack(spacing: 16) {
+                        switch section {
+                        case .style:
+                            styleControls
+                        case .slots:
+                            slotControls
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+            .background(Color.parchment)
+            .navigationTitle("Fernlet")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(Color.moss)
+                }
+            }
+        }
+    }
+
+    private var companionPreview: some View {
+        VStack(spacing: 14) {
+            CompanionView(
+                state: store.companionState,
+                appearance: store.settings.companionAppearance,
+                size: 150,
+                interactionLevel: petCount
+            )
+            .frame(maxWidth: .infinity)
+
+            Picker("Companion options", selection: $section) {
+                ForEach(Section.allCases) { section in
+                    Text(section.rawValue).tag(section)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 16)
+        .background(Color.parchment)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.bark.opacity(0.08))
+                .frame(height: 1)
+        }
+    }
+
+    private var styleControls: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            CompanionCustomizationCard(
+                title: "Blob",
+                items: CompanionBodyStyle.allCases,
+                selection: appearanceBinding(\.bodyStyle),
+                colorTitle: "Body color",
+                colorSelection: colorPresetBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
+                customColorHex: appearanceBinding(\.bodyCustomColorHex),
+                customColor: customColorBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
+                state: store.companionState
+            ) { style in
+                Label(style.label, systemImage: "seal")
+            }
+
+            CompanionCustomizationCard(
+                title: "Accessory",
+                items: CompanionAccessory.allCases,
+                selection: appearanceBinding(\.accessory),
+                colorTitle: "Accessory color",
+                colorSelection: colorPresetBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
+                customColorHex: appearanceBinding(\.accessoryCustomColorHex),
+                customColor: customColorBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
+                state: store.companionState
+            ) { accessory in
+                Label(accessory.label, systemImage: accessoryIcon(accessory))
+            }
+        }
+    }
+
+    private var slotControls: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            CompanionCustomizationCard(
+                title: "Clothing",
+                items: CompanionClothing.allCases,
+                selection: appearanceBinding(\.clothing),
+                colorTitle: "Clothing color",
+                colorSelection: colorPresetBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
+                customColorHex: appearanceBinding(\.clothingCustomColorHex),
+                customColor: customColorBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
+                state: store.companionState
+            ) { clothing in
+                Label(clothing.label, systemImage: clothingIcon(clothing))
+            }
+
+            CompanionCustomizationCard(
+                title: "Side item",
+                items: CompanionSideItem.allCases,
+                selection: appearanceBinding(\.sideItem),
+                colorTitle: "Item color",
+                colorSelection: colorPresetBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
+                customColorHex: appearanceBinding(\.sideItemCustomColorHex),
+                customColor: customColorBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
+                state: store.companionState
+            ) { item in
+                Label(item.label, systemImage: item.systemImage)
+            }
+        }
+    }
+
+    private func appearanceBinding<Value>(_ keyPath: WritableKeyPath<CompanionAppearance, Value>) -> Binding<Value> {
+        Binding(
+            get: { store.settings.companionAppearance[keyPath: keyPath] },
+            set: { newValue in
+                var appearance = store.settings.companionAppearance
+                appearance[keyPath: keyPath] = newValue
+                store.setCompanionAppearance(appearance)
+            }
+        )
+    }
+
+    private func colorPresetBinding(
+        _ presetKeyPath: WritableKeyPath<CompanionAppearance, CompanionAssetColor>,
+        customHex customKeyPath: WritableKeyPath<CompanionAppearance, String?>
+    ) -> Binding<CompanionAssetColor> {
+        Binding(
+            get: { store.settings.companionAppearance[keyPath: presetKeyPath] },
+            set: { newValue in
+                var appearance = store.settings.companionAppearance
+                appearance[keyPath: presetKeyPath] = newValue
+                appearance[keyPath: customKeyPath] = nil
+                store.setCompanionAppearance(appearance)
+            }
+        )
+    }
+
+    private func customColorBinding(
+        _ presetKeyPath: WritableKeyPath<CompanionAppearance, CompanionAssetColor>,
+        customHex customKeyPath: WritableKeyPath<CompanionAppearance, String?>
+    ) -> Binding<Color> {
+        Binding(
+            get: {
+                let appearance = store.settings.companionAppearance
+                if let hex = appearance[keyPath: customKeyPath], let color = Color(fernletHex: hex) {
+                    return color
+                }
+                return appearance[keyPath: presetKeyPath].color(for: store.companionState)
+            },
+            set: { newValue in
+                var appearance = store.settings.companionAppearance
+                appearance[keyPath: customKeyPath] = newValue.fernletHexString
+                store.setCompanionAppearance(appearance)
+            }
+        )
+    }
+
+    private func accessoryIcon(_ accessory: CompanionAccessory) -> String {
+        switch accessory {
+        case .none: "circle.slash"
+        case .sprout: "leaf"
+        case .flower: "camera.macro"
+        case .glasses: "eyeglasses"
+        }
+    }
+
+    private func clothingIcon(_ clothing: CompanionClothing) -> String {
+        switch clothing {
+        case .none: "circle.slash"
+        case .scarf: "wind"
+        case .sleepCap: "moon"
+        }
+    }
+
+    private func colorLabel(_ color: CompanionAssetColor) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(color.color(for: store.companionState))
+                .frame(width: 12, height: 12)
+            Text(color.label)
+        }
+    }
+}
+
+private extension Color {
+    init?(fernletHex: String) {
+        let cleaned = fernletHex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        guard cleaned.count == 6, let value = Int(cleaned, radix: 16) else { return nil }
+        self.init(
+            red: Double((value >> 16) & 0xFF) / 255,
+            green: Double((value >> 8) & 0xFF) / 255,
+            blue: Double(value & 0xFF) / 255
+        )
+    }
+
+    var fernletHexString: String? {
+        #if canImport(UIKit)
+        UIColor(self).hexString
+        #else
+        nil
+        #endif
+    }
+}
+
+private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelContent: View>: View {
+    var title: String
+    var items: [Item]
+    @Binding var selection: Item
+    var colorTitle: String
+    @Binding var colorSelection: CompanionAssetColor
+    @Binding var customColorHex: String?
+    @Binding var customColor: Color
+    var state: CompanionState
+    @ViewBuilder var label: (Item) -> LabelContent
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
+    private let colorColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 3)
+
+    var body: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 14) {
+                SectionLabel(title)
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(items) { item in
+                        Button {
+                            selection = item
+                        } label: {
+                            label(item)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(selection.id == item.id ? Color.cream : Color.bark)
+                                .frame(maxWidth: .infinity, minHeight: 42)
+                                .background(
+                                    selection.id == item.id ? Color.moss : Color.bark.opacity(0.06),
+                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        SectionLabel(colorTitle)
+                        Spacer()
+                        ColorPicker("Custom color", selection: $customColor, supportsOpacity: false)
+                            .labelsHidden()
+                    }
+
+                    LazyVGrid(columns: colorColumns, spacing: 6) {
+                        ForEach(CompanionAssetColor.allCases) { color in
+                            Button {
+                                colorSelection = color
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(color.color(for: state))
+                                        .frame(width: 11, height: 11)
+                                    Text(color.label)
+                                        .font(.caption2.weight(.semibold))
+                                        .lineLimit(1)
+                                }
+                                .foregroundStyle(customColorHex == nil && colorSelection == color ? Color.cream : Color.bark)
+                                .frame(maxWidth: .infinity, minHeight: 34)
+                                .background(
+                                    customColorHex == nil && colorSelection == color ? Color.moss : Color.bark.opacity(0.05),
+                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -486,33 +896,6 @@ enum SignalPresentation {
     }
 }
 
-struct CompactSignalRow: View {
-    var signal: DerivedSignalRecord
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: SignalPresentation.icon(for: signal.signalName))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(SignalPresentation.color(for: signal.value))
-                .frame(width: 30, height: 30)
-                .background(SignalPresentation.color(for: signal.value).opacity(0.10), in: Circle())
-
-            Text(SignalPresentation.title(for: signal.signalName))
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(Color.bark)
-
-            Spacer()
-
-            Text(signal.value.capitalized)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(SignalPresentation.color(for: signal.value))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(SignalPresentation.color(for: signal.value).opacity(0.10), in: Capsule())
-        }
-    }
-}
-
 struct TrendsModal: View {
     @Environment(\.dismiss) private var dismiss
     var signals: [DerivedSignalRecord]
@@ -582,49 +965,6 @@ struct SectionLabel: View {
             .font(.caption2.weight(.semibold))
             .tracking(0.8)
             .foregroundStyle(Color.slate)
-    }
-}
-
-struct CompanionView: View {
-    var state: CompanionState
-    var size: CGFloat
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(state.color)
-                .frame(width: size, height: size)
-            Circle()
-                .fill(.white.opacity(0.16))
-                .frame(width: size * 0.34, height: size * 0.24)
-                .offset(x: -size * 0.11, y: -size * 0.18)
-            HStack(spacing: size * 0.18) {
-                EyeView(tired: state == .tired || state == .resting, size: size)
-                EyeView(tired: state == .tired || state == .resting, size: size)
-            }
-            .offset(y: -size * 0.08)
-            RoundedRectangle(cornerRadius: 5)
-                .fill(.white.opacity(0.72))
-                .frame(width: size * 0.18, height: state == .thriving ? 9 : state == .okay ? 6 : 3)
-                .offset(y: size * 0.14)
-        }
-        .accessibilityLabel("Fernlet companion, \(state.rawValue)")
-    }
-}
-
-struct EyeView: View {
-    var tired: Bool
-    var size: CGFloat
-
-    var body: some View {
-        ZStack {
-            Ellipse()
-                .fill(.white.opacity(0.92))
-                .frame(width: size * 0.13, height: tired ? size * 0.07 : size * 0.13)
-            Circle()
-                .fill(Color(red: 0.239, green: 0.180, blue: 0.118))
-                .frame(width: size * 0.06, height: size * 0.06)
-        }
     }
 }
 
@@ -882,10 +1222,14 @@ struct FernletRowDivider: View {
 }
 
 struct PhotowallTile: Identifiable {
-    let id = UUID()
     let caption: String
     let rotation: Double
     let color: Color
+    let photoID: UUID?
+
+    var id: String {
+        photoID?.uuidString ?? caption
+    }
 }
 
 // MARK: - Styling

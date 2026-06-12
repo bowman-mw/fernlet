@@ -542,7 +542,7 @@ final class FakeLockCryptoProvider: FernletLockCryptoProviding {
         return Data(repeating: saltCounter, count: FernletLockCrypto.saltLength)
     }
 
-    func deriveVerifier(passcode: String, salt: Data) async throws -> Data {
+    func deriveVerifier(passcode: String, salt: Data, n: Int) async throws -> Data {
         let material = Data("verifier:\(passcode):".utf8) + salt
         return SHA256.hash(data: material).withUnsafeBytes { Data($0) }
     }

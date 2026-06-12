@@ -26,111 +26,155 @@ struct LogPeriodSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                if lockService.state == .notConfigured && hasNarrative {
-                    Text("Notes are only saved when app lock is on. Set up app lock in Settings to keep them with this cycle.")
-                        .font(.callout)
-                        .foregroundStyle(Color.terracotta)
-                }
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text("Log period")
+                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .foregroundStyle(Color.bark)
 
-                Section("Flow") {
-                    Picker("Flow level", selection: $flowLevel) {
-                        ForEach(PeriodFlowLevel.allCases) { level in
-                            Text(level.title).tag(level)
-                        }
+                    if lockService.state == .notConfigured && hasNarrative {
+                        Text("Notes are only saved when app lock is on. Set up app lock in Settings to keep them with this cycle.")
+                            .font(.callout)
+                            .foregroundStyle(Color.terracotta)
+                            .fernletWrappingText()
                     }
-                    .pickerStyle(.segmented)
-                    Toggle("First day of cycle", isOn: $isCycleStart)
-                    Toggle("Intermenstrual bleeding", isOn: $hasIntermenstrualBleeding)
-                }
 
-                Section("Observations") {
-                    HStack {
-                        TextField("Basal body temperature", text: $temperatureText)
-                            .keyboardType(.decimalPad)
-                        Picker("Unit", selection: $temperatureUnit) {
-                            ForEach(PeriodTemperatureUnit.allCases) { unit in
-                                Text(unit.symbol).tag(unit)
+                    SheetField("Flow level") {
+                        FlowLayout(spacing: 8) {
+                            ForEach(PeriodFlowLevel.allCases) { level in
+                                Button(level.title) { flowLevel = level }
+                                    .buttonStyle(ChipButtonStyle(selected: flowLevel == level))
                             }
                         }
-                        .pickerStyle(.segmented)
-                        .frame(width: 110)
                     }
-                    Picker("Cervical mucus", selection: $mucusQuality) {
-                        Text("None").tag(CervicalMucusQuality?.none)
-                        ForEach(CervicalMucusQuality.allCases) { quality in
-                            Text(quality.title).tag(Optional(quality))
-                        }
-                    }
-                    Picker("Ovulation test", selection: $ovulationResult) {
-                        Text("None").tag(OvulationTestResult?.none)
-                        ForEach(OvulationTestResult.allCases) { result in
-                            Text(result.title).tag(Optional(result))
-                        }
-                    }
-                }
 
-                Section("Symptoms") {
-                    ForEach(PeriodSymptom.allCases) { symptom in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Toggle(symptom.title, isOn: Binding(
-                                get: { symptoms.contains(symptom) },
-                                set: { isOn in
-                                    if isOn {
-                                        symptoms.insert(symptom)
-                                    } else {
-                                        symptoms.remove(symptom)
-                                        customScales[symptom] = nil
+                    SheetField("Cycle details") {
+                        VStack(spacing: 0) {
+                            periodToggle("First day of cycle", isOn: $isCycleStart)
+                            Divider()
+                            periodToggle("Intermenstrual bleeding", isOn: $hasIntermenstrualBleeding)
+                        }
+                        .padding(.horizontal, 14)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    }
+
+                    SheetField("Symptoms") {
+                        VStack(spacing: 0) {
+                            ForEach(PeriodSymptom.allCases) { symptom in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    periodToggle(symptom.title, isOn: Binding(
+                                        get: { symptoms.contains(symptom) },
+                                        set: { isOn in
+                                            if isOn {
+                                                symptoms.insert(symptom)
+                                            } else {
+                                                symptoms.remove(symptom)
+                                                customScales[symptom] = nil
+                                            }
+                                        }
+                                    ))
+
+                                    if symptoms.contains(symptom) {
+                                        Stepper(value: Binding(
+                                            get: { customScales[symptom] ?? 5 },
+                                            set: { customScales[symptom] = $0 }
+                                        ), in: 1...10) {
+                                            Text("Intensity \(customScales[symptom] ?? 5)")
+                                        }
+                                        .padding(.bottom, 12)
                                     }
                                 }
-                            ))
-
-                            if symptoms.contains(symptom) {
-                                Stepper(value: Binding(
-                                    get: { customScales[symptom] ?? 5 },
-                                    set: { customScales[symptom] = $0 }
-                                ), in: 1...10) {
-                                    Text("Intensity \(customScales[symptom] ?? 5)")
+                                if symptom != PeriodSymptom.allCases.last {
+                                    Divider()
                                 }
                             }
                         }
+                        .padding(.horizontal, 14)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
                     }
-                }
 
-                Section("Note") {
-                    TextEditor(text: $note)
-                        .frame(minHeight: 120)
-                        .onChange(of: note) { _, newValue in
-                            if newValue.count > 1000 { note = String(newValue.prefix(1000)) }
+                    SheetField("Observations") {
+                        VStack(spacing: 12) {
+                            Picker("Cervical mucus", selection: $mucusQuality) {
+                                Text("None").tag(CervicalMucusQuality?.none)
+                                ForEach(CervicalMucusQuality.allCases) { quality in
+                                    Text(quality.title).tag(Optional(quality))
+                                }
+                            }
+                            Picker("Ovulation test", selection: $ovulationResult) {
+                                Text("None").tag(OvulationTestResult?.none)
+                                ForEach(OvulationTestResult.allCases) { result in
+                                    Text(result.title).tag(Optional(result))
+                                }
+                            }
                         }
-                }
+                        .padding(14)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    }
 
-                if let statusMessage {
-                    Section {
+                    SheetField("Basal body temperature") {
+                        HStack(spacing: 10) {
+                            TextField("Optional", text: $temperatureText)
+                                .keyboardType(.decimalPad)
+                                .sheetTextInput()
+                            Picker("Unit", selection: $temperatureUnit) {
+                                ForEach(PeriodTemperatureUnit.allCases) { unit in
+                                    Text(unit.symbol).tag(unit)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 110)
+                        }
+                    }
+
+                    SheetField("Note") {
+                        SheetTextEditor(
+                            text: Binding(
+                                get: { note },
+                                set: { note = String($0.prefix(1000)) }
+                            ),
+                            placeholder: "Anything important to remember?",
+                            minHeight: 140
+                        )
+                    }
+
+                    Text("\(note.count)/1000")
+                        .font(.caption)
+                        .foregroundStyle(Color.slate)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+
+                    if let statusMessage {
                         Text(statusMessage)
                             .font(.callout)
                             .foregroundStyle(Color.moss)
+                            .fernletWrappingText()
                     }
                 }
+                .padding(20)
+                .padding(.bottom, 10)
             }
-            .navigationTitle("Log period")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Saving" : "Save") { Task { await save() } }
-                        .disabled(isSaving)
-                }
-            }
-            .task {
-                periodStore.attachLockService(lockService)
-                if !authorization.hasRequested(.cycleTracking) {
-                    await authorization.request(.cycleTracking)
-                }
+
+            SheetSaveBar(label: isSaving ? "Saving" : "Save", disabled: isSaving) {
+                Task { await save() }
             }
         }
+        .background(Color.parchment)
+        .task {
+            periodStore.attachLockService(lockService)
+            if !authorization.hasRequested(.cycleTracking) {
+                await authorization.request(.cycleTracking)
+            }
+        }
+    }
+
+    private func periodToggle(_ title: String, isOn: Binding<Bool>) -> some View {
+        Toggle(title, isOn: isOn)
+            .tint(Color.moss)
+            .padding(.vertical, 12)
     }
 
     private var hasNarrative: Bool {

@@ -81,6 +81,17 @@ struct ProximityCoordinatorTests {
         return peer
     }
 
+    private func waitUntil(
+        timeout: Duration = .seconds(1),
+        condition: @escaping @MainActor () -> Bool
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition(), clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     @Test func beginAsBrowserStartsBrowsing() async throws {
         let (identity, serviceID) = try makeIdentity()
         defer { cleanup(serviceID) }
@@ -90,7 +101,7 @@ struct ProximityCoordinatorTests {
         await coordinator.begin(role: .browser, mode: .trainer)
 
         #expect(transport.browsingStarted == true)
-        #expect(transport.lastServiceType == MultipeerSession.defaultServiceType)
+        #expect(transport.lastServiceType == MultipeerServiceType.trainer)
         #expect(coordinator.state == .discovering)
     }
 
@@ -139,7 +150,8 @@ struct ProximityCoordinatorTests {
 
         transport.simulateInvite(from: peer)
         try await Task.sleep(nanoseconds: 10_000_000)
-        #expect(coordinator.state == .awaitingTapConfirmation(peer: peer))
+        #expect(coordinator.state == .awaitingIdentityIntroduction(peer: peer))
+        #expect(transport.sentData.count == 1)
 
         transport.simulateConnected(peer: peer)
         try await Task.sleep(nanoseconds: 10_000_000)
@@ -288,6 +300,46 @@ struct ProximityCoordinatorTests {
         #expect(inspector.liveLog?.events.contains { $0.message.contains("rssi estimate unavailable") } == true)
     }
 
+    @Test func friendRangingInvalidationFallsBackToManualCommit() async throws {
+        struct RangingPayload: Encodable {
+            let rangingMode: String
+            let discoveryToken: Data?
+        }
+
+        let (local, localServiceID) = try makeIdentity()
+        defer { cleanup(localServiceID) }
+        let (remote, remoteServiceID) = try makeIdentity()
+        defer { cleanup(remoteServiceID) }
+        let transport = MockMultipeerTransport()
+        let ranging = MockRangingProvider()
+        let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging)
+        let peer = makePeer(name: "Remote", fingerprint: remote.localFingerprint)
+        let payload = try JSONEncoder().encode(RangingPayload(rangingMode: "uwb", discoveryToken: Data([9, 8, 7])))
+        let envelope = try FernletIdentityEnvelope.signed(
+            identityService: remote,
+            senderDisplayName: "Remote Device",
+            payloadType: .identityIntroduction,
+            payloadSummary: PayloadSummary(title: "Hello from Remote Device"),
+            payload: payload
+        )
+
+        await coordinator.begin(role: .browser, mode: .friend)
+        transport.simulateConnected(peer: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        guard case .awaitingProximityCommit(let peerIdentity) = coordinator.state else {
+            Issue.record("Expected proximity gate, got \(coordinator.state)")
+            return
+        }
+
+        ranging.simulateInvalidated(reason: "Nearby Interaction unavailable")
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        #expect(coordinator.state == .awaitingManualCommit(peer: peerIdentity))
+    }
+
     @Test func validIdentityIntroductionMovesToUserConfirmation() async throws {
         let (local, localServiceID) = try makeIdentity()
         defer { cleanup(localServiceID) }
@@ -312,6 +364,31 @@ struct ProximityCoordinatorTests {
         }
         #expect(peerIdentity.fingerprint == remote.localFingerprint)
         #expect(peerIdentity.displayName == "Remote Device")
+    }
+
+    @Test func legacyAdvertisedFingerprintAcceptsCanonicalIdentityIntroduction() async throws {
+        let (local, localServiceID) = try makeIdentity()
+        defer { cleanup(localServiceID) }
+        let (remote, remoteServiceID) = try makeIdentity()
+        defer { cleanup(remoteServiceID) }
+        let transport = MockMultipeerTransport()
+        let coordinator = makeCoordinator(identity: local, transport: transport)
+        let peer = makePeer(name: "Remote", fingerprint: String(remote.localFingerprint.prefix(8)))
+        let envelope = try signedIntroduction(from: remote)
+        let data = try JSONEncoder().encode(envelope)
+
+        await coordinator.begin(role: .browser, mode: .trainer)
+        transport.simulateConnected(peer: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        await coordinator.tapToConfirm()
+        transport.simulateInboundData(data, from: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        guard case .awaitingUserConfirmation(let peerIdentity) = coordinator.state else {
+            Issue.record("Expected awaiting user confirmation, got \(coordinator.state)")
+            return
+        }
+        #expect(peerIdentity.fingerprint == remote.localFingerprint)
     }
 
     @Test func inspectorRecordsRangingSamplesFromDistanceUpdates() async throws {
@@ -390,7 +467,9 @@ struct ProximityCoordinatorTests {
             expiresAt: currentDate.addingTimeInterval(30)
         )
         transport.simulateInboundData(try JSONEncoder().encode(ackEnvelope), from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil {
+            inspector.liveLog?.transport.rttSamplesMs.count == 1
+        }
 
         #expect(inspector.liveLog?.transport.rttSamplesMs.count == 1)
         #expect(inspector.liveLog?.transport.averageRttMs == 125)

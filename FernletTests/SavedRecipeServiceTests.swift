@@ -82,7 +82,7 @@ struct SavedRecipeServiceTests {
         let savingService = SavedRecipeService(repository: repository)
 
         savingService.add(recipe)
-        try? await ContinuousClock().sleep(for: .milliseconds(50))
+        savingService.flushPendingSave()
 
         let reloadedService = SavedRecipeService(repository: repository)
         await reloadedService.loadAsync()

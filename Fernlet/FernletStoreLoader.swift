@@ -33,6 +33,8 @@ final class FernletStoreLoader {
             let store = try await FernletStore.load { [weak self] message in
                 self?.statusMessage = message
             }
+            statusMessage = "Loading food catalog..."
+            await store.loadBundledFoodItemsForLaunch()
             statusMessage = "Getting Fernlet ready..."
             phase = .ready(store)
         } catch {

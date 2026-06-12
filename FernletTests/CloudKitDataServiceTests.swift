@@ -91,6 +91,27 @@ struct CloudKitDataServiceTests {
         #expect(audit.contains("cloudkit.delete.failed"))
     }
 
+    @Test func sealedBackupAssetRoundTripsAndDeletesByPayloadType() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let service = makeService(database: database, zoneID: zoneID)
+        let backup = SealedBackupRecord(
+            payloadType: .sensitiveNotes,
+            signingPublicKey: Data("signing".utf8),
+            keyAgreementPublicKey: Data("agreement".utf8),
+            nonce: Data(repeating: 1, count: 12),
+            ciphertext: Data("encrypted".utf8),
+            tag: Data(repeating: 2, count: 16),
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+
+        try await service.saveSealedBackup(backup)
+        #expect(try await service.sealedBackup(payloadType: .sensitiveNotes) == backup)
+
+        try await service.deleteSealedBackup(payloadType: .sensitiveNotes)
+        #expect(try await service.sealedBackup(payloadType: .sensitiveNotes) == nil)
+    }
+
     @Test func notSignedInStateThrowsRightErrorForBothMethods() async throws {
         let detectService = makeService(accountStatus: .noAccount, database: MockCloudKitRecordDatabase())
         await #expect(throws: CloudKitDataServiceError.notSignedIn) {
@@ -223,6 +244,22 @@ private final class MockCloudKitRecordDatabase: CloudKitRecordDatabase {
     func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] {
         let requested = Set(recordIDs.map(\.recordName))
         return allRecords.filter { requested.contains($0.recordID.recordName) }
+    }
+
+    func saveRecords(_ records: [CKRecord]) async throws {
+        for record in records {
+            if let asset = record["encryptedBlob"] as? CKAsset, let sourceURL = asset.fileURL {
+                let stableURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension("fernlet-sealed-backup-test")
+                try FileManager.default.copyItem(at: sourceURL, to: stableURL)
+                record["encryptedBlob"] = CKAsset(fileURL: stableURL)
+            }
+            var existing = recordsByType[record.recordType, default: []]
+            existing.removeAll { $0.recordID == record.recordID }
+            existing.append(record)
+            recordsByType[record.recordType] = existing
+        }
     }
 
     func deleteRecords(with recordIDs: [CKRecord.ID]) async throws {

@@ -4,6 +4,8 @@ struct JournalView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
+    @Binding var isTabBarCompact: Bool
+    @Binding var tabResetToken: Int
     @State private var path = NavigationPath()
     @State private var displayedMonth: Date = .now
     @State private var allDays: [String: FernletDay] = [:]
@@ -16,7 +18,7 @@ struct JournalView: View {
                     HStack(alignment: .top) {
                         ScreenHeader(title: "Journal", subtitle: "A small record of being.")
                         Spacer()
-                        HeaderActionButton(systemImage: "square.and.pencil") { activeSheet = .journal }
+                        HeaderActionButton(systemImage: "plus") { activeSheet = .journal }
                     }
                     .padding(.top, 4)
 
@@ -67,6 +69,7 @@ struct JournalView: View {
                 }
                 .padding(20)
             }
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
             .navigationTitle("")
             .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)

@@ -124,6 +124,41 @@ struct MealBuilderTests {
         #expect(meal.name == "Banana")
     }
 
+    @Test func numericRecipeTokenDoesNotReplaceReviewedProductMatch() throws {
+        let chickenMelt = foodItem(
+            name: "Sandwich Bros Chicken Melts",
+            source: .aiResolved,
+            macros: Macros(protein: 9, carbs: 18, fat: 7),
+            category: "web product",
+            tags: ["web-import", "costco"]
+        )
+        let steak = foodItem(name: "Steak", source: .manual, macros: Macros(protein: 24, carbs: 0, fat: 8))
+        let candidates = [FoodSelectionCandidate(id: 1, foodItem: chickenMelt)]
+        let plan = try #require(FoundationFoodSelectionModel.deterministicPlan(
+            description: "2 costco chicken melts",
+            candidates: candidates,
+            fallbackType: .lunch
+        ))
+
+        let result = try #require(MealBuilder.meals(
+            from: plan,
+            candidates: candidates,
+            recipes: [
+                recipe(
+                    name: "Steak 2",
+                    ingredients: [RecipeIngredient(foodItemId: steak.id, quantity: 1, unit: RecipeUnit.serving.rawValue)]
+                )
+            ],
+            foodItems: [chickenMelt, steak],
+            originalDescription: "2 costco chicken melts"
+        ))
+
+        let meal = try #require(result.meals.first)
+        #expect(meal.mealSource == .manual)
+        #expect(meal.macros == Macros(protein: 18, carbs: 36, fat: 14))
+        #expect(meal.note.contains("2 serving Sandwich Bros Chicken Melts"))
+    }
+
     @Test func sandwichAcceptsBreadOrCheeseIngredientsAsRelevant() throws {
         let bread = foodItem(name: "Sourdough bread", source: .manual, macros: Macros(protein: 4, carbs: 22, fat: 1), category: "bread")
         let cheese = foodItem(name: "Cheddar cheese", source: .manual, macros: Macros(protein: 7, carbs: 1, fat: 9), category: "cheese")
@@ -222,6 +257,127 @@ struct MealBuilderTests {
         #expect(scannedMeal.source == MealLogSource.labelScan)
         #expect(webImportMeal.source == MealLogSource.webImport)
         #expect(manualMeal.source == MealLogSource.manual)
+    }
+
+    @Test func directIngredientMealStoresComponentSnapshots() throws {
+        let rice = foodItem(
+            name: "Cooked rice",
+            source: .manual,
+            macros: Macros(protein: 3, carbs: 28, fat: 0),
+            micronutrients: Micronutrients(fiber: 1)
+        )
+
+        let meal = MealBuilder.mealFromIngredients(
+            itemName: "rice bowl",
+            resolvedIngredients: [(ingredient(candidateId: 1, foodName: "Cooked rice", quantity: 2), rice)],
+            mealType: .lunch
+        )
+
+        let component = try #require(meal.componentSnapshots.first)
+        #expect(meal.componentSnapshots.count == 1)
+        #expect(component.name == "Cooked rice")
+        #expect(component.quantity == 2)
+        #expect(component.macros == Macros(protein: 6, carbs: 56, fat: 0))
+        #expect(meal.macros == component.macros)
+        #expect(meal.micronutrientSnapshot.fiber == 2)
+    }
+
+    @Test func recipeMealStoresPerServingComponentSnapshots() throws {
+        let yogurt = foodItem(name: "Greek yogurt", source: .manual, macros: Macros(protein: 18, carbs: 6, fat: 0))
+        let berries = foodItem(name: "Berries", source: .manual, macros: Macros(protein: 1, carbs: 12, fat: 0))
+        let recipe = RecipeDefinition(
+            name: "Yogurt Bowl",
+            servings: 2,
+            ingredients: [
+                RecipeIngredient(foodItemId: yogurt.id, quantity: 2, unit: RecipeUnit.serving.rawValue),
+                RecipeIngredient(foodItemId: berries.id, quantity: 2, unit: RecipeUnit.serving.rawValue)
+            ],
+            source: "manual",
+            createdAt: Date(timeIntervalSince1970: 1_779_664_800),
+            updatedAt: Date(timeIntervalSince1970: 1_779_664_800)
+        )
+
+        let meal = MealBuilder.mealFromRecipe(recipe, mealType: .breakfast, foodItems: [yogurt, berries])
+
+        #expect(meal.macros == Macros(protein: 19, carbs: 18, fat: 0))
+        #expect(meal.componentSnapshots.count == 2)
+        #expect(meal.componentSnapshots.map(\.quantity) == [1, 1])
+    }
+
+    @Test func mealCorrectionRecomputesFromComponentSnapshots() {
+        let store = makeTestStore()
+        let meal = Meal(
+            name: "Rice Bowl",
+            mealType: .lunch,
+            macros: Macros(protein: 10, carbs: 50, fat: 5),
+            micronutrientSnapshot: Micronutrients(fiber: 4),
+            componentSnapshots: [
+                MealComponentSnapshot(
+                    name: "Chicken",
+                    quantity: 100,
+                    unit: RecipeUnit.gram.rawValue,
+                    macros: Macros(protein: 20, carbs: 0, fat: 3),
+                    micronutrients: Micronutrients(sodium: 60)
+                ),
+                MealComponentSnapshot(
+                    name: "Rice",
+                    quantity: 150,
+                    unit: RecipeUnit.gram.rawValue,
+                    macros: Macros(protein: 4, carbs: 42, fat: 1),
+                    micronutrients: Micronutrients(fiber: 2)
+                )
+            ],
+            quality: .ok,
+            confidence: "Food match",
+            note: "Matched locally from food selection: chicken, rice.",
+            source: MealLogSource.foundationModelFoodSelection
+        )
+        store.day.meals.append(meal)
+        let corrected = [
+            MealComponentSnapshot(
+                id: meal.componentSnapshots[0].id,
+                name: "Chicken",
+                quantity: 150,
+                unit: RecipeUnit.gram.rawValue,
+                macros: Macros(protein: 30, carbs: 0, fat: 5),
+                micronutrients: Micronutrients(sodium: 90)
+            ),
+            meal.componentSnapshots[1]
+        ]
+
+        store.updateMealCorrection(
+            mealID: meal.id,
+            name: "Chicken Rice Bowl",
+            mealType: .dinner,
+            macros: meal.macros,
+            componentSnapshots: corrected
+        )
+
+        let updated = store.day.meals[0]
+        #expect(updated.name == "Chicken Rice Bowl")
+        #expect(updated.mealType == .dinner)
+        #expect(updated.macros == Macros(protein: 34, carbs: 42, fat: 6))
+        #expect(updated.micronutrientSnapshot.sodium == 90)
+        #expect(updated.micronutrientSnapshot.fiber == 2)
+        #expect(updated.componentSnapshots == corrected)
+        #expect(updated.confidence == "Corrected")
+    }
+
+    @Test func mealDecodingDefaultsMissingComponentSnapshots() throws {
+        let json = """
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "name": "Legacy Meal",
+          "mealType": "Lunch",
+          "macros": { "protein": 1, "carbs": 2, "fat": 3 },
+          "quality": "ok",
+          "confidence": "Legacy",
+          "note": "Old meal"
+        }
+        """
+        let meal = try JSONDecoder().decode(Meal.self, from: Data(json.utf8))
+        #expect(meal.componentSnapshots.isEmpty)
+        #expect(meal.source == MealLogSource.manual)
     }
 
     private func ingredient(

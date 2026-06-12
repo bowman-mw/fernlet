@@ -66,7 +66,7 @@ struct FernletLockGateModifier: ViewModifier {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Notes attached to your cycle history will be permanently deleted. Your HealthKit entries remain in Apple Health.")
+            Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {

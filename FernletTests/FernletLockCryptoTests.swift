@@ -18,7 +18,7 @@ struct FernletLockCryptoTests {
 
     // MARK: Proves Scrypt cost parameters cannot be silently weakened.
     @Test func verifierKDFCostParametersAreEnforced() {
-        #expect(FernletLockCrypto.scryptN >= 32768, "Scrypt N must remain at least 32768 for the lock verifier")
+        #expect(FernletLockCrypto.scryptN >= 65536, "Scrypt N must be at least 65536 (2^16) per OWASP 2024+ guidance")
         #expect(FernletLockCrypto.scryptR >= 8, "Scrypt r must remain at least 8 for the lock verifier")
         #expect(FernletLockCrypto.scryptP >= 1, "Scrypt p must remain at least 1 for the lock verifier")
     }

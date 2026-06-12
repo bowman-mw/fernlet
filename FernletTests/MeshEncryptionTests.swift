@@ -21,9 +21,15 @@ struct MeshEncryptionTests {
     }
 
     private func makeGroupKey(epoch: Int = 1) -> MeshGroupKey {
-        var bytes = Data(count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, 32, &bytes)
-        return MeshGroupKey(epoch: epoch, keyBytes: bytes, activeSince: Date())
+        MeshGroupKey(epoch: epoch, keyBytes: makeRandomBytes(), activeSince: Date())
+    }
+
+    private func makeRandomBytes(count: Int = 32) -> Data {
+        var bytes = Data(count: count)
+        bytes.withUnsafeMutableBytes {
+            _ = SecRandomCopyBytes(kSecRandomDefault, count, $0.baseAddress!)
+        }
+        return bytes
     }
 
     // MARK: - Photo encrypt / decrypt round-trip
@@ -122,6 +128,41 @@ struct MeshEncryptionTests {
         #expect(cached.senderFingerprint == wirePayload.senderFingerprint)
     }
 
+    @Test func withDecryptedImageDataRetainsSessionMetadata() throws {
+        let session = makePhotoSession()
+        let wirePayload = FriendPhotoPayload(
+            encryptedImageData: Data("encrypted bytes".utf8),
+            nonce: Data(count: 12),
+            keyEpoch: 2,
+            senderName: "Bob",
+            session: session
+        )
+
+        let cached = wirePayload.withDecryptedImageData(Data("decrypted image".utf8))
+
+        #expect(cached.session == session)
+    }
+
+    @Test func meshPhotoCacheLoadsMetadataAndHydratesImageOnDemand() throws {
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FernletMeshPhotoCacheTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let store = MeshPhotoCacheStore(indexURL: directoryURL.appendingPathComponent("MeshPhotoCache.json"))
+        let photo = FriendPhotoPayload(
+            imageData: Data("image bytes".utf8),
+            senderName: "Alice",
+            session: makePhotoSession()
+        )
+
+        store.save([photo])
+        let loaded = try #require(store.load().first)
+
+        #expect(loaded.id == photo.id)
+        #expect(loaded.session == photo.session)
+        #expect(loaded.imageData == nil)
+        #expect(store.imageData(for: loaded) == photo.imageData)
+    }
+
     // MARK: - Epoch filtering on manifest
 
     @Test func manifestEpochFilterSkipsOldEpochs() {
@@ -144,8 +185,7 @@ struct MeshEncryptionTests {
         let sender = makeIdentity()
         let recipient = makeIdentity()
 
-        var groupKeyBytes = Data(count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, 32, &groupKeyBytes)
+        let groupKeyBytes = makeRandomBytes()
 
         let bundle = try sender.encryptGroupKey(groupKeyBytes, for: recipient.localKeyAgreementPublicKey)
         #expect(bundle.count == 92, "Bundle must be 32 + 12 + 32 + 16 = 92 bytes")
@@ -159,8 +199,7 @@ struct MeshEncryptionTests {
         let intendedRecipient = makeIdentity()
         let wrongRecipient = makeIdentity()
 
-        var key = Data(count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, 32, &key)
+        let key = makeRandomBytes()
 
         let bundle = try sender.encryptGroupKey(key, for: intendedRecipient.localKeyAgreementPublicKey)
         #expect(throws: (any Error).self) {
@@ -227,7 +266,7 @@ struct MeshEncryptionTests {
             firstSeenAt: Date()
         )
         vault.trust(fakeIdentity, mode: .friend)
-        vault.revoke(fingerprint: fakeIdentity.fingerprint)
+        vault.revoke(signingPublicKey: fakeIdentity.signingPublicKey)
 
         // id1's key is revoked.
         #expect(vault.isRevokedProximitySigningKey(id1.localSigningPublicKey))
@@ -251,9 +290,22 @@ struct MeshEncryptionTests {
             firstSeenAt: Date()
         )
         vault.trust(fakeIdentity, mode: .friend)
-        vault.block(fingerprint: fakeIdentity.fingerprint)
+        vault.block(signingPublicKey: fakeIdentity.signingPublicKey)
 
         #expect(vault.isBlockedProximitySigningKey(id1.localSigningPublicKey))
         #expect(!vault.isBlockedProximitySigningKey(id2.localSigningPublicKey))
     }
+}
+
+private func makePhotoSession() -> FriendPhotoSessionMetadata {
+    FriendPhotoSessionMetadata(
+        id: UUID(),
+        meshID: UUID(),
+        meshName: "Test Mesh",
+        startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+        participants: [
+            FriendPhotoSessionParticipant(fingerprint: "alice-fp", displayName: "Alice"),
+            FriendPhotoSessionParticipant(fingerprint: "bob-fp", displayName: "Bob")
+        ]
+    )
 }

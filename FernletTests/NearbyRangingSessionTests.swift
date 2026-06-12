@@ -7,10 +7,10 @@ import Combine
 @Suite(.serialized) @MainActor
 struct NearbyRangingSessionTests {
 
-    // MARK: - TapConfirmedDetector
+    // MARK: - ProximityCommitDetector tap gate
 
     @Test func tapConfirmedDetectorTrueWhenSustainedClose() {
-        let detector = TapConfirmedDetector()
+        let detector = makeTapGateDetector()
         let start = Date()
         var result = false
         // 15 samples at 10 Hz → spans 0.0 to 1.4 s; confirmed at ≥ 1.0 s mark
@@ -21,7 +21,7 @@ struct NearbyRangingSessionTests {
     }
 
     @Test func tapConfirmedDetectorFalseWhenBrief() {
-        let detector = TapConfirmedDetector()
+        let detector = makeTapGateDetector()
         let start = Date()
         // 5 samples → spans only 0.4 s; window never fills a full second
         var result = false
@@ -32,7 +32,7 @@ struct NearbyRangingSessionTests {
     }
 
     @Test func tapConfirmedDetectorFalseWhenFar() {
-        let detector = TapConfirmedDetector()
+        let detector = makeTapGateDetector()
         let start = Date()
         // 1.5 s of samples but all above the 5 cm threshold
         var result = false
@@ -43,7 +43,7 @@ struct NearbyRangingSessionTests {
     }
 
     @Test func tapConfirmedDetectorRequiresMinimumSamples() {
-        let detector = TapConfirmedDetector()
+        let detector = makeTapGateDetector()
         let start = Date()
         // Only 2 samples within the 1-second window — below the 3-sample minimum
         _ = detector.ingest(distanceMeters: 0.04, at: start)
@@ -52,7 +52,7 @@ struct NearbyRangingSessionTests {
     }
 
     @Test func tapConfirmedDetectorResetClearsWindow() {
-        let detector = TapConfirmedDetector()
+        let detector = makeTapGateDetector()
         let start = Date()
         var confirmed = false
         for i in 0..<15 {
@@ -65,6 +65,10 @@ struct NearbyRangingSessionTests {
         // Single sample after reset — window is empty, count < minimum → false
         let result = detector.ingest(distanceMeters: 0.04, at: start.addingTimeInterval(2.0))
         #expect(result == false)
+    }
+
+    private func makeTapGateDetector() -> ProximityCommitDetector {
+        ProximityCommitDetector(proximityThreshold: 0.05, dwellSeconds: 1.0, minimumSamples: 3)
     }
 
     @Test func tokenArchiveRoundTrip() throws {

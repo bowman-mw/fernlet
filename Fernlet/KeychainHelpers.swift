@@ -10,24 +10,32 @@ import Security
 enum KeychainItem {
     enum Account: String {
         case storagePreferences = "com.fernlet.storage-preferences.preferences"
+        case deviceJournalKey = "com.fernlet.journal.deviceKey"
     }
 
     nonisolated static let productionService = "com.fernlet.lock"
     nonisolated static let storagePreferencesService = "com.fernlet.storage-preferences"
+    nonisolated static let journalService = "com.fernlet.journal"
 
     // MARK: - Generic String-keyed operations
 
-    static func store(_ data: Data, account: String, service: String, accessibility: CFString) {
+    static func store(
+        _ data: Data,
+        account: String,
+        service: String,
+        accessibility: CFString,
+        synchronizable: Bool = false
+    ) {
+        delete(account: account, service: service)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecAttrAccessible as String: accessibility,
-            kSecAttrSynchronizable as String: false,
+            kSecAttrSynchronizable as String: synchronizable,
             kSecUseDataProtectionKeychain as String: true,
             kSecValueData as String: data
         ]
-        SecItemDelete(query as CFDictionary)
         SecItemAdd(query as CFDictionary, nil)
     }
 
@@ -37,6 +45,7 @@ enum KeychainItem {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
             kSecMatchLimit as String: kSecMatchLimitOne,
             kSecReturnData as String: true,
             kSecUseDataProtectionKeychain as String: true
@@ -50,6 +59,7 @@ enum KeychainItem {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
             kSecUseDataProtectionKeychain as String: true
         ]
         SecItemDelete(query as CFDictionary)
@@ -59,6 +69,7 @@ enum KeychainItem {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
+            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
             kSecUseDataProtectionKeychain as String: true
         ]
         SecItemDelete(query as CFDictionary)

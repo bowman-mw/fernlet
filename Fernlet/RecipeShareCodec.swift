@@ -41,6 +41,36 @@ struct RecipeShareCodec {
         )
     }
 
+    static func proximityPayload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> ProximityRecipeSharePayload {
+        ProximityRecipeSharePayload(
+            recipe: ProximitySharedRecipe(
+                kind: .local,
+                local: payload(for: recipe, foodItems: foodItems),
+                saved: nil
+            )
+        )
+    }
+
+    static func proximityPayload(for recipe: SavedRecipe) -> ProximityRecipeSharePayload {
+        ProximityRecipeSharePayload(
+            recipe: ProximitySharedRecipe(
+                kind: .saved,
+                local: nil,
+                saved: SharedSavedRecipePayload(
+                    name: recipe.name,
+                    sourceURLString: recipe.sourceURLString,
+                    ingredients: recipe.ingredients,
+                    summary: recipe.summary,
+                    servings: recipe.servings,
+                    protein: recipe.protein,
+                    carbs: recipe.carbs,
+                    fat: recipe.fat,
+                    micronutrients: recipe.micronutrients
+                )
+            )
+        )
+    }
+
     static func decodePayload(from text: String) throws -> SharedRecipePayload {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let jsonText: String

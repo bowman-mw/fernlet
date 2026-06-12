@@ -14,7 +14,7 @@ This plan assumes the current app is a single-target SwiftUI prototype with loca
 
 ## Current Prototype Scope
 
-Execution order for the next line is: Phase 0 storage, P1 scoring/sickness, P2 AI fallbacks, P3 memory/signals, P4 ambient/recipe, Phase 1 cleanup, Phase 7 local proximity/file sharing, Phase 8 trainer/nutritionist local sharing, then Phase 9 cloud-assisted group sharing. Deferred production hardening sections can be implemented later without blocking this path.
+Execution order for the next line was: Phase 0 storage, P1 scoring/sickness, P2 AI fallbacks, P3 memory/signals, P4 ambient/recipe, Phase 1 cleanup, Phase 7 local proximity/file sharing, Phase 8 trainer/nutritionist local sharing, then Phase 9 cloud-assisted group sharing. **As of 2026-05-28, the priority sequence is revised: the next phases are S1 (proximity security hardening), S2 (at-rest sealing and CloudKit period isolation), M1 (meal-tracking overhaul), and S3 (AI privacy boundary), all ahead of the remaining ambient/recipe polish.** Proximity/mesh Phase 1 and much of Phase 2 are already implemented; see Completed Prototype Work below.
 
 The next prototype line prioritizes practical product behavior over the full production architecture:
 - In scope now: local data model/storage, goal-based scoring, sickness mode, deterministic AI fallbacks, meal retry queue, Fernlet-voice error/fallback messaging, AI status indicator, recipe parsing, derived signals, log trends, selected ambient features, expanded memory handling, and local proximity/file sharing.
@@ -52,6 +52,14 @@ Scoring, fallback behavior, and tests:
 
 Navigation and UX:
 - Main tabs now support horizontal swipe navigation in `ContentView` in addition to the tab bar.
+
+Proximity and mesh networking:
+- `IdentityService` with Ed25519/X25519 Keychain-backed identity, envelope signing/verification, and ChaCha20-Poly1305 `seal/open` with forward-secret ephemeral X25519 is implemented and tested.
+- `MultipeerSession` 1:1 transport, `ProximityCoordinator` state machine (identity intro/ack, NI token exchange, tap confirmation, heartbeat RTT), `NIRangingSession`, and `ReplayCache` are implemented and tested.
+- Mesh Phase 1 and much of Phase 2 are implemented: `MeshMultipeerSession`, `PeerChannelTransport`, `MeshNetworkManager` (slot table, admission flow, open/closed mode, photo routing, block enforcement), `MeshAdmissionToken`, `MeshNameGenerator`, `MeshLobbyView`, `MeshAdmissionPromptSheet`, and `FriendListView`. Admission tokens, block model, photo-provenance fields, and cache-cap bump are complete.
+- App lock (`FernletLockService`) is implemented with passcode/biometric gates, scrypt key derivation, monotonic anchor, and reboot detection.
+- Period tracker with sealed menstrual narrative (ChaChaPoly per-column, HKDF column keys) is implemented. CloudKit isolation of sealed entities is not yet complete (see Phase S2).
+- Note: the original plan listed Phase 7/8/9 proximity work as future. That work is largely done. Remaining open items are security hardening (S1–S3) and group encryption (Mesh Phase 3/4).
 
 ## Phase 0 — Data Model, Storage, and Website-Port Integration
 
@@ -147,6 +155,62 @@ Exit criteria:
 - No current AI failure blocks logging.
 - Pending meal analysis can be retried later.
 - User-facing error messages do not expose provider or HTTP details.
+
+## Phase S1 — Proximity Security Hardening
+
+Goal: make the local sharing transport secure by construction, not by convention. Addresses SEC-1 (fingerprint trust), SEC-2 (transport encryption), SEC-6 (friend proximity gate), and SEC-7 (envelope expiry).
+
+Tasks:
+- Re-key trust on the **full signing public key**. `isTrusted`, `isRevoked`, and `isBlocked` in `ProximityTrustVault` compare the full 32-byte key (or full SHA-256). The 8-char fingerprint becomes display-only; lengthen the user-facing fingerprint to ≥16 hex.
+- In `ProximityCoordinator.handleIdentityEnvelope`, require `storedPeer.signingPublicKey == envelope.senderSigningPublicKey` before any auto-confirm. A fingerprint match alone is not sufficient.
+- Set `encryptionPreference: .required` on every `MCSession` (`MultipeerSession` and `MeshMultipeerSession`). Do not negotiate down.
+- Send sensitive 1:1 payloads (friend photos, trainer attachments) with `payloadEncryption: .sealedTo(recipientKeyAgreementPublicKey:)` using the existing `IdentityService.seal/open` helpers. The crypto is built and tested; the senders just aren't using it.
+- Require a proximity confirmation for **friend** handshakes: UWB ≤-threshold tap when `NIRangingSession.isHardwareSupported`; explicit user confirmation prompt otherwise. No auto-proceed on transport connect.
+- Set `expiresAt` on all outbound envelopes. Bind photo/attachment envelopes to the current session/epoch.
+
+Exit criteria:
+- A crafted keypair with the same 8-char fingerprint as a trusted peer is rejected — it cannot be auto-confirmed or rejoin via a cached admission token.
+- Packet capture of a 1:1 friend photo or trainer attachment shows ciphertext, not plaintext image data.
+- A friend handshake cannot complete without a UWB tap or explicit user confirmation.
+- A replayed envelope after an app restart is rejected.
+- Unit test: `isTrustedProximityPeer` returns false when fingerprint matches but public key differs.
+
+## Phase S2 — At-Rest Sealing and CloudKit Period Isolation
+
+Goal: make "sealed/encrypted" mean every sensitive surface behind the lock gate, and keep period data off the cloud unless explicitly opted in. Addresses SEC-3 (period narrative in CloudKit), SEC-4 (journal/intimacy plaintext), and SEC-8 (metadata leaks).
+
+Tasks:
+- Extend the `MenstrualNarrativeRepository` pattern (ChaChaPoly + HKDF column key) to **journal text and emotion tags** and **local intimacy notes**. Gate reads/writes on `contentKey()` from `FernletLockService`.
+- Move sealed Core Data entities (`MenstrualNarrative`, future sealed types) into a **non-CloudKit-mirrored** persistent store configuration. A second `NSPersistentStoreDescription` targeting a local-only store file is the recommended approach.
+- Add a test asserting that no sealed entity (by entity name) appears in the CloudKit-mirrored store description's managed object model.
+- Ensure period data leaves the device **only** via the dedicated AES-GCM sealed-backup path gated by `sealedBackupPeriodEnabled` in `StoragePreferences`.
+- Treat period narrative `dateKey` as sensitive: either derive/obfuscate the lookup key or document and accept it as metadata. Prune `NSPersistentHistoryTrackingKey` history for sealed entities on delete.
+
+Exit criteria:
+- Journal text and local intimacy note bytes on disk are ciphertext when the lock is set. Disabling the lock / clearing the content key makes them unreadable.
+- With iCloud sync enabled but period backup disabled, no period record and no period date metadata (dateKey, createdAt) appears in the CloudKit private database.
+- Test: sealed entities are not in the CloudKit-mirrored store model.
+- Test: `MenstrualNarrativeRepository` reads and writes round-trip through encryption.
+
+## Phase M1 — Meal-Tracking and Food-Search Overhaul
+
+Goal: correct single-food meal logging and generic-first ingredient search. Root-cause analysis in the 2026-05-28 review document identifies five root causes for the "French fries → three-brand recipe" bug.
+
+Tasks:
+1. **Add a data-type classification to `FoodItem`** (`foundation`, `srLegacy`, `branded`/`restaurant`) derived at bundle-generation time and persisted. This is the keystone for the items below.
+2. **Generic-first ranking.** Rank `foundation`/`srLegacy` above `branded` in `FoodDataCatalog` unless the query contains a brand/restaurant token. Add a curated brand/chain lexicon. When a chain is named ("McDonald's fries"), flip to restaurant mode and prefer that brand's entries.
+3. **Single-best candidate for atomic foods.** In `FoundationFoodSelection` and `deterministicIngredients`, an atomic food (non-composite) yields **one** ingredient — the best match — not `itemCandidates.prefix(3)`.
+4. **Composite detection by lexicon, not by count.** Replace `if resolved.count > 1 { createRecipe(…) }` in `MealBuilder` with "is this item a known composite?" using a lexicon (sandwich, burger, bowl, salad, tacos, wrap, stir fry, smoothie, …). Only genuine composites expand into parts.
+5. **Dedupe near-identical results.** Collapse multiple brand variants of the same food in search and candidate building; surface one generic with a "more brands" disclosure.
+6. **Ingredient-search UX.** Generic first, deduped, grouped; branded/restaurant items behind a disclosure row; show data source label (Foundation, SR-Legacy, Branded) on each row.
+7. **Quantity sanity.** Default atomic foods to one realistic portion (USDA `foodPortions` gram weight when present). Make the sandwich/grilled-cheese 2-slice heuristic lexicon-driven.
+
+Exit criteria:
+- "French fries" logs **one** generic fries portion, not three branded variants. Macro total is realistic for a single portion.
+- Naming a chain ("Wendy's fries") logs that chain's entry.
+- "Grilled cheese" still expands to bread + cheese (genuine composite).
+- Ingredient search surfaces the generic food first; brand variants are behind a disclosure row.
+- Tests: single-food parse returns exactly one ingredient; composite parse returns multiple; chain-named parse prefers the named brand.
 
 ## Phase P3 — Prototype Memory, Derived Signals, and Trends
 
@@ -305,28 +369,29 @@ Exit criteria:
 - Scoring logic is deterministic and unit-tested.
 - UI shows fuzzy state and subtle live score without optimization framing.
 
-## Phase 3 — Privacy Modules and Sealed Stores
+## Phase 3 / Phase S3 — Privacy Modules, AI Boundary, and Sealed Stores
 
-Goal: establish compile-time boundaries before period, photo, sensitive memory, or AI payload work.
+Goal: establish compile-time boundaries before any third-party AI path and before period, photo, or sensitive memory work. This phase expands the original Phase 3 scope with the S3 requirements from the 2026-05-28 audit. **Must be complete before any OHTTP or third-party provider is introduced.**
 
 Tasks:
-- Create separate Swift modules or local packages:
+- Create separate Swift packages:
   - `PrivateHealthStore`
   - `PeriodContextBridge`
   - `PrivateMemoryStore`
   - `PrivateMediaStore`
   - `ContextBuilder`
   - `AIProviders`
-- Move period raw types into `PrivateHealthStore`.
-- Move `SensitiveMemory` into `PrivateMemoryStore`.
-- Move `Photo` into `PrivateMediaStore`.
-- Add import-boundary tests or build checks proving forbidden modules cannot import sealed types.
-- Define `AIContextPayload` as a transient type with field allowlists.
+- Move period raw types into `PrivateHealthStore`. Move `SensitiveMemory` into `PrivateMemoryStore`. Move `Photo` into `PrivateMediaStore`.
+- Add import-boundary build checks (e.g., forbidden-import Swift package tests or `swiftpackage-forbidden-imports` CI checks) proving that `OHTTPProvider` and AI modules cannot import sealed types.
+- Define typed per-request `AIContextPayload`s with field allowlists. Unit-test that forbidden fields (period, raw journal text, sensitive memory, photos, location, friend data) are absent from each payload type.
+- Add the local **AI audit log**: records request type, provider, field names (not values), whether period context was included, and success/failure. No plaintext sensitive content in the log.
+- Route Tier-2 memory access through the **Memory Agent** (recency/destination filtering + `containsDiagnosticLanguage` post-classifier) before any text reaches a prompt. Remove the raw `tierTwoContextSummary`-into-prompt path in `LaunchPreparationService`/`FernletStore`.
 
 Exit criteria:
-- `OHTTPProvider` cannot import period bridge, sensitive memory, raw journal, or photo types.
+- `OHTTPProvider` (when it exists) cannot import period bridge, sensitive memory, raw journal, or photo types — enforced by build.
+- Payload unit tests assert forbidden fields are absent from each AI request type.
+- No Tier-2 text reaches any prompt without Memory-Agent filtering and diagnostic-language check.
 - `MemoryExtractionContext` cannot import period modules.
-- Context payload unit tests assert forbidden fields are absent.
 
 ## Phase 4 — Onboarding and Permissions
 
@@ -676,11 +741,37 @@ Exit criteria:
 
 ## Suggested Immediate Next Sprint
 
-1. Finish the partial Phase P3 work: editable Core Memory UI, natural-language forget/edit shell, readable test-only Tier 2/debug view, derived-signal computation, and a local trends/signals inspection surface.
-2. Complete the remaining Day Detail gaps: micronutrient summary, cached `daySummaryText` display, and invalidation rules for summaries when past-day food or workout data changes.
-3. Implement the overnight Foundation Models day-summary batch using the existing `DailyHealthScore.daySummaryText` storage, with silent fallback when Foundation Models are unavailable.
-4. Close the recipe loop: decide whether URL-imported `SavedRecipe` should merge into `RecipeDefinition`, then add `fernlet.recipe` import and the nutrition-change notice for updated ingredients.
-5. Expand AI retry beyond meals to journal and recipe analyses, and add visible retry/review affordances where they are still missing.
-6. Add two or three ambient features that are still absent: macro-gap meal suggestions, forgotten-good-things prompts, preventive-care bubbles, or a dedicated year-ago journal card.
-7. Add the first local proximity/file-sharing spike once the export bundle review UI is defined.
-8. Backfill tests around swipe tab navigation if practical, Day Detail month navigation/past-date edit coverage beyond meals/workouts, recipe import, and summary invalidation.
+Revised 2026-05-28. Security-first ordering based on the architecture audit in `Fernlet-Review-and-Plan-Updates.md`.
+
+**Priority 1 — Phase S1 (Proximity Security Hardening):**
+- Re-key trust decisions on the full signing public key; remove auto-confirm on fingerprint match alone.
+- Set `encryptionPreference: .required` on all `MCSession` instances.
+- Send 1:1 friend photos and trainer attachments sealed with `IdentityService.seal`.
+- Add UWB-tap or explicit-confirmation gate to friend handshake.
+- Set `expiresAt` on all outbound envelopes.
+
+**Priority 2 — Phase S2 (At-Rest Sealing and CloudKit Period Isolation):**
+- Move sealed Core Data entities to a non-mirrored store configuration.
+- Extend ChaChaPoly sealing to journal text/emotions and local intimacy notes.
+- Add test asserting no sealed entity appears in the CloudKit-mirrored model.
+
+**Priority 3 — Phase M1 (Meal-Tracking Overhaul):**
+- Add `FoodItem` data-type classification (foundation/srLegacy/branded).
+- Fix `deterministicIngredients` to return one best match per atomic food.
+- Replace count-based composite trigger with lexicon-based detection.
+- Generic-first search ranking with brand-variant deduplication.
+
+**Priority 4 — Phase S3 (AI Privacy Boundary) — before any OHTTP path:**
+- Split sealed types into Swift packages with import-boundary build checks.
+- Define typed `AIContextPayload`s with forbidden-field unit tests.
+- Add the local AI audit log.
+- Route Tier-2 memory through a Memory Agent with diagnostic-language filter.
+
+**After security phases — continue existing work:**
+1. Finish Phase P3: editable Core Memory UI, natural-language forget/edit shell, derived-signal computation, and local signals inspection surface.
+2. Complete Day Detail gaps: micronutrient summary, `daySummaryText` display, and invalidation rules.
+3. Implement the overnight Foundation Models day-summary batch.
+4. Close the recipe loop: merge URL-imported `SavedRecipe` into `RecipeDefinition`, add import, and nutrition-change notice.
+5. Expand AI retry beyond meals to journal and recipe analyses.
+6. Add ambient features: macro-gap meal suggestions, forgotten-good-things prompts, preventive-care bubbles, year-ago journal card.
+7. Settings consolidation (5-section IA) and friction-reduction features (one-tap re-log, widgets, smarter defaults) — see `Fernlet-Review-and-Plan-Updates.md` Parts G and H.

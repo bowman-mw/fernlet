@@ -99,14 +99,21 @@
     },
     {
       "name": "burger",
-      "aliases": ["hamburger", "cheeseburger", "beef burger", "chicken burger"],
+      "aliases": ["hamburger", "beef burger", "chicken burger"],
+      "aliasOverrides": [
+        {
+          "alias": "cheeseburger",
+          "componentOverrides": [
+            { "search": "cheese american", "gramsPerUnit": 21 }
+          ]
+        }
+      ],
       "isComposite": true,
       "unit": "burger",
       "defaultCount": 1,
       "components": [
         { "search": "beef patty ground", "gramsPerUnit": 113, "preparation": "grilled" },
         { "search": "hamburger bun", "gramsPerUnit": 50 },
-        { "search": "cheese american", "gramsPerUnit": 21 },
         { "search": "lettuce", "gramsPerUnit": 15 },
         { "search": "tomato", "gramsPerUnit": 30 }
       ]

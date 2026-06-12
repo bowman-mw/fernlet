@@ -6,6 +6,7 @@ import Foundation
 /// Adding any cloud/OHTTP destination here requires S3 to be fully complete first.
 enum AIDestination: String, Codable, Sendable {
     case onDeviceFoundationModels
+    case webNutritionLookup
 }
 
 // MARK: - Payload protocol
@@ -29,6 +30,29 @@ struct FoodSelectionPayload: AIContextPayload {
     let fallbackMealType: MealType?
 
     var includedFieldNames: [String] { ["mealDescription", "candidates", "fallbackMealType"] }
+}
+
+// MARK: - Meal decomposition payload
+
+/// Fields allowed for AI dish decomposition (M1).
+/// Sends strictly less than FoodSelectionPayload — no candidate list required.
+struct MealDecompositionPayload: AIContextPayload {
+    let payloadKind = "meal-decomposition"
+    let mealDescription: String
+    let fallbackMealType: MealType?
+
+    var includedFieldNames: [String] { ["mealDescription", "fallbackMealType"] }
+}
+
+// MARK: - Web nutrition payload
+
+/// Fields allowed for web nutrition lookup.
+/// The meal description is sent to a search provider, so this path is opt-in and audited.
+struct WebNutritionLookupPayload: AIContextPayload {
+    let payloadKind = "web-nutrition"
+    let mealDescription: String
+
+    var includedFieldNames: [String] { ["mealDescription"] }
 }
 
 // MARK: - Day summary payload

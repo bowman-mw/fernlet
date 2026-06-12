@@ -73,6 +73,7 @@ protocol CloudKitRecordDatabase {
     func recordZoneIDs() async throws -> [CKRecordZone.ID]
     func recordIDs(matching recordType: String, in zoneID: CKRecordZone.ID) async throws -> [CKRecord.ID]
     func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord]
+    func saveRecords(_ records: [CKRecord]) async throws
     func deleteRecords(with recordIDs: [CKRecord.ID]) async throws
 }
 
@@ -213,9 +214,87 @@ final class CloudKitDataService {
         }
     }
 
+    func saveSealedBackup(_ record: SealedBackupRecord) async throws {
+        try await ensureSignedIn()
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("fernlet-sealed-backup")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        try record.ciphertext.write(to: fileURL, options: .atomic)
+
+        let cloudRecord = CKRecord(
+            recordType: "SealedBackupRecord",
+            recordID: sealedBackupRecordID(payloadType: record.payloadType)
+        )
+        cloudRecord["payloadType"] = record.payloadType.rawValue as CKRecordValue
+        cloudRecord["signingPublicKey"] = record.signingPublicKey as CKRecordValue
+        cloudRecord["keyAgreementPublicKey"] = record.keyAgreementPublicKey as CKRecordValue
+        cloudRecord["nonce"] = record.nonce as CKRecordValue
+        cloudRecord["tag"] = record.tag as CKRecordValue
+        cloudRecord["updatedAt"] = record.updatedAt as CKRecordValue
+        cloudRecord["encryptedBlob"] = CKAsset(fileURL: fileURL)
+        try await database.saveRecords([cloudRecord])
+        FernletAuditLog.log("cloudkit.sealedBackup.saved", context: ["payloadType": record.payloadType.rawValue])
+    }
+
+    func sealedBackup(payloadType: SealedBackupPayloadType) async throws -> SealedBackupRecord? {
+        try await ensureSignedIn()
+        let recordID = sealedBackupRecordID(payloadType: payloadType)
+        let records: [CKRecord]
+        do {
+            records = try await database.records(for: [recordID])
+        } catch let error as CKError where error.code == .unknownItem {
+            return nil
+        }
+        guard let record = records.first else { return nil }
+        return try decodeSealedBackup(record)
+    }
+
+    func deleteSealedBackup(payloadType: SealedBackupPayloadType) async throws {
+        try await ensureSignedIn()
+        let recordID = sealedBackupRecordID(payloadType: payloadType)
+        do {
+            try await database.deleteRecords(with: [recordID])
+        } catch let error as CKError where error.code == .unknownItem {
+            return
+        }
+        FernletAuditLog.log("cloudkit.sealedBackup.deleted", context: ["payloadType": payloadType.rawValue])
+    }
+
     private func ensureSignedIn() async throws {
         let status = try await accountProvider.accountStatus()
         guard status == .available else { throw CloudKitDataServiceError.notSignedIn }
+    }
+
+    private func sealedBackupRecordID(payloadType: SealedBackupPayloadType) -> CKRecord.ID {
+        CKRecord.ID(
+            recordName: "sealed-backup.\(payloadType.rawValue)",
+            zoneID: zoneIDOverride ?? Self.appZoneID
+        )
+    }
+
+    private func decodeSealedBackup(_ record: CKRecord) throws -> SealedBackupRecord {
+        guard let rawPayloadType = record["payloadType"] as? String,
+              let payloadType = SealedBackupPayloadType(rawValue: rawPayloadType),
+              let signingPublicKey = record["signingPublicKey"] as? Data,
+              let keyAgreementPublicKey = record["keyAgreementPublicKey"] as? Data,
+              let nonce = record["nonce"] as? Data,
+              let tag = record["tag"] as? Data,
+              let updatedAt = record["updatedAt"] as? Date,
+              let asset = record["encryptedBlob"] as? CKAsset,
+              let fileURL = asset.fileURL,
+              let ciphertext = try? Data(contentsOf: fileURL) else {
+            throw SealedBackupError.malformedRecord
+        }
+        return SealedBackupRecord(
+            payloadType: payloadType,
+            signingPublicKey: signingPublicKey,
+            keyAgreementPublicKey: keyAgreementPublicKey,
+            nonce: nonce,
+            ciphertext: ciphertext,
+            tag: tag,
+            updatedAt: updatedAt
+        )
     }
 
     private func validate(_ confirmation: DeletionConfirmation) throws {
@@ -369,6 +448,23 @@ private final class SystemCloudKitRecordDatabase: CloudKitRecordDatabase {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let operation = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: recordIDs)
             operation.savePolicy = .changedKeys
+            operation.modifyRecordsResultBlock = { result in
+                switch result {
+                case .success:
+                    continuation.resume()
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            database.add(operation)
+        }
+    }
+
+    func saveRecords(_ records: [CKRecord]) async throws {
+        guard !records.isEmpty else { return }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let operation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: nil)
+            operation.savePolicy = .allKeys
             operation.modifyRecordsResultBlock = { result in
                 switch result {
                 case .success:

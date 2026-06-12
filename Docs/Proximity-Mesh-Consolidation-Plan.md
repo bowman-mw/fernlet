@@ -1,7 +1,7 @@
 # Proximity + Mesh Consolidation Plan
 
-**Status:** Planning / implementer-ready  
-**Updated against:** Current post-redesign tree  
+**Status:** Lower-risk consolidation complete; broader folder moves remain optional
+**Updated against:** Current post-redesign tree
 **Scope:** The proximity connection engine, mesh session manager, MultipeerConnectivity transport layer, ranging support, identity envelopes, trust policy, audit data, and friend-photo pipeline.
 
 ---
@@ -15,15 +15,15 @@ The proximity redesign has already removed the largest architectural duplication
 - The standalone `FriendPhotoSharingService` and its cache store have already been deleted.
 - Mesh slots already use real `NIRangingSession` instances and the 15 cm proximity-commit flow.
 
-The remaining cleanup is still worthwhile, but it is narrower than the original consolidation proposal:
+The lower-risk cleanup is complete. The consolidation work landed as focused extractions rather than a rewrite:
 
-1. Extract shared transport types from the legacy `MultipeerSession` file, then delete the unused concrete single-connection wrapper.
-2. Move on-the-wire payload types out of UI and oversized envelope files.
-3. Remove dead `NoopRangingSession`.
-4. Rename the mesh manager's transient distance-window sample so it is not confused with persisted inspector diagnostics.
-5. Organize the flat proximity directory into focused folders.
-6. Split oversized classes only where extension boundaries do not require broad access-control widening.
-7. Consider a shared MultipeerConnectivity substrate and typed payload routing only after the lower-risk cleanup lands.
+1. Extracted shared transport types from the legacy `MultipeerSession` file and deleted the unused concrete single-connection wrapper.
+2. Moved on-the-wire payload types out of UI and oversized envelope files.
+3. Removed dead `NoopRangingSession`.
+4. Renamed the mesh manager's transient distance-window sample so it is not confused with persisted inspector diagnostics.
+5. Added focused transport, wire, ranging, engine, mesh, trust, and photo-support folders as declarations move.
+6. Evaluated separate extension files for the oversized owner classes and kept the classes intact because the apparent sections remain tightly coupled through private state.
+7. Deferred a shared MultipeerConnectivity substrate and typed payload routing until they provide a concrete benefit.
 
 This is consolidation around the existing `ProximityCoordinator`, not a rewrite.
 
@@ -58,39 +58,37 @@ Current behavior:
 
 ### Legacy transport status
 
-`MultipeerSession` is no longer constructed by production code. It still cannot be deleted immediately because live code refers to nested types declared on it:
+The unused concrete `MultipeerSession` wrapper has been deleted. Its reusable support types now live in `Proximity/Transport/`:
 
-- `MultipeerSession.State`
-- `MultipeerSession.PendingInvite`
-- `MultipeerSession.InboundMessage`
-- `MultipeerSession.MultipeerError`
-- `MultipeerSession.defaultServiceType`
+- `MultipeerTransportState`
+- `MultipeerPendingInvite`
+- `MultipeerInboundMessage`
+- `MultipeerTransportError`
+- `MultipeerServiceType.trainer`
 
-Those support types belong at the transport layer, not on an unused concrete adapter.
+The reserved trainer service identifier remains available for future trainer connection work. No replacement single-connection adapter has been added prematurely.
 
 ---
 
 ## 3. Remaining maintenance issues
 
-### P1 - Transport support types are attached to a dead concrete wrapper
+### P1 - Transport support extraction complete
 
-`MultipeerSession.swift` mixes reusable transport contracts and value types with an unused single-connection `MCSession` implementation. `PeerChannelTransport`, `MeshMultipeerSession`, `ProximityCoordinator`, mocks, and tests still depend on the nested support types.
+The reusable transport contract, value types, peer model, and `MCPeerID` persistence now live in `Proximity/Transport/`. The unused concrete `MultipeerSession` wrapper and its wrapper-focused tests have been deleted.
 
-**Resolution:** extract neutral transport types first, update references, then delete the unused concrete `MultipeerSession` implementation and retire tests that only cover that deleted adapter.
+A replacement single-connection adapter remains deferred until trainer connection work needs one.
 
-Do not add a replacement single-connection adapter unless a production feature needs one.
+### P2 - Wire-type extraction complete
 
-### P2 - Wire types are scattered
+`PayloadType`, mesh payloads, admission tokens, rotation payloads, and friend-photo payloads now live in focused files under `Proximity/Wire/`. Envelope signing and verification remain in `FernletIdentityEnvelope.swift`.
 
-`PayloadType`, envelope signing, mesh payloads, admission tokens, and rotation payloads share `FernletIdentityEnvelope.swift`. Friend-photo wire payloads live at the top of `FriendPhotoShareView.swift`, mixed with cache code and SwiftUI views.
-
-**Resolution:** move wire models into `Proximity/Wire/`. Keep Codable shape unchanged.
+**Resolution:** wire models moved without changing their Codable shape.
 
 ### P3 - Large owner files hide boundaries
 
 `MeshNetworkManager.swift` and `ProximityCoordinator.swift` contain several distinct responsibilities. Their existing `// MARK:` sections show useful boundaries, but splitting them into extensions is not automatically mechanical: Swift `private` declarations are file-scoped.
 
-**Resolution:** extract standalone types and helpers first. Split extensions only where the required access-control changes remain narrow and reviewable. Avoid a broad `private` to internal rewrite.
+**Resolution:** standalone types and helpers were extracted first. The independent mesh session models now live in `Proximity/Mesh/MeshSessionTypes.swift`, and the vault-backed friend policy lives in `Proximity/Trust/FriendSessionTrustPolicy.swift`. A follow-up extension evaluation found no narrow separate-file boundary worth taking now: manager routing, admission, photo, and encryption sections share private session state and send helpers; coordinator transport, ranging, identity, heartbeat, and inspector paths share one private state machine. Keep both classes intact until a cohesive helper can own one of those responsibilities without broad `private` to internal widening. Keep file-scoped photo-wall preferences beside the manager until they have that boundary.
 
 ### P4 - Similar names hide intentionally different models
 
@@ -99,9 +97,9 @@ Two distance sample types currently share the name `DistanceSample`:
 | Type | Purpose | Resolution |
 |---|---|---|
 | `ConnectionSessionLog.DistanceSample` | Persisted inspector diagnostic with timestamp and optional direction components | Keep as-is |
-| Global `DistanceSample` in `MeshNetworkManager.swift` | Transient rolling window for mesh slot ranking | Rename to `MeshDistanceSample` or `DistanceStabilitySample` |
+| `MeshDistanceSample` in `Proximity/Mesh/MeshSessionTypes.swift` | Transient rolling window for mesh slot ranking | Renamed; keep separate from persisted inspector diagnostics |
 
-The two event enums are also intentionally different:
+The two event enums are intentionally different. Decision complete: keep both enums separate.
 
 | Type | Purpose | Resolution |
 |---|---|---|
@@ -112,10 +110,10 @@ Do not merge persisted diagnostics and security audit data simply because some c
 
 ### P5 - Dead and misleading declarations remain
 
-- `NoopRangingSession` is dead. Slots use `NIRangingSession()`.
-- `MeshSlotTrustPolicy` is misleadingly named and partially redundant. It delegates revoked, blocked, and audit operations through `FernletStore`, while returning `true` for trusted-peer checks. In friend mode that permissiveness is intentional because the proximity gate is the authorization step.
+- Deleted dead `NoopRangingSession`; slots use `NIRangingSession()`.
+- `FriendSessionTrustPolicy` is a thin wrapper over `ProximityTrustVault`. It delegates revoked, blocked, and audit operations directly to the vault while returning `true` for remembered-trust checks. In friend mode that permissiveness is intentional because the proximity gate is the authorization step. This replaces the misleading store-backed `MeshSlotTrustPolicy` name.
 
-**Resolution:** delete `NoopRangingSession`. Keep the slot policy behavior initially, but rename or replace it with a thin friend-session policy wrapper over `ProximityTrustVault` after adding focused tests.
+**Resolution:** dead ranging stub removed. Friend-session trust-policy cleanup is complete with focused tests.
 
 ### P6 - Payload dispatch should remain layered
 
@@ -152,11 +150,11 @@ Proximity/
 │   ├── FernletIdentityEnvelope.swift
 │   ├── MeshPayloads.swift
 │   ├── FriendPhotoPayloads.swift
-│   └── TrainerPayloads.swift
+│   └── TrainerPayloads.swift              # add when concrete trainer wire models exist
 ├── Trust/
-│   ├── ProximityTrustPolicy.swift
+│   ├── FriendSessionTrustPolicy.swift
 │   ├── ProximityTrustVault.swift
-│   └── TrainerAuditLog.swift
+│   └── TrainerAuditLog.swift              # includes ProximityTrustPolicy
 ├── Audit/
 │   ├── ConnectionSessionLog.swift
 │   └── ConnectionInspector.swift
@@ -191,38 +189,38 @@ Keep app-level surfaces such as `ConnectView`, `DisposableCameraView`, and `Mesh
 
 ### Phase 1 - Low-risk dead-code and naming cleanup
 
-- Delete `NoopRangingSession`.
-- Rename the manager's transient `DistanceSample`.
-- Extract `ProximityCommitDetector` from `NIRangingSession.swift`.
-- Move `RangingDistance`, `RangingState`, and `RangingProvider` into a small ranging contract file.
+- Deleted `NoopRangingSession`.
+- Renamed the manager's transient `DistanceSample` to `MeshDistanceSample`.
+- Extracted `ProximityCommitDetector` from `NIRangingSession.swift`.
+- Moved `RangingDistance`, `RangingState`, and `RangingProvider` into a small ranging contract file.
 
 **Gate:** build, `ProximityCoordinatorTests`, `MeshNetworkManagerTests`, and ranging tests pass.
 
-### Phase 2 - Wire-type extraction
+### Phase 2 - Wire-type extraction (complete)
 
-- Move friend-photo payload models out of `FriendPhotoShareView.swift`.
-- Move mesh and trainer payload models out of `FernletIdentityEnvelope.swift`.
-- Keep raw values, Codable field names, defaults, and canonical-byte ordering unchanged.
-- Leave envelope signing and verification code in `FernletIdentityEnvelope.swift`.
+- Moved friend-photo payload models out of `FriendPhotoShareView.swift`.
+- Moved mesh payload models out of `FernletIdentityEnvelope.swift`. Add `TrainerPayloads.swift` only when concrete trainer wire models exist.
+- Preserved raw values, Codable field names, defaults, and canonical-byte ordering.
+- Left envelope signing and verification code in `FernletIdentityEnvelope.swift`.
 
 **Gate:** build, encryption tests, snapshot round-trip tests, and mesh tests pass.
 
-### Phase 3 - Retire the legacy single-connection transport
+### Phase 3 - Retire the legacy single-connection transport (complete)
 
-- Extract `MultipeerPeer`, `MCPeerIDStoring`, and `FileMCPeerIDStore`.
-- Replace nested `MultipeerSession.*` support types with neutral transport-layer names.
-- Update `MultipeerTransport`, `PeerChannelTransport`, `MeshMultipeerSession`, coordinator code, mocks, and tests.
-- Delete the unused concrete `MultipeerSession` wrapper.
-- Remove or rewrite `MultipeerSessionTests` so the retained behavior is covered at the active fan-out transport boundary.
+- Extracted `MultipeerPeer`, `MCPeerIDStoring`, and `FileMCPeerIDStore`.
+- Replaced nested `MultipeerSession.*` support types with neutral transport-layer names.
+- Updated `MultipeerTransport`, `PeerChannelTransport`, `MeshMultipeerSession`, coordinator code, and mocks.
+- Deleted the unused concrete `MultipeerSession` wrapper and its wrapper-focused tests.
+- Preserved `MultipeerServiceType.trainer` for future trainer connection work without adding an unused adapter.
 
-**Gate:** build and all proximity, mesh, and transport tests pass.
+**Gate:** app target builds cleanly. Full test-target execution remains blocked by the pre-existing missing `TrainerProximityService` implementation referenced by `TrainerProximityServiceTests.swift`.
 
-### Phase 4 - Folder organization and selective extraction
+### Phase 4 - Folder organization and selective extraction (complete)
 
-- Move files into the target folders.
-- Extract photo cache and image helpers from `FriendPhotoShareView.swift`.
-- Extract mesh supporting types from `MeshNetworkManager.swift`.
-- Consider focused manager extensions only when access-control impact is small.
+- Moved proximity implementation files into focused ownership folders.
+- Extracted photo cache and image helpers from `FriendPhotoShareView.swift`.
+- Extracted independent mesh session supporting types from `MeshNetworkManager.swift`.
+- Evaluated manager and coordinator extension boundaries; no separate-file split is justified without broad access-control widening.
 
 **Gate:** build and full test suite pass with behavior unchanged.
 
@@ -262,7 +260,7 @@ Add typed routing only if it improves exhaustiveness, forbidden-payload rejectio
 
 ## 8. Documentation follow-up
 
-Update these documents as each phase lands:
+Updated as the lower-risk consolidation landed:
 
 - `Docs/FileIndex.md`
 - `Docs/MeshNetworkImplementationPlan.md`

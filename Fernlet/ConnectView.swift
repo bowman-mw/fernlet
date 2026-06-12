@@ -5,10 +5,16 @@ import SwiftUI
 struct FriendsView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
+    @Binding var isTabBarCompact: Bool
+    @Binding var tabResetToken: Int
 
     @State private var showConnectionAnimation = false
     @State private var connectionPeerName = ""
     @State private var sessionReady = false
+    @State private var disconnectReviewPresented = false
+    @State private var selectedForSave: Set<UUID> = []
+    @State private var selectedAlbumPostID: UUID?
+    @State private var sessionSearchText = ""
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
 
@@ -23,18 +29,17 @@ struct FriendsView: View {
                     .zIndex(0)
             }
 
-            if showConnectionAnimation {
-                ConnectionSuccessOverlay(peerName: connectionPeerName) {
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        showConnectionAnimation = false
-                        sessionReady = true
-                    }
-                }
-                .transition(.opacity)
-                .zIndex(2)
-            }
         }
         .animation(.easeInOut(duration: 0.3), value: sessionReady)
+        .fullScreenCover(isPresented: $showConnectionAnimation) {
+            ConnectionSuccessOverlay(peerName: connectionPeerName) {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    showConnectionAnimation = false
+                    sessionReady = true
+                }
+            }
+            .presentationBackground(.clear)
+        }
         .onAppear {
             // Already in session when returning to the tab — skip animation.
             if manager.isInSession { sessionReady = true }
@@ -47,7 +52,41 @@ struct FriendsView: View {
             } else if wasInSession && !nowInSession {
                 sessionReady = false
                 showConnectionAnimation = false
+                presentDisconnectReviewIfNeeded()
             }
+        }
+        .sheet(isPresented: $disconnectReviewPresented) {
+            FriendPhotoReviewSheet(
+                photos: manager.sessionPhotos,
+                selectedIDs: $selectedForSave,
+                saveSelected: {
+                    let toSave = manager.sessionPhotos.filter { selectedForSave.contains($0.id) }
+                    try? await FriendPhotoLibrarySaver.save(toSave)
+                    manager.finishSessionPhotos(keeping: selectedForSave)
+                    await manager.leaveSessionAfterNotifyingPeers()
+                    disconnectReviewPresented = false
+                },
+                discardAll: {
+                    manager.deleteAllSessionPhotos()
+                    Task {
+                        await manager.leaveSessionAfterNotifyingPeers()
+                        disconnectReviewPresented = false
+                    }
+                }
+            )
+        }
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { selectedAlbumPostID != nil },
+                set: { if !$0 { selectedAlbumPostID = nil } }
+            )
+        ) {
+            FriendPhotoFeedView(
+                    posts: filteredPhotoWallPosts,
+                    initialPostID: selectedAlbumPostID,
+                    manager: manager,
+                    onDismiss: { selectedAlbumPostID = nil }
+                )
         }
     }
 
@@ -61,14 +100,8 @@ struct FriendsView: View {
                         ScreenHeader(title: "Friends", subtitle: "")
                         Spacer()
                         HStack(spacing: 10) {
-                            if store.settings.showProximityDebugTools {
-                                HeaderActionButton(systemImage: "dot.radiowaves.left.and.right") {
-                                    store.showConnectionInspector = true
-                                }
-                                .accessibilityIdentifier("friends.inspectorButton")
-                            }
                             NavigationLink {
-                                FriendListView(store: store)
+                                FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                             } label: {
                                 headerButtonLabel("person.2")
                             }
@@ -85,11 +118,13 @@ struct FriendsView: View {
                     if manager.meshPhotos.isEmpty {
                         emptyAlbumView
                     } else {
+                        sessionSearchField
                         photoGrid
                     }
                 }
                 .padding(20)
             }
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
             .navigationTitle("")
         }
@@ -144,26 +179,65 @@ struct FriendsView: View {
     // MARK: - Photo grid
 
     private let columns = [
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2)
+        GridItem(.flexible(), spacing: 1),
+        GridItem(.flexible(), spacing: 1),
+        GridItem(.flexible(), spacing: 1)
     ]
 
     private var photoGrid: some View {
-        LazyVGrid(columns: columns, spacing: 2) {
-            ForEach(manager.meshPhotos) { photo in
-                if let data = photo.imageData, let uiImage = UIImage(data: data) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .aspectRatio(1, contentMode: .fill)
-                        .clipped()
-                } else {
-                    Color.cream.aspectRatio(1, contentMode: .fill)
-                }
+        LazyVGrid(columns: columns, spacing: 1) {
+            ForEach(filteredPhotoWallPosts) { post in
+                albumPhotoCell(post)
+                    .onTapGesture {
+                        selectedAlbumPostID = post.id
+                    }
             }
         }
         .padding(.top, 2)
+    }
+
+    private var sessionSearchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Color.slate)
+            TextField("Search sessions by person or mesh", text: $sessionSearchText)
+                .autocorrectionDisabled()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+    }
+
+    private var filteredPhotoWallPosts: [FriendPhotoWallPost] {
+        let posts = manager.photoWallPosts
+        let query = sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return posts }
+        return posts.filter { post in
+            guard let session = post.session else { return false }
+            return session.meshName?.lowercased().contains(query) == true
+                || session.participants.contains {
+                    $0.displayName.lowercased().contains(query) || $0.fingerprint.lowercased().contains(query)
+                }
+        }
+    }
+
+    private func albumPhotoCell(_ post: FriendPhotoWallPost) -> some View {
+        Color.cream
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                LazyFriendPhotoImage(loadData: { manager.thumbnailData(for: post.coverPhoto) }, contentMode: .fill)
+            }
+            .clipped()
+            .overlay(alignment: .topTrailing) {
+                if post.isCarousel {
+                    Image(systemName: "square.on.square")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                        .shadow(radius: 2)
+                        .padding(8)
+                }
+            }
     }
 
     // MARK: - Empty state
@@ -196,6 +270,236 @@ struct FriendsView: View {
             }
         }
         return manager.slots.first?.peer.displayName ?? "Friend"
+    }
+
+    private func presentDisconnectReviewIfNeeded() {
+        guard !manager.sessionPhotos.isEmpty else { return }
+        selectedForSave = Set(manager.sessionPhotos.map(\.id))
+        disconnectReviewPresented = true
+    }
+
+}
+
+// MARK: - Full-screen photo feed
+
+private struct FriendPhotoFeedView: View {
+    let posts: [FriendPhotoWallPost]
+    let initialPostID: UUID?
+    let manager: MeshNetworkManager
+    let onDismiss: () -> Void
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    LazyVStack(spacing: 8) {
+                        ForEach(posts) { post in
+                            FriendPhotoCarouselPostView(
+                                post: post,
+                                manager: manager,
+                                width: geometry.size.width
+                            )
+                            .id(post.id)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .background(Color.parchment)
+                .onAppear {
+                    guard let initialPostID else { return }
+                    proxy.scrollTo(initialPostID, anchor: .top)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(Color.bark)
+                        .frame(width: 42, height: 42)
+                        .background(.regularMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 14)
+                .padding(.trailing, 16)
+                .accessibilityLabel("Close photo viewer")
+            }
+        }
+        .background(Color.parchment)
+    }
+}
+
+private struct FriendPhotoCarouselPostView: View {
+    let post: FriendPhotoWallPost
+    let manager: MeshNetworkManager
+    let width: CGFloat
+
+    @State private var selectedPhotoID: UUID
+    @State private var chromeVisible = true
+    @State private var chromeTask: Task<Void, Never>?
+
+    init(post: FriendPhotoWallPost, manager: MeshNetworkManager, width: CGFloat) {
+        self.post = post
+        self.manager = manager
+        self.width = width
+        self._selectedPhotoID = State(initialValue: post.photos.first?.id ?? post.coverPhoto.id)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+
+            TabView(selection: $selectedPhotoID) {
+                ForEach(post.photos) { photo in
+                    carouselPhoto(photo)
+                        .tag(photo.id)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: width * 1.25)
+            .overlay(alignment: .topTrailing) {
+                if chromeVisible, post.photos.count > 1 {
+                    Text("\(selectedIndex + 1) / \(post.photos.count)")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.black.opacity(0.58), in: Capsule())
+                        .padding(14)
+                        .transition(.opacity)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if chromeVisible, post.photos.count > 1 {
+                    HStack(spacing: 6) {
+                        ForEach(post.photos) { photo in
+                            Circle()
+                                .fill(photo.id == selectedPhotoID ? Color.white : Color.white.opacity(0.5))
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                    .padding(10)
+                    .background(.black.opacity(0.35), in: Capsule())
+                    .padding(.bottom, 14)
+                    .transition(.opacity)
+                }
+            }
+        }
+        .background(Color.parchment)
+        .onAppear { scheduleChromeFade() }
+        .onChange(of: selectedPhotoID) { _, _ in scheduleChromeFade() }
+        .onDisappear { chromeTask?.cancel() }
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            FriendProfilePlaceholder()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(selectedPhoto.senderName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.bark)
+                Text(selectedPhoto.addedAt, style: .date)
+                    .font(.caption)
+                    .foregroundStyle(Color.slate)
+            }
+            Spacer()
+            Color.clear.frame(width: 42, height: 42)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func carouselPhoto(_ photo: FriendPhotoPayload) -> some View {
+        Color.parchment
+            .overlay {
+                LazyFriendPhotoImage(
+                    loadData: { manager.imageData(for: photo) },
+                    contentMode: .fit,
+                    shouldLoad: shouldLoad(photo)
+                )
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: width * 1.25)
+            .overlay(alignment: .bottomTrailing) {
+                Button {
+                    manager.toggleFavorite(photoID: photo.id, in: post)
+                } label: {
+                    Image(systemName: manager.favoritePhotoID(for: post) == photo.id ? "heart.fill" : "heart")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(manager.favoritePhotoID(for: post) == photo.id ? Color.dustyRose : .white)
+                        .frame(width: 44, height: 44)
+                        .background(.black.opacity(0.38), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(14)
+                .accessibilityLabel("Use this picture as the session cover")
+            }
+    }
+
+    private var selectedIndex: Int {
+        post.photos.firstIndex(where: { $0.id == selectedPhotoID }) ?? 0
+    }
+
+    private func shouldLoad(_ photo: FriendPhotoPayload) -> Bool {
+        guard let index = post.photos.firstIndex(where: { $0.id == photo.id }) else { return false }
+        return abs(index - selectedIndex) <= 1
+    }
+
+    private var selectedPhoto: FriendPhotoPayload {
+        post.photos[selectedIndex]
+    }
+
+    private func scheduleChromeFade() {
+        chromeTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            chromeVisible = true
+        }
+        chromeTask = Task {
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                chromeVisible = false
+            }
+        }
+    }
+}
+
+private struct LazyFriendPhotoImage: View {
+    let loadData: () -> Data?
+    let contentMode: ContentMode
+    var shouldLoad = true
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
+            } else {
+                Image(systemName: "photo")
+                    .font(.largeTitle)
+                    .foregroundStyle(Color.white.opacity(0.7))
+            }
+        }
+        .task(id: shouldLoad) {
+            guard shouldLoad, image == nil, let data = loadData() else { return }
+            image = UIImage(data: data)
+        }
+    }
+}
+
+private struct FriendProfilePlaceholder: View {
+    var body: some View {
+        Circle()
+            .fill(Color.moss.opacity(0.16))
+            .overlay {
+                Image(systemName: "leaf.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color.moss)
+            }
+            .frame(width: 38, height: 38)
+            .overlay(Circle().stroke(Color.bark.opacity(0.08), lineWidth: 1))
     }
 }
 

@@ -9,17 +9,39 @@ private enum FriendListFilter: String, CaseIterable, Identifiable {
 
 struct FriendListView: View {
     var store: FernletStore
+    @Binding var isTabBarCompact: Bool
+    @Binding var tabResetToken: Int
 
     @State private var searchText = ""
+    @State private var displayName = ""
     @State private var filter: FriendListFilter = .all
     @State private var selected: ProximityTrustedPeerRecord?
     @State private var peerToBlock: ProximityTrustedPeerRecord?
     @State private var blockConfirmShown = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 10) {
+                        Text("You appear as")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.slate)
+                        Spacer()
+                        TextField("Your name", text: $displayName)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundStyle(Color.bark)
+                            .submitLabel(.done)
+                            .onSubmit { store.setProximityDisplayName(displayName) }
+                            .onChange(of: displayName) { store.setProximityDisplayName(displayName) }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
+
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
                             .foregroundStyle(Color.slate)
@@ -32,7 +54,7 @@ struct FriendListView: View {
                     .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
                     .padding(.horizontal, 20)
-                    .padding(.top, 16)
+                    .padding(.top, 0)
                     .padding(.bottom, 8)
 
                     HubSectionPicker(
@@ -57,7 +79,7 @@ struct FriendListView: View {
                                         }
                                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                             Button(role: .destructive) {
-                                                store.revokeTrustedProximityPeer(fingerprint: peer.fingerprint)
+                                                store.revokeTrustedProximityPeer(signingPublicKey: peer.signingPublicKey)
                                                 if selected?.id == peer.id { selected = nil }
                                             } label: {
                                                 Label("Remove", systemImage: "trash")
@@ -73,7 +95,7 @@ struct FriendListView: View {
                                                 .tint(Color.terracotta)
                                             } else {
                                                 Button {
-                                                    store.unblockProximityPeer(fingerprint: peer.fingerprint)
+                                                    store.unblockProximityPeer(signingPublicKey: peer.signingPublicKey)
                                                 } label: {
                                                     Label("Unblock", systemImage: "hand.raised.slash")
                                                 }
@@ -101,15 +123,16 @@ struct FriendListView: View {
                     }
                 }
             }
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .scrollContentBackground(.hidden)
             .background(Color.parchment)
             .navigationTitle("Friends & Blocks")
             .navigationBarTitleDisplayMode(.large)
-        }
+            .onAppear { displayName = store.settings.proximityDisplayName }
         .alert("Block peer?", isPresented: $blockConfirmShown) {
             Button("Block", role: .destructive) {
                 if let peer = peerToBlock {
-                    store.blockProximityPeer(fingerprint: peer.fingerprint)
+                    store.blockProximityPeer(signingPublicKey: peer.signingPublicKey)
                     if selected?.id == peer.id { selected = nil }
                 }
                 peerToBlock = nil
@@ -208,14 +231,14 @@ struct FriendListView: View {
                     .buttonStyle(ChipButtonStyle(selected: false))
                 } else {
                     Button("Unblock") {
-                        store.unblockProximityPeer(fingerprint: peer.fingerprint)
+                        store.unblockProximityPeer(signingPublicKey: peer.signingPublicKey)
                         if selected?.id == peer.id { selected = nil }
                     }
                     .buttonStyle(ChipButtonStyle(selected: true))
                 }
 
                 Button("Remove") {
-                    store.revokeTrustedProximityPeer(fingerprint: peer.fingerprint)
+                    store.revokeTrustedProximityPeer(signingPublicKey: peer.signingPublicKey)
                     if selected?.id == peer.id { selected = nil }
                 }
                 .buttonStyle(ChipButtonStyle(selected: false))

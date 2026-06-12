@@ -14,7 +14,7 @@ struct FernletIdentityEnvelope: Codable, Equatable {
     let senderSigningPublicKey: Data              // Ed25519 raw, 32 B
     let senderKeyAgreementPublicKey: Data         // X25519 raw, 32 B
     let senderDisplayName: String
-    let recipientFingerprint: String?             // 8-char SHA-256 prefix; nil = broadcast
+    let recipientFingerprint: String?             // 16-char SHA-256 prefix; nil = broadcast
     let payloadType: PayloadType
     let payloadEncryption: PayloadEncryption
     let payloadSummary: PayloadSummary
@@ -54,7 +54,7 @@ extension FernletIdentityEnvelope {
     // Payload types that must always be delivered sealed to the recipient.
     // A misbehaving sender that omits sealing is rejected at the receiver even if the transport
     // is already encrypted, closing the misbehaving-sender gap for sensitive content.
-    private static let sealingRequiredTypes: Set<PayloadType> = [.friendPhoto]
+    private static let sealingRequiredTypes: Set<PayloadType> = [.friendPhoto, .recipeShare]
 
     /// Verifies the envelope signature, recipient, expiry, and replay status; returns the plaintext payload.
     func verify(identityService: IdentityService, replayCache: ReplayCache) throws -> Data {
@@ -66,7 +66,8 @@ extension FernletIdentityEnvelope {
             throw VerifyError.signatureInvalid
         }
 
-        if let recipientFingerprint, recipientFingerprint != identityService.localFingerprint {
+        if let recipientFingerprint,
+           !IdentityService.fingerprintsMatch(recipientFingerprint, identityService.localFingerprint) {
             throw VerifyError.recipientMismatch
         }
 

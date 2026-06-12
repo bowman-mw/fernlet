@@ -201,6 +201,103 @@ struct FernletTests {
         #expect(results.dropFirst().first?.id == usdaOil.id)
     }
 
+    @Test func compactSurveyFoodDecodesWithSurveyDataType() throws {
+        let data = Data(#"""
+        [
+          {
+            "fdcId": 2708953,
+            "name": "Rice, fried, with chicken",
+            "servingSize": 1,
+            "servingUnit": "cup",
+            "protein": 13.4,
+            "carbs": 45.2,
+            "fat": 11.8,
+            "category": "Rice mixed dishes",
+            "dataType": "survey",
+            "source": "usda",
+            "tags": ["fried rice", "chicken rice", "asian", "survey"],
+            "portions": [{ "amount": 1, "unit": "cup", "gramWeight": 198, "description": "1 cup" }]
+          }
+        ]
+        """#.utf8)
+
+        let item = try #require(FoodDataCatalog.foodItems(from: data).first)
+
+        #expect(item.dataType == .survey)
+        #expect(item.source == .usda)
+        #expect(item.name == "Rice, fried, with chicken")
+        #expect(item.portions.first?.description == "1 cup")
+    }
+
+    @Test func surveyFoodsParticipateInBundledFoodSearch() throws {
+        let data = Data(#"""
+        [
+          {
+            "fdcId": 2708953,
+            "name": "Rice, fried, with chicken",
+            "servingSize": 1,
+            "servingUnit": "cup",
+            "protein": 13.4,
+            "carbs": 45.2,
+            "fat": 11.8,
+            "category": "Survey (FNDDS) - Fried rice and lo/chow mein",
+            "dataType": "survey",
+            "source": "usda",
+            "tags": ["fried rice", "chicken rice", "asian", "survey"]
+          }
+        ]
+        """#.utf8)
+        let surveyItems = FoodDataCatalog.foodItems(from: data)
+        let foundationRice = FoodItem(
+            name: "Rice, white, cooked",
+            brandSource: "USDA",
+            servingSize: 100,
+            servingUnit: "g",
+            macros: Macros(protein: 3, carbs: 28, fat: 0),
+            micronutrients: Micronutrients(),
+            category: "Foundation Foods",
+            source: .usda,
+            dataType: .foundation,
+            tags: ["rice", "foundation"]
+        )
+
+        let results = FoodItemSearch.results(for: "chicken fried rice", in: [foundationRice] + surveyItems, limit: 2)
+
+        #expect(results.first?.name == "Rice, fried, with chicken")
+        #expect(results.first?.dataType == .survey)
+    }
+
+    @Test func dishTemplateResolutionStillUsesComponentsBeforeSurveyWholeDish() throws {
+        let surveyTaco = FoodItem(
+            name: "Taco, NFS",
+            brandSource: "USDA FDC 2708514",
+            servingSize: 1,
+            servingUnit: "taco",
+            macros: Macros(protein: 12, carbs: 18, fat: 9),
+            micronutrients: Micronutrients(),
+            category: "Survey (FNDDS) - Burritos and tacos",
+            source: .usda,
+            dataType: .survey,
+            tags: ["taco", "survey", "fndds"]
+        )
+        let componentItems = [
+            surveyComponentFood(name: "Cooked beef ground cooked", tags: ["cooked", "beef", "ground"]),
+            surveyComponentFood(name: "Tortilla corn", tags: ["tortilla", "corn"]),
+            surveyComponentFood(name: "Cheese shredded", tags: ["cheese", "shredded"]),
+            surveyComponentFood(name: "Lettuce", tags: ["lettuce"])
+        ]
+
+        let meals = try #require(DishTemplateLexicon.resolve(
+            description: "taco",
+            mealType: nil,
+            foodItems: [surveyTaco] + componentItems
+        ))
+        let meal = try #require(meals.first)
+
+        #expect(meal.componentSnapshots.count >= 4)
+        #expect(!meal.componentSnapshots.contains { $0.name == surveyTaco.name })
+    }
+
     @MainActor
     @Test func intimacyAgeGateControlsHubAndQuickLogVisibility() {
         let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("intimacy-age-gate")))
@@ -742,6 +839,21 @@ struct FernletTests {
             source: .manual,
             lastVerified: lastVerified,
             tags: ["fixture"]
+        )
+    }
+
+    private func surveyComponentFood(name: String, tags: [String]) -> FoodItem {
+        FoodItem(
+            name: name,
+            brandSource: "USDA",
+            servingSize: 100,
+            servingUnit: "g",
+            macros: Macros(protein: 10, carbs: 10, fat: 5),
+            micronutrients: Micronutrients(),
+            category: "Foundation Foods",
+            source: .usda,
+            dataType: .foundation,
+            tags: tags
         )
     }
 

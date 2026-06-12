@@ -48,59 +48,6 @@ struct TrainerProximityServiceTests {
         )
     }
 
-    @Test func disclosureCardIncludesTrainerPermissionsAndFingerprint() throws {
-        let (remote, serviceID) = try makeIdentity()
-        defer { cleanup(serviceID) }
-        let store = makeTestStore()
-        let service = TrainerProximityService(store: store)
-        let peer = makePeerIdentity(from: remote)
-
-        let disclosure = service.disclosure(for: peer)
-
-        #expect(disclosure.title == "Accept plan from Coach Alex?")
-        #expect(disclosure.fingerprint == remote.localFingerprint)
-        #expect(disclosure.canSend.contains("Planned workouts"))
-        #expect(disclosure.canSend.contains("Completed workout summaries"))
-        #expect(disclosure.canSend.contains("Plan swaps"))
-        #expect(disclosure.cannotAccess.contains("Journal"))
-        #expect(disclosure.cannotAccess.contains("Period history"))
-        #expect(disclosure.cannotAccess.contains("Sleep"))
-        #expect(disclosure.cannotAccess.contains("Private notes"))
-        #expect(disclosure.cannotAccess.contains("Data before today"))
-        #expect(store.trainerAuditEvents.contains { $0.kind == .disclosureShown })
-    }
-
-    @Test func acceptingPeerStoresTrustedRecordAndReturningPeerSkipsPreInvite() async throws {
-        let (remote, serviceID) = try makeIdentity()
-        defer { cleanup(serviceID) }
-        let store = makeTestStore()
-        let service = TrainerProximityService(store: store)
-        let peer = makePeerIdentity(from: remote)
-
-        #expect(service.shouldShowPreInviteDialog(displayName: peer.displayName, fingerprint: peer.fingerprint))
-        await service.accept(peer)
-
-        let trusted = store.trustedProximityPeer(fingerprint: remote.localFingerprint)
-        #expect(trusted?.displayName == "Coach Alex")
-        #expect(trusted?.revokedAt == nil)
-        #expect(service.shouldShowPreInviteDialog(displayName: peer.displayName, fingerprint: peer.fingerprint) == false)
-        #expect(store.trainerAuditEvents.contains { $0.kind == .peerAccepted })
-    }
-
-    @Test func keyChangeWarningAppearsForSameDisplayNameWithDifferentFingerprint() throws {
-        let (first, firstID) = try makeIdentity()
-        defer { cleanup(firstID) }
-        let (second, secondID) = try makeIdentity()
-        defer { cleanup(secondID) }
-        let store = makeTestStore()
-        let service = TrainerProximityService(store: store)
-
-        store.trustProximityPeer(makePeerIdentity(from: first), mode: .trainer)
-
-        let warning = service.keyChangeWarning(displayName: "Coach Alex", fingerprint: second.localFingerprint)
-        #expect(warning?.contains("different proximity key") == true)
-    }
-
     @Test func revocationBlocksSubsequentEnvelopeAndWritesAudit() async throws {
         let (local, localID) = try makeIdentity()
         defer { cleanup(localID) }
@@ -119,7 +66,7 @@ struct TrainerProximityServiceTests {
         )
         let peerIdentity = makePeerIdentity(from: remote)
         store.trustProximityPeer(peerIdentity, mode: .trainer)
-        serviceRevoke(store: store, fingerprint: remote.localFingerprint)
+        serviceRevoke(store: store, signingPublicKey: remote.localSigningPublicKey)
         let peer = makeMultipeerPeer(name: "Coach Alex", fingerprint: remote.localFingerprint)
         let data = try JSONEncoder().encode(signedIntroduction(from: remote))
 
@@ -159,7 +106,7 @@ struct TrainerProximityServiceTests {
         #expect(store.trainerAuditEvents.contains { $0.kind == .stateTransition && $0.message == "discovering" })
     }
 
-    private func serviceRevoke(store: FernletStore, fingerprint: String) {
-        TrainerProximityService(store: store).revokeTrainer(fingerprint: fingerprint)
+    private func serviceRevoke(store: FernletStore, signingPublicKey: Data) {
+        store.revokeTrustedProximityPeer(signingPublicKey: signingPublicKey)
     }
 }

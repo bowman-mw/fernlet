@@ -122,14 +122,26 @@ struct IdentityServiceTests {
         #expect(!svc.localFingerprint.isEmpty)
     }
 
-    @Test func localFingerprintIs8HexChars() throws {
+    @Test func localFingerprintIs16HexChars() throws {
         let (svc, id) = makeService()
         defer { cleanup(id) }
         try svc.ensureProvisioned()
 
         let fp = svc.localFingerprint
-        #expect(fp.count == 8)
+        #expect(fp.count == 16)
         #expect(fp.allSatisfy { $0.isHexDigit })
+    }
+
+    @Test func fingerprintMatcherAcceptsLegacyEightCharacterPrefix() throws {
+        let (svc, id) = makeService()
+        defer { cleanup(id) }
+        try svc.ensureProvisioned()
+
+        let canonical = svc.localFingerprint
+        let legacy = String(canonical.prefix(8))
+        #expect(IdentityService.fingerprintsMatch(canonical, legacy))
+        #expect(IdentityService.fingerprintsMatch(legacy, canonical))
+        #expect(!IdentityService.fingerprintsMatch(canonical, "deadbeef"))
     }
 
     @Test func fingerprintOfDifferentKeysDiffers() {

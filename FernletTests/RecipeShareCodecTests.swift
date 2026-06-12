@@ -52,6 +52,113 @@ struct RecipeShareCodecTests {
         }
     }
 
+    @MainActor
+    @Test func proximityPayloadForLocalRecipePreservesSharePayload() throws {
+        let fixture = makeRecipeFixture()
+        let expected = RecipeShareCodec.payload(for: fixture.recipe, foodItems: fixture.foodItems)
+
+        let payload = RecipeShareCodec.proximityPayload(for: fixture.recipe, foodItems: fixture.foodItems)
+        let decoded = try JSONDecoder().decode(ProximityRecipeSharePayload.self, from: JSONEncoder().encode(payload))
+
+        #expect(decoded.format == "fernlet.proximity.recipe")
+        #expect(decoded.version == 1)
+        #expect(decoded.recipe.kind == .local)
+        #expect(decoded.recipe.local == expected)
+        #expect(decoded.recipe.saved == nil)
+    }
+
+    @MainActor
+    @Test func proximityPayloadForSavedRecipePreservesSavedRecipeFields() throws {
+        let recipe = makeSavedRecipe()
+
+        let payload = RecipeShareCodec.proximityPayload(for: recipe)
+        let decoded = try JSONDecoder().decode(ProximityRecipeSharePayload.self, from: JSONEncoder().encode(payload))
+        let saved = try #require(decoded.recipe.saved)
+
+        #expect(decoded.recipe.kind == .saved)
+        #expect(decoded.recipe.local == nil)
+        #expect(saved.name == recipe.name)
+        #expect(saved.sourceURLString == recipe.sourceURLString)
+        #expect(saved.ingredients == recipe.ingredients)
+        #expect(saved.summary == recipe.summary)
+        #expect(saved.servings == recipe.servings)
+        #expect(saved.protein == recipe.protein)
+        #expect(saved.carbs == recipe.carbs)
+        #expect(saved.fat == recipe.fat)
+    }
+
+    @MainActor
+    @Test func omittingShareNotesRemovesLocalRecipeNotesOnly() throws {
+        let fixture = makeRecipeFixture()
+        let payload = RecipeShareCodec.proximityPayload(for: fixture.recipe, foodItems: fixture.foodItems)
+
+        let stripped = payload.omittingShareNotes()
+
+        #expect(payload.hasShareNotes)
+        #expect(stripped.recipe.local?.notes == "")
+        #expect(stripped.recipe.local?.name == payload.recipe.local?.name)
+        #expect(stripped.recipe.local?.ingredients == payload.recipe.local?.ingredients)
+    }
+
+    @MainActor
+    @Test func omittingShareNotesRemovesSavedRecipeSummaryOnly() {
+        let payload = RecipeShareCodec.proximityPayload(for: makeSavedRecipe())
+
+        let stripped = payload.omittingShareNotes()
+
+        #expect(payload.hasShareNotes)
+        #expect(stripped.recipe.saved?.summary == "")
+        #expect(stripped.recipe.saved?.name == payload.recipe.saved?.name)
+        #expect(stripped.recipe.saved?.ingredients == payload.recipe.saved?.ingredients)
+    }
+
+    @MainActor
+    @Test func importProximityLocalRecipeCreatesRecipeAndIngredients() throws {
+        let fixture = makeRecipeFixture()
+        let store = makeTestStore()
+        let payload = RecipeShareCodec.proximityPayload(for: fixture.recipe, foodItems: fixture.foodItems)
+
+        let importedName = try store.importProximityRecipeShare(payload)
+        let imported = try #require(store.recipes.first)
+
+        #expect(importedName == "Training Bowl")
+        #expect(imported.name == "Training Bowl")
+        #expect(imported.servings == 2)
+        #expect(imported.ingredients.count == 3)
+        #expect(store.foodItems.filter { $0.tags.contains("imported") }.count == 3)
+    }
+
+    @MainActor
+    @Test func importProximitySavedRecipeAddsSavedRecipe() throws {
+        let store = makeTestStore()
+        let recipe = makeSavedRecipe()
+        let payload = RecipeShareCodec.proximityPayload(for: recipe)
+
+        let importedName = try store.importProximityRecipeShare(payload)
+        let imported = try #require(store.savedRecipes.first)
+
+        #expect(importedName == recipe.name)
+        #expect(imported.name == recipe.name)
+        #expect(imported.sourceURLString == recipe.sourceURLString)
+        #expect(imported.ingredients == recipe.ingredients)
+        #expect(imported.summary == recipe.summary)
+        #expect(imported.servings == recipe.servings)
+        #expect(imported.protein == recipe.protein)
+        #expect(imported.carbs == recipe.carbs)
+        #expect(imported.fat == recipe.fat)
+    }
+
+    @MainActor
+    @Test func importProximityRecipeRejectsUnsupportedVersion() {
+        let store = makeTestStore()
+        var payload = RecipeShareCodec.proximityPayload(for: makeSavedRecipe())
+        payload.version = 2
+
+        #expect(throws: RecipeImportError.unsupportedFormat) {
+            try store.importProximityRecipeShare(payload)
+        }
+    }
+
     private func makeRecipeFixture() -> (recipe: RecipeDefinition, foodItems: [FoodItem]) {
         let oats = foodItem(
             name: "Rolled oats",
@@ -85,6 +192,22 @@ struct RecipeShareCodecTests {
             updatedAt: Date(timeIntervalSince1970: 1_779_664_800)
         )
         return (recipe, [oats, yogurt, berries])
+    }
+
+    private func makeSavedRecipe() -> SavedRecipe {
+        SavedRecipe(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000777")!,
+            sourceURL: URL(string: "https://example.com/saved-training-bowl")!,
+            name: "Saved Training Bowl",
+            ingredients: ["Oats", "Greek yogurt", "Blueberries"],
+            summary: "A saved web recipe summary.",
+            servings: 3,
+            protein: 24,
+            carbs: 42,
+            fat: 6,
+            micronutrients: Micronutrients(),
+            savedAt: Date(timeIntervalSince1970: 1_779_664_800)
+        )
     }
 
     private func foodItem(name: String, servingSize: Double, servingUnit: String, macros: Macros) -> FoodItem {

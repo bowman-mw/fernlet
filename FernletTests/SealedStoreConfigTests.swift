@@ -7,7 +7,7 @@ import Testing
 /// Addresses SEC-3 from the architecture audit (Fernlet-Review-and-Plan-Updates.md).
 struct SealedStoreConfigTests {
 
-    private let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative"]
+    private let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog"]
     private let cloudEntityNames = ["FernletDatabaseRecord", "SavedRecipeRecord"]
 
     // MARK: - Cloud model exclusion
@@ -62,6 +62,12 @@ struct SealedStoreConfigTests {
             storeDesc?.cloudKitContainerOptions == nil,
             "PrivatePersistenceController store must never have CloudKit container options"
         )
+    }
+
+    @Test func privateStoreTracksHistorySoDeletionCanPruneIt() {
+        let controller = PrivatePersistenceController(inMemory: true)
+        let storeDesc = controller.container.persistentStoreDescriptions.first
+        #expect(storeDesc?.options[NSPersistentHistoryTrackingKey] as? NSNumber == true)
     }
 
     /// Cloud store must use NSPersistentCloudKitContainer (not plain NSPersistentContainer)

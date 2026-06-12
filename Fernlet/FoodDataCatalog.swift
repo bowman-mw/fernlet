@@ -1,6 +1,6 @@
 import Foundation
 
-struct USDAFoodItemRecord: Codable {
+struct USDAFoodItemRecord: Decodable {
     var id: UUID?
     var fdcId: Int?
     var name: String
@@ -11,9 +11,9 @@ struct USDAFoodItemRecord: Codable {
     var carbs: Double
     var fat: Double
     var category: String
+    var dataType: String?
     var tags: [String]?
     var portions: [FoodPortion]?
-    var micronutrients: Micronutrients?
     var fiber: Double?
     var sugar: Double?
     var saturatedFat: Double?
@@ -38,6 +38,115 @@ struct USDAFoodItemRecord: Codable {
     var zinc: Double?
     var omega3: Double?
 
+    private enum CodingKeys: String, CodingKey {
+        case id, fdcId, name, brandSource, servingSize, servingUnit, protein, carbs, fat
+        case category, tags, portions, fiber, sugar, saturatedFat, cholesterol
+        case vitaminA, vitaminC, vitaminD, vitaminE, vitaminK, vitaminB6, vitaminB12
+        case thiamin, riboflavin, niacin, folate, calcium, iron, magnesium, phosphorus
+        case potassium, sodium, zinc, omega3
+        case description, dataType, brandOwner, brandName, foodCategory, foodNutrients, foodPortions
+        case servingSizeUnit, householdServingFullText, labelNutrients
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id)
+        fdcId = try container.decodeIfPresent(Int.self, forKey: .fdcId)
+
+        if let compactName = try container.decodeIfPresent(String.self, forKey: .name) {
+            name = compactName
+            brandSource = try container.decodeIfPresent(String.self, forKey: .brandSource)
+            servingSize = try container.decodeIfPresent(Double.self, forKey: .servingSize) ?? 100
+            servingUnit = try container.decodeIfPresent(String.self, forKey: .servingUnit) ?? RecipeUnit.gram.rawValue
+            protein = try container.decodeIfPresent(Double.self, forKey: .protein) ?? 0
+            carbs = try container.decodeIfPresent(Double.self, forKey: .carbs) ?? 0
+            fat = try container.decodeIfPresent(Double.self, forKey: .fat) ?? 0
+            category = try container.decodeIfPresent(String.self, forKey: .category) ?? "USDA"
+            dataType = try container.decodeIfPresent(String.self, forKey: .dataType)
+            tags = try container.decodeIfPresent([String].self, forKey: .tags)
+            portions = try container.decodeIfPresent([FoodPortion].self, forKey: .portions)
+            fiber = try container.decodeIfPresent(Double.self, forKey: .fiber)
+            sugar = try container.decodeIfPresent(Double.self, forKey: .sugar)
+            saturatedFat = try container.decodeIfPresent(Double.self, forKey: .saturatedFat)
+            cholesterol = try container.decodeIfPresent(Double.self, forKey: .cholesterol)
+            vitaminA = try container.decodeIfPresent(Double.self, forKey: .vitaminA)
+            vitaminC = try container.decodeIfPresent(Double.self, forKey: .vitaminC)
+            vitaminD = try container.decodeIfPresent(Double.self, forKey: .vitaminD)
+            vitaminE = try container.decodeIfPresent(Double.self, forKey: .vitaminE)
+            vitaminK = try container.decodeIfPresent(Double.self, forKey: .vitaminK)
+            vitaminB6 = try container.decodeIfPresent(Double.self, forKey: .vitaminB6)
+            vitaminB12 = try container.decodeIfPresent(Double.self, forKey: .vitaminB12)
+            thiamin = try container.decodeIfPresent(Double.self, forKey: .thiamin)
+            riboflavin = try container.decodeIfPresent(Double.self, forKey: .riboflavin)
+            niacin = try container.decodeIfPresent(Double.self, forKey: .niacin)
+            folate = try container.decodeIfPresent(Double.self, forKey: .folate)
+            calcium = try container.decodeIfPresent(Double.self, forKey: .calcium)
+            iron = try container.decodeIfPresent(Double.self, forKey: .iron)
+            magnesium = try container.decodeIfPresent(Double.self, forKey: .magnesium)
+            phosphorus = try container.decodeIfPresent(Double.self, forKey: .phosphorus)
+            potassium = try container.decodeIfPresent(Double.self, forKey: .potassium)
+            sodium = try container.decodeIfPresent(Double.self, forKey: .sodium)
+            zinc = try container.decodeIfPresent(Double.self, forKey: .zinc)
+            omega3 = try container.decodeIfPresent(Double.self, forKey: .omega3)
+            return
+        }
+
+        let nutrients = try container.decodeIfPresent([FDCFoodNutrient].self, forKey: .foodNutrients) ?? []
+        let nutrientValues = Dictionary(grouping: nutrients, by: \.nutrientId)
+            .compactMapValues { $0.first?.amount }
+        let fdcPortions = try container.decodeIfPresent([FDCFoodPortion].self, forKey: .foodPortions) ?? []
+        let categoryDescription = try container.decodeIfPresent(FDCFoodCategory.self, forKey: .foodCategory)?.description
+        dataType = try container.decodeIfPresent(String.self, forKey: .dataType)
+        let labelNutrients = try container.decodeIfPresent(FDCLabelNutrients.self, forKey: .labelNutrients)
+        let labelServingSize = try container.decodeIfPresent(Double.self, forKey: .servingSize)
+        let labelServingUnit = try container.decodeIfPresent(String.self, forKey: .servingSizeUnit)
+        let labelServingText = try container.decodeIfPresent(String.self, forKey: .householdServingFullText)
+
+        name = try container.decodeIfPresent(String.self, forKey: .description) ?? "USDA food"
+        brandSource = try container.decodeIfPresent(String.self, forKey: .brandOwner)
+            ?? container.decodeIfPresent(String.self, forKey: .brandName)
+        let isBrandedLabel = labelNutrients != nil && (brandSource != nil || dataType?.localizedCaseInsensitiveContains("branded") == true)
+        if isBrandedLabel, let labelServingSize, labelServingSize > 0 {
+            servingSize = labelServingSize
+            servingUnit = labelServingUnit ?? RecipeUnit.gram.rawValue
+            protein = labelNutrients?.protein?.value ?? nutrientValues[1003] ?? 0
+            carbs = labelNutrients?.carbohydrates?.value ?? nutrientValues[1005] ?? 0
+            fat = labelNutrients?.fat?.value ?? nutrientValues[1004] ?? 0
+        } else {
+            servingSize = 100
+            servingUnit = RecipeUnit.gram.rawValue
+            protein = nutrientValues[1003] ?? 0
+            carbs = nutrientValues[1005] ?? 0
+            fat = nutrientValues[1004] ?? 0
+        }
+        category = categoryDescription ?? dataType ?? "USDA"
+        tags = [dataType, categoryDescription, "usda"].compactMap { $0 }
+        portions = Self.portions(from: fdcPortions, labelServingSize: labelServingSize, labelServingUnit: labelServingUnit, labelServingText: labelServingText)
+        fiber = nutrientValues[1079]
+        sugar = nutrientValues[2000] ?? nutrientValues[1063]
+        saturatedFat = nutrientValues[1258]
+        cholesterol = nutrientValues[1253]
+        vitaminA = nutrientValues[1106]
+        vitaminC = nutrientValues[1162]
+        vitaminD = nutrientValues[1114]
+        vitaminE = nutrientValues[1109]
+        vitaminK = nutrientValues[1185]
+        vitaminB6 = nutrientValues[1175]
+        vitaminB12 = nutrientValues[1178]
+        thiamin = nutrientValues[1165]
+        riboflavin = nutrientValues[1166]
+        niacin = nutrientValues[1167]
+        folate = nutrientValues[1177]
+        calcium = nutrientValues[1087]
+        iron = nutrientValues[1089]
+        magnesium = nutrientValues[1090]
+        phosphorus = nutrientValues[1091]
+        potassium = nutrientValues[1092]
+        sodium = nutrientValues[1093]
+        zinc = nutrientValues[1095]
+        omega3 = nutrientValues[1272] ?? nutrientValues[1278] ?? nutrientValues[1270]
+    }
+
     nonisolated func foodItem() -> FoodItem {
         FoodItem(
             id: id ?? stableUSDAID ?? UUID(),
@@ -53,14 +162,28 @@ struct USDAFoodItemRecord: Codable {
             micronutrients: resolvedMicronutrients,
             category: category,
             source: .usda,
+            dataType: classifiedDataType,
             lastVerified: nil,
             tags: tags ?? ["usda"],
             portions: portions ?? []
         )
     }
 
+    nonisolated private var classifiedDataType: FoodDataType {
+        let dataTypeLower = dataType?.lowercased()
+        if dataTypeLower?.contains("foundation") == true { return .foundation }
+        if dataTypeLower?.contains("survey") == true || dataTypeLower?.contains("fndds") == true { return .survey }
+        if dataTypeLower?.contains("branded") == true { return .branded }
+
+        let categoryLower = category.lowercased()
+        if categoryLower.contains("foundation") { return .foundation }
+        if categoryLower.contains("survey") || categoryLower.contains("fndds") { return .survey }
+        guard let brand = brandSource else { return .srLegacy }
+        return FoodBrandLexicon.isRestaurantChain(brand) ? .restaurant : .branded
+    }
+
     nonisolated private var resolvedMicronutrients: Micronutrients {
-        micronutrients ?? Micronutrients(
+        Micronutrients(
             fiber: fiber,
             sugar: sugar,
             saturatedFat: saturatedFat,
@@ -87,6 +210,43 @@ struct USDAFoodItemRecord: Codable {
         )
     }
 
+    private static func portions(
+        from fdcPortions: [FDCFoodPortion],
+        labelServingSize: Double?,
+        labelServingUnit: String?,
+        labelServingText: String?
+    ) -> [FoodPortion] {
+        var portions = fdcPortions.compactMap(\.foodPortion)
+        guard let labelServingSize, labelServingSize > 0,
+              let gramWeight = gramWeight(quantity: labelServingSize, unit: labelServingUnit) else {
+            return portions
+        }
+        let labelPortion = FoodPortion(
+            amount: labelServingSize,
+            unit: labelServingUnit ?? RecipeUnit.gram.rawValue,
+            gramWeight: gramWeight,
+            description: labelServingText ?? "label serving"
+        )
+        if portions.contains(where: { $0.unit == labelPortion.unit && abs($0.gramWeight - labelPortion.gramWeight) < 0.1 }) == false {
+            portions.append(labelPortion)
+        }
+        portions.append(FoodPortion(amount: 100, unit: RecipeUnit.gram.rawValue, gramWeight: 100, description: "per 100 g"))
+        return portions
+    }
+
+    private static func gramWeight(quantity: Double, unit: String?) -> Double? {
+        switch RecipeUnit.normalized(unit ?? RecipeUnit.gram.rawValue) {
+        case .gram, .milliliter:
+            return quantity
+        case .ounce:
+            return quantity * 28.3495
+        case .pound:
+            return quantity * 453.592
+        default:
+            return nil
+        }
+    }
+
     nonisolated private var fdcDescription: String? {
         guard let fdcId else { return nil }
         return "USDA FDC \(fdcId)"
@@ -99,13 +259,76 @@ struct USDAFoodItemRecord: Codable {
     }
 }
 
+private struct FDCFoodNutrient: Decodable {
+    let amount: Double?
+    private let nutrient: FDCNutrient?
+    private let nutrientIdValue: Int?
+
+    var nutrientId: Int {
+        nutrient?.id ?? nutrientIdValue ?? -1
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case amount, nutrient, nutrientIdValue = "nutrientId"
+    }
+}
+
+private struct FDCNutrient: Decodable {
+    let id: Int?
+}
+
+private struct FDCFoodCategory: Decodable {
+    let description: String?
+}
+
+private struct FDCLabelNutrients: Decodable {
+    let protein: FDCLabelNutrientValue?
+    let carbohydrates: FDCLabelNutrientValue?
+    let fat: FDCLabelNutrientValue?
+}
+
+private struct FDCLabelNutrientValue: Decodable {
+    let value: Double?
+}
+
+private struct FDCFoodPortion: Decodable {
+    let amount: Double?
+    let gramWeight: Double?
+    let modifier: String?
+    let portionDescription: String?
+    let measureUnit: FDCMeasureUnit?
+
+    var foodPortion: FoodPortion? {
+        guard let gramWeight, gramWeight > 0 else { return nil }
+        let unit = measureUnit?.abbreviation ?? measureUnit?.name ?? portionDescription ?? modifier
+        guard let unit, unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return nil }
+        return FoodPortion(
+            amount: max(amount ?? 1, 0.01),
+            unit: unit,
+            gramWeight: gramWeight,
+            description: [modifier, portionDescription].compactMap { $0 }.joined(separator: " ")
+        )
+    }
+}
+
+private struct FDCMeasureUnit: Decodable {
+    let name: String?
+    let abbreviation: String?
+}
+
 enum FoodDataCatalog {
     nonisolated static let resourceName = "USDAFoodItems"
+    nonisolated static let curatedSurveyResourceName = "CuratedSurveyFoodItems"
+    nonisolated private static let bundledResourceNames = [resourceName, curatedSurveyResourceName]
 
     nonisolated static func bundledFoodItems(bundle: Bundle = .main) -> [FoodItem] {
         StartupTiming.timed("FoodDataCatalog.bundledFoodItems") {
-            guard let data = bundledData(bundle: bundle) else { return [] }
-            return foodItems(from: data)
+            if let cached = loadCachedItems(bundle: bundle) {
+                return cached
+            }
+            let items = bundledDataFiles(bundle: bundle).flatMap { foodItems(from: $0) }
+            saveCachedItems(items, bundle: bundle)
+            return items
         }
     }
 
@@ -134,9 +357,95 @@ enum FoodDataCatalog {
         return items + [aliased]
     }
 
-    nonisolated private static func bundledData(bundle: Bundle) -> Data? {
-        guard let url = bundle.url(forResource: resourceName, withExtension: "json") else { return nil }
-        return try? Data(contentsOf: url)
+    nonisolated private static func bundledDataFiles(bundle: Bundle) -> [Data] {
+        bundledResourceNames.compactMap { resourceName in
+            guard let url = bundle.url(forResource: resourceName, withExtension: "json") else { return nil }
+            return try? Data(contentsOf: url)
+        }
+    }
+
+    // MARK: - Binary plist cache
+
+    nonisolated private static func cacheURLs() -> (data: URL, key: URL) {
+        let base = URL(fileURLWithPath: NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true)[0])
+        return (
+            data: base.appendingPathComponent("food_catalog_v2.bplist"),
+            key: base.appendingPathComponent("food_catalog_v2.key")
+        )
+    }
+
+    nonisolated private static func bundledCacheKey(bundle: Bundle) -> String? {
+        let components = bundledResourceNames.compactMap { resourceName -> String? in
+            guard let url = bundle.url(forResource: resourceName, withExtension: "json"),
+                  let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
+                  let size = values.fileSize,
+                  let modified = values.contentModificationDate else { return nil }
+            return "\(resourceName):\(size)-\(modified.timeIntervalSinceReferenceDate)"
+        }
+        return components.isEmpty ? nil : components.joined(separator: "|")
+    }
+
+    nonisolated private static func loadCachedItems(bundle: Bundle) -> [FoodItem]? {
+        let urls = cacheURLs()
+        guard let key = bundledCacheKey(bundle: bundle),
+              let storedKey = try? String(contentsOf: urls.key, encoding: .utf8),
+              key == storedKey,
+              let data = try? Data(contentsOf: urls.data) else { return nil }
+        return try? PropertyListDecoder().decode([FoodItem].self, from: data)
+    }
+
+    nonisolated private static func saveCachedItems(_ items: [FoodItem], bundle: Bundle) {
+        let urls = cacheURLs()
+        guard let key = bundledCacheKey(bundle: bundle) else { return }
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        guard let data = try? encoder.encode(items) else { return }
+        try? data.write(to: urls.data, options: .atomic)
+        try? key.write(to: urls.key, atomically: true, encoding: .utf8)
+    }
+}
+
+enum FoodBrandLexicon {
+    nonisolated private static let chains: Set<String> = [
+        "mcdonalds", "wendys", "burger king", "taco bell", "chick fil a", "subway",
+        "starbucks", "chipotle", "dominos", "pizza hut", "kfc", "popeyes", "five guys",
+        "shake shack", "in n out", "whataburger", "sonic", "jack in the box",
+        "panda express", "olive garden", "applebees", "chilis", "red lobster",
+        "outback", "panera", "dunkin", "arbys", "dairy queen", "hardees", "carls jr",
+        "del taco", "wingstop", "buffalo wild wings", "cracker barrel", "ihop",
+        "dennys", "waffle house", "friendlys", "bojangles", "checkers", "rallys",
+        "long john silvers", "captain d"
+    ]
+
+    nonisolated static func isRestaurantChain(_ text: String) -> Bool {
+        let n = FoodItemSearch.normalized(text)
+        return chains.contains { n.contains($0) }
+    }
+
+    nonisolated static func queryContainsBrandToken(_ query: String) -> Bool {
+        let n = FoodItemSearch.normalized(query)
+        return chains.contains { n.contains($0) }
+    }
+}
+
+enum CompositeFoodLexicon {
+    nonisolated private static let singleTokenComposites: Set<String> = [
+        "sandwich", "burger", "cheeseburger", "hamburger", "bowl", "taco", "tacos",
+        "wrap", "burrito", "quesadilla", "enchilada", "fajita", "sub", "hoagie",
+        "smoothie", "salad", "pizza", "stew", "casserole", "calzone", "gyro"
+    ]
+
+    nonisolated private static let multiWordComposites: [String] = [
+        "grilled cheese", "stir fry", "fried rice", "lo mein", "pad thai",
+        "french dip", "club sandwich", "egg salad", "tuna melt", "chicken parm"
+    ]
+
+    nonisolated static func isComposite(_ itemName: String) -> Bool {
+        let normalized = FoodItemSearch.normalized(itemName)
+        for term in multiWordComposites where normalized.contains(FoodItemSearch.normalized(term)) {
+            return true
+        }
+        return normalized.split(separator: " ").map(String.init).contains { singleTokenComposites.contains($0) }
     }
 }
 
@@ -164,7 +473,8 @@ enum FoodItemSearch {
         static let empty = Index(foodItems: [])
 
         fileprivate func matches(queryTokens: [String], normalizedQuery: String, limit: Int) -> [FoodItem] {
-            entries
+            let isBrandQuery = FoodBrandLexicon.queryContainsBrandToken(normalizedQuery)
+            return entries
                 .compactMap { entry -> (foodItem: FoodItem, score: Int)? in
                     guard let score = FoodItemSearch.score(entry, queryTokens: queryTokens, normalizedQuery: normalizedQuery) else { return nil }
                     return (entry.foodItem, score)
@@ -173,6 +483,9 @@ enum FoodItemSearch {
                     if first.foodItem.source != second.foodItem.source {
                         return FoodItemSearch.sourcePriority(first.foodItem.source) > FoodItemSearch.sourcePriority(second.foodItem.source)
                     }
+                    let firstType = FoodItemSearch.dataTypePriority(first.foodItem.dataType, brandQuery: isBrandQuery)
+                    let secondType = FoodItemSearch.dataTypePriority(second.foodItem.dataType, brandQuery: isBrandQuery)
+                    if firstType != secondType { return firstType > secondType }
                     if first.score != second.score { return first.score > second.score }
                     return first.foodItem.name.localizedStandardCompare(second.foodItem.name) == .orderedAscending
                 }
@@ -213,7 +526,7 @@ enum FoodItemSearch {
         return index.matches(queryTokens: queryTokens, normalizedQuery: normalizedQuery, limit: limit)
     }
 
-    static func normalized(_ text: String) -> String {
+    nonisolated static func normalized(_ text: String) -> String {
         text
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
@@ -245,8 +558,74 @@ enum FoodItemSearch {
             partial + (entry.nameTokens.contains(queryToken) ? 60 : 0)
         }
         score -= max(name.count - normalizedQuery.count, 0) / 8
+        score += preparationBias(queryTokens: queryTokens, normalizedQuery: normalizedQuery, candidateName: entry.foodItem.name)
         return score
     }
+
+    // M1a: Additive preparation bias — rewards matching preparation, penalises conflicting ones.
+    // Not a hard filter: a missing fresh entry still wins over nothing.
+    private static func preparationBias(queryTokens: [String], normalizedQuery: String, candidateName: String) -> Int {
+        let querySet = Set(queryTokens)
+        let impliesRaw     = !querySet.isDisjoint(with: rawImpliedTokens)
+        let impliesGrilled = !querySet.isDisjoint(with: grilledImpliedTokens)
+        let impliesBaked   = !querySet.isDisjoint(with: bakedImpliedTokens)
+        let impliesFried   = !querySet.isDisjoint(with: friedImpliedTokens)
+        let impliesCanned  = !querySet.isDisjoint(with: cannedImpliedTokens)
+            || normalizedQuery.contains("in water") || normalizedQuery.contains("in oil")
+        let impliesSmoked  = querySet.contains("smoked")
+        let impliesDried   = !querySet.isDisjoint(with: driedImpliedTokens)
+
+        guard impliesRaw || impliesGrilled || impliesBaked || impliesFried
+                || impliesCanned || impliesSmoked || impliesDried else { return 0 }
+
+        let cand = normalized(candidateName)
+        let isRaw     = cand.contains("raw") || cand.contains("fresh")
+        let isGrilled = cand.contains("grilled")
+        let isBaked   = cand.contains("baked") || cand.contains("roasted")
+        let isFried   = cand.contains("fried") || cand.contains("breaded")
+        let isCanned  = cand.contains("canned") || cand.contains("in water") || cand.contains("in oil")
+        let isSmoked  = cand.contains("smoked")
+        let isDried   = cand.contains("dried") || cand.contains("jerky")
+
+        var bias = 0
+        if impliesRaw {
+            if isRaw                              { bias += 150 }
+            else if isCanned || isDried || isSmoked { bias -= 200 }
+        }
+        if impliesGrilled {
+            if isGrilled                    { bias += 150 }
+            else if isCanned || isFried     { bias -= 200 }
+        }
+        if impliesBaked {
+            if isBaked                      { bias += 150 }
+            else if isCanned || isFried     { bias -= 150 }
+        }
+        if impliesFried {
+            if isFried          { bias += 150 }
+            else if isRaw       { bias -= 100 }
+        }
+        if impliesCanned {
+            if isCanned                     { bias += 150 }
+            else if isRaw || isGrilled      { bias -= 150 }
+        }
+        if impliesSmoked {
+            if isSmoked                     { bias += 150 }
+            else if isRaw || isCanned       { bias -= 100 }
+        }
+        if impliesDried {
+            if isDried          { bias += 150 }
+            else if isRaw       { bias -= 100 }
+        }
+        return bias
+    }
+
+    // Dish-context tokens that imply a preparation even without an explicit word
+    private static let rawImpliedTokens: Set<String>     = ["raw", "fresh", "sashimi", "sushi", "nigiri", "poke", "tartare", "ceviche"]
+    private static let grilledImpliedTokens: Set<String> = ["grilled", "grill", "bbq", "charbroiled"]
+    private static let bakedImpliedTokens: Set<String>   = ["baked", "roasted"]
+    private static let friedImpliedTokens: Set<String>   = ["fried", "breaded", "crispy", "tempura"]
+    private static let cannedImpliedTokens: Set<String>  = ["canned", "tinned"]
+    private static let driedImpliedTokens: Set<String>   = ["dried", "jerky", "dehydrated"]
 
     private static func sourcePriority(_ source: FoodItemSource) -> Int {
         switch source {
@@ -256,34 +635,30 @@ enum FoodItemSearch {
         }
     }
 
+    static func dataTypePriority(_ dataType: FoodDataType, brandQuery: Bool) -> Int {
+        if brandQuery {
+            switch dataType {
+            case .restaurant: return 5
+            case .branded: return 4
+            case .foundation: return 3
+            case .survey: return 2
+            case .srLegacy: return 1
+            }
+        } else {
+            switch dataType {
+            case .foundation: return 5
+            case .survey: return 4
+            case .srLegacy: return 3
+            case .branded: return 2
+            case .restaurant: return 1
+            }
+        }
+    }
+
     private static func tokens(in text: String) -> [String] {
         normalized(text)
             .split(separator: " ")
             .map(String.init)
             .filter { $0.count >= 2 }
-    }
-}
-
-enum RecipeSearch {
-    static func results(for query: String, recipes: [RecipeDefinition], foodItems: [FoodItem]) -> [RecipeDefinition] {
-        let normalizedQuery = FoodItemSearch.normalized(query)
-        guard !normalizedQuery.isEmpty else { return recipes }
-        let queryTokens = normalizedQuery.split(separator: " ").map(String.init)
-        guard !queryTokens.isEmpty else { return recipes }
-        return recipes.filter { recipe in
-            let haystack = searchableText(for: recipe, foodItems: foodItems)
-            return queryTokens.allSatisfy { token in
-                haystack.contains(token)
-            }
-        }
-    }
-
-    private static func searchableText(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> String {
-        let ingredientText = recipe.ingredients.compactMap { ingredient in
-            foodItems.first { $0.id == ingredient.foodItemId }.map { foodItem in
-                "\(foodItem.name) \(foodItem.category) \(foodItem.tags.joined(separator: " "))"
-            }
-        }.joined(separator: " ")
-        return FoodItemSearch.normalized("\(recipe.name) \(ingredientText)")
     }
 }

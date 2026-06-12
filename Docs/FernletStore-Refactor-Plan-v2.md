@@ -2049,12 +2049,46 @@ PROCESS
 
 ---
 
-## 12. Open Questions
+## 12. Optional Future / Deferred Work
 
-All previously open items are resolved. Two confirmations worth recording explicitly:
+All previously open items are resolved. The items below are intentionally deferred so this refactor stays a low-risk store decomposition instead of becoming a full architecture rewrite.
 
-- **`DailyHealthScoreStore`, `MemoryStore`, `RecipeStore`, `FoodItemStore`** are explicitly NOT in this plan. They can be reconsidered after the FernletSnapshot refactor.
-- **`Scoring.compute(for: FernletStore)`** signature is unchanged. A future refactor can substitute a value-type `DailyScoreContext` if desired.
+### 12.1 Additional Store Slices
+
+These are explicitly **not** in this plan. Reconsider them only after the `FernletSnapshot` schema refactor clarifies persistence boundaries:
+
+- **`DailyHealthScoreStore` / `DailyScoreService`** — could own `dailyScores`, `storeDaySummary`, `invalidateDaySummary`, and score cache mutation. Defer because scoring still reads broad store context through `Scoring.compute(for:)`.
+- **`MemoryStore` / `MemoryService`** — could own `memories`, Tier 2 summaries, deletion, and update logic. Defer until the Memory Agent and sealed-memory boundary are designed; otherwise the service would likely be reshaped immediately.
+- **`RecipeStore`** — could own local `RecipeDefinition` CRUD separate from SwiftData-backed `SavedRecipeService`. Defer until the local recipe builder and URL-imported saved recipe flow are reconciled.
+- **`FoodItemStore`** — could own `foodItems`, bundled seeding, custom ingredient upserts, and catalog mutation. Defer until the food catalog cache / per-100 g data refactor lands; the data model is still moving.
+- **`JournalService`** — could own `previousJournals` and journal mutation. Defer until journal text/emotion sealing is expanded, because persistence and encryption shape the service boundary.
+- **`SettingsService`** — could own user settings, privacy toggles, quick-log items, and connection-inspector mode. Defer until Settings IA settles; today's settings fields are small and view-facing forwarding would add more indirection than value.
+
+### 12.2 Value Context Refactors
+
+- **`DailyScoreContext` for scoring.** Keep `Scoring.compute(for: FernletStore)` unchanged in this plan. A future refactor can introduce a value-type context containing only the fields scoring needs, which would reduce coupling and make score tests easier to set up.
+- **`LaunchPreparationContext`.** `LaunchPreparationService` still reads broad store state. After the Memory Agent / AI payload boundary work, consider passing a narrowed launch context instead of the full store.
+- **`SnapshotSaveContext`.** `SnapshotSaveCoordinator` can remain a behavior class for now. If snapshot assembly grows, move `currentSnapshot` construction into a small value builder so save coordination does not need to know every persisted field.
+
+### 12.3 Persistence And Repository Boundaries
+
+- **Feature-area repository protocols.** `FernletRepository` remains broad. After the snapshot refactor, split only where a real storage backend or test boundary benefits: recipes, journal, period/private data, proximity trust, and derived records are likely candidates.
+- **`FernletSnapshot` schema split.** This plan does not split the snapshot blob. A later schema plan can decide whether settings, food catalog state, private sealed data, and proximity trust should have separate records/stores.
+- **Core Data / CloudKit alignment.** Keep repository and CloudKit transport out of this refactor. The right time to revisit them is the storage-schema pass, not while slimming `FernletStore`.
+
+### 12.4 Cleanup Candidates After Refactor
+
+- **Workshop data removal.** Workshop UI is no longer a primary surface, but `WorkshopData` still round-trips through snapshots. If product confirms it is retired, remove the store property and snapshot field in a deliberate compatibility pass.
+- **Trainer naming cleanup.** `TrainerAuditEvent` and `TrainerAuditLog.swift` are really proximity trust/audit infrastructure. Rename only after proximity work is stable, because it touches persistence-facing names and many references.
+- **File renames for extracted services.** Once the refactor is fully landed, align filenames and docs around actual roles (`FriendPhotoPayloads`, `ProximityTrustLog`, etc.) in a separate no-behavior cleanup.
+- **Observation audit.** After all slices are extracted, audit `@ObservationIgnored` usage and remove stale Combine imports. This is mechanical cleanup, not a prerequisite for the refactor.
+
+### 12.5 Test Hardening To Add Later
+
+- Snapshot round-trip tests that assert service-owned slices still persist through `FernletStore.currentSnapshot`.
+- Focused mutation tests for forwarded APIs, especially where a forwarding method also triggers save scheduling.
+- Regression tests for `Scoring.compute(for:)` before introducing `DailyScoreContext`.
+- A small observation smoke test for service forwarding if UI invalidation regressions appear in practice.
 
 ---
 

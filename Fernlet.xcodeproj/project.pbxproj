@@ -7,16 +7,22 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		68187DC72FD0E119004E15E9 /* Meal-Estimation-Overhaul-Plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68187DC62FD0E119004E15E9 /* Meal-Estimation-Overhaul-Plan.md */; };
+		68187DDE2FD36861004E15E9 /* CompanionVectorAssets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68187DDD2FD36861004E15E9 /* CompanionVectorAssets.swift */; };
 		684018BA2FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 684018B92FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md */; };
 		684018CB2FBE9AD400EFC6D6 /* CryptoSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 684018CA2FBE9AD400EFC6D6 /* CryptoSwift */; };
 		684018E42FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md in Resources */ = {isa = PBXBuildFile; fileRef = 684018E32FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md */; };
 		684019122FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md in Resources */ = {isa = PBXBuildFile; fileRef = 684019112FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md */; };
+		6861B7812FCA9EF000B26022 /* DisposableCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6861B7802FCA9EF000B26022 /* DisposableCameraView.swift */; };
+		6861B7892FCCA74600B26022 /* Dead-Code-and-Carryover-Gap-Review.md in Resources */ = {isa = PBXBuildFile; fileRef = 6861B7882FCCA74600B26022 /* Dead-Code-and-Carryover-Gap-Review.md */; };
+		6861B78B2FCCAEA900B26022 /* Proximity-Mesh-Consolidation-Plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 6861B78A2FCCAEA900B26022 /* Proximity-Mesh-Consolidation-Plan.md */; };
 		68B9EBCE2FC296F200AF8FB6 /* codex-implementation-prompts.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EBCD2FC296F100AF8FB6 /* codex-implementation-prompts.md */; };
 		68B9EBDC2FC2AA1800AF8FB6 /* phase7-proximity-implementation-plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EBDB2FC2AA1800AF8FB6 /* phase7-proximity-implementation-plan.md */; };
 		68B9EC082FC352D000AF8FB6 /* proximity-handshake-process-map.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC072FC352D000AF8FB6 /* proximity-handshake-process-map.md */; };
 		68B9EC122FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC112FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md */; };
 		68B9EC142FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC132FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md */; };
 		68B9EC1E2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC1D2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md */; };
+		68B9EE622FCA75B600AF8FB6 /* Life-Tab-Redesign-Implementation-Plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EE612FCA75B600AF8FB6 /* Life-Tab-Redesign-Implementation-Plan.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -37,10 +43,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		68187DC62FD0E119004E15E9 /* Meal-Estimation-Overhaul-Plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "Meal-Estimation-Overhaul-Plan.md"; sourceTree = "<group>"; };
+		68187DDB2FD20EB8004E15E9 /* ProximityFunctionIndex.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ProximityFunctionIndex.md; sourceTree = "<group>"; };
+		68187DDC2FD261F7004E15E9 /* StoreRepositoryFunctionIndex.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = StoreRepositoryFunctionIndex.md; sourceTree = "<group>"; };
+		68187DDD2FD36861004E15E9 /* CompanionVectorAssets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionVectorAssets.swift; sourceTree = "<group>"; };
 		684018B92FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "fernlet-period-intimacy-plan.md"; sourceTree = "<group>"; };
 		684018E02FBFAC4500EFC6D6 /* FileIndex.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FileIndex.md; sourceTree = "<group>"; };
 		684018E32FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PeriodAlgorithimResearch.md; sourceTree = "<group>"; };
 		684019112FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = StartupAndBiometricFixPlan.md; sourceTree = "<group>"; };
+		6861B7802FCA9EF000B26022 /* DisposableCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisposableCameraView.swift; sourceTree = "<group>"; };
+		6861B7882FCCA74600B26022 /* Dead-Code-and-Carryover-Gap-Review.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "Dead-Code-and-Carryover-Gap-Review.md"; sourceTree = "<group>"; };
+		6861B78A2FCCAEA900B26022 /* Proximity-Mesh-Consolidation-Plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "Proximity-Mesh-Consolidation-Plan.md"; sourceTree = "<group>"; };
 		6869C2E22FB8D39D0098A0F3 /* Fernlet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Fernlet.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6869C2F62FB8D39D0098A0F3 /* FernletTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FernletTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6869C3002FB8D39D0098A0F3 /* FernletUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FernletUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -53,6 +66,8 @@
 		68B9EC112FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = MeshNetworkImplementationPlan.md; sourceTree = "<group>"; };
 		68B9EC132FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "FernletStore-Refactor-Plan-v2.md"; sourceTree = "<group>"; };
 		68B9EC1D2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "PR0-Incremental-Migration-Plan.md"; sourceTree = "<group>"; };
+		68B9EE4E2FC9048C00AF8FB6 /* Fernlet-Review-and-Plan-Updates.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "Fernlet-Review-and-Plan-Updates.md"; sourceTree = "<group>"; };
+		68B9EE612FCA75B600AF8FB6 /* Life-Tab-Redesign-Implementation-Plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "Life-Tab-Redesign-Implementation-Plan.md"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -120,6 +135,8 @@
 				6869C3032FB8D39D0098A0F3 /* FernletUITests */,
 				6869C2E32FB8D39D0098A0F3 /* Products */,
 				6869C37B2FBBF3450098A0F3 /* Docs */,
+				6861B7802FCA9EF000B26022 /* DisposableCameraView.swift */,
+				68187DDD2FD36861004E15E9 /* CompanionVectorAssets.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -139,9 +156,13 @@
 				68B9EC1F2FC67DE800AF8FB6 /* Completed Implemtations */,
 				6869C37C2FBBF4AF0098A0F3 /* FernletSpecificationV3.md */,
 				68B9EC132FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md */,
-				68B9EC112FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md */,
+				68187DC62FD0E119004E15E9 /* Meal-Estimation-Overhaul-Plan.md */,
 				6869C37E2FBBF4AF0098A0F3 /* ImplementationPlan.md */,
+				6861B78A2FCCAEA900B26022 /* Proximity-Mesh-Consolidation-Plan.md */,
 				684018E02FBFAC4500EFC6D6 /* FileIndex.md */,
+				68B9EE4E2FC9048C00AF8FB6 /* Fernlet-Review-and-Plan-Updates.md */,
+				68187DDB2FD20EB8004E15E9 /* ProximityFunctionIndex.md */,
+				68187DDC2FD261F7004E15E9 /* StoreRepositoryFunctionIndex.md */,
 			);
 			path = Docs;
 			sourceTree = "<group>";
@@ -149,6 +170,9 @@
 		68B9EC1F2FC67DE800AF8FB6 /* Completed Implemtations */ = {
 			isa = PBXGroup;
 			children = (
+				68B9EE612FCA75B600AF8FB6 /* Life-Tab-Redesign-Implementation-Plan.md */,
+				68B9EC112FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md */,
+				6861B7882FCCA74600B26022 /* Dead-Code-and-Carryover-Gap-Review.md */,
 				684018E32FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md */,
 				68B9EBCD2FC296F100AF8FB6 /* codex-implementation-prompts.md */,
 				68B9EC1D2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md */,
@@ -287,12 +311,16 @@
 			files = (
 				68B9EC1E2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md in Resources */,
 				68B9EC122FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md in Resources */,
+				6861B78B2FCCAEA900B26022 /* Proximity-Mesh-Consolidation-Plan.md in Resources */,
 				68B9EBCE2FC296F200AF8FB6 /* codex-implementation-prompts.md in Resources */,
 				684019122FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md in Resources */,
 				68B9EC142FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md in Resources */,
+				68187DC72FD0E119004E15E9 /* Meal-Estimation-Overhaul-Plan.md in Resources */,
 				684018E42FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md in Resources */,
 				684018BA2FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md in Resources */,
+				68B9EE622FCA75B600AF8FB6 /* Life-Tab-Redesign-Implementation-Plan.md in Resources */,
 				68B9EC082FC352D000AF8FB6 /* proximity-handshake-process-map.md in Resources */,
+				6861B7892FCCA74600B26022 /* Dead-Code-and-Carryover-Gap-Review.md in Resources */,
 				68B9EBDC2FC2AA1800AF8FB6 /* phase7-proximity-implementation-plan.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -318,6 +346,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				68187DDE2FD36861004E15E9 /* CompanionVectorAssets.swift in Sources */,
+				6861B7812FCA9EF000B26022 /* DisposableCameraView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

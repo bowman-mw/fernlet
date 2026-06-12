@@ -44,6 +44,7 @@ final class JournalNarrativeRepository {
         let request = request(id: id)
         try context.fetch(request).forEach(context.delete)
         try context.save()
+        try PrivatePersistentHistoryPruner.prune(context: context)
     }
 
     func narratives(forDayKey dayKey: String, contentKey: SymmetricKey?) throws -> [JournalNarrative] {

@@ -24,15 +24,17 @@ struct SettingsSheet: View {
         NavigationStack {
             Form {
                 Section {
+                } header: {
                     Text("Everything stays on this device.")
                         .font(.callout.italic())
                         .foregroundStyle(Color.slate)
+                        .textCase(nil)
                         .fernletWrappingText()
                 }
-                .listRowBackground(Color.cream)
+                .listSectionSeparator(.hidden)
+                .listSectionSpacing(.compact)
 
                 Section("General") {
-                    Toggle("Dark mode", isOn: $isDarkModeEnabled)
                     NavigationLink("Appearance") {
                         settingsDestination(title: "Appearance") { appearanceTab }
                     }
@@ -41,18 +43,6 @@ struct SettingsSheet: View {
                     }
                     NavigationLink("Layout & shortcuts") {
                         settingsDestination(title: "Layout & shortcuts") { layoutTab }
-                    }
-                }
-                .listRowBackground(Color.cream)
-
-                Section("Friends") {
-                    HStack {
-                        Text("Your name")
-                        Spacer()
-                        TextField(UIDevice.current.name, text: proximityDisplayNameBinding)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundStyle(Color.bark)
-                            .submitLabel(.done)
                     }
                 }
                 .listRowBackground(Color.cream)
@@ -77,17 +67,13 @@ struct SettingsSheet: View {
                 }
                 .listRowBackground(Color.cream)
 
-                Section("Memory & signals") {
+                Section("Advanced") {
                     NavigationLink("Core memory") {
                         settingsDestination(title: "Core memory") { memoriesTab }
                     }
                     NavigationLink("Signals") {
                         settingsDestination(title: "Signals") { signalsTab }
                     }
-                }
-                .listRowBackground(Color.cream)
-
-                Section("Advanced") {
                     NavigationLink("Debug") {
                         settingsDestination(title: "Debug") { debugTab }
                     }
@@ -111,6 +97,13 @@ struct SettingsSheet: View {
                             .fernletLockGate(active: lockService.state != .notConfigured)
                             .environment(lockService)
                     }
+                    Toggle(
+                        "Allow nearby recipe shares",
+                        isOn: Binding(
+                            get: { store.settings.allowNearbyRecipeShares },
+                            set: { store.setAllowNearbyRecipeShares($0) }
+                        )
+                    )
                 }
                 .listRowBackground(Color.cream)
 
@@ -151,13 +144,6 @@ struct SettingsSheet: View {
         )
     }
 
-    private var proximityDisplayNameBinding: Binding<String> {
-        Binding(
-            get: { store.settings.proximityDisplayName },
-            set: { store.setProximityDisplayName($0) }
-        )
-    }
-
     private func settingsDestination<Content: View>(
         title: String,
         @ViewBuilder content: () -> Content
@@ -174,6 +160,9 @@ struct SettingsSheet: View {
 
     private var appearanceTab: some View {
         VStack(alignment: .leading, spacing: 14) {
+            Toggle("Dark mode", isOn: $isDarkModeEnabled)
+                .padding(14)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
             SectionLabel("Backgrounds")
             VStack(alignment: .leading, spacing: 12) {
                 Text("Choose separate backgrounds for light and dark mode. Cards and input boxes stay in the same color family so the existing text colors remain readable.")
@@ -811,7 +800,7 @@ struct SettingsSheet: View {
 
     private var generalTab: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionLabel("Goal focus")
+            SectionLabel("Goal")
             VStack(alignment: .leading, spacing: 10) {
                 Picker("Goal", selection: $store.settings.selectedGoal) {
                     ForEach(GoalType.allCases) { goal in
@@ -822,17 +811,16 @@ struct SettingsSheet: View {
                     .font(.caption.italic())
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
+                Divider().overlay(Color.bark.opacity(0.08))
+                Toggle("Sick mode", isOn: $store.settings.isSick)
+                Toggle("Show calories", isOn: $store.settings.showCalories)
             }
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            Toggle("Sick mode", isOn: $store.settings.isSick)
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            Toggle("Show calories", isOn: $store.settings.showCalories)
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            SectionLabel("Nutrition profile")
+
+            SectionLabel("Body & preferences")
             ProfileEditor(profile: healthSyncedProfileBinding, preferences: $store.settings.nutritionPreferences)
+
             FernletCard {
                 let targets = store.nutritionTargets
                 VStack(alignment: .leading, spacing: 10) {
@@ -848,7 +836,8 @@ struct SettingsSheet: View {
                         .fernletWrappingText()
                 }
             }
-            SectionLabel("AI status")
+
+            SectionLabel("AI")
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Current")
@@ -858,6 +847,13 @@ struct SettingsSheet: View {
                         .foregroundStyle(Color.bark)
                 }
                 Toggle("Manual off mode", isOn: aiManualOffBinding)
+                Divider().overlay(Color.bark.opacity(0.08))
+                Toggle("Web nutrition lookup", isOn: $store.settings.webNutritionLookupEnabled)
+                    .disabled(store.settings.aiStatus == .off)
+                Text("Fernlet can search the web for chain and packaged-food nutrition. Your meal description is sent to a search provider only when this is on.")
+                    .font(.caption.italic())
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
                 Text(FernletVoice.message(for: store.settings.aiStatus == .off ? .aiUnavailable : .retryAvailable))
                     .font(.caption.italic())
                     .foregroundStyle(Color.slate)
@@ -865,19 +861,17 @@ struct SettingsSheet: View {
             }
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            SectionLabel("Bottle size")
-            Stepper("\(store.settings.bottleOz) oz", value: $store.settings.bottleOz, in: 4...64)
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            SectionLabel("Hydration target")
-            Stepper("\(store.settings.hydrationTarget) bottles", value: $store.settings.hydrationTarget, in: 1...30)
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+
+            SectionLabel("Hydration")
+            VStack(alignment: .leading, spacing: 10) {
+                Stepper("Bottle: \(store.settings.bottleOz) oz", value: $store.settings.bottleOz, in: 4...64)
+                Divider().overlay(Color.bark.opacity(0.08))
+                Stepper("Daily target: \(store.settings.hydrationTarget) bottles", value: $store.settings.hydrationTarget, in: 1...30)
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+
             personalCareSettings
-            Toggle("Show developer notes", isOn: $store.settings.showDeveloperNotes)
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            if store.settings.showDeveloperNotes { debugCard }
         }
     }
 
@@ -967,6 +961,21 @@ struct SettingsSheet: View {
                 .font(.callout.italic())
                 .foregroundStyle(Color.terracotta)
                 .fernletWrappingText()
+
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel("Friends tab")
+                Toggle(
+                    "Proximity debug tools",
+                    isOn: Binding(
+                        get: { store.settings.showProximityDebugTools },
+                        set: { store.setShowProximityDebugTools($0) }
+                    )
+                )
+                Text("Shows the connection inspector button and a Force override on the Friends tab that bypasses distance requirements.")
+                    .font(.caption.italic())
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
 
             debugCard
 
@@ -1301,7 +1310,7 @@ struct AppLockSettingsView: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Notes attached to your cycle history will be permanently deleted. Your HealthKit entries remain in Apple Health.")
+            Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
         }
     }
 

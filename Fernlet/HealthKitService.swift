@@ -602,6 +602,40 @@ final class HealthKitService: HealthKitServicing {
         return context
     }
 
+    func loadIntimacyEventsByDay(for month: Date) async throws -> [String: Int] {
+        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        let cal = Calendar.current
+        guard let interval = cal.dateInterval(of: .month, for: month) else { return [:] }
+        let sexualActivity = try Self.categoryType(.sexualActivity)
+        let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: .strictStartDate)
+        let samples = try await categorySamples(for: sexualActivity, predicate: predicate)
+        var result: [String: Int] = [:]
+        for sample in samples {
+            let key = FernletDate.dayKey(for: sample.startDate)
+            result[key, default: 0] += 1
+        }
+        return result
+    }
+
+    func saveIntimacyEvent(date: Date, protectionUsed: Bool?, externalUUID: UUID) async throws {
+        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        var metadata: [String: Any] = [
+            HKMetadataKeyExternalUUID: externalUUID.uuidString
+        ]
+        if let protectionUsed {
+            metadata[HKMetadataKeySexualActivityProtectionUsed] = protectionUsed
+        }
+        let sample = HKCategorySample(
+            type: try Self.categoryType(.sexualActivity),
+            value: HKCategoryValue.notApplicable.rawValue,
+            start: date,
+            end: date.addingTimeInterval(60),
+            metadata: metadata
+        )
+        try await save([sample])
+        FernletAuditLog.log("hk.write.saved", context: ["type": "intimacy", "externalUUID": externalUUID.uuidString])
+    }
+
     private func sleepHours(referenceDate: Date) async throws -> Double? {
         let sleepType = try Self.categoryType(.sleepAnalysis)
         let interval = Self.sleepNightInterval(containing: referenceDate)

@@ -80,6 +80,7 @@ enum MealDecompositionResolver {
         payload: MealDecompositionPayload,
         index: FoodItemSearch.Index
     ) -> Meal? {
+        let gramBounds = DishTemplateLexicon.componentGramBounds(description: payload.mealDescription)
         let resolvedIngredients: [(FoodSelectionIngredient, FoodItem)] = decomposition.components.compactMap { component in
             let ing = component.ingredient.trimmingCharacters(in: .whitespaces)
             guard !ing.isEmpty else { return nil }
@@ -88,7 +89,8 @@ enum MealDecompositionResolver {
                 ? ing
                 : "\(prep) \(ing)"
             guard let foodItem = FoodItemSearch.results(for: query, in: index, limit: 1).first else { return nil }
-            let clampedGrams = max(1, min(1500, component.grams))
+            let boundedGrams = boundedComponentGrams(component.grams, query: query, gramBounds: gramBounds)
+            let clampedGrams = max(1, min(1500, boundedGrams))
             let ingredient = FoodSelectionIngredient(
                 candidateId: 0,
                 foodName: foodItem.name,
@@ -121,6 +123,26 @@ enum MealDecompositionResolver {
             resolvedIngredients: resolvedIngredients,
             mealType: mealType
         )
+    }
+    private static func boundedComponentGrams(
+        _ grams: Double,
+        query: String,
+        gramBounds: [String: ClosedRange<Double>]
+    ) -> Double {
+        guard gramBounds.isEmpty == false else { return grams }
+        let normalizedQuery = FoodItemSearch.normalized(query)
+        let queryTokens = Set(normalizedQuery.split(separator: " ").map(String.init))
+        let matchingBounds = gramBounds.compactMap { key, bounds -> ClosedRange<Double>? in
+            if normalizedQuery == key || normalizedQuery.contains(key) || key.contains(normalizedQuery) {
+                return bounds
+            }
+            let keyTokens = Set(key.split(separator: " ").map(String.init))
+            return queryTokens.intersection(keyTokens).isEmpty ? nil : bounds
+        }
+        guard matchingBounds.isEmpty == false else { return grams }
+        let lower = matchingBounds.map(\.lowerBound).min() ?? grams
+        let upper = matchingBounds.map(\.upperBound).max() ?? grams
+        return min(max(grams, lower), upper)
     }
     #endif
 }

@@ -181,14 +181,20 @@ extension MeshAdmissionToken {
 
     /// Verifies the token against the key the local device actually holds.
     /// `presentedKey` must match the `joinerSigningPublicKey` bound into the token at issuance,
-    /// preventing a fingerprint-collision attack (~2^32 SHA-256) from impersonating the intended joiner.
+    /// preventing a fingerprint-collision attack from impersonating the intended joiner.
     func verify(joinerSigningPublicKey presentedKey: Data, now: Date = Date()) throws {
         guard expiresAt >= now else { throw VerifyError.expired }
         guard presentedKey == joinerSigningPublicKey else { throw VerifyError.joinerKeyMismatch }
-        guard IdentityService.fingerprint(of: joinerSigningPublicKey) == joinerFingerprint else {
+        guard IdentityService.fingerprintsMatch(
+            IdentityService.fingerprint(of: joinerSigningPublicKey),
+            joinerFingerprint
+        ) else {
             throw VerifyError.fingerprintMismatch
         }
-        guard IdentityService.fingerprint(of: admitterSigningPublicKey) == admitterFingerprint else {
+        guard IdentityService.fingerprintsMatch(
+            IdentityService.fingerprint(of: admitterSigningPublicKey),
+            admitterFingerprint
+        ) else {
             throw VerifyError.fingerprintMismatch
         }
         guard IdentityService.verify(admitterSignature, of: canonicalBytes(for: self), by: admitterSigningPublicKey) else {

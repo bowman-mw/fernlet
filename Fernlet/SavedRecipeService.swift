@@ -48,6 +48,13 @@ final class SavedRecipeService {
         scheduleSave()
     }
 
+    func flushPendingSave() {
+        guard saveScheduled else { return }
+        saveScheduled = false
+        let saved = repository.save(savedRecipes)
+        assert(saved, "saved recipes should save")
+    }
+
     func shareText(for recipe: SavedRecipe) -> String {
         var lines: [String] = [recipe.name, ""]
         if recipe.protein > 0 || recipe.carbs > 0 || recipe.fat > 0 {
@@ -84,12 +91,12 @@ final class SavedRecipeService {
     private func scheduleSave() {
         guard !saveScheduled else { return }
         saveScheduled = true
-        Task { @MainActor [weak self] in
+        Task { [weak self] in
             await Task.yield()
-            guard let self else { return }
-            saveScheduled = false
-            let saved = repository.save(savedRecipes)
-            assert(saved, "saved recipes should save")
+            await MainActor.run {
+                guard let self else { return }
+                self.flushPendingSave()
+            }
         }
     }
 }

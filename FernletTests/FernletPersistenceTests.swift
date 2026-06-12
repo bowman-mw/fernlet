@@ -36,7 +36,10 @@ struct FernletPersistenceTests {
     }
 
     @MainActor
-    private func makeStore(controller: PersistenceController) -> FernletStore {
+    private func makeStore(
+        controller: PersistenceController,
+        privateController: PrivatePersistenceController? = nil
+    ) -> FernletStore {
         let legacyURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("json")
@@ -44,7 +47,9 @@ struct FernletPersistenceTests {
             controller: controller,
             legacyRepository: LocalFernletRepository(fileURL: legacyURL)
         )
-        return FernletStore(date: testDate, repository: repo)
+        let activePrivate = privateController ?? PrivatePersistenceController(inMemory: true)
+        let jnr = JournalNarrativeRepository(controller: activePrivate)
+        return FernletStore(date: testDate, repository: repo, journalNarrativeRepository: jnr)
     }
 
     // MARK: - Test 1
@@ -294,6 +299,30 @@ struct FernletPersistenceTests {
         #expect(savedIngredient != nil)
         #expect(matchingItems.count == 1)
         #expect(store.recipes.first?.ingredients.first?.foodItemId == savedIngredient?.id)
+    }
+
+    // MARK: - Security: NEW-1
+
+    /// Journal text must never appear in the iCloud-synced blob, even when no lock is configured.
+    /// Entries are sealed with a device-managed key; the blob stores only stripped metadata.
+    @MainActor
+    @Test func test_noLock_journalTextStrippedFromBlob() {
+        let controller = makeController()
+        let store = makeStore(controller: controller)
+        store.addJournal(text: "Sensitive diary content that must not reach iCloud.", tag: .neutral)
+        store.flushPendingSnapshotSave()
+
+        // A fresh store loaded from the same blob should never see journal text
+        // unless activateNoLockJournals() / activateSealedJournals() is called first.
+        let reloaded = makeStore(controller: controller)
+        #expect(
+            reloaded.day.journals.allSatisfy { $0.text.isEmpty },
+            "Journal text must not appear in the iCloud-synced blob when no lock is configured"
+        )
+        #expect(
+            reloaded.previousJournals.allSatisfy { $0.text.isEmpty },
+            "Previous journal text must not appear in the iCloud-synced blob when no lock is configured"
+        )
     }
 }
 

@@ -18,13 +18,16 @@ struct ContentView: View {
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
     @State private var selectedTab: FernletTab = .home
     @State private var privateHubSection: PrivateHubSection = .journal
-    @State private var socialHubSection: SocialHubSection = .workshop
+    @State private var isHomeTabBarCompact = false
+    @State private var tabResetTokens: [FernletTab: Int] = Dictionary(uniqueKeysWithValues: FernletTab.allCases.map { ($0, 0) })
     @State private var activeSheet: FernletSheet?
     @State private var mealLogNotification: MealLogNotification?
     @State private var editingRecipeFromHome: RecipeDefinition?
     @State private var editingSavedRecipeFromHome: SavedRecipe?
     @State private var didAutoImportHealthProfile = false
     @State private var didAutoImportHealthContext = false
+    @State private var discoveryTimeoutTask: Task<Void, Never>?
+    @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         launchRoot
             .preferredColorScheme(isDarkModeEnabled ? .dark : .light)
@@ -49,9 +52,27 @@ struct ContentView: View {
                     .presentationDragIndicator(.visible)
                     .presentationBackgroundInteraction(.enabled)
             }
+            .sheet(item: pendingRecipeShareBinding) { share in
+                ProximityRecipeShareReviewSheet(
+                    share: share,
+                    store: store,
+                    manager: store.recipeShareManager
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+            }
             .onChange(of: lockService.state) { _, newState in
                 store.lockState = newState
                 Task { await drainPendingPeriodNarrativesIfUnlocked(newState) }
+                if case .unlocked = newState, let contentKey = lockService.contentKey() {
+                    store.activateSealedJournals(contentKey: contentKey)
+                } else if case .locked = newState {
+                    store.deactivateSealedJournals()
+                } else if case .notConfigured = newState {
+                    store.activateNoLockJournals()
+                }
+                updateRecipeShareListener()
             }
             .overlay(alignment: .top) {
                 if let mealLogNotification {
@@ -65,110 +86,199 @@ struct ContentView: View {
             .animation(.easeOut(duration: 0.45), value: launcher.isDone)
             .task {
                 periodStore.attachLockService(lockService)
-                try? await Task.sleep(for: .milliseconds(120))
-                if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_OPEN_SETTINGS"] == "1" {
-                    activeSheet = .settings
+                if lockService.state == .notConfigured {
+                    store.activateNoLockJournals()
                 }
+                try? await Task.sleep(for: .milliseconds(120))
                 async let _ = autoImportHealthProfileIfAvailable()
                 async let _ = autoImportHealthContextIfAvailable()
                 await launcher.prepare(store: store)
                 store.markLaunchScreenDismissed()
+                if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_OPEN_SETTINGS"] == "1" {
+                    activeSheet = .settings
+                }
+                store.meshNetworkManager.injectUITestStateIfNeeded()
+                updateRecipeShareListener()
                 store.deferredPostLaunchTasks()
                 store.ensureBundledFoodItemsSeeded()
+                await store.processSharedRecipeImportQueue()
             }
-            .onChange(of: selectedTab) { _, newTab in
+            .onChange(of: selectedTab) { oldTab, newTab in
+                tabResetTokens[oldTab, default: 0] += 1
+                isHomeTabBarCompact = false
+                if newTab == .social {
+                    startFriendsDiscovery()
+                } else if oldTab == .social {
+                    stopFriendsDiscovery()
+                }
+                updateRecipeShareListener()
                 Task { await refreshHealthContextForActiveTab(newTab) }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active && selectedTab == .social {
+                    stopFriendsDiscovery()
+                }
+                updateRecipeShareListener()
             }
             .onChange(of: customLightBackgroundHex) { _, _ in }
             .onChange(of: customDarkBackgroundHex) { _, _ in }
     }
 
+    private func resetTokenBinding(for tab: FernletTab) -> Binding<Int> {
+        Binding(
+            get: { tabResetTokens[tab, default: 0] },
+            set: { tabResetTokens[tab] = $0 }
+        )
+    }
+
+    private var pendingRecipeShareBinding: Binding<PendingProximityRecipeShare?> {
+        Binding(
+            get: { store.recipeShareManager.pendingRecipeShares.first },
+            set: { newValue in
+                guard newValue == nil,
+                      let first = store.recipeShareManager.pendingRecipeShares.first else { return }
+                store.recipeShareManager.dismissRecipeShare(first)
+            }
+        )
+    }
+
     private var launchRoot: some View {
         ZStack {
-            Color.parchment.ignoresSafeArea()
+            sceneBackground.ignoresSafeArea()
             if launcher.isDone {
                 mainInterface
                     .transition(.opacity)
             } else {
-                LaunchScreen(statusMessage: launcher.statusMessage)
+                LaunchScreen(
+                    statusMessage: launcher.statusMessage,
+                    companionState: store.companionState,
+                    companionAppearance: store.settings.companionAppearance,
+                    showsCompanion: true
+                )
                     .transition(.opacity)
             }
         }
-        .background(Color.parchment)
+        .background(sceneBackground)
     }
 
     private var mainInterface: some View {
+        mainTabContent
+            .overlay(alignment: .bottom) {
+                if !isDisposableCameraSessionActive {
+                    LinearGradient(
+                        colors: [Color.parchment.opacity(0), Color.parchment],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 26)
+                    .allowsHitTesting(false)
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !isLandscapeDisposableCameraActive {
+                    customTabBar
+                        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: isCustomTabBarCompact)
+                }
+            }
+            .tint(Color.moss)
+            .background(sceneBackground.ignoresSafeArea())
+    }
+
+    @ViewBuilder
+    private var mainTabContent: some View {
+        if isDisposableCameraSessionActive {
+            SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: .constant(false), tabResetToken: .constant(0))
+        } else {
+            pagedTabs
+        }
+    }
+
+    private var pagedTabs: some View {
         TabView(selection: $selectedTab) {
             HomeView(
                 store: store,
                 activeSheet: $activeSheet,
                 selectedTab: $selectedTab,
                 privateHubSection: $privateHubSection,
-                socialHubSection: $socialHubSection
+                isTabBarCompact: $isHomeTabBarCompact,
+                tabResetToken: resetTokenBinding(for: .home)
             )
             .tag(FernletTab.home)
-            FoodView(store: store, activeSheet: $activeSheet)
+            FoodView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
                 .tag(FernletTab.food)
-            MoveView(store: store, activeSheet: $activeSheet)
+            MoveView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .move))
                 .tag(FernletTab.move)
-            SocialHubView(store: store, activeSheet: $activeSheet, section: $socialHubSection)
+            SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
                 .tag(FernletTab.social)
-            PrivateHubView(store: store, periodStore: periodStore, activeSheet: $activeSheet, section: $privateHubSection)
+            PrivateHubView(store: store, periodStore: periodStore, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal))
                 .tag(FernletTab.personal)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-        .overlay(alignment: .bottom) {
-            LinearGradient(
-                colors: [Color.parchment.opacity(0), Color.parchment],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 26)
-            .allowsHitTesting(false)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            customTabBar
-        }
-        .tint(Color.moss)
-        .background(Color.parchment)
+    }
+
+    private var isDisposableCameraSessionActive: Bool {
+        selectedTab == .social
+            && store.meshNetworkManager.isInSession
+    }
+
+    private var isLandscapeDisposableCameraActive: Bool {
+        isDisposableCameraSessionActive
+            && store.isDisposableCameraLandscape
+    }
+
+    private var isCustomTabBarCompact: Bool {
+        !isDisposableCameraSessionActive && isHomeTabBarCompact
+    }
+
+    private var sceneBackground: Color {
+        isDisposableCameraSessionActive
+            ? Color(red: 0.13, green: 0.10, blue: 0.08)
+            : Color.parchment
     }
 
     private var customTabBar: some View {
-        HStack(spacing: 0) {
+        let isCompact = isCustomTabBarCompact
+        let cornerRadius: CGFloat = isCompact ? 22 : 26
+
+        return HStack(spacing: isCompact ? 4 : 0) {
             ForEach(FernletTab.allCases) { tab in
                 Button {
                     selectedTab = tab
                 } label: {
                     let isSelected = selectedTab == tab
-                    VStack(spacing: 3) {
+                    VStack(spacing: isCompact ? 0 : 3) {
                         Image(systemName: tab.systemImage)
-                            .font(.system(size: 20))
-                            .frame(height: 24)
+                            .font(.system(size: isCompact ? 18 : 20))
+                            .frame(height: isCompact ? 22 : 24)
                         Text(tab.title)
                             .font(.system(size: 10, weight: .medium))
+                            .opacity(isCompact ? 0 : 1)
+                            .frame(height: isCompact ? 0 : nil)
+                            .accessibilityHidden(isCompact)
                     }
                     .foregroundStyle(isSelected ? Color.moss : Color(UIColor.secondaryLabel))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
+                    .padding(.vertical, isCompact ? 8 : 9)
                     .background(
                         isSelected ? Color.parchment : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        in: RoundedRectangle(cornerRadius: isCompact ? 14 : 16, style: .continuous)
                     )
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .padding(.horizontal, isCompact ? 6 : 8)
+        .padding(.vertical, isCompact ? 5 : 6)
+        .frame(maxWidth: isCompact ? 300 : .infinity)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(Color.bark.opacity(0.08), lineWidth: 1)
         )
-        .shadow(color: Color.bark.opacity(0.12), radius: 16, x: 0, y: 6)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
+        .shadow(color: Color.bark.opacity(0.12), radius: isCompact ? 12 : 16, x: 0, y: isCompact ? 4 : 6)
+        .padding(.horizontal, isCompact ? 40 : 20)
+        .padding(.bottom, isCompact ? 4 : 12)
     }
 
     @ViewBuilder
@@ -224,11 +334,6 @@ struct ContentView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
-        case .texture:
-            TextureSheet(store: store)
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
         case .settings:
             SettingsSheet(store: store)
                 .presentationDetents([.large])
@@ -252,6 +357,13 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
                 .environment(lockService)
+        case .logIntimacy:
+            LogIntimacySheet()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+                .environment(lockService)
+                .environment(storagePreferencesStore)
         }
     }
 
@@ -326,6 +438,46 @@ struct ContentView: View {
             }
         }
     }
+
+    private func updateRecipeShareListener() {
+        if shouldListenForRecipeShares {
+            store.recipeShareManager.start()
+        } else {
+            store.recipeShareManager.stop()
+        }
+    }
+
+    private var shouldListenForRecipeShares: Bool {
+        guard store.settings.allowNearbyRecipeShares else { return false }
+        guard scenePhase == .active else { return false }
+        guard selectedTab == .home || selectedTab == .food || selectedTab == .move else { return false }
+        switch lockService.state {
+        case .notConfigured, .unlocked:
+            return true
+        case .locked:
+            return false
+        }
+    }
+
+    private func startFriendsDiscovery() {
+        let manager = store.meshNetworkManager
+        guard !manager.isInSession, !manager.isSearching else { return }
+        manager.startJoin()
+        discoveryTimeoutTask?.cancel()
+        discoveryTimeoutTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5 * 60))
+            guard !Task.isCancelled, !manager.isInSession else { return }
+            manager.stopJoin()
+        }
+    }
+
+    private func stopFriendsDiscovery() {
+        discoveryTimeoutTask?.cancel()
+        discoveryTimeoutTask = nil
+        let manager = store.meshNetworkManager
+        guard !manager.isInSession else { return }
+        manager.stopJoin()
+    }
 }
 
 struct PersonalScreenView: View {
@@ -333,6 +485,13 @@ struct PersonalScreenView: View {
     @Bindable var store: FernletStore
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
+    @Binding var isTabBarCompact: Bool
+    @Binding var tabResetToken: Int
+    @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
+    @Environment(FernletLockService.self) private var lockService
+    @State private var intimacyDisplayedMonth: Date = .now
+    @State private var intimacyEventsByDay: [String: Int] = [:]
+    @State private var intimacyLogs: [IntimacyLog] = []
 
     var body: some View {
         NavigationStack {
@@ -347,12 +506,17 @@ struct PersonalScreenView: View {
                     }
                     .padding(.top, 4)
 
-                    FernletScrollSection(todaySectionTitle) {
+                    if screen == .intimacyTracking {
                         personalScreenBody
+                    } else {
+                        FernletScrollSection(todaySectionTitle) {
+                            personalScreenBody
+                        }
                     }
                 }
                 .padding(20)
             }
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
             .navigationTitle("")
             .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)
@@ -365,20 +529,19 @@ struct PersonalScreenView: View {
         case .intimacyTracking: "Private"
         case .friends: "People"
         case .photos: "Photo wall"
-        case .hobbyNotes: "Notes"
-        case .food, .move, .journal, .workshop: "Today"
+        case .food, .move, .journal: "Today"
         }
     }
 
     private var primaryActionIcon: String {
         switch screen {
         case .periodTracking, .intimacyTracking:
-            "heart.text.square"
+            "plus"
         case .photos:
             "photo.badge.plus"
-        case .friends, .hobbyNotes:
+        case .friends:
             "square.and.pencil"
-        case .food, .move, .journal, .workshop:
+        case .food, .move, .journal:
             "plus"
         }
     }
@@ -398,16 +561,49 @@ struct PersonalScreenView: View {
             }
             .padding(.vertical, 8)
         case .intimacyTracking:
-            VStack(alignment: .leading, spacing: 8) {
-                Label(intimacySummary, systemImage: screen.systemImage)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(Color.bark)
+            VStack(alignment: .leading, spacing: 12) {
+                IntimacyCalendarCard(
+                    displayedMonth: $intimacyDisplayedMonth,
+                    eventsByDay: intimacyEventsByDay
+                )
                 Text("Intimacy access is private, optional, and age-gated.")
                     .font(.caption)
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
+
+                FernletScrollSection("Notes") {
+                    if intimacyLogs.isEmpty {
+                        EmptyState(text: "No private intimacy notes yet.")
+                    } else {
+                        ForEach(Array(intimacyLogs.prefix(12).enumerated()), id: \.element.id) { index, log in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(log.eventDate.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.slate)
+                                if !log.note.isEmpty {
+                                    Text(log.note)
+                                        .font(.callout)
+                                        .foregroundStyle(Color.bark)
+                                        .fernletWrappingText()
+                                }
+                                if log.healthKitExternalUUID != nil {
+                                    Label("Saved to Apple Health", systemImage: "heart.text.square")
+                                        .font(.caption2)
+                                        .foregroundStyle(Color.moss)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                            if index < intimacyLogs.prefix(12).count - 1 {
+                                FernletRowDivider()
+                            }
+                        }
+                    }
+                }
             }
-            .padding(.vertical, 8)
+            .task(id: intimacyDisplayedMonth) { await loadIntimacyCalendar() }
+            .onChange(of: activeSheet?.id) { _, newValue in
+                if newValue == nil { Task { await loadIntimacyCalendar() } }
+            }
         case .friends:
             PersonalMemoryList(category: "friend", emptyText: "No friend notes yet.", store: store)
         case .photos:
@@ -423,9 +619,7 @@ struct PersonalScreenView: View {
                     .fernletWrappingText()
             }
             .padding(.vertical, 4)
-        case .hobbyNotes:
-            PersonalMemoryList(category: "hobby", emptyText: "No hobby notes yet.", store: store)
-        case .food, .move, .journal, .workshop:
+        case .food, .move, .journal:
             EmptyView()
         }
     }
@@ -440,15 +634,31 @@ struct PersonalScreenView: View {
         return count == 0 ? "No intimacy events today." : "\(count) private event\(count == 1 ? "" : "s") today"
     }
 
+    private func loadIntimacyCalendar() async {
+        guard store.isIntimateLoggingAllowed else { return }
+        let localLogs = (try? IntimacyLogRepository().logs(contentKey: lockService.contentKey())) ?? []
+        intimacyLogs = localLogs
+        let localEventsByDay = Dictionary(grouping: localLogs, by: \.dayKey).mapValues(\.count)
+        do {
+            let service = HealthKitService(preferencesStore: storagePreferencesStore)
+            let healthEventsByDay = try await service.loadIntimacyEventsByDay(for: intimacyDisplayedMonth)
+            intimacyEventsByDay = healthEventsByDay.merging(localEventsByDay) { max($0, $1) }
+        } catch {
+            intimacyEventsByDay = localEventsByDay
+        }
+    }
+
     private func handlePrimaryAction() {
         switch screen {
-        case .periodTracking, .intimacyTracking:
+        case .periodTracking:
             activeSheet = .settings
-        case .friends, .hobbyNotes:
+        case .intimacyTracking:
+            activeSheet = .logIntimacy
+        case .friends:
             activeSheet = .journal
         case .photos:
             break
-        case .food, .move, .journal, .workshop:
+        case .food, .move, .journal:
             break
         }
     }
@@ -541,6 +751,9 @@ struct MealLogNotificationView: View {
 
 struct LaunchScreen: View {
     var statusMessage: String
+    var companionState: CompanionState = .thriving
+    var companionAppearance: CompanionAppearance = .standard
+    var showsCompanion = false
 
     private var greeting: String {
         Self.greeting(for: Date.now)
@@ -564,16 +777,22 @@ struct LaunchScreen: View {
             VStack(spacing: 32) {
                 Spacer()
 
-                TimelineView(.animation) { timeline in
-                    let elapsed = timeline.date.timeIntervalSinceReferenceDate
-                    let pulse = 1 + 0.14 * ((sin(elapsed * .pi / 0.85) + 1) / 2)
+                if showsCompanion {
+                    TimelineView(.animation) { timeline in
+                        let elapsed = timeline.date.timeIntervalSinceReferenceDate
+                        let pulse = 1 + 0.14 * ((sin(elapsed * .pi / 0.85) + 1) / 2)
 
-                    ZStack {
-                        Circle()
-                            .fill(Color.fern.opacity(0.07))
-                            .frame(width: 168, height: 168)
-                            .scaleEffect(pulse)
-                        CompanionView(state: .thriving, size: 112)
+                        ZStack {
+                            Circle()
+                                .fill(Color.fern.opacity(0.07))
+                                .frame(width: 168, height: 168)
+                                .scaleEffect(pulse)
+                            CompanionView(
+                                state: companionState,
+                                appearance: companionAppearance,
+                                size: 112
+                            )
+                        }
                     }
                 }
 
@@ -605,6 +824,156 @@ struct LaunchScreen: View {
                 Spacer()
             }
         }
+    }
+}
+
+// MARK: - Intimacy Calendar Card
+
+private struct IntimacyCalendarCard: View {
+    @Binding var displayedMonth: Date
+    var eventsByDay: [String: Int]
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+    private var cal: Calendar { .current }
+    private var todayKey: String { FernletDate.dayKey(for: Date()) }
+
+    var body: some View {
+        let model = IntimacyMonthModel(date: displayedMonth, eventsByDay: eventsByDay, todayKey: todayKey)
+        FernletCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center) {
+                    Button {
+                        displayedMonth = cal.date(byAdding: .month, value: -1, to: displayedMonth) ?? displayedMonth
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Color.slate)
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+
+                    Text(model.monthTitle)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Color.bark)
+                        .frame(maxWidth: .infinity)
+
+                    let isCurrentMonth = cal.isDate(displayedMonth, equalTo: .now, toGranularity: .month)
+                    Button {
+                        if !isCurrentMonth {
+                            displayedMonth = cal.date(byAdding: .month, value: 1, to: displayedMonth) ?? displayedMonth
+                        }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(isCurrentMonth ? Color.slate.opacity(0.25) : Color.slate)
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isCurrentMonth)
+                }
+
+                LazyVGrid(columns: columns, spacing: 4) {
+                    ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
+                        Text(day).font(.caption2.weight(.semibold)).foregroundStyle(Color.slate)
+                    }
+                    ForEach(model.cells) { cell in
+                        IntimacyCalendarCell(cell: cell)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct IntimacyCalendarCell: View {
+    var cell: IntimacyMonthCell
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(cell.fill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5)
+                        .stroke(cell.isToday ? Color.moss : Color.clear, lineWidth: 1.5)
+                )
+            if let day = cell.day {
+                VStack(spacing: 1) {
+                    Text("\(day)")
+                        .font(.caption2.weight(cell.isToday ? .bold : .medium))
+                        .foregroundStyle(
+                            cell.isFuture ? Color.bark.opacity(0.28)
+                                : cell.isToday ? Color.moss
+                                : Color.bark.opacity(0.68)
+                        )
+                    if cell.hasEvent {
+                        Circle()
+                            .fill(Color.dustyRose.opacity(0.75))
+                            .frame(width: 4, height: 4)
+                    }
+                }
+                .padding(.bottom, 2)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .accessibilityLabel(cell.accessibilityLabel)
+    }
+}
+
+private struct IntimacyMonthCell: Identifiable {
+    let id = UUID()
+    var day: Int?
+    var dateKey: String?
+    var hasEvent: Bool
+    var isToday: Bool
+    var isFuture: Bool
+
+    var fill: Color {
+        guard day != nil else { return Color.softTaupe.opacity(0.05) }
+        if hasEvent { return Color.dustyRose.opacity(0.15) }
+        return isToday ? Color.moss.opacity(0.18) : Color.softTaupe.opacity(0.16)
+    }
+
+    var accessibilityLabel: String {
+        guard let day else { return "Empty calendar cell" }
+        if isFuture { return "Day \(day)" }
+        if isToday { return hasEvent ? "Today, day \(day), event logged" : "Today, day \(day)" }
+        return hasEvent ? "Day \(day), event logged" : "Day \(day)"
+    }
+}
+
+private struct IntimacyMonthModel {
+    let monthTitle: String
+    let weekdaySymbols: [String]
+    let cells: [IntimacyMonthCell]
+
+    init(date: Date, eventsByDay: [String: Int], todayKey: String, calendar: Calendar = .current) {
+        let monthInterval = calendar.dateInterval(of: .month, for: date)
+        let start = monthInterval?.start ?? date
+        let range = calendar.range(of: .day, in: .month, for: date) ?? 1..<2
+        let firstWeekday = calendar.component(.weekday, from: start)
+
+        self.monthTitle = date.formatted(.dateTime.month(.wide).year())
+        self.weekdaySymbols = calendar.veryShortWeekdaySymbols
+
+        let ymFormatter = DateFormatter()
+        ymFormatter.dateFormat = "yyyy-MM"
+        ymFormatter.calendar = Calendar(identifier: .gregorian)
+        let yearMonth = ymFormatter.string(from: date)
+
+        let blanks = (0..<(firstWeekday - 1)).map { _ in
+            IntimacyMonthCell(day: nil, dateKey: nil, hasEvent: false, isToday: false, isFuture: false)
+        }
+        let days = range.map { d -> IntimacyMonthCell in
+            let key = "\(yearMonth)-\(String(format: "%02d", d))"
+            return IntimacyMonthCell(
+                day: d,
+                dateKey: key,
+                hasEvent: (eventsByDay[key] ?? 0) > 0,
+                isToday: key == todayKey,
+                isFuture: key > todayKey
+            )
+        }
+        self.cells = blanks + days
     }
 }
 

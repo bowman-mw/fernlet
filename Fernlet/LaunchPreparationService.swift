@@ -12,6 +12,70 @@ struct PhotowallSeed: Identifiable {
     let caption: String
     let rotation: Double
     let colorIndex: Int  // 0–3, mapped to themed colors in the view
+    let photoID: UUID?
+}
+
+struct PhotowallSelectionContext {
+    let selectedAt: Date
+    let derivedSignals: [DerivedSignalRecord]
+    let recentActivityNames: [String]
+}
+
+protocol PhotowallPhotoRanking {
+    func rankedCandidates(
+        from photos: [FriendPhotoPayload],
+        context: PhotowallSelectionContext
+    ) -> [FriendPhotoPayload]
+}
+
+struct RandomPhotowallPhotoRanking: PhotowallPhotoRanking {
+    func rankedCandidates(
+        from photos: [FriendPhotoPayload],
+        context: PhotowallSelectionContext
+    ) -> [FriendPhotoPayload] {
+        _ = context
+        return photos.shuffled()
+    }
+}
+
+struct PhotowallPhotoSelector {
+    private let defaults: UserDefaults
+    private let historyKey: String
+    private let ranking: any PhotowallPhotoRanking
+
+    init(
+        defaults: UserDefaults = .standard,
+        historyKey: String = "fernlet.homePhotowall.previousPhotoIDs",
+        ranking: any PhotowallPhotoRanking = RandomPhotowallPhotoRanking()
+    ) {
+        self.defaults = defaults
+        self.historyKey = historyKey
+        self.ranking = ranking
+    }
+
+    func selectPhotoIDs(
+        from photos: [FriendPhotoPayload],
+        count: Int,
+        context: PhotowallSelectionContext
+    ) -> [UUID] {
+        guard count > 0 else { return [] }
+        let previousIDs = previousPhotoIDs()
+        let uniquePhotos = photos.reduce(into: [FriendPhotoPayload]()) { result, photo in
+            if !result.contains(where: { $0.id == photo.id }) {
+                result.append(photo)
+            }
+        }
+        let ranked = ranking.rankedCandidates(from: uniquePhotos, context: context)
+        let fresh = ranked.filter { !previousIDs.contains($0.id) }
+        let previous = ranked.filter { previousIDs.contains($0.id) }
+        let selected = Array((fresh + previous).prefix(count).map(\.id))
+        defaults.set(selected.map(\.uuidString), forKey: historyKey)
+        return selected
+    }
+
+    private func previousPhotoIDs() -> Set<UUID> {
+        Set((defaults.stringArray(forKey: historyKey) ?? []).compactMap(UUID.init(uuidString:)))
+    }
 }
 
 // MARK: - Launch preparation service
@@ -21,8 +85,13 @@ struct PhotowallSeed: Identifiable {
 final class LaunchPreparationService {
     private(set) var isDone = false
     private(set) var statusMessage = initialStatusMessage
+    private let photowallPhotoSelector: PhotowallPhotoSelector
 
     static let initialStatusMessage = "Checking in with your body..."
+
+    init(photowallPhotoSelector: PhotowallPhotoSelector? = nil) {
+        self.photowallPhotoSelector = photowallPhotoSelector ?? PhotowallPhotoSelector()
+    }
 
     func prepare(store: FernletStore) async {
         guard !isDone else { return }
@@ -70,13 +139,23 @@ final class LaunchPreparationService {
 
         let defaults = ["morning", "meal", "movement", "moment"]
         let captions = Array((categories + defaults).prefix(4))
+        let selectedPhotoIDs = photowallPhotoSelector.selectPhotoIDs(
+            from: store.meshNetworkManager.meshPhotos,
+            count: 4,
+            context: PhotowallSelectionContext(
+                selectedAt: Date(),
+                derivedSignals: store.derivedSignals,
+                recentActivityNames: store.day.workouts.map(\.name)
+            )
+        )
 
         let rotations: [Double] = [-3, 2, -1, 3]
         return (0..<4).map { i in
             PhotowallSeed(
                 caption: i < captions.count ? captions[i] : defaults[i % defaults.count],
                 rotation: rotations[i],
-                colorIndex: i
+                colorIndex: i,
+                photoID: selectedPhotoIDs.indices.contains(i) ? selectedPhotoIDs[i] : nil
             )
         }
     }
@@ -174,22 +253,30 @@ final class LaunchPreparationService {
     #if canImport(FoundationModels)
     @available(iOS 26.0, *)
     private func foundationModelsDaySummary(for day: FernletDay) async -> String? {
-        let mealNames = day.meals.prefix(5).map(\.name).joined(separator: ", ")
-        let workoutNames = day.workouts.prefix(3).map(\.name).joined(separator: ", ")
-        let sleepDesc: String
-        if let sleep = day.sleep {
-            let hours = sleep.hours.map { String(format: "%.1f", $0) + " hrs" } ?? ""
-            sleepDesc = [sleep.quality.label.lowercased(), hours].filter { !$0.isEmpty }.joined(separator: " ")
-        } else {
-            sleepDesc = ""
-        }
-        let journalTag = day.journals.last?.tag.label.lowercased() ?? ""
+        let sleep = day.sleep
+        let sleepHours = sleep?.hours
+        let payload = DaySummaryPayload(
+            mealNames: day.meals.prefix(5).map(\.name),
+            workoutNames: day.workouts.prefix(3).map(\.name),
+            sleepQualityLabel: sleep.map { $0.quality.label.lowercased() },
+            sleepHours: sleepHours,
+            journalTagLabel: day.journals.last?.tag.label.lowercased()
+        )
+        let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
+        Task { await AIAuditLog.shared.record(payloadKind: auditKind, destination: .onDeviceFoundationModels, includedFields: auditFields) }
 
         var dataParts: [String] = []
-        if !mealNames.isEmpty { dataParts.append("meals: \(mealNames)") }
-        if !workoutNames.isEmpty { dataParts.append("workouts: \(workoutNames)") }
+        let mealLine = payload.mealNames.joined(separator: ", ")
+        let workoutLine = payload.workoutNames.joined(separator: ", ")
+        let sleepDesc: String = {
+            guard let label = payload.sleepQualityLabel else { return "" }
+            let hours = sleepHours.map { String(format: "%.1f", $0) + " hrs" } ?? ""
+            return [label, hours].filter { !$0.isEmpty }.joined(separator: " ")
+        }()
+        if !mealLine.isEmpty { dataParts.append("meals: \(mealLine)") }
+        if !workoutLine.isEmpty { dataParts.append("workouts: \(workoutLine)") }
         if !sleepDesc.isEmpty { dataParts.append("sleep: \(sleepDesc)") }
-        if !journalTag.isEmpty { dataParts.append("feeling: \(journalTag)") }
+        if let tag = payload.journalTagLabel, !tag.isEmpty { dataParts.append("feeling: \(tag)") }
         guard !dataParts.isEmpty else { return nil }
 
         let prompt = """
@@ -214,16 +301,25 @@ final class LaunchPreparationService {
         let signals = store.derivedSignals.filter { $0.value != "insufficient data" }
         guard !signals.isEmpty else { return nil }
 
-        let signalSummary = signals.prefix(3)
-            .map { "\($0.signalName): \($0.value)" }
-            .joined(separator: ", ")
+        let signalSummaries = signals.prefix(3).map { AISignalSummary(signalName: $0.signalName, value: $0.value) }
         let journalTag = store.day.journals.last?.tag.label.lowercased() ?? ""
+        let filteredMemory = MemoryAgent.filteredContext(
+            from: store.tierTwoMemories,
+            destinedFor: "companion-thought",
+            maxChars: 400
+        )
+        let payload = CompanionThoughtPayload(
+            signalSummaries: Array(signalSummaries),
+            journalTagLabel: journalTag.isEmpty ? nil : journalTag,
+            filteredMemorySummary: filteredMemory
+        )
+        let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
+        Task { await AIAuditLog.shared.record(payloadKind: auditKind, destination: .onDeviceFoundationModels, includedFields: auditFields, memorySummaryCharCount: filteredMemory.count) }
 
-        let tierTwoContext = store.tierTwoContextSummary(maxChars: 400)
-
-        var contextParts = [signalSummary]
-        if !journalTag.isEmpty { contextParts.append("today feeling: \(journalTag)") }
-        if !tierTwoContext.isEmpty { contextParts.append("user pattern: \(tierTwoContext)") }
+        let signalLine = signalSummaries.map { "\($0.signalName): \($0.value)" }.joined(separator: ", ")
+        var contextParts = [signalLine]
+        if let tag = payload.journalTagLabel { contextParts.append("today feeling: \(tag)") }
+        if !payload.filteredMemorySummary.isEmpty { contextParts.append("user pattern: \(payload.filteredMemorySummary)") }
 
         let prompt = """
         Write one brief gentle observation (under 20 words) for a wellness companion called Fernlet.

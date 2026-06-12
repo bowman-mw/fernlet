@@ -59,7 +59,7 @@ extension Color {
     }
 }
 
-enum FernletTab: String, CaseIterable, Identifiable {
+enum FernletTab: String, CaseIterable, Hashable, Identifiable {
     case home
     case food
     case move
@@ -73,7 +73,7 @@ enum FernletTab: String, CaseIterable, Identifiable {
         case .home: "Home"
         case .food: "Food"
         case .move: "Move"
-        case .social: "Life"
+        case .social: "Friends"
         case .personal: "Private"
         }
     }
@@ -116,11 +116,11 @@ enum FernletSheet: Identifiable {
     case workoutSuggestion
     case goals
     case hygiene
-    case texture
     case settings
     case recipeBook
     case trends
     case logPeriod(targetDate: Date?)
+    case logIntimacy
 
     var id: String {
         switch self {
@@ -134,11 +134,11 @@ enum FernletSheet: Identifiable {
         case .workoutSuggestion: "workoutSuggestion"
         case .goals: "goals"
         case .hygiene: "hygiene"
-        case .texture: "texture"
         case .settings: "settings"
         case .recipeBook: "recipeBook"
         case .trends: "trends"
         case .logPeriod: "logPeriod"
+        case .logIntimacy: "logIntimacy"
         }
     }
 }
@@ -213,12 +213,23 @@ struct PolaroidTile: View {
     var color: Color
     var caption: String
     var rotation: Double
+    var imageData: Data? = nil
+    var imageWidth: CGFloat = 98
+    var imageHeight: CGFloat = 86
 
     var body: some View {
         VStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 3)
                 .fill(color)
-                .frame(width: 86, height: 74)
+                .frame(width: imageWidth, height: imageHeight)
+                .overlay {
+                    if let imageData, let image = UIImage(data: imageData) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 3))
             Text(caption)
                 .font(.system(size: 11, design: .serif).italic())
                 .foregroundStyle(Color.slate.opacity(0.58))
@@ -407,6 +418,39 @@ struct HubSectionPicker<Section: Hashable>: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.parchment)
+    }
+}
+
+extension View {
+    func fernletTabBarCompaction(_ isCompact: Binding<Bool>, resetToken: Binding<Int>) -> some View {
+        modifier(FernletTabBarCompactionModifier(isCompact: isCompact, resetToken: resetToken))
+    }
+}
+
+private struct FernletTabBarCompactionModifier: ViewModifier {
+    @Binding var isCompact: Bool
+    @Binding var resetToken: Int
+    @State private var scrollPosition = ScrollPosition(edge: .top)
+
+    func body(content: Content) -> some View {
+        content
+            .scrollPosition($scrollPosition)
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                let scrollableOverflow = geometry.contentSize.height - geometry.containerSize.height
+                return scrollableOverflow > 24 && geometry.contentOffset.y > geometry.contentInsets.top + 24
+            } action: { _, shouldCompact in
+                guard isCompact != shouldCompact else { return }
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                    isCompact = shouldCompact
+                }
+            }
+            .onChange(of: resetToken) { _, _ in
+                scrollPosition.scrollTo(edge: .top)
+                isCompact = false
+            }
+            .onDisappear {
+                isCompact = false
+            }
     }
 }
 

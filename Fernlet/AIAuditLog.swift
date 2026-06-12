@@ -24,16 +24,19 @@ actor AIAuditLog {
 
     private(set) var entries: [AIAuditEntry] = []
 
+    /// Records an AI call. Extract `payloadKind` and `includedFieldNames` from the payload
+    /// at the call site (before any actor hop) to avoid Sendable boundary issues.
     func record(
-        _ payload: some AIContextPayload,
+        payloadKind: String,
         destination: AIDestination,
+        includedFields: [String],
         memorySummaryCharCount: Int = 0
     ) {
         entries.append(AIAuditEntry(
             timestamp: Date(),
-            payloadKind: payload.payloadKind,
+            payloadKind: payloadKind,
             destination: destination,
-            includedFields: payload.includedFieldNames,
+            includedFields: includedFields,
             memorySummaryCharCount: memorySummaryCharCount
         ))
     }
