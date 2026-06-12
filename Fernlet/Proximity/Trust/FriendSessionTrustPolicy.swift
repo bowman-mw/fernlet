@@ -16,7 +16,6 @@ final class FriendSessionTrustPolicy: ProximityTrustPolicy {
     }
 
     // Friend sessions authorize through the proximity gate; remembered trust is not required.
-    func isTrustedProximityPeer(fingerprint: String) -> Bool { true }
     func isTrustedProximityPeer(signingPublicKey: Data) -> Bool { true }
 
     func recordTrainerAudit(_ event: TrainerAuditEvent) {

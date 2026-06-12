@@ -194,6 +194,14 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         leaveMesh()
     }
 
+    /// Notify connected peers before tearing down transport so they can review their session photos.
+    func leaveSessionAfterNotifyingPeers() async {
+        for slot in slots {
+            await sendEnvelope(.sessionGoodbye, encodable: PayloadSummary(title: "Session ended"), via: slot)
+        }
+        leaveSession()
+    }
+
     func finishSessionPhotos(keeping keptPhotoIDs: Set<UUID>) {
         finalizeCurrentPhotoSessionMetadata()
         let sessionPhotoIDs = Set(sessionPhotos.map(\.id))
@@ -560,6 +568,16 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         return vouchCache.values
             .first { $0.expiresAt > now && $0.trustedFingerprints.contains(fingerprint) }
             .map { "Friend of \($0.voucherDisplayName)" }
+    }
+
+    func block(_ participant: MeshSessionParticipant) {
+        let signingPublicKey = currentMesh?.members
+            .first { $0.fingerprint == participant.fingerprint }?
+            .signingPublicKey
+            ?? slots.first { $0.fingerprint == participant.fingerprint }?
+            .verifiedSigningPublicKey
+        guard let signingPublicKey else { return }
+        store.blockProximityPeer(signingPublicKey: signingPublicKey)
     }
 
     private func sendVouchList(to slot: PeerSlot) async {
@@ -1207,12 +1225,11 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     }
 
     private func isPhotoFromCurrentSession(_ photo: FriendPhotoPayload) -> Bool {
-        guard let photoSessionStartedAt else { return false }
-        return photo.addedAt >= photoSessionStartedAt
+        photoSessionStartedAt != nil && photo.session != nil
     }
 
     private func syncPhotoManifest(to slot: PeerSlot) async {
-        let entries = meshPhotos.map { photo in
+        let entries = sessionPhotos.map { photo in
             FriendPhotoManifestEntry(
                 id: photo.id,
                 senderFingerprint: photo.senderFingerprint ?? identity.localFingerprint,
@@ -1247,7 +1264,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     }
 
     private func sendRequestedPhotos(_ ids: [UUID], to slot: PeerSlot) {
-        let requested = meshPhotos.filter { ids.contains($0.id) }.compactMap { photoCacheStore.hydrated($0) }
+        let requested = sessionPhotos.filter { ids.contains($0.id) }.compactMap { photoCacheStore.hydrated($0) }
         for photo in requested {
             Task { [weak self] in await self?.sendEnvelope(.friendPhoto, encodable: photo, via: slot, sealed: true) }
         }
@@ -1621,6 +1638,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
                 let fp = peerIdentity.fingerprint
                 if slots[index].fingerprint != fp {
                     slots[index].fingerprint = fp
+                    slots[index].verifiedSigningPublicKey = peerIdentity.signingPublicKey
                     // Store the handshake-verified KA key; used for group key wrapping (Phase 3).
                     slots[index].verifiedKeyAgreementPublicKey = peerIdentity.keyAgreementPublicKey
                     onSlotConnected(at: index, identity: peerIdentity)

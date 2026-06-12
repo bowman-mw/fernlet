@@ -16,17 +16,19 @@ struct PrivateHubView: View {
     var periodStore: PeriodTrackerStore
     @Binding var activeSheet: FernletSheet?
     @Binding var section: PrivateHubSection
+    @Binding var isTabBarCompact: Bool
+    @Binding var tabResetToken: Int
 
     var body: some View {
         let visibleSections = store.isIntimateLoggingAllowed ? PrivateHubSection.allCases : PrivateHubSection.allCases.filter { $0 != .intimacy }
 
         TabView(selection: $section) {
-            JournalView(store: store, activeSheet: $activeSheet, isInHub: true)
+            JournalView(store: store, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                 .tag(PrivateHubSection.journal)
-            PeriodTrackerView(store: store, periodStore: periodStore, activeSheet: $activeSheet, isInHub: true)
+            PeriodTrackerView(store: store, periodStore: periodStore, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                 .tag(PrivateHubSection.period)
             if store.isIntimateLoggingAllowed {
-                PersonalScreenView(screen: .intimacyTracking, store: store, activeSheet: $activeSheet, isInHub: true)
+                PersonalScreenView(screen: .intimacyTracking, store: store, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                     .tag(PrivateHubSection.intimacy)
             }
         }

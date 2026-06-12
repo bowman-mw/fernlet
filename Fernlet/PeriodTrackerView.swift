@@ -5,6 +5,8 @@ struct PeriodTrackerView: View {
     var periodStore: PeriodTrackerStore
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
+    @Binding var isTabBarCompact: Bool
+    @Binding var tabResetToken: Int
     @Environment(FernletLockService.self) private var lockService
     @State private var authorization = HealthKitAuthorizationViewModel()
     @State private var selectedDay: SelectedPeriodDay?
@@ -14,12 +16,10 @@ struct PeriodTrackerView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    privacyBanner
                     header
                     if showsPrediction {
                         PredictionsCard(prediction: periodStore.prediction)
                     }
-                    SectionLabel("Cycle calendar")
                     PeriodCalendarCard(
                         displayedMonth: $displayedMonth,
                         entriesByKey: entriesByKey,
@@ -27,6 +27,7 @@ struct PeriodTrackerView: View {
                         prediction: showsPrediction ? periodStore.prediction : nil,
                         onDayTapped: { date in selectedDay = SelectedPeriodDay(date: date) }
                     )
+                    privacyBanner
                     recentEvents
                     if showsPrediction, let prediction = periodStore.prediction {
                         TrendsCard(prediction: prediction)
@@ -34,6 +35,7 @@ struct PeriodTrackerView: View {
                 }
                 .padding(20)
             }
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
             .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)
             .navigationDestination(item: $selectedDay) { day in
@@ -66,10 +68,14 @@ struct PeriodTrackerView: View {
 
     private var header: some View {
         HStack(alignment: .top) {
-            ScreenHeader(title: "Period", subtitle: periodStore.currentPhase.title)
+            ScreenHeader(title: "Period", subtitle: phaseSubtitle)
             Spacer()
             HeaderActionButton(systemImage: "plus") { activeSheet = .logPeriod(targetDate: nil) }
         }
+    }
+
+    private var phaseSubtitle: String {
+        periodStore.currentPhase == .unknown ? "Your cycle, at a glance." : periodStore.currentPhase.title
     }
 
     private var entriesByKey: [String: CycleDayEntry] {

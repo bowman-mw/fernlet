@@ -376,7 +376,9 @@ final class NutritionLabelScanner {
 
             guard isOrphanLabelLine(labelLine) else { continue }
 
-            if result.saturatedFat == nil, matchesLabel(labelLine, "saturated fat") {
+            if result.calories == nil, labelLine.hasPrefix("calories") {
+                result.calories = bareCalories(in: lines, around: index)
+            } else if result.saturatedFat == nil, matchesLabel(labelLine, "saturated fat") {
                 result.saturatedFat = extractGramsDouble(from: valueLine)
                     ?? extractFromDailyValue(from: valueLine, dvReference: 20)
             } else if result.transFat == nil, matchesLabel(labelLine, "trans fat") {
@@ -392,6 +394,22 @@ final class NutritionLabelScanner {
                     ?? extractFromDailyValue(from: valueLine, dvReference: 300)
             }
         }
+    }
+
+    private static func bareCalories(in lines: [String], around caloriesIndex: Int) -> Int? {
+        lines.indices
+            .filter { $0 != caloriesIndex }
+            .sorted { abs($0 - caloriesIndex) < abs($1 - caloriesIndex) }
+            .compactMap { index -> Int? in
+                let line = lines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+                guard line.range(of: #"^\d{1,4}$"#, options: .regularExpression) != nil,
+                      let calories = Int(line),
+                      calories <= 2_000 else {
+                    return nil
+                }
+                return calories
+            }
+            .first
     }
 
     private static func applySanityLimits(to result: inout NutritionLabelResult) {

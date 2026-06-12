@@ -63,8 +63,12 @@ final class OnboardingCoordinatorModel {
     var goal: GoalType
     var profile: UserNutritionProfile
     var nutritionPreferences: UserNutritionPreferences
+    var goalPlanningLevel = "beginner"
+    var goalPlanningInterests = ""
+    var goalPlanningConstraints = ""
     var starterName = "Fernlet"
     var starterColor = "Fern"
+    var proximityDisplayName = ""
 
     @ObservationIgnored private let store: FernletStore
     @ObservationIgnored private let onComplete: () -> Void
@@ -99,6 +103,13 @@ final class OnboardingCoordinatorModel {
 
     func complete() {
         store.completeOnboarding(profile: profile, preferences: nutritionPreferences, goal: goal)
+        store.replaceGoals(WorkoutPlanner.defaultGoals(
+            level: goalPlanningLevel,
+            interests: goalPlanningInterests,
+            constraints: goalPlanningConstraints
+        ))
+        let name = proximityDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty { store.setProximityDisplayName(name) }
         UserDefaults.standard.set(true, forKey: OnboardingDefaults.hasCompletedOnboardingKey)
         onComplete()
     }
@@ -144,7 +155,14 @@ struct OnboardingCoordinator: View {
                 continueAction: model.advance
             )
         case .goal:
-            OnboardingGoalScreen(stepText: model.step.indexText, goal: $model.goal, continueAction: model.advance)
+            OnboardingGoalScreen(
+                stepText: model.step.indexText,
+                goal: $model.goal,
+                level: $model.goalPlanningLevel,
+                interests: $model.goalPlanningInterests,
+                constraints: $model.goalPlanningConstraints,
+                continueAction: model.advance
+            )
         case .starterCustomization:
             OnboardingStarterScreen(
                 stepText: model.step.indexText,
@@ -156,6 +174,7 @@ struct OnboardingCoordinator: View {
             OnboardingPersonalDetailsScreen(
                 stepText: model.step.indexText,
                 profile: $model.profile,
+                displayName: $model.proximityDisplayName,
                 continueAction: model.advance
             )
         case .dietaryPattern:
@@ -198,26 +217,50 @@ struct OnboardingScreenContainer<Content: View>: View {
 struct OnboardingGoalScreen: View {
     var stepText: String
     @Binding var goal: GoalType
+    @Binding var level: String
+    @Binding var interests: String
+    @Binding var constraints: String
     var continueAction: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             OnboardingScreenContainer(
                 stepText: stepText,
-                title: "Choose your focus",
-                subtitle: "Fernlet uses this to weight daily care without pressure."
+                title: "Plan your goals",
+                subtitle: "Choose a focus and outline how movement should fit your life."
             ) {
-                VStack(spacing: 10) {
-                    ForEach(GoalType.allCases) { option in
-                        OnboardingChoiceRow(
-                            title: option.displayName,
-                            subtitle: option.tagline,
-                            systemImage: goal == option ? "checkmark.circle.fill" : "circle",
-                            isSelected: goal == option
-                        ) {
-                            goal = option
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(spacing: 10) {
+                        ForEach(GoalType.allCases) { option in
+                            OnboardingChoiceRow(
+                                title: option.displayName,
+                                subtitle: option.tagline,
+                                systemImage: goal == option ? "checkmark.circle.fill" : "circle",
+                                isSelected: goal == option
+                            ) {
+                                goal = option
+                            }
+                            .accessibilityIdentifier("onboarding.goal.\(option.rawValue)")
                         }
-                        .accessibilityIdentifier("onboarding.goal.\(option.rawValue)")
+                    }
+
+                    SheetField("Current level") {
+                        FlowLayout(spacing: 8) {
+                            ForEach(["beginner", "intermediate", "advanced"], id: \.self) { option in
+                                Button(option.capitalized) { level = option }
+                                    .buttonStyle(ChipButtonStyle(selected: level == option))
+                            }
+                        }
+                    }
+
+                    SheetField("Interests") {
+                        TextField("strength, running, mobility", text: $interests)
+                            .sheetTextInput()
+                    }
+
+                    SheetField("Constraints") {
+                        TextField("shoulder issues, hotel gyms only", text: $constraints)
+                            .sheetTextInput()
                     }
                 }
             }
@@ -272,6 +315,7 @@ struct OnboardingStarterScreen: View {
 struct OnboardingPersonalDetailsScreen: View {
     var stepText: String
     @Binding var profile: UserNutritionProfile
+    @Binding var displayName: String
     var continueAction: () -> Void
 
     var body: some View {
@@ -281,6 +325,12 @@ struct OnboardingPersonalDetailsScreen: View {
                 title: "Add personal details",
                 subtitle: "These are optional except age. Fernlet never asks for weight goals."
             ) {
+                SheetField("Your name") {
+                    TextField("How friends will see you", text: $displayName)
+                        .textInputAutocapitalization(.words)
+                        .sheetTextInput()
+                        .accessibilityIdentifier("onboarding.displayName")
+                }
                 SheetField("Body profile") {
                     VStack(alignment: .leading, spacing: 12) {
                         Stepper("Age: \(profile.age)", value: $profile.age, in: 13...100)

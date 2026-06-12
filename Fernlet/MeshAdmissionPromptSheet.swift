@@ -16,14 +16,10 @@ struct MeshAdmissionPromptSheet: View {
 
                     if let request = requests.first {
                         VStack(alignment: .leading, spacing: 16) {
-                            (
-                                Text(request.requesterDisplayName).bold()
-                                + Text(" wants to join ")
-                                + Text(meshName).bold()
-                            )
-                            .font(.body)
-                            .foregroundStyle(Color.bark)
-                            .fernletWrappingText()
+                            Text("\(Text(request.requesterDisplayName).bold()) wants to join \(Text(meshName).bold())")
+                                .font(.body)
+                                .foregroundStyle(Color.bark)
+                                .fernletWrappingText()
 
                             Text(request.requesterFingerprint)
                                 .font(.system(.caption, design: .monospaced))
@@ -49,11 +45,13 @@ struct MeshAdmissionPromptSheet: View {
                                     allow(request)
                                 }
                                 .buttonStyle(ChipButtonStyle(selected: true))
+                                .accessibilityIdentifier("mesh.admission.allow")
 
                                 Button("Decline") {
                                     decline(request)
                                 }
                                 .buttonStyle(ChipButtonStyle(selected: false))
+                                .accessibilityIdentifier("mesh.admission.decline")
                             }
                         }
                         .padding(16)

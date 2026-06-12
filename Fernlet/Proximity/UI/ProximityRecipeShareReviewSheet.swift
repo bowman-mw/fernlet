@@ -3,7 +3,7 @@ import SwiftUI
 struct ProximityRecipeShareReviewSheet: View {
     var share: PendingProximityRecipeShare
     var store: FernletStore
-    var manager: MeshNetworkManager
+    var manager: ProximityRecipeShareManager
 
     @Environment(\.dismiss) private var dismiss
     @State private var notice: String?

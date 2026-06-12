@@ -10,14 +10,14 @@ struct CompanionView: View {
         TimelineView(.animation) { timeline in
             let elapsed = timeline.date.timeIntervalSinceReferenceDate
             let breath = (sin(elapsed * .pi / state.animationTempo) + 1) / 2
-            let petBounce = interactionLevel.isMultiple(of: 2) ? 0.0 : -size * 0.025
-            let bodyColor = appearance.bodyColor.color(for: state)
+            let petBounce = interactionLevel.isMultiple(of: 2) ? 0.0 : -size * 0.060
+            let bodyColor = appearance.resolvedBodyColor(for: state)
 
             ZStack {
                 if appearance.sideItem != .none {
                     CompanionSideItemView(
                         item: appearance.sideItem,
-                        color: appearance.sideItemColor.color(for: state),
+                        color: appearance.resolvedSideItemColor(for: state),
                         size: size
                     )
                     .offset(x: size * 0.58, y: size * 0.28)
@@ -37,14 +37,14 @@ struct CompanionView: View {
 
                 CompanionAccessoryView(
                     accessory: appearance.accessory,
-                    color: appearance.accessoryColor.color(for: state),
+                    color: appearance.resolvedAccessoryColor(for: state),
                     size: size
                 )
                 .offset(y: petBounce)
 
                 CompanionClothingView(
                     clothing: appearance.clothing,
-                    color: appearance.clothingColor.color(for: state),
+                    color: appearance.resolvedClothingColor(for: state),
                     size: size
                 )
                 .offset(y: petBounce)
@@ -60,6 +60,7 @@ struct CompanionView: View {
                     .frame(width: size * 0.18, height: state.mouthHeight(for: size))
                     .offset(y: size * 0.14 + petBounce)
             }
+            .animation(.easeInOut(duration: 0.44), value: interactionLevel)
         }
         .accessibilityLabel("Fernlet companion, \(state.rawValue)")
     }
@@ -246,12 +247,119 @@ struct CompanionSideItemView: View {
     var size: CGFloat
 
     var body: some View {
-        Image(systemName: item.systemImage)
-            .font(.system(size: size * 0.22, weight: .semibold))
-            .foregroundStyle(color.opacity(0.86))
-            .frame(width: size * 0.34, height: size * 0.34)
-            .background(Color.cream, in: Circle())
-            .overlay(Circle().stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        ZStack {
+            Circle()
+                .fill(Color.cream)
+            Circle()
+                .stroke(Color.bark.opacity(0.08), lineWidth: 1)
+            sideItemAsset
+                .foregroundStyle(color.opacity(0.86))
+        }
+        .frame(width: size * 0.34, height: size * 0.34)
+    }
+
+    @ViewBuilder
+    private var sideItemAsset: some View {
+        let assetSize = size * 0.34
+        switch item {
+        case .none:
+            Circle()
+                .stroke(color.opacity(0.72), lineWidth: max(2, size * 0.014))
+                .frame(width: assetSize * 0.42, height: assetSize * 0.42)
+                .overlay(
+                    Rectangle()
+                        .fill(color.opacity(0.72))
+                        .frame(width: assetSize * 0.52, height: max(2, size * 0.012))
+                        .rotationEffect(.degrees(-45))
+                )
+        case .mug:
+            ZStack(alignment: .trailing) {
+                RoundedRectangle(cornerRadius: assetSize * 0.12, style: .continuous)
+                    .fill(color.opacity(0.86))
+                    .frame(width: assetSize * 0.42, height: assetSize * 0.44)
+                    .offset(x: -assetSize * 0.05)
+                Circle()
+                    .stroke(color.opacity(0.86), lineWidth: max(2, size * 0.018))
+                    .frame(width: assetSize * 0.22, height: assetSize * 0.24)
+                    .offset(x: assetSize * 0.08)
+            }
+        case .book:
+            ZStack {
+                RoundedRectangle(cornerRadius: assetSize * 0.08, style: .continuous)
+                    .fill(color.opacity(0.86))
+                    .frame(width: assetSize * 0.54, height: assetSize * 0.42)
+                    .rotationEffect(.degrees(-6))
+                Rectangle()
+                    .fill(Color.cream.opacity(0.65))
+                    .frame(width: max(1, size * 0.010), height: assetSize * 0.32)
+                    .offset(x: -assetSize * 0.08)
+                    .rotationEffect(.degrees(-6))
+            }
+        case .dumbbell:
+            HStack(spacing: assetSize * 0.05) {
+                RoundedRectangle(cornerRadius: assetSize * 0.04, style: .continuous)
+                    .fill(color.opacity(0.86))
+                    .frame(width: assetSize * 0.16, height: assetSize * 0.36)
+                Capsule()
+                    .fill(color.opacity(0.86))
+                    .frame(width: assetSize * 0.36, height: max(3, size * 0.030))
+                RoundedRectangle(cornerRadius: assetSize * 0.04, style: .continuous)
+                    .fill(color.opacity(0.86))
+                    .frame(width: assetSize * 0.16, height: assetSize * 0.36)
+            }
+            .rotationEffect(.degrees(-12))
+        case .waterBottle:
+            VStack(spacing: 0) {
+                RoundedRectangle(cornerRadius: assetSize * 0.04, style: .continuous)
+                    .fill(color.opacity(0.86))
+                    .frame(width: assetSize * 0.20, height: assetSize * 0.10)
+                RoundedRectangle(cornerRadius: assetSize * 0.11, style: .continuous)
+                    .fill(color.opacity(0.86))
+                    .frame(width: assetSize * 0.30, height: assetSize * 0.50)
+                    .overlay(
+                        Capsule()
+                            .fill(Color.cream.opacity(0.45))
+                            .frame(width: assetSize * 0.16, height: assetSize * 0.24)
+                    )
+            }
+        }
+    }
+}
+
+private extension CompanionAppearance {
+    func resolvedBodyColor(for state: CompanionState) -> Color {
+        color(hex: bodyCustomColorHex, fallback: bodyColor, state: state)
+    }
+
+    func resolvedAccessoryColor(for state: CompanionState) -> Color {
+        color(hex: accessoryCustomColorHex, fallback: accessoryColor, state: state)
+    }
+
+    func resolvedClothingColor(for state: CompanionState) -> Color {
+        color(hex: clothingCustomColorHex, fallback: clothingColor, state: state)
+    }
+
+    func resolvedSideItemColor(for state: CompanionState) -> Color {
+        color(hex: sideItemCustomColorHex, fallback: sideItemColor, state: state)
+    }
+
+    private func color(hex: String?, fallback: CompanionAssetColor, state: CompanionState) -> Color {
+        if let hex, let color = Color(fernletHex: hex) {
+            return color
+        }
+        return fallback.color(for: state)
+    }
+}
+
+private extension Color {
+    init?(fernletHex: String) {
+        let cleaned = fernletHex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        guard cleaned.count == 6, let value = Int(cleaned, radix: 16) else { return nil }
+        self.init(
+            red: Double((value >> 16) & 0xFF) / 255,
+            green: Double((value >> 8) & 0xFF) / 255,
+            blue: Double(value & 0xFF) / 255
+        )
     }
 }
 

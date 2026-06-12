@@ -2,7 +2,8 @@
 // Fernlet/Proximity
 //
 // Per-device Ed25519 signing identity + X25519 key-agreement for proximity sessions.
-// Keys use AfterFirstUnlockThisDeviceOnly so sessions survive screen-off during workouts.
+// The signing key stays device-only. The X25519 key is synchronizable because it also derives
+// the opt-in sealed-backup key used to recover private archives on another Fernlet device.
 
 import Foundation
 import CryptoKit
@@ -58,6 +59,16 @@ final class IdentityService {
     func sign(_ data: Data) throws -> Data {
         guard let key = signingKey else { throw IdentityError.notProvisioned }
         return try key.signature(for: data)
+    }
+
+    func sealedBackupKey() throws -> SymmetricKey {
+        guard let keyAgreementKey else { throw IdentityError.notProvisioned }
+        return HKDF<SHA256>.deriveKey(
+            inputKeyMaterial: SymmetricKey(data: keyAgreementKey.rawRepresentation),
+            salt: Data(),
+            info: Data("com.fernlet.sealed-backup".utf8),
+            outputByteCount: 32
+        )
     }
 
     static func verify(_ signature: Data, of data: Data, by publicKeyData: Data) -> Bool {
@@ -189,6 +200,13 @@ final class IdentityService {
            let loadedKA = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: kaData) {
             signingKey = loadedSigning
             keyAgreementKey = loadedKA
+            KeychainItem.store(
+                loadedKA.rawRepresentation,
+                account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue,
+                service: keychainService,
+                accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                synchronizable: true
+            )
             return
         }
 
@@ -201,7 +219,9 @@ final class IdentityService {
                            service: keychainService, accessibility: access)
         KeychainItem.store(newKAKey.rawRepresentation,
                            account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue,
-                           service: keychainService, accessibility: access)
+                           service: keychainService,
+                           accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                           synchronizable: true)
         KeychainItem.store(newSigningKey.publicKey.rawRepresentation,
                            account: IdentityKeychainKey.signingPublicKeyCache.rawValue,
                            service: keychainService, accessibility: access)
@@ -220,10 +240,19 @@ final class IdentityService {
         keyAgreementKey = nil
     }
 
-    /// 8-char lowercase hex prefix of SHA-256(publicKey). Suitable for user-facing display.
+    /// 16-char lowercase hex prefix of SHA-256(publicKey). Suitable for user-facing display.
     static func fingerprint(of publicKey: Data) -> String {
         let hash = SHA256.hash(data: publicKey)
         let hex = hash.compactMap { String(format: "%02x", $0) }.joined()
-        return String(hex.prefix(8))
+        return String(hex.prefix(16))
+    }
+
+    /// Matches canonical 16-char fingerprints and legacy 8-char values stored by older builds.
+    /// Fingerprints remain display and routing metadata only; authorization uses full key bytes.
+    static func fingerprintsMatch(_ first: String, _ second: String) -> Bool {
+        let lhs = first.lowercased()
+        let rhs = second.lowercased()
+        guard [8, 16].contains(lhs.count), [8, 16].contains(rhs.count) else { return false }
+        return lhs.hasPrefix(rhs) || rhs.hasPrefix(lhs)
     }
 }

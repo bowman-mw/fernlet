@@ -85,8 +85,6 @@ struct TrainerAuditEvent: Codable, Equatable, Identifiable {
 protocol ProximityTrustPolicy: AnyObject {
     func isRevokedProximitySigningKey(_ publicKey: Data) -> Bool
     func isBlockedProximitySigningKey(_ publicKey: Data) -> Bool
-    func isTrustedProximityPeer(fingerprint: String) -> Bool
-    /// Verifies trust against the full signing key bytes, not just the 8-char fingerprint prefix.
     func isTrustedProximityPeer(signingPublicKey: Data) -> Bool
     func recordTrainerAudit(_ event: TrainerAuditEvent)
 }

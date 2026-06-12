@@ -332,10 +332,11 @@ final class PersistenceController {
 
     private static func makeManagedObjectModel() -> NSManagedObjectModel {
         let model = NSManagedObjectModel()
+        // Only cloud-safe, non-sensitive entities belong here.
+        // Sealed entities (MenstrualNarrative, JournalNarrative) live in PrivatePersistenceController.
         model.entities = [
             makeFernletDatabaseRecordEntity(),
-            makeSavedRecipeRecordEntity(),
-            makeMenstrualNarrativeEntity()
+            makeSavedRecipeRecordEntity()
         ]
         return model
     }
@@ -368,28 +369,6 @@ final class PersistenceController {
             makeAttribute("fat", type: .integer64AttributeType, defaultValue: 0),
             makeAttribute("savedAt", type: .dateAttributeType)
         ]
-        return entity
-    }
-
-    private static func makeMenstrualNarrativeEntity() -> NSEntityDescription {
-        let entity = NSEntityDescription()
-        entity.name = "MenstrualNarrative"
-        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
-        entity.properties = [
-            makeAttribute("id", type: .UUIDAttributeType),
-            makeAttribute("hkExternalUUID", type: .stringAttributeType),
-            makeAttribute("dateKey", type: .stringAttributeType),
-            makeAttribute("noteCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
-            makeAttribute("symptomFlagsCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
-            makeAttribute("customSymptomScalesCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
-            makeAttribute("createdAt", type: .dateAttributeType),
-            makeAttribute("updatedAt", type: .dateAttributeType)
-        ]
-        if let dateKeyProp = entity.propertiesByName["dateKey"] {
-            entity.indexes = [NSFetchIndexDescription(name: "byDateKey", elements: [
-                NSFetchIndexElementDescription(property: dateKeyProp, collationType: .binary)
-            ])]
-        }
         return entity
     }
 

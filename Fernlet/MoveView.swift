@@ -3,9 +3,18 @@ import SwiftUI
 struct MoveView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
+    @Binding var isTabBarCompact: Bool
+    @Binding var tabResetToken: Int
     @State private var path = NavigationPath()
     @State private var displayedWeek: Date = .now
     @State private var allDays: [String: FernletDay] = [:]
+
+    private var hasRecentCoachInteraction: Bool {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: .now) ?? .now
+        return store.trainerAuditEvents.contains { event in
+            event.timestamp >= cutoff && [.peerAccepted, .envelopeReceived, .envelopeSent].contains(event.kind)
+        }
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -21,19 +30,45 @@ struct MoveView: View {
                     }
                     .padding(.top, 4)
 
+                    MoveGoalSummaryLine(store: store) {
+                        activeSheet = .goals
+                    }
+
                     WorkoutCalendarCard(
                         displayedWeek: $displayedWeek,
                         allDays: allDays,
                         todayKey: store.todayKey,
+                        selectedGoal: store.settings.selectedGoal,
+                        goals: store.goals,
+                        showsPlanSourceTag: hasRecentCoachInteraction,
                         onDayTapped: { key in path.append(key) }
                     )
 
-                    GoalsCard(store: store, activeSheet: $activeSheet)
-
                     FernletScrollSection("Today's movement") {
-                        if store.day.workouts.isEmpty {
+                        if store.day.plannedWorkouts.isEmpty && store.day.workouts.isEmpty {
                             EmptyState(text: "No workouts today. No rush.")
                         } else {
+                            ForEach(Array(store.day.plannedWorkouts.enumerated()), id: \.element.id) { index, plannedWorkout in
+                                PlannedWorkoutRow(
+                                    plannedWorkout: plannedWorkout,
+                                    showsPlanSourceTag: hasRecentCoachInteraction,
+                                    showsCompleteAction: true,
+                                    onComplete: {
+                                        store.completePlannedWorkout(plannedWorkout, date: store.todayKey)
+                                        allDays = store.loadDays()
+                                    },
+                                    onEdit: {
+                                        path.append(store.todayKey)
+                                    },
+                                    onDelete: {
+                                        store.deletePlannedWorkout(plannedWorkout, date: store.todayKey)
+                                        allDays = store.loadDays()
+                                    }
+                                )
+                                if index < store.day.plannedWorkouts.count - 1 || !store.day.workouts.isEmpty {
+                                    FernletRowDivider()
+                                }
+                            }
                             ForEach(Array(store.day.workouts.enumerated()), id: \.element.id) { index, workout in
                                 WorkoutRow(workout: workout)
                                 if index < store.day.workouts.count - 1 {
@@ -45,10 +80,11 @@ struct MoveView: View {
                 }
                 .padding(20)
             }
+            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             .background(Color.parchment)
             .navigationTitle("")
             .navigationDestination(for: String.self) { dateKey in
-                MoveDayDetailView(store: store, dateKey: dateKey)
+                MoveDayDetailView(store: store, dateKey: dateKey, showsPlanSourceTag: hasRecentCoachInteraction)
                     .onDisappear { allDays = store.loadDays() }
             }
         }
@@ -58,6 +94,7 @@ struct MoveView: View {
             allDays = store.loadDays()
         }
         .onChange(of: store.day.workouts.count) { allDays = store.loadDays() }
+        .onChange(of: store.day.plannedWorkouts.count) { allDays = store.loadDays() }
     }
 }
 
@@ -587,6 +624,62 @@ struct WorkoutCategoryPreview: View {
     }
 }
 
+private extension GoalType {
+    var defaultWorkoutSplitSummary: String {
+        switch self {
+        case .strength:
+            "Upper, lower, and full-body days across the week."
+        case .weightManagement:
+            "Strength days mixed with cardio and recovery."
+        case .mentalHealth:
+            "Gentle movement, cardio, and recovery anchors."
+        case .recovery:
+            "Recovery-first movement with optional light strength."
+        case .wellness:
+            "Balanced strength, cardio, and rest days."
+        case .exploring:
+            "Flexible splits based on what feels useful."
+        }
+    }
+}
+
+struct MoveGoalSummaryLine: View {
+    var store: FernletStore
+    var onEdit: () -> Void
+
+    private var summary: String {
+        if let goal = store.goals.first {
+            return "\(goal.goal) · \(goal.timeframe)"
+        }
+        return "\(store.settings.selectedGoal.displayName) · Tap to plan goals"
+    }
+
+    var body: some View {
+        Button(action: onEdit) {
+            HStack(spacing: 8) {
+                Image(systemName: "target")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.moss)
+                Text(summary)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color.bark)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                Spacer(minLength: 8)
+                Image(systemName: "pencil")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.slate)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Edit movement goals")
+    }
+}
+
 struct WorkoutExerciseEntry: Identifiable, Equatable {
     var id = UUID()
     var exercise: ExerciseTarget
@@ -837,13 +930,99 @@ struct LoggedExerciseRow: View {
     }
 }
 
+struct EditablePlannedExerciseRow: View {
+    @Binding var entry: WorkoutExerciseEntry
+    var onRemove: () -> Void
+    var onChange: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.exercise.name)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(Color.bark)
+                    Text(entry.exercise.muscles.joined(separator: ", "))
+                        .font(.caption2)
+                        .foregroundStyle(entry.exercise.category.color)
+                }
+                Spacer()
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.slate)
+                }
+                .buttonStyle(.plain)
+            }
+
+            switch entry.exercise.inputKind {
+            case .strength:
+                HStack(alignment: .top, spacing: 10) {
+                    editableField("Sets", text: $entry.sets, keyboard: .numberPad)
+                    editableField("Reps", text: $entry.reps, keyboard: .numberPad)
+                    editableField("Weight", text: $entry.weight)
+                }
+            case .treadmill:
+                HStack(alignment: .top, spacing: 10) {
+                    editableField("Speed", text: $entry.speed, keyboard: .decimalPad)
+                    editableField("Incline", text: $entry.incline, keyboard: .decimalPad)
+                }
+            case .none:
+                EmptyView()
+            }
+
+            editableField("Details", text: $entry.details)
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+    }
+
+    private func editableField(
+        _ label: String,
+        text: Binding<String>,
+        keyboard: UIKeyboardType = .default
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.slate)
+            TextField(label, text: text)
+                .keyboardType(keyboard)
+                .sheetTextInput()
+                .onChange(of: text.wrappedValue) { _, _ in onChange() }
+        }
+    }
+}
+
 struct WorkoutCalendarCard: View {
     @Binding var displayedWeek: Date
     var allDays: [String: FernletDay]
     var todayKey: String
+    var selectedGoal: GoalType
+    var goals: [FitnessGoal]
+    var showsPlanSourceTag: Bool
     var onDayTapped: (String) -> Void
 
     private var cal: Calendar { .current }
+    private let defaultLegendSplits: [WorkoutSplit] = [.fullBody, .upper, .lower, .workout]
+
+    private var legendSplits: [WorkoutSplit] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.calendar = Calendar(identifier: .gregorian)
+        let today = formatter.date(from: todayKey) ?? .now
+        let cutoff = cal.date(byAdding: .month, value: -1, to: today) ?? today
+        let cutoffKey = formatter.string(from: cutoff)
+
+        let recentSplits = allDays
+            .filter { $0.key >= cutoffKey && $0.key <= todayKey }
+            .flatMap { $0.value.plannedWorkouts.map(\.split) }
+
+        return WorkoutSplit.allCases.filter { split in
+            defaultLegendSplits.contains(split) || recentSplits.contains(split)
+        }
+    }
 
     var body: some View {
         let model = WorkoutWeekModel(date: displayedWeek, allDays: allDays, todayKey: todayKey)
@@ -865,27 +1044,21 @@ struct WorkoutCalendarCard: View {
                         .foregroundStyle(Color.bark)
                         .frame(maxWidth: .infinity)
 
-                    let isCurrentWeek = cal.isDate(displayedWeek, equalTo: .now, toGranularity: .weekOfYear)
                     Button {
-                        if !isCurrentWeek {
-                            displayedWeek = cal.date(byAdding: .weekOfYear, value: 1, to: displayedWeek) ?? displayedWeek
-                        }
+                        displayedWeek = cal.date(byAdding: .weekOfYear, value: 1, to: displayedWeek) ?? displayedWeek
                     } label: {
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(isCurrentWeek ? Color.slate.opacity(0.25) : Color.slate)
+                            .foregroundStyle(Color.slate)
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(.plain)
-                    .disabled(isCurrentWeek)
                 }
 
                 HStack(spacing: 6) {
                     ForEach(model.cells) { cell in
                         WorkoutCalendarCell(cell: cell) {
-                            if !cell.isFuture {
-                                onDayTapped(cell.dateKey)
-                            }
+                            onDayTapped(cell.dateKey)
                         }
                     }
                 }
@@ -896,10 +1069,10 @@ struct WorkoutCalendarCard: View {
 
     private var workoutLegend: some View {
         HStack {
-            ForEach(WorkoutType.allCases) { type in
+            ForEach(legendSplits) { split in
                 HStack(spacing: 4) {
-                    Circle().fill(type.color).frame(width: 8, height: 8)
-                    Text(type.rawValue).font(.caption2).foregroundStyle(Color.slate)
+                    Circle().fill(split.color).frame(width: 8, height: 8)
+                    Text(split.title).font(.caption2).foregroundStyle(Color.slate)
                 }
             }
         }
@@ -933,11 +1106,16 @@ struct WorkoutCalendarCell: View {
                                         : cell.isToday ? Color.moss
                                         : Color.bark.opacity(0.68)
                                 )
-                            if !cell.categories.isEmpty {
+                            if !cell.categories.isEmpty || !cell.plannedCategories.isEmpty {
                                 HStack(spacing: 2) {
                                     ForEach(Array(cell.categories.prefix(3).enumerated()), id: \.offset) { _, category in
                                         Circle()
                                             .fill(category.color)
+                                            .frame(width: 5, height: 5)
+                                    }
+                                    ForEach(Array(cell.plannedCategories.prefix(max(0, 3 - cell.categories.count)).enumerated()), id: \.offset) { _, category in
+                                        Circle()
+                                            .fill(category.color.opacity(0.38))
                                             .frame(width: 5, height: 5)
                                     }
                                 }
@@ -949,12 +1127,11 @@ struct WorkoutCalendarCell: View {
                     .font(.caption2)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                    .foregroundStyle(cell.categories.isEmpty ? Color.slate.opacity(0.45) : Color.slate)
+                    .foregroundStyle(cell.categories.isEmpty && cell.plannedCategories.isEmpty ? Color.slate.opacity(0.45) : Color.slate)
             }
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
-        .disabled(cell.isFuture)
         .accessibilityLabel(cell.accessibilityLabel)
     }
 }
@@ -964,26 +1141,34 @@ struct WorkoutWeekCell: Identifiable {
     var day: Int
     var dateKey: String
     var weekdayText: String
+    var longWeekdayText: String
+    var monthDayText: String
     var categories: [WorkoutType]
+    var plannedWorkouts: [PlannedWorkout]
+    var plannedSplits: [WorkoutSplit]
+    var plannedCategories: [WorkoutType]
     var workoutCount: Int
+    var plannedCount: Int
     var isToday: Bool
     var isFuture: Bool = false
 
     var fill: Color {
-        if isFuture { return Color.softTaupe.opacity(0.05) }
         if let first = categories.first { return first.color.opacity(isToday ? 0.34 : 0.24) }
+        if let first = plannedCategories.first { return first.color.opacity(isToday ? 0.18 : 0.12) }
         if isToday { return Color.moss.opacity(0.18) }
         return Color.softTaupe.opacity(0.16)
     }
 
     var summaryText: String {
-        if workoutCount == 0 { return "Rest" }
+        if workoutCount == 0 && plannedCount == 0 { return "Rest" }
+        if workoutCount == 0 { return plannedCount == 1 ? "1 plan" : "\(plannedCount) plans" }
         return workoutCount == 1 ? "1 log" : "\(workoutCount) logs"
     }
 
     var accessibilityLabel: String {
         let categoryText = categories.map(\.rawValue).joined(separator: ", ")
-        if isFuture { return "\(weekdayText), day \(day)" }
+        let planText = plannedSplits.map(\.title).joined(separator: ", ")
+        if categoryText.isEmpty && !planText.isEmpty { return "\(weekdayText), day \(day), planned \(planText)" }
         if categoryText.isEmpty { return isToday ? "Today, day \(day), no workouts" : "\(weekdayText), day \(day), no workouts" }
         return isToday ? "Today, day \(day), \(categoryText)" : "\(weekdayText), day \(day), \(categoryText)"
     }
@@ -1012,16 +1197,31 @@ struct WorkoutWeekModel {
         cells = dates.map { date in
             let key = formatter.string(from: date)
             let workouts = allDays[key]?.workouts ?? []
+            let plannedWorkouts = allDays[key]?.plannedWorkouts ?? []
             let categories = workouts.reduce(into: [WorkoutType]()) { result, workout in
                 let category = WorkoutExerciseCatalog.inferredCategory(for: workout)
+                if !result.contains(category) { result.append(category) }
+            }
+            let plannedSplits = plannedWorkouts.reduce(into: [WorkoutSplit]()) { result, workout in
+                let split = workout.split
+                if !result.contains(split) { result.append(split) }
+            }
+            let plannedCategories = plannedWorkouts.reduce(into: [WorkoutType]()) { result, workout in
+                let category = workout.workoutType
                 if !result.contains(category) { result.append(category) }
             }
             return WorkoutWeekCell(
                 day: calendar.component(.day, from: date),
                 dateKey: key,
                 weekdayText: date.formatted(.dateTime.weekday(.narrow)),
+                longWeekdayText: date.formatted(.dateTime.weekday(.abbreviated)),
+                monthDayText: date.formatted(.dateTime.month(.abbreviated).day()),
                 categories: categories,
+                plannedWorkouts: plannedWorkouts,
+                plannedSplits: plannedSplits,
+                plannedCategories: plannedCategories,
                 workoutCount: workouts.count,
+                plannedCount: plannedWorkouts.count,
                 isToday: key == todayKey,
                 isFuture: key > todayKey
             )
@@ -1032,10 +1232,17 @@ struct WorkoutWeekModel {
 struct MoveDayDetailView: View {
     var store: FernletStore
     var dateKey: String
+    var showsPlanSourceTag: Bool
     @State private var showWorkoutSheet = false
+    @State private var showPlanSheet = false
+    @State private var editingPlannedWorkout: PlannedWorkout?
 
     private var day: FernletDay {
         store.loadDay(for: dateKey)
+    }
+
+    private var isFuture: Bool {
+        dateKey > store.todayKey
     }
 
     private var navigationTitle: String {
@@ -1051,13 +1258,43 @@ struct MoveDayDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 ScreenHeader(title: navigationTitle, subtitle: "Movement only.")
-                FernletScrollSection("Workouts") {
-                    if day.workouts.isEmpty {
-                        EmptyState(text: "No workouts logged")
+
+                FernletScrollSection("Plan") {
+                    if day.plannedWorkouts.isEmpty {
+                        Button {
+                            editingPlannedWorkout = nil
+                            showPlanSheet = true
+                        } label: {
+                            EmptyState(text: "No workouts planned")
+                        }
+                        .buttonStyle(.plain)
                     } else {
-                        ForEach(Array(day.workouts.enumerated()), id: \.element.id) { index, workout in
-                            WorkoutRow(workout: workout)
-                            if index < day.workouts.count - 1 { FernletRowDivider() }
+                        ForEach(Array(day.plannedWorkouts.enumerated()), id: \.element.id) { index, workout in
+                            PlannedWorkoutRow(
+                                plannedWorkout: workout,
+                                showsPlanSourceTag: showsPlanSourceTag,
+                                showsCompleteAction: !isFuture,
+                                onComplete: { store.completePlannedWorkout(workout, date: dateKey) },
+                                onEdit: {
+                                    editingPlannedWorkout = workout
+                                    showPlanSheet = true
+                                },
+                                onDelete: { store.deletePlannedWorkout(workout, date: dateKey) }
+                            )
+                            if index < day.plannedWorkouts.count - 1 { FernletRowDivider() }
+                        }
+                    }
+                }
+
+                if !isFuture {
+                    FernletScrollSection("Workouts") {
+                        if day.workouts.isEmpty {
+                            EmptyState(text: "No workouts logged")
+                        } else {
+                            ForEach(Array(day.workouts.enumerated()), id: \.element.id) { index, workout in
+                                WorkoutRow(workout: workout)
+                                if index < day.workouts.count - 1 { FernletRowDivider() }
+                            }
                         }
                     }
                 }
@@ -1069,19 +1306,40 @@ struct MoveDayDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { showWorkoutSheet = true } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "plus")
-                        Text("Log")
+                HStack(spacing: 8) {
+                    Button {
+                        editingPlannedWorkout = nil
+                        showPlanSheet = true
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "calendar.badge.plus")
+                            Text("Plan")
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.bark)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Color.cream.opacity(0.9), in: Capsule())
+                        .overlay(Capsule().stroke(Color.bark.opacity(0.10), lineWidth: 1))
                     }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.bark)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(Color.cream.opacity(0.9), in: Capsule())
-                    .overlay(Capsule().stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    .buttonStyle(.plain)
+
+                    if !isFuture {
+                        Button { showWorkoutSheet = true } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "plus")
+                                Text("Log")
+                            }
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Color.bark)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Color.cream.opacity(0.9), in: Capsule())
+                            .overlay(Capsule().stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
             }
         }
         .sheet(isPresented: $showWorkoutSheet) {
@@ -1090,6 +1348,450 @@ struct MoveDayDetailView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
+        .sheet(isPresented: $showPlanSheet) {
+            WorkoutPlanSheet(
+                store: store,
+                dateKey: dateKey,
+                showsPlanSourceTag: showsPlanSourceTag,
+                editingPlan: editingPlannedWorkout
+            )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
+    }
+}
+
+struct PlannedWorkoutRow: View {
+    var plannedWorkout: PlannedWorkout
+    var showsPlanSourceTag: Bool
+    var showsCompleteAction: Bool
+    var onComplete: () -> Void
+    var onEdit: () -> Void
+    var onDelete: () -> Void
+
+    private var stepLines: [String] {
+        plannedWorkout.exercises
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            if showsCompleteAction {
+                Button(action: onComplete) {
+                    ZStack {
+                        Circle()
+                            .fill(plannedWorkout.workoutType.color.opacity(0.14))
+                            .frame(width: 34, height: 34)
+                        Circle()
+                            .stroke(plannedWorkout.workoutType.color, lineWidth: 2)
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "checkmark")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(plannedWorkout.workoutType.color)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Mark \(plannedWorkout.name) complete")
+            } else {
+                Circle()
+                    .fill(plannedWorkout.workoutType.color.opacity(0.42))
+                    .frame(width: 18, height: 18)
+                    .padding(.top, 6)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(plannedWorkout.name)
+                        .font(.headline)
+                        .foregroundStyle(Color.bark)
+                    HStack(spacing: 8) {
+                        Text(plannedWorkout.split.title)
+                        if showsPlanSourceTag {
+                            Text(plannedWorkout.source.title)
+                        }
+                        if let duration = plannedWorkout.duration {
+                            Text("\(duration) min")
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(Color.slate)
+                }
+
+                if !stepLines.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(stepLines.prefix(4).enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.caption)
+                                .foregroundStyle(Color.bark.opacity(0.82))
+                                .lineLimit(2)
+                        }
+                    }
+                }
+
+                if !plannedWorkout.notes.isEmpty {
+                    Text(plannedWorkout.notes)
+                        .font(.caption)
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
+
+                HStack(spacing: 10) {
+                    Button("Edit", action: onEdit)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.moss)
+                    Button("Remove", role: .destructive, action: onDelete)
+                        .font(.caption.weight(.semibold))
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct WorkoutPlanSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var store: FernletStore
+    var dateKey: String
+    var showsPlanSourceTag: Bool
+    var editingPlan: PlannedWorkout?
+    @State private var split: WorkoutSplit
+    @State private var name = ""
+    @State private var exerciseRows: [WorkoutExerciseEntry] = []
+    @State private var plannedExerciseText = ""
+    @State private var draftExercise: ExerciseTarget?
+    @State private var draftSets = ""
+    @State private var draftReps = ""
+    @State private var draftWeight = ""
+    @State private var draftSpeed = ""
+    @State private var draftIncline = ""
+    @State private var draftDetails = ""
+    @State private var exerciseResetToken = 0
+    @State private var duration = ""
+    @State private var distance = ""
+    @State private var energyKcal = ""
+    @State private var effort = ""
+    @State private var notes = ""
+    @State private var selectedActivityType: WorkoutActivityType?
+    @State private var logMode: WorkoutMode
+    private let previousWeekPlan: PlannedWorkout?
+
+    init(store: FernletStore, dateKey: String, showsPlanSourceTag: Bool, editingPlan: PlannedWorkout? = nil) {
+        self.store = store
+        self.dateKey = dateKey
+        self.showsPlanSourceTag = showsPlanSourceTag
+        self.editingPlan = editingPlan
+        self.previousWeekPlan = store.previousWeekPlannedWorkout(for: dateKey)
+        let copiedSplit = editingPlan?.split ?? store.copiedForwardWorkoutSplit(before: dateKey) ?? .fullBody
+        _split = State(initialValue: copiedSplit)
+        _logMode = State(initialValue: editingPlan?.mode ?? (copiedSplit == .workout ? .activity : .strengthTraining))
+        _name = State(initialValue: editingPlan?.name ?? "")
+        _plannedExerciseText = State(initialValue: editingPlan?.exercises ?? "")
+        _exerciseRows = State(initialValue: Self.exerciseEntries(from: editingPlan?.exercises ?? ""))
+        _duration = State(initialValue: editingPlan?.duration.map(String.init) ?? "")
+        _notes = State(initialValue: editingPlan?.notes ?? "")
+        _selectedActivityType = State(initialValue: editingPlan?.activityType)
+    }
+
+    private var targetDateTitle: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.calendar = Calendar(identifier: .gregorian)
+        let date = formatter.date(from: dateKey) ?? .now
+        if dateKey == store.todayKey { return "Today" }
+        return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
+    }
+
+    private var plannedName: String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        if logMode == .activity, let selectedActivityType {
+            return selectedActivityType.displayName
+        }
+        return "\(split.title) workout"
+    }
+
+    private var exerciseText: String {
+        if logMode == .activity {
+            return selectedActivityType?.displayName ?? ""
+        }
+        if !exerciseRows.isEmpty {
+            return exerciseRows.map(\.summary).joined(separator: "\n")
+        }
+        return plannedExerciseText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var aggregatedMuscleGroups: Set<MuscleGroup> {
+        WorkoutSheetRules.aggregatedMuscleGroups(from: exerciseRows)
+    }
+
+    private var plannedMuscleGroups: Set<MuscleGroup> {
+        if exerciseRows.isEmpty {
+            return editingPlan?.muscleGroups ?? []
+        }
+        return aggregatedMuscleGroups
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(editingPlan == nil ? "Plan workout" : "Edit plan")
+                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .foregroundStyle(Color.bark)
+                        Text(targetDateTitle)
+                            .font(.callout)
+                            .foregroundStyle(Color.slate)
+                        if showsPlanSourceTag {
+                            Text("User plan")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Color.moss)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.moss.opacity(0.12), in: Capsule())
+                        }
+                    }
+
+                    if let previousWeekPlan {
+                        Button {
+                            copyPreviousWeekPlan(previousWeekPlan)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "arrow.turn.down.right")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(Color.moss)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Copy previous week")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(Color.bark)
+                                    Text(previousWeekPlan.name)
+                                        .font(.caption)
+                                        .foregroundStyle(Color.slate)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                            }
+                            .padding(12)
+                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    SheetField("Split") {
+                        FlowLayout(spacing: 8) {
+                            ForEach(WorkoutSplit.allCases) { option in
+                                Button(option.title) {
+                                    split = option
+                                    if option == .workout { logMode = .activity }
+                                }
+                                    .buttonStyle(ChipButtonStyle(selected: split == option))
+                            }
+                        }
+                    }
+
+                    SheetField("Kind") {
+                        FlowLayout(spacing: 8) {
+                            ForEach(WorkoutMode.allCases) { mode in
+                                Button(mode.label) {
+                                    logMode = mode
+                                    if mode == .activity { split = .workout }
+                                }
+                                    .buttonStyle(ChipButtonStyle(selected: logMode == mode))
+                            }
+                        }
+                    }
+
+                    SheetField("Workout") {
+                        TextField("\(split.title) workout", text: $name)
+                            .sheetTextInput()
+                    }
+
+                    if logMode == .strengthTraining {
+                        WorkoutExerciseBuilder(
+                            selectedExercise: $draftExercise,
+                            sets: $draftSets,
+                            reps: $draftReps,
+                            weight: $draftWeight,
+                            speed: $draftSpeed,
+                            incline: $draftIncline,
+                            details: $draftDetails,
+                            resetToken: $exerciseResetToken,
+                            pickerTitle: logMode.pickerTitle,
+                            searchPlaceholder: logMode.searchPlaceholder,
+                            mode: logMode,
+                            addLabel: logMode.addLabel,
+                            onAdd: addDraftExercise
+                        )
+
+                        if !exerciseRows.isEmpty {
+                            SheetField("Planned exercises") {
+                                VStack(spacing: 8) {
+                                    ForEach($exerciseRows) { $entry in
+                                        EditablePlannedExerciseRow(entry: $entry) {
+                                            exerciseRows.removeAll { $0.id == entry.id }
+                                            plannedExerciseText = exerciseRows.map(\.summary).joined(separator: "\n")
+                                        } onChange: {
+                                            plannedExerciseText = exerciseRows.map(\.summary).joined(separator: "\n")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        SheetField("Plan steps") {
+                            SheetTextEditor(
+                                text: $plannedExerciseText,
+                                placeholder: "Exercises, sets, reps, or trainer cues...",
+                                minHeight: 100
+                            )
+                        }
+                    } else {
+                        ActivityPickerSection(
+                            selectedActivityType: $selectedActivityType,
+                            duration: $duration,
+                            distance: $distance,
+                            energyKcal: $energyKcal,
+                            effort: $effort
+                        )
+                    }
+
+                    if logMode == .strengthTraining {
+                        SheetField("Duration (min)") {
+                            TextField("45", text: $duration)
+                                .keyboardType(.numberPad)
+                                .sheetTextInput()
+                        }
+                    }
+
+                    SheetField("Plan notes") {
+                        SheetTextEditor(
+                            text: $notes,
+                            placeholder: "Exercises, coach cues, target pace, or recovery focus...",
+                            minHeight: 120
+                        )
+                    }
+                }
+                .padding(20)
+                .padding(.bottom, 10)
+            }
+
+            SheetSaveBar(label: editingPlan == nil ? "Save plan" : "Update plan") {
+                store.planWorkout(
+                    PlannedWorkout(
+                        id: editingPlan?.id ?? UUID(),
+                        name: plannedName,
+                        split: split,
+                        source: editingPlan?.source ?? .user,
+                        mode: logMode,
+                        activityType: selectedActivityType,
+                        exercises: exerciseText,
+                        muscleGroups: plannedMuscleGroups,
+                        notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+                        duration: Int(duration),
+                        createdAt: editingPlan?.createdAt ?? Date()
+                    ),
+                    date: dateKey
+                )
+                dismiss()
+            }
+        }
+        .background(Color.parchment)
+        .onChange(of: logMode) { _, _ in
+            clearDraftExercise()
+        }
+    }
+
+    private func addDraftExercise() {
+        guard let draftExercise else { return }
+        exerciseRows.append(WorkoutExerciseEntry(
+            exercise: draftExercise,
+            sets: draftSets,
+            reps: draftReps,
+            weight: draftExercise.inputKind == .strength ? draftWeight : "",
+            speed: draftExercise.inputKind == .treadmill ? draftSpeed : "",
+            incline: draftExercise.inputKind == .treadmill ? draftIncline : "",
+            details: draftDetails
+        ))
+        plannedExerciseText = (plannedExerciseText.components(separatedBy: .newlines) + [exerciseRows.last?.summary ?? ""])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        clearDraftExercise()
+    }
+
+    private func copyPreviousWeekPlan(_ plan: PlannedWorkout) {
+        split = plan.split
+        logMode = plan.mode
+        name = plan.name
+        plannedExerciseText = plan.exercises
+        exerciseRows = Self.exerciseEntries(from: plan.exercises)
+        duration = plan.duration.map(String.init) ?? ""
+        notes = plan.notes
+        selectedActivityType = plan.activityType
+    }
+
+    private func clearDraftExercise() {
+        draftExercise = nil
+        draftSets = ""
+        draftReps = ""
+        draftWeight = ""
+        draftSpeed = ""
+        draftIncline = ""
+        draftDetails = ""
+        exerciseResetToken += 1
+    }
+
+    private static func exerciseEntries(from text: String) -> [WorkoutExerciseEntry] {
+        text.components(separatedBy: .newlines).compactMap { line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty,
+                  let exercise = WorkoutExerciseCatalog.search(trimmed).first else {
+                return nil
+            }
+
+            let setRep = firstMatch(in: trimmed, pattern: #"(\d+)\s*x\s*(\d+)"#)
+            let weight = trimmed
+                .split(separator: "@", maxSplits: 1)
+                .dropFirst()
+                .first
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) } ?? ""
+            var details = trimmed.replacingOccurrences(of: exercise.name, with: "")
+            if let fullMatch = setRep.fullMatch {
+                details = details.replacingOccurrences(of: fullMatch, with: "")
+            }
+            if !weight.isEmpty {
+                details = details.replacingOccurrences(of: "@\(weight)", with: "")
+            }
+            details = details.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            return WorkoutExerciseEntry(
+                exercise: exercise,
+                sets: setRep.groups.first ?? "",
+                reps: setRep.groups.dropFirst().first ?? "",
+                weight: exercise.inputKind == .strength ? weight : "",
+                speed: exercise.inputKind == .treadmill ? weight : "",
+                incline: "",
+                details: details
+            )
+        }
+    }
+
+    private static func firstMatch(in text: String, pattern: String) -> (fullMatch: String?, groups: [String]) {
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else {
+            return (nil, [])
+        }
+        let fullMatch = Range(match.range(at: 0), in: text).map { String(text[$0]) }
+        let groups = (1..<match.numberOfRanges).compactMap { index -> String? in
+            guard let range = Range(match.range(at: index), in: text) else { return nil }
+            return String(text[range])
+        }
+        return (fullMatch, groups)
     }
 }
 

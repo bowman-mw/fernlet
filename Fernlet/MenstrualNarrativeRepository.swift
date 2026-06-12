@@ -36,7 +36,7 @@ struct MenstrualNarrative: Identifiable, Equatable {
 final class MenstrualNarrativeRepository {
     private let context: NSManagedObjectContext
 
-    init(controller: PersistenceController = .shared) {
+    init(controller: PrivatePersistenceController = .shared) {
         self.context = controller.container.viewContext
     }
 
@@ -64,6 +64,7 @@ final class MenstrualNarrativeRepository {
         let request = request(id: id)
         try context.fetch(request).forEach(context.delete)
         try context.save()
+        try PrivatePersistentHistoryPruner.prune(context: context)
     }
 
     func narratives(in dateRange: DateInterval, contentKey: SymmetricKey?) throws -> [MenstrualNarrative] {

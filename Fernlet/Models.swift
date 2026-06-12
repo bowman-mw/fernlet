@@ -4,6 +4,7 @@ struct FernletDay: Codable {
     var date: String
     var meals: [Meal]
     var workouts: [Workout]
+    var plannedWorkouts: [PlannedWorkout]
     var journals: [JournalEntry]
     var sleep: SleepLog?
     var bottleCount: Int
@@ -15,6 +16,7 @@ struct FernletDay: Codable {
         date: String,
         meals: [Meal] = [],
         workouts: [Workout] = [],
+        plannedWorkouts: [PlannedWorkout] = [],
         journals: [JournalEntry] = [],
         sleep: SleepLog? = nil,
         bottleCount: Int = 0,
@@ -25,6 +27,7 @@ struct FernletDay: Codable {
         self.date = date
         self.meals = meals
         self.workouts = workouts
+        self.plannedWorkouts = plannedWorkouts
         self.journals = journals
         self.sleep = sleep
         self.bottleCount = bottleCount
@@ -38,6 +41,7 @@ struct FernletDay: Codable {
         date = try container.decode(String.self, forKey: .date)
         meals = try container.decodeIfPresent([Meal].self, forKey: .meals) ?? []
         workouts = try container.decodeIfPresent([Workout].self, forKey: .workouts) ?? []
+        plannedWorkouts = try container.decodeIfPresent([PlannedWorkout].self, forKey: .plannedWorkouts) ?? []
         journals = try container.decodeIfPresent([JournalEntry].self, forKey: .journals) ?? []
         sleep = try container.decodeIfPresent(SleepLog.self, forKey: .sleep)
         bottleCount = try container.decodeIfPresent(Int.self, forKey: .bottleCount) ?? 0
@@ -95,9 +99,11 @@ struct FernletSettings: Codable {
     var hydrationTarget: Int = 4
     var showDeveloperNotes = false
     var connectionInspectorMode: ConnectionInspectorMode = .live
+    var companionAppearance: CompanionAppearance = .standard
     var selectedGoal: GoalType = .wellness
     var isSick: Bool = false
     var aiStatus: AIStatus = .off
+    var webNutritionLookupEnabled: Bool = false
     var showCalories: Bool = false
     var hasCompletedOnboarding: Bool = false
     var hidePredictions: Bool = false
@@ -108,6 +114,8 @@ struct FernletSettings: Codable {
     var homeWidgets: [HomeWidget] = HomeWidget.defaultWidgets
     var personalCareTasks: [PersonalCareTask] = PersonalCareTask.defaultTasks
     var proximityDisplayName: String = ""
+    var showProximityDebugTools: Bool = false
+    var allowNearbyRecipeShares: Bool = true
 
     init() {}
 
@@ -117,9 +125,11 @@ struct FernletSettings: Codable {
         hydrationTarget = try container.decodeIfPresent(Int.self, forKey: .hydrationTarget) ?? 4
         showDeveloperNotes = try container.decodeIfPresent(Bool.self, forKey: .showDeveloperNotes) ?? false
         connectionInspectorMode = try container.decodeIfPresent(ConnectionInspectorMode.self, forKey: .connectionInspectorMode) ?? .live
+        companionAppearance = try container.decodeIfPresent(CompanionAppearance.self, forKey: .companionAppearance) ?? .standard
         selectedGoal = try container.decodeIfPresent(GoalType.self, forKey: .selectedGoal) ?? .wellness
         isSick = try container.decodeIfPresent(Bool.self, forKey: .isSick) ?? false
         aiStatus = try container.decodeIfPresent(AIStatus.self, forKey: .aiStatus) ?? .off
+        webNutritionLookupEnabled = try container.decodeIfPresent(Bool.self, forKey: .webNutritionLookupEnabled) ?? false
         showCalories = try container.decodeIfPresent(Bool.self, forKey: .showCalories) ?? false
         hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
         hidePredictions = try container.decodeIfPresent(Bool.self, forKey: .hidePredictions) ?? false
@@ -133,6 +143,8 @@ struct FernletSettings: Codable {
         let decodedCareTasks = try container.decodeIfPresent([PersonalCareTask].self, forKey: .personalCareTasks) ?? PersonalCareTask.defaultTasks
         personalCareTasks = PersonalCareTask.normalized(decodedCareTasks)
         proximityDisplayName = try container.decodeIfPresent(String.self, forKey: .proximityDisplayName) ?? ""
+        showProximityDebugTools = try container.decodeIfPresent(Bool.self, forKey: .showProximityDebugTools) ?? false
+        allowNearbyRecipeShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyRecipeShares) ?? true
     }
 }
 
@@ -156,12 +168,10 @@ enum FernletScreen: String, Codable, CaseIterable, Identifiable {
     case food
     case move
     case journal
-    case workshop
     case periodTracking
     case intimacyTracking
     case friends
     case photos
-    case hobbyNotes
 
     var id: String { rawValue }
 
@@ -170,12 +180,10 @@ enum FernletScreen: String, Codable, CaseIterable, Identifiable {
         case .food: "Food"
         case .move: "Move"
         case .journal: "Journal"
-        case .workshop: "Workshop"
         case .periodTracking: "Period"
         case .intimacyTracking: "Intimacy"
         case .friends: "Friends"
         case .photos: "Photos"
-        case .hobbyNotes: "Hobbies"
         }
     }
 
@@ -184,12 +192,10 @@ enum FernletScreen: String, Codable, CaseIterable, Identifiable {
         case .food: "Meals, macros, and recipes."
         case .move: "Training, walks, and recovery."
         case .journal: "Mood and short daily notes."
-        case .workshop: "Design observations."
         case .periodTracking: "Cycle notes and Health context."
         case .intimacyTracking: "Private intimacy notes."
         case .friends: "People to remember."
         case .photos: "A small photo wall."
-        case .hobbyNotes: "Notes from things you make and do."
         }
     }
 
@@ -198,12 +204,10 @@ enum FernletScreen: String, Codable, CaseIterable, Identifiable {
         case .food: "fork.knife"
         case .move: "figure.walk"
         case .journal: "book.closed.fill"
-        case .workshop: "hammer.fill"
         case .periodTracking: "calendar.badge.clock"
         case .intimacyTracking: "lock.shield.fill"
         case .friends: "person.2.fill"
         case .photos: "photo.on.rectangle.fill"
-        case .hobbyNotes: "paintpalette.fill"
         }
     }
 }
@@ -296,8 +300,6 @@ enum FernletShortcut: String, Codable, CaseIterable, Identifiable {
     case periodTracking
     case intimacyTracking
     case friends
-    case photos
-    case hobbyNotes
 
     static let defaultQuickLog: [FernletShortcut] = [.meal, .water, .move, .sleep, .journal, .care]
 
@@ -315,8 +317,6 @@ enum FernletShortcut: String, Codable, CaseIterable, Identifiable {
         case .periodTracking: "Period"
         case .intimacyTracking: "Intimacy"
         case .friends: "Friends"
-        case .photos: "Photos"
-        case .hobbyNotes: "Hobbies"
         }
     }
 
@@ -332,8 +332,6 @@ enum FernletShortcut: String, Codable, CaseIterable, Identifiable {
         case .periodTracking: "calendar.badge.clock"
         case .intimacyTracking: "lock.shield"
         case .friends: "person.2"
-        case .photos: "photo.on.rectangle"
-        case .hobbyNotes: "paintpalette"
         }
     }
 
@@ -344,8 +342,6 @@ enum FernletShortcut: String, Codable, CaseIterable, Identifiable {
         case .periodTracking: .periodTracking
         case .intimacyTracking: .intimacyTracking
         case .friends: .friends
-        case .photos: .photos
-        case .hobbyNotes: .hobbyNotes
         case .meal, .water, .sleep, .care, .logPeriod:
             nil
         }
@@ -488,6 +484,34 @@ enum AIStatus: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+struct MealComponentSnapshot: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var foodItemId: UUID?
+    var name: String
+    var quantity: Double
+    var unit: String
+    var macros: Macros
+    var micronutrients: Micronutrients
+
+    init(
+        id: UUID = UUID(),
+        foodItemId: UUID? = nil,
+        name: String,
+        quantity: Double,
+        unit: String,
+        macros: Macros,
+        micronutrients: Micronutrients
+    ) {
+        self.id = id
+        self.foodItemId = foodItemId
+        self.name = name
+        self.quantity = quantity
+        self.unit = unit
+        self.macros = macros
+        self.micronutrients = micronutrients
+    }
+}
+
 struct Meal: Identifiable, Codable, Equatable {
     var id = UUID()
     var name: String
@@ -496,6 +520,7 @@ struct Meal: Identifiable, Codable, Equatable {
     var macroSnapshot: Macros
     var calorieSnapshot: Int
     var micronutrientSnapshot: Micronutrients
+    var componentSnapshots: [MealComponentSnapshot]
     var mealSource: MealSource = .manual
     var isAIFallback: Bool = true
     var quality: MealQuality
@@ -503,6 +528,7 @@ struct Meal: Identifiable, Codable, Equatable {
     var note: String
     var source: String
     var loggedAt = Date()
+    var photoID: UUID?
 
     var calories: Int {
         macros.protein * 4 + macros.carbs * 4 + macros.fat * 9
@@ -512,6 +538,7 @@ struct Meal: Identifiable, Codable, Equatable {
         var copy = self
         copy.id = UUID()
         copy.loggedAt = .now
+        copy.photoID = nil
         return copy
     }
 
@@ -523,13 +550,15 @@ struct Meal: Identifiable, Codable, Equatable {
         macroSnapshot: Macros? = nil,
         calorieSnapshot: Int? = nil,
         micronutrientSnapshot: Micronutrients = Micronutrients(),
+        componentSnapshots: [MealComponentSnapshot] = [],
         mealSource: MealSource = .manual,
         isAIFallback: Bool = true,
         quality: MealQuality,
         confidence: String,
         note: String,
         source: String,
-        loggedAt: Date = Date()
+        loggedAt: Date = Date(),
+        photoID: UUID? = nil
     ) {
         self.id = id
         self.name = name
@@ -538,6 +567,7 @@ struct Meal: Identifiable, Codable, Equatable {
         self.macroSnapshot = macroSnapshot ?? macros
         self.calorieSnapshot = calorieSnapshot ?? Self.calories(for: macroSnapshot ?? macros)
         self.micronutrientSnapshot = micronutrientSnapshot
+        self.componentSnapshots = componentSnapshots
         self.mealSource = mealSource
         self.isAIFallback = isAIFallback
         self.quality = quality
@@ -545,6 +575,7 @@ struct Meal: Identifiable, Codable, Equatable {
         self.note = note
         self.source = source
         self.loggedAt = loggedAt
+        self.photoID = photoID
     }
 
     init(from decoder: Decoder) throws {
@@ -556,6 +587,7 @@ struct Meal: Identifiable, Codable, Equatable {
         macroSnapshot = try container.decodeIfPresent(Macros.self, forKey: .macroSnapshot) ?? macros
         calorieSnapshot = try container.decodeIfPresent(Int.self, forKey: .calorieSnapshot) ?? Self.calories(for: macroSnapshot)
         micronutrientSnapshot = try container.decodeIfPresent(Micronutrients.self, forKey: .micronutrientSnapshot) ?? Micronutrients()
+        componentSnapshots = try container.decodeIfPresent([MealComponentSnapshot].self, forKey: .componentSnapshots) ?? []
         mealSource = try container.decodeIfPresent(MealSource.self, forKey: .mealSource) ?? .manual
         isAIFallback = try container.decodeIfPresent(Bool.self, forKey: .isAIFallback) ?? true
         quality = try container.decode(MealQuality.self, forKey: .quality)
@@ -563,6 +595,7 @@ struct Meal: Identifiable, Codable, Equatable {
         note = try container.decode(String.self, forKey: .note)
         source = try container.decodeIfPresent(String.self, forKey: .source) ?? MealLogSource.manual
         loggedAt = try container.decodeIfPresent(Date.self, forKey: .loggedAt) ?? Date()
+        photoID = try container.decodeIfPresent(UUID.self, forKey: .photoID)
     }
 
     private static func calories(for macros: Macros) -> Int {
@@ -574,6 +607,8 @@ struct Macros: Codable, Equatable {
     var protein: Int
     var carbs: Int
     var fat: Int
+
+    var calories: Int { protein * 4 + carbs * 4 + fat * 9 }
 }
 
 struct Micronutrients: Codable, Equatable {
@@ -864,6 +899,14 @@ enum MicronutrientGapAnalyzer {
     }
 }
 
+enum FoodDataType: String, Codable {
+    case foundation   // USDA Foundation Foods
+    case survey       // USDA/FNDDS survey foods
+    case srLegacy     // USDA SR Legacy reference
+    case branded      // Commercial/branded product
+    case restaurant   // Restaurant chain item
+}
+
 enum FoodItemSource: String, Codable {
     case usda
     case aiResolved
@@ -889,6 +932,9 @@ struct FoodItem: Identifiable, Codable, Equatable {
     var micronutrients: Micronutrients
     var category: String
     var source: FoodItemSource
+    var dataType: FoodDataType = .srLegacy
+    var sourceURL: URL?
+    var servingDescription: String?
     var verificationPolicyDays: Int = 180
     var lastVerified: Date?
     var isFlagged: Bool = false
@@ -909,6 +955,9 @@ struct FoodItem: Identifiable, Codable, Equatable {
         micronutrients: Micronutrients,
         category: String,
         source: FoodItemSource,
+        dataType: FoodDataType = .srLegacy,
+        sourceURL: URL? = nil,
+        servingDescription: String? = nil,
         verificationPolicyDays: Int = 180,
         lastVerified: Date? = nil,
         isFlagged: Bool = false,
@@ -924,6 +973,9 @@ struct FoodItem: Identifiable, Codable, Equatable {
         self.micronutrients = micronutrients
         self.category = category
         self.source = source
+        self.dataType = dataType
+        self.sourceURL = sourceURL
+        self.servingDescription = servingDescription
         self.verificationPolicyDays = verificationPolicyDays
         self.lastVerified = lastVerified
         self.isFlagged = isFlagged
@@ -942,6 +994,9 @@ struct FoodItem: Identifiable, Codable, Equatable {
         micronutrients = try container.decodeIfPresent(Micronutrients.self, forKey: .micronutrients) ?? Micronutrients()
         category = try container.decode(String.self, forKey: .category)
         source = try container.decode(FoodItemSource.self, forKey: .source)
+        dataType = try container.decodeIfPresent(FoodDataType.self, forKey: .dataType) ?? .srLegacy
+        sourceURL = try container.decodeIfPresent(URL.self, forKey: .sourceURL)
+        servingDescription = try container.decodeIfPresent(String.self, forKey: .servingDescription)
         verificationPolicyDays = try container.decodeIfPresent(Int.self, forKey: .verificationPolicyDays) ?? 180
         lastVerified = try container.decodeIfPresent(Date.self, forKey: .lastVerified)
         isFlagged = try container.decodeIfPresent(Bool.self, forKey: .isFlagged) ?? false
@@ -1269,17 +1324,17 @@ extension Macros {
 extension FoodItem {
     var preferredRecipeUnit: RecipeUnit {
         let nameText = FoodItemSearch.normalized(name)
+        if nameText.contains("flour") {
+            return .gram
+        }
         if portion(for: .cup) != nil {
             return .cup
         }
-        if nameText.contains("egg") && portion(for: .each) != nil {
+        if portion(for: .each) != nil {
             return .each
         }
         if nameText.contains("oil") && portions.isEmpty {
             return RecipeUnit.normalized(servingUnit) == .milliliter ? .tablespoon : .cup
-        }
-        if nameText.contains("flour") {
-            return .gram
         }
         if servingUnit.caseInsensitiveCompare(RecipeUnit.gram.rawValue) == .orderedSame {
             return .gram
@@ -1646,6 +1701,152 @@ struct Workout: Identifiable, Codable, Equatable {
         case id, name, type, mode, activityType, exercises, rpe, notes, duration
         case distanceMiles, activeEnergyKcal, effort, muscleGroups, healthKitUUID, plannedWorkoutID
         case intensity, completedAt, loggedAt
+    }
+}
+
+struct PlannedWorkout: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var name: String
+    var split: WorkoutSplit
+    var source: WorkoutPlanSource
+    var mode: WorkoutMode
+    var activityType: WorkoutActivityType?
+    var exercises: String
+    var muscleGroups: Set<MuscleGroup>
+    var notes: String
+    var duration: Int?
+    var createdAt = Date()
+
+    var workoutType: WorkoutType { split.workoutType }
+
+    var completedWorkout: Workout {
+        Workout(
+            name: name,
+            type: workoutType,
+            mode: mode,
+            activityType: activityType,
+            exercises: exercises.isEmpty ? notes : exercises,
+            rpe: nil,
+            notes: source.completionNote,
+            duration: duration,
+            muscleGroups: muscleGroups,
+            plannedWorkoutID: id,
+            intensity: .moderate
+        )
+    }
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        split: WorkoutSplit,
+        source: WorkoutPlanSource,
+        mode: WorkoutMode = .strengthTraining,
+        activityType: WorkoutActivityType? = nil,
+        exercises: String = "",
+        muscleGroups: Set<MuscleGroup> = [],
+        notes: String,
+        duration: Int?,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.split = split
+        self.source = source
+        self.mode = mode
+        self.activityType = activityType
+        self.exercises = exercises
+        self.muscleGroups = muscleGroups
+        self.notes = notes
+        self.duration = duration
+        self.createdAt = createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        split = try container.decode(WorkoutSplit.self, forKey: .split)
+        source = try container.decodeIfPresent(WorkoutPlanSource.self, forKey: .source) ?? .user
+        mode = try container.decodeIfPresent(WorkoutMode.self, forKey: .mode) ?? .strengthTraining
+        activityType = try container.decodeIfPresent(WorkoutActivityType.self, forKey: .activityType)
+        exercises = try container.decodeIfPresent(String.self, forKey: .exercises) ?? ""
+        muscleGroups = try container.decodeIfPresent(Set<MuscleGroup>.self, forKey: .muscleGroups) ?? []
+        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        duration = try container.decodeIfPresent(Int.self, forKey: .duration)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, split, source, mode, activityType, exercises, muscleGroups, notes, duration, createdAt
+    }
+}
+
+enum WorkoutPlanSource: String, Codable, CaseIterable, Identifiable {
+    case user
+    case coach
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .user: "User"
+        case .coach: "Coach"
+        }
+    }
+
+    var completionNote: String {
+        switch self {
+        case .user: "Completed from user plan."
+        case .coach: "Completed from coach plan."
+        }
+    }
+}
+
+enum WorkoutSplit: String, Codable, CaseIterable, Identifiable {
+    case workout
+    case upper
+    case lower
+    case fullBody
+    case push
+    case pull
+    case legs
+    case cardio
+    case recovery
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .workout: "Workout"
+        case .upper: "Upper"
+        case .lower: "Lower"
+        case .fullBody: "Full Body"
+        case .push: "Push"
+        case .pull: "Pull"
+        case .legs: "Legs"
+        case .cardio: "Cardio"
+        case .recovery: "Recovery"
+        }
+    }
+
+    var workoutType: WorkoutType {
+        switch self {
+        case .workout: .cardio
+        case .upper, .push, .pull: .upper
+        case .lower, .legs: .lower
+        case .fullBody, .recovery: .fullBody
+        case .cardio: .cardio
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .workout: .terracotta
+        case .upper, .push, .pull: .moss
+        case .lower, .legs: .goldenrod
+        case .fullBody, .recovery: .dustyRose
+        case .cardio: .terracotta
+        }
     }
 }
 
@@ -2384,6 +2585,235 @@ enum TextureTag: String, Codable, CaseIterable, Identifiable {
         case .tension: .terracotta
         case .delight: .moss
         case .friction: .goldenrod
+        }
+    }
+}
+
+struct CompanionAppearance: Codable, Equatable {
+    var bodyStyle: CompanionBodyStyle = .circle
+    var palette: CompanionPalette = .state
+    var bodyColor: CompanionAssetColor = .state
+    var bodyCustomColorHex: String?
+    var accessory: CompanionAccessory = .sprout
+    var accessoryColor: CompanionAssetColor = .fern
+    var accessoryCustomColorHex: String?
+    var clothing: CompanionClothing = .none
+    var clothingColor: CompanionAssetColor = .terracotta
+    var clothingCustomColorHex: String?
+    var sideItem: CompanionSideItem = .none
+    var sideItemColor: CompanionAssetColor = .bark
+    var sideItemCustomColorHex: String?
+
+    static let standard = CompanionAppearance()
+
+    init(
+        bodyStyle: CompanionBodyStyle = .circle,
+        palette: CompanionPalette = .state,
+        bodyColor: CompanionAssetColor = .state,
+        bodyCustomColorHex: String? = nil,
+        accessory: CompanionAccessory = .sprout,
+        accessoryColor: CompanionAssetColor = .fern,
+        accessoryCustomColorHex: String? = nil,
+        clothing: CompanionClothing = .none,
+        clothingColor: CompanionAssetColor = .terracotta,
+        clothingCustomColorHex: String? = nil,
+        sideItem: CompanionSideItem = .none,
+        sideItemColor: CompanionAssetColor = .bark,
+        sideItemCustomColorHex: String? = nil
+    ) {
+        self.bodyStyle = bodyStyle
+        self.palette = palette
+        self.bodyColor = bodyColor
+        self.bodyCustomColorHex = bodyCustomColorHex
+        self.accessory = accessory
+        self.accessoryColor = accessoryColor
+        self.accessoryCustomColorHex = accessoryCustomColorHex
+        self.clothing = clothing
+        self.clothingColor = clothingColor
+        self.clothingCustomColorHex = clothingCustomColorHex
+        self.sideItem = sideItem
+        self.sideItemColor = sideItemColor
+        self.sideItemCustomColorHex = sideItemCustomColorHex
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        bodyStyle = try container.decodeIfPresent(CompanionBodyStyle.self, forKey: .bodyStyle) ?? .circle
+        palette = try container.decodeIfPresent(CompanionPalette.self, forKey: .palette) ?? .state
+        bodyColor = try container.decodeIfPresent(CompanionAssetColor.self, forKey: .bodyColor) ?? CompanionAssetColor(palette: palette)
+        bodyCustomColorHex = try container.decodeIfPresent(String.self, forKey: .bodyCustomColorHex)
+        accessory = try container.decodeIfPresent(CompanionAccessory.self, forKey: .accessory) ?? .sprout
+        accessoryColor = try container.decodeIfPresent(CompanionAssetColor.self, forKey: .accessoryColor) ?? .fern
+        accessoryCustomColorHex = try container.decodeIfPresent(String.self, forKey: .accessoryCustomColorHex)
+        clothing = try container.decodeIfPresent(CompanionClothing.self, forKey: .clothing) ?? .none
+        clothingColor = try container.decodeIfPresent(CompanionAssetColor.self, forKey: .clothingColor) ?? .terracotta
+        clothingCustomColorHex = try container.decodeIfPresent(String.self, forKey: .clothingCustomColorHex)
+        sideItem = try container.decodeIfPresent(CompanionSideItem.self, forKey: .sideItem) ?? .none
+        sideItemColor = try container.decodeIfPresent(CompanionAssetColor.self, forKey: .sideItemColor) ?? .bark
+        sideItemCustomColorHex = try container.decodeIfPresent(String.self, forKey: .sideItemCustomColorHex)
+    }
+}
+
+enum CompanionBodyStyle: String, Codable, CaseIterable, Identifiable {
+    case circle
+    case softBlob
+    case pear
+    case puddle
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .circle: "Circle"
+        case .softBlob: "Soft"
+        case .pear: "Pear"
+        case .puddle: "Puddle"
+        }
+    }
+}
+
+enum CompanionPalette: String, Codable, CaseIterable, Identifiable {
+    case state
+    case fern
+    case rose
+    case sun
+    case slate
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .state: "Mood"
+        case .fern: "Fern"
+        case .rose: "Rose"
+        case .sun: "Sun"
+        case .slate: "Slate"
+        }
+    }
+
+    func color(for state: CompanionState) -> Color {
+        switch self {
+        case .state: state.color
+        case .fern: .fern
+        case .rose: .dustyRose
+        case .sun: .sun
+        case .slate: .slate
+        }
+    }
+}
+
+enum CompanionAssetColor: String, Codable, CaseIterable, Identifiable {
+    case state
+    case moss
+    case fern
+    case rose
+    case sun
+    case slate
+    case terracotta
+    case cream
+    case bark
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .state: "Mood"
+        case .moss: "Moss"
+        case .fern: "Fern"
+        case .rose: "Rose"
+        case .sun: "Sun"
+        case .slate: "Slate"
+        case .terracotta: "Clay"
+        case .cream: "Cream"
+        case .bark: "Bark"
+        }
+    }
+
+    init(palette: CompanionPalette) {
+        switch palette {
+        case .state: self = .state
+        case .fern: self = .fern
+        case .rose: self = .rose
+        case .sun: self = .sun
+        case .slate: self = .slate
+        }
+    }
+
+    func color(for state: CompanionState) -> Color {
+        switch self {
+        case .state: state.color
+        case .moss: .moss
+        case .fern: .fern
+        case .rose: .dustyRose
+        case .sun: .sun
+        case .slate: .slate
+        case .terracotta: .terracotta
+        case .cream: .cream
+        case .bark: .bark
+        }
+    }
+}
+
+enum CompanionAccessory: String, Codable, CaseIterable, Identifiable {
+    case none
+    case sprout
+    case flower
+    case glasses
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none: "None"
+        case .sprout: "Sprout"
+        case .flower: "Flower"
+        case .glasses: "Glasses"
+        }
+    }
+}
+
+enum CompanionClothing: String, Codable, CaseIterable, Identifiable {
+    case none
+    case scarf
+    case sleepCap
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none: "None"
+        case .scarf: "Scarf"
+        case .sleepCap: "Sleep cap"
+        }
+    }
+}
+
+enum CompanionSideItem: String, Codable, CaseIterable, Identifiable {
+    case none
+    case mug
+    case book
+    case dumbbell
+    case waterBottle
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none: "None"
+        case .mug: "Mug"
+        case .book: "Book"
+        case .dumbbell: "Weight"
+        case .waterBottle: "Bottle"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .none: "circle.slash"
+        case .mug: "mug"
+        case .book: "book.closed"
+        case .dumbbell: "dumbbell"
+        case .waterBottle: "waterbottle"
         }
     }
 }

@@ -689,18 +689,6 @@ struct TierTwoMemoryRecord: Identifiable, Codable, Equatable {
     }
 }
 
-struct TrainerNutritionistExportBundle: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var createdAt = Date()
-    var dateRangeStart: String
-    var dateRangeEnd: String
-    var includedCategories: [String]
-    var workoutLogs: [WorkoutLogRecord]
-    var mealLogs: [MealLogRecord]
-    var dailyLogs: [DailyLogRecord]
-    var derivedSignals: [DerivedSignalRecord]
-}
-
 enum FernletLimits {
     static let maxStoredDays = 370
     static let maxMealsPerDay = 20

@@ -15,15 +15,15 @@ final class ProximityTrustVault: ProximityTrustPolicy {
         initialAudit: [TrainerAuditEvent] = [],
         onChange: @escaping () -> Void = {}
     ) {
-        self.trustedPeers = initialPeers
+        self.trustedPeers = Self.normalized(initialPeers)
         self.auditEvents = initialAudit
         self.onChange = onChange
     }
 
     // MARK: - Reads
 
-    func peer(fingerprint: String) -> ProximityTrustedPeerRecord? {
-        trustedPeers.first { $0.fingerprint == fingerprint }
+    func peer(signingPublicKey: Data) -> ProximityTrustedPeerRecord? {
+        trustedPeers.first { $0.signingPublicKey == signingPublicKey }
     }
 
     func peer(displayName: String) -> ProximityTrustedPeerRecord? {
@@ -33,40 +33,33 @@ final class ProximityTrustVault: ProximityTrustPolicy {
             .first
     }
 
-    func isTrustedProximityPeer(fingerprint: String) -> Bool {
-        trustedPeers.contains { $0.fingerprint == fingerprint && $0.revokedAt == nil }
-    }
-
     func isTrustedProximityPeer(signingPublicKey: Data) -> Bool {
-        let fp = IdentityService.fingerprint(of: signingPublicKey)
         return trustedPeers.contains {
-            $0.fingerprint == fp && $0.signingPublicKey == signingPublicKey && $0.revokedAt == nil
+            $0.signingPublicKey == signingPublicKey && $0.revokedAt == nil
         }
     }
 
     func isRevokedProximitySigningKey(_ publicKey: Data) -> Bool {
-        // Phase 4 (SEC-1): require full public-key match, not just the 8-char fingerprint prefix,
-        // so a collision-crafted key cannot inherit a revoked peer's status.
-        let fp = IdentityService.fingerprint(of: publicKey)
-        return trustedPeers.contains { $0.fingerprint == fp && $0.signingPublicKey == publicKey && $0.revokedAt != nil }
+        trustedPeers.contains { $0.signingPublicKey == publicKey && $0.revokedAt != nil }
     }
 
     func isBlockedProximitySigningKey(_ publicKey: Data) -> Bool {
-        // Phase 4 (SEC-1): same full-key check for the block list.
-        let fp = IdentityService.fingerprint(of: publicKey)
-        return trustedPeers.contains { $0.fingerprint == fp && $0.signingPublicKey == publicKey && $0.blockedAt != nil }
+        trustedPeers.contains { $0.signingPublicKey == publicKey && $0.blockedAt != nil }
     }
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
-        trustedPeers.contains { $0.fingerprint == fingerprint && $0.blockedAt != nil }
+        trustedPeers.contains {
+            IdentityService.fingerprintsMatch($0.fingerprint, fingerprint) && $0.blockedAt != nil
+        }
     }
 
     // MARK: - Writes
 
     func trust(_ peer: ProximityCoordinator.PeerIdentity, mode: ProximityCoordinator.Mode) {
-        if let index = trustedPeers.firstIndex(where: { $0.fingerprint == peer.fingerprint }) {
+        let fingerprint = IdentityService.fingerprint(of: peer.signingPublicKey)
+        if let index = trustedPeers.firstIndex(where: { $0.signingPublicKey == peer.signingPublicKey }) {
             trustedPeers[index].displayName = peer.displayName
-            trustedPeers[index].signingPublicKey = peer.signingPublicKey
+            trustedPeers[index].fingerprint = fingerprint
             trustedPeers[index].keyAgreementPublicKey = peer.keyAgreementPublicKey
             trustedPeers[index].mode = mode
             trustedPeers[index].lastSeenAt = Date()
@@ -74,7 +67,7 @@ final class ProximityTrustVault: ProximityTrustPolicy {
         } else {
             trustedPeers.append(ProximityTrustedPeerRecord(
                 displayName: peer.displayName,
-                fingerprint: peer.fingerprint,
+                fingerprint: fingerprint,
                 signingPublicKey: peer.signingPublicKey,
                 keyAgreementPublicKey: peer.keyAgreementPublicKey,
                 mode: mode
@@ -83,13 +76,14 @@ final class ProximityTrustVault: ProximityTrustPolicy {
         onChange()
     }
 
-    func block(fingerprint: String) {
+    func block(signingPublicKey: Data) {
         let now = Date()
-        guard let index = trustedPeers.firstIndex(where: { $0.fingerprint == fingerprint }) else {
+        guard let index = trustedPeers.firstIndex(where: { $0.signingPublicKey == signingPublicKey }) else {
+            let fingerprint = IdentityService.fingerprint(of: signingPublicKey)
             trustedPeers.append(ProximityTrustedPeerRecord(
                 displayName: fingerprint,
                 fingerprint: fingerprint,
-                signingPublicKey: Data(),
+                signingPublicKey: signingPublicKey,
                 keyAgreementPublicKey: Data(),
                 mode: .friend,
                 firstAcceptedAt: now,
@@ -111,15 +105,15 @@ final class ProximityTrustVault: ProximityTrustPolicy {
         onChange()
     }
 
-    func unblock(fingerprint: String) {
-        guard let index = trustedPeers.firstIndex(where: { $0.fingerprint == fingerprint }) else { return }
+    func unblock(signingPublicKey: Data) {
+        guard let index = trustedPeers.firstIndex(where: { $0.signingPublicKey == signingPublicKey }) else { return }
         trustedPeers[index].blockedAt = nil
         trustedPeers[index].revokedAt = nil
         onChange()
     }
 
-    func revoke(fingerprint: String) {
-        guard let index = trustedPeers.firstIndex(where: { $0.fingerprint == fingerprint }) else { return }
+    func revoke(signingPublicKey: Data) {
+        guard let index = trustedPeers.firstIndex(where: { $0.signingPublicKey == signingPublicKey }) else { return }
         trustedPeers[index].revokedAt = Date()
         recordAuditWithoutSaving(TrainerAuditEvent(
             kind: .trainerRevoked,
@@ -138,8 +132,19 @@ final class ProximityTrustVault: ProximityTrustPolicy {
     // MARK: - Snapshot
 
     func apply(peers: [ProximityTrustedPeerRecord], audit: [TrainerAuditEvent]) {
-        trustedPeers = peers
+        trustedPeers = Self.normalized(peers)
         auditEvents = audit
+    }
+
+    private static func normalized(_ peers: [ProximityTrustedPeerRecord]) -> [ProximityTrustedPeerRecord] {
+        peers.map { peer in
+            guard !peer.signingPublicKey.isEmpty,
+                  peer.fingerprint.count == 8,
+                  peer.fingerprint.allSatisfy(\.isHexDigit) else { return peer }
+            var normalizedPeer = peer
+            normalizedPeer.fingerprint = IdentityService.fingerprint(of: peer.signingPublicKey)
+            return normalizedPeer
+        }
     }
 
     private func recordAuditWithoutSaving(_ event: TrainerAuditEvent) {

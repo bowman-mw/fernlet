@@ -276,7 +276,7 @@ struct FernletLockSetupView: View {
                         .font(.title3.weight(.bold))
                         .foregroundStyle(Color.bark)
 
-                    Text("Notes attached to your cycle history will be permanently deleted. Your HealthKit cycle and intimacy entries are not affected — they remain in Apple Health.")
+                    Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
                         .font(.body)
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
@@ -567,7 +567,7 @@ struct FernletLockView: View {
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(Color.bark)
 
-            Text("You must reset app lock to continue. This will permanently delete notes attached to your cycle history.")
+            Text("You must reset app lock to continue. Private journal, cycle, and intimacy notes will become permanently unreadable.")
                 .font(.callout)
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)

@@ -2,7 +2,7 @@ import CoreData
 import Foundation
 
 /// A dedicated non-CloudKit persistent store for sealed (ChaChaPoly-encrypted) entities.
-/// MenstrualNarrative and JournalNarrative live here and are never mirrored to iCloud.
+/// Sensitive narrative records live here and are never mirrored to iCloud.
 final class PrivatePersistenceController {
     static let shared = PrivatePersistenceController()
 
@@ -41,7 +41,7 @@ final class PrivatePersistenceController {
 
     static func makeManagedObjectModel() -> NSManagedObjectModel {
         let model = NSManagedObjectModel()
-        model.entities = [makeMenstrualNarrativeEntity(), makeJournalNarrativeEntity()]
+        model.entities = [makeMenstrualNarrativeEntity(), makeJournalNarrativeEntity(), makeIntimacyLogEntity()]
         return model
     }
 
@@ -71,6 +71,9 @@ final class PrivatePersistenceController {
         let entity = NSEntityDescription()
         entity.name = "JournalNarrative"
         entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        // id, dayKey, tag, entryDate, createdAt, updatedAt are stored plaintext (accepted risk, NEW-4).
+        // This store is local-only (never iCloud-synced), so exposure is limited to local forensic
+        // analysis ("which days have entries"). All text content lives in sealed ciphertext columns.
         entity.properties = [
             makeAttribute("id", type: .UUIDAttributeType),
             makeAttribute("dayKey", type: .stringAttributeType),
@@ -83,6 +86,28 @@ final class PrivatePersistenceController {
         ]
         if let dayKeyProp = entity.propertiesByName["dayKey"] {
             entity.indexes = [NSFetchIndexDescription(name: "byDayKey", elements: [
+                NSFetchIndexElementDescription(property: dayKeyProp, collationType: .binary)
+            ])]
+        }
+        return entity
+    }
+
+    static func makeIntimacyLogEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "IntimacyLog"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        // Dates are plaintext so the calendar can be indexed. Free-form details are always sealed.
+        entity.properties = [
+            makeAttribute("id", type: .UUIDAttributeType),
+            makeAttribute("dayKey", type: .stringAttributeType),
+            makeAttribute("eventDate", type: .dateAttributeType),
+            makeAttribute("noteCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
+            makeAttribute("healthKitExternalUUID", type: .stringAttributeType),
+            makeAttribute("createdAt", type: .dateAttributeType),
+            makeAttribute("updatedAt", type: .dateAttributeType)
+        ]
+        if let dayKeyProp = entity.propertiesByName["dayKey"] {
+            entity.indexes = [NSFetchIndexDescription(name: "intimacyByDayKey", elements: [
                 NSFetchIndexElementDescription(property: dayKeyProp, collationType: .binary)
             ])]
         }
@@ -102,5 +127,12 @@ final class PrivatePersistenceController {
         attribute.defaultValue = defaultValue
         attribute.allowsExternalBinaryDataStorage = allowsExternalBinaryDataStorage
         return attribute
+    }
+}
+
+enum PrivatePersistentHistoryPruner {
+    static func prune(context: NSManagedObjectContext, before date: Date = Date()) throws {
+        let request = NSPersistentHistoryChangeRequest.deleteHistory(before: date)
+        try context.execute(request)
     }
 }

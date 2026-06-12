@@ -11,6 +11,31 @@ private struct RecipeShareConnection: Identifiable {
     var verifiedKeyAgreementPublicKey: Data?
 }
 
+struct ProximityRecipeShareDiagnosticEvent: Identifiable, Equatable {
+    let id: UUID
+    let timestamp: Date
+    let message: String
+
+    init(id: UUID = UUID(), timestamp: Date = Date(), message: String) {
+        self.id = id
+        self.timestamp = timestamp
+        self.message = message
+    }
+}
+
+enum ProximityRecipeShareDiagnostics {
+    static let maxEvents = 40
+
+    static func appending(
+        _ event: ProximityRecipeShareDiagnosticEvent,
+        to events: [ProximityRecipeShareDiagnosticEvent],
+        maxCount: Int = maxEvents
+    ) -> [ProximityRecipeShareDiagnosticEvent] {
+        guard maxCount > 0 else { return [] }
+        return Array((events + [event]).suffix(maxCount))
+    }
+}
+
 @MainActor
 @Observable
 final class ProximityRecipeShareManager: ProximityPayloadHandling {
@@ -24,6 +49,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
 
     private(set) var nearbyRecipients: [ProximityRecipeShareRecipient] = []
     private(set) var sendState: SendState = .idle
+    private(set) var diagnosticEvents: [ProximityRecipeShareDiagnosticEvent] = []
     var pendingRecipeShares: [PendingProximityRecipeShare] = []
 
     @ObservationIgnored private unowned let store: FernletStore
@@ -31,6 +57,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
     @ObservationIgnored private let identity: IdentityService
     @ObservationIgnored private let replayCache = ReplayCache()
     @ObservationIgnored private var connections: [RecipeShareConnection] = []
+    @ObservationIgnored private var discoveredPeers: [UUID: MultipeerPeer] = [:]
     @ObservationIgnored private var observationTask: Task<Void, Never>?
     @ObservationIgnored private var clearStatusTask: Task<Void, Never>?
     @ObservationIgnored private var pendingOutgoing: (payload: ProximityRecipeSharePayload, recipient: ProximityRecipeShareRecipient)?
@@ -49,11 +76,15 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
     func start() {
         guard !isRunning else { return }
         isRunning = true
+        recordDiagnostic("Recipe share discovery started.")
         session.start(serviceType: Self.serviceType, discoveryInfo: discoveryInfo())
         startObserving()
     }
 
     func stop() {
+        if isRunning {
+            recordDiagnostic("Recipe share discovery stopped.")
+        }
         isRunning = false
         observationTask?.cancel()
         observationTask = nil
@@ -62,14 +93,33 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         session.stop()
         nearbyRecipients.removeAll()
         pendingOutgoing = nil
+        discoveredPeers.removeAll()
         connections.removeAll()
         sendState = .idle
+    }
+
+    func refreshDiscovery() {
+        let shouldRestart = isRunning
+        recordDiagnostic("Recipe share discovery refreshed.")
+        observationTask?.cancel()
+        observationTask = nil
+        session.stop()
+        nearbyRecipients.removeAll()
+        pendingOutgoing = nil
+        discoveredPeers.removeAll()
+        connections.removeAll()
+        sendState = .idle
+        isRunning = false
+        if shouldRestart {
+            start()
+        }
     }
 
     func sendRecipeShare(_ payload: ProximityRecipeSharePayload, to recipient: ProximityRecipeShareRecipient) {
         start()
         pendingOutgoing = (payload, recipient)
         sendState = .connecting(recipientName: recipient.displayName)
+        recordDiagnostic("Connecting to \(recipient.displayName).")
 
         if let connection = connections.first(where: { $0.id == recipient.id }),
            connection.verifiedKeyAgreementPublicKey != nil {
@@ -79,6 +129,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
 
         guard let peer = peer(for: recipient) else {
             sendState = .failed(message: "That nearby Fernlet is no longer available.")
+            recordDiagnostic("Recipe share failed: \(recipient.displayName) is no longer available.")
             scheduleStatusClear()
             return
         }
@@ -112,6 +163,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         )
         pendingRecipeShares.removeAll { $0.id == pending.id }
         pendingRecipeShares.insert(pending, at: 0)
+        recordDiagnostic("Received recipe share from \(envelope.senderDisplayName).")
     }
 
     private func setupSession() {
@@ -127,10 +179,14 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         session.onPeerDisconnected = { [weak self] peer, _ in
             self?.handlePeerLost(peer)
             self?.connections.removeAll { $0.peer.id == peer.id }
+            self?.recordDiagnostic("\(peer.displayName) disconnected.")
         }
         session.shouldAcceptInvitation = { [weak self] peer in
             guard let self else { return false }
-            if let fp = peer.advertisedFingerprint, self.store.isBlockedFingerprint(fp) { return false }
+            if let fp = peer.advertisedFingerprint, self.store.isBlockedFingerprint(fp) {
+                self.recordDiagnostic("Rejected blocked recipe-share invitation from \(peer.displayName).")
+                return false
+            }
             return self.connections.count < 1 || self.connections.contains(where: { $0.peer.id == peer.id })
         }
     }
@@ -155,6 +211,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
               !IdentityService.fingerprintsMatch(fingerprint, identity.localFingerprint),
               !store.isBlockedFingerprint(fingerprint) else { return }
 
+        discoveredPeers[peer.id] = peer
         let recipient = ProximityRecipeShareRecipient(
             id: peer.id,
             displayName: peer.discoveryInfo?["name"] ?? peer.displayName,
@@ -163,14 +220,19 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         nearbyRecipients.removeAll { $0.id == recipient.id || $0.fingerprint == recipient.fingerprint }
         nearbyRecipients.append(recipient)
         nearbyRecipients.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+        recordDiagnostic("Discovered \(recipient.displayName).")
     }
 
     private func handlePeerLost(_ peer: MultipeerPeer) {
+        let displayName = nearbyRecipients.first { $0.id == peer.id }?.displayName ?? peer.displayName
+        discoveredPeers.removeValue(forKey: peer.id)
         nearbyRecipients.removeAll { $0.id == peer.id }
+        recordDiagnostic("\(displayName) is no longer nearby.")
     }
 
     private func handleChannelReady(_ channel: PeerChannelTransport) {
         guard !connections.contains(where: { $0.peer.id == channel.peer.id }) else { return }
+        recordDiagnostic("Secure recipe-share channel opened with \(channel.peer.displayName).")
         let trustPolicy = FriendSessionTrustPolicy(vault: store.proximityTrustVault)
         let coordinator = ProximityCoordinator(
             identity: identity,
@@ -233,6 +295,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
                     connections[index].fingerprint = fingerprint
                     connections[index].verifiedKeyAgreementPublicKey = peerIdentity.keyAgreementPublicKey
                     ensureRecipient(for: connections[index], identity: peerIdentity)
+                    recordDiagnostic("Verified \(peerIdentity.displayName).")
                 }
                 if pendingOutgoing?.recipient.id == connections[index].id {
                     let connection = connections[index]
@@ -266,6 +329,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
               outgoing.recipient.id == connection.id else { return }
         pendingOutgoing = nil
         sendState = .sending(recipientName: outgoing.recipient.displayName)
+        recordDiagnostic("Sending \(outgoing.payload.recipe.title) to \(outgoing.recipient.displayName).")
         do {
             let summary = PayloadSummary(
                 title: outgoing.payload.recipe.title,
@@ -280,8 +344,10 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
                 sealed: true
             )
             sendState = .sent(recipientName: outgoing.recipient.displayName)
+            recordDiagnostic("Sent \(outgoing.payload.recipe.title) to \(outgoing.recipient.displayName).")
         } catch {
             sendState = .failed(message: "Could not send that recipe.")
+            recordDiagnostic("Recipe share failed while sending to \(outgoing.recipient.displayName).")
         }
         scheduleStatusClear()
     }
@@ -290,14 +356,8 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         if let connection = connections.first(where: { $0.id == recipient.id }) {
             return connection.peer
         }
-        return session.channels.values.map(\.peer).first { $0.id == recipient.id }
-            ?? nearbyPeerFromCache(recipient)
-    }
-
-    private func nearbyPeerFromCache(_ recipient: ProximityRecipeShareRecipient) -> MultipeerPeer? {
-        // MeshMultipeerSession intentionally keeps its peer map private; discovered recipients are
-        // reconnected through channels once invited. If no channel exists, wait for a fresh discovery.
-        nil
+        return discoveredPeers[recipient.id]
+            ?? session.channels.values.map(\.peer).first { $0.id == recipient.id }
     }
 
     private func scheduleStatusClear() {
@@ -307,5 +367,12 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
             guard !Task.isCancelled else { return }
             self?.sendState = .idle
         }
+    }
+
+    private func recordDiagnostic(_ message: String) {
+        diagnosticEvents = ProximityRecipeShareDiagnostics.appending(
+            ProximityRecipeShareDiagnosticEvent(message: message),
+            to: diagnosticEvents
+        )
     }
 }

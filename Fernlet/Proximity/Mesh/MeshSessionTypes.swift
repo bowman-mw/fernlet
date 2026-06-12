@@ -17,6 +17,8 @@ struct PeerSlot: Identifiable {
     let coordinator: ProximityCoordinator
     var kind: SlotKind
     var fingerprint: String?
+    // Handshake-verified Ed25519 key used for key-based block operations.
+    var verifiedSigningPublicKey: Data? = nil
     // Handshake-verified X25519 key agreement public key used for group key wrapping.
     // Set from ProximityCoordinator.PeerIdentity after identity exchange, never descriptor gossip.
     var verifiedKeyAgreementPublicKey: Data?

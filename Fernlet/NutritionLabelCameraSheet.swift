@@ -14,6 +14,8 @@ struct NutritionLabelCameraSheet: View {
     @State private var isScanning = false
     @State private var scanError: String?
     @State private var scanResult: NutritionLabelResult?
+    @State private var dualColumnResult: DualColumnScanResult?
+    @State private var selectedDualColumn = 0
     @State private var isFlashOn = false
 
     var body: some View {
@@ -87,6 +89,36 @@ struct NutritionLabelCameraSheet: View {
                             if shouldShowScanTips {
                                 scanTips
                             }
+                        }
+                    }
+
+                    if let dual = dualColumnResult {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("TWO-COLUMN LABEL DETECTED")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.slate)
+                                .tracking(0.8)
+
+                            HStack(spacing: 0) {
+                                ForEach([0, 1], id: \.self) { index in
+                                    let label = index == 0 ? dual.col1Header : dual.col2Header
+                                    let isSelected = selectedDualColumn == index
+                                    Button {
+                                        selectedDualColumn = index
+                                        scanResult = index == 0 ? dual.col1 : dual.col2
+                                    } label: {
+                                        Text(label)
+                                            .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                                            .foregroundStyle(isSelected ? Color.bark : Color.slate)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 10)
+                                            .background(isSelected ? Color.cream : Color.clear)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .background(Color.bark.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.10), lineWidth: 1))
                         }
                     }
 
@@ -356,11 +388,15 @@ struct NutritionLabelCameraSheet: View {
         selectedImage = image
         scanError = nil
         scanResult = nil
+        dualColumnResult = nil
+        selectedDualColumn = 0
         isScanning = true
 
         Task {
             do {
-                scanResult = try await NutritionLabelScanner.scan(image: image)
+                let (primary, dual) = try await NutritionLabelScanner.scanAll(image: image)
+                dualColumnResult = dual
+                scanResult = primary
             } catch {
                 scanError = (error as? LocalizedError)?.errorDescription ?? "Could not read that label."
             }
