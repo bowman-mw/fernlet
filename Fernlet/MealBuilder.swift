@@ -81,7 +81,8 @@ struct MealBuilder {
     static func mealFromIngredients(
         itemName: String,
         resolvedIngredients: [(FoodSelectionIngredient, FoodItem)],
-        mealType: MealType
+        mealType: MealType,
+        confidenceLabel: String = "Food match"
     ) -> Meal {
         let components = componentSnapshots(for: resolvedIngredients)
         let totals = totals(for: components)
@@ -100,7 +101,7 @@ struct MealBuilder {
             mealSource: .manual,
             isAIFallback: false,
             quality: totals.macros.protein >= goodProteinThreshold ? .good : .ok,
-            confidence: "Food match",
+            confidence: confidenceLabel,
             note: "Matched locally from food selection: \(ingredientText).",
             source: MealLogSource.foundationModelFoodSelection
         )

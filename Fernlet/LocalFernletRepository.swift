@@ -993,7 +993,7 @@ enum TierTwoMemoryEngine {
         let confidence: String
 
         switch primary.type {
-        case .strength:
+        case .strength, .sportsPrep:
             evidence = "\(workoutDays)/\(n) days with workouts"
             if workoutRate < 0.2 {
                 state = "misaligned"; confidence = "high"

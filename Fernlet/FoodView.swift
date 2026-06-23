@@ -976,6 +976,7 @@ struct MealSheet: View {
     @State private var notice: String?
     @State private var path: [MealFlowDestination] = []
     @State private var isResolvingMeal = false
+    @State private var reviewContext: MealReviewContext?
     #if canImport(UIKit)
     @State private var mealPhoto: UIImage?
     @State private var showingCamera = false
@@ -1012,6 +1013,36 @@ struct MealSheet: View {
         .onAppear {
             store.markLaunchScreenDismissed()
             store.ensureBundledFoodItemsSeeded()
+        }
+        .sheet(item: $reviewContext) { context in
+            MealReviewSheet(
+                resolution: context.resolution,
+                store: store,
+                onConfirm: { reviewedMeals in
+                    // User reviewed it: commit their version, never re-queue an AI retry over it.
+                    let committed = store.commitResolution(
+                        MealResolution(
+                            meals: reviewedMeals,
+                            createdRecipes: context.resolution.createdRecipes,
+                            confidence: context.resolution.confidence,
+                            isFallback: false
+                        )
+                    )
+                    #if canImport(UIKit)
+                    attachPhoto(context.photo, to: committed)
+                    #endif
+                    reviewContext = nil
+                    onLogged(committed)
+                    dismiss()
+                },
+                onDiscard: {
+                    // Leave the log sheet open with the original text so the user can adjust and retry.
+                    reviewContext = nil
+                }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
         }
         #if canImport(UIKit)
         .fullScreenCover(isPresented: $showingCamera) {
@@ -1118,18 +1149,21 @@ struct MealSheet: View {
                 }
                 isResolvingMeal = true
                 Task {
-                    let meals = await store.addResolvedMeals(from: mealDescription, type: selectedMealType)
-                    #if canImport(UIKit)
-                    if let photo = capturedPhoto, let photoID = store.saveMealPhoto(photo) {
-                        for meal in meals {
-                            store.attachMealPhoto(mealID: meal.id, photoID: photoID)
-                        }
-                    }
-                    #endif
+                    let resolution = await store.resolveMeals(from: mealDescription, type: selectedMealType)
                     isResolvingMeal = false
-                    if meals.contains(where: \.isAIFallback) {
-                        notice = FernletVoice.message(for: .mealAnalysisFailed)
+                    if resolution.needsReview {
+                        // Pause for a pre-log review instead of silently committing a low-confidence guess.
+                        #if canImport(UIKit)
+                        reviewContext = MealReviewContext(resolution: resolution, photo: capturedPhoto)
+                        #else
+                        reviewContext = MealReviewContext(resolution: resolution)
+                        #endif
+                        return
                     }
+                    let meals = store.commitResolution(resolution)
+                    #if canImport(UIKit)
+                    attachPhoto(capturedPhoto, to: meals)
+                    #endif
                     onLogged(meals)
                     dismiss()
                 }
@@ -1137,6 +1171,23 @@ struct MealSheet: View {
         }
         .background(Color.parchment)
     }
+
+    struct MealReviewContext: Identifiable {
+        let id = UUID()
+        let resolution: MealResolution
+        #if canImport(UIKit)
+        var photo: UIImage?
+        #endif
+    }
+
+    #if canImport(UIKit)
+    private func attachPhoto(_ photo: UIImage?, to meals: [Meal]) {
+        guard let photo, let photoID = store.saveMealPhoto(photo) else { return }
+        for meal in meals {
+            store.attachMealPhoto(mealID: meal.id, photoID: photoID)
+        }
+    }
+    #endif
 
     private var webNutritionLookupDisabledMessage: String {
         store.settings.aiStatus == .off
@@ -1571,7 +1622,7 @@ struct MealRow: View {
     }
 }
 
-private struct MealComponentCorrectionInput: Identifiable {
+struct MealComponentCorrectionInput: Identifiable {
     let id: UUID
     let foodItemId: UUID?
     let name: String
@@ -1652,50 +1703,11 @@ struct MealCorrectionSheet: View {
 
                     if components.isEmpty {
                         SheetField("Macros") {
-                            VStack(spacing: 10) {
-                                MacroInputRow(label: "Protein", unit: "g", value: $protein, range: 0...300)
-                                MacroInputRow(label: "Carbs", unit: "g", value: $carbs, range: 0...500)
-                                MacroInputRow(label: "Fat", unit: "g", value: $fat, range: 0...300)
-                            }
-                            .padding(14)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                            MealMacroEditorRows(protein: $protein, carbs: $carbs, fat: $fat)
                         }
                     } else {
                         SheetField("Matched items") {
-                            VStack(alignment: .leading, spacing: 12) {
-                                ForEach($components) { $component in
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        HStack(alignment: .firstTextBaseline) {
-                                            Text(component.name)
-                                                .font(.subheadline.weight(.semibold))
-                                                .foregroundStyle(Color.bark)
-                                            Spacer()
-                                            Text("\(component.quantity.formatted(.number.precision(.fractionLength(0...1)))) \(component.unit)")
-                                                .font(.caption.weight(.semibold))
-                                                .foregroundStyle(Color.moss)
-                                        }
-                                        Stepper("", value: $component.quantity, in: 0...2000, step: component.unit == RecipeUnit.gram.rawValue ? 5 : 0.25)
-                                            .labelsHidden()
-                                        let macros = component.snapshot.macros
-                                        Text("P \(macros.protein)g  C \(macros.carbs)g  F \(macros.fat)g")
-                                            .font(.caption)
-                                            .foregroundStyle(Color.slate)
-                                    }
-                                    .padding(12)
-                                    .background(Color.parchment.opacity(0.7), in: RoundedRectangle(cornerRadius: 10))
-                                }
-
-                                HStack(spacing: 14) {
-                                    Text("P \(componentMacros.protein)g").foregroundStyle(Color.moss)
-                                    Text("C \(componentMacros.carbs)g")
-                                    Text("F \(componentMacros.fat)g")
-                                    Spacer(minLength: 0)
-                                }
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Color.slate)
-                            }
-                            .padding(14)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                            MealComponentEditorRows(components: $components)
                         }
                     }
                 }
@@ -1720,6 +1732,219 @@ struct MealCorrectionSheet: View {
     private var componentMacros: Macros {
         let totals = MealBuilder.totals(for: components.map(\.snapshot))
         return Macros(protein: totals.macros.protein, carbs: totals.macros.carbs, fat: totals.macros.fat)
+    }
+}
+
+// MARK: - Shared meal editor rows (used by correction + pre-log review)
+
+struct MealMacroEditorRows: View {
+    @Binding var protein: Int
+    @Binding var carbs: Int
+    @Binding var fat: Int
+
+    var body: some View {
+        VStack(spacing: 10) {
+            MacroInputRow(label: "Protein", unit: "g", value: $protein, range: 0...300)
+            MacroInputRow(label: "Carbs", unit: "g", value: $carbs, range: 0...500)
+            MacroInputRow(label: "Fat", unit: "g", value: $fat, range: 0...300)
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct MealComponentEditorRows: View {
+    @Binding var components: [MealComponentCorrectionInput]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach($components) { $component in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(component.name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.bark)
+                        Spacer()
+                        Text("\(component.quantity.formatted(.number.precision(.fractionLength(0...1)))) \(component.unit)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.moss)
+                    }
+                    Stepper("", value: $component.quantity, in: 0...2000, step: component.unit == RecipeUnit.gram.rawValue ? 5 : 0.25)
+                        .labelsHidden()
+                    let macros = component.snapshot.macros
+                    Text("P \(macros.protein)g  C \(macros.carbs)g  F \(macros.fat)g")
+                        .font(.caption)
+                        .foregroundStyle(Color.slate)
+                }
+                .padding(12)
+                .background(Color.parchment.opacity(0.7), in: RoundedRectangle(cornerRadius: 10))
+            }
+
+            HStack(spacing: 14) {
+                Text("P \(componentMacros.protein)g").foregroundStyle(Color.moss)
+                Text("C \(componentMacros.carbs)g")
+                Text("F \(componentMacros.fat)g")
+                Spacer(minLength: 0)
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Color.slate)
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var componentMacros: Macros {
+        let totals = MealBuilder.totals(for: components.map(\.snapshot))
+        return Macros(protein: totals.macros.protein, carbs: totals.macros.carbs, fat: totals.macros.fat)
+    }
+}
+
+// MARK: - Pre-log review (low-confidence / fabricated resolutions)
+
+private struct EditableReviewMeal: Identifiable {
+    let id: UUID
+    var name: String
+    var mealType: MealType
+    var components: [MealComponentCorrectionInput]
+    var protein: Int
+    var carbs: Int
+    var fat: Int
+    let base: Meal
+
+    nonisolated init(base: Meal) {
+        id = base.id
+        name = base.name
+        mealType = base.mealType
+        components = base.componentSnapshots.map(MealComponentCorrectionInput.init(snapshot:))
+        protein = base.macros.protein
+        carbs = base.macros.carbs
+        fat = base.macros.fat
+        self.base = base
+    }
+
+    /// The meal the user is choosing to log, with their edits applied and marked as reviewed.
+    var applied: Meal {
+        var meal = base
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        meal.name = trimmed.isEmpty ? base.name : trimmed
+        meal.mealType = mealType
+        if components.isEmpty {
+            let macros = Macros(protein: protein, carbs: carbs, fat: fat)
+            meal.macros = macros
+            meal.macroSnapshot = macros
+            meal.calorieSnapshot = macros.calories
+            meal.micronutrientSnapshot = Micronutrients()
+        } else {
+            let snapshots = components.map(\.snapshot)
+            var totalProtein = 0, totalCarbs = 0, totalFat = 0
+            var micronutrients = Micronutrients()
+            for snapshot in snapshots {
+                totalProtein += snapshot.macros.protein
+                totalCarbs += snapshot.macros.carbs
+                totalFat += snapshot.macros.fat
+                micronutrients.add(snapshot.micronutrients)
+            }
+            let macros = Macros(protein: totalProtein, carbs: totalCarbs, fat: totalFat)
+            meal.componentSnapshots = snapshots
+            meal.macros = macros
+            meal.macroSnapshot = macros
+            meal.calorieSnapshot = macros.calories
+            meal.micronutrientSnapshot = micronutrients
+        }
+        meal.isAIFallback = false
+        meal.confidence = "Reviewed"
+        meal.quality = meal.macros.protein >= 25 ? .good : .ok // mirrors MealBuilder.goodProteinThreshold
+        return meal
+    }
+}
+
+struct MealReviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var store: FernletStore
+    private let confidence: MealResolutionConfidence
+    var onConfirm: ([Meal]) -> Void
+    var onDiscard: () -> Void
+    @State private var meals: [EditableReviewMeal]
+
+    init(
+        resolution: MealResolution,
+        store: FernletStore,
+        onConfirm: @escaping ([Meal]) -> Void,
+        onDiscard: @escaping () -> Void
+    ) {
+        self.store = store
+        self.confidence = resolution.confidence
+        self.onConfirm = onConfirm
+        self.onDiscard = onDiscard
+        _meals = State(initialValue: resolution.meals.map(EditableReviewMeal.init(base:)))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Check this meal")
+                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .foregroundStyle(Color.bark)
+                        Spacer()
+                        Button("Discard", action: onDiscard)
+                            .buttonStyle(.plain)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.slate)
+                    }
+
+                    Text(reviewMessage)
+                        .font(.caption.italic())
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+
+                    ForEach($meals) { $meal in
+                        VStack(alignment: .leading, spacing: 14) {
+                            SheetField("Meal name") {
+                                TextField("Meal", text: $meal.name)
+                                    .sheetTextInput()
+                            }
+
+                            SheetField("Meal type") {
+                                FlowLayout(spacing: 8) {
+                                    ForEach(MealType.allCases) { type in
+                                        Button(type.rawValue) { $meal.mealType.wrappedValue = type }
+                                            .buttonStyle(ChipButtonStyle(selected: meal.mealType == type))
+                                    }
+                                }
+                            }
+
+                            if meal.components.isEmpty {
+                                SheetField("Macros") {
+                                    MealMacroEditorRows(protein: $meal.protein, carbs: $meal.carbs, fat: $meal.fat)
+                                }
+                            } else {
+                                SheetField("Matched items") {
+                                    MealComponentEditorRows(components: $meal.components)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(20)
+                .padding(.bottom, 10)
+            }
+
+            SheetSaveBar(label: "Log meal", disabled: false) {
+                onConfirm(meals.map(\.applied))
+            }
+        }
+        .background(Color.parchment)
+    }
+
+    private var reviewMessage: String {
+        switch confidence {
+        case .low:
+            return "Fernlet wasn't sure this matched what you ate, so it's a rough estimate. Adjust anything that looks off, then log it."
+        default:
+            return "Double-check the items below before logging."
+        }
     }
 }
 

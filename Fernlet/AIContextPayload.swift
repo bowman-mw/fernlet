@@ -98,6 +98,20 @@ struct CompanionThoughtPayload: AIContextPayload {
     }
 }
 
+// MARK: - Workout adjustment payload
+
+/// Fields allowed for on-device workout-session adjustment.
+/// Forbidden: journal text, period data, health metrics, narratives. Only the session's exercise
+/// names, the user's free-text request, and how many catalog candidates were offered are sent.
+struct WorkoutAdjustmentPayload: AIContextPayload {
+    let payloadKind = "workout-adjustment"
+    let request: String
+    let currentExercises: [String]
+    let candidateCount: Int
+
+    var includedFieldNames: [String] { ["request", "currentExercises", "candidateCount"] }
+}
+
 // MARK: - Web page extraction payloads
 
 /// Fields allowed for on-device nutrition extraction from a product webpage.

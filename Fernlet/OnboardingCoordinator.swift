@@ -108,6 +108,11 @@ final class OnboardingCoordinatorModel {
             interests: goalPlanningInterests,
             constraints: goalPlanningConstraints
         ))
+        store.setWorkoutProfile(WorkoutProfile.fromOnboarding(
+            level: goalPlanningLevel,
+            interests: goalPlanningInterests,
+            constraints: goalPlanningConstraints
+        ))
         let name = proximityDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !name.isEmpty { store.setProximityDisplayName(name) }
         let trimmedStarterName = starterName.trimmingCharacters(in: .whitespacesAndNewlines)

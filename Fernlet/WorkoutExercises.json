@@ -1,59 +1,1139 @@
 [
-  { "name": "Bench press", "primaryMuscles": ["chest"], "secondaryMuscles": ["triceps", "frontDelts"], "equipment": "barbell", "movementPattern": "push", "inputKind": "strength" },
-  { "name": "Incline bench press", "primaryMuscles": ["chest"], "secondaryMuscles": ["frontDelts", "triceps"], "equipment": "barbell", "movementPattern": "push", "inputKind": "strength" },
-  { "name": "Overhead press", "primaryMuscles": ["frontDelts", "sideDelts"], "secondaryMuscles": ["triceps", "traps"], "equipment": "barbell", "movementPattern": "push", "inputKind": "strength" },
-  { "name": "Dumbbell bench press", "primaryMuscles": ["chest"], "secondaryMuscles": ["triceps", "frontDelts"], "equipment": "dumbbell", "movementPattern": "push", "inputKind": "strength" },
-  { "name": "Push-up", "primaryMuscles": ["chest"], "secondaryMuscles": ["triceps", "frontDelts", "abs"], "equipment": "bodyweight", "movementPattern": "push", "inputKind": "strength" },
-  { "name": "Dip", "primaryMuscles": ["triceps", "chest"], "secondaryMuscles": ["frontDelts"], "equipment": "bodyweight", "movementPattern": "push", "inputKind": "strength" },
-  { "name": "Cable fly", "primaryMuscles": ["chest"], "secondaryMuscles": ["frontDelts"], "equipment": "cable", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Lateral raise", "primaryMuscles": ["sideDelts"], "secondaryMuscles": ["traps"], "equipment": "dumbbell", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Front raise", "primaryMuscles": ["frontDelts"], "secondaryMuscles": [], "equipment": "dumbbell", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Triceps pushdown", "primaryMuscles": ["triceps"], "secondaryMuscles": [], "equipment": "cable", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Skullcrusher", "primaryMuscles": ["triceps"], "secondaryMuscles": [], "equipment": "barbell", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Close-grip bench", "primaryMuscles": ["triceps"], "secondaryMuscles": ["chest", "frontDelts"], "equipment": "barbell", "movementPattern": "push", "inputKind": "strength" },
-  { "name": "Pull-up", "primaryMuscles": ["lats", "upperBack"], "secondaryMuscles": ["biceps", "forearms"], "equipment": "bodyweight", "movementPattern": "pull", "inputKind": "strength" },
-  { "name": "Chin-up", "primaryMuscles": ["lats", "biceps"], "secondaryMuscles": ["upperBack", "forearms"], "equipment": "bodyweight", "movementPattern": "pull", "inputKind": "strength" },
-  { "name": "Lat pulldown", "primaryMuscles": ["lats"], "secondaryMuscles": ["biceps", "upperBack"], "equipment": "cable", "movementPattern": "pull", "inputKind": "strength" },
-  { "name": "Barbell row", "primaryMuscles": ["upperBack", "lats"], "secondaryMuscles": ["biceps", "rearDelts"], "equipment": "barbell", "movementPattern": "pull", "inputKind": "strength" },
-  { "name": "Dumbbell row", "primaryMuscles": ["lats", "upperBack"], "secondaryMuscles": ["biceps", "rearDelts"], "equipment": "dumbbell", "movementPattern": "pull", "inputKind": "strength" },
-  { "name": "Cable row", "primaryMuscles": ["upperBack", "lats"], "secondaryMuscles": ["biceps", "rearDelts"], "equipment": "cable", "movementPattern": "pull", "inputKind": "strength" },
-  { "name": "Face pull", "primaryMuscles": ["rearDelts", "upperBack"], "secondaryMuscles": ["traps"], "equipment": "cable", "movementPattern": "pull", "inputKind": "strength" },
-  { "name": "Biceps curl", "primaryMuscles": ["biceps"], "secondaryMuscles": ["forearms"], "equipment": "dumbbell", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Hammer curl", "primaryMuscles": ["biceps", "forearms"], "secondaryMuscles": [], "equipment": "dumbbell", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Preacher curl", "primaryMuscles": ["biceps"], "secondaryMuscles": ["forearms"], "equipment": "machine", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Rear delt fly", "primaryMuscles": ["rearDelts"], "secondaryMuscles": ["upperBack"], "equipment": "dumbbell", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Shrug", "primaryMuscles": ["traps"], "secondaryMuscles": ["forearms"], "equipment": "dumbbell", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Back squat", "primaryMuscles": ["quads", "glutes"], "secondaryMuscles": ["hamstrings", "abs"], "equipment": "barbell", "movementPattern": "squat", "inputKind": "strength" },
-  { "name": "Front squat", "primaryMuscles": ["quads"], "secondaryMuscles": ["glutes", "abs", "upperBack"], "equipment": "barbell", "movementPattern": "squat", "inputKind": "strength" },
-  { "name": "Goblet squat", "primaryMuscles": ["quads", "glutes"], "secondaryMuscles": ["abs"], "equipment": "kettlebell", "movementPattern": "squat", "inputKind": "strength" },
-  { "name": "Leg press", "primaryMuscles": ["quads", "glutes"], "secondaryMuscles": ["hamstrings"], "equipment": "machine", "movementPattern": "squat", "inputKind": "strength" },
-  { "name": "Hack squat", "primaryMuscles": ["quads"], "secondaryMuscles": ["glutes", "hamstrings"], "equipment": "machine", "movementPattern": "squat", "inputKind": "strength" },
-  { "name": "Bulgarian split squat", "primaryMuscles": ["quads", "glutes"], "secondaryMuscles": ["hamstrings", "adductors"], "equipment": "dumbbell", "movementPattern": "lunge", "inputKind": "strength" },
-  { "name": "Lunge", "primaryMuscles": ["quads", "glutes"], "secondaryMuscles": ["hamstrings", "adductors"], "equipment": "dumbbell", "movementPattern": "lunge", "inputKind": "strength" },
-  { "name": "Step-up", "primaryMuscles": ["quads", "glutes"], "secondaryMuscles": ["hamstrings", "calves"], "equipment": "bench", "movementPattern": "lunge", "inputKind": "strength" },
-  { "name": "Leg extension", "primaryMuscles": ["quads"], "secondaryMuscles": [], "equipment": "machine", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Deadlift", "primaryMuscles": ["hamstrings", "glutes"], "secondaryMuscles": ["lowerBack", "upperBack", "forearms"], "equipment": "barbell", "movementPattern": "hinge", "inputKind": "strength" },
-  { "name": "Romanian deadlift", "primaryMuscles": ["hamstrings", "glutes"], "secondaryMuscles": ["lowerBack", "forearms"], "equipment": "barbell", "movementPattern": "hinge", "inputKind": "strength" },
-  { "name": "Hip thrust", "primaryMuscles": ["glutes"], "secondaryMuscles": ["hamstrings", "quads"], "equipment": "barbell", "movementPattern": "hinge", "inputKind": "strength" },
-  { "name": "Glute bridge", "primaryMuscles": ["glutes"], "secondaryMuscles": ["hamstrings", "abs"], "equipment": "bodyweight", "movementPattern": "hinge", "inputKind": "strength" },
-  { "name": "Good morning", "primaryMuscles": ["hamstrings", "glutes"], "secondaryMuscles": ["lowerBack"], "equipment": "barbell", "movementPattern": "hinge", "inputKind": "strength" },
-  { "name": "Hyperextension", "primaryMuscles": ["lowerBack", "glutes"], "secondaryMuscles": ["hamstrings"], "equipment": "bench", "movementPattern": "hinge", "inputKind": "strength" },
-  { "name": "Leg curl", "primaryMuscles": ["hamstrings"], "secondaryMuscles": ["calves"], "equipment": "machine", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Plank", "primaryMuscles": ["abs"], "secondaryMuscles": ["obliques", "glutes"], "equipment": "bodyweight", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Side plank", "primaryMuscles": ["obliques"], "secondaryMuscles": ["abs", "glutes"], "equipment": "bodyweight", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Hanging leg raise", "primaryMuscles": ["abs"], "secondaryMuscles": ["obliques", "forearms"], "equipment": "bodyweight", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Ab wheel", "primaryMuscles": ["abs"], "secondaryMuscles": ["obliques", "lats"], "equipment": "none", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Cable crunch", "primaryMuscles": ["abs"], "secondaryMuscles": ["obliques"], "equipment": "cable", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Russian twist", "primaryMuscles": ["obliques"], "secondaryMuscles": ["abs"], "equipment": "bodyweight", "movementPattern": "twist", "inputKind": "strength" },
-  { "name": "Pallof press", "primaryMuscles": ["obliques", "abs"], "secondaryMuscles": ["chest"], "equipment": "cable", "movementPattern": "twist", "inputKind": "strength" },
-  { "name": "Standing calf raise", "primaryMuscles": ["calves"], "secondaryMuscles": [], "equipment": "machine", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Seated calf raise", "primaryMuscles": ["calves"], "secondaryMuscles": [], "equipment": "machine", "movementPattern": "isolation", "inputKind": "strength" },
-  { "name": "Treadmill walk", "primaryMuscles": ["quads", "calves"], "secondaryMuscles": ["hamstrings", "glutes"], "equipment": "cardio", "movementPattern": "locomotion", "inputKind": "treadmill" },
-  { "name": "Treadmill run", "primaryMuscles": ["quads", "calves"], "secondaryMuscles": ["hamstrings", "glutes"], "equipment": "cardio", "movementPattern": "locomotion", "inputKind": "treadmill" },
-  { "name": "Burpee", "primaryMuscles": ["fullBody"], "secondaryMuscles": ["chest", "quads", "abs"], "equipment": "bodyweight", "movementPattern": "locomotion", "inputKind": "strength" },
-  { "name": "Kettlebell swing", "primaryMuscles": ["glutes", "hamstrings"], "secondaryMuscles": ["abs", "forearms"], "equipment": "kettlebell", "movementPattern": "hinge", "inputKind": "strength" },
-  { "name": "Clean", "primaryMuscles": ["fullBody"], "secondaryMuscles": ["traps", "glutes", "quads"], "equipment": "barbell", "movementPattern": "hinge", "inputKind": "strength" },
-  { "name": "Snatch", "primaryMuscles": ["fullBody"], "secondaryMuscles": ["traps", "glutes", "sideDelts"], "equipment": "barbell", "movementPattern": "hinge", "inputKind": "strength" },
-  { "name": "Thruster", "primaryMuscles": ["fullBody"], "secondaryMuscles": ["quads", "glutes", "frontDelts"], "equipment": "barbell", "movementPattern": "push", "inputKind": "strength" },
-  { "name": "Turkish get-up", "primaryMuscles": ["fullBody"], "secondaryMuscles": ["abs", "sideDelts", "glutes"], "equipment": "kettlebell", "movementPattern": "carry", "inputKind": "strength" }
+  {
+    "name": "Bench press",
+    "primaryMuscles": [
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "frontDelts"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Incline bench press",
+    "primaryMuscles": [
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "frontDelts",
+      "triceps"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Overhead press",
+    "primaryMuscles": [
+      "frontDelts",
+      "sideDelts"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "traps"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Dumbbell bench press",
+    "primaryMuscles": [
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "frontDelts"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Push-up",
+    "primaryMuscles": [
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "frontDelts",
+      "abs"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Dip",
+    "primaryMuscles": [
+      "triceps",
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "frontDelts"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Cable fly",
+    "primaryMuscles": [
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "frontDelts"
+    ],
+    "equipment": "cable",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Lateral raise",
+    "primaryMuscles": [
+      "sideDelts"
+    ],
+    "secondaryMuscles": [
+      "traps"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Front raise",
+    "primaryMuscles": [
+      "frontDelts"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "dumbbell",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Triceps pushdown",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "cable",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Skullcrusher",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "barbell",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Close-grip bench",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [
+      "chest",
+      "frontDelts"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Pull-up",
+    "primaryMuscles": [
+      "lats",
+      "upperBack"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "forearms"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "pull",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Chin-up",
+    "primaryMuscles": [
+      "lats",
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "upperBack",
+      "forearms"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "pull",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Lat pulldown",
+    "primaryMuscles": [
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "upperBack"
+    ],
+    "equipment": "cable",
+    "movementPattern": "pull",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Barbell row",
+    "primaryMuscles": [
+      "upperBack",
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "rearDelts"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "pull",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Dumbbell row",
+    "primaryMuscles": [
+      "lats",
+      "upperBack"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "rearDelts"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "pull",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Cable row",
+    "primaryMuscles": [
+      "upperBack",
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "rearDelts"
+    ],
+    "equipment": "cable",
+    "movementPattern": "pull",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Face pull",
+    "primaryMuscles": [
+      "rearDelts",
+      "upperBack"
+    ],
+    "secondaryMuscles": [
+      "traps"
+    ],
+    "equipment": "cable",
+    "movementPattern": "pull",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Biceps curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "forearms"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Hammer curl",
+    "primaryMuscles": [
+      "biceps",
+      "forearms"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "dumbbell",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Preacher curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "forearms"
+    ],
+    "equipment": "machine",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Rear delt fly",
+    "primaryMuscles": [
+      "rearDelts"
+    ],
+    "secondaryMuscles": [
+      "upperBack"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Shrug",
+    "primaryMuscles": [
+      "traps"
+    ],
+    "secondaryMuscles": [
+      "forearms"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Back squat",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "abs"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "squat",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Front squat",
+    "primaryMuscles": [
+      "quads"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "abs",
+      "upperBack"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "squat",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Goblet squat",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "abs"
+    ],
+    "equipment": "kettlebell",
+    "movementPattern": "squat",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Leg press",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "equipment": "machine",
+    "movementPattern": "squat",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Hack squat",
+    "primaryMuscles": [
+      "quads"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "equipment": "machine",
+    "movementPattern": "squat",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Bulgarian split squat",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "adductors"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "lunge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Lunge",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "adductors"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "lunge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Step-up",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "calves"
+    ],
+    "equipment": "bench",
+    "movementPattern": "lunge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Leg extension",
+    "primaryMuscles": [
+      "quads"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "machine",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Deadlift",
+    "primaryMuscles": [
+      "hamstrings",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "lowerBack",
+      "upperBack",
+      "forearms"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Romanian deadlift",
+    "primaryMuscles": [
+      "hamstrings",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "lowerBack",
+      "forearms"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Hip thrust",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "quads"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Glute bridge",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "abs"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Good morning",
+    "primaryMuscles": [
+      "hamstrings",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "lowerBack"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Hyperextension",
+    "primaryMuscles": [
+      "lowerBack",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "equipment": "bench",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Leg curl",
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "secondaryMuscles": [
+      "calves"
+    ],
+    "equipment": "machine",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Plank",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [
+      "obliques",
+      "glutes"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Side plank",
+    "primaryMuscles": [
+      "obliques"
+    ],
+    "secondaryMuscles": [
+      "abs",
+      "glutes"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Hanging leg raise",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [
+      "obliques",
+      "forearms"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Ab wheel",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [
+      "obliques",
+      "lats"
+    ],
+    "equipment": "none",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Cable crunch",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [
+      "obliques"
+    ],
+    "equipment": "cable",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Russian twist",
+    "primaryMuscles": [
+      "obliques"
+    ],
+    "secondaryMuscles": [
+      "abs"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "twist",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Pallof press",
+    "primaryMuscles": [
+      "obliques",
+      "abs"
+    ],
+    "secondaryMuscles": [
+      "chest"
+    ],
+    "equipment": "cable",
+    "movementPattern": "twist",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Standing calf raise",
+    "primaryMuscles": [
+      "calves"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "machine",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Seated calf raise",
+    "primaryMuscles": [
+      "calves"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "machine",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Treadmill walk",
+    "primaryMuscles": [
+      "quads",
+      "calves"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "glutes"
+    ],
+    "equipment": "cardio",
+    "movementPattern": "locomotion",
+    "inputKind": "treadmill"
+  },
+  {
+    "name": "Treadmill run",
+    "primaryMuscles": [
+      "quads",
+      "calves"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "glutes"
+    ],
+    "equipment": "cardio",
+    "movementPattern": "locomotion",
+    "inputKind": "treadmill"
+  },
+  {
+    "name": "Burpee",
+    "primaryMuscles": [
+      "fullBody"
+    ],
+    "secondaryMuscles": [
+      "chest",
+      "quads",
+      "abs"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "locomotion",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Kettlebell swing",
+    "primaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "secondaryMuscles": [
+      "abs",
+      "forearms"
+    ],
+    "equipment": "kettlebell",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Clean",
+    "primaryMuscles": [
+      "fullBody"
+    ],
+    "secondaryMuscles": [
+      "traps",
+      "glutes",
+      "quads"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Snatch",
+    "primaryMuscles": [
+      "fullBody"
+    ],
+    "secondaryMuscles": [
+      "traps",
+      "glutes",
+      "sideDelts"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Thruster",
+    "primaryMuscles": [
+      "fullBody"
+    ],
+    "secondaryMuscles": [
+      "quads",
+      "glutes",
+      "frontDelts"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Turkish get-up",
+    "primaryMuscles": [
+      "fullBody"
+    ],
+    "secondaryMuscles": [
+      "abs",
+      "sideDelts",
+      "glutes"
+    ],
+    "equipment": "kettlebell",
+    "movementPattern": "carry",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Bodyweight squat",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "squat",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Reverse lunge",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "lunge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Pike push-up",
+    "primaryMuscles": [
+      "frontDelts",
+      "sideDelts"
+    ],
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Inverted row",
+    "primaryMuscles": [
+      "upperBack",
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "biceps"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "pull",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Calf raise",
+    "primaryMuscles": [
+      "calves"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Hollow hold",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Nordic curl",
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Single-leg glute bridge",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Bird dog",
+    "primaryMuscles": [
+      "lowerBack",
+      "abs"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Superman",
+    "primaryMuscles": [
+      "lowerBack"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Mountain climber",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [
+      "quads"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "locomotion",
+    "inputKind": "none"
+  },
+  {
+    "name": "Band chest press",
+    "primaryMuscles": [
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "frontDelts"
+    ],
+    "equipment": "band",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Band overhead press",
+    "primaryMuscles": [
+      "frontDelts",
+      "sideDelts"
+    ],
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "equipment": "band",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Band row",
+    "primaryMuscles": [
+      "upperBack",
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "biceps"
+    ],
+    "equipment": "band",
+    "movementPattern": "pull",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Band lat pulldown",
+    "primaryMuscles": [
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "biceps"
+    ],
+    "equipment": "band",
+    "movementPattern": "pull",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Band pull-apart",
+    "primaryMuscles": [
+      "rearDelts"
+    ],
+    "secondaryMuscles": [
+      "upperBack"
+    ],
+    "equipment": "band",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Band biceps curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "band",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Band triceps pushdown",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "band",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Band lateral raise",
+    "primaryMuscles": [
+      "sideDelts"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "band",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Band good morning",
+    "primaryMuscles": [
+      "hamstrings",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "lowerBack"
+    ],
+    "equipment": "band",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Band squat",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "band",
+    "movementPattern": "squat",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Dumbbell shoulder press",
+    "primaryMuscles": [
+      "frontDelts",
+      "sideDelts"
+    ],
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Arnold press",
+    "primaryMuscles": [
+      "frontDelts",
+      "sideDelts"
+    ],
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Incline dumbbell press",
+    "primaryMuscles": [
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "frontDelts",
+      "triceps"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "push",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Dumbbell Romanian deadlift",
+    "primaryMuscles": [
+      "hamstrings",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "lowerBack"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "hinge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Dumbbell pullover",
+    "primaryMuscles": [
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "chest"
+    ],
+    "equipment": "dumbbell",
+    "movementPattern": "isolation",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Box jump",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "calves"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "squat",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Broad jump",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "squat",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Lateral bound",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "abductors"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "lunge",
+    "inputKind": "strength"
+  },
+  {
+    "name": "Jump rope",
+    "primaryMuscles": [
+      "calves"
+    ],
+    "secondaryMuscles": [
+      "quads"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "locomotion",
+    "inputKind": "none"
+  },
+  {
+    "name": "Sprint",
+    "primaryMuscles": [
+      "hamstrings",
+      "quads"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "calves"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "locomotion",
+    "inputKind": "none"
+  },
+  {
+    "name": "High knees",
+    "primaryMuscles": [
+      "quads"
+    ],
+    "secondaryMuscles": [
+      "calves"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "locomotion",
+    "inputKind": "none"
+  },
+  {
+    "name": "Medicine ball slam",
+    "primaryMuscles": [
+      "abs",
+      "obliques"
+    ],
+    "secondaryMuscles": [
+      "lats"
+    ],
+    "equipment": "none",
+    "movementPattern": "twist",
+    "inputKind": "strength"
+  }
 ]

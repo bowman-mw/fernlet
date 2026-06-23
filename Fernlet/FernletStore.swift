@@ -405,7 +405,19 @@ final class FernletStore {
         return first
     }
 
+    /// Convenience: resolve and immediately commit. Used by non-interactive callers (recipe retry
+    /// queue, programmatic logging). The interactive quick-log flow calls `resolveMeals` then either
+    /// `commitResolution` or routes low-confidence results through a pre-log review first.
     @discardableResult func addResolvedMeals(from description: String, type: MealType? = nil, date: String? = nil) async -> [Meal] {
+        let targetDate = date ?? todayKey
+        let resolution = await resolveMeals(from: description, type: type, date: targetDate)
+        return commitResolution(resolution, date: targetDate)
+    }
+
+    /// Runs the quick-log resolution cascade WITHOUT writing anything to the diary, returning the
+    /// resolved meals plus a confidence. Separating resolve from commit lets the UI review a
+    /// low-confidence / fabricated result before it counts toward the day's totals.
+    func resolveMeals(from description: String, type: MealType? = nil, date: String? = nil) async -> MealResolution {
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "meal date required")
 
@@ -413,16 +425,15 @@ final class FernletStore {
             // Primary (M1): model decomposes the dish from world knowledge, catalog supplies macros.
             do {
                 let index = FoodItemSearch.Index(foodItems: allFoodItems)
-                if let meal = try await FoundationDishDecompositionModel.decompose(
+                if let resolved = try await FoundationDishDecompositionModel.decompose(
                     MealDecompositionPayload(mealDescription: description, fallbackMealType: type),
                     index: index
                 ) {
-                    appendMeal(meal, date: targetDate)
-                    return [meal]
+                    return MealResolution(meals: [resolved.meal], createdRecipes: [], confidence: resolved.confidence, isFallback: false)
                 }
             } catch {}
 
-            // Secondary AI: candidate-constrained selection (item-count guard removed per M1).
+            // Secondary AI: candidate-constrained selection (catalog-grounded, high confidence).
             let candidates = FoodSelectionCandidateBuilder.candidates(for: description, foodItems: allFoodItems)
             do {
                 if let plan = try await FoundationFoodSelectionModel.resolve(
@@ -434,17 +445,14 @@ final class FernletStore {
                     foodItems: allFoodItems,
                     originalDescription: description
                 ), result.meals.isEmpty == false {
-                    for newRecipe in result.createdRecipes { recipes.insert(newRecipe, at: 0) }
-                    result.meals.forEach { appendMeal($0, date: targetDate) }
-                    return result.meals
+                    return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
                 }
             } catch {}
         }
 
         // Deterministic tier 1 (M2): dish template lexicon — handles composite dishes when AI is off.
         if let lexiconMeals = DishTemplateLexicon.resolve(description: description, mealType: type, foodItems: allFoodItems) {
-            lexiconMeals.forEach { appendMeal($0, date: targetDate) }
-            return lexiconMeals
+            return MealResolution(meals: lexiconMeals, createdRecipes: [], confidence: .high, isFallback: false)
         }
 
         // Deterministic tier 2: candidate-constrained plan.
@@ -457,13 +465,25 @@ final class FernletStore {
             foodItems: allFoodItems,
             originalDescription: description
            ), result.meals.isEmpty == false {
-            for newRecipe in result.createdRecipes { recipes.insert(newRecipe, at: 0) }
-            result.meals.forEach { appendMeal($0, date: targetDate) }
-            return result.meals
+            return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
         }
-        let fallback = addMeal(from: description, type: type, date: targetDate)
-        queueMealRetry(fallback)
-        return [fallback]
+
+        // Keyword-heuristic fallback: fabricated macros, no catalog grounding — always reviewed.
+        let fallback = MealParser.parse(description, fallbackType: type)
+        return MealResolution(meals: [fallback], createdRecipes: [], confidence: .low, isFallback: true)
+    }
+
+    /// Commits a resolved meal set to the diary: registers any created recipes, appends each meal,
+    /// and queues a background AI retry for fabricated fallback meals.
+    @discardableResult func commitResolution(_ resolution: MealResolution, date: String? = nil) -> [Meal] {
+        let targetDate = date ?? todayKey
+        assert(!targetDate.isEmpty, "meal date required")
+        for newRecipe in resolution.createdRecipes { recipes.insert(newRecipe, at: 0) }
+        resolution.meals.forEach { appendMeal($0, date: targetDate) }
+        if resolution.isFallback {
+            resolution.meals.forEach { queueMealRetry($0) }
+        }
+        return resolution.meals
     }
 
     private func appendMeal(_ meal: Meal, date: String) {
@@ -1014,6 +1034,150 @@ final class FernletStore {
     func replaceGoals(_ newGoals: [FitnessGoal]) {
         goals = Array(newGoals.prefix(12))
         snapshotSaveCoordinator.schedule()
+    }
+
+    // MARK: - Workout profile, locations & suggestions
+
+    func setWorkoutProfile(_ profile: WorkoutProfile) {
+        batchSnapshotPersistence { settings.workoutProfile = profile }
+    }
+
+    func upsertWorkoutLocation(_ location: WorkoutLocation, makeActive: Bool = false) {
+        batchSnapshotPersistence {
+            if let index = settings.workoutLocations.firstIndex(where: { $0.id == location.id }) {
+                settings.workoutLocations[index] = location
+            } else {
+                settings.workoutLocations.append(location)
+            }
+            if makeActive { settings.activeWorkoutLocationID = location.id }
+        }
+    }
+
+    func deleteWorkoutLocation(_ id: UUID) {
+        batchSnapshotPersistence {
+            settings.workoutLocations.removeAll { $0.id == id }
+            if settings.workoutLocations.isEmpty { settings.workoutLocations = [.fullGym] }
+            if settings.activeWorkoutLocationID == id {
+                settings.activeWorkoutLocationID = settings.workoutLocations.first?.id
+            }
+        }
+    }
+
+    func setActiveWorkoutLocation(_ id: UUID) {
+        batchSnapshotPersistence { settings.activeWorkoutLocationID = id }
+    }
+
+    func setWorkoutLocations(_ locations: [WorkoutLocation], activeID: UUID?) {
+        batchSnapshotPersistence {
+            let normalized = locations.isEmpty ? [WorkoutLocation.fullGym] : locations
+            settings.workoutLocations = normalized
+            if let activeID, normalized.contains(where: { $0.id == activeID }) {
+                settings.activeWorkoutLocationID = activeID
+            } else {
+                settings.activeWorkoutLocationID = normalized.first?.id
+            }
+        }
+    }
+
+    func setSelectedSplit(_ id: String?) {
+        batchSnapshotPersistence { settings.workoutProfile.selectedSplitID = id }
+    }
+
+    /// How consistently the user has trained over the last 4 weeks — a recommendation input.
+    func workoutConsistency() -> WorkoutConsistency {
+        let history = loadDays()
+        let calendar = Calendar.current
+        let today = Date()
+        var daysWithWorkout = 0
+        for offset in 0..<28 {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            let key = FernletDate.dayKey(for: date)
+            let dayRecord = (key == todayKey) ? day : history[key]
+            if let dayRecord, dayRecord.workouts.isEmpty == false { daysWithWorkout += 1 }
+        }
+        let perWeek = Double(daysWithWorkout) / 4.0
+        if perWeek >= 3.5 { return .high }
+        if perWeek >= 1.5 { return .medium }
+        return .low
+    }
+
+    /// Splits ranked for this user (goal + activity level + consistency + preferred days).
+    func recommendedSplits() -> [TrainingSplit] {
+        WorkoutSplitRecommender.ranked(
+            goal: settings.selectedGoal,
+            experience: settings.workoutProfile.experience,
+            consistency: workoutConsistency(),
+            activity: settings.userProfile.activityLevel,
+            preferredDays: settings.workoutProfile.trainingDaysPerWeek
+        )
+    }
+
+    /// The user's chosen split, or the top recommendation when on auto.
+    func activeWorkoutSplit() -> TrainingSplit {
+        if let id = settings.workoutProfile.selectedSplitID,
+           let chosen = WorkoutSplitCatalog.all.first(where: { $0.id == id }) {
+            return chosen
+        }
+        return recommendedSplits().first ?? WorkoutSplitCatalog.fallback
+    }
+
+    /// Builds today's session(s) from the active split, rotating by weekday so the program is
+    /// consistent week to week. Equipment + injuries are applied deterministically by the engine,
+    /// and reps/sets reflect logged progression.
+    func workoutDayPlan(intensity: WorkoutIntensity, context: String) -> WorkoutProgram.DayPlan {
+        let rotation = Calendar.current.component(.weekday, from: Date())
+        return WorkoutProgram.dayPlan(
+            goal: settings.selectedGoal,
+            intensity: intensity,
+            profile: settings.workoutProfile,
+            location: settings.activeWorkoutLocation,
+            context: context,
+            split: activeWorkoutSplit(),
+            rotationIndex: rotation,
+            progression: settings.workoutProgression
+        )
+    }
+
+    /// Records that catalog exercises were completed, advancing their week-to-week progression.
+    func recordCompletedExercises(_ names: [String]) {
+        let deduped = Array(Set(names)).filter { $0.isEmpty == false }
+        guard deduped.isEmpty == false else { return }
+        batchSnapshotPersistence {
+            for name in deduped { settings.workoutProgression[name, default: 0] += 1 }
+        }
+    }
+
+    /// Applies a natural-language adjustment to a generated day plan using on-device Foundation
+    /// Models, constrained to the equipment/injury-filtered catalog. Returns the plan unchanged when
+    /// AI is off/unavailable or the request is empty.
+    func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String, intensity: WorkoutIntensity) async -> WorkoutProgram.DayPlan {
+        let trimmed = request.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false, settings.aiStatus != .off else { return plan }
+        let location = settings.activeWorkoutLocation
+        let profile = settings.workoutProfile
+
+        var sessions = plan.sessions
+        for index in sessions.indices {
+            let session = sessions[index]
+            guard session.kind == .strength || session.kind == .fullBody || session.kind == .sport else { continue }
+            let currentNames = session.catalogExerciseNames
+            let candidates = WorkoutAdjustmentCandidateBuilder.candidates(
+                currentNames: currentNames, request: trimmed, location: location, profile: profile
+            )
+            guard candidates.isEmpty == false else { continue }
+            let payload = WorkoutAdjustmentPayload(request: trimmed, currentExercises: currentNames, candidateCount: candidates.count)
+            do {
+                if let adjusted = try await FoundationWorkoutAdjustmentModel.adjust(
+                    payload, candidates: candidates, currentLines: session.exercises.map(\.line)
+                ) {
+                    sessions[index] = WorkoutProgram.applyAdjustment(to: session, exercises: adjusted)
+                }
+            } catch {}
+        }
+        return WorkoutProgram.DayPlan(
+            splitName: plan.splitName, dayTitle: plan.dayTitle, sessions: sessions,
+            droppedSlots: plan.droppedSlots, locationName: plan.locationName
+        )
     }
 
     func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {

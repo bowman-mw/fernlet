@@ -117,6 +117,20 @@ struct FernletSettings: Codable {
     var showProximityDebugTools: Bool = false
     var allowNearbyRecipeShares: Bool = true
     var companionName: String = ""
+    var workoutProfile: WorkoutProfile = WorkoutProfile()
+    var workoutLocations: [WorkoutLocation] = [WorkoutLocation.fullGym]
+    var activeWorkoutLocationID: UUID? = nil
+    /// Times each catalog exercise has been completed from a suggested session — drives week-to-week
+    /// progression (reps/sets climb as the exercise is repeated).
+    var workoutProgression: [String: Int] = [:]
+
+    /// The location whose equipment drives workout suggestions. Falls back to the first location
+    /// (or a full gym) so this is always non-nil.
+    var activeWorkoutLocation: WorkoutLocation {
+        workoutLocations.first(where: { $0.id == activeWorkoutLocationID })
+            ?? workoutLocations.first
+            ?? .fullGym
+    }
 
     nonisolated init() {}
 
@@ -147,6 +161,11 @@ struct FernletSettings: Codable {
         showProximityDebugTools = try container.decodeIfPresent(Bool.self, forKey: .showProximityDebugTools) ?? false
         allowNearbyRecipeShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyRecipeShares) ?? true
         companionName = try container.decodeIfPresent(String.self, forKey: .companionName) ?? ""
+        workoutProfile = try container.decodeIfPresent(WorkoutProfile.self, forKey: .workoutProfile) ?? WorkoutProfile()
+        let decodedLocations = try container.decodeIfPresent([WorkoutLocation].self, forKey: .workoutLocations) ?? [WorkoutLocation.fullGym]
+        workoutLocations = decodedLocations.isEmpty ? [WorkoutLocation.fullGym] : decodedLocations
+        activeWorkoutLocationID = try container.decodeIfPresent(UUID.self, forKey: .activeWorkoutLocationID)
+        workoutProgression = try container.decodeIfPresent([String: Int].self, forKey: .workoutProgression) ?? [:]
     }
 }
 
@@ -603,6 +622,73 @@ struct Meal: Identifiable, Codable, Equatable {
     private static func calories(for macros: Macros) -> Int {
         macros.protein * 4 + macros.carbs * 4 + macros.fat * 9
     }
+}
+
+/// How much to trust a resolved meal. Drives the honest label on the meal row and whether the
+/// quick-log flow pauses for a pre-log review before committing a fabricated / low-confidence result.
+enum MealResolutionConfidence: String, Codable {
+    case high
+    case medium
+    case low
+
+    var mealLabel: String {
+        switch self {
+        case .high: "Food match"
+        case .medium: "Estimated"
+        case .low: "Rough estimate"
+        }
+    }
+
+    /// Low-confidence resolutions are routed through a pre-log review sheet instead of auto-committing.
+    var needsReview: Bool { self == .low }
+
+    var rank: Int {
+        switch self {
+        case .high: 2
+        case .medium: 1
+        case .low: 0
+        }
+    }
+
+    static func fromRank(_ rank: Int) -> MealResolutionConfidence {
+        if rank >= 2 { return .high }
+        if rank == 1 { return .medium }
+        return .low
+    }
+
+    /// One step less confident (high -> medium -> low), floored at `.low`.
+    var lowered: MealResolutionConfidence { Self.fromRank(rank - 1) }
+
+    /// The more pessimistic of two confidences.
+    static func combine(_ lhs: MealResolutionConfidence, _ rhs: MealResolutionConfidence) -> MealResolutionConfidence {
+        fromRank(min(lhs.rank, rhs.rank))
+    }
+
+    /// Parses the model's free-text confidence word; defaults to `.medium` when absent/unrecognised.
+    static func fromModelWord(_ word: String) -> MealResolutionConfidence {
+        let normalized = word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized.contains("high") { return .high }
+        if normalized.contains("low") { return .low }
+        return .medium
+    }
+}
+
+/// A meal produced by the resolver together with how much to trust it.
+struct ResolvedMeal {
+    var meal: Meal
+    var confidence: MealResolutionConfidence
+}
+
+/// The full outcome of resolving a quick-log description: the meals (not yet committed), any
+/// recipes that were created as a side effect, overall confidence, and whether the keyword-heuristic
+/// fallback was used. `needsReview` decides whether the UI pauses for a pre-log review.
+struct MealResolution {
+    var meals: [Meal]
+    var createdRecipes: [RecipeDefinition]
+    var confidence: MealResolutionConfidence
+    var isFallback: Bool
+
+    var needsReview: Bool { confidence.needsReview || isFallback }
 }
 
 struct Macros: Codable, Equatable {
@@ -1510,6 +1596,8 @@ enum NutritionTargetCalculator {
             adjusted = base * 0.88
         case .strength:
             adjusted = base * 1.08
+        case .sportsPrep:
+            adjusted = base * 1.05
         case .recovery:
             adjusted = base * 0.98
         case .wellness, .mentalHealth, .exploring:
@@ -1529,6 +1617,8 @@ enum NutritionTargetCalculator {
         switch (settings.selectedGoal, settings.nutritionPreferences.dietaryPattern) {
         case (.strength, _):
             gramsPerKilogram = 1.7
+        case (.sportsPrep, _):
+            gramsPerKilogram = 1.6
         case (.weightManagement, _):
             gramsPerKilogram = 1.5
         case (_, .higherProtein):
@@ -2594,6 +2684,7 @@ enum GoalType: String, Codable, CaseIterable, Identifiable {
     case mentalHealth
     case recovery
     case exploring
+    case sportsPrep
 
     var id: String { rawValue }
 
@@ -2605,6 +2696,7 @@ enum GoalType: String, Codable, CaseIterable, Identifiable {
         case .mentalHealth: "Mental Health"
         case .recovery: "Recovery"
         case .exploring: "Exploring"
+        case .sportsPrep: "Sports Prep"
         }
     }
 
@@ -2616,6 +2708,16 @@ enum GoalType: String, Codable, CaseIterable, Identifiable {
         case .mentalHealth: "Mood and steadiness first."
         case .recovery: "Rest, hydration, and gentle care."
         case .exploring: "Learn what feels useful."
+        case .sportsPrep: "Train for your sport."
+        }
+    }
+
+    /// Goals whose programming is built around structured training (drives stricter workout
+    /// consistency / progression vs. the gentler wellness-oriented goals).
+    var isTrainingFocused: Bool {
+        switch self {
+        case .strength, .sportsPrep, .weightManagement: true
+        case .wellness, .mentalHealth, .recovery, .exploring: false
         }
     }
 
@@ -2635,6 +2737,8 @@ enum GoalType: String, Codable, CaseIterable, Identifiable {
             self = .recovery
         case Self.exploring.rawValue, "Exploring":
             self = .exploring
+        case Self.sportsPrep.rawValue, "Sports Prep", "Sport", "Sports":
+            self = .sportsPrep
         default:
             self = .wellness
         }

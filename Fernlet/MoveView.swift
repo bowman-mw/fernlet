@@ -8,6 +8,7 @@ struct MoveView: View {
     @State private var path = NavigationPath()
     @State private var displayedWeek: Date = .now
     @State private var allDays: [String: FernletDay] = [:]
+    @State private var showingLocations = false
 
     private var hasRecentCoachInteraction: Bool {
         let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: .now) ?? .now
@@ -33,6 +34,30 @@ struct MoveView: View {
                     MoveGoalSummaryLine(store: store) {
                         activeSheet = .goals
                     }
+
+                    Button {
+                        showingLocations = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "mappin.and.ellipse")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.moss)
+                            Text("\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(Color.bark)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.82)
+                            Spacer(minLength: 8)
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.slate)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
 
                     WorkoutCalendarCard(
                         displayedWeek: $displayedWeek,
@@ -89,6 +114,12 @@ struct MoveView: View {
             }
         }
         .onAppear { allDays = store.loadDays() }
+        .sheet(isPresented: $showingLocations) {
+            WorkoutLocationSetupView(store: store)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
         .task {
             await store.refreshWorkoutsFromHealth()
             allDays = store.loadDays()
@@ -451,31 +482,72 @@ struct WorkoutSuggestionSheet: View {
     var store: FernletStore
     @State private var energy: WorkoutIntensity = .moderate
     @State private var context = ""
-    @State private var suggestion: WorkoutSuggestion?
+    @State private var dayPlan: WorkoutProgram.DayPlan?
+    @State private var showingSetup = false
+    @State private var adjustRequest = ""
+    @State private var isAdjusting = false
+
+    private var aiAdjustAvailable: Bool {
+        store.settings.aiStatus != .off && FoodSelectionAvailability.isFoundationModelAvailable
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text(suggestion == nil ? "Suggest workout" : "Suggestion")
+                    Text(dayPlan == nil ? "Suggest workout" : "Today's session")
                         .font(.system(size: 28, weight: .bold, design: .serif))
                         .foregroundStyle(Color.bark)
 
-                    if let suggestion {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(suggestion.name)
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(Color.bark)
-                            Text(suggestion.exercises)
-                                .foregroundStyle(Color.bark)
-                            Text(suggestion.notes)
-                                .font(.callout.italic())
-                                .foregroundStyle(Color.slate)
-                                .fernletWrappingText()
+                    if let dayPlan {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("\(dayPlan.splitName) · \(dayPlan.dayTitle)")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color.moss)
+                            ForEach(dayPlan.sessions) { session in
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(session.suggestion.name)
+                                        .font(.title3.weight(.semibold))
+                                        .foregroundStyle(Color.bark)
+                                    Text(session.suggestion.exercises)
+                                        .foregroundStyle(Color.bark)
+                                    Text(session.suggestion.notes)
+                                        .font(.caption.italic())
+                                        .foregroundStyle(Color.slate)
+                                        .fernletWrappingText()
+                                }
+                                .padding(16)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+                            }
+
+                            if aiAdjustAvailable {
+                                SheetField("Adjust") {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        TextField("e.g. swap the squat, 30 minutes, no barbell", text: $adjustRequest)
+                                            .sheetTextInput()
+                                            .disabled(isAdjusting)
+                                        Button {
+                                            runAdjustment()
+                                        } label: {
+                                            HStack(spacing: 8) {
+                                                if isAdjusting { ProgressView().controlSize(.small) }
+                                                Image(systemName: "wand.and.stars")
+                                                    .font(.caption.weight(.semibold))
+                                                Text(isAdjusting ? "Adjusting…" : "Adjust with AI")
+                                                    .font(.subheadline.weight(.semibold))
+                                            }
+                                            .foregroundStyle(Color.moss)
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 9)
+                                            .background(Color.moss.opacity(0.12), in: Capsule())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(isAdjusting || adjustRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                    }
+                                }
+                            }
                         }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
                     } else {
                         SheetField("How are you feeling?") {
                             FlowLayout(spacing: 8) {
@@ -493,11 +565,35 @@ struct WorkoutSuggestionSheet: View {
                         }
 
                         SheetField("Anything else?") {
-                            TextField("Context...", text: $context)
+                            TextField("e.g. sore left knee, short on time", text: $context)
                                 .sheetTextInput()
                         }
 
-                        Text(FernletVoice.message(for: .workoutSuggestionUnavailable))
+                        Button {
+                            showingSetup = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "dumbbell")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.moss)
+                                Text("Equipment & limits · \(store.settings.activeWorkoutLocation.name)")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(Color.bark)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.82)
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.slate)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+
+                        Text("Built from your \(store.settings.selectedGoal.displayName.lowercased()) split, your equipment, and anything you note here.")
                             .font(.caption.italic())
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
@@ -507,20 +603,39 @@ struct WorkoutSuggestionSheet: View {
                 .padding(.bottom, 10)
             }
 
-            if let suggestion {
-                SheetSaveBar(label: "Mark done") {
-                    store.addWorkout(suggestion.workout(intensity: energy))
+            if let dayPlan {
+                SheetSaveBar(label: dayPlan.sessions.count > 1 ? "Mark all done" : "Mark done") {
+                    for session in dayPlan.sessions {
+                        store.addWorkout(session.workout(intensity: energy))
+                        store.recordCompletedExercises(session.catalogExerciseNames)
+                    }
                     dismiss()
                 }
             } else {
                 SheetSaveBar(label: "Suggest") {
-                    self.suggestion = WorkoutSuggestionLibrary.suggestions(
-                        for: store.settings.selectedGoal, intensity: energy
-                    ).first
+                    self.dayPlan = store.workoutDayPlan(intensity: energy, context: context)
                 }
             }
         }
         .background(Color.parchment)
+        .sheet(isPresented: $showingSetup) {
+            WorkoutSetupSheet(store: store)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
+    }
+
+    private func runAdjustment() {
+        guard let plan = dayPlan, isAdjusting == false else { return }
+        let request = adjustRequest
+        isAdjusting = true
+        Task {
+            let adjusted = await store.adjustWorkoutDayPlan(plan, request: request, intensity: energy)
+            dayPlan = adjusted
+            adjustRequest = ""
+            isAdjusting = false
+        }
     }
 }
 
@@ -643,6 +758,8 @@ private extension GoalType {
             "Balanced strength, cardio, and rest days."
         case .exploring:
             "Flexible splits based on what feels useful."
+        case .sportsPrep:
+            "Sport-specific training with strength and conditioning."
         }
     }
 }

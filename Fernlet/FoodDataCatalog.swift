@@ -456,6 +456,13 @@ enum CompositeFoodLexicon {
 enum FoodItemSearch {
     static let minimumQueryLength = 3
 
+    /// Minimum score for a query to be allowed to *bind* to a catalog item. Below this the top
+    /// hit matched only via category/tags (no real name signal) and is treated as no match.
+    static let minimumBindScore = 1
+    /// At or above this score a single-item bind is considered confident (exact/prefix/substring
+    /// name hit). Between `minimumBindScore` and this, the bind is kept but flagged low-confidence.
+    static let confidentBindScore = 250
+
     struct Index {
         private var entries: [Entry]
 
@@ -477,24 +484,29 @@ enum FoodItemSearch {
         static let empty = Index(foodItems: [])
 
         fileprivate func matches(queryTokens: [String], normalizedQuery: String, limit: Int) -> [FoodItem] {
+            scoredMatches(queryTokens: queryTokens, normalizedQuery: normalizedQuery, limit: limit).map(\.foodItem)
+        }
+
+        fileprivate func scoredMatches(queryTokens: [String], normalizedQuery: String, limit: Int) -> [(foodItem: FoodItem, score: Int)] {
             let isBrandQuery = FoodBrandLexicon.queryContainsBrandToken(normalizedQuery)
-            return entries
-                .compactMap { entry -> (foodItem: FoodItem, score: Int)? in
-                    guard let score = FoodItemSearch.score(entry, queryTokens: queryTokens, normalizedQuery: normalizedQuery) else { return nil }
-                    return (entry.foodItem, score)
-                }
-                .sorted { first, second in
-                    if first.foodItem.source != second.foodItem.source {
-                        return FoodItemSearch.sourcePriority(first.foodItem.source) > FoodItemSearch.sourcePriority(second.foodItem.source)
+            return Array(
+                entries
+                    .compactMap { entry -> (foodItem: FoodItem, score: Int)? in
+                        guard let score = FoodItemSearch.score(entry, queryTokens: queryTokens, normalizedQuery: normalizedQuery) else { return nil }
+                        return (entry.foodItem, score)
                     }
-                    let firstType = FoodItemSearch.dataTypePriority(first.foodItem.dataType, brandQuery: isBrandQuery)
-                    let secondType = FoodItemSearch.dataTypePriority(second.foodItem.dataType, brandQuery: isBrandQuery)
-                    if firstType != secondType { return firstType > secondType }
-                    if first.score != second.score { return first.score > second.score }
-                    return first.foodItem.name.localizedStandardCompare(second.foodItem.name) == .orderedAscending
-                }
-                .prefix(limit)
-                .map(\.foodItem)
+                    .sorted { first, second in
+                        if first.foodItem.source != second.foodItem.source {
+                            return FoodItemSearch.sourcePriority(first.foodItem.source) > FoodItemSearch.sourcePriority(second.foodItem.source)
+                        }
+                        let firstType = FoodItemSearch.dataTypePriority(first.foodItem.dataType, brandQuery: isBrandQuery)
+                        let secondType = FoodItemSearch.dataTypePriority(second.foodItem.dataType, brandQuery: isBrandQuery)
+                        if firstType != secondType { return firstType > secondType }
+                        if first.score != second.score { return first.score > second.score }
+                        return first.foodItem.name.localizedStandardCompare(second.foodItem.name) == .orderedAscending
+                    }
+                    .prefix(limit)
+            )
         }
 
         func exactNameMatch(for normalizedName: String) -> FoodItem? {
@@ -530,6 +542,17 @@ enum FoodItemSearch {
         return index.matches(queryTokens: queryTokens, normalizedQuery: normalizedQuery, limit: limit)
     }
 
+    /// Like `results(for:in:limit:)` but returns the internal relevance score alongside each item
+    /// so callers can apply a confidence floor (e.g. drop weak binds, flag low-confidence matches).
+    static func scoredResults(for query: String, in index: Index, limit: Int = 6) -> [(item: FoodItem, score: Int)] {
+        let normalizedQuery = normalized(query)
+        guard normalizedQuery.count >= minimumQueryLength else { return [] }
+        let queryTokens = tokens(in: query)
+        guard !queryTokens.isEmpty else { return [] }
+        return index.scoredMatches(queryTokens: queryTokens, normalizedQuery: normalizedQuery, limit: limit)
+            .map { (item: $0.foodItem, score: $0.score) }
+    }
+
     nonisolated static func normalized(_ text: String) -> String {
         text
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
@@ -563,8 +586,27 @@ enum FoodItemSearch {
         }
         score -= max(name.count - normalizedQuery.count, 0) / 8
         score += preparationBias(queryTokens: queryTokens, normalizedQuery: normalizedQuery, candidateName: entry.foodItem.name)
+        score += formSpecificityBias(queryTokens: queryTokens, candidateName: entry.foodItem.name)
         return score
     }
+
+    // Penalises candidates that are a derivative/sub-part *form* of a food the user named plainly.
+    // e.g. query "egg" should resolve to whole egg, not "egg yolk", "egg white", or "egg powder";
+    // "orange" should beat "orange juice"/"orange peel". Only fires when the candidate carries a
+    // form qualifier the query did NOT ask for, so naming the part ("egg whites") keeps it neutral.
+    private static func formSpecificityBias(queryTokens: [String], candidateName: String) -> Int {
+        let querySet = Set(queryTokens)
+        let candidateTokens = Set(normalized(candidateName).split(separator: " ").map(String.init))
+        let extraneousForms = candidateTokens.intersection(formQualifierTokens).subtracting(querySet)
+        return extraneousForms.isEmpty ? 0 : -130 * extraneousForms.count
+    }
+
+    // Tokens that mark a non-default form / derivative of a base food.
+    private static let formQualifierTokens: Set<String> = [
+        "yolk", "yolks", "white", "whites", "powder", "powdered", "dried", "dehydrated",
+        "concentrate", "paste", "juice", "extract", "substitute", "imitation", "peel",
+        "skin", "skins", "flour", "flakes", "puree"
+    ]
 
     // M1a: Additive preparation bias — rewards matching preparation, penalises conflicting ones.
     // Not a hard filter: a missing fresh entry still wins over nothing.

@@ -8,10 +8,11 @@ import FoundationModels
 
 enum FoundationDishDecompositionModel {
     /// Decomposes `payload.mealDescription` into primary components using on-device Foundation Models,
-    /// resolves each component against the food catalog `index`, and returns a fully scaled `Meal`.
+    /// resolves each component against the food catalog `index`, and returns a fully scaled `Meal`
+    /// together with a confidence in how well it matches what was eaten.
     /// Returns `nil` when the model is unavailable, the result fails plausibility checks, or
     /// no components can be resolved to catalog entries.
-    static func decompose(_ payload: MealDecompositionPayload, index: FoodItemSearch.Index) async throws -> Meal? {
+    static func decompose(_ payload: MealDecompositionPayload, index: FoodItemSearch.Index) async throws -> ResolvedMeal? {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             guard FoodSelectionAvailability.isFoundationModelAvailable else { return nil }
@@ -23,14 +24,21 @@ enum FoundationDishDecompositionModel {
                 )
             }
             let instructions = """
-            You are a nutrition assistant. Break down meal descriptions into their primary edible components.
-            For each component give: the ingredient (simple name, e.g. "salmon", "sushi rice", "avocado"), \
-            the preparation state (raw, grilled, baked, fried, steamed, canned, or "none"), \
-            and your best estimate of the edible grams of that component across the whole dish as described.
+            You are a nutrition assistant. Break a meal description into the foods that were actually eaten.
+            Return each food as ONE component with: the ingredient (a simple, common name, e.g. "egg", \
+            "sushi rice", "avocado"), the preparation state (raw, grilled, baked, fried, steamed, canned, \
+            or "none"), and your best estimate of the edible grams of that food across the whole dish.
+            Treat a plainly named whole food as a SINGLE component — "2 eggs" is one "egg" component (~100 g), \
+            NOT separate yolk and white. Only split a food into parts when the person explicitly names the part.
             Include implied staples: rice in a bowl, bread in a sandwich, tortilla in a taco, beans in a burrito.
-            Honor explicit counts: "6 pieces nigiri" means roughly 6 × 35 g = 210 g across fish and rice components.
-            Keep components to 2–6 primary ingredients only. Do not include sauces, condiments, or garnishes \
-            unless they contribute meaningfully to macros (e.g. cheese, oil used for cooking).
+            Honor explicit counts, including spelled-out numbers: "two eggs" ≈ 2 × 50 g = 100 g; \
+            "6 pieces nigiri" ≈ 6 × 35 g across fish and rice.
+            Keep to 2–6 primary ingredients. Skip sauces, condiments, and garnishes unless they add meaningful \
+            macros (e.g. cheese, cooking oil).
+            Do NOT invent specific ingredients for a vague description. If the dish is generic ("a healthy bowl", \
+            "lunch", "leftovers"), return few low-confidence components or none rather than guessing a detailed recipe.
+            For each component set confidence (high/medium/low) and whether the person explicitly stated it. \
+            Set overallConfidence for how well the whole breakdown matches what was eaten.
             """
             let prompt = """
             Dish: \(payload.mealDescription)
@@ -38,7 +46,7 @@ enum FoundationDishDecompositionModel {
             """
             let session = LanguageModelSession(instructions: instructions)
             let response = try await session.respond(to: prompt, generating: FoundationDishDecomposition.self)
-            return MealDecompositionResolver.meal(from: response.content, payload: payload, index: index)
+            return MealDecompositionResolver.resolve(from: response.content, payload: payload, index: index)
         }
         #endif
         return nil
@@ -56,6 +64,8 @@ struct FoundationDishDecomposition {
     @Guide(description: "Meal type if clear from context, else 'Auto'")
     var mealType: String
     var components: [FoundationDishComponent]
+    @Guide(description: "Overall confidence the breakdown matches what was eaten: high, medium, or low")
+    var overallConfidence: String
 }
 
 @available(iOS 26.0, *)
@@ -67,6 +77,10 @@ struct FoundationDishComponent {
     var preparation: String
     @Guide(description: "Best estimate of edible grams of THIS component for the whole dish as described")
     var grams: Double
+    @Guide(description: "How sure you are this exact ingredient is in the dish: high, medium, or low")
+    var confidence: String
+    @Guide(description: "True only if the person's text explicitly named this ingredient or its amount")
+    var explicitlyStated: Bool
 }
 #endif
 
@@ -75,20 +89,35 @@ struct FoundationDishComponent {
 enum MealDecompositionResolver {
     #if canImport(FoundationModels)
     @available(iOS 26.0, *)
-    static func meal(
+    static func resolve(
         from decomposition: FoundationDishDecomposition,
         payload: MealDecompositionPayload,
         index: FoodItemSearch.Index
-    ) -> Meal? {
+    ) -> ResolvedMeal? {
         let gramBounds = DishTemplateLexicon.componentGramBounds(description: payload.mealDescription)
-        let resolvedIngredients: [(FoodSelectionIngredient, FoodItem)] = decomposition.components.compactMap { component in
+        var minBindScore = Int.max
+        var droppedComponents = 0
+        var weakComponents = 0
+
+        var resolvedIngredients: [(FoodSelectionIngredient, FoodItem)] = []
+        for component in decomposition.components {
             let ing = component.ingredient.trimmingCharacters(in: .whitespaces)
-            guard !ing.isEmpty else { return nil }
+            guard !ing.isEmpty else { continue }
             let prep = component.preparation.trimmingCharacters(in: .whitespaces)
             let query = (prep.isEmpty || prep.caseInsensitiveCompare("none") == .orderedSame)
                 ? ing
                 : "\(prep) \(ing)"
-            guard let foodItem = FoodItemSearch.results(for: query, in: index, limit: 1).first else { return nil }
+            // Bind to the best catalog hit, but drop the component when even the top match is junk
+            // (matched only via category/tags with no real name signal).
+            guard let match = FoodItemSearch.scoredResults(for: query, in: index, limit: 1).first,
+                  match.score >= FoodItemSearch.minimumBindScore else {
+                droppedComponents += 1
+                continue
+            }
+            minBindScore = min(minBindScore, match.score)
+            if match.score < FoodItemSearch.confidentBindScore { weakComponents += 1 }
+            if MealResolutionConfidence.fromModelWord(component.confidence) == .low { weakComponents += 1 }
+            let foodItem = match.item
             let boundedGrams = boundedComponentGrams(component.grams, query: query, gramBounds: gramBounds)
             let clampedGrams = max(1, min(1500, boundedGrams))
             let ingredient = FoodSelectionIngredient(
@@ -97,19 +126,30 @@ enum MealDecompositionResolver {
                 quantity: clampedGrams,
                 unit: RecipeUnit.gram.rawValue
             )
-            return (ingredient, foodItem)
+            resolvedIngredients.append((ingredient, foodItem))
         }
-        guard !resolvedIngredients.isEmpty else { return nil }
+
+        // Collapse components that bound to the same catalog item (defends against the model
+        // emitting e.g. yolk + white + whole that all resolve to one egg row).
+        let deduped = dedupedByFoodItem(resolvedIngredients)
+        guard !deduped.isEmpty else { return nil }
 
         // Sanity check: total caloric density must be plausible (0.3–9 kcal/g).
-        let totalGrams = resolvedIngredients.reduce(0.0) { $0 + $1.0.quantity }
-        let totalCalories = resolvedIngredients.reduce(0.0) { cal, pair in
+        let totalGrams = deduped.reduce(0.0) { $0 + $1.0.quantity }
+        let totalCalories = deduped.reduce(0.0) { cal, pair in
             let ri = RecipeIngredient(foodItemId: pair.1.id, quantity: pair.0.quantity, unit: pair.0.unit)
             let m = ri.scaledMacros(using: pair.1)
             return cal + Double(m.protein * 4 + m.carbs * 4 + m.fat * 9)
         }
         let caloriesPerGram = totalCalories / max(totalGrams, 1)
         guard caloriesPerGram >= 0.3 && caloriesPerGram <= 9 else { return nil }
+
+        let confidence = resolutionConfidence(
+            model: decomposition.overallConfidence,
+            minBindScore: minBindScore == Int.max ? 0 : minBindScore,
+            droppedComponents: droppedComponents,
+            weakComponents: weakComponents
+        )
 
         let dishName = decomposition.name.trimmingCharacters(in: .whitespaces).isEmpty
             ? MealParser.mealName(from: payload.mealDescription)
@@ -118,12 +158,54 @@ enum MealDecompositionResolver {
             ?? payload.fallbackMealType
             ?? MealParser.classifyMealType(payload.mealDescription)
 
-        return MealBuilder.mealFromIngredients(
+        let meal = MealBuilder.mealFromIngredients(
             itemName: dishName,
-            resolvedIngredients: resolvedIngredients,
-            mealType: mealType
+            resolvedIngredients: deduped,
+            mealType: mealType,
+            confidenceLabel: confidence.mealLabel
         )
+        return ResolvedMeal(meal: meal, confidence: confidence)
     }
+
+    /// Merges resolved components that point at the same catalog item, summing their grams.
+    @available(iOS 26.0, *)
+    private static func dedupedByFoodItem(
+        _ pairs: [(FoodSelectionIngredient, FoodItem)]
+    ) -> [(FoodSelectionIngredient, FoodItem)] {
+        var order: [UUID] = []
+        var merged: [UUID: (FoodSelectionIngredient, FoodItem)] = [:]
+        for (ingredient, foodItem) in pairs {
+            if let existing = merged[foodItem.id] {
+                var combined = existing.0
+                combined.quantity = min(1500, existing.0.quantity + ingredient.quantity)
+                merged[foodItem.id] = (combined, existing.1)
+            } else {
+                merged[foodItem.id] = (ingredient, foodItem)
+                order.append(foodItem.id)
+            }
+        }
+        return order.compactMap { merged[$0] }
+    }
+
+    /// Combines the model's self-reported confidence with how strongly each ingredient bound to the
+    /// catalog and whether any components were dropped/weak, into a single resolution confidence.
+    @available(iOS 26.0, *)
+    private static func resolutionConfidence(
+        model: String,
+        minBindScore: Int,
+        droppedComponents: Int,
+        weakComponents: Int
+    ) -> MealResolutionConfidence {
+        let modelLevel = MealResolutionConfidence.fromModelWord(model)
+        let bindLevel: MealResolutionConfidence
+        if minBindScore >= FoodItemSearch.confidentBindScore { bindLevel = .high }
+        else if minBindScore >= 60 { bindLevel = .medium }
+        else { bindLevel = .low }
+        var level = MealResolutionConfidence.combine(modelLevel, bindLevel)
+        if droppedComponents > 0 || weakComponents > 0 { level = level.lowered }
+        return level
+    }
+
     private static func boundedComponentGrams(
         _ grams: Double,
         query: String,

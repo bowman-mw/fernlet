@@ -80,6 +80,8 @@ enum GoalWeights {
             weights = ScoringWeights(journalWeight: 0.18, mealWeight: 0.20, workoutWeight: 0.08, sleepWeight: 0.32, hydrationWeight: 0.16, hygieneWeight: 0.06)
         case .exploring:
             weights = ScoringWeights(journalWeight: 0.18, mealWeight: 0.22, workoutWeight: 0.18, sleepWeight: 0.22, hydrationWeight: 0.12, hygieneWeight: 0.08)
+        case .sportsPrep:
+            weights = ScoringWeights(journalWeight: 0.10, mealWeight: 0.26, workoutWeight: 0.30, sleepWeight: 0.18, hydrationWeight: 0.12, hygieneWeight: 0.04)
         }
         assert(abs(weights.total - 1.0) < 0.000_001, "scoring weights must sum to 1")
         return weights
