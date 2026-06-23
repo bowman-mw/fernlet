@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 import CoreData
 import HealthKit
 import Testing
@@ -199,6 +200,42 @@ struct FernletTests {
 
         #expect(results.first?.id == customOil.id)
         #expect(results.dropFirst().first?.id == usdaOil.id)
+    }
+
+    @MainActor
+    @Test func addRecipeKeepsSelectedBundledUSDAIngredient() throws {
+        let store = makeTestStore()
+        let chicken = FoodItem(
+            name: "Chicken breast",
+            brandSource: "USDA",
+            servingSize: 100,
+            servingUnit: RecipeUnit.gram.rawValue,
+            macros: Macros(protein: 31, carbs: 0, fat: 4),
+            micronutrients: Micronutrients(iron: 1.1, potassium: 256),
+            category: "Poultry",
+            source: .usda,
+            tags: ["usda", "chicken"]
+        )
+        store.bundledFoodItems = [chicken]
+        var ingredient = ManualRecipeIngredientInput()
+        ingredient.name = chicken.name
+        ingredient.selectedFoodItemId = chicken.id
+        ingredient.quantity = 150
+        ingredient.unit = RecipeUnit.gram.rawValue
+        ingredient.protein = chicken.macros.protein
+        ingredient.fat = chicken.macros.fat
+
+        let recipe = store.addRecipe(
+            name: "Chicken bowl",
+            servings: 1,
+            ingredients: [ingredient]
+        )
+
+        let savedIngredient = try #require(recipe.ingredients.first)
+        #expect(savedIngredient.foodItemId == chicken.id)
+        #expect(savedIngredient.scaledMacros(using: chicken).protein == 47)
+        #expect(savedIngredient.scaledMicronutrients(using: chicken).potassium == 384)
+        #expect(store.foodItems.isEmpty)
     }
 
     @Test func compactSurveyFoodDecodesWithSurveyDataType() throws {
@@ -400,7 +437,22 @@ struct FernletTests {
         #expect(database.mealLogs.count == 1)
         #expect(database.workoutLogs.count == 1)
         #expect(database.journalLogs.count == 1)
-        #expect(database.derivedSignals.isEmpty == false)
+    }
+
+    @MainActor
+    @Test func localRepositoryRefusesSaveAfterDecodeFailure() throws {
+        let url = temporaryDatabaseURL("corrupt-local")
+        let corruptData = Data("not-json".utf8)
+        try corruptData.write(to: url)
+        let repository = LocalFernletRepository(fileURL: url)
+        let replacement = FernletSnapshot(todayKey: "2026-05-16", day: FernletDay(date: "2026-05-16", bottleCount: 4), settings: FernletSettings(), recentMeals: [], previousJournals: [], memories: [], goals: [], workshop: WorkshopData())
+
+        _ = repository.loadSnapshot(todayKey: "2026-05-16")
+        let saved = repository.saveSnapshot(replacement)
+        let persisted = try Data(contentsOf: url)
+
+        #expect(saved == false)
+        #expect(persisted == corruptData)
     }
 
     @MainActor
@@ -418,6 +470,65 @@ struct FernletTests {
         #expect(saved)
         #expect(loaded.day.meals.count == 1)
         #expect(loaded.day.bottleCount == 2)
+    }
+
+    @MainActor
+    @Test func coreDataRepositoryRefusesSaveAfterFetchFailure() throws {
+        let controller = PersistenceController(inMemory: true)
+        let repository = CoreDataFernletRepository(
+            controller: controller,
+            legacyRepository: LocalFernletRepository(fileURL: temporaryDatabaseURL("empty-coredata-fetch-failure-legacy"))
+        )
+        let snapshot = FernletSnapshot(todayKey: "2026-05-16", day: FernletDay(date: "2026-05-16", bottleCount: 2), settings: FernletSettings(), recentMeals: [], previousJournals: [], memories: [], goals: [], workshop: WorkshopData())
+        #expect(repository.saveSnapshot(snapshot))
+
+        // While a fetch is failing, the save's own reload returns the empty fallback, so the
+        // save must be refused rather than overwriting the real record with empty data.
+        repository.invalidateCache()
+        repository.forceNextFetchFailureForTesting(CocoaError(.fileReadUnknown))
+        let replacement = FernletSnapshot(todayKey: "2026-05-16", day: FernletDay(date: "2026-05-16", bottleCount: 9), settings: FernletSettings(), recentMeals: [], previousJournals: [], memories: [], goals: [], workshop: WorkshopData())
+        #expect(repository.saveSnapshot(replacement) == false)
+
+        // The original record must be intact after the refused save.
+        repository.invalidateCache()
+        #expect(repository.loadSnapshot(todayKey: "2026-05-16").day.bottleCount == 2)
+
+        // A transient fetch failure must not brick saves for the session: once the store is
+        // readable again, saves resume and persist correctly.
+        #expect(repository.saveSnapshot(replacement))
+        repository.invalidateCache()
+        #expect(repository.loadSnapshot(todayKey: "2026-05-16").day.bottleCount == 9)
+    }
+
+    @MainActor
+    @Test func coreDataRepositoryRefusesSaveAfterDecodeFailure() throws {
+        let controller = PersistenceController(inMemory: true)
+        let repository = CoreDataFernletRepository(
+            controller: controller,
+            legacyRepository: LocalFernletRepository(fileURL: temporaryDatabaseURL("empty-coredata-corrupt-legacy"))
+        )
+        let snapshot = FernletSnapshot(todayKey: "2026-05-16", day: FernletDay(date: "2026-05-16", bottleCount: 2), settings: FernletSettings(), recentMeals: [], previousJournals: [], memories: [], goals: [], workshop: WorkshopData())
+        #expect(repository.saveSnapshot(snapshot))
+
+        let corruptData = Data("not-json".utf8)
+        let context = controller.container.viewContext
+        let request = NSFetchRequest<NSManagedObject>(entityName: "FernletDatabaseRecord")
+        request.predicate = NSPredicate(format: "recordID == %@", "primary")
+        let record = try #require(try context.fetch(request).first)
+        record.setValue(corruptData, forKey: "payloadData")
+        try context.save()
+
+        let reloadedRepository = CoreDataFernletRepository(
+            controller: controller,
+            legacyRepository: LocalFernletRepository(fileURL: temporaryDatabaseURL("empty-coredata-corrupt-legacy-reload"))
+        )
+        _ = reloadedRepository.loadSnapshot(todayKey: "2026-05-16")
+        let replacement = FernletSnapshot(todayKey: "2026-05-16", day: FernletDay(date: "2026-05-16", bottleCount: 9), settings: FernletSettings(), recentMeals: [], previousJournals: [], memories: [], goals: [], workshop: WorkshopData())
+        let saved = reloadedRepository.saveSnapshot(replacement)
+        let persistedRecord = try #require(try context.fetch(request).first)
+
+        #expect(saved == false)
+        #expect(persistedRecord.value(forKey: "payloadData") as? Data == corruptData)
     }
 
     @MainActor
@@ -618,7 +729,8 @@ struct FernletTests {
 
         let repository = SavedRecipeRepository(
             controller: PersistenceController(inMemory: true),
-            legacyRepository: legacyRepository
+            legacyRepository: legacyRepository,
+            defaults: UserDefaults(suiteName: UUID().uuidString)!
         )
 
         let migrated = repository.load()
@@ -768,8 +880,9 @@ struct FernletTests {
 
         let data = try Data(contentsOf: url)
         let database = try testDecoder.decode(LocalFernletDatabase.self, from: data)
-        let sevenDaySignal = try #require(database.derivedSignals.first { $0.signalName == "micronutrientGaps7Day" })
-        let fourteenDaySignal = try #require(database.derivedSignals.first { $0.signalName == "micronutrientGaps14Day" })
+        let signals = DerivedSignalsRebuilder.rebuild(allDays: database.days, todayKey: today)
+        let sevenDaySignal = try #require(signals.first { $0.signalName == "micronutrientGaps7Day" })
+        let fourteenDaySignal = try #require(signals.first { $0.signalName == "micronutrientGaps14Day" })
 
         #expect(sevenDaySignal.nutrientGaps.contains { $0.nutrientKey == "calcium" && $0.status == .gap })
         #expect(fourteenDaySignal.nutrientGaps.contains { $0.nutrientKey == "vitaminC" && $0.status == .covered })

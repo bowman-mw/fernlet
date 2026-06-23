@@ -122,6 +122,12 @@ struct WorkoutSheet: View {
     @State private var logMode: WorkoutMode = .strengthTraining
 
     var intensity: WorkoutIntensity {
+        if logMode == .activity {
+            guard let value = Double(effort) else { return .moderate }
+            if value >= 8 { return .hard }
+            if value >= 5 { return .moderate }
+            return .light
+        }
         guard let value = Double(rpe) else { return .moderate }
         if value >= 8 { return .hard }
         if value >= 5 { return .moderate }
@@ -253,13 +259,13 @@ struct WorkoutSheet: View {
                     type: inferredCategory,
                     mode: logMode,
                     activityType: logMode == .activity ? selectedActivityType : nil,
-                    exercises: exerciseText,
-                    rpe: Double(rpe),
+                    exercises: logMode == .strengthTraining ? exerciseText : "",
+                    rpe: logMode == .strengthTraining ? Double(rpe) : nil,
                     notes: notes,
                     duration: Int(duration),
                     distanceMiles: logMode == .activity ? Double(distance) : nil,
                     activeEnergyKcal: logMode == .activity ? Double(energyKcal) : nil,
-                    effort: Int(effort),
+                    effort: logMode == .activity ? Int(effort) : nil,
                     muscleGroups: logMode == .strengthTraining ? aggregatedMuscleGroups : [],
                     intensity: intensity
                 )
@@ -296,10 +302,8 @@ struct WorkoutSheet: View {
     }
 
     private var completedAtDate: Date {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.calendar = Calendar(identifier: .gregorian)
-        let date = formatter.date(from: targetDateKey) ?? .now
+        guard targetDateKey != store.todayKey else { return .now }
+        let date = FernletDate.date(fromDayKey: targetDateKey) ?? .now
         return Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: date) ?? date
     }
 
@@ -764,15 +768,9 @@ struct WorkoutExerciseBuilder: View {
                     }
                 }
 
-                HStack(alignment: .top, spacing: 12) {
-                    SheetField("Weight") {
-                        TextField("30 lb", text: $weight)
-                            .sheetTextInput()
-                    }
-                    SheetField("Details") {
-                        TextField("tempo, distance, incline", text: $details)
+                SheetField("Weight") {
+                    TextField("30 lb", text: $weight)
                         .sheetTextInput()
-                    }
                 }
 
                 SheetField("Details") {
@@ -1008,12 +1006,9 @@ struct WorkoutCalendarCard: View {
     private let defaultLegendSplits: [WorkoutSplit] = [.fullBody, .upper, .lower, .workout]
 
     private var legendSplits: [WorkoutSplit] {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.calendar = Calendar(identifier: .gregorian)
-        let today = formatter.date(from: todayKey) ?? .now
+        let today = FernletDate.date(fromDayKey: todayKey) ?? .now
         let cutoff = cal.date(byAdding: .month, value: -1, to: today) ?? today
-        let cutoffKey = formatter.string(from: cutoff)
+        let cutoffKey = FernletDate.dayKey(for: cutoff)
 
         let recentSplits = allDays
             .filter { $0.key >= cutoffKey && $0.key <= todayKey }
@@ -1184,10 +1179,6 @@ struct WorkoutWeekModel {
         let start = weekInterval?.start ?? date
         let dates = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.calendar = Calendar(identifier: .gregorian)
-
         if let first = dates.first, let last = dates.last {
             weekTitle = "\(first.formatted(.dateTime.month(.abbreviated).day())) - \(last.formatted(.dateTime.month(.abbreviated).day()))"
         } else {
@@ -1195,7 +1186,7 @@ struct WorkoutWeekModel {
         }
 
         cells = dates.map { date in
-            let key = formatter.string(from: date)
+            let key = FernletDate.dayKey(for: date)
             let workouts = allDays[key]?.workouts ?? []
             let plannedWorkouts = allDays[key]?.plannedWorkouts ?? []
             let categories = workouts.reduce(into: [WorkoutType]()) { result, workout in
@@ -1247,10 +1238,7 @@ struct MoveDayDetailView: View {
 
     private var navigationTitle: String {
         if dateKey == store.todayKey { return "Today" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.calendar = Calendar(identifier: .gregorian)
-        let date = formatter.date(from: dateKey) ?? .now
+        let date = FernletDate.date(fromDayKey: dateKey) ?? .now
         return date.formatted(.dateTime.month(.abbreviated).day())
     }
 
@@ -1492,16 +1480,16 @@ struct WorkoutPlanSheet: View {
         _plannedExerciseText = State(initialValue: editingPlan?.exercises ?? "")
         _exerciseRows = State(initialValue: Self.exerciseEntries(from: editingPlan?.exercises ?? ""))
         _duration = State(initialValue: editingPlan?.duration.map(String.init) ?? "")
+        _distance = State(initialValue: editingPlan?.targetDistanceMiles.map { String($0) } ?? "")
+        _energyKcal = State(initialValue: editingPlan?.targetEnergyKcal.map { String($0) } ?? "")
+        _effort = State(initialValue: editingPlan?.targetEffort.map(String.init) ?? "")
         _notes = State(initialValue: editingPlan?.notes ?? "")
         _selectedActivityType = State(initialValue: editingPlan?.activityType)
     }
 
     private var targetDateTitle: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.calendar = Calendar(identifier: .gregorian)
-        let date = formatter.date(from: dateKey) ?? .now
         if dateKey == store.todayKey { return "Today" }
+        let date = FernletDate.date(fromDayKey: dateKey) ?? .now
         return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
     }
 
@@ -1517,9 +1505,6 @@ struct WorkoutPlanSheet: View {
     private var exerciseText: String {
         if logMode == .activity {
             return selectedActivityType?.displayName ?? ""
-        }
-        if !exerciseRows.isEmpty {
-            return exerciseRows.map(\.summary).joined(separator: "\n")
         }
         return plannedExerciseText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -1587,7 +1572,7 @@ struct WorkoutPlanSheet: View {
                             ForEach(WorkoutSplit.allCases) { option in
                                 Button(option.title) {
                                     split = option
-                                    if option == .workout { logMode = .activity }
+                                    logMode = option == .workout ? .activity : .strengthTraining
                                 }
                                     .buttonStyle(ChipButtonStyle(selected: split == option))
                             }
@@ -1599,7 +1584,11 @@ struct WorkoutPlanSheet: View {
                             ForEach(WorkoutMode.allCases) { mode in
                                 Button(mode.label) {
                                     logMode = mode
-                                    if mode == .activity { split = .workout }
+                                    if mode == .activity {
+                                        split = .workout
+                                    } else if split == .workout {
+                                        split = .fullBody
+                                    }
                                 }
                                     .buttonStyle(ChipButtonStyle(selected: logMode == mode))
                             }
@@ -1693,6 +1682,9 @@ struct WorkoutPlanSheet: View {
                         muscleGroups: plannedMuscleGroups,
                         notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
                         duration: Int(duration),
+                        targetDistanceMiles: Double(distance),
+                        targetEnergyKcal: Double(energyKcal),
+                        targetEffort: Int(effort),
                         createdAt: editingPlan?.createdAt ?? Date()
                     ),
                     date: dateKey

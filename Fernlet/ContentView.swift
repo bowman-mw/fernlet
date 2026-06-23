@@ -27,24 +27,13 @@ struct ContentView: View {
     @State private var didAutoImportHealthProfile = false
     @State private var didAutoImportHealthContext = false
     @State private var discoveryTimeoutTask: Task<Void, Never>?
+    @State private var healthRefreshTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         launchRoot
             .preferredColorScheme(isDarkModeEnabled ? .dark : .light)
-            .sheet(item: $activeSheet) { sheet in
+            .sheet(item: $activeSheet, onDismiss: handleActiveSheetDismiss) { sheet in
                 sheetContent(for: sheet)
-            }
-            .sheet(item: $editingRecipeFromHome) { recipe in
-                RecipeSheet(store: store, recipe: recipe)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(20)
-            }
-            .sheet(item: $editingSavedRecipeFromHome) { recipe in
-                SavedRecipeNotesSheet(store: store, recipe: recipe)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(20)
             }
             .sheet(isPresented: $store.showConnectionInspector) {
                 ConnectionInspectorView(inspector: store.connectionInspector)
@@ -86,7 +75,13 @@ struct ContentView: View {
             .animation(.easeOut(duration: 0.45), value: launcher.isDone)
             .task {
                 periodStore.attachLockService(lockService)
-                if lockService.state == .notConfigured {
+                let initialLockState = lockService.state
+                store.lockState = initialLockState
+                if case .unlocked = initialLockState, let contentKey = lockService.contentKey() {
+                    store.activateSealedJournals(contentKey: contentKey)
+                } else if case .locked = initialLockState {
+                    store.deactivateSealedJournals()
+                } else {
                     store.activateNoLockJournals()
                 }
                 try? await Task.sleep(for: .milliseconds(120))
@@ -112,16 +107,18 @@ struct ContentView: View {
                     stopFriendsDiscovery()
                 }
                 updateRecipeShareListener()
-                Task { await refreshHealthContextForActiveTab(newTab) }
+                healthRefreshTask?.cancel()
+                healthRefreshTask = Task { await refreshHealthContextForActiveTab(newTab) }
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active && selectedTab == .social {
+                if phase == .active {
+                    Task { await store.processSharedRecipeImportQueue() }
+                    if selectedTab == .social { startFriendsDiscovery() }
+                } else if selectedTab == .social {
                     stopFriendsDiscovery()
                 }
                 updateRecipeShareListener()
             }
-            .onChange(of: customLightBackgroundHex) { _, _ in }
-            .onChange(of: customDarkBackgroundHex) { _, _ in }
     }
 
     private func resetTokenBinding(for tab: FernletTab) -> Binding<Int> {
@@ -133,7 +130,7 @@ struct ContentView: View {
 
     private var pendingRecipeShareBinding: Binding<PendingProximityRecipeShare?> {
         Binding(
-            get: { store.recipeShareManager.pendingRecipeShares.first },
+            get: { activeSheet == nil ? store.recipeShareManager.pendingRecipeShares.first : nil },
             set: { newValue in
                 guard newValue == nil,
                       let first = store.recipeShareManager.pendingRecipeShares.first else { return }
@@ -351,8 +348,8 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
-        case .logPeriod(let targetDate):
-            LogPeriodSheet(periodStore: periodStore, targetDate: targetDate)
+        case .logPeriod(let targetDate, let editingEntry):
+            LogPeriodSheet(periodStore: periodStore, targetDate: targetDate, editingEntry: editingEntry)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
@@ -364,6 +361,16 @@ struct ContentView: View {
                 .presentationCornerRadius(20)
                 .environment(lockService)
                 .environment(storagePreferencesStore)
+        case .editRecipe(let recipe):
+            RecipeSheet(store: store, recipe: recipe)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        case .editSavedRecipe(let recipe):
+            SavedRecipeNotesSheet(store: store, recipe: recipe)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
         }
     }
 
@@ -436,6 +443,16 @@ struct ContentView: View {
             if mealLogNotification?.id == notification.id {
                 mealLogNotification = nil
             }
+        }
+    }
+
+    private func handleActiveSheetDismiss() {
+        if let recipe = editingRecipeFromHome {
+            editingRecipeFromHome = nil
+            activeSheet = .editRecipe(recipe)
+        } else if let recipe = editingSavedRecipeFromHome {
+            editingSavedRecipeFromHome = nil
+            activeSheet = .editSavedRecipe(recipe)
         }
     }
 
@@ -636,7 +653,8 @@ struct PersonalScreenView: View {
 
     private func loadIntimacyCalendar() async {
         guard store.isIntimateLoggingAllowed else { return }
-        let localLogs = (try? IntimacyLogRepository().logs(contentKey: lockService.contentKey())) ?? []
+        let contentKey = lockService.contentKey()
+        let localLogs: [IntimacyLog] = (try? IntimacyLogRepository().logs(contentKey: contentKey)) ?? []
         intimacyLogs = localLogs
         let localEventsByDay = Dictionary(grouping: localLogs, by: \.dayKey).mapValues(\.count)
         do {

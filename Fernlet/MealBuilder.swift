@@ -54,21 +54,20 @@ struct MealBuilder {
         mealType: MealType,
         foodItems: [FoodItem]
     ) -> Meal {
-        let totals = macroTotals(for: recipe, foodItems: foodItems)
-        let micronutrients = micronutrientTotals(for: recipe, foodItems: foodItems)
         let divisor = max(recipe.servings, 1)
         let components = componentSnapshots(for: recipe, foodItems: foodItems, divisor: divisor)
+        let componentTotals = totals(for: components)
         let perServing = Macros(
-            protein: Int((Double(totals.protein) / Double(divisor)).rounded()),
-            carbs: Int((Double(totals.carbs) / Double(divisor)).rounded()),
-            fat: Int((Double(totals.fat) / Double(divisor)).rounded())
+            protein: componentTotals.macros.protein,
+            carbs: componentTotals.macros.carbs,
+            fat: componentTotals.macros.fat
         )
         return Meal(
             name: recipe.name,
             mealType: mealType,
             macros: perServing,
             macroSnapshot: perServing,
-            micronutrientSnapshot: micronutrients.scaled(by: 1 / Double(divisor)),
+            micronutrientSnapshot: componentTotals.micronutrients,
             componentSnapshots: components,
             mealSource: .recipe,
             isAIFallback: false,
@@ -197,7 +196,7 @@ struct MealBuilder {
         }
     }
 
-    private static func macroTotals(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> MacroTotals {
+    static func macroTotals(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> MacroTotals {
         recipe.ingredients.reduce(into: MacroTotals()) { totals, ingredient in
             guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }) else { return }
             let macros = ingredient.scaledMacros(using: foodItem)
@@ -207,7 +206,7 @@ struct MealBuilder {
         }
     }
 
-    private static func micronutrientTotals(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> Micronutrients {
+    static func micronutrientTotals(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> Micronutrients {
         recipe.ingredients.reduce(into: Micronutrients()) { totals, ingredient in
             guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }) else { return }
             totals.add(ingredient.scaledMicronutrients(using: foodItem))
@@ -222,8 +221,11 @@ struct MealBuilder {
             .map { recipe -> (recipe: RecipeDefinition, score: Int)? in
                 let normalizedRecipe = FoodItemSearch.normalized(recipe.name)
                 if normalizedRecipe == normalizedItem { return (recipe, 1_000) }
-                if normalizedRecipe.contains(normalizedItem) || normalizedItem.contains(normalizedRecipe) { return (recipe, 700) }
                 let recipeTokens = meaningfulRecipeTokens(in: normalizedRecipe)
+                if !itemTokens.isEmpty, !recipeTokens.isEmpty,
+                    itemTokens.isSubset(of: recipeTokens) || recipeTokens.isSubset(of: itemTokens) {
+                    return (recipe, 700)
+                }
                 guard itemTokens.isEmpty == false, recipeTokens.isEmpty == false else { return nil }
                 let overlap = itemTokens.intersection(recipeTokens).count
                 guard overlap >= max(1, min(itemTokens.count, recipeTokens.count) - 1) else { return nil }

@@ -20,115 +20,118 @@ struct FriendListView: View {
     @State private var blockConfirmShown = false
 
     var body: some View {
-        ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 10) {
-                        Text("You appear as")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.slate)
-                        Spacer()
-                        TextField("Your name", text: $displayName)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundStyle(Color.bark)
-                            .submitLabel(.done)
-                            .onSubmit { store.setProximityDisplayName(displayName) }
-                            .onChange(of: displayName) { store.setProximityDisplayName(displayName) }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        List {
+            HStack(spacing: 10) {
+                Text("You appear as")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.slate)
+                Spacer()
+                TextField("Your name", text: $displayName)
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(Color.bark)
+                    .submitLabel(.done)
+                    .onSubmit { store.setProximityDisplayName(displayName) }
+                    .onChange(of: displayName) { store.setProximityDisplayName(displayName) }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 0, trailing: 20))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(Color.slate)
+                TextField("Search by name or fingerprint", text: $searchText)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+
+            HubSectionPicker(
+                sections: FriendListFilter.allCases,
+                selection: $filter
+            ) { $0.rawValue }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+
+            if filteredPeers.isEmpty {
+                EmptyState(text: emptyStateText)
                     .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 8)
-
-                    HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(Color.slate)
-                        TextField("Search by name or fingerprint", text: $searchText)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                    .padding(.horizontal, 20)
-                    .padding(.top, 0)
-                    .padding(.bottom, 8)
-
-                    HubSectionPicker(
-                        sections: FriendListFilter.allCases,
-                        selection: $filter
-                    ) { $0.rawValue }
-
-                    if filteredPeers.isEmpty {
-                        EmptyState(text: emptyStateText)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 24)
-                    } else {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(filteredPeers) { peer in
-                                VStack(alignment: .leading, spacing: 0) {
-                                    peerRow(peer)
-                                        .contentShape(Rectangle())
-                                        .onTapGesture {
-                                            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
-                                                selected = selected?.id == peer.id ? nil : peer
-                                            }
-                                        }
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                            Button(role: .destructive) {
-                                                store.revokeTrustedProximityPeer(signingPublicKey: peer.signingPublicKey)
-                                                if selected?.id == peer.id { selected = nil }
-                                            } label: {
-                                                Label("Remove", systemImage: "trash")
-                                            }
-
-                                            if peer.blockedAt == nil {
-                                                Button {
-                                                    peerToBlock = peer
-                                                    blockConfirmShown = true
-                                                } label: {
-                                                    Label("Block", systemImage: "hand.raised")
-                                                }
-                                                .tint(Color.terracotta)
-                                            } else {
-                                                Button {
-                                                    store.unblockProximityPeer(signingPublicKey: peer.signingPublicKey)
-                                                } label: {
-                                                    Label("Unblock", systemImage: "hand.raised.slash")
-                                                }
-                                                .tint(Color.moss)
-                                            }
-                                        }
-
-                                    if let expanded = selected, expanded.id == peer.id {
-                                        peerDetailCard(peer)
-                                            .padding(.horizontal, 20)
-                                            .padding(.bottom, 12)
-                                            .transition(.opacity.combined(with: .move(edge: .top)))
-                                    }
-
-                                    if peer.id != filteredPeers.last?.id {
-                                        Divider()
-                                            .overlay(Color.bark.opacity(0.07))
-                                            .padding(.horizontal, 20)
-                                    }
+                    .padding(.top, 24)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(filteredPeers) { peer in
+                    VStack(alignment: .leading, spacing: 0) {
+                        peerRow(peer)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                                    selected = selected?.id == peer.id ? nil : peer
                                 }
                             }
+
+                        if let expanded = selected, expanded.id == peer.id {
+                            peerDetailCard(peer)
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 12)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
                         }
-                        .padding(.top, 8)
-                        .padding(.bottom, 20)
+
+                        if peer.id != filteredPeers.last?.id {
+                            Divider()
+                                .overlay(Color.bark.opacity(0.07))
+                                .padding(.horizontal, 20)
+                        }
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.parchment)
+                    .listRowSeparator(.hidden)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            store.revokeTrustedProximityPeer(signingPublicKey: peer.signingPublicKey)
+                            if selected?.id == peer.id { selected = nil }
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                        }
+
+                        if peer.blockedAt == nil {
+                            Button {
+                                peerToBlock = peer
+                                blockConfirmShown = true
+                            } label: {
+                                Label("Block", systemImage: "hand.raised")
+                            }
+                            .tint(Color.terracotta)
+                        } else {
+                            Button {
+                                store.unblockProximityPeer(signingPublicKey: peer.signingPublicKey)
+                            } label: {
+                                Label("Unblock", systemImage: "hand.raised.slash")
+                            }
+                            .tint(Color.moss)
+                        }
                     }
                 }
             }
-            .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
-            .scrollContentBackground(.hidden)
-            .background(Color.parchment)
-            .navigationTitle("Friends & Blocks")
-            .navigationBarTitleDisplayMode(.large)
-            .onAppear { displayName = store.settings.proximityDisplayName }
+        }
+        .listStyle(.plain)
+        .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
+        .scrollContentBackground(.hidden)
+        .background(Color.parchment)
+        .navigationTitle("Friends & Blocks")
+        .navigationBarTitleDisplayMode(.large)
+        .onAppear { displayName = store.settings.proximityDisplayName }
         .alert("Block peer?", isPresented: $blockConfirmShown) {
             Button("Block", role: .destructive) {
                 if let peer = peerToBlock {

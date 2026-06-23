@@ -272,63 +272,37 @@ struct HealthKitAnchorKeychain {
     }
 
     static func delete(identifier: String) {
-        delete(account: account(for: identifier))
+        KeychainItem.delete(account: account(for: identifier), service: service)
     }
 
     static func deleteWorkoutAnchor() {
-        delete(account: workoutAnchorKey)
+        KeychainItem.delete(account: workoutAnchorKey, service: service)
     }
 
     static func loadWorkoutAnchor() -> HKQueryAnchor? {
-        load(account: workoutAnchorKey).flatMap { data in
+        KeychainItem.load(account: workoutAnchorKey, service: service).flatMap { data in
             try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
         }
     }
 
     static func storeWorkoutAnchor(_ anchor: HKQueryAnchor) {
         guard let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) else { return }
-        store(data, account: workoutAnchorKey)
+        KeychainItem.store(data, account: workoutAnchorKey, service: service, accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
 
     static func store(_ data: Data, identifier: String) {
-        store(data, account: account(for: identifier))
+        KeychainItem.store(data, account: account(for: identifier), service: service, accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
 
-    private static func load(account: String) -> Data? {
-        var result: AnyObject?
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecReturnData as String: true,
-            kSecUseDataProtectionKeychain as String: true
-        ]
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
-        return result as? Data
+    static func loadAnchor(for identifier: String) -> HKQueryAnchor? {
+        KeychainItem.load(account: account(for: identifier), service: service).flatMap { data in
+            try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
+        }
     }
 
-    private static func store(_ data: Data, account: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-            kSecUseDataProtectionKeychain as String: true,
-            kSecValueData as String: data
-        ]
-        delete(account: account)
-        SecItemAdd(query as CFDictionary, nil)
-    }
-
-    private static func delete(account: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecUseDataProtectionKeychain as String: true
-        ]
-        SecItemDelete(query as CFDictionary)
+    static func storeAnchor(_ anchor: HKQueryAnchor, for identifier: String) {
+        guard let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) else { return }
+        KeychainItem.store(data, account: account(for: identifier), service: service, accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
 }
 
@@ -387,9 +361,11 @@ final class HealthKitService: HealthKitServicing {
 
         let workoutType = HKObjectType.workoutType()
         let anchor = HealthKitAnchorKeychain.loadWorkoutAnchor()
+        let startDate = Self.workoutBackfillStartDate(referenceDate: .now)
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: nil, options: [])
         let query = HKAnchoredObjectQuery(
             type: workoutType,
-            predicate: nil,
+            predicate: predicate,
             anchor: anchor,
             limit: HKObjectQueryNoLimit
         ) { _, samples, _, newAnchor, error in
@@ -759,11 +735,12 @@ final class HealthKitService: HealthKitServicing {
     nonisolated private static func deliver(workoutSamples samples: [HKSample]?, anchor: HKQueryAnchor?, handler: @escaping ([HKWorkout]) -> Void) {
         let workouts = samples?.compactMap { $0 as? HKWorkout } ?? []
         Task { @MainActor in
-            if let anchor {
-                HealthKitAnchorKeychain.storeWorkoutAnchor(anchor)
+            guard !workouts.isEmpty else {
+                if let anchor { HealthKitAnchorKeychain.storeWorkoutAnchor(anchor) }
+                return
             }
-            guard !workouts.isEmpty else { return }
             handler(workouts)
+            if let anchor { HealthKitAnchorKeychain.storeWorkoutAnchor(anchor) }
         }
     }
 
@@ -810,18 +787,29 @@ final class HealthKitService: HealthKitServicing {
     }
 
     private func startAnchoredQuery(for type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) {
+        let savedAnchor = HealthKitAnchorKeychain.loadAnchor(for: type.identifier)
         let query = HKAnchoredObjectQuery(
             type: type,
             predicate: nil,
-            anchor: nil,
+            anchor: savedAnchor,
             limit: HKObjectQueryNoLimit
-        ) { query, samples, deletedObjects, _, error in
+        ) { query, samples, deletedObjects, newAnchor, error in
             guard error == nil else { return }
-            handler(query, samples ?? [], deletedObjects ?? [])
+            let samplesCopy = samples ?? []
+            let deletedCopy = deletedObjects ?? []
+            Task { @MainActor in
+                if let newAnchor { HealthKitAnchorKeychain.storeAnchor(newAnchor, for: type.identifier) }
+                handler(query, samplesCopy, deletedCopy)
+            }
         }
-        query.updateHandler = { query, samples, deletedObjects, _, error in
+        query.updateHandler = { query, samples, deletedObjects, newAnchor, error in
             guard error == nil else { return }
-            handler(query, samples ?? [], deletedObjects ?? [])
+            let samplesCopy = samples ?? []
+            let deletedCopy = deletedObjects ?? []
+            Task { @MainActor in
+                if let newAnchor { HealthKitAnchorKeychain.storeAnchor(newAnchor, for: type.identifier) }
+                handler(query, samplesCopy, deletedCopy)
+            }
         }
         activeQueries.append(query)
         storeController.execute(query)
@@ -892,14 +880,26 @@ final class HealthKitService: HealthKitServicing {
             config.activityType = .traditionalStrengthTraining
         case .activity:
             config.activityType = workout.activityType.map(ActivityTypeCatalog.hkActivityType(for:)) ?? .other
+            switch workout.activityType {
+            case .indoorCycling:
+                config.locationType = .indoor
+            case .swimmingPool:
+                config.locationType = .indoor
+                config.swimmingLocationType = .pool
+            case .swimmingOpenWater:
+                config.locationType = .outdoor
+                config.swimmingLocationType = .openWater
+            default:
+                config.locationType = .unknown
+            }
         }
-        config.locationType = .unknown
         return config
     }
 
     internal static func makeMetadata(for workout: Workout) -> [String: Any] {
         var metadata: [String: Any] = [
             "fernlet.workoutID": workout.id.uuidString,
+            "fernlet.activityName": workout.name,
             "fernlet.mode": workout.mode.rawValue,
             "fernlet.intensity": workout.intensity.rawValue,
             HKMetadataKeySyncIdentifier: workout.id.uuidString,
@@ -919,6 +919,12 @@ final class HealthKitService: HealthKitServicing {
         }
         if let plannedID = workout.plannedWorkoutID {
             metadata["fernlet.plannedWorkoutID"] = plannedID.uuidString
+        }
+        if let activityType = workout.activityType {
+            metadata["fernlet.activityType"] = activityType.rawValue
+            if activityType == .indoorCycling {
+                metadata[HKMetadataKeyIndoorWorkout] = NSNumber(value: true)
+            }
         }
         return metadata
     }
@@ -971,8 +977,10 @@ final class HealthKitService: HealthKitServicing {
     private static func sleepNightInterval(containing date: Date) -> DateInterval {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: date)
-        let morningBoundary = calendar.date(bySettingHour: 11, minute: 0, second: 0, of: dayStart) ?? dayStart.addingTimeInterval(11 * 3600)
-        let sleepDayStart = date < morningBoundary
+        // Use the previous day's window unless the current time is at or after evening (18:00),
+        // which indicates we want tonight's window rather than last night's.
+        let eveningBoundary = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: dayStart) ?? dayStart.addingTimeInterval(18 * 3600)
+        let sleepDayStart = date < eveningBoundary
             ? calendar.date(byAdding: .day, value: -1, to: dayStart) ?? dayStart
             : dayStart
         let start = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: sleepDayStart) ?? sleepDayStart.addingTimeInterval(18 * 3600)

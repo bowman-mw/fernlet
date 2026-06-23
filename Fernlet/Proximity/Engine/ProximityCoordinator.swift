@@ -112,6 +112,9 @@ final class ProximityCoordinator {
     @ObservationIgnored private var heartbeatSendFailures = 0
     @ObservationIgnored private var pendingHeartbeatSentAtByID: [UUID: Date] = [:]
     @ObservationIgnored private var autoReconnect = false
+    @ObservationIgnored private var reconnectTask: Task<Void, Never>?
+    // Ephemeral per-session random ID advertised in Bonjour TXT instead of the persistent fingerprint.
+    @ObservationIgnored private var sessionID = UUID().uuidString
 
     init(
         identity: IdentityService,
@@ -197,6 +200,7 @@ final class ProximityCoordinator {
     }
 
     private func prepareSession(role: Role, mode: Mode) throws {
+        sessionID = UUID().uuidString
         try identity.ensureProvisioned()
         currentRole = role
         currentMode = mode
@@ -291,6 +295,7 @@ final class ProximityCoordinator {
         }
 
         transition(to: .transferring(peer: identity, progress: 0.0))
+        defer { if case .transferring = state { transition(to: .connected(peer: identity)) } }
         let data = try JSONEncoder().encode(envelope)
         try await transport.send(data, to: peer, mode: .reliable)
         recordEnvelope(envelope, direction: .sent, byteCount: data.count, signatureVerified: true)
@@ -309,13 +314,13 @@ final class ProximityCoordinator {
     }
 
     func sendPayload(type: PayloadType, summary: PayloadSummary, payload: Data, sealed: Bool = false) async throws {
-        guard let peer = currentTransportPeer else { throw CoordinatorError.notConnected }
+        guard currentTransportPeer != nil else { throw CoordinatorError.notConnected }
         let (finalPayload, encryption) = try sealIfNeeded(payload, sealed: sealed)
         let sentAt = now()
         let envelope = try FernletIdentityEnvelope.signed(
             identityService: identity,
             senderDisplayName: displayName,
-            recipientFingerprint: peer.advertisedFingerprint,
+            recipientFingerprint: connectedIdentity?.fingerprint,
             payloadType: type,
             payloadEncryption: encryption,
             payloadSummary: summary,
@@ -336,6 +341,8 @@ final class ProximityCoordinator {
 
     func cancel() async {
         autoReconnect = false
+        reconnectTask?.cancel()
+        reconnectTask = nil
         await end(.userCancelled)
     }
 
@@ -471,11 +478,11 @@ final class ProximityCoordinator {
 
     private func shouldInviteDiscoveredPeer(_ peer: MultipeerPeer) -> Bool {
         guard currentMode == .friend else { return true }
-        guard let remoteFingerprint = peer.advertisedFingerprint else { return true }
-        if identity.localFingerprint == remoteFingerprint {
-            return displayName < peer.displayName
+        guard let remoteSID = peer.discoveryInfo?["sid"] else { return true }
+        if sessionID == remoteSID {
+            return displayName < peer.displayName  // self-discovery tie-break
         }
-        return identity.localFingerprint < remoteFingerprint
+        return sessionID < remoteSID  // deterministic single-inviter selection
     }
 
     private func handleRangingState(_ rangingState: RangingState) {
@@ -750,7 +757,7 @@ final class ProximityCoordinator {
             timestamp: now(),
             signatureVerified: signatureVerified,
             encrypted: encrypted,
-            summary: envelope.payloadSummary.title
+            summary: encrypted ? envelope.payloadType.rawValue : envelope.payloadSummary.title
         ))
     }
 
@@ -908,6 +915,7 @@ final class ProximityCoordinator {
         return [
             "v": "1",
             "role": advertisedRole,
+            "sid": sessionID,
             "fp": identity.localFingerprint,
             "name": String(displayName.prefix(32)),
             "caps": mode == .trainer ? "plan,live,delta" : "share"
@@ -938,7 +946,11 @@ final class ProximityCoordinator {
             message: reason
         ))
         inspector?.endSession(endState: "failed")
-        Task { await foregroundAnchor.stop() }
+        Task { [weak self] in
+            await self?.ranging.stop()
+            await self?.transport.disconnect()
+            await self?.foregroundAnchor.stop()
+        }
     }
 
     private func end(_ reason: EndReason) async {
@@ -960,8 +972,12 @@ final class ProximityCoordinator {
             inspector?.recordCoordinatorEvent("transport lost, reconnecting")
             inspector?.endSession(endState: "reconnecting")
             transition(to: .discovering)
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            await beginFriendJoin()
+            reconnectTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                guard !Task.isCancelled, let self, self.autoReconnect,
+                      case .discovering = self.state else { return }
+                await self.beginFriendJoin()
+            }
             return
         }
 
@@ -1034,6 +1050,8 @@ final class ProximityCoordinator {
             let data = try JSONEncoder().encode(envelope)
             try await transport.send(data, to: peer, mode: .unreliable)
             pendingHeartbeatSentAtByID[heartbeatID] = sentAt
+            let pruneThreshold = sentAt.addingTimeInterval(-(interval * 5))
+            pendingHeartbeatSentAtByID = pendingHeartbeatSentAtByID.filter { $0.value > pruneThreshold }
             heartbeatSendFailures = 0
             recordEnvelope(envelope, direction: .sent, byteCount: data.count, signatureVerified: true)
             bytesSent += data.count

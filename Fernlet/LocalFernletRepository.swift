@@ -94,7 +94,7 @@ struct FernletSnapshot: Codable {
     }
 }
 
-struct LocalFernletDatabase: Codable {
+struct LocalFernletDatabase: Codable, @unchecked Sendable {
     var schemaVersion = 1
     var updatedAt = Date()
     var days: [String: FernletDay] = [:]
@@ -108,10 +108,6 @@ struct LocalFernletDatabase: Codable {
     var mealLogs: [MealLogRecord] = []
     var workoutLogs: [WorkoutLogRecord] = []
     var journalLogs: [JournalLogRecord] = []
-    var runningLogs: [RunningLogRecord] = []
-    var nutrientTable: [NutrientTableRecord] = []
-    var equipment: [EquipmentRecord] = []
-    var derivedSignals: [DerivedSignalRecord] = []
     var retryQueue: [AIAnalysisRetryRecord] = []
     var tierTwoMemories: [TierTwoMemoryRecord] = []
     var foodItems: [FoodItem] = []
@@ -123,7 +119,7 @@ struct LocalFernletDatabase: Codable {
 
     init() {}
 
-    init(from decoder: Decoder) throws {
+    nonisolated init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
@@ -138,10 +134,6 @@ struct LocalFernletDatabase: Codable {
         mealLogs = try container.decodeIfPresent([MealLogRecord].self, forKey: .mealLogs) ?? []
         workoutLogs = try container.decodeIfPresent([WorkoutLogRecord].self, forKey: .workoutLogs) ?? []
         journalLogs = try container.decodeIfPresent([JournalLogRecord].self, forKey: .journalLogs) ?? []
-        runningLogs = try container.decodeIfPresent([RunningLogRecord].self, forKey: .runningLogs) ?? []
-        nutrientTable = try container.decodeIfPresent([NutrientTableRecord].self, forKey: .nutrientTable) ?? []
-        equipment = try container.decodeIfPresent([EquipmentRecord].self, forKey: .equipment) ?? []
-        derivedSignals = try container.decodeIfPresent([DerivedSignalRecord].self, forKey: .derivedSignals) ?? []
         retryQueue = try container.decodeIfPresent([AIAnalysisRetryRecord].self, forKey: .retryQueue) ?? []
         tierTwoMemories = try container.decodeIfPresent([TierTwoMemoryRecord].self, forKey: .tierTwoMemories) ?? []
         foodItems = try container.decodeIfPresent([FoodItem].self, forKey: .foodItems) ?? []
@@ -154,9 +146,15 @@ struct LocalFernletDatabase: Codable {
 }
 
 struct LocalFernletRepository: FernletRepository {
+    private final class State {
+        var persistenceBlockedByDecodeFailure = false
+        var pendingLegacyCleanup = false
+    }
+
     private let fileURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let state = State()
 
     init(fileURL: URL? = nil) {
         let resolvedURL = fileURL ?? Self.defaultFileURL()
@@ -217,21 +215,11 @@ struct LocalFernletRepository: FernletRepository {
     }
 
     func loadAllDays() -> [String: FernletDay] {
-        guard FileManager.default.fileExists(atPath: fileURL.path),
-              let data = try? Data(contentsOf: fileURL),
-              let database = try? decoder.decode(LocalFernletDatabase.self, from: data) else {
-            return [:]
-        }
-        return database.days
+        loadDatabase(todayKey: FernletDate.dayKey(for: .now)).days
     }
 
     func loadTierTwoMemories() -> [TierTwoMemoryRecord] {
-        guard FileManager.default.fileExists(atPath: fileURL.path),
-              let data = try? Data(contentsOf: fileURL),
-              let database = try? decoder.decode(LocalFernletDatabase.self, from: data) else {
-            return []
-        }
-        return database.tierTwoMemories
+        loadDatabase(todayKey: FernletDate.dayKey(for: .now)).tierTwoMemories
     }
 
     func loadDatabaseForMigration(todayKey: String) -> LocalFernletDatabase {
@@ -244,7 +232,8 @@ struct LocalFernletRepository: FernletRepository {
             return migratedDatabase(todayKey: todayKey)
         }
         guard let data = try? Data(contentsOf: fileURL) else {
-            assertionFailure("database could not be read")
+            print("[Fernlet] Local database could not be read; entering read-only recovery mode.")
+            markPersistenceBlockedByDecodeFailure()
             return migratedDatabase(todayKey: todayKey)
         }
         return decodeDatabase(data, todayKey: todayKey)
@@ -254,20 +243,35 @@ struct LocalFernletRepository: FernletRepository {
         assert(!data.isEmpty, "database data required")
         assert(!todayKey.isEmpty, "today key required")
         if let database = try? decoder.decode(LocalFernletDatabase.self, from: data) {
+            state.persistenceBlockedByDecodeFailure = false
             return database
         }
-        assertionFailure("database decode failed")
+        print("[Fernlet] Local database decode failed; entering read-only recovery mode.")
+        markPersistenceBlockedByDecodeFailure()
         return migratedDatabase(todayKey: todayKey)
+    }
+
+    private func markPersistenceBlockedByDecodeFailure() {
+        state.persistenceBlockedByDecodeFailure = true
     }
 
     private func saveDatabase(_ database: LocalFernletDatabase) -> Bool {
         assert(database.schemaVersion >= 1, "schema version invalid")
+        guard !state.persistenceBlockedByDecodeFailure else {
+            print("[Fernlet] Refusing to save after local database decode failed.")
+            return false
+        }
         guard ensureDirectoryExists() else { return false }
         guard let data = try? encoder.encode(database) else {
             assertionFailure("database encode failed")
             return false
         }
-        return write(data)
+        guard write(data) else { return false }
+        if state.pendingLegacyCleanup {
+            state.pendingLegacyCleanup = false
+            Self.clearLegacyUserDefaultsIfPresent()
+        }
+        return true
     }
 
     private func ensureDirectoryExists() -> Bool {
@@ -304,7 +308,24 @@ struct LocalFernletRepository: FernletRepository {
         database.goals = Self.loadLegacy([FitnessGoal].self, key: LegacyKeys.goals) ?? []
         database.workshop = Self.loadLegacy(WorkshopData.self, key: LegacyKeys.workshop) ?? WorkshopData()
         database.rebuildDerivedTables(todayKey: todayKey)
+        state.pendingLegacyCleanup = true
         return database
+    }
+
+    private static func clearLegacyUserDefaultsIfPresent() {
+        let knownKeys = [
+            LegacyKeys.settings,
+            LegacyKeys.recentMeals,
+            LegacyKeys.previousJournals,
+            LegacyKeys.memories,
+            LegacyKeys.goals,
+            LegacyKeys.workshop
+        ]
+        guard knownKeys.contains(where: { UserDefaults.standard.data(forKey: $0) != nil }) else { return }
+        knownKeys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        UserDefaults.standard.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix("fernlet-day-") }
+            .forEach { UserDefaults.standard.removeObject(forKey: $0) }
     }
 
     private static func loadLegacy<T: Decodable>(_ type: T.Type, key: String) -> T? {
@@ -357,6 +378,10 @@ extension LocalFernletDatabase {
         assert(!snapshot.todayKey.isEmpty, "snapshot key required")
         assert(snapshot.day.date == snapshot.todayKey, "snapshot day mismatch")
         days[snapshot.todayKey] = snapshot.day
+        if days.count > FernletLimits.maxStoredDays {
+            let oldest = days.keys.sorted().prefix(days.count - FernletLimits.maxStoredDays)
+            oldest.forEach { days.removeValue(forKey: $0) }
+        }
         settings = snapshot.settings
         recentMeals = snapshot.recentMeals
         previousJournals = snapshot.previousJournals
@@ -380,7 +405,6 @@ extension LocalFernletDatabase {
         mealLogs = Self.makeMealLogs(from: orderedDays)
         workoutLogs = Self.makeWorkoutLogs(from: orderedDays)
         journalLogs = Self.makeJournalLogs(from: orderedDays)
-        derivedSignals = Self.makeDerivedSignals(from: orderedDays, todayKey: todayKey)
         tierTwoMemories = TierTwoMemoryEngine.updateInferences(existing: tierTwoMemories, from: orderedDays, goals: goals)
     }
 
@@ -390,15 +414,13 @@ extension LocalFernletDatabase {
     }
 
     private static func makeDailyLogs(from days: [(String, FernletDay)]) -> [DailyLogRecord] {
-        assert(days.count <= FernletLimits.maxStoredDays, "too many days")
-        return days.prefix(FernletLimits.maxStoredDays).map { key, day in
+        return days.suffix(FernletLimits.maxStoredDays).map { key, day in
             DailyLogRecord(dateKey: key, day: day)
         }
     }
 
     private static func makeMealLogs(from days: [(String, FernletDay)]) -> [MealLogRecord] {
-        assert(days.count <= FernletLimits.maxStoredDays, "too many days")
-        let nested = days.prefix(FernletLimits.maxStoredDays).map { key, day in
+        let nested = days.suffix(FernletLimits.maxStoredDays).map { key, day in
             day.meals.prefix(FernletLimits.maxMealsPerDay).map { meal in
                 MealLogRecord(dateKey: key, meal: meal, totals: MacroTotals(meals: day.meals))
             }
@@ -407,8 +429,7 @@ extension LocalFernletDatabase {
     }
 
     private static func makeWorkoutLogs(from days: [(String, FernletDay)]) -> [WorkoutLogRecord] {
-        assert(days.count <= FernletLimits.maxStoredDays, "too many days")
-        let nested = days.prefix(FernletLimits.maxStoredDays).map { key, day in
+        let nested = days.suffix(FernletLimits.maxStoredDays).map { key, day in
             day.workouts.prefix(FernletLimits.maxWorkoutsPerDay).map { workout in
                 WorkoutLogRecord(dateKey: key, workout: workout)
             }
@@ -417,8 +438,7 @@ extension LocalFernletDatabase {
     }
 
     private static func makeJournalLogs(from days: [(String, FernletDay)]) -> [JournalLogRecord] {
-        assert(days.count <= FernletLimits.maxStoredDays, "too many days")
-        let nested = days.prefix(FernletLimits.maxStoredDays).map { key, day in
+        let nested = days.suffix(FernletLimits.maxStoredDays).map { key, day in
             day.journals.prefix(FernletLimits.maxJournalsPerDay).map { journal in
                 JournalLogRecord(dateKey: key, journal: journal)
             }
@@ -426,12 +446,6 @@ extension LocalFernletDatabase {
         return Array(nested.joined().prefix(FernletLimits.maxJournalLogs))
     }
 
-    private static func makeDerivedSignals(from days: [(String, FernletDay)], todayKey: String) -> [DerivedSignalRecord] {
-        assert(days.count <= FernletLimits.maxStoredDays, "too many days")
-        let recent = Array(days.suffix(FernletLimits.signalWindowDays))
-        assert(recent.count <= FernletLimits.signalWindowDays, "signal window too large")
-        return DerivedSignalFactory.makeSignals(from: recent, todayKey: todayKey)
-    }
 }
 
 struct DailyLogRecord: Identifiable, Codable, Equatable {
@@ -556,43 +570,6 @@ struct JournalLogRecord: Identifiable, Codable, Equatable {
         self.text = journal.text
         self.emotions = Array(journal.emotions.prefix(FernletLimits.maxEmotionKeys))
     }
-}
-
-struct RunningLogRecord: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var dateKey: String
-    var phase: String
-    var week: Int
-    var day: Int
-    var type: String
-    var completed: Bool
-    var mph: Double?
-    var incline: Double?
-    var rpe: Double?
-    var distance: Double?
-    var time: TimeInterval?
-    var repeatCount: Int?
-    var notes: String?
-}
-
-struct NutrientTableRecord: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var mealName: String
-    var category: String
-    var serving: String
-    var calories: Int
-    var protein: Int
-    var carbs: Int
-    var fat: Int
-    var notes: String?
-}
-
-struct EquipmentRecord: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var location: String
-    var equipment: String
-    var category: String
-    var notes: String?
 }
 
 struct DerivedSignalRecord: Identifiable, Codable, Equatable {

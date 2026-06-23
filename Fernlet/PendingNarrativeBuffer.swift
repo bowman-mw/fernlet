@@ -24,10 +24,10 @@ struct PendingNarrativePayload: Codable {
 
 final class PendingNarrativeBuffer {
 
-    private static let bufferKeyAccount = "com.fernlet.buffer.key"
+    private static let bufferKeyService = "com.fernlet.narrative-buffer"
+    private static let bufferKeyAccount = "com.fernlet.buffer.key"           // legacy (no service)
+    private static let bufferKeyAccountV2 = "com.fernlet.buffer.key.v2"      // current (with service)
     private static let maxEntries = 50
-    private var evictedCount = 0
-
     private var bufferFileURL: URL {
         let support = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)
@@ -47,7 +47,6 @@ final class PendingNarrativeBuffer {
         if entries.count > Self.maxEntries {
             let excess = entries.count - Self.maxEntries
             entries.removeFirst(excess)
-            evictedCount += excess
             FernletAuditLog.log("buffer.evicted", context: ["count": "\(excess)"])
         }
 
@@ -56,7 +55,7 @@ final class PendingNarrativeBuffer {
 
     func drainAll() throws -> [PendingNarrativePayload] {
         let entries = try loadEntries()
-        try purge()
+        if !entries.isEmpty { try purge() }
         return entries
     }
 
@@ -111,14 +110,44 @@ final class PendingNarrativeBuffer {
     }
 
     private func loadBufferKey() -> SymmetricKey? {
-        var result: AnyObject?
-        let query: [String: Any] = [
+        // Try current key (with service) first
+        if let key = loadRawBufferKey(account: Self.bufferKeyAccountV2, service: Self.bufferKeyService) {
+            return key
+        }
+        // Migrate legacy key (no service) into the scoped service slot
+        if let key = loadRawBufferKey(account: Self.bufferKeyAccount, service: nil) {
+            let keyData = key.withUnsafeBytes { Data($0) }
+            let addQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: Self.bufferKeyService,
+                kSecAttrAccount as String: Self.bufferKeyAccountV2,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                kSecUseDataProtectionKeychain as String: true,
+                kSecValueData as String: keyData
+            ]
+            SecItemDelete(addQuery as CFDictionary)
+            SecItemAdd(addQuery as CFDictionary, nil)
+            let deleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrAccount as String: Self.bufferKeyAccount,
+                kSecUseDataProtectionKeychain as String: true
+            ]
+            SecItemDelete(deleteQuery as CFDictionary)
+            return key
+        }
+        return nil
+    }
+
+    private func loadRawBufferKey(account: String, service: String?) -> SymmetricKey? {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: Self.bufferKeyAccount,
+            kSecAttrAccount as String: account,
             kSecMatchLimit as String: kSecMatchLimitOne,
             kSecReturnData as String: true,
             kSecUseDataProtectionKeychain as String: true
         ]
+        if let service { query[kSecAttrService as String] = service }
+        var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
               let data = result as? Data else { return nil }
         return SymmetricKey(data: data)
@@ -130,7 +159,8 @@ final class PendingNarrativeBuffer {
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: Self.bufferKeyAccount,
+            kSecAttrService as String: Self.bufferKeyService,
+            kSecAttrAccount as String: Self.bufferKeyAccountV2,
             // Background-accessible: works after first device unlock, no passcode required
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             kSecUseDataProtectionKeychain as String: true,

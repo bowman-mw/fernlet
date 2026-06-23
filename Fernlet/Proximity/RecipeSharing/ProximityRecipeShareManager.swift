@@ -62,8 +62,13 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
     @ObservationIgnored private var clearStatusTask: Task<Void, Never>?
     @ObservationIgnored private var pendingOutgoing: (payload: ProximityRecipeSharePayload, recipient: ProximityRecipeShareRecipient)?
     @ObservationIgnored private var isRunning = false
+    private var connectionObservationRevision = 0
+    @ObservationIgnored private var sessionID = UUID().uuidString
 
     private static let serviceType = "fernlet-recipe"
+    private static let maxPendingShares = 8
+    private static let perSenderRateLimitSeconds: TimeInterval = 3
+    @ObservationIgnored private var lastAcceptedBySender: [String: Date] = [:]
 
     init(store: FernletStore) {
         self.store = store
@@ -155,14 +160,30 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
               payload.format == "fernlet.proximity.recipe",
               payload.version == 1 else { return }
 
+        let senderFP = peer?.fingerprint ?? envelope.senderDisplayName
+        let now = Date()
+        if let lastAccepted = lastAcceptedBySender[senderFP],
+           now.timeIntervalSince(lastAccepted) < Self.perSenderRateLimitSeconds {
+            recordDiagnostic("Rate-limited recipe share from \(envelope.senderDisplayName).")
+            return
+        }
+        guard pendingRecipeShares.count < Self.maxPendingShares else {
+            recordDiagnostic("Dropped recipe share from \(envelope.senderDisplayName): queue full.")
+            return
+        }
+        lastAcceptedBySender[senderFP] = now
+
         let pending = PendingProximityRecipeShare(
             senderDisplayName: envelope.senderDisplayName,
             senderFingerprint: peer?.fingerprint,
-            receivedAt: Date(),
+            receivedAt: now,
             payload: payload
         )
         pendingRecipeShares.removeAll { $0.id == pending.id }
         pendingRecipeShares.insert(pending, at: 0)
+        if pendingRecipeShares.count > Self.maxPendingShares {
+            pendingRecipeShares = Array(pendingRecipeShares.prefix(Self.maxPendingShares))
+        }
         recordDiagnostic("Received recipe share from \(envelope.senderDisplayName).")
     }
 
@@ -177,16 +198,14 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
             self?.handleChannelReady(channel)
         }
         session.onPeerDisconnected = { [weak self] peer, _ in
-            self?.handlePeerLost(peer)
-            self?.connections.removeAll { $0.peer.id == peer.id }
-            self?.recordDiagnostic("\(peer.displayName) disconnected.")
+            guard let self else { return }
+            self.handlePeerLost(peer)
+            self.removeConnections(matching: peer)
+            self.recordDiagnostic("\(peer.displayName) disconnected.")
         }
         session.shouldAcceptInvitation = { [weak self] peer in
             guard let self else { return false }
-            if let fp = peer.advertisedFingerprint, self.store.isBlockedFingerprint(fp) {
-                self.recordDiagnostic("Rejected blocked recipe-share invitation from \(peer.displayName).")
-                return false
-            }
+            // Blocklist is enforced at identity-introduction time by the coordinator.
             return self.connections.count < 1 || self.connections.contains(where: { $0.peer.id == peer.id })
         }
     }
@@ -194,7 +213,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
     private func discoveryInfo() -> [String: String] {
         [
             "v": "1",
-            "fp": identity.localFingerprint,
+            "sid": sessionID,
             "name": String(displayName.prefix(32)),
             "mode": "recipe"
         ]
@@ -206,18 +225,15 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
     }
 
     private func handlePeerDiscovered(_ peer: MultipeerPeer) {
-        guard let fingerprint = peer.advertisedFingerprint,
-              !fingerprint.isEmpty,
-              !IdentityService.fingerprintsMatch(fingerprint, identity.localFingerprint),
-              !store.isBlockedFingerprint(fingerprint) else { return }
-
+        // Exclude self using session ID comparison; blocklist is enforced post-introduction.
+        if let remoteSID = peer.discoveryInfo?["sid"], remoteSID == sessionID { return }
         discoveredPeers[peer.id] = peer
         let recipient = ProximityRecipeShareRecipient(
             id: peer.id,
             displayName: peer.discoveryInfo?["name"] ?? peer.displayName,
-            fingerprint: fingerprint
+            fingerprint: nil
         )
-        nearbyRecipients.removeAll { $0.id == recipient.id || $0.fingerprint == recipient.fingerprint }
+        nearbyRecipients.removeAll { $0.id == recipient.id }
         nearbyRecipients.append(recipient)
         nearbyRecipients.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
         recordDiagnostic("Discovered \(recipient.displayName).")
@@ -253,6 +269,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
             verifiedKeyAgreementPublicKey: nil
         )
         connections.append(connection)
+        connectionObservationRevision += 1
 
         Task { [weak self] in
             await coordinator.begin(role: .browser, mode: .friend)
@@ -268,6 +285,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
                 guard let self else { return }
                 let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
                 withObservationTracking {
+                    _ = self.connectionObservationRevision
                     _ = self.connections.count
                     for connection in self.connections {
                         _ = connection.coordinator.state
@@ -289,6 +307,15 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
 
     private func checkCoordinatorStates() {
         for index in connections.indices {
+            switch connections[index].coordinator.state {
+            case .awaitingManualCommit, .awaitingProximityCommit:
+                let coordinator = connections[index].coordinator
+                recordDiagnostic("Recipe share recipient verified; confirming selected recipient.")
+                Task { await coordinator.commitManualProximity() }
+            default:
+                break
+            }
+
             if case .connected(let peerIdentity) = connections[index].coordinator.state {
                 let fingerprint = peerIdentity.fingerprint
                 if connections[index].fingerprint != fingerprint {
@@ -311,6 +338,19 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
             }
         }
         for connection in stale { connections.removeAll { $0.id == connection.id } }
+        if !stale.isEmpty {
+            connectionObservationRevision += 1
+        }
+    }
+
+    private func removeConnections(matching peer: MultipeerPeer) {
+        let before = connections.count
+        connections.removeAll { connection in
+            connection.peer.id == peer.id || connection.peer.underlying == peer.underlying
+        }
+        if connections.count != before {
+            connectionObservationRevision += 1
+        }
     }
 
     private func ensureRecipient(for connection: RecipeShareConnection, identity peerIdentity: ProximityCoordinator.PeerIdentity) {
@@ -332,8 +372,8 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         recordDiagnostic("Sending \(outgoing.payload.recipe.title) to \(outgoing.recipient.displayName).")
         do {
             let summary = PayloadSummary(
-                title: outgoing.payload.recipe.title,
-                subtitle: "Recipe share",
+                title: "Recipe share",
+                subtitle: nil,
                 itemCount: outgoing.payload.recipe.ingredientCount
             )
             let payloadData = try JSONEncoder().encode(outgoing.payload)

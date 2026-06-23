@@ -55,9 +55,6 @@ final class WorkoutHealthKitSync {
     }
 
     func refreshFromHealth() async {
-        let snapshot = service.currentAuthorizationSnapshot()
-        guard Self.isWorkoutLoggingAuthorized(snapshot) else { return }
-
         do {
             try await service.startObservingWorkouts { [weak self] workouts in
                 self?.reconcileWorkouts(workouts)
@@ -69,8 +66,6 @@ final class WorkoutHealthKitSync {
 
     func backfillIfNeeded(defaults: UserDefaults = .standard) async {
         guard HealthKitService.shouldRunWorkoutBackfill(defaults: defaults) else { return }
-        let snapshot = service.currentAuthorizationSnapshot()
-        guard Self.isWorkoutLoggingAuthorized(snapshot) else { return }
 
         do {
             let workouts = try await service.backfillWorkoutsFromHealth(referenceDate: .now)
@@ -82,7 +77,18 @@ final class WorkoutHealthKitSync {
     }
 
     static func makeWorkout(from sample: some HealthWorkoutSample) -> Workout {
-        let activityType = ActivityTypeCatalog.fernletType(for: sample.workoutActivityType)
+        let activityType: WorkoutActivityType = {
+            if let rawValue = sample.metadata?["fernlet.activityType"] as? String,
+               let type = WorkoutActivityType(rawValue: rawValue) {
+                return type
+            }
+            let base = ActivityTypeCatalog.fernletType(for: sample.workoutActivityType)
+            if base == .cycling,
+               let indoor = sample.metadata?[HKMetadataKeyIndoorWorkout] as? Bool, indoor {
+                return .indoorCycling
+            }
+            return base
+        }()
         let durationMin = Int(sample.duration / 60)
         let kcal = sample.sumQuantity(for: HKQuantityType(.activeEnergyBurned))?.doubleValue(for: .kilocalorie())
         let distanceMiles: Double? = {
@@ -141,12 +147,16 @@ final class WorkoutHealthKitSync {
     }
 
     static func isWorkoutLoggingAuthorized(_ snapshot: AuthorizationSnapshot) -> Bool {
-        snapshot.status(for: HKObjectType.workoutType().identifier) == .sharingAuthorized
-            || snapshot.status(for: HealthCapability.workoutLogging.rawValue) == .sharingAuthorized
+        snapshot.status(for: HKObjectType.workoutType().identifier) == .sharingAuthorized ||
+        snapshot.status(for: HealthCapability.workoutLogging.rawValue) == .sharingAuthorized
+    }
+
+    func stopObservation() {
+        service.stopObservingWorkouts()
     }
 
     func reconcileWorkouts(_ samples: [some HealthWorkoutSample]) {
-        guard let context else { return }
+        guard let context, service.currentAuthorizationSnapshot().isAvailable else { return }
         for sample in samples {
             let externalID = sample.metadata?["fernlet.workoutID"] as? String
             let syncID = sample.metadata?[HKMetadataKeySyncIdentifier] as? String

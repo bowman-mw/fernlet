@@ -43,8 +43,12 @@ enum RecipeWebImportError: LocalizedError {
 }
 
 enum RecipeWebImporter {
-    static func importRecipe(from url: URL, foodItems: [FoodItem]) async throws -> ImportedRecipe {
-        guard url.scheme == "http" || url.scheme == "https" else {
+    private static let maxFetchBytes = 3 * 1024 * 1024  // 3 MB
+
+    /// - Parameter aiEnabled: When false, the FoundationModels fallback is skipped so that
+    ///   users who have disabled AI are not silently opted in via recipe import.
+    static func importRecipe(from url: URL, foodItems: [FoodItem], aiEnabled: Bool) async throws -> ImportedRecipe {
+        guard url.scheme == "https" else {
             throw RecipeWebImportError.invalidURL
         }
 
@@ -53,18 +57,22 @@ enum RecipeWebImporter {
             return recipe
         }
 
+        guard aiEnabled else {
+            throw RecipeWebImportError.noRecipeFound
+        }
+
         let cleanedText = try cleanedBodyText(from: html)
         return try await extractWithFoundationModel(from: cleanedText, sourceURL: url, foodItems: foodItems)
     }
 
     private static func fetchHTML(from url: URL) async throws -> String {
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: url, timeoutInterval: 15)
         request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
         request.setValue("Fernlet/1.0", forHTTPHeaderField: "User-Agent")
 
-        let (data, response): (Data, URLResponse)
+        let (asyncBytes, response): (URLSession.AsyncBytes, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
         } catch {
             throw RecipeWebImportError.fetchFailed
         }
@@ -73,7 +81,22 @@ enum RecipeWebImporter {
             throw RecipeWebImportError.fetchFailed
         }
 
-        let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
+        let mimeType = httpResponse.mimeType ?? ""
+        guard mimeType.hasPrefix("text/html") || mimeType.hasPrefix("application/xhtml+xml") else {
+            throw RecipeWebImportError.fetchFailed
+        }
+
+        var accumulated = Data()
+        do {
+            for try await byte in asyncBytes {
+                accumulated.append(byte)
+                if accumulated.count >= maxFetchBytes { break }
+            }
+        } catch {
+            throw RecipeWebImportError.fetchFailed
+        }
+
+        let html = String(data: accumulated, encoding: .utf8) ?? String(data: accumulated, encoding: .isoLatin1)
         guard let html, html.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             throw RecipeWebImportError.emptyHTML
         }
@@ -119,6 +142,16 @@ enum RecipeWebImporter {
             guard RecipeExtractionAvailability.isFoundationModelAvailable else {
                 throw RecipeWebImportError.modelUnavailable
             }
+
+            let payload = RecipeExtractionPayload(
+                sourceHost: sourceURL.host() ?? "unknown",
+                cleanedTextCharCount: text.count
+            )
+            await AIAuditLog.shared.record(
+                payloadKind: payload.payloadKind,
+                destination: .onDeviceFoundationModels,
+                includedFields: payload.includedFieldNames
+            )
 
             let instructions = """
             Extract one cooking recipe from cleaned webpage text.
@@ -502,21 +535,15 @@ enum RecipeWebImporter {
 
     private static func htmlDecoded(_ text: String) -> String {
         var decoded = text
-        let namedEntities = [
-            "&amp;": "&",
-            "&lt;": "<",
-            "&gt;": ">",
-            "&quot;": "\"",
-            "&#39;": "'",
-            "&apos;": "'",
-            "&nbsp;": " "
+        decoded = replacingNumericEntities(in: decoded, pattern: #"&#(\d+);"#) { UInt32($0) }
+        decoded = replacingNumericEntities(in: decoded, pattern: #"&#x([0-9a-fA-F]+);"#) { UInt32($0, radix: 16) }
+        let namedEntities: [(String, String)] = [
+            ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""),
+            ("&#39;", "'"), ("&apos;", "'"), ("&nbsp;", " "), ("&amp;", "&")
         ]
         for (entity, replacement) in namedEntities {
             decoded = decoded.replacingOccurrences(of: entity, with: replacement, options: .caseInsensitive)
         }
-
-        decoded = replacingNumericEntities(in: decoded, pattern: #"&#(\d+);"#) { UInt32($0) }
-        decoded = replacingNumericEntities(in: decoded, pattern: #"&#x([0-9a-fA-F]+);"#) { UInt32($0, radix: 16) }
         return decoded
     }
 

@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import ImageIO
 
 struct MeshPhotoCacheStore {
     private let indexURL: URL
@@ -7,6 +8,10 @@ struct MeshPhotoCacheStore {
     private let thumbnailDirectoryURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+
+    // Reject incoming photos larger than this to prevent decompression-bomb OOM.
+    private static let maxIncomingPhotoBytes = 10 * 1024 * 1024  // 10 MB
+    private static let thumbnailMaxPixelSize = 400
 
     init(indexURL: URL) {
         self.indexURL = indexURL
@@ -31,8 +36,12 @@ struct MeshPhotoCacheStore {
         createDirectories()
         for photo in capped {
             guard let imageData = photo.imageData else { continue }
+            guard imageData.count <= Self.maxIncomingPhotoBytes else {
+                print("[Fernlet] Dropped oversized peer photo (\(imageData.count) bytes)")
+                continue
+            }
             try? imageData.write(to: imageURL(for: photo.id), options: [.atomic, .completeFileProtection])
-            if let thumbnailData = UIImage(data: imageData)?.friendPhotoThumbnailData() {
+            if let thumbnailData = Self.safeThumbnailData(from: imageData) {
                 try? thumbnailData.write(to: thumbnailURL(for: photo.id), options: [.atomic, .completeFileProtection])
             }
         }
@@ -50,7 +59,7 @@ struct MeshPhotoCacheStore {
             return data
         }
         guard let data = imageData(for: photo),
-              let thumbnailData = UIImage(data: data)?.friendPhotoThumbnailData() else { return nil }
+              let thumbnailData = Self.safeThumbnailData(from: data) else { return nil }
         try? thumbnailData.write(to: thumbnailURL(for: photo.id), options: [.atomic, .completeFileProtection])
         return thumbnailData
     }
@@ -66,6 +75,31 @@ struct MeshPhotoCacheStore {
             senderSigningPublicKey: photo.senderSigningPublicKey,
             session: photo.session
         )
+    }
+
+    // MARK: - Safe thumbnail generation
+
+    /// Generates a thumbnail using ImageIO to avoid fully decompressing untrusted image data.
+    /// Checks pixel dimensions before decode and caps output at thumbnailMaxPixelSize.
+    private static func safeThumbnailData(from imageData: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(imageData as CFData, nil) else { return nil }
+
+        // Check dimensions without full decode.
+        if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
+            let width = properties[kCGImagePropertyPixelWidth] as? Int ?? 0
+            let height = properties[kCGImagePropertyPixelHeight] as? Int ?? 0
+            // Reject unreasonably large images that would OOM even as thumbnails.
+            if width > 20_000 || height > 20_000 { return nil }
+        }
+
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: thumbnailMaxPixelSize,
+            kCGImageSourceCreateThumbnailWithTransform: true
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        let uiImage = UIImage(cgImage: cgImage)
+        return uiImage.jpegData(compressionQuality: 0.7)
     }
 
     private func createDirectories() {

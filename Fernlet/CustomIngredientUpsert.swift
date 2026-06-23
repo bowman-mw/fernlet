@@ -26,6 +26,10 @@ struct CustomIngredientUpsert {
         }) {
             var updatedFoodItem = foodItem
             updatedFoodItem.id = foodItems[existingIndex].id
+            // Preserve existing micronutrients when no fresh label scan was provided.
+            if ingredient.scannedMicronutrients == nil {
+                updatedFoodItem.micronutrients = foodItems[existingIndex].micronutrients
+            }
             foodItems[existingIndex] = updatedFoodItem
             return updatedFoodItem
         }
@@ -35,14 +39,16 @@ struct CustomIngredientUpsert {
 
     static func recipeIngredients(
         from inputs: [ManualRecipeIngredientInput],
+        selectionCatalog: [FoodItem]? = nil,
         in foodItems: inout [FoodItem],
         verifiedAt: Date
     ) -> [RecipeIngredient] {
         let validIngredients = inputs.filter { !$0.trimmedName.isEmpty }
         assert(!validIngredients.isEmpty, "recipe ingredients required")
+        let selectableFoodItems = selectionCatalog ?? foodItems
         var recipeIngredients: [RecipeIngredient] = []
         for ingredient in validIngredients {
-            let foodItem = ingredient.selectedFoodItem(in: foodItems) ?? resolve(
+            let foodItem = ingredient.selectedFoodItem(in: selectableFoodItems) ?? resolve(
                 ingredient: ingredient,
                 in: &foodItems,
                 verifiedAt: verifiedAt

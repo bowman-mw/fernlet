@@ -35,6 +35,7 @@ protocol FernletLockServicing: AnyObject {
     func contentKey() -> SymmetricKey?
     func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws
     func drainPendingNarratives() throws -> [PendingNarrativePayload]
+    func purgePendingNarratives() throws
 }
 
 enum FernletLockState: Equatable {
@@ -114,6 +115,7 @@ enum FernletLockError: Error, LocalizedError {
     case resetRequired
     case biometricFailed
     case biometricNotAvailable
+    case keychainFailure(operation: String, status: OSStatus)
     case internalError(String)
     case locked
 
@@ -140,6 +142,14 @@ enum FernletLockError: Error, LocalizedError {
             return "Biometric authentication failed."
         case .biometricNotAvailable:
             return "Biometric authentication is not available."
+        case .keychainFailure(let operation, let status):
+            if status == errSecNotAvailable {
+                return "Keychain is not available. Set a device passcode and try again."
+            }
+            if let message = SecCopyErrorMessageString(status, nil) as String? {
+                return "Keychain \(operation) failed: \(message) (\(status))."
+            }
+            return "Keychain \(operation) failed with status \(status)."
         case .internalError(let message):
             return "Internal error: \(message)"
         case .locked:
@@ -287,12 +297,15 @@ final class SystemFernletUptimeProvider: FernletUptimeProviding {
 }
 
 extension KeychainItem {
-    static func store(_ data: Data, for key: LockKeychainKey, service: String) {
+    @discardableResult
+    static func store(_ data: Data, for key: LockKeychainKey, service: String) -> OSStatus {
         store(
             data,
             account: key.rawValue,
             service: service,
-            accessibility: kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly
+            // WhenUnlockedThisDeviceOnly: items survive device passcode removal instead of being
+            // silently deleted, preventing unexpected notConfigured state and content key loss.
+            accessibility: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         )
     }
 
@@ -317,7 +330,7 @@ extension KeychainItem {
         return access
     }
 
-    static func storeBiometricBypass(_ data: Data, service: String) {
+    static func storeBiometricBypass(_ data: Data, service: String) throws {
         let deleteQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -326,7 +339,7 @@ extension KeychainItem {
         ]
         SecItemDelete(deleteQuery as CFDictionary)
 
-        guard let access = try? accessControl(for: .biometryCurrentSet) else { return }
+        let access = try accessControl(for: .biometryCurrentSet)
         let addQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -336,7 +349,10 @@ extension KeychainItem {
             kSecUseDataProtectionKeychain as String: true,
             kSecValueData as String: data
         ]
-        SecItemAdd(addQuery as CFDictionary, nil)
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw FernletLockError.keychainFailure(operation: "store biometric bypass", status: status)
+        }
     }
 
     static func loadBiometricBypassSync(prompt: String, service: String) throws -> Data {
@@ -402,7 +418,7 @@ enum FernletAuditLog {
             .sorted { $0.key < $1.key }
             .map { "\($0.key)=\($0.value)" }
             .joined(separator: " ")
-        logger.info("\(event, privacy: .public)\(ctx, privacy: .public)")
+        logger.info("\(event, privacy: .auto)\(ctx, privacy: .private)")
     }
 }
 
@@ -425,6 +441,9 @@ final class FernletLockService: FernletLockServicing {
     @ObservationIgnored private let uptimeProvider: FernletUptimeProviding
     @ObservationIgnored private let cryptoProvider: FernletLockCryptoProviding
     @ObservationIgnored private let biometricBypassLoader: ((String, String) throws -> Data)?
+    @ObservationIgnored private let keychainStore: (Data, LockKeychainKey, String) -> OSStatus
+    @ObservationIgnored private let keychainLoad: (LockKeychainKey, String) -> Data?
+    @ObservationIgnored private let privatePersistenceController: PrivatePersistenceController
     @ObservationIgnored private var _contentKey: SymmetricKey?
     @ObservationIgnored private let buffer = PendingNarrativeBuffer()
 
@@ -433,15 +452,25 @@ final class FernletLockService: FernletLockServicing {
         dateProvider: FernletDateProviding? = nil,
         uptimeProvider: FernletUptimeProviding? = nil,
         cryptoProvider: FernletLockCryptoProviding? = nil,
-        biometricBypassLoader: ((String, String) throws -> Data)? = nil
+        biometricBypassLoader: ((String, String) throws -> Data)? = nil,
+        keychainStore: ((Data, LockKeychainKey, String) -> OSStatus)? = nil,
+        keychainLoad: ((LockKeychainKey, String) -> Data?)? = nil,
+        privatePersistenceController: PrivatePersistenceController? = nil
     ) {
         self.keychainService = keychainService
         self.dateProvider = dateProvider ?? SystemFernletDateProvider()
         self.uptimeProvider = uptimeProvider ?? SystemFernletUptimeProvider()
         self.cryptoProvider = cryptoProvider ?? SystemFernletLockCryptoProvider()
         self.biometricBypassLoader = biometricBypassLoader
+        self.keychainStore = keychainStore ?? { data, key, service in
+            KeychainItem.store(data, for: key, service: service)
+        }
+        self.keychainLoad = keychainLoad ?? { key, service in
+            KeychainItem.load(for: key, service: service)
+        }
+        self.privatePersistenceController = privatePersistenceController ?? .shared
 
-        if KeychainItem.load(for: .salt, service: keychainService) == nil {
+        if self.keychainLoad(.salt, keychainService) == nil {
             state = .notConfigured
         } else {
             state = .locked(cooldownDeadline: activeCooldownDeadline())
@@ -449,11 +478,11 @@ final class FernletLockService: FernletLockServicing {
     }
 
     var requiresReset: Bool {
-        KeychainItem.load(for: .requiresReset, service: keychainService) != nil
+        keychainLoad(.requiresReset, keychainService) != nil
     }
 
     var biometricEnabled: Bool {
-        KeychainItem.load(for: .biometricEnabledFlag, service: keychainService) != nil
+        keychainLoad(.biometricEnabledFlag, keychainService) != nil
     }
 
     var biometricType: LABiometryType {
@@ -466,13 +495,13 @@ final class FernletLockService: FernletLockServicing {
     }
 
     var credentialKind: FernletLockCredentialKind? {
-        guard let data = KeychainItem.load(for: .kind, service: keychainService),
+        guard let data = keychainLoad(.kind, keychainService),
               let string = String(data: data, encoding: .utf8) else { return nil }
         return FernletLockCredentialKind(rawValue: string)
     }
 
     var currentAttemptCount: Int {
-        guard let data = KeychainItem.load(for: .attemptCount, service: keychainService),
+        guard let data = keychainLoad(.attemptCount, keychainService),
               let byte = data.first else { return 0 }
         return Int(byte)
     }
@@ -491,12 +520,12 @@ final class FernletLockService: FernletLockServicing {
         let contentKeyData = cryptoProvider.generateContentKey()
         let wrappedContentKey = try cryptoProvider.wrapContentKey(contentKeyData, using: derivedKey)
 
-        KeychainItem.store(saltData, for: .salt, service: keychainService)
-        KeychainItem.store(derivedKey, for: .verifier, service: keychainService)
-        KeychainItem.store(Data(credential.kind.rawValue.utf8), for: .kind, service: keychainService)
-        KeychainItem.store(wrappedContentKey, for: .wrappedContentKey, service: keychainService)
+        try storeVerified(saltData, for: .salt)
+        try storeVerified(derivedKey, for: .verifier)
+        try storeVerified(Data(credential.kind.rawValue.utf8), for: .kind)
+        try storeVerified(wrappedContentKey, for: .wrappedContentKey)
         var configuredN = Int32(FernletLockCrypto.scryptN)
-        KeychainItem.store(Data(bytes: &configuredN, count: MemoryLayout<Int32>.size), for: .scryptN, service: keychainService)
+        try storeVerified(Data(bytes: &configuredN, count: MemoryLayout<Int32>.size), for: .scryptN)
         KeychainItem.delete(for: .biometricBypass, service: keychainService)
         KeychainItem.delete(for: .biometricEnabledFlag, service: keychainService)
         KeychainItem.delete(for: .cooldownDeadline, service: keychainService)
@@ -530,15 +559,15 @@ final class FernletLockService: FernletLockServicing {
         let newDerivedKey = try await cryptoProvider.deriveVerifier(passcode: new.rawValue, salt: newSalt, n: FernletLockCrypto.scryptN)
         let newWrappedContentKey = try cryptoProvider.wrapContentKey(contentKeyData, using: newDerivedKey)
 
-        KeychainItem.store(newSalt, for: .salt, service: keychainService)
-        KeychainItem.store(newDerivedKey, for: .verifier, service: keychainService)
-        KeychainItem.store(Data(new.kind.rawValue.utf8), for: .kind, service: keychainService)
-        KeychainItem.store(newWrappedContentKey, for: .wrappedContentKey, service: keychainService)
+        try storeVerified(newSalt, for: .salt)
+        try storeVerified(newDerivedKey, for: .verifier)
+        try storeVerified(Data(new.kind.rawValue.utf8), for: .kind)
+        try storeVerified(newWrappedContentKey, for: .wrappedContentKey)
         var newN = Int32(FernletLockCrypto.scryptN)
-        KeychainItem.store(Data(bytes: &newN, count: MemoryLayout<Int32>.size), for: .scryptN, service: keychainService)
+        try storeVerified(Data(bytes: &newN, count: MemoryLayout<Int32>.size), for: .scryptN)
 
         if KeychainItem.load(for: .biometricEnabledFlag, service: keychainService) != nil {
-            KeychainItem.storeBiometricBypass(contentKeyData, service: keychainService)
+            try KeychainItem.storeBiometricBypass(contentKeyData, service: keychainService)
         }
         if case .unlocked = state {
             _contentKey = SymmetricKey(data: contentKeyData)
@@ -562,7 +591,7 @@ final class FernletLockService: FernletLockServicing {
 
         let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData, n: storedScryptN())
         guard constantTimeEqual(computedVerifier, storedVerifier) else {
-            recordFailedAttempt()
+            try recordFailedAttempt()
             FernletAuditLog.log("lock.failedAttempt", context: ["cooldownLevel": "\(loadCooldownLevel())"])
             throw FernletLockError.invalidPasscode
         }
@@ -621,6 +650,7 @@ final class FernletLockService: FernletLockServicing {
     func reset() throws {
         KeychainItem.deleteAll(service: keychainService)
         try buffer.purge()
+        try privatePersistenceController.purgeEncryptedEntities()
         scrubContentKey()
         state = .notConfigured
         hasAutoPromptedBiometricForCurrentLockSession = false
@@ -642,8 +672,8 @@ final class FernletLockService: FernletLockServicing {
             }
 
             let contentKeyData = try cryptoProvider.unwrapContentKey(wrappedData, using: computedVerifier)
-            KeychainItem.storeBiometricBypass(contentKeyData, service: keychainService)
-            KeychainItem.store(Data([1]), for: .biometricEnabledFlag, service: keychainService)
+            try KeychainItem.storeBiometricBypass(contentKeyData, service: keychainService)
+            try storeVerified(Data([1]), for: .biometricEnabledFlag)
         } else {
             KeychainItem.delete(for: .biometricBypass, service: keychainService)
             KeychainItem.delete(for: .biometricEnabledFlag, service: keychainService)
@@ -662,12 +692,29 @@ final class FernletLockService: FernletLockServicing {
         try buffer.drainAll()
     }
 
+    func purgePendingNarratives() throws {
+        try buffer.purge()
+    }
+
     private func scrubContentKey() {
         _contentKey = nil
     }
 
+    private func storeVerified(_ data: Data, for key: LockKeychainKey) throws {
+        try verifyStatus(keychainStore(data, key, keychainService), operation: "store \(key.rawValue)")
+        guard keychainLoad(key, keychainService) == data else {
+            throw FernletLockError.keychainFailure(operation: "read back \(key.rawValue)", status: errSecItemNotFound)
+        }
+    }
+
+    private func verifyStatus(_ status: OSStatus, operation: String) throws {
+        guard status == errSecSuccess else {
+            throw FernletLockError.keychainFailure(operation: operation, status: status)
+        }
+    }
+
     private func activeCooldownDeadline() -> Date? {
-        guard let data = KeychainItem.load(for: .cooldownDeadline, service: keychainService),
+        guard let data = keychainLoad(.cooldownDeadline, keychainService),
               let timeInterval = data.toDouble else { return nil }
         let wallClockDeadline = Date(timeIntervalSinceReferenceDate: timeInterval)
         let wallClockRemaining = wallClockDeadline.timeIntervalSince(dateProvider.now)
@@ -700,9 +747,9 @@ final class FernletLockService: FernletLockServicing {
     }
 
     private func monotonicRemainingCooldownSeconds() -> MonotonicCheckOutcome {
-        guard let anchorData = KeychainItem.load(for: .cooldownMonotonicAnchor, service: keychainService),
+        guard let anchorData = keychainLoad(.cooldownMonotonicAnchor, keychainService),
               let anchor = anchorData.toDouble,
-              let durationData = KeychainItem.load(for: .cooldownDurationSeconds, service: keychainService),
+              let durationData = keychainLoad(.cooldownDurationSeconds, keychainService),
               let duration = durationData.toDouble else {
             return .notRecorded
         }
@@ -717,37 +764,37 @@ final class FernletLockService: FernletLockServicing {
     }
 
     private func loadCooldownLevel() -> Int {
-        guard let data = KeychainItem.load(for: .cooldownLevel, service: keychainService),
+        guard let data = keychainLoad(.cooldownLevel, keychainService),
               let byte = data.first else { return 0 }
         return Int(byte)
     }
 
-    private func recordFailedAttempt() {
+    private func recordFailedAttempt() throws {
         let newAttemptCount = currentAttemptCount + 1
         let currentLevel = loadCooldownLevel()
 
         if newAttemptCount >= 4 {
             if currentLevel >= 4 {
-                KeychainItem.store(Data([1]), for: .requiresReset, service: keychainService)
-                storeAttemptCount(0)
+                try storeVerified(Data([1]), for: .requiresReset)
+                try storeAttemptCount(0)
                 state = .locked(cooldownDeadline: nil)
                 FernletAuditLog.log("lock.cooldownStarted", context: ["level": "reset-required"])
             } else {
                 let newLevel = currentLevel + 1
                 let duration = cooldownDuration(for: newLevel)
                 let deadline = dateProvider.now.addingTimeInterval(duration)
-                KeychainItem.store(Data([UInt8(newLevel)]), for: .cooldownLevel, service: keychainService)
+                try storeVerified(Data([UInt8(newLevel)]), for: .cooldownLevel)
 
                 var deadlineInterval = deadline.timeIntervalSinceReferenceDate
-                KeychainItem.store(Data(bytes: &deadlineInterval, count: MemoryLayout<Double>.size), for: .cooldownDeadline, service: keychainService)
+                try storeVerified(Data(bytes: &deadlineInterval, count: MemoryLayout<Double>.size), for: .cooldownDeadline)
 
                 var anchor = uptimeProvider.systemUptime
-                KeychainItem.store(Data(bytes: &anchor, count: MemoryLayout<Double>.size), for: .cooldownMonotonicAnchor, service: keychainService)
+                try storeVerified(Data(bytes: &anchor, count: MemoryLayout<Double>.size), for: .cooldownMonotonicAnchor)
 
                 var durationSeconds = duration
-                KeychainItem.store(Data(bytes: &durationSeconds, count: MemoryLayout<Double>.size), for: .cooldownDurationSeconds, service: keychainService)
+                try storeVerified(Data(bytes: &durationSeconds, count: MemoryLayout<Double>.size), for: .cooldownDurationSeconds)
 
-                storeAttemptCount(0)
+                try storeAttemptCount(0)
                 state = .locked(cooldownDeadline: deadline)
                 FernletAuditLog.log("lock.cooldownStarted", context: [
                     "level": "\(newLevel)",
@@ -755,17 +802,17 @@ final class FernletLockService: FernletLockServicing {
                 ])
             }
         } else {
-            storeAttemptCount(newAttemptCount)
+            try storeAttemptCount(newAttemptCount)
             state = .locked(cooldownDeadline: activeCooldownDeadline())
         }
     }
 
-    private func storeAttemptCount(_ count: Int) {
-        KeychainItem.store(Data([UInt8(min(count, 255))]), for: .attemptCount, service: keychainService)
+    private func storeAttemptCount(_ count: Int) throws {
+        try storeVerified(Data([UInt8(min(count, 255))]), for: .attemptCount)
     }
 
     private func storedScryptN() -> Int {
-        guard let data = KeychainItem.load(for: .scryptN, service: keychainService),
+        guard let data = keychainLoad(.scryptN, keychainService),
               data.count == MemoryLayout<Int32>.size else {
             return 32768  // pre-NEW-3 installs stored no N; 32768 was the only value used
         }

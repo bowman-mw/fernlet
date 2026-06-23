@@ -1,7 +1,8 @@
 import Foundation
 
 final class ProximityCommitDetector {
-    private var window: [(timestamp: Date, distance: Double)] = []
+    private var thresholdEntryTime: Date?
+    private var closeSampleCount = 0
     private let proximityThreshold: Double
     private let dwellSeconds: Double
     private let minimumSamples: Int
@@ -13,14 +14,27 @@ final class ProximityCommitDetector {
     }
 
     func ingest(distanceMeters: Double, at timestamp: Date) -> Bool {
-        window.append((timestamp, distanceMeters))
-        let cutoff = timestamp.addingTimeInterval(-dwellSeconds)
-        window.removeAll { $0.timestamp < cutoff }
-        guard window.count >= minimumSamples else { return false }
-        guard timestamp.timeIntervalSince(window.first!.timestamp) >= dwellSeconds else { return false }
-        let average = window.reduce(0.0) { $0 + $1.distance } / Double(window.count)
-        return average < proximityThreshold
+        guard distanceMeters < proximityThreshold else {
+            reset()
+            return false
+        }
+
+        if thresholdEntryTime == nil {
+            thresholdEntryTime = timestamp
+        }
+        closeSampleCount += 1
+
+        guard closeSampleCount >= minimumSamples,
+              let thresholdEntryTime,
+              timestamp.timeIntervalSince(thresholdEntryTime) >= dwellSeconds else {
+            return false
+        }
+
+        return true
     }
 
-    func reset() { window.removeAll() }
+    func reset() {
+        thresholdEntryTime = nil
+        closeSampleCount = 0
+    }
 }

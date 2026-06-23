@@ -35,9 +35,10 @@ struct MenstrualNarrative: Identifiable, Equatable {
 
 final class MenstrualNarrativeRepository {
     private let context: NSManagedObjectContext
+    private let crypto = ColumnCrypto(label: "menstrual-narrative")
 
-    init(controller: PrivatePersistenceController = .shared) {
-        self.context = controller.container.viewContext
+    init(controller: PrivatePersistenceController? = nil) {
+        self.context = (controller ?? .shared).container.viewContext
     }
 
     init(context: NSManagedObjectContext) {
@@ -74,7 +75,13 @@ final class MenstrualNarrativeRepository {
         let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
         request.predicate = NSPredicate(format: "dateKey IN %@", keys)
         request.sortDescriptors = [NSSortDescriptor(key: "dateKey", ascending: true)]
-        return try context.fetch(request).compactMap { try decrypt($0, contentKey: contentKey) }
+        return try context.fetch(request).compactMap { object in
+            do {
+                return try decrypt(object, contentKey: contentKey)
+            } catch {
+                return nil
+            }
+        }
     }
 
     func narrative(forHKUUID hkExternalUUID: String, contentKey: SymmetricKey?) throws -> MenstrualNarrative? {
@@ -90,9 +97,9 @@ final class MenstrualNarrativeRepository {
         object.setValue(narrative.id, forKey: "id")
         object.setValue(narrative.hkExternalUUID, forKey: "hkExternalUUID")
         object.setValue(narrative.dateKey, forKey: "dateKey")
-        object.setValue(try encryptOptionalString(narrative.note, contentKey: contentKey), forKey: "noteCiphertext")
-        object.setValue(try encrypt(narrative.symptomFlags.map(\.rawValue), contentKey: contentKey), forKey: "symptomFlagsCiphertext")
-        object.setValue(try encrypt(narrative.customSymptomScales, contentKey: contentKey), forKey: "customSymptomScalesCiphertext")
+        object.setValue(try crypto.sealOptionalString(narrative.note, contentKey: contentKey), forKey: "noteCiphertext")
+        object.setValue(try crypto.seal(narrative.symptomFlags.map(\.rawValue), contentKey: contentKey), forKey: "symptomFlagsCiphertext")
+        object.setValue(try crypto.seal(narrative.customSymptomScales, contentKey: contentKey), forKey: "customSymptomScalesCiphertext")
         object.setValue(createdAt, forKey: "createdAt")
         object.setValue(Date(), forKey: "updatedAt")
     }
@@ -101,13 +108,13 @@ final class MenstrualNarrativeRepository {
         guard let id = object.value(forKey: "id") as? UUID,
               let hkExternalUUID = object.value(forKey: "hkExternalUUID") as? String,
               let dateKey = object.value(forKey: "dateKey") as? String else { return nil }
-        let symptomRaw: [String] = try decrypt((object.value(forKey: "symptomFlagsCiphertext") as? Data), contentKey: contentKey) ?? []
-        let scales: [String: Int] = try decrypt((object.value(forKey: "customSymptomScalesCiphertext") as? Data), contentKey: contentKey) ?? [:]
+        let symptomRaw: [String] = try crypto.open((object.value(forKey: "symptomFlagsCiphertext") as? Data), contentKey: contentKey) ?? []
+        let scales: [String: Int] = try crypto.open((object.value(forKey: "customSymptomScalesCiphertext") as? Data), contentKey: contentKey) ?? [:]
         return MenstrualNarrative(
             id: id,
             hkExternalUUID: hkExternalUUID,
             dateKey: dateKey,
-            note: try decryptString(object.value(forKey: "noteCiphertext") as? Data, contentKey: contentKey),
+            note: try crypto.openString(object.value(forKey: "noteCiphertext") as? Data, contentKey: contentKey),
             symptomFlags: symptomRaw.compactMap(PeriodSymptom.init(rawValue:)),
             customSymptomScales: scales,
             createdAt: object.value(forKey: "createdAt") as? Date ?? Date(),
@@ -122,41 +129,7 @@ final class MenstrualNarrativeRepository {
         return request
     }
 
-    private func encryptOptionalString(_ value: String?, contentKey: SymmetricKey) throws -> Data? {
-        guard let value, !value.isEmpty else { return nil }
-        return try ChaChaPoly.seal(Data(value.utf8), using: columnKey(from: contentKey)).combined
-    }
-
-    private func decryptString(_ data: Data?, contentKey: SymmetricKey) throws -> String? {
-        guard let data else { return nil }
-        let plaintext = try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: columnKey(from: contentKey))
-        return String(data: plaintext, encoding: .utf8)
-    }
-
-    private func encrypt<T: Encodable>(_ value: T, contentKey: SymmetricKey) throws -> Data {
-        let plaintext = try JSONEncoder().encode(value)
-        return try ChaChaPoly.seal(plaintext, using: columnKey(from: contentKey)).combined
-    }
-
-    private func decrypt<T: Decodable>(_ data: Data?, contentKey: SymmetricKey) throws -> T? {
-        guard let data else { return nil }
-        let plaintext = try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: columnKey(from: contentKey))
-        return try JSONDecoder().decode(T.self, from: plaintext)
-    }
-
-    private func columnKey(from contentKey: SymmetricKey) -> SymmetricKey {
-        HKDF<SHA256>.deriveKey(inputKeyMaterial: contentKey, info: Data("menstrual-narrative".utf8), outputByteCount: 32)
-    }
-
     private static func dateKeys(in interval: DateInterval) -> [String] {
-        var keys: [String] = []
-        let calendar = Calendar.current
-        var day = calendar.startOfDay(for: interval.start)
-        let end = calendar.startOfDay(for: interval.end)
-        while day <= end {
-            keys.append(FernletDate.dayKey(for: day))
-            day = calendar.date(byAdding: .day, value: 1, to: day) ?? day.addingTimeInterval(86_400)
-        }
-        return keys
+        FernletDate.dayKeys(in: interval)
     }
 }

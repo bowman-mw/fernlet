@@ -12,11 +12,15 @@ struct PeriodPredictionUITests {
         periodStore.prediction = try syntheticPrediction(in: gregorianCalendar(), month: 6)
         store.settings.hidePredictions = true
         var activeSheet: FernletSheet?
+        var isTabBarCompact = false
+        var tabResetToken = 0
 
         let view = PeriodTrackerView(
             store: store,
             periodStore: periodStore,
-            activeSheet: Binding(get: { activeSheet }, set: { activeSheet = $0 })
+            activeSheet: Binding(get: { activeSheet }, set: { activeSheet = $0 }),
+            isTabBarCompact: Binding(get: { isTabBarCompact }, set: { isTabBarCompact = $0 }),
+            tabResetToken: Binding(get: { tabResetToken }, set: { tabResetToken = $0 })
         )
 
         #expect(view.showsPrediction == false)

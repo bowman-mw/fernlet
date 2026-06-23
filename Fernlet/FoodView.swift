@@ -10,7 +10,6 @@ struct FoodView: View {
     @Binding var activeSheet: FernletSheet?
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
-    @State private var retryNotice: String?
     @State private var editingRecipe: RecipeDefinition?
     @State private var editingSavedRecipe: SavedRecipe?
     @State private var correctingMeal: Meal?
@@ -43,17 +42,9 @@ struct FoodView: View {
                                     .font(.callout.italic())
                                     .foregroundStyle(Color.slate)
                                 Button("Retry oldest") {
-                                    if let oldest = store.retryQueue.first {
-                                        store.clearRetryItem(oldest.id)
-                                        retryNotice = FernletVoice.message(for: .mealAnalysisFailed)
-                                    }
+                                    Task { await store.retryOldestMeal() }
                                 }
                                 .buttonStyle(.bordered)
-                                if let retryNotice {
-                                    Text(retryNotice)
-                                        .font(.caption.italic())
-                                        .foregroundStyle(Color.slate)
-                                }
                             }
                         }
                     }
@@ -302,7 +293,7 @@ struct RecipeImportSheet: View {
 
         Task {
             do {
-                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, foodItems: store.allFoodItems)
+                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, foodItems: store.allFoodItems, aiEnabled: store.settings.aiStatus != .off)
                 store.addSavedRecipe(SavedRecipe(importedRecipe: importedRecipe))
                 notice = "\(importedRecipe.name) added to your recipes."
                 isImportingURL = false
@@ -544,11 +535,10 @@ struct RecipeSheet: View {
 
                     SheetField("Ingredients") {
                         VStack(spacing: 8) {
-                            ForEach(ingredients.indices, id: \.self) { index in
-                                let ingredient = ingredients[index]
+                            ForEach($ingredients) { $ingredient in
                                 if expandedId == ingredient.id || ingredient.trimmedName.isEmpty {
                                     RecipeIngredientEditor(
-                                        ingredient: $ingredients[index],
+                                        ingredient: $ingredient,
                                         foodItems: store.allFoodItems,
                                         foodSearchIndex: foodSearchIndex,
                                         onSaveCustomIngredient: { store.saveCustomIngredient($0) },
@@ -943,7 +933,7 @@ struct RecipeIngredientEditor: View {
         guard ingredient.selectedFoodItemId == nil else { return }
         let normalizedName = FoodItemSearch.normalized(ingredient.trimmedName)
         if let exact = foodSearchIndex.exactNameMatch(for: normalizedName) {
-            select(exact)
+            ingredient.selectedFoodItemId = exact.id
         }
     }
 }
@@ -1130,8 +1120,7 @@ struct MealSheet: View {
                 Task {
                     let meals = await store.addResolvedMeals(from: mealDescription, type: selectedMealType)
                     #if canImport(UIKit)
-                    if let photo = capturedPhoto {
-                        let photoID = store.saveMealPhoto(photo)
+                    if let photo = capturedPhoto, let photoID = store.saveMealPhoto(photo) {
                         for meal in meals {
                             store.attachMealPhoto(mealID: meal.id, photoID: photoID)
                         }

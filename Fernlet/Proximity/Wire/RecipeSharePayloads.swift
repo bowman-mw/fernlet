@@ -95,5 +95,5 @@ struct PendingProximityRecipeShare: Identifiable, Equatable {
 struct ProximityRecipeShareRecipient: Identifiable, Equatable {
     var id: UUID
     var displayName: String
-    var fingerprint: String
+    var fingerprint: String?  // nil until identity introduction completes
 }

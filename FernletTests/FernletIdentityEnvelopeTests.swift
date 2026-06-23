@@ -457,17 +457,17 @@ struct FernletIdentityEnvelopeTests {
         let cache = ReplayCache(dateProvider: { clock.date })
 
         let id1 = UUID()
-        try cache.recordIfNew(envelopeID: id1)
+        try cache.recordIfNew(envelopeID: id1, createdAt: clock.date)
 
         // Confirm it's tracked
         #expect(throws: FernletIdentityEnvelope.VerifyError.replayDetected) {
-            try cache.recordIfNew(envelopeID: id1)
+            try cache.recordIfNew(envelopeID: id1, createdAt: clock.date)
         }
 
         // Advance clock by 25 hours — past the 24-hour retention window
         clock.date = clock.date.addingTimeInterval(25 * 60 * 60)
 
         // Old entry purged; same ID can be recorded again
-        try cache.recordIfNew(envelopeID: id1)
+        try cache.recordIfNew(envelopeID: id1, createdAt: clock.date)
     }
 }

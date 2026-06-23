@@ -119,8 +119,10 @@ enum FernletSheet: Identifiable {
     case settings
     case recipeBook
     case trends
-    case logPeriod(targetDate: Date?)
+    case logPeriod(targetDate: Date?, editingEntry: CycleDayEntry?)
     case logIntimacy
+    case editRecipe(RecipeDefinition)
+    case editSavedRecipe(SavedRecipe)
 
     var id: String {
         switch self {
@@ -139,6 +141,8 @@ enum FernletSheet: Identifiable {
         case .trends: "trends"
         case .logPeriod: "logPeriod"
         case .logIntimacy: "logIntimacy"
+        case .editRecipe(let r): "editRecipe-\(r.id)"
+        case .editSavedRecipe(let r): "editSavedRecipe-\(r.id)"
         }
     }
 }

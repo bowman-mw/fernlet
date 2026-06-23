@@ -60,8 +60,32 @@ struct CameraPreviewView: UIViewRepresentable {
 /// The arm/wind/disarm logic is independent of AVFoundation and fully testable.
 @Observable
 final class CameraCaptureController: NSObject {
+    enum CaptureError: LocalizedError, Equatable {
+        case cameraUnavailable
+        case captureInProgress
+
+        var errorDescription: String? {
+            switch self {
+            case .cameraUnavailable:
+                return "Camera access is unavailable."
+            case .captureInProgress:
+                return "A photo is already being captured."
+            }
+        }
+    }
+
     private(set) var isArmed: Bool = true
     private(set) var windProgress: Double = 0  // 0.0 (unwound) → 1.0 (ready to arm)
+    private(set) var isSessionConfigured = false
+    private(set) var cameraAuthorizationStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+
+    var canCapturePhoto: Bool {
+        isSessionConfigured && cameraAuthorizationStatus == .authorized
+    }
+
+    var needsCameraPermissionPrompt: Bool {
+        cameraAuthorizationStatus == .denied || cameraAuthorizationStatus == .restricted
+    }
 
     @ObservationIgnored let session = AVCaptureSession()
     @ObservationIgnored private let photoOutput = AVCapturePhotoOutput()
@@ -69,35 +93,55 @@ final class CameraCaptureController: NSObject {
     @ObservationIgnored private var captureRotationObservation: NSKeyValueObservation?
     @ObservationIgnored private let sessionQueue = DispatchQueue(label: "com.fernlet.disposable-camera.session")
     @ObservationIgnored private var shouldRunSession = false
+    @ObservationIgnored private var sessionConfiguredOnQueue = false
     // Set on main actor before capture; consumed once on AVFoundation queue.
     // Single-flight guarantee (shutter disarms before capturePhoto returns) prevents races.
     @ObservationIgnored nonisolated(unsafe) private var captureCompletion: CheckedContinuation<Data, Error>?
 
     override init() {
         super.init()
-        configureSession()
     }
 
     // MARK: Session lifecycle
 
-    private func configureSession() {
+    private func configureSessionIfNeeded() -> Bool {
+        guard !sessionConfiguredOnQueue else { return true }
         session.beginConfiguration()
         session.sessionPreset = .photo
+        defer { session.commitConfiguration() }
+
         guard
             let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-            let input = try? AVCaptureDeviceInput(device: device)
+            let input = try? AVCaptureDeviceInput(device: device),
+            session.canAddInput(input),
+            session.canAddOutput(photoOutput)
         else {
-            session.commitConfiguration()
-            return
+            publishSessionConfigured(false)
+            return false
         }
-        if session.canAddInput(input) { session.addInput(input) }
-        if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
-        session.commitConfiguration()
+
+        session.addInput(input)
+        session.addOutput(photoOutput)
+        sessionConfiguredOnQueue = true
+        publishSessionConfigured(true)
 
         let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
         captureRotationCoordinator = coordinator
         captureRotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelCapture, options: [.initial, .new]) { [weak self] _, _ in
             self?.updateCaptureRotation()
+        }
+        return true
+    }
+
+    private func publishSessionConfigured(_ configured: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            self?.isSessionConfigured = configured
+        }
+    }
+
+    private func publishAuthorizationStatus(_ status: AVAuthorizationStatus) {
+        DispatchQueue.main.async { [weak self] in
+            self?.cameraAuthorizationStatus = status
         }
     }
 
@@ -112,17 +156,39 @@ final class CameraCaptureController: NSObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             shouldRunSession = true
-            guard !session.isRunning else { return }
 
-            Task { [weak self] in
-                guard let self else { return }
-                let granted = await AVCaptureDevice.requestAccess(for: .video)
-                sessionQueue.async { [weak self] in
-                    guard let self, granted, shouldRunSession, !session.isRunning else { return }
-                    session.startRunning()
+            switch AVCaptureDevice.authorizationStatus(for: .video) {
+            case .authorized:
+                publishAuthorizationStatus(.authorized)
+                startConfiguredSessionIfNeeded()
+            case .notDetermined:
+                Task { [weak self] in
+                    guard let self else { return }
+                    let granted = await AVCaptureDevice.requestAccess(for: .video)
+                    sessionQueue.async { [weak self] in
+                        guard let self else { return }
+                        let status = AVCaptureDevice.authorizationStatus(for: .video)
+                        publishAuthorizationStatus(status)
+                        guard granted, status == .authorized else {
+                            publishSessionConfigured(false)
+                            return
+                        }
+                        startConfiguredSessionIfNeeded()
+                    }
                 }
+            case .denied, .restricted:
+                publishAuthorizationStatus(AVCaptureDevice.authorizationStatus(for: .video))
+                publishSessionConfigured(false)
+            @unknown default:
+                publishAuthorizationStatus(AVCaptureDevice.authorizationStatus(for: .video))
+                publishSessionConfigured(false)
             }
         }
+    }
+
+    private func startConfiguredSessionIfNeeded() {
+        guard shouldRunSession, !session.isRunning, configureSessionIfNeeded() else { return }
+        session.startRunning()
     }
 
     func stopSession() {
@@ -176,6 +242,15 @@ final class CameraCaptureController: NSObject {
                 cont.resume(throwing: CocoaError(.fileNoSuchFile))
                 return
             }
+            guard captureCompletion == nil else {
+                cont.resume(throwing: CaptureError.captureInProgress)
+                return
+            }
+            guard canCapturePhoto, photoOutput.connection(with: .video) != nil else {
+                cont.resume(throwing: CaptureError.cameraUnavailable)
+                return
+            }
+
             captureCompletion = cont
             let settings = AVCapturePhotoSettings()
             settings.flashMode = .off
@@ -211,6 +286,7 @@ struct DisposableCameraView: View {
     @State private var showInfo = false
     @State private var reviewPresented = false
     @State private var selectedForSave: Set<UUID> = []
+    @State private var photoSaveError: String? = nil
     @State private var activeRemovalProposal: MeshRemovalProposalPayload?
     @State private var previousWindTranslation: CGFloat = 0
     @State private var renamingMesh = false
@@ -258,7 +334,11 @@ struct DisposableCameraView: View {
         .sheet(isPresented: $showInfo) { infoSheet }
         .sheet(isPresented: Binding(
             get: { !manager.pendingAdmissionRequests.isEmpty && manager.currentMesh != nil },
-            set: { _ in }
+            set: { isPresented in
+                if !isPresented {
+                    manager.pendingAdmissionRequests.forEach { manager.declineAdmission($0) }
+                }
+            }
         )) {
             if let mesh = manager.currentMesh {
                 MeshAdmissionPromptSheet(
@@ -379,8 +459,36 @@ struct DisposableCameraView: View {
             CameraPreviewView(session: camera.session)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             viewfinderBrackets
+            if camera.needsCameraPermissionPrompt {
+                cameraPermissionPrompt
+            }
         }
         .aspectRatio(4.0 / 3.0, contentMode: .fit)
+    }
+
+    private var cameraPermissionPrompt: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "camera.fill")
+                .font(.system(size: 26, weight: .semibold))
+            Text("Camera access needed")
+                .font(.system(size: 16, weight: .semibold))
+            Button("Open Settings") {
+                openAppSettings()
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 7))
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityIdentifier("camera.permissionPrompt")
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     private var viewfinderBrackets: some View {
@@ -424,7 +532,7 @@ struct DisposableCameraView: View {
     }
 
     private var shutterButton: some View {
-        let canShoot = camera.isArmed && manager.filmRemaining > 0
+        let canShoot = camera.isArmed && manager.filmRemaining > 0 && camera.canCapturePhoto
         return Button {
             guard canShoot else { return }
             Task { await takePhoto() }
@@ -444,15 +552,25 @@ struct DisposableCameraView: View {
                     Image(systemName: "film.slash")
                         .font(.system(size: 18))
                         .foregroundStyle(Color.red.opacity(0.7))
+                } else if !camera.canCapturePhoto {
+                    Image(systemName: "camera.slash")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.white.opacity(0.5))
                 }
             }
         }
         .disabled(!canShoot)
         .scaleEffect(canShoot ? 1.0 : 0.9)
         .animation(.spring(response: 0.2, dampingFraction: 0.7), value: canShoot)
-        .accessibilityLabel(canShoot ? "Take photo" :
-            manager.filmRemaining == 0 ? "No film remaining" : "Wind camera first")
+        .accessibilityLabel(shutterAccessibilityLabel(canShoot: canShoot))
         .accessibilityIdentifier("camera.shutter")
+    }
+
+    private func shutterAccessibilityLabel(canShoot: Bool) -> String {
+        if canShoot { return "Take photo" }
+        if manager.filmRemaining == 0 { return "No film remaining" }
+        if !camera.canCapturePhoto { return "Camera unavailable" }
+        return "Wind camera first"
     }
 
     private func windIndicator(isLandscape: Bool) -> some View {
@@ -516,11 +634,15 @@ struct DisposableCameraView: View {
     // MARK: - Photo capture
 
     private func takePhoto() async {
-        guard camera.isArmed, manager.filmRemaining > 0 else { return }
+        guard camera.isArmed, manager.filmRemaining > 0, camera.canCapturePhoto else { return }
         camera.disarm()
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-        guard let data = try? await camera.capturePhoto() else { return }
-        manager.addPhoto(data)
+        do {
+            let data = try await camera.capturePhoto()
+            manager.addPhoto(data)
+        } catch {
+            manager.meshError = error.localizedDescription
+        }
     }
 
     // MARK: - Develop / leave
@@ -549,10 +671,16 @@ struct DisposableCameraView: View {
             selectedIDs: $selectedForSave,
             saveSelected: {
                 let toSave = manager.sessionPhotos.filter { selectedForSave.contains($0.id) }
-                try? await FriendPhotoLibrarySaver.save(toSave)
-                manager.finishSessionPhotos(keeping: selectedForSave)
-                await manager.leaveSessionAfterNotifyingPeers()
-                reviewPresented = false
+                do {
+                    try await FriendPhotoLibrarySaver.save(toSave)
+                    manager.finishSessionPhotos(keeping: selectedForSave)
+                    await manager.leaveSessionAfterNotifyingPeers()
+                    reviewPresented = false
+                } catch CocoaError.userCancelled {
+                    photoSaveError = "Fernlet needs access to your Photo Library to save photos. Open Settings to grant access."
+                } catch {
+                    photoSaveError = "Could not save to your photo library. Please try again."
+                }
             },
             discardAll: {
                 manager.deleteAllSessionPhotos()
@@ -562,6 +690,22 @@ struct DisposableCameraView: View {
                 }
             }
         )
+        .alert("Couldn't Save Photos", isPresented: Binding(
+            get: { photoSaveError != nil },
+            set: { if !$0 { photoSaveError = nil } }
+        )) {
+            if photoSaveError?.contains("Settings") == true {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                    photoSaveError = nil
+                }
+            }
+            Button("OK", role: .cancel) { photoSaveError = nil }
+        } message: {
+            Text(photoSaveError ?? "")
+        }
     }
 
     // MARK: - Info sheet

@@ -45,36 +45,73 @@ struct SharedRecipeImportQueue {
     }
 
     func records() -> [SharedRecipeImportRecord] {
-        guard fileManager.fileExists(atPath: fileURL.path),
-              let data = try? Data(contentsOf: fileURL),
-              let records = try? decoder.decode([SharedRecipeImportRecord].self, from: data) else {
-            return []
+        var result: [SharedRecipeImportRecord] = []
+        var coordinatorError: NSError?
+        let coordinator = NSFileCoordinator()
+        coordinator.coordinate(readingItemAt: fileURL, options: .withoutChanges, error: &coordinatorError) { url in
+            guard fileManager.fileExists(atPath: url.path),
+                  let data = try? Data(contentsOf: url),
+                  let decoded = try? decoder.decode([SharedRecipeImportRecord].self, from: data) else { return }
+            result = decoded
         }
-        return records
+        return result
     }
 
     func remove(_ record: SharedRecipeImportRecord) {
-        save(records().filter { $0.id != record.id })
+        modifyRecords { $0.removeAll { $0.id == record.id } }
     }
 
     func markAttempt(_ record: SharedRecipeImportRecord, errorDescription: String?) {
-        var updatedRecords = records()
-        guard let index = updatedRecords.firstIndex(where: { $0.id == record.id }) else { return }
-        updatedRecords[index].attemptCount += 1
-        updatedRecords[index].lastAttemptAt = Date()
-        updatedRecords[index].lastErrorDescription = errorDescription
-        save(updatedRecords)
+        modifyRecords { records in
+            guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
+            records[index].attemptCount += 1
+            records[index].lastAttemptAt = Date()
+            records[index].lastErrorDescription = errorDescription
+            if records[index].attemptCount >= 5 {
+                records.remove(at: index)
+            }
+        }
+    }
+
+    private func modifyRecords(_ transform: (inout [SharedRecipeImportRecord]) -> Void) {
+        var coordinatorError: NSError?
+        let coordinator = NSFileCoordinator()
+        coordinator.coordinate(readingItemAt: fileURL, options: .withoutChanges,
+                               writingItemAt: fileURL, options: .forReplacing,
+                               error: &coordinatorError) { readURL, writeURL in
+            var current: [SharedRecipeImportRecord] = []
+            if fileManager.fileExists(atPath: readURL.path) {
+                guard let data = try? Data(contentsOf: readURL),
+                      let decoded = try? decoder.decode([SharedRecipeImportRecord].self, from: data) else {
+                    return  // File exists but corrupt — abort mutation to preserve data.
+                }
+                current = decoded
+            }
+            transform(&current)
+            writeRecords(current, to: writeURL)
+        }
     }
 
     @discardableResult
-    private func save(_ records: [SharedRecipeImportRecord]) -> Bool {
+    func save(_ records: [SharedRecipeImportRecord]) -> Bool {
+        var success = false
+        var coordinatorError: NSError?
+        let coordinator = NSFileCoordinator()
+        coordinator.coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordinatorError) { url in
+            success = writeRecords(records, to: url)
+        }
+        return success && coordinatorError == nil
+    }
+
+    @discardableResult
+    private func writeRecords(_ records: [SharedRecipeImportRecord], to url: URL) -> Bool {
         do {
             try fileManager.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
+                at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
             let data = try encoder.encode(records)
-            try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             return true
         } catch {
             assertionFailure("shared recipe import queue write failed")

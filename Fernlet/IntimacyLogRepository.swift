@@ -49,9 +49,10 @@ struct IntimacyLog: Identifiable, Equatable {
 
 final class IntimacyLogRepository {
     private let context: NSManagedObjectContext
+    private let crypto = ColumnCrypto(label: "intimacy-log")
 
-    init(controller: PrivatePersistenceController = .shared) {
-        self.context = controller.container.viewContext
+    init(controller: PrivatePersistenceController? = nil) {
+        self.context = (controller ?? .shared).container.viewContext
     }
 
     init(context: NSManagedObjectContext) {
@@ -64,7 +65,7 @@ final class IntimacyLogRepository {
         object.setValue(log.id, forKey: "id")
         object.setValue(log.dayKey, forKey: "dayKey")
         object.setValue(log.eventDate, forKey: "eventDate")
-        object.setValue(try seal(log.note, contentKey: contentKey), forKey: "noteCiphertext")
+        object.setValue(try crypto.sealString(log.note, contentKey: contentKey), forKey: "noteCiphertext")
         object.setValue(log.healthKitExternalUUID, forKey: "healthKitExternalUUID")
         object.setValue(log.createdAt, forKey: "createdAt")
         object.setValue(log.updatedAt, forKey: "updatedAt")
@@ -76,18 +77,11 @@ final class IntimacyLogRepository {
         let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
         request.sortDescriptors = [NSSortDescriptor(key: "eventDate", ascending: false)]
         return try context.fetch(request).compactMap { object in
-            guard let id = object.value(forKey: "id") as? UUID,
-                  let dayKey = object.value(forKey: "dayKey") as? String,
-                  let eventDate = object.value(forKey: "eventDate") as? Date else { return nil }
-            return IntimacyLog(
-                id: id,
-                dayKey: dayKey,
-                eventDate: eventDate,
-                note: try open(object.value(forKey: "noteCiphertext") as? Data, contentKey: contentKey),
-                healthKitExternalUUID: object.value(forKey: "healthKitExternalUUID") as? String,
-                createdAt: object.value(forKey: "createdAt") as? Date ?? eventDate,
-                updatedAt: object.value(forKey: "updatedAt") as? Date ?? eventDate
-            )
+            do {
+                return try decryptLog(object, contentKey: contentKey)
+            } catch {
+                return nil
+            }
         }
     }
 
@@ -110,17 +104,19 @@ final class IntimacyLogRepository {
         try context.save()
     }
 
-    private func seal(_ value: String, contentKey: SymmetricKey) throws -> Data {
-        try ChaChaPoly.seal(Data(value.utf8), using: columnKey(from: contentKey)).combined
+    private func decryptLog(_ object: NSManagedObject, contentKey: SymmetricKey) throws -> IntimacyLog? {
+        guard let id = object.value(forKey: "id") as? UUID,
+              let dayKey = object.value(forKey: "dayKey") as? String,
+              let eventDate = object.value(forKey: "eventDate") as? Date else { return nil }
+        return IntimacyLog(
+            id: id,
+            dayKey: dayKey,
+            eventDate: eventDate,
+            note: try crypto.openString(object.value(forKey: "noteCiphertext") as? Data, contentKey: contentKey) ?? "",
+            healthKitExternalUUID: object.value(forKey: "healthKitExternalUUID") as? String,
+            createdAt: object.value(forKey: "createdAt") as? Date ?? eventDate,
+            updatedAt: object.value(forKey: "updatedAt") as? Date ?? eventDate
+        )
     }
 
-    private func open(_ data: Data?, contentKey: SymmetricKey) throws -> String {
-        guard let data else { return "" }
-        let plaintext = try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: columnKey(from: contentKey))
-        return String(data: plaintext, encoding: .utf8) ?? ""
-    }
-
-    private func columnKey(from contentKey: SymmetricKey) -> SymmetricKey {
-        HKDF<SHA256>.deriveKey(inputKeyMaterial: contentKey, info: Data("intimacy-log".utf8), outputByteCount: 32)
-    }
 }

@@ -70,7 +70,6 @@ final class PeerChannelTransport: MultipeerTransport {
 final class MeshMultipeerSession: NSObject {
 
     nonisolated static let friendServiceType   = "fernlet-friend"
-    nonisolated static let trainerServiceType  = "fernlet-coach-mesh"
 
     let localPeerID: MCPeerID
     private(set) var channels: [MCPeerID: PeerChannelTransport] = [:]
@@ -80,7 +79,7 @@ final class MeshMultipeerSession: NSObject {
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
     private var activeServiceType: String = MeshMultipeerSession.friendServiceType
-    private var pendingConnectionPeers: Set<MCPeerID> = []
+    private var pendingConnectionPeers: [MCPeerID: UUID] = [:]
 
     var onPeerDiscovered: ((MultipeerPeer) -> Void)?
     var onPeerLost: ((MultipeerPeer) -> Void)?
@@ -127,12 +126,14 @@ final class MeshMultipeerSession: NSObject {
 
     func invite(_ peer: MultipeerPeer) {
         guard let session = mcSession, let browser else { return }
-        guard !pendingConnectionPeers.contains(peer.underlying) else { return }
         guard !session.connectedPeers.contains(peer.underlying) else { return }
-        pendingConnectionPeers.insert(peer.underlying)
+        guard pendingConnectionPeers[peer.underlying] == nil else { return }
+        let inviteID = UUID()
+        pendingConnectionPeers[peer.underlying] = inviteID
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(31))
-            self?.pendingConnectionPeers.remove(peer.underlying)
+            guard self?.pendingConnectionPeers[peer.underlying] == inviteID else { return }
+            self?.pendingConnectionPeers.removeValue(forKey: peer.underlying)
         }
         _ = prepareChannel(for: peer.underlying)
         browser.invitePeer(peer.underlying, to: session, withContext: nil, timeout: 30)
@@ -217,7 +218,7 @@ extension MeshMultipeerSession: MCSessionDelegate {
             let peer = self.peer(for: peerID)
             switch state {
             case .connected:
-                self.pendingConnectionPeers.remove(peerID)
+                self.pendingConnectionPeers.removeValue(forKey: peerID)
                 let channel = self.prepareChannel(for: peerID)
                 // onPeerChannelReady creates the coordinator and queues begin() as a Task.
                 // begin() suspends at `await transport.disconnect()`, which would let a
@@ -227,14 +228,22 @@ extension MeshMultipeerSession: MCSessionDelegate {
                 // The channel owner calls notifyConnected() after its awaited begin() completes.
                 self.onPeerChannelReady?(channel)
             case .notConnected:
-                self.pendingConnectionPeers.remove(peerID)
+                self.pendingConnectionPeers.removeValue(forKey: peerID)
                 if let channel = self.channels[peerID] {
                     channel.notifyDisconnected()
                 }
                 self.channels.removeValue(forKey: peerID)
                 self.onPeerDisconnected?(peer, "Peer disconnected")
             case .connecting:
-                self.pendingConnectionPeers.insert(peerID)
+                if self.pendingConnectionPeers[peerID] == nil {
+                    let inviteID = UUID()
+                    self.pendingConnectionPeers[peerID] = inviteID
+                    Task { @MainActor [weak self] in
+                        try? await Task.sleep(for: .seconds(31))
+                        guard self?.pendingConnectionPeers[peerID] == inviteID else { return }
+                        self?.pendingConnectionPeers.removeValue(forKey: peerID)
+                    }
+                }
             @unknown default:
                 break
             }
@@ -267,7 +276,13 @@ extension MeshMultipeerSession: MCNearbyServiceAdvertiserDelegate {
             let peer = self.peer(for: peerID)
             let accept = self.shouldAcceptInvitation?(peer) ?? false
             if accept {
-                self.pendingConnectionPeers.insert(peerID)
+                let inviteID = UUID()
+                self.pendingConnectionPeers[peerID] = inviteID
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(31))
+                    guard self?.pendingConnectionPeers[peerID] == inviteID else { return }
+                    self?.pendingConnectionPeers.removeValue(forKey: peerID)
+                }
                 _ = self.prepareChannel(for: peerID)
             }
             invitationHandler(accept, accept ? self.mcSession : nil)
@@ -293,7 +308,10 @@ extension MeshMultipeerSession: MCNearbyServiceBrowserDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let peer = self.peer(for: peerID)
-            self.peerMap.removeValue(forKey: peerID)
+            if self.channels[peerID] == nil {
+                self.peerInfoCache.removeValue(forKey: peerID)
+                self.peerMap.removeValue(forKey: peerID)
+            }
             self.onPeerLost?(peer)
         }
     }

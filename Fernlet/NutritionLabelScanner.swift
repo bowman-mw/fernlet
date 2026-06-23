@@ -88,7 +88,6 @@ enum NutritionLabelScanError: LocalizedError {
     }
 }
 
-@MainActor
 final class NutritionLabelScanner {
     static func scan(image: UIImage) async throws -> NutritionLabelResult {
         let lines = try await recognizeText(in: image)
@@ -104,46 +103,55 @@ final class NutritionLabelScanner {
         return (dual?.col1 ?? parse(lines: lines), dual)
     }
 
-    private static func recognizeText(in image: UIImage) async throws -> [String] {
+    nonisolated static func recognizeText(
+        in image: UIImage,
+        workDidStart: (@Sendable () -> Void)? = nil
+    ) async throws -> [String] {
         guard let rawCGImage = image.cgImage else {
             throw NutritionLabelScanError.imageConversionFailed
         }
-        let cgImage = preprocessImage(image) ?? rawCGImage
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let request = VNRecognizeTextRequest { request, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                let observations = request.results as? [VNRecognizedTextObservation] ?? []
-                let lines = observations.compactMap { $0.topCandidates(1).first?.string }
-                continuation.resume(returning: lines)
-            }
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = true
-            request.customWords = [
-                "Calories", "Total Fat", "Saturated Fat", "Trans Fat",
-                "Cholesterol", "Sodium", "Total Carbohydrate", "Dietary Fiber",
-                "Total Sugars", "Added Sugars", "Protein", "Vitamin D",
-                "Calcium", "Iron", "Potassium", "Vitamin A", "Vitamin C",
-                "Vitamin E", "Vitamin B12", "Folate", "Magnesium", "Zinc",
-                "Niacin", "Thiamin", "Riboflavin", "Phosphorus", "Omega-3",
-                "DHA", "EPA", "% Daily Value", "%DV", "Serving size",
-                "Servings per container", "Amount per serving"
-            ]
-
-            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-            do {
-                try handler.perform([request])
-            } catch {
-                continuation.resume(throwing: error)
-            }
-        }
+        return try await Task.detached(priority: .userInitiated) {
+            workDidStart?()
+            let cgImage = preprocessImage(rawCGImage) ?? rawCGImage
+            return try recognizeTextSynchronously(in: cgImage)
+        }.value
     }
 
-    private static func preprocessImage(_ image: UIImage) -> CGImage? {
-        guard var ciImage = CIImage(image: image) else { return nil }
+    nonisolated private static func recognizeTextSynchronously(in cgImage: CGImage) throws -> [String] {
+        var recognitionError: Error?
+        var recognizedLines: [String] = []
+        let request = VNRecognizeTextRequest { request, error in
+            if let error {
+                recognitionError = error
+                return
+            }
+            let observations = request.results as? [VNRecognizedTextObservation] ?? []
+            recognizedLines = observations.compactMap { $0.topCandidates(1).first?.string }
+        }
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        request.customWords = [
+            "Calories", "Total Fat", "Saturated Fat", "Trans Fat",
+            "Cholesterol", "Sodium", "Total Carbohydrate", "Dietary Fiber",
+            "Total Sugars", "Added Sugars", "Protein", "Vitamin D",
+            "Calcium", "Iron", "Potassium", "Vitamin A", "Vitamin C",
+            "Vitamin E", "Vitamin B12", "Folate", "Magnesium", "Zinc",
+            "Niacin", "Thiamin", "Riboflavin", "Phosphorus", "Omega-3",
+            "DHA", "EPA", "% Daily Value", "%DV", "Serving size",
+            "Servings per container", "Amount per serving"
+        ]
+
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        try handler.perform([request])
+        if let recognitionError {
+            throw recognitionError
+        }
+        return recognizedLines
+    }
+
+    nonisolated private static func preprocessImage(_ image: CGImage) -> CGImage? {
+        var ciImage = CIImage(cgImage: image)
 
         if let correctedImage = perspectiveCorrectedImage(from: ciImage) {
             ciImage = correctedImage
@@ -163,7 +171,7 @@ final class NutritionLabelScanner {
         return context.createCGImage(ciImage, from: ciImage.extent)
     }
 
-    private static func perspectiveCorrectedImage(from image: CIImage) -> CIImage? {
+    nonisolated private static func perspectiveCorrectedImage(from image: CIImage) -> CIImage? {
         guard let rectangle = detectedDocumentRectangle(in: image) else { return nil }
 
         let width = image.extent.width
@@ -177,7 +185,7 @@ final class NutritionLabelScanner {
         return correction.outputImage
     }
 
-    private static func detectedDocumentRectangle(in image: CIImage) -> VNRectangleObservation? {
+    nonisolated private static func detectedDocumentRectangle(in image: CIImage) -> VNRectangleObservation? {
         guard let cgImage = CIContext().createCGImage(image, from: image.extent) else { return nil }
         let request = VNDetectDocumentSegmentationRequest()
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
@@ -190,7 +198,7 @@ final class NutritionLabelScanner {
         }
     }
 
-    private static func imagePoint(from normalizedPoint: CGPoint, width: CGFloat, height: CGFloat) -> CGPoint {
+    nonisolated private static func imagePoint(from normalizedPoint: CGPoint, width: CGFloat, height: CGFloat) -> CGPoint {
         CGPoint(x: normalizedPoint.x * width, y: normalizedPoint.y * height)
     }
 
@@ -530,7 +538,7 @@ final class NutritionLabelScanner {
             return ug
         }
         if let mg = extractFirstNumericWithUnit(from: text, unit: "mg", matchIndex: matchIndex) {
-            return mg
+            return mg * 1000  // convert mg to mcg (canonical unit for vitaminD/A/B12/folate)
         }
         return text.contains("%") ? nil : extractFirstBareNumber(from: text, matchIndex: matchIndex)
     }
@@ -545,31 +553,45 @@ final class NutritionLabelScanner {
         return nil
     }
 
+    /// Parses a captured numeric token into a `Double`, treating a single comma followed by
+    /// exactly three digits as a thousands separator (US "1,150" -> 1150) and any other comma
+    /// as a decimal separator (European "12,5" -> 12.5). A blind comma->dot replacement would
+    /// misread comma-grouped sodium/potassium values ~1000x too low.
+    private static func normalizedNumber(_ token: Substring) -> Double? {
+        let string = String(token)
+        guard string.contains(",") else { return Double(string) }
+        if string.filter({ $0 == "," }).count > 1 {
+            return Double(string.replacingOccurrences(of: ",", with: ""))
+        }
+        let isThousands = string.range(of: #",\d{3}(?!\d)"#, options: .regularExpression) != nil
+        return Double(string.replacingOccurrences(of: ",", with: isThousands ? "" : "."))
+    }
+
     private static func extractFromDailyValue(from text: String, dvReference: Double, matchIndex: Int = 0) -> Double? {
-        let pattern = #"(\d+\.?\d*)\s*%"#
+        let pattern = #"(\d+(?:[.,]\d+)?)\s*%"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let nsRange = NSRange(text.startIndex..., in: text)
         let matches = regex.matches(in: text, range: nsRange)
         guard matches.count > matchIndex,
               let range = Range(matches[matchIndex].range(at: 1), in: text),
-              let percent = Double(text[range]) else { return nil }
+              let percent = normalizedNumber(text[range]) else { return nil }
         return dvReference * percent / 100
     }
 
     private static func extractFirstNumericWithUnit(from text: String, unit: String, matchIndex: Int = 0) -> Double? {
         let escaped = NSRegularExpression.escapedPattern(for: unit)
-        let pattern = #"(\d+\.?\d*)\s*"# + escaped
+        let pattern = #"(\d+(?:[.,]\d+)?)\s*"# + escaped
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let nsRange = NSRange(text.startIndex..., in: text)
         let matches = regex.matches(in: text, range: nsRange)
         guard matches.count > matchIndex,
               let range = Range(matches[matchIndex].range(at: 1), in: text) else { return nil }
-        return Double(text[range])
+        return normalizedNumber(text[range])
     }
 
     // Only counts matches that don't satisfy excludePattern toward matchIndex.
     private static func extractNumericBeforeUnit(from text: String, unitPattern: String, excludePattern: String, matchIndex: Int = 0) -> Double? {
-        let pattern = #"(\d+\.?\d*)\s*"# + unitPattern
+        let pattern = #"(\d+(?:[.,]\d+)?)\s*"# + unitPattern
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
         let nsRange = NSRange(text.startIndex..., in: text)
         let allMatches = regex.matches(in: text, range: nsRange)
@@ -585,7 +607,7 @@ final class NutritionLabelScanner {
                 continue
             }
             if validCount == matchIndex {
-                return Double(text[numberRange])
+                return normalizedNumber(text[numberRange])
             }
             validCount += 1
         }
@@ -594,7 +616,7 @@ final class NutritionLabelScanner {
 
     // Forward iteration; matchIndex selects which non-percentage numeric token to return.
     private static func extractFirstBareNumber(from text: String, matchIndex: Int = 0) -> Double? {
-        let pattern = #"(\d+\.?\d*)"#
+        let pattern = #"(\d+(?:[.,]\d+)?)"#
         let components = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
         var count = 0
         for component in components {
@@ -602,7 +624,7 @@ final class NutritionLabelScanner {
                   let regex = try? NSRegularExpression(pattern: pattern),
                   let match = regex.firstMatch(in: component, range: NSRange(component.startIndex..., in: component)),
                   let range = Range(match.range(at: 1), in: component) else { continue }
-            if count == matchIndex { return Double(component[range]) }
+            if count == matchIndex { return normalizedNumber(component[range]) }
             count += 1
         }
         return nil

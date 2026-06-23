@@ -140,12 +140,9 @@ struct EncryptedMetadataInner: Codable {
 }
 
 func canonicalBytes(for token: MeshAdmissionToken) -> Data {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-    encoder.dateEncodingStrategy = .iso8601
     var copy = token
     copy.admitterSignature = Data()
-    return try! encoder.encode(copy)
+    return try! makeCanonicalSignatureEncoder().encode(copy)
 }
 
 extension MeshAdmissionToken {

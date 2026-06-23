@@ -5,7 +5,7 @@ import HealthKit
 
 struct UserLoggedCycleEvent: Equatable {
     var date: Date = Date()
-    var flowLevel: PeriodFlowLevel = .unspecified
+    var flowLevel: PeriodFlowLevel?
     var basalBodyTemperature: Double?
     var temperatureUnit: PeriodTemperatureUnit = .fahrenheit
     var cervicalMucusQuality: CervicalMucusQuality?
@@ -111,7 +111,7 @@ struct CycleDayEntry: Identifiable, Equatable {
     var narrative: MenstrualNarrative?
     var phase: CyclePhase
 
-    var hasObservedEvent: Bool { !samples.isEmpty }
+    var hasObservedEvent: Bool { !samples.isEmpty || narrative != nil }
     var menstrualFlowSamples: [HKCategorySample] {
         samples.compactMap { $0 as? HKCategorySample }.filter { $0.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue }
     }
@@ -135,6 +135,24 @@ struct CycleDayEntry: Identifiable, Equatable {
         default: return "Unspecified"
         }
     }
+    var isCycleStart: Bool {
+        menstrualFlowSamples.first?.metadata?[HKMetadataKeyMenstrualCycleStart] as? Bool ?? false
+    }
+    var hasIntermenstrualBleeding: Bool {
+        samples.contains { ($0 as? HKCategorySample)?.categoryType.identifier == HKCategoryTypeIdentifier.intermenstrualBleeding.rawValue }
+    }
+    var cervicalMucusQuality: CervicalMucusQuality? {
+        guard let sample = samples.compactMap({ $0 as? HKCategorySample }).first(where: { $0.categoryType.identifier == HKCategoryTypeIdentifier.cervicalMucusQuality.rawValue }) else { return nil }
+        return CervicalMucusQuality.allCases.first { $0.hkValue == sample.value }
+    }
+    var ovulationTestResult: OvulationTestResult? {
+        guard let sample = samples.compactMap({ $0 as? HKCategorySample }).first(where: { $0.categoryType.identifier == HKCategoryTypeIdentifier.ovulationTestResult.rawValue }) else { return nil }
+        return OvulationTestResult.allCases.first { $0.hkValue == sample.value }
+    }
+    var basalBodyTemperatureFahrenheit: Double? {
+        guard let sample = samples.compactMap({ $0 as? HKQuantitySample }).first(where: { $0.quantityType.identifier == HKQuantityTypeIdentifier.basalBodyTemperature.rawValue }) else { return nil }
+        return sample.quantity.doubleValue(for: .degreeFahrenheit())
+    }
 }
 
 protocol PeriodHealthKitServicing: HealthKitServicing {
@@ -146,7 +164,9 @@ extension HealthKitService: PeriodHealthKitServicing {
     func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample] {
         guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
         let samples = try Self.periodSamples(for: event, externalUUID: externalUUID)
-        try await save(samples)
+        if !samples.isEmpty {
+            try await save(samples)
+        }
         FernletAuditLog.log("hk.write.saved", context: ["type": "cycle", "externalUUID": externalUUID.uuidString])
         return samples
     }
@@ -168,9 +188,11 @@ extension HealthKitService: PeriodHealthKitServicing {
             HKMetadataKeyExternalUUID: externalUUID.uuidString,
             HKMetadataKeyMenstrualCycleStart: event.isCycleStart
         ]
-        var samples: [HKSample] = [
-            HKCategorySample(type: try categoryType(.menstrualFlow), value: event.flowLevel.hkValue, start: start, end: end, metadata: metadata)
-        ]
+        var samples: [HKSample] = []
+
+        if let flowLevel = event.flowLevel {
+            samples.append(HKCategorySample(type: try categoryType(.menstrualFlow), value: flowLevel.hkValue, start: start, end: end, metadata: metadata))
+        }
 
         if let temperature = event.basalBodyTemperature {
             let unit: HKUnit = event.temperatureUnit == .fahrenheit ? .degreeFahrenheit() : .degreeCelsius()
@@ -289,18 +311,36 @@ final class PeriodTrackerStore {
         return .savedWithBufferedNarrative
     }
 
-    func deleteEntry(_ entry: CycleDayEntry) async throws {
-        try await healthService.delete(entry.samples)
+    func editEvent(_ event: UserLoggedCycleEvent, replacingEntry entry: CycleDayEntry, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
+        let bundleID = Bundle.main.bundleIdentifier ?? ""
+        let ownedSamples = entry.samples.filter { $0.sourceRevision.source.bundleIdentifier == bundleID }
+        if !ownedSamples.isEmpty {
+            try await healthService.delete(ownedSamples)
+        }
         if let narrative = entry.narrative {
-            try narrativeRepository.delete(id: narrative.id)
+            try? narrativeRepository.delete(id: narrative.id)
+        }
+        return try await logEvent(event, unlockedContentKey: unlockedContentKey)
+    }
+
+    func deleteEntry(_ entry: CycleDayEntry) async throws {
+        let bundleID = Bundle.main.bundleIdentifier ?? ""
+        let ownedSamples = entry.samples.filter { $0.sourceRevision.source.bundleIdentifier == bundleID }
+        if !ownedSamples.isEmpty {
+            try await healthService.delete(ownedSamples)
+        }
+        if let narrative = entry.narrative {
+            try? narrativeRepository.delete(id: narrative.id)
         }
         entries.removeAll { $0.id == entry.id }
+        prediction = CyclePredictionEngine.predict(from: entries, today: Date(), calendar: calendar)
         currentPhase = currentPhaseFromObservations()
     }
 
     func drainPendingBuffer(contentKey: SymmetricKey) async throws {
         guard let lockService else { return }
         let pending = try lockService.drainPendingNarratives()
+        guard !pending.isEmpty else { return }
         for payload in pending {
             let symptomsRaw = try payload.symptomFlagsBytes.map { try JSONDecoder().decode([String].self, from: $0) } ?? []
             let scales = try payload.customSymptomScalesBytes.map { try JSONDecoder().decode([String: Int].self, from: $0) } ?? [:]
@@ -312,28 +352,40 @@ final class PeriodTrackerStore {
                 customSymptomScales: scales
             ), contentKey: contentKey)
         }
+        // Purge only after all inserts succeed, so a partial failure leaves the buffer intact.
+        try lockService.purgePendingNarratives()
     }
 
     func currentPhaseFromObservations() -> CyclePhase {
         let todayKey = FernletDate.dayKey(for: Date())
-        guard entries.first(where: { $0.dateKey == todayKey })?.menstrualFlowSamples.isEmpty == false else { return .unknown }
-        return .menstrual
+        guard let entry = entries.first(where: { $0.dateKey == todayKey }) else { return .unknown }
+        let hasActualFlow = entry.menstrualFlowSamples.contains { sample in
+            guard let flow = HKCategoryValueVaginalBleeding(rawValue: sample.value) else { return false }
+            return flow != .none
+        }
+        return hasActualFlow ? .menstrual : .unknown
     }
 
     private func buildEntries(samples: [HKSample], narratives: [String: MenstrualNarrative], range: DateInterval) -> [CycleDayEntry] {
         let grouped = Dictionary(grouping: samples) { FernletDate.dayKey(for: $0.startDate) }
+        // Note/symptom-only events have no backing HealthKit sample, so they can't be matched
+        // by sample external UUID. Index narratives by their own day key so those entries still
+        // surface instead of being silently orphaned in the encrypted store.
+        var narrativesByDayKey: [String: [MenstrualNarrative]] = [:]
+        for narrative in narratives.values {
+            narrativesByDayKey[narrative.dateKey, default: []].append(narrative)
+        }
         var result: [CycleDayEntry] = []
-        var day = calendar.startOfDay(for: range.start)
-        let end = calendar.startOfDay(for: range.end)
-        while day <= end {
-            let key = FernletDate.dayKey(for: day)
+        for key in FernletDate.dayKeys(in: range, calendar: calendar) {
+            guard let day = FernletDate.date(fromDayKey: key) else { continue }
             let daySamples = grouped[key] ?? []
-            let narrative = daySamples.compactMap { $0.metadata?[HKMetadataKeyExternalUUID] as? String }.compactMap { narratives[$0] }.first
+            let sampleUUIDs = Set(daySamples.compactMap { $0.metadata?[HKMetadataKeyExternalUUID] as? String })
+            let narrative = sampleUUIDs.compactMap { narratives[$0] }.first
+                ?? narrativesByDayKey[key]?.first { !sampleUUIDs.contains($0.hkExternalUUID) }
             let phase: CyclePhase = daySamples.contains { sample in
                 (sample as? HKCategorySample)?.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue
             } ? .menstrual : .unknown
             result.append(CycleDayEntry(date: day, dateKey: key, samples: daySamples, narrative: narrative, phase: phase))
-            day = calendar.date(byAdding: .day, value: 1, to: day) ?? day.addingTimeInterval(86_400)
         }
         return result
     }

@@ -32,6 +32,7 @@ actor AIAuditLog {
         includedFields: [String],
         memorySummaryCharCount: Int = 0
     ) {
+        if entries.count >= 200 { entries.removeFirst() }
         entries.append(AIAuditEntry(
             timestamp: Date(),
             payloadKind: payloadKind,

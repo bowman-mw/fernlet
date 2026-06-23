@@ -103,10 +103,10 @@ final class LaunchPreparationService {
         // Keep launch work deterministic and cheap so the first screen can animate.
         store.photowallSeeds = buildPhotowallSeeds(store: store)
         statusMessage = "Reading your recent patterns..."
-        if let summary = deterministicDaySummaryForYesterday(store: store) {
+        if let summary = await generateDaySummary(for: store) {
             store.storeDaySummary(summary, for: yesterdayKey())
         }
-        store.storeCompanionThought(deterministicThought(for: store))
+        store.storeCompanionThought(await generateCompanionThought(for: store))
         await store.backfillWorkoutsFromHealthIfNeeded()
 
         // Cycle status messages while async work runs.
@@ -177,7 +177,7 @@ final class LaunchPreparationService {
 
     private func makeDaySummaryText(for day: FernletDay, store: FernletStore) async -> String? {
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, *), isFoundationModelAvailable {
+        if #available(iOS 26.0, *), isFoundationModelAvailable, store.settings.aiStatus != .off {
             if let text = await foundationModelsDaySummary(for: day) { return text }
         }
         #endif
@@ -198,22 +198,11 @@ final class LaunchPreparationService {
         return parts.joined(separator: ", ").capitalized + "."
     }
 
-    private func deterministicDaySummaryForYesterday(store: FernletStore) -> String? {
-        let key = yesterdayKey()
-        let targetDay = store.loadDay(for: key)
-
-        guard !targetDay.meals.isEmpty || !targetDay.workouts.isEmpty else { return nil }
-        if let existing = store.dailyScores.first(where: { $0.dateKey == key })?.daySummaryText,
-           !existing.isEmpty { return nil }
-
-        return deterministicDaySummary(for: targetDay)
-    }
-
     // MARK: - Companion thought
 
     private func generateCompanionThought(for store: FernletStore) async -> String {
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, *), isFoundationModelAvailable {
+        if #available(iOS 26.0, *), isFoundationModelAvailable, store.settings.aiStatus != .off {
             if let thought = await foundationModelsThought(for: store) { return thought }
         }
         #endif

@@ -10,11 +10,13 @@ struct FernletApp: App {
     @State private var loader = FernletStoreLoader()
     @AppStorage(OnboardingDefaults.hasCompletedOnboardingKey) private var hasCompletedOnboarding = false
     @State private var didScheduleStartupCloudSync = false
+    @State private var pendingPreferenceReload: StoragePreferences?
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         StartupTiming.beginAppLaunch()
 
+        #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-resetOnboarding") {
             UserDefaults.standard.removeObject(forKey: OnboardingDefaults.hasCompletedOnboardingKey)
             UserDefaults.standard.removeObject(forKey: OnboardingDefaults.lockSetupDeferredKey)
@@ -22,6 +24,7 @@ struct FernletApp: App {
         if ProcessInfo.processInfo.arguments.contains("-completeOnboarding") {
             UserDefaults.standard.set(true, forKey: OnboardingDefaults.hasCompletedOnboardingKey)
         }
+        #endif
         #if canImport(UIKit)
         UIScrollView.appearance().isDirectionalLockEnabled = true
         UIWindow.appearance().backgroundColor = UIColor(red: 0.961, green: 0.937, blue: 0.878, alpha: 1)
@@ -41,6 +44,9 @@ struct FernletApp: App {
             // Relock on background and on device lock
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background {
+                    if case .ready(let store) = loader.phase {
+                        store.flushPendingSnapshotSave()
+                    }
                     lockService.lock(reason: .background)
                 }
             }
@@ -78,7 +84,11 @@ struct FernletApp: App {
     }
 
     private var shouldOpenPrivacyDataForUITest: Bool {
+        #if DEBUG
         ProcessInfo.processInfo.environment["FERNLET_UI_TEST_OPEN_PRIVACY_DATA"] == "1"
+        #else
+        false
+        #endif
     }
 
     private var privacyDataTestContent: some View {
@@ -113,8 +123,12 @@ struct FernletApp: App {
         .onChange(of: storagePreferencesStore.preferences) { old, new in
             let storageChanged = old.iCloudSyncEnabled != new.iCloudSyncEnabled
                 || old.localBackupExcludedFromiOSBackup != new.localBackupExcludedFromiOSBackup
-            guard storageChanged else { return }
-            Task { await reloadPersistenceForPreferenceChange(new) }
+            if storageChanged {
+                Task { await reloadPersistenceForPreferenceChange(new) }
+            }
+            if old.healthKitMasterEnabled && !new.healthKitMasterEnabled {
+                store.stopHealthKitWorkoutObservation()
+            }
         }
         .task {
             await activateCloudSyncAfterStartupIfNeeded()
@@ -126,17 +140,26 @@ struct FernletApp: App {
         guard !didScheduleStartupCloudSync else { return }
         didScheduleStartupCloudSync = true
 
-        let preferences = storagePreferencesStore.preferences
-        guard preferences.iCloudSyncEnabled else { return }
+        guard storagePreferencesStore.preferences.iCloudSyncEnabled else { return }
         try? await Task.sleep(for: .seconds(5))
-        await reloadPersistenceForPreferenceChange(preferences)
+        guard !Task.isCancelled else { return }
+        let current = storagePreferencesStore.preferences
+        guard current.iCloudSyncEnabled else { return }
+        await reloadPersistenceForPreferenceChange(current)
     }
 
     @MainActor
     private func reloadPersistenceForPreferenceChange(_ preferences: StoragePreferences) async {
-        guard !PersistenceController.shared.isReloading else { return }
+        guard !PersistenceController.shared.isReloading else {
+            pendingPreferenceReload = preferences
+            return
+        }
         do {
             try await PersistenceController.shared.reload(with: preferences)
+            if let pending = pendingPreferenceReload {
+                pendingPreferenceReload = nil
+                await reloadPersistenceForPreferenceChange(pending)
+            }
         } catch {
             FernletAuditLog.log("persistence.reload.failed", context: [
                 "trigger": "appPreferencesChanged",

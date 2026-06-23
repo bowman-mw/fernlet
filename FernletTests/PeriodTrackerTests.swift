@@ -68,6 +68,41 @@ struct PeriodTrackerTests {
         #expect(sample.metadata?[HKMetadataKeyMenstrualCycleStart] as? Bool == true)
     }
 
+    @Test func cycleEventWithoutFlowDoesNotEmitMenstrualFlowSample() throws {
+        let samples = try HealthKitService.periodSamples(
+            for: UserLoggedCycleEvent(date: Date(), basalBodyTemperature: 98.6),
+            externalUUID: UUID()
+        )
+
+        #expect(samples.contains { sample in
+            sample.sampleType.identifier == HKQuantityTypeIdentifier.basalBodyTemperature.rawValue
+        })
+        #expect(samples.compactMap { $0 as? HKCategorySample }.allSatisfy { sample in
+            sample.categoryType.identifier != HKCategoryTypeIdentifier.menstrualFlow.rawValue
+        })
+    }
+
+    @Test func logEventWithDefaultFlowSavesNoHealthKitSamples() async throws {
+        let health = MockPeriodHealthKitService()
+        let periodStore = PeriodTrackerStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .notConfigured))
+
+        let result = try await periodStore.logEvent(UserLoggedCycleEvent(), unlockedContentKey: nil)
+
+        #expect(result == .saved)
+        #expect(health.savedSamples.isEmpty)
+    }
+
+    @Test func explicitUnspecifiedFlowEmitsHealthKitUnspecifiedSample() throws {
+        let samples = try HealthKitService.periodSamples(
+            for: UserLoggedCycleEvent(date: Date(), flowLevel: .unspecified),
+            externalUUID: UUID()
+        )
+        let sample = try #require(samples.first as? HKCategorySample)
+
+        #expect(sample.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue)
+        #expect(sample.value == HKCategoryValueVaginalBleeding.unspecified.rawValue)
+    }
+
     @Test func logEventPersistsProvidedDate() async throws {
         let health = MockPeriodHealthKitService()
         let key = SymmetricKey(data: Data(repeating: 6, count: 32))
@@ -338,5 +373,6 @@ private final class MockLockService: FernletLockServicing {
     func setBiometricEnabled(_ enabled: Bool, passcode: String) async throws { biometricEnabled = enabled }
     func contentKey() -> SymmetricKey? { key }
     func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws { pending.append(payload) }
-    func drainPendingNarratives() throws -> [PendingNarrativePayload] { defer { pending = [] }; return pending }
+    func drainPendingNarratives() throws -> [PendingNarrativePayload] { pending }
+    func purgePendingNarratives() throws { pending = [] }
 }

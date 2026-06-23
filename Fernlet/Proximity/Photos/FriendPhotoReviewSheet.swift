@@ -47,6 +47,7 @@ struct FriendPhotoReviewSheet: View {
     @Binding var selectedIDs: Set<UUID>
     let saveSelected: () async -> Void
     let discardAll: () -> Void
+    @State private var isSaving = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,11 +80,16 @@ struct FriendPhotoReviewSheet: View {
             HStack(spacing: 10) {
                 Button("Delete all", role: .destructive, action: discardAll)
                     .buttonStyle(ChipButtonStyle(selected: false))
+                    .disabled(isSaving)
                 Button("Save selected") {
-                    Task { await saveSelected() }
+                    isSaving = true
+                    Task {
+                        await saveSelected()
+                        isSaving = false
+                    }
                 }
                 .buttonStyle(ChipButtonStyle(selected: true))
-                .disabled(selectedIDs.isEmpty)
+                .disabled(selectedIDs.isEmpty || isSaving)
             }
             .padding(16)
             .background(Color.parchment)

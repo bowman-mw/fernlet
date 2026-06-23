@@ -6,6 +6,13 @@ import SwiftUI
 @MainActor
 @Observable
 final class FernletStore {
+    private enum JournalActivationMode {
+        case inactive
+        case noLock
+        case sealedUnlocked
+        case sealedLocked
+    }
+
     var day: FernletDay
     var settings: FernletSettings
     var recentMeals: [Meal]
@@ -79,6 +86,7 @@ final class FernletStore {
     @ObservationIgnored private var isProcessingSharedRecipeImportQueue = false
     /// Content key available while the lock is open; nil when locked.
     @ObservationIgnored private var journalContentKey: SymmetricKey?
+    @ObservationIgnored private var journalActivationMode: JournalActivationMode = .inactive
     /// IDs of journal entries whose text is sealed in JournalNarrativeRepository.
     /// Used by currentSnapshot() to strip text before persisting to the cloud blob.
     @ObservationIgnored private var sealedJournalIDs: Set<UUID> = []
@@ -280,6 +288,11 @@ final class FernletStore {
         snapshotSaveCoordinator.schedule()
     }
 
+    func setCompanionName(_ name: String) {
+        settings.companionName = name
+        snapshotSaveCoordinator.schedule()
+    }
+
     func setProximityDisplayName(_ name: String) {
         settings.proximityDisplayName = name.trimmingCharacters(in: .whitespaces)
         snapshotSaveCoordinator.schedule()
@@ -458,7 +471,7 @@ final class FernletStore {
         batchSnapshotPersistence {
             mutateDay(date: date) { $0.meals.append(meal) }
             invalidateDaySummary(for: date)
-            recentMeals.insert(meal.copyForToday(), at: 0)
+            recentMeals.insert(meal, at: 0)
             recentMeals = Array(recentMeals.prefix(50))
         }
     }
@@ -472,8 +485,14 @@ final class FernletStore {
     }
 
     func deleteMeal(_ meal: Meal) {
+        aiRetryQueueService.clearForSourceID(meal.id)
         batchSnapshotPersistence {
-            if let photoID = meal.photoID { mealPhotoStore.delete(id: photoID) }
+            if let photoID = meal.photoID {
+                let stillReferenced = day.meals.contains { $0.id != meal.id && $0.photoID == photoID }
+                if !stillReferenced {
+                    mealPhotoStore.delete(id: photoID)
+                }
+            }
             day.meals.removeAll { $0.id == meal.id }
         }
     }
@@ -573,8 +592,8 @@ final class FernletStore {
     }
 
     #if canImport(UIKit)
-    @discardableResult func saveMealPhoto(_ image: UIImage) -> UUID {
-        let data = image.jpegData(compressionQuality: 0.82) ?? Data()
+    @discardableResult func saveMealPhoto(_ image: UIImage) -> UUID? {
+        guard let data = image.jpegData(compressionQuality: 0.82) else { return nil }
         return mealPhotoStore.save(data)
     }
     #endif
@@ -590,7 +609,7 @@ final class FernletStore {
         batchSnapshotPersistence {
             mutateDay(date: targetDate) { $0.meals.append(meal) }
             invalidateDaySummary(for: targetDate)
-            recentMeals.insert(meal.copyForToday(), at: 0)
+            recentMeals.insert(meal, at: 0)
             recentMeals = Array(recentMeals.prefix(50))
         }
         return meal
@@ -636,15 +655,19 @@ final class FernletStore {
         defer { isProcessingSharedRecipeImportQueue = false }
 
         let queue = SharedRecipeImportQueue()
+        let maxAge: TimeInterval = 7 * 24 * 3600
         for record in queue.records() {
             guard let url = record.url else {
                 queue.remove(record)
                 continue
             }
+            if record.attemptCount >= 3 || Date().timeIntervalSince(record.queuedAt) > maxAge {
+                queue.remove(record)
+                continue
+            }
 
             do {
-                queue.markAttempt(record, errorDescription: nil)
-                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, foodItems: allFoodItems)
+                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, foodItems: allFoodItems, aiEnabled: settings.aiStatus != .off)
                 addSavedRecipe(SavedRecipe(importedRecipe: importedRecipe))
                 queue.remove(record)
             } catch {
@@ -706,14 +729,11 @@ final class FernletStore {
 
     func previousWeekPlannedWorkout(for date: String) -> PlannedWorkout? {
         assert(!date.isEmpty, "planned workout date required")
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.calendar = Calendar(identifier: .gregorian)
-        guard let targetDate = formatter.date(from: date),
+        guard let targetDate = FernletDate.date(fromDayKey: date),
               let previousWeekDate = Calendar.current.date(byAdding: .day, value: -7, to: targetDate) else {
             return nil
         }
-        let previousWeekKey = formatter.string(from: previousWeekDate)
+        let previousWeekKey = FernletDate.dayKey(for: previousWeekDate)
         return loadDay(for: previousWeekKey).plannedWorkouts.first
     }
 
@@ -727,10 +747,7 @@ final class FernletStore {
     func completePlannedWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
         assert(!date.isEmpty, "planned workout date required")
         var workout = plannedWorkout.completedWorkout
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.calendar = Calendar(identifier: .gregorian)
-        if let targetDate = formatter.date(from: date),
+        if let targetDate = FernletDate.date(fromDayKey: date),
            let completedAt = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: targetDate) {
             workout.completedAt = completedAt
             workout.loggedAt = completedAt
@@ -747,6 +764,10 @@ final class FernletStore {
 
     func backfillWorkoutsFromHealthIfNeeded(defaults: UserDefaults = .standard) async {
         await workoutHealthKitSync.backfillIfNeeded(defaults: defaults)
+    }
+
+    func stopHealthKitWorkoutObservation() {
+        workoutHealthKitSync.stopObservation()
     }
 
     func addJournal(text: String, tag: FeelingTag) {
@@ -865,6 +886,19 @@ final class FernletStore {
         return repository.loadDay(for: dateKey, todayKey: todayKey)
     }
 
+    func loadDayWithDecryptedJournals(for dateKey: String) -> FernletDay {
+        var loaded = loadDay(for: dateKey)
+        let emptyEntries = loaded.journals.filter { $0.text.isEmpty }
+        guard !emptyEntries.isEmpty, let key = activeJournalRefreshKey() else { return loaded }
+        let narratives = (try? journalNarrativeRepository.narratives(forDayKey: dateKey, contentKey: key)) ?? []
+        let byID = Dictionary(narratives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        loaded.journals = loaded.journals.map { entry in
+            guard entry.text.isEmpty, let n = byID[entry.id] else { return entry }
+            return JournalEntry(id: entry.id, text: n.text, tag: entry.tag, date: entry.date, emotions: n.emotions)
+        }
+        return loaded
+    }
+
     func score(for targetDay: FernletDay) -> Double {
         FernletScoring.compute(
             journalTag: targetDay.journals.last?.tag,
@@ -920,7 +954,7 @@ final class FernletStore {
         updatedEntry.text = trimmed
         updatedEntry.tag = tag
 
-        if let key = journalContentKey, sealedJournalIDs.contains(entry.id) {
+        if sealedJournalIDs.contains(entry.id), let key = activeJournalRefreshKey() {
             let updated = JournalNarrative(
                 id: entry.id, dayKey: date, tag: tag, entryDate: entry.date,
                 text: trimmed, emotions: entry.emotions,
@@ -997,8 +1031,10 @@ final class FernletStore {
         assert(!trimmedName.isEmpty, "recipe name required")
         let now = Date()
         return batchSnapshotPersistence {
+            let selectionCatalog = allFoodItems
             let recipeIngredients = CustomIngredientUpsert.recipeIngredients(
                 from: inputIngredients,
+                selectionCatalog: selectionCatalog,
                 in: &foodItems,
                 verifiedAt: now
             )
@@ -1021,8 +1057,10 @@ final class FernletStore {
         assert(!trimmedName.isEmpty, "recipe name required")
         guard let index = recipes.firstIndex(where: { $0.id == recipe.id }) else { return }
         batchSnapshotPersistence {
+            let selectionCatalog = allFoodItems
             let recipeIngredients = CustomIngredientUpsert.recipeIngredients(
                 from: inputIngredients,
+                selectionCatalog: selectionCatalog,
                 in: &foodItems,
                 verifiedAt: Date()
             )
@@ -1095,20 +1133,11 @@ final class FernletStore {
     }
 
     func macroTotals(for recipe: RecipeDefinition) -> MacroTotals {
-        recipe.ingredients.reduce(into: MacroTotals()) { totals, ingredient in
-            guard let foodItem = allFoodItems.first(where: { $0.id == ingredient.foodItemId }) else { return }
-            let macros = ingredient.scaledMacros(using: foodItem)
-            totals.protein += macros.protein
-            totals.carbs += macros.carbs
-            totals.fat += macros.fat
-        }
+        MealBuilder.macroTotals(for: recipe, foodItems: allFoodItems)
     }
 
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {
-        recipe.ingredients.reduce(into: Micronutrients()) { totals, ingredient in
-            guard let foodItem = allFoodItems.first(where: { $0.id == ingredient.foodItemId }) else { return }
-            totals.add(ingredient.scaledMicronutrients(using: foodItem))
-        }
+        MealBuilder.micronutrientTotals(for: recipe, foodItems: allFoodItems)
     }
 
     func recipeShareText(for recipe: RecipeDefinition) -> String {
@@ -1231,6 +1260,17 @@ final class FernletStore {
         aiRetryQueueService.clear(id: id)
     }
 
+    func retryOldestMeal() async {
+        guard let record = aiRetryQueueService.retryQueue.first else { return }
+        if let meal = day.meals.first(where: { $0.id == record.sourceId }) {
+            let description = meal.name
+            deleteMeal(meal)
+            await addResolvedMeals(from: description)
+        } else {
+            aiRetryQueueService.clear(id: record.id)
+        }
+    }
+
     func resetAll() {
         batchSnapshotPersistence {
             day = FernletDay(date: todayKey)
@@ -1270,6 +1310,8 @@ final class FernletStore {
         isReloadingFromRepository = true
         defer { isReloadingFromRepository = false }
 
+        snapshotSaveCoordinator.flushPending()
+
         let snapshot: FernletSnapshot
         if let coreDataRepository = repository as? CoreDataFernletRepository {
             snapshot = await coreDataRepository.loadSnapshotAsync(todayKey: todayKey)
@@ -1294,14 +1336,13 @@ final class FernletStore {
         aiRetryQueueService.apply(snapshot.retryQueue)
         proximityTrustVault.apply(peers: snapshot.trustedProximityPeers, audit: snapshot.trainerAuditEvents)
         connectionInspector.attachStore(self)
+        refreshSealedJournalsAfterSnapshotApply()
         rebuildDerivedSignals()
     }
 
     private func currentSnapshot() -> FernletSnapshot {
-        // Strip sealed journal text before writing to the cloud blob.
-        let (storedDay, storedPreviousJournals) = sealedJournalIDs.isEmpty
-            ? (day, previousJournals)
-            : strippedForStorage(day: day, previousJournals: previousJournals)
+        // strippedForStorage always runs: it strips sealed journal text AND sensitive health fields.
+        let (storedDay, storedPreviousJournals) = strippedForStorage(day: day, previousJournals: previousJournals)
         return FernletSnapshot(
             todayKey: todayKey,
             day: storedDay,
@@ -1321,7 +1362,9 @@ final class FernletStore {
         )
     }
 
-    /// Returns copies of day and previousJournals with sealed-entry text and emotions removed.
+    /// Returns copies of day and previousJournals with sealed-entry text, emotions, and
+    /// sensitive health fields (cycle, intimacy) removed before writing to the cloud blob.
+    /// Cycle/intimacy data is always re-synced from HealthKit; it must not appear in CloudKit.
     private func strippedForStorage(
         day: FernletDay,
         previousJournals: [JournalEntry]
@@ -1332,6 +1375,13 @@ final class FernletStore {
         }
         var strippedDay = day
         strippedDay.journals = day.journals.map(strip)
+
+        if var context = strippedDay.healthContext {
+            context.cycle = nil
+            context.intimate = nil
+            strippedDay.healthContext = context
+        }
+
         return (strippedDay, previousJournals.map(strip))
     }
 
@@ -1368,6 +1418,7 @@ extension FernletStore {
     /// Call at startup when no lock is configured: seals any legacy plaintext blob entries
     /// with the device key and populates in-memory journal text from the device-key-sealed store.
     func activateNoLockJournals() {
+        journalActivationMode = .noLock
         let key = deviceJournalKey
         migrateExistingJournalsToSealedStore(contentKey: key)
         refreshSealedJournals(contentKey: key)
@@ -1377,6 +1428,7 @@ extension FernletStore {
     /// populates in-memory journal text from the sealed store, and migrates legacy plaintext entries.
     func activateSealedJournals(contentKey: SymmetricKey) {
         journalContentKey = contentKey
+        journalActivationMode = .sealedUnlocked
         migrateDeviceKeyEntriesToUserKey(userKey: contentKey)
         refreshSealedJournals(contentKey: contentKey)
         migrateExistingJournalsToSealedStore(contentKey: contentKey)
@@ -1397,9 +1449,26 @@ extension FernletStore {
             sealedJournalIDs.removeAll()
         }
         journalContentKey = nil
+        journalActivationMode = .sealedLocked
     }
 
     // MARK: Private helpers
+
+    private func activeJournalRefreshKey() -> SymmetricKey? {
+        switch journalActivationMode {
+        case .inactive, .sealedLocked:
+            return nil
+        case .noLock:
+            return deviceJournalKey
+        case .sealedUnlocked:
+            return journalContentKey
+        }
+    }
+
+    private func refreshSealedJournalsAfterSnapshotApply() {
+        guard let key = activeJournalRefreshKey() else { return }
+        refreshSealedJournals(contentKey: key)
+    }
 
     /// Device-bound key generated on first use and stored in Keychain (not iCloud-synced).
     /// Used to seal journal text when no user lock is configured, ensuring text never reaches the blob.
@@ -1428,6 +1497,14 @@ extension FernletStore {
             sealedJournalIDs.insert(entry.id)
         } catch {
             print("[Fernlet] Journal sealing failed for \(entry.id): \(error)")
+            // Do NOT add the entry to sealedJournalIDs on failure. Leaving it unsealed keeps
+            // its plaintext in the local snapshot (so the user's text is never lost) and lets
+            // migrateExistingJournalsToSealedStore (run from activateNoLockJournals /
+            // activateSealedJournals on the next launch or unlock) retry sealing it, since it
+            // targets exactly `!text.isEmpty && !sealedJournalIDs.contains(id)` entries.
+            // We prioritise no-data-loss over the rare transient case where the text briefly
+            // remains in the user's own (already-encrypted) private store instead of the
+            // app-sealed narrative store.
         }
     }
 
@@ -1454,7 +1531,7 @@ extension FernletStore {
         let emptyToday = day.journals.filter { $0.text.isEmpty }
         if !emptyToday.isEmpty {
             let narratives = (try? journalNarrativeRepository.narratives(forDayKey: todayKey, contentKey: contentKey)) ?? []
-            let byID = Dictionary(uniqueKeysWithValues: narratives.map { ($0.id, $0) })
+            let byID = Dictionary(narratives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             day.journals = day.journals.map { entry in
                 guard entry.text.isEmpty, let n = byID[entry.id] else { return entry }
                 sealedJournalIDs.insert(entry.id)
@@ -1467,7 +1544,7 @@ extension FernletStore {
         if !emptyPrevious.isEmpty {
             let dayKeys = Array(Set(emptyPrevious.map { FernletDate.dayKey(for: $0.date) }))
             let narratives = (try? journalNarrativeRepository.narratives(forDayKeys: dayKeys, contentKey: contentKey)) ?? []
-            let byID = Dictionary(uniqueKeysWithValues: narratives.map { ($0.id, $0) })
+            let byID = Dictionary(narratives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             previousJournals = previousJournals.map { entry in
                 guard entry.text.isEmpty, let n = byID[entry.id] else { return entry }
                 sealedJournalIDs.insert(entry.id)
@@ -1586,6 +1663,7 @@ extension FernletStore {
     static func load(
         date: Date = .now,
         repository: FernletRepository? = nil,
+        persistenceController: PersistenceController? = nil,
         statusUpdate: @MainActor @escaping (String) -> Void = { _ in }
     ) async throws -> FernletStore {
         let loadSignpostID = StartupTiming.begin("FernletStore.load")
@@ -1597,8 +1675,19 @@ extension FernletStore {
         statusUpdate("Opening your records...")
         await Task.yield()
 
+        let sharedPersistenceController: PersistenceController?
+        if repository == nil {
+            let controller = persistenceController ?? PersistenceController.shared
+            guard !controller.didFailToLoad else {
+                throw PersistenceStoreLoadError.primaryStoreUnavailable
+            }
+            sharedPersistenceController = controller
+        } else {
+            sharedPersistenceController = nil
+        }
+
         let activeRepository = StartupTiming.timed("CoreDataFernletRepository.init") {
-            repository ?? CoreDataFernletRepository()
+            repository ?? CoreDataFernletRepository(controller: sharedPersistenceController)
         }
         let savedRecipeService = StartupTiming.timed("SavedRecipeService.init") {
             SavedRecipeService()

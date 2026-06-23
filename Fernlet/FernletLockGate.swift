@@ -33,6 +33,9 @@ struct FernletLockGateModifier: ViewModifier {
     // so Face ID presenting its system dialog doesn't cause a spurious re-lock loop.
     @State private var suppressRelock = false
     @State private var suppressRelockTask: Task<Void, Never>?
+    // Set when handleDisappear fires while suppressRelock is active; the lock is
+    // executed when the suppression window expires if the gate hasn't re-appeared.
+    @State private var pendingRelock = false
 
     func body(content: Content) -> some View {
         ZStack {
@@ -80,6 +83,13 @@ struct FernletLockGateModifier: ViewModifier {
                 suppressRelockTask = Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(1500))
                     suppressRelock = false
+                    // Execute any deferred lock request if the gate hasn't re-appeared.
+                    if pendingRelock && !gateIsActive {
+                        pendingRelock = false
+                        if case .unlocked = lockService.state {
+                            lockService.lock(reason: .viewDisappeared)
+                        }
+                    }
                 }
             default:
                 break
@@ -103,6 +113,7 @@ struct FernletLockGateModifier: ViewModifier {
     private func handleAppear() {
         guard active else { return }
         gateIsActive = true
+        pendingRelock = false
         // If configured + locked -> the overlay will appear automatically via `isLocked`
         // Nothing else to do here; biometric auto-prompt is inside FernletLockView.onAppear
     }
@@ -110,9 +121,13 @@ struct FernletLockGateModifier: ViewModifier {
     private func handleDisappear() {
         guard active, gateIsActive else { return }
         gateIsActive = false
-        guard !suppressRelock else { return }
         guard !lockService.isPerformingBiometricUnlock else { return }
-        if case .unlocked = lockService.state {
+        guard case .unlocked = lockService.state else { return }
+        if suppressRelock {
+            // Defer the lock so it fires when the suppression window expires,
+            // preventing the view from staying unlocked if the user navigated away.
+            pendingRelock = true
+        } else {
             lockService.lock(reason: .viewDisappeared)
         }
     }

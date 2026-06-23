@@ -75,6 +75,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     @ObservationIgnored private var peerRetryCount: [UUID: Int] = [:]
     @ObservationIgnored private var removedMemberFingerprints: Set<String> = []
     @ObservationIgnored private var approvedRemovalProposalIDs: Set<UUID> = []
+    @ObservationIgnored private var sessionID = UUID().uuidString
     private static let maxPeerRetries = 3
 
     // MARK: - Phase 3 Group Encryption State
@@ -442,15 +443,14 @@ final class MeshNetworkManager: ProximityPayloadHandling {
                 admitterIdentity: self.identity
             ) else { return }
 
-            // Phase 3: wrap the current group key for the joiner using the KA key from the
-            // admission request (signed by the joiner, so it is authentic).
+            // Phase 3: wrap the current group key to the slot's handshake-verified KA key,
+            // not the request's claimed key, to prevent key-substitution attacks.
             var encryptedKey: Data? = nil
             var keyEpoch = 0
             if let groupKey = self.currentGroupKey {
-                encryptedKey = try? self.identity.encryptGroupKey(
-                    groupKey.keyBytes,
-                    for: request.requesterKeyAgreementPublicKey
-                )
+                let kaKey = self.slots.first(where: { $0.fingerprint == request.requesterFingerprint })?
+                    .verifiedKeyAgreementPublicKey ?? request.requesterKeyAgreementPublicKey
+                encryptedKey = try? self.identity.encryptGroupKey(groupKey.keyBytes, for: kaKey)
                 keyEpoch = groupKey.epoch
             }
 
@@ -490,7 +490,8 @@ final class MeshNetworkManager: ProximityPayloadHandling {
             }
         case .meshAdmissionRequest:
             if let payload = try? decoder.decode(MeshAdmissionRequestPayload.self, from: plaintext) {
-                handleAdmissionRequest(payload)
+                handleAdmissionRequest(payload, senderFingerprint: peer?.fingerprint,
+                                       senderSigningPublicKey: slot?.verifiedSigningPublicKey)
             }
         case .meshAdmissionGrant:
             if let payload = try? decoder.decode(MeshAdmissionGrantPayload.self, from: plaintext) {
@@ -521,7 +522,8 @@ final class MeshNetworkManager: ProximityPayloadHandling {
             }
         case .meshFriendVouchList:
             if let payload = try? decoder.decode(MeshFriendVouchListPayload.self, from: plaintext),
-               payload.expiresAt > Date() {
+               payload.expiresAt > Date(),
+               payload.voucherFingerprint == peer?.fingerprint {
                 vouchCache[payload.voucherFingerprint] = payload
             }
         case .meshRemovalProposal:
@@ -543,11 +545,13 @@ final class MeshNetworkManager: ProximityPayloadHandling {
             }
         case .meshRotationSync:
             if let sync = try? decoder.decode(MeshRotationSyncPayload.self, from: plaintext) {
-                Task { [weak self] in await self?.handleRotationSync(sync) }
+                let senderFingerprint = peer?.fingerprint
+                Task { [weak self] in await self?.handleRotationSync(sync, senderFingerprint: senderFingerprint) }
             }
         case .meshKeyRotation:
             if let rotation = try? decoder.decode(MeshKeyRotationPayload.self, from: plaintext) {
-                Task { [weak self] in await self?.handleKeyRotation(rotation) }
+                let senderFingerprint = peer?.fingerprint
+                Task { [weak self] in await self?.handleKeyRotation(rotation, senderFingerprint: senderFingerprint) }
             }
         case .meshKeyAck:
             if let ack = try? decoder.decode(MeshKeyAckPayload.self, from: plaintext) {
@@ -613,8 +617,11 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         }
         meshSession.onPeerDisconnected = { [weak self] peer, _ in
             guard let self else { return }
-            let wasCommitted = self.slots.first(where: { $0.peer.id == peer.id })?.fingerprint != nil
-            if let slot = self.slots.first(where: { $0.peer.id == peer.id }) {
+            let matchingSlot = self.slots.first {
+                $0.peer.id == peer.id || $0.peer.underlying == peer.underlying
+            }
+            let wasCommitted = matchingSlot?.fingerprint != nil
+            if let slot = matchingSlot {
                 self.removeSlot(slot)
             }
             // In proximity join: if the MC connection dropped before the peer committed and we
@@ -631,13 +638,13 @@ final class MeshNetworkManager: ProximityPayloadHandling {
                 try? await Task.sleep(for: .seconds(2))
                 guard let self, self.isProximityJoin, self.isSessionOpen,
                       self.slots.count < Self.maxTotalSlots,
-                      !self.slots.contains(where: { $0.peer.id == peer.id }) else { return }
+                      !self.slots.contains(where: { $0.peer.id == peer.id || $0.peer.underlying == peer.underlying }) else { return }
                 self.meshSession.invite(peer)
             }
         }
         meshSession.shouldAcceptInvitation = { [weak self] peer in
             guard let self else { return false }
-            if let fp = peer.advertisedFingerprint, self.store.isBlockedFingerprint(fp) { return false }
+            // Blocklist is enforced at identity-introduction time by the slot coordinator.
             if self.isProximityJoin && !self.isSessionOpen { return false }
             if self.slots.count < Self.maxTotalSlots { return true }
             return self.canEvaluateOverflowCandidate(peer)
@@ -665,7 +672,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     func currentDiscoveryInfo() -> [String: String] {
         var info: [String: String] = [
             "v": "1",
-            "fp": identity.localFingerprint,
+            "sid": sessionID,
             "name": String(displayName.prefix(32))
         ]
         if let mesh = currentMesh, mesh.mode == .open {
@@ -1056,9 +1063,16 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         }
     }
 
-    private func handleAdmissionRequest(_ request: MeshAdmissionRequestPayload) {
+    private func handleAdmissionRequest(_ request: MeshAdmissionRequestPayload,
+                                        senderFingerprint: String?,
+                                        senderSigningPublicKey: Data?) {
         guard let mesh = currentMesh, mesh.meshID == request.meshID else { return }
         guard !mesh.members.contains(where: { $0.signingPublicKey == request.requesterSigningPublicKey }) else { return }
+        // Reject requests whose claimed fingerprint or signing key don't match the authenticated sender.
+        guard let senderFP = senderFingerprint, senderFP == request.requesterFingerprint else { return }
+        if let senderKey = senderSigningPublicKey {
+            guard senderKey == request.requesterSigningPublicKey else { return }
+        }
         if !pendingAdmissionRequests.contains(where: { $0.requesterSigningPublicKey == request.requesterSigningPublicKey }) {
             pendingAdmissionRequests.append(request)
         }
@@ -1295,7 +1309,11 @@ final class MeshNetworkManager: ProximityPayloadHandling {
             payload: finalPayload
         ) else { return }
         guard let envelopeData = try? JSONEncoder().encode(envelope) else { return }
-        try? await slot.channel.send(envelopeData, to: slot.peer, mode: .reliable)
+        do {
+            try await slot.channel.send(envelopeData, to: slot.peer, mode: .reliable)
+        } catch {
+            FernletAuditLog.log("mesh.sendEnvelope.failed", context: ["type": type.rawValue, "error": error.localizedDescription])
+        }
     }
 
     // MARK: - Phase 3: Static encrypt / decrypt helpers
@@ -1559,7 +1577,9 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     }
 
     /// Non-coordinator: respond to a rotation sync from the coordinator.
-    private func handleRotationSync(_ sync: MeshRotationSyncPayload) async {
+    private func handleRotationSync(_ sync: MeshRotationSyncPayload, senderFingerprint: String?) async {
+        // Accept only from the elected coordinator (sender-authenticated).
+        guard let senderFP = senderFingerprint, isElectedCoordinator(senderFP) else { return }
         // Drain any pending outbound photo work before signalling ready.
         try? await Task.sleep(for: .seconds(3))
         let ack = MeshKeyAckPayload(epoch: sync.closingEpoch, memberFingerprint: identity.localFingerprint)
@@ -1569,13 +1589,20 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     }
 
     /// Non-coordinator: apply the new group key from a rotation payload.
-    private func handleKeyRotation(_ payload: MeshKeyRotationPayload) async {
-        // Ignore from non-elected coordinators (Review Issue 2 hardening).
-        guard isElectedCoordinator(payload.coordinatorFingerprint) else { return }
+    private func handleKeyRotation(_ payload: MeshKeyRotationPayload, senderFingerprint: String?) async {
+        // Require the authenticated envelope sender to be both the elected coordinator
+        // and the coordinator claimed in the payload.
+        guard let senderFP = senderFingerprint,
+              senderFP == payload.coordinatorFingerprint,
+              isElectedCoordinator(senderFP) else { return }
 
         guard let myBundle = payload.perMember[identity.localFingerprint] else {
             // Excluded from this rotation — surface a non-modal warning and initiate rejoin.
             meshError = "You were excluded from the key rotation. Rejoining…"
+            currentGroupKey = nil
+            if let mesh = currentMesh {
+                sendAdmissionRequest(for: mesh)
+            }
             return
         }
         guard let keyData = try? identity.decryptGroupKey(myBundle) else { return }
@@ -1645,9 +1672,8 @@ final class MeshNetworkManager: ProximityPayloadHandling {
                 }
             }
         }
-        // Evict uncommitted slots whose coordinators have ended (e.g. 25 s TTL timeout).
+        // Evict slots whose coordinators have ended (e.g. timeout or transport loss).
         let stale = slots.filter { slot in
-            guard slot.fingerprint == nil else { return false }
             switch slot.coordinator.state {
             case .ended, .failed: return true
             default: return false

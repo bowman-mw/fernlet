@@ -67,7 +67,7 @@ struct ProximityRecipeShareSheet: View {
                                                             .font(.headline.weight(.semibold))
                                                             .foregroundStyle(Color.bark)
                                                             .lineLimit(1)
-                                                        Text(String(recipient.fingerprint.prefix(8)))
+                                                        Text(recipient.fingerprint.map { String($0.prefix(8)) } ?? "Verifying…")
                                                             .font(.caption)
                                                             .foregroundStyle(Color.slate)
                                                     }
@@ -124,6 +124,7 @@ struct ProximityRecipeShareSheet: View {
             .onDisappear {
                 searchDelayTask?.cancel()
                 dismissAfterSendTask?.cancel()
+                manager.stop()
             }
             .onChange(of: manager.sendState) { _, state in
                 scheduleDismissAfterSendIfNeeded(state)

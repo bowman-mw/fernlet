@@ -64,6 +64,7 @@ final class ProximityTrustVault: ProximityTrustPolicy {
             trustedPeers[index].mode = mode
             trustedPeers[index].lastSeenAt = Date()
             trustedPeers[index].revokedAt = nil
+            trustedPeers[index].blockedAt = nil
         } else {
             trustedPeers.append(ProximityTrustedPeerRecord(
                 displayName: peer.displayName,
@@ -108,7 +109,7 @@ final class ProximityTrustVault: ProximityTrustPolicy {
     func unblock(signingPublicKey: Data) {
         guard let index = trustedPeers.firstIndex(where: { $0.signingPublicKey == signingPublicKey }) else { return }
         trustedPeers[index].blockedAt = nil
-        trustedPeers[index].revokedAt = nil
+        // Do not touch revokedAt: block and revoke are independent states.
         onChange()
     }
 

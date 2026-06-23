@@ -15,9 +15,10 @@ struct JournalNarrative: Identifiable, Equatable {
 
 final class JournalNarrativeRepository {
     private let context: NSManagedObjectContext
+    private let crypto = ColumnCrypto(label: "journal-narrative")
 
-    init(controller: PrivatePersistenceController = .shared) {
-        self.context = controller.container.viewContext
+    init(controller: PrivatePersistenceController? = nil) {
+        self.context = (controller ?? .shared).container.viewContext
     }
 
     init(context: NSManagedObjectContext) {
@@ -26,9 +27,25 @@ final class JournalNarrativeRepository {
 
     func insert(_ narrative: JournalNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
-        let object = NSEntityDescription.insertNewObject(forEntityName: "JournalNarrative", into: context)
-        try apply(narrative, to: object, contentKey: contentKey, createdAt: narrative.createdAt)
-        try context.save()
+        let isNew: Bool
+        let object: NSManagedObject
+        let createdAt: Date
+        if let existing = try context.fetch(request(id: narrative.id)).first {
+            isNew = false
+            object = existing
+            createdAt = existing.value(forKey: "createdAt") as? Date ?? narrative.createdAt
+        } else {
+            isNew = true
+            object = NSEntityDescription.insertNewObject(forEntityName: "JournalNarrative", into: context)
+            createdAt = narrative.createdAt
+        }
+        do {
+            try apply(narrative, to: object, contentKey: contentKey, createdAt: createdAt)
+            try context.save()
+        } catch {
+            if isNew { context.delete(object) } else { context.rollback() }
+            throw error
+        }
     }
 
     func update(_ narrative: JournalNarrative, contentKey: SymmetricKey?) throws {
@@ -36,8 +53,13 @@ final class JournalNarrativeRepository {
         let request = request(id: narrative.id)
         guard let object = try context.fetch(request).first else { return }
         let createdAt = object.value(forKey: "createdAt") as? Date ?? narrative.createdAt
-        try apply(narrative, to: object, contentKey: contentKey, createdAt: createdAt)
-        try context.save()
+        do {
+            try apply(narrative, to: object, contentKey: contentKey, createdAt: createdAt)
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
     }
 
     func delete(id: UUID) throws {
@@ -52,7 +74,9 @@ final class JournalNarrativeRepository {
         let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
         request.predicate = NSPredicate(format: "dayKey == %@", dayKey)
         request.sortDescriptors = [NSSortDescriptor(key: "entryDate", ascending: true)]
-        return try context.fetch(request).compactMap { try decrypt($0, contentKey: contentKey) }
+        return try context.fetch(request).compactMap { object in
+            try decrypt(object, contentKey: contentKey)
+        }
     }
 
     func narratives(forDayKeys dayKeys: [String], contentKey: SymmetricKey?) throws -> [JournalNarrative] {
@@ -60,7 +84,9 @@ final class JournalNarrativeRepository {
         let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
         request.predicate = NSPredicate(format: "dayKey IN %@", dayKeys)
         request.sortDescriptors = [NSSortDescriptor(key: "entryDate", ascending: true)]
-        return try context.fetch(request).compactMap { try decrypt($0, contentKey: contentKey) }
+        return try context.fetch(request).compactMap { object in
+            try decrypt(object, contentKey: contentKey)
+        }
     }
 
     // MARK: - Private
@@ -75,8 +101,8 @@ final class JournalNarrativeRepository {
         object.setValue(narrative.dayKey, forKey: "dayKey")
         object.setValue(narrative.tag.rawValue, forKey: "tag")
         object.setValue(narrative.entryDate, forKey: "entryDate")
-        object.setValue(try encryptString(narrative.text, contentKey: contentKey), forKey: "textCiphertext")
-        object.setValue(try encrypt(narrative.emotions, contentKey: contentKey), forKey: "emotionsCiphertext")
+        object.setValue(try crypto.sealString(narrative.text, contentKey: contentKey), forKey: "textCiphertext")
+        object.setValue(try crypto.seal(narrative.emotions, contentKey: contentKey), forKey: "emotionsCiphertext")
         object.setValue(createdAt, forKey: "createdAt")
         object.setValue(Date(), forKey: "updatedAt")
     }
@@ -87,8 +113,8 @@ final class JournalNarrativeRepository {
               let tagRaw = object.value(forKey: "tag") as? String,
               let tag = FeelingTag(rawValue: tagRaw),
               let entryDate = object.value(forKey: "entryDate") as? Date else { return nil }
-        let text = try decryptString(object.value(forKey: "textCiphertext") as? Data, contentKey: contentKey) ?? ""
-        let emotions: [String] = try decryptValue(object.value(forKey: "emotionsCiphertext") as? Data, contentKey: contentKey) ?? []
+        let text = try crypto.openString(object.value(forKey: "textCiphertext") as? Data, contentKey: contentKey) ?? ""
+        let emotions: [String] = try crypto.open(object.value(forKey: "emotionsCiphertext") as? Data, contentKey: contentKey) ?? []
         return JournalNarrative(
             id: id,
             dayKey: dayKey,
@@ -108,28 +134,4 @@ final class JournalNarrativeRepository {
         return request
     }
 
-    private func encryptString(_ value: String, contentKey: SymmetricKey) throws -> Data {
-        try ChaChaPoly.seal(Data(value.utf8), using: columnKey(from: contentKey)).combined
-    }
-
-    private func decryptString(_ data: Data?, contentKey: SymmetricKey) throws -> String? {
-        guard let data else { return nil }
-        let plaintext = try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: columnKey(from: contentKey))
-        return String(data: plaintext, encoding: .utf8)
-    }
-
-    private func encrypt<T: Encodable>(_ value: T, contentKey: SymmetricKey) throws -> Data {
-        let plaintext = try JSONEncoder().encode(value)
-        return try ChaChaPoly.seal(plaintext, using: columnKey(from: contentKey)).combined
-    }
-
-    private func decryptValue<T: Decodable>(_ data: Data?, contentKey: SymmetricKey) throws -> T? {
-        guard let data else { return nil }
-        let plaintext = try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: columnKey(from: contentKey))
-        return try JSONDecoder().decode(T.self, from: plaintext)
-    }
-
-    private func columnKey(from contentKey: SymmetricKey) -> SymmetricKey {
-        HKDF<SHA256>.deriveKey(inputKeyMaterial: contentKey, info: Data("journal-narrative".utf8), outputByteCount: 32)
-    }
 }

@@ -42,7 +42,7 @@ struct PeriodTrackerView: View {
                 let dayEntry = entry(for: day.date)
                 PeriodDayDetailView(
                     entry: dayEntry,
-                    onEdit: { activeSheet = .logPeriod(targetDate: day.date) },
+                    onEdit: { activeSheet = .logPeriod(targetDate: day.date, editingEntry: dayEntry) },
                     onDelete: {
                         Task {
                             try? await periodStore.deleteEntry(dayEntry)
@@ -70,7 +70,7 @@ struct PeriodTrackerView: View {
         HStack(alignment: .top) {
             ScreenHeader(title: "Period", subtitle: phaseSubtitle)
             Spacer()
-            HeaderActionButton(systemImage: "plus") { activeSheet = .logPeriod(targetDate: nil) }
+            HeaderActionButton(systemImage: "plus") { activeSheet = .logPeriod(targetDate: nil, editingEntry: nil) }
         }
     }
 
@@ -377,11 +377,6 @@ struct PeriodMonthModel {
         self.monthTitle = date.formatted(.dateTime.month(.wide).year())
         self.weekdaySymbols = calendar.veryShortWeekdaySymbols
 
-        let ymFormatter = DateFormatter()
-        ymFormatter.dateFormat = "yyyy-MM"
-        ymFormatter.calendar = Calendar(identifier: .gregorian)
-        let yearMonth = ymFormatter.string(from: date)
-
         let projectedLevelsByDay = Self.projectedLevelsByDay(for: prediction, calendar: calendar)
         let blanks = (0..<(firstWeekday - 1)).map { _ in
             PeriodMonthCell(day: nil, date: nil, dateKey: nil, entry: nil, projectedLevel: nil, isToday: false, isFuture: false)
@@ -389,8 +384,8 @@ struct PeriodMonthModel {
         let year = calendar.component(.year, from: start)
         let month = calendar.component(.month, from: start)
         let days = range.map { d -> PeriodMonthCell in
-            let key = "\(yearMonth)-\(String(format: "%02d", d))"
             let cellDate = calendar.date(from: DateComponents(year: year, month: month, day: d))
+            let key = cellDate.map { FernletDate.dayKey(for: $0) } ?? String(format: "%04d-%02d-%02d", year, month, d)
             let entry = entriesByKey[key]
             return PeriodMonthCell(
                 day: d,
@@ -411,12 +406,9 @@ struct PeriodMonthModel {
             (FernletDate.dayKey(for: day.date), day.level)
         })
         var result: [String: PredictedFlowLevel] = [:]
-        var day = calendar.startOfDay(for: prediction.likelyStartRange.lowerBound)
-        let end = calendar.startOfDay(for: prediction.likelyStartRange.upperBound)
-        while day <= end {
-            let key = FernletDate.dayKey(for: day)
+        let range = DateInterval(start: prediction.likelyStartRange.lowerBound, end: prediction.likelyStartRange.upperBound)
+        for key in FernletDate.dayKeys(in: range, calendar: calendar) {
             result[key] = flowByDay[key] ?? .medium
-            day = calendar.date(byAdding: .day, value: 1, to: day) ?? day.addingTimeInterval(86_400)
         }
         return result
     }

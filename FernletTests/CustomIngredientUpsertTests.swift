@@ -93,6 +93,33 @@ struct CustomIngredientUpsertTests {
         #expect(foodItem.source == .manual)
     }
 
+    @Test func recipeIngredientsKeepsSelectedUSDAItemFromSelectionCatalog() {
+        var selected = foodItem(
+            name: "Chicken breast",
+            source: .usda,
+            macros: Macros(protein: 31, carbs: 0, fat: 4)
+        )
+        selected.id = UUID()
+        var foodItems: [FoodItem] = []
+        var selectedInput = ManualRecipeIngredientInput()
+        selectedInput.name = "Chicken breast"
+        selectedInput.selectedFoodItemId = selected.id
+        selectedInput.quantity = 150
+        selectedInput.unit = RecipeUnit.gram.rawValue
+
+        let recipeIngredients = CustomIngredientUpsert.recipeIngredients(
+            from: [selectedInput],
+            selectionCatalog: [selected],
+            in: &foodItems,
+            verifiedAt: Date(timeIntervalSince1970: 1_779_664_800)
+        )
+
+        #expect(recipeIngredients.count == 1)
+        #expect(recipeIngredients[0].foodItemId == selected.id)
+        #expect(recipeIngredients[0].quantity == 150)
+        #expect(foodItems.isEmpty)
+    }
+
     @Test func recipeIngredientsFiltersEmptyNames() {
         var selected = foodItem(
             name: "Greek yogurt",

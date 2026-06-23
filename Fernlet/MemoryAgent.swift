@@ -16,7 +16,10 @@ enum MemoryAgent {
         "disorder", "syndrome", "diagnos", "depression", "anxiety",
         "bipolar", "adhd", "autism", "ocd", "ptsd", "trauma",
         "schizophrenia", "psychosis", "medication", "prescription",
-        "therapy", "psychiatric", "clinical"
+        "therapy", "psychiatric", "clinical",
+        "period", "cycle", "pregnan", "miscarriage",
+        "intimacy", "libido",
+        "suicid", "self-harm", "self harm"
     ]
 
     // MARK: - Destination allowlist

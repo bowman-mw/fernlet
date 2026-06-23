@@ -34,6 +34,23 @@ struct StoragePrivacyIntegrationTests {
         #expect(values.isExcludedFromBackup == true)
     }
 
+    @Test func storeLoadFailureSurfacesLaunchErrorWithoutDeletingStorePath() async throws {
+        let storeURL = makeTemporaryStoreURL()
+        try FileManager.default.createDirectory(at: storeURL, withIntermediateDirectories: true)
+        defer { removeTemporaryStore(at: storeURL) }
+
+        let controller = PersistenceController(
+            preferences: StoragePreferences(iCloudSyncEnabled: false),
+            storeURL: storeURL
+        )
+
+        #expect(controller.didFailToLoad == true)
+        #expect(FileManager.default.fileExists(atPath: storeURL.path) == true)
+        await #expect(throws: PersistenceStoreLoadError.primaryStoreUnavailable) {
+            _ = try await FernletStore.load(persistenceController: controller)
+        }
+    }
+
     /// Local-only preferences with backup inclusion set to false do NOT exclude
     /// the store from backup.
     @Test func localOnlyPath_backupInclusionEnabled_storeNotExcluded() throws {

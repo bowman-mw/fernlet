@@ -85,10 +85,12 @@ enum FoodProductWebSearch {
         if url.host()?.contains("duckduckgo.com") == true,
            let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
            let redirect = components.queryItems?.first(where: { $0.name == "uddg" })?.value,
-           let redirectedURL = URL(string: redirect) {
+           let redirectedURL = URL(string: redirect),
+           redirectedURL.scheme == "https",
+           !(redirectedURL.host()?.contains("duckduckgo.com") ?? false) {
             return redirectedURL
         }
-        guard url.scheme == "http" || url.scheme == "https",
+        guard url.scheme == "https",
               url.host()?.contains("duckduckgo.com") != true else {
             return nil
         }
@@ -114,11 +116,11 @@ enum FoodProductWebSearch {
             "burgerking.com", "subway.com", "starbucks.com", "chick-fil-a.com",
             "dominos.com", "pizzahut.com", "kfc.com", "popeyes.com", "panerabread.com"
         ]
-        if preferredHosts.contains(where: host.contains) {
+        if preferredHosts.contains(where: { preferred in host == preferred || host.hasSuffix("." + preferred) }) {
             return 20
         }
         let secondaryNutritionHosts = ["fatsecret.com", "snapcalorie.com", "myfooddiary.com"]
-        if secondaryNutritionHosts.contains(where: host.contains) {
+        if secondaryNutritionHosts.contains(where: { preferred in host == preferred || host.hasSuffix("." + preferred) }) {
             return -10
         }
         return 0
@@ -219,7 +221,7 @@ enum FoodProductWebImporter {
         guard !trimmed.isEmpty else { return nil }
         let candidate = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
         guard let url = URL(string: candidate),
-              url.scheme == "http" || url.scheme == "https",
+              url.scheme == "https",
               url.host() != nil else {
             return nil
         }
@@ -321,8 +323,9 @@ enum FoodProductWebImporter {
     static func isDirectImageURL(_ url: URL) -> Bool {
         let pathExtension = url.pathExtension.lowercased()
         let imageExtensions = ["jpg", "jpeg", "png", "webp", "heic", "gif"]
+        let imageHost = url.host()?.lowercased() ?? ""
         return imageExtensions.contains(pathExtension)
-            || url.host()?.lowercased().contains("costco-static.com") == true
+            || imageHost == "costco-static.com" || imageHost.hasSuffix(".costco-static.com")
             || URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?
                 .contains(where: { item in
@@ -332,21 +335,34 @@ enum FoodProductWebImporter {
     }
 
     static func fetchHTML(from url: URL) async throws -> String {
-        guard url.scheme == "http" || url.scheme == "https" else {
+        guard url.scheme == "https" else {
             throw FoodProductWebImportError.invalidURL
         }
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: url, timeoutInterval: 15)
         request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
         request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
-        let (data, response): (Data, URLResponse)
+        let (asyncBytes, response): (URLSession.AsyncBytes, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
         } catch {
             throw FoodProductWebImportError.fetchFailed
         }
         guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
             throw FoodProductWebImportError.fetchFailed
+        }
+        let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? ""
+        guard contentType.contains("text/html") || contentType.contains("application/xhtml") else {
+            throw FoodProductWebImportError.fetchFailed
+        }
+        let maxBytes = 3 * 1024 * 1024
+        var data = Data()
+        data.reserveCapacity(min(256 * 1024, maxBytes))
+        for try await byte in asyncBytes {
+            data.append(byte)
+            if data.count > maxBytes {
+                throw FoodProductWebImportError.fetchFailed
+            }
         }
         let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
         guard let html, !html.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -501,6 +517,7 @@ enum FoodProductWebImporter {
     }
 
     private static func fetchImage(from url: URL) async -> UIImage? {
+        guard url.scheme == "https" else { return nil }
         var request = URLRequest(url: url)
         request.setValue("image/*", forHTTPHeaderField: "Accept")
         request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
@@ -547,6 +564,17 @@ enum FoodProductWebImporter {
             guard case .available = SystemLanguageModel.default.availability else {
                 throw FoodProductWebImportError.modelUnavailable
             }
+
+            let payload = WebPageNutritionExtractionPayload(
+                sourceHost: sourceURL.host() ?? "unknown",
+                cleanedTextCharCount: text.count
+            )
+            await AIAuditLog.shared.record(
+                payloadKind: payload.payloadKind,
+                destination: .onDeviceFoundationModels,
+                includedFields: payload.includedFieldNames
+            )
+
             let instructions = """
             Extract nutrition facts for one packaged food product from webpage text.
             Use values for one labeled serving. Do not estimate or invent values.
@@ -563,6 +591,18 @@ enum FoodProductWebImporter {
             let response = try await session.respond(to: prompt, generating: ExtractedFoodProduct.self)
             guard let product = response.content.importedProduct(sourceURL: sourceURL, fallbackName: fallbackName) else {
                 throw FoodProductWebImportError.nutritionNotFound
+            }
+            // Plausibility: per-field bounds + macro-calorie consistency
+            let p = product.macros.protein, c = product.macros.carbs, f = product.macros.fat
+            let macroCalories = p * 4 + c * 4 + f * 9
+            if let reportedCalories = product.calories {
+                let allowedLow = max(0, reportedCalories / 2 - 50)
+                let allowedHigh = reportedCalories * 2 + 100
+                guard reportedCalories >= 0 && reportedCalories <= 5000,
+                      p >= 0 && p <= 500, c >= 0 && c <= 1000, f >= 0 && f <= 500,
+                      macroCalories >= allowedLow && macroCalories <= allowedHigh else {
+                    throw FoodProductWebImportError.nutritionNotFound
+                }
             }
             return product
         }
@@ -771,7 +811,7 @@ enum FoodProductWebImporter {
         if imageHost == sourceHost || imageHost.hasSuffix("." + sourceHost) { return true }
         let sourceParts = sourceHost.split(separator: ".")
         let sourceRoot = sourceParts.suffix(2).joined(separator: ".")
-        return !sourceRoot.isEmpty && imageHost.contains(sourceRoot)
+        return !sourceRoot.isEmpty && (imageHost == sourceRoot || imageHost.hasSuffix("." + sourceRoot))
     }
 
     private static func isTinyImageHint(_ context: String) -> Bool {
@@ -814,8 +854,20 @@ enum FoodProductWebImporter {
 
     fileprivate static func nutritionDoubleValue(_ value: Any?) -> Double? {
         guard let string = stringValue(value) else { return nil }
-        let numeric = string.replacingOccurrences(of: ",", with: "").prefix(while: { $0.isNumber || $0 == "." })
+        let normalized = Self.normalizeDecimalSeparator(string)
+        let numeric = normalized.prefix(while: { $0.isNumber || $0 == "." })
         return Double(numeric)
+    }
+
+    private static func normalizeDecimalSeparator(_ string: String) -> String {
+        let commaCount = string.filter { $0 == "," }.count
+        guard commaCount > 0 else { return string }
+        if commaCount > 1 {
+            return string.replacingOccurrences(of: ",", with: "")
+        }
+        // Single comma: 3-digit group = thousands separator; 1-2-digit group = decimal separator.
+        let isThousands = string.range(of: #",\d{3}(?!\d)"#, options: .regularExpression) != nil
+        return string.replacingOccurrences(of: ",", with: isThousands ? "" : ".")
     }
 
     fileprivate static func stringValue(_ value: Any?) -> String? {
@@ -841,10 +893,13 @@ enum FoodProductWebImporter {
     }
 
     static func htmlDecoded(_ text: String) -> String {
-        ["&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&apos;": "'", "&nbsp;": " "]
-            .reduce(text) { result, entity in
-                result.replacingOccurrences(of: entity.key, with: entity.value, options: .caseInsensitive)
-            }
+        let entities: [(String, String)] = [
+            ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""),
+            ("&#39;", "'"), ("&apos;", "'"), ("&nbsp;", " "), ("&amp;", "&")
+        ]
+        return entities.reduce(text) { result, entity in
+            result.replacingOccurrences(of: entity.0, with: entity.1, options: .caseInsensitive)
+        }
     }
 }
 

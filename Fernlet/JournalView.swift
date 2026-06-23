@@ -603,6 +603,7 @@ struct JournalMonthModel {
         self.weekdaySymbols = calendar.veryShortWeekdaySymbols
 
         let ymFormatter = DateFormatter()
+        ymFormatter.locale = Locale(identifier: "en_US_POSIX")
         ymFormatter.dateFormat = "yyyy-MM"
         ymFormatter.calendar = Calendar(identifier: .gregorian)
         let yearMonth = ymFormatter.string(from: date)
@@ -673,18 +674,15 @@ struct DayDetailView: View {
     init(store: FernletStore, dateKey: String) {
         self.store = store
         self.dateKey = dateKey
-        _day = State(initialValue: store.loadDay(for: dateKey))
+        _day = State(initialValue: store.loadDayWithDecryptedJournals(for: dateKey))
     }
 
     private func refresh() {
-        day = store.loadDay(for: dateKey)
+        day = store.loadDayWithDecryptedJournals(for: dateKey)
     }
 
     private var date: Date {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.calendar = Calendar(identifier: .gregorian)
-        return formatter.date(from: dateKey) ?? .now
+        FernletDate.date(fromDayKey: dateKey) ?? .now
     }
 
     private var navigationTitle: String {
@@ -1144,10 +1142,7 @@ struct DayEditSheet: View {
     }
 
     private var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.calendar = Calendar(identifier: .gregorian)
-        guard let d = formatter.date(from: dateKey) else { return dateKey }
+        guard let d = FernletDate.date(fromDayKey: dateKey) else { return dateKey }
         return d.formatted(.dateTime.weekday(.wide).month(.wide).day())
     }
 
@@ -1350,8 +1345,9 @@ struct DayEditSheet: View {
 
         let hasSleepEntry = initialDay.sleep != nil
         let hoursEntered = !sleepHoursText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if hasSleepEntry || hoursEntered {
-            store.setSleep(hours: Double(sleepHoursText), quality: sleepQuality, note: sleepNote, date: dateKey)
+        let sleepNoteEntered = !sleepNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if hasSleepEntry || hoursEntered || sleepNoteEntered || sleepQuality != .ok {
+            store.setSleep(hours: Double(sleepHoursText.replacingOccurrences(of: ",", with: ".")), quality: sleepQuality, note: sleepNote, date: dateKey)
         }
 
         let journalTrimmed = journalText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1366,10 +1362,7 @@ struct DayEditSheet: View {
 
         let workoutTrimmed = workoutName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !workoutTrimmed.isEmpty {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            formatter.calendar = Calendar(identifier: .gregorian)
-            let workoutDate = formatter.date(from: dateKey) ?? .now
+            let workoutDate = FernletDate.date(fromDayKey: dateKey) ?? .now
             let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: workoutDate) ?? workoutDate
             var workout = Workout(
                 name: workoutTrimmed, type: workoutType, exercises: "",

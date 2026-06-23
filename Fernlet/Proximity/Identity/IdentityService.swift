@@ -2,8 +2,10 @@
 // Fernlet/Proximity
 //
 // Per-device Ed25519 signing identity + X25519 key-agreement for proximity sessions.
-// The signing key stays device-only. The X25519 key is synchronizable because it also derives
-// the opt-in sealed-backup key used to recover private archives on another Fernlet device.
+// Keys are split by purpose:
+//   signingPrivateKey        — Ed25519, ThisDeviceOnly, never synced
+//   keyAgreementPrivateKey   — X25519, ThisDeviceOnly, never synced (proximity transport only)
+//   backupEscrowPrivateKey   — X25519, synchronizable (iCloud Keychain), used only for sealedBackupKey()
 
 import Foundation
 import CryptoKit
@@ -16,6 +18,7 @@ private enum IdentityKeychainKey: String {
     case keyAgreementPrivateKey     = "keyAgreementPrivateKey"
     case signingPublicKeyCache      = "signingPublicKeyCache"
     case keyAgreementPublicKeyCache = "keyAgreementPublicKeyCache"
+    case backupEscrowPrivateKey     = "backupEscrowPrivateKey"
 }
 
 // MARK: - Errors
@@ -36,6 +39,7 @@ final class IdentityService {
 
     private var signingKey: Curve25519.Signing.PrivateKey?
     private var keyAgreementKey: Curve25519.KeyAgreement.PrivateKey?
+    private var backupEscrowKey: Curve25519.KeyAgreement.PrivateKey?
 
     init(keychainService: String = "com.fernlet.identity") {
         self.keychainService = keychainService
@@ -62,9 +66,9 @@ final class IdentityService {
     }
 
     func sealedBackupKey() throws -> SymmetricKey {
-        guard let keyAgreementKey else { throw IdentityError.notProvisioned }
+        guard let backupEscrowKey else { throw IdentityError.notProvisioned }
         return HKDF<SHA256>.deriveKey(
-            inputKeyMaterial: SymmetricKey(data: keyAgreementKey.rawRepresentation),
+            inputKeyMaterial: SymmetricKey(data: backupEscrowKey.rawRepresentation),
             salt: Data(),
             info: Data("com.fernlet.sealed-backup".utf8),
             outputByteCount: 32
@@ -191,46 +195,124 @@ final class IdentityService {
     // MARK: - Provisioning
 
     /// Bootstrap on first launch. Idempotent — returns the existing identity if already provisioned.
+    ///
+    /// Key separation: the proximity KA key is ThisDeviceOnly (never syncs); the backup escrow key
+    /// is synchronizable so it can be recovered on another device. On existing installs the KA key
+    /// is migrated to device-only and a fresh backup escrow key is generated if absent.
     func ensureProvisioned() throws {
-        if signingKey != nil && keyAgreementKey != nil { return }
+        if signingKey != nil && keyAgreementKey != nil && backupEscrowKey != nil { return }
 
+        let deviceOnly = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as CFString
+
+        // Case 1: Signing + proximity KA keys present on this device (normal relaunch).
         if let sigData = KeychainItem.load(account: IdentityKeychainKey.signingPrivateKey.rawValue, service: keychainService),
-           let kaData = KeychainItem.load(account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue, service: keychainService),
+           let kaData  = KeychainItem.load(account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue, service: keychainService),
            let loadedSigning = try? Curve25519.Signing.PrivateKey(rawRepresentation: sigData),
-           let loadedKA = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: kaData) {
-            signingKey = loadedSigning
+           let loadedKA      = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: kaData) {
+
+            signingKey      = loadedSigning
             keyAgreementKey = loadedKA
-            KeychainItem.store(
-                loadedKA.rawRepresentation,
-                account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue,
-                service: keychainService,
-                accessibility: kSecAttrAccessibleAfterFirstUnlock,
-                synchronizable: true
-            )
+
+            // Ensure backup escrow key exists (generated on first run post-migration).
+            if let escrowData = KeychainItem.load(account: IdentityKeychainKey.backupEscrowPrivateKey.rawValue, service: keychainService),
+               let loadedEscrow = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: escrowData) {
+                backupEscrowKey = loadedEscrow
+            } else {
+                let newEscrow = Curve25519.KeyAgreement.PrivateKey()
+                KeychainItem.store(newEscrow.rawRepresentation,
+                                   account: IdentityKeychainKey.backupEscrowPrivateKey.rawValue,
+                                   service: keychainService,
+                                   accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                   synchronizable: true)
+                backupEscrowKey = newEscrow
+            }
+
+            // Migrate proximity KA key to device-only (removes synchronizable flag if set).
+            KeychainItem.store(loadedKA.rawRepresentation,
+                               account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue,
+                               service: keychainService,
+                               accessibility: deviceOnly,
+                               synchronizable: false)
             return
         }
 
-        let newSigningKey = Curve25519.Signing.PrivateKey()
-        let newKAKey = Curve25519.KeyAgreement.PrivateKey()
-        let access = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as CFString
+        // Case 2: Backup escrow key synced from iCloud (new device install, post-migration).
+        // Generate fresh signing + proximity KA keys; adopt the synced backup escrow key.
+        if let escrowData = KeychainItem.load(account: IdentityKeychainKey.backupEscrowPrivateKey.rawValue, service: keychainService),
+           let loadedEscrow = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: escrowData) {
+            let newSigning = Curve25519.Signing.PrivateKey()
+            let newKA      = Curve25519.KeyAgreement.PrivateKey()
+            KeychainItem.store(newSigning.rawRepresentation,
+                               account: IdentityKeychainKey.signingPrivateKey.rawValue,
+                               service: keychainService, accessibility: deviceOnly)
+            KeychainItem.store(newSigning.publicKey.rawRepresentation,
+                               account: IdentityKeychainKey.signingPublicKeyCache.rawValue,
+                               service: keychainService, accessibility: deviceOnly)
+            KeychainItem.store(newKA.rawRepresentation,
+                               account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue,
+                               service: keychainService, accessibility: deviceOnly)
+            KeychainItem.store(newKA.publicKey.rawRepresentation,
+                               account: IdentityKeychainKey.keyAgreementPublicKeyCache.rawValue,
+                               service: keychainService, accessibility: deviceOnly)
+            signingKey      = newSigning
+            keyAgreementKey = newKA
+            backupEscrowKey = loadedEscrow
+            return
+        }
 
-        KeychainItem.store(newSigningKey.rawRepresentation,
+        // Case 3: Legacy synced KA key present (pre-migration second-device path).
+        // Promote the old KA key to backup escrow role; generate fresh device-only identity.
+        if let kaData = KeychainItem.load(account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue, service: keychainService),
+           let loadedKA = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: kaData) {
+            let newSigning = Curve25519.Signing.PrivateKey()
+            let newKA      = Curve25519.KeyAgreement.PrivateKey()
+            KeychainItem.store(loadedKA.rawRepresentation,
+                               account: IdentityKeychainKey.backupEscrowPrivateKey.rawValue,
+                               service: keychainService,
+                               accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                               synchronizable: true)
+            KeychainItem.store(newSigning.rawRepresentation,
+                               account: IdentityKeychainKey.signingPrivateKey.rawValue,
+                               service: keychainService, accessibility: deviceOnly)
+            KeychainItem.store(newSigning.publicKey.rawRepresentation,
+                               account: IdentityKeychainKey.signingPublicKeyCache.rawValue,
+                               service: keychainService, accessibility: deviceOnly)
+            KeychainItem.store(newKA.rawRepresentation,
+                               account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue,
+                               service: keychainService, accessibility: deviceOnly)
+            KeychainItem.store(newKA.publicKey.rawRepresentation,
+                               account: IdentityKeychainKey.keyAgreementPublicKeyCache.rawValue,
+                               service: keychainService, accessibility: deviceOnly)
+            signingKey      = newSigning
+            keyAgreementKey = newKA
+            backupEscrowKey = loadedKA
+            return
+        }
+
+        // Case 4: No keys at all — generate a complete fresh identity.
+        let newSigning = Curve25519.Signing.PrivateKey()
+        let newKA      = Curve25519.KeyAgreement.PrivateKey()
+        let newEscrow  = Curve25519.KeyAgreement.PrivateKey()
+        KeychainItem.store(newSigning.rawRepresentation,
                            account: IdentityKeychainKey.signingPrivateKey.rawValue,
-                           service: keychainService, accessibility: access)
-        KeychainItem.store(newKAKey.rawRepresentation,
+                           service: keychainService, accessibility: deviceOnly)
+        KeychainItem.store(newKA.rawRepresentation,
                            account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue,
+                           service: keychainService, accessibility: deviceOnly)
+        KeychainItem.store(newEscrow.rawRepresentation,
+                           account: IdentityKeychainKey.backupEscrowPrivateKey.rawValue,
                            service: keychainService,
                            accessibility: kSecAttrAccessibleAfterFirstUnlock,
                            synchronizable: true)
-        KeychainItem.store(newSigningKey.publicKey.rawRepresentation,
+        KeychainItem.store(newSigning.publicKey.rawRepresentation,
                            account: IdentityKeychainKey.signingPublicKeyCache.rawValue,
-                           service: keychainService, accessibility: access)
-        KeychainItem.store(newKAKey.publicKey.rawRepresentation,
+                           service: keychainService, accessibility: deviceOnly)
+        KeychainItem.store(newKA.publicKey.rawRepresentation,
                            account: IdentityKeychainKey.keyAgreementPublicKeyCache.rawValue,
-                           service: keychainService, accessibility: access)
-
-        signingKey = newSigningKey
-        keyAgreementKey = newKAKey
+                           service: keychainService, accessibility: deviceOnly)
+        signingKey      = newSigning
+        keyAgreementKey = newKA
+        backupEscrowKey = newEscrow
     }
 
     /// Wipes identity. Breaks every existing trust relationship.
@@ -238,6 +320,7 @@ final class IdentityService {
         KeychainItem.deleteAll(service: keychainService)
         signingKey = nil
         keyAgreementKey = nil
+        backupEscrowKey = nil
     }
 
     /// 16-char lowercase hex prefix of SHA-256(publicKey). Suitable for user-facing display.

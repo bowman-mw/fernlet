@@ -122,29 +122,33 @@ struct USDAFoodItemRecord: Decodable {
         category = categoryDescription ?? dataType ?? "USDA"
         tags = [dataType, categoryDescription, "usda"].compactMap { $0 }
         portions = Self.portions(from: fdcPortions, labelServingSize: labelServingSize, labelServingUnit: labelServingUnit, labelServingText: labelServingText)
-        fiber = nutrientValues[1079]
-        sugar = nutrientValues[2000] ?? nutrientValues[1063]
-        saturatedFat = nutrientValues[1258]
-        cholesterol = nutrientValues[1253]
-        vitaminA = nutrientValues[1106]
-        vitaminC = nutrientValues[1162]
-        vitaminD = nutrientValues[1114]
-        vitaminE = nutrientValues[1109]
-        vitaminK = nutrientValues[1185]
-        vitaminB6 = nutrientValues[1175]
-        vitaminB12 = nutrientValues[1178]
-        thiamin = nutrientValues[1165]
-        riboflavin = nutrientValues[1166]
-        niacin = nutrientValues[1167]
-        folate = nutrientValues[1177]
-        calcium = nutrientValues[1087]
-        iron = nutrientValues[1089]
-        magnesium = nutrientValues[1090]
-        phosphorus = nutrientValues[1091]
-        potassium = nutrientValues[1092]
-        sodium = nutrientValues[1093]
-        zinc = nutrientValues[1095]
-        omega3 = nutrientValues[1272] ?? nutrientValues[1278] ?? nutrientValues[1270]
+        let nutrientScale: Double = isBrandedLabel && (labelServingSize ?? 100) > 0
+            ? (labelServingSize ?? 100) / 100.0
+            : 1.0
+        func scaled(_ v: Double?) -> Double? { v.map { $0 * nutrientScale } }
+        fiber = scaled(nutrientValues[1079])
+        sugar = scaled(nutrientValues[2000] ?? nutrientValues[1063])
+        saturatedFat = scaled(nutrientValues[1258])
+        cholesterol = scaled(nutrientValues[1253])
+        vitaminA = scaled(nutrientValues[1106])
+        vitaminC = scaled(nutrientValues[1162])
+        vitaminD = scaled(nutrientValues[1114])
+        vitaminE = scaled(nutrientValues[1109])
+        vitaminK = scaled(nutrientValues[1185])
+        vitaminB6 = scaled(nutrientValues[1175])
+        vitaminB12 = scaled(nutrientValues[1178])
+        thiamin = scaled(nutrientValues[1165])
+        riboflavin = scaled(nutrientValues[1166])
+        niacin = scaled(nutrientValues[1167])
+        folate = scaled(nutrientValues[1177])
+        calcium = scaled(nutrientValues[1087])
+        iron = scaled(nutrientValues[1089])
+        magnesium = scaled(nutrientValues[1090])
+        phosphorus = scaled(nutrientValues[1091])
+        potassium = scaled(nutrientValues[1092])
+        sodium = scaled(nutrientValues[1093])
+        zinc = scaled(nutrientValues[1095])
+        omega3 = scaled(nutrientValues[1272] ?? nutrientValues[1278] ?? nutrientValues[1270])
     }
 
     nonisolated func foodItem() -> FoodItem {

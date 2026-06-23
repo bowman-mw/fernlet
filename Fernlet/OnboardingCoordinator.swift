@@ -110,6 +110,18 @@ final class OnboardingCoordinatorModel {
         ))
         let name = proximityDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !name.isEmpty { store.setProximityDisplayName(name) }
+        let trimmedStarterName = starterName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedStarterName.isEmpty {
+            store.setCompanionName(trimmedStarterName)
+        }
+        let paletteByColor: [String: CompanionPalette] = [
+            "Fern": .fern, "Moss": .fern, "Rose": .rose, "Gold": .sun
+        ]
+        if let palette = paletteByColor[starterColor] {
+            var appearance = store.settings.companionAppearance
+            appearance.palette = palette
+            store.setCompanionAppearance(appearance)
+        }
         UserDefaults.standard.set(true, forKey: OnboardingDefaults.hasCompletedOnboardingKey)
         onComplete()
     }
@@ -145,7 +157,7 @@ struct OnboardingCoordinator: View {
             OnboardingLockSetupView(
                 stepText: model.step.indexText,
                 setPasscodeAction: { model.markLockSetupChosen(via: "passcode") },
-                biometricsOnlyAction: { model.markLockSetupChosen(via: "biometricOnly") },
+                biometricsOnlyAction: model.deferLockSetup,
                 skipAction: model.deferLockSetup
             )
         case .storageChoice:

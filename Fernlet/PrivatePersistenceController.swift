@@ -10,6 +10,7 @@ final class PrivatePersistenceController {
     static let preview = PrivatePersistenceController(inMemory: true)
 
     let container: NSPersistentContainer
+    private(set) var didFailToLoad = false
 
     init(inMemory: Bool = false) {
         container = NSPersistentContainer(
@@ -28,13 +29,26 @@ final class PrivatePersistenceController {
         }
         container.persistentStoreDescriptions = [storeDesc]
 
-        container.loadPersistentStores { _, error in
+        container.loadPersistentStores { [self] _, error in
             if let error {
                 print("[Fernlet] PrivatePersistenceController store failed to load: \(error)")
+                self.didFailToLoad = true
             }
         }
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
         container.viewContext.automaticallyMergesChangesFromParent = true
+    }
+
+    func purgeEncryptedEntities() throws {
+        let context = container.viewContext
+        for entityName in ["MenstrualNarrative", "JournalNarrative", "IntimacyLog"] {
+            let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
+            try context.fetch(request).forEach(context.delete)
+        }
+        if context.hasChanges {
+            try context.save()
+        }
+        try PrivatePersistentHistoryPruner.prune(context: context)
     }
 
     // MARK: - Model

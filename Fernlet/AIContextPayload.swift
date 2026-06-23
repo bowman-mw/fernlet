@@ -97,3 +97,25 @@ struct CompanionThoughtPayload: AIContextPayload {
         ["signalSummaries", "journalTagLabel", "filteredMemorySummary"]
     }
 }
+
+// MARK: - Web page extraction payloads
+
+/// Fields allowed for on-device nutrition extraction from a product webpage.
+/// Only the source host and approximate text length are recorded; page content is never logged.
+struct WebPageNutritionExtractionPayload: AIContextPayload {
+    let payloadKind = "web-nutrition-extraction"
+    let sourceHost: String
+    let cleanedTextCharCount: Int
+
+    var includedFieldNames: [String] { ["sourceHost", "cleanedTextCharCount"] }
+}
+
+/// Fields allowed for on-device recipe extraction from a webpage.
+/// Only the source host and approximate text length are recorded; page content is never logged.
+struct RecipeExtractionPayload: AIContextPayload {
+    let payloadKind = "recipe-extraction"
+    let sourceHost: String
+    let cleanedTextCharCount: Int
+
+    var includedFieldNames: [String] { ["sourceHost", "cleanedTextCharCount"] }
+}

@@ -25,7 +25,7 @@ struct SettingsSheet: View {
             Form {
                 Section {
                 } header: {
-                    Text("Everything stays on this device.")
+                    Text("Your data stays local by default. iCloud sync and web nutrition lookup are off unless you turn them on.")
                         .font(.callout.italic())
                         .foregroundStyle(Color.slate)
                         .textCase(nil)

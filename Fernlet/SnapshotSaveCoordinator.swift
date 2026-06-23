@@ -67,7 +67,9 @@ final class SnapshotSaveCoordinator {
 
     private func performSnapshotSave() {
         let saved = repository.saveSnapshot(buildSnapshot())
-        assert(saved, "snapshot should save")
+        if !saved {
+            FernletAuditLog.log("snapshot.save.failed", context: [:])
+        }
         onAfterSave()
     }
 

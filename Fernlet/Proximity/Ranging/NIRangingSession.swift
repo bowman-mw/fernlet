@@ -16,6 +16,7 @@ final class NIRangingSession: NSObject, RangingProvider {
     let isHardwareSupported: Bool
 
     private var niSession: NISession?
+    private var lastConfig: NINearbyPeerConfiguration?
     private let distanceSubject = PassthroughSubject<RangingDistance, Never>()
     private let stateSubject = CurrentValueSubject<RangingState, Never>(.idle)
 
@@ -57,6 +58,7 @@ final class NIRangingSession: NSObject, RangingProvider {
         }
         let session = getOrCreateSession()
         let config = NINearbyPeerConfiguration(peerToken: peerToken)
+        lastConfig = config
         session.run(config)
         stateSubject.send(.running)
     }
@@ -99,6 +101,17 @@ extension NIRangingSession: NISessionDelegate {
         }
     }
 
-    nonisolated func sessionWasSuspended(_ session: NISession) {}
-    nonisolated func sessionSuspensionEnded(_ session: NISession) {}
+    nonisolated func sessionWasSuspended(_ session: NISession) {
+        Task { @MainActor [weak self] in
+            self?.stateSubject.send(.fallback(rssiOnly: false))
+        }
+    }
+
+    nonisolated func sessionSuspensionEnded(_ session: NISession) {
+        Task { @MainActor [weak self] in
+            guard let self, let config = self.lastConfig, let niSession = self.niSession else { return }
+            niSession.run(config)
+            self.stateSubject.send(.running)
+        }
+    }
 }

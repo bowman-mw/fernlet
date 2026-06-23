@@ -18,6 +18,15 @@ struct DisposableCameraControllerTests {
         #expect(camera.windProgress == 0.0)
     }
 
+    @Test func unconfiguredCaptureThrowsCameraUnavailable() async {
+        let camera = CameraCaptureController()
+
+        #expect(camera.canCapturePhoto == false)
+        await #expect(throws: CameraCaptureController.CaptureError.cameraUnavailable) {
+            _ = try await camera.capturePhoto()
+        }
+    }
+
     // MARK: - Disarm
 
     @Test func disarm_clearsIsArmed() {

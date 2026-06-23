@@ -50,36 +50,6 @@
             endingLineNumber = "334"
             landmarkName = "supplementalNutritionLabelURLs(for:)"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "AF7FBDD4-BABC-4E0D-AE17-95123660E6AC - 2c0f9079209c1db2"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "static Fernlet.FoodProductWebImporter.fetchHTML(from: Foundation.URL) async throws -&gt; Swift.String"
-                  moduleName = "Fernlet.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/michaelbowman/Desktop/Fernlet%205-18/Fernlet/Fernlet/FoodProductWebImporter.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "334"
-                  endingLineNumber = "334">
-               </Location>
-               <Location
-                  uuid = "AF7FBDD4-BABC-4E0D-AE17-95123660E6AC - f47c5d422234d499"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(1) suspend resume partial function for static Fernlet.FoodProductWebImporter.fetchHTML(from: Foundation.URL) async throws -&gt; Swift.String"
-                  moduleName = "Fernlet.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/michaelbowman/Desktop/Fernlet%205-18/Fernlet/Fernlet/FoodProductWebImporter.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "334"
-                  endingLineNumber = "334">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

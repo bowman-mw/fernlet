@@ -64,24 +64,29 @@ struct SavedRecipe: Identifiable, Codable, Equatable {
 struct SavedRecipeRepository {
     private let controller: PersistenceController
     private let legacyRepository: LegacySavedRecipeJSONRepository
+    private let defaults: UserDefaults
 
     init() {
-        self.init(controller: .shared, legacyRepository: LegacySavedRecipeJSONRepository())
+        self.init(controller: .shared, legacyRepository: LegacySavedRecipeJSONRepository(), defaults: .standard)
     }
 
-    init(controller: PersistenceController, legacyRepository: LegacySavedRecipeJSONRepository) {
+    init(controller: PersistenceController, legacyRepository: LegacySavedRecipeJSONRepository, defaults: UserDefaults = .standard) {
         self.controller = controller
         self.legacyRepository = legacyRepository
+        self.defaults = defaults
     }
+
+    private static let migrationCompletedKey = "com.fernlet.savedRecipeMigrationCompleted"
 
     func load() -> [SavedRecipe] {
         StartupTiming.timed("SavedRecipeRepository.load") {
             let recipes = loadCoreDataRecipes()
-            if recipes.isEmpty {
+            if recipes.isEmpty && !defaults.bool(forKey: Self.migrationCompletedKey) {
                 let migrated = legacyRepository.load()
                 if !migrated.isEmpty {
                     _ = save(migrated)
                 }
+                defaults.set(true, forKey: Self.migrationCompletedKey)
                 return migrated
             }
             return recipes
@@ -91,7 +96,7 @@ struct SavedRecipeRepository {
     func loadAsync() async -> [SavedRecipe] {
         StartupTiming.timed("SavedRecipeRepository.loadAsync") {
             let recipes = loadCoreDataRecipes()
-            guard recipes.isEmpty else { return recipes }
+            guard recipes.isEmpty && !defaults.bool(forKey: Self.migrationCompletedKey) else { return recipes }
 
             let signpostID = StartupTiming.begin("SavedRecipeRepository.legacyLoad.async")
             let migrated = legacyRepository.load()
@@ -99,6 +104,7 @@ struct SavedRecipeRepository {
             if !migrated.isEmpty {
                 _ = save(migrated)
             }
+            defaults.set(true, forKey: Self.migrationCompletedKey)
             return migrated
         }
     }
@@ -122,9 +128,19 @@ struct SavedRecipeRepository {
 
         do {
             let existing = try context.fetch(request)
-            existing.forEach(context.delete)
-            recipes.forEach { recipe in
-                let record = NSEntityDescription.insertNewObject(forEntityName: "SavedRecipeRecord", into: context)
+            var existingByID: [String: NSManagedObject] = [:]
+            for record in existing {
+                if let idString = record.value(forKey: "idString") as? String {
+                    existingByID[idString] = record
+                }
+            }
+            let incomingIDs = Set(recipes.map { $0.id.uuidString })
+            for (idString, record) in existingByID where !incomingIDs.contains(idString) {
+                context.delete(record)
+            }
+            for recipe in recipes {
+                let record = existingByID[recipe.id.uuidString]
+                    ?? NSEntityDescription.insertNewObject(forEntityName: "SavedRecipeRecord", into: context)
                 Self.apply(recipe, to: record)
             }
             if context.hasChanges {
@@ -148,6 +164,14 @@ struct SavedRecipeRepository {
         }
 
         let ingredientsText = record.value(forKey: "ingredientsText") as? String ?? ""
+        let micronutrients: Micronutrients
+        if let json = record.value(forKey: "micronutrientsJSON") as? String,
+           let data = json.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(Micronutrients.self, from: data) {
+            micronutrients = decoded
+        } else {
+            micronutrients = Micronutrients()
+        }
         return SavedRecipe(
             id: id,
             sourceURL: sourceURL,
@@ -158,6 +182,7 @@ struct SavedRecipeRepository {
             protein: (record.value(forKey: "protein") as? NSNumber)?.intValue ?? 0,
             carbs: (record.value(forKey: "carbs") as? NSNumber)?.intValue ?? 0,
             fat: (record.value(forKey: "fat") as? NSNumber)?.intValue ?? 0,
+            micronutrients: micronutrients,
             savedAt: record.value(forKey: "savedAt") as? Date ?? Date.distantPast
         )
     }
@@ -172,6 +197,10 @@ struct SavedRecipeRepository {
         record.setValue(recipe.protein, forKey: "protein")
         record.setValue(recipe.carbs, forKey: "carbs")
         record.setValue(recipe.fat, forKey: "fat")
+        if let data = try? JSONEncoder().encode(recipe.micronutrients),
+           let json = String(data: data, encoding: .utf8) {
+            record.setValue(json, forKey: "micronutrientsJSON")
+        }
         record.setValue(recipe.savedAt, forKey: "savedAt")
     }
 }

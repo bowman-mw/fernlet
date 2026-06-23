@@ -19,13 +19,14 @@ enum KeychainItem {
 
     // MARK: - Generic String-keyed operations
 
+    @discardableResult
     static func store(
         _ data: Data,
         account: String,
         service: String,
         accessibility: CFString,
         synchronizable: Bool = false
-    ) {
+    ) -> OSStatus {
         delete(account: account, service: service)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -36,7 +37,7 @@ enum KeychainItem {
             kSecUseDataProtectionKeychain as String: true,
             kSecValueData as String: data
         ]
-        SecItemAdd(query as CFDictionary, nil)
+        return SecItemAdd(query as CFDictionary, nil)
     }
 
     static func load(account: String, service: String) -> Data? {
@@ -77,7 +78,8 @@ enum KeychainItem {
 
     // MARK: - Account typed convenience (AfterFirstUnlockThisDeviceOnly)
 
-    static func store(_ data: Data, for account: Account, service: String) {
+    @discardableResult
+    static func store(_ data: Data, for account: Account, service: String) -> OSStatus {
         store(data, account: account.rawValue, service: service,
               accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }

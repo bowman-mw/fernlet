@@ -5,8 +5,6 @@
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>remote-notification</string>
-			<string>bluetooth-central</string>
-			<string>bluetooth-peripheral</string>
 		</array>
 		<key>NSLocalNetworkUsageDescription</key>
 		<string>Fernlet uses your local network to connect with nearby trainers and friends for workout sharing.</string>
@@ -16,11 +14,8 @@
 			<string>_fernlet-coach._udp</string>
 			<string>_fernlet-friend._tcp</string>
 			<string>_fernlet-friend._udp</string>
-			<string>_fernlet-mesh._tcp</string>
-			<string>_fernlet-mesh._udp</string>
 			<string>_fernlet-recipe._tcp</string>
 			<string>_fernlet-recipe._udp</string>
-			<string>_fernlet-coach-mesh._tcp</string>
 		</array>
 		<key>NSNearbyInteractionUsageDescription</key>
 		<string>Fernlet uses Ultra Wideband to precisely measure distance when connecting with a nearby trainer or friend.</string>

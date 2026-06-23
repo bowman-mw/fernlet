@@ -2,34 +2,54 @@ import SwiftUI
 
 struct LogPeriodSheet: View {
     var periodStore: PeriodTrackerStore
+    private let editingEntry: CycleDayEntry?
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
     @State private var authorization = HealthKitAuthorizationViewModel()
 
     @State private var eventDate: Date
-    @State private var flowLevel: PeriodFlowLevel = .unspecified
-    @State private var temperatureText = ""
-    @State private var temperatureUnit: PeriodTemperatureUnit = Locale.current.measurementSystem == .metric ? .celsius : .fahrenheit
+    @State private var flowLevel: PeriodFlowLevel?
+    @State private var temperatureText: String
+    @State private var temperatureUnit: PeriodTemperatureUnit
     @State private var mucusQuality: CervicalMucusQuality?
     @State private var ovulationResult: OvulationTestResult?
-    @State private var hasIntermenstrualBleeding = false
-    @State private var isCycleStart = false
-    @State private var note = ""
-    @State private var symptoms: Set<PeriodSymptom> = []
-    @State private var customScales: [PeriodSymptom: Int] = [:]
+    @State private var hasIntermenstrualBleeding: Bool
+    @State private var isCycleStart: Bool
+    @State private var note: String
+    @State private var symptoms: Set<PeriodSymptom>
+    @State private var customScales: [PeriodSymptom: Int]
     @State private var statusMessage: String?
     @State private var isSaving = false
 
-    init(periodStore: PeriodTrackerStore, targetDate: Date? = nil) {
+    init(periodStore: PeriodTrackerStore, targetDate: Date? = nil, editingEntry: CycleDayEntry? = nil) {
         self.periodStore = periodStore
-        _eventDate = State(initialValue: targetDate ?? Date())
+        self.editingEntry = editingEntry
+        let defaultUnit: PeriodTemperatureUnit = Locale.current.measurementSystem == .metric ? .celsius : .fahrenheit
+        _eventDate = State(initialValue: editingEntry?.date ?? targetDate ?? Date())
+        _flowLevel = State(initialValue: editingEntry?.flowLevel)
+        _isCycleStart = State(initialValue: editingEntry?.isCycleStart ?? false)
+        _hasIntermenstrualBleeding = State(initialValue: editingEntry?.hasIntermenstrualBleeding ?? false)
+        _mucusQuality = State(initialValue: editingEntry?.cervicalMucusQuality)
+        _ovulationResult = State(initialValue: editingEntry?.ovulationTestResult)
+        if let bbt = editingEntry?.basalBodyTemperatureFahrenheit {
+            _temperatureText = State(initialValue: String(format: "%.2f", bbt))
+            _temperatureUnit = State(initialValue: .fahrenheit)
+        } else {
+            _temperatureText = State(initialValue: "")
+            _temperatureUnit = State(initialValue: defaultUnit)
+        }
+        _note = State(initialValue: editingEntry?.narrative?.note ?? "")
+        _symptoms = State(initialValue: Set(editingEntry?.narrative?.symptomFlags ?? []))
+        _customScales = State(initialValue: Dictionary(uniqueKeysWithValues: (editingEntry?.narrative?.customSymptomScales ?? [:]).compactMap { rawValue, scale in
+            PeriodSymptom(rawValue: rawValue).map { ($0, scale) }
+        }))
     }
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("Log period")
+                    Text(editingEntry != nil ? "Edit period" : "Log period")
                         .font(.system(size: 28, weight: .bold, design: .serif))
                         .foregroundStyle(Color.bark)
 
@@ -188,7 +208,7 @@ struct LogPeriodSheet: View {
             let event = UserLoggedCycleEvent(
                 date: eventDate,
                 flowLevel: flowLevel,
-                basalBodyTemperature: Double(temperatureText.trimmingCharacters(in: .whitespacesAndNewlines)),
+                basalBodyTemperature: Double(temperatureText.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")),
                 temperatureUnit: temperatureUnit,
                 cervicalMucusQuality: mucusQuality,
                 ovulationTestResult: ovulationResult,
@@ -200,7 +220,12 @@ struct LogPeriodSheet: View {
                     (symptom.rawValue, value)
                 })
             )
-            let result = try await periodStore.logEvent(event, unlockedContentKey: lockService.contentKey())
+            let result: PeriodLogResult
+            if let entry = editingEntry {
+                result = try await periodStore.editEvent(event, replacingEntry: entry, unlockedContentKey: lockService.contentKey())
+            } else {
+                result = try await periodStore.logEvent(event, unlockedContentKey: lockService.contentKey())
+            }
             switch result {
             case .saved:
                 dismiss()

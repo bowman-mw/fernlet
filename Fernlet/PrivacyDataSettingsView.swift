@@ -29,7 +29,7 @@ struct PrivacyDataSettingsView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
 
-    @State private var hasFreshVerification = ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_AUTH"] == "1"
+    @State private var hasFreshVerification = false
     @State private var isVerifying = false
     @State private var verificationError: String?
     @State private var showLockSetup = false
@@ -38,6 +38,7 @@ struct PrivacyDataSettingsView: View {
     @State private var deleteConfirmationText = ""
     @State private var isShowingDisableConfirmation = false
     @State private var isShowingEnableConfirmation = false
+    @State private var isShowingDeleteProtectedDataAlert = false
     @State private var isUpdatingStorage = false
     @State private var isDetectingCloudData = false
     @State private var operationError: String?
@@ -83,10 +84,12 @@ struct PrivacyDataSettingsView: View {
             Text("Your local data will upload to iCloud and sync to your other Fernlet devices.")
         }
         .task {
+            #if DEBUG
             seedUITestPreferencesIfNeeded()
             if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_AUTH"] == "1" {
                 hasFreshVerification = true
             }
+            #endif
             await loadCloudCountsIfNeeded()
         }
     }
@@ -167,6 +170,7 @@ struct PrivacyDataSettingsView: View {
             iCloudCard
             healthKitCard
             localBackupCard
+            lockDataCard
 
             if let operationError {
                 Text(operationError)
@@ -282,6 +286,39 @@ struct PrivacyDataSettingsView: View {
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
+    private var lockDataCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel("App lock data")
+            Text("Fernlet protects your data with its own passcode, separate from your device passcode. Removing your device passcode will not affect your Fernlet app lock or erase your protected data.")
+                .font(.caption)
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+
+            Button(role: .destructive) {
+                isShowingDeleteProtectedDataAlert = true
+            } label: {
+                Label("Delete all protected data", systemImage: "trash.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.vertical, 11)
+            .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityIdentifier("privacy.lock.deleteProtectedData")
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .alert("Delete all protected data?", isPresented: $isShowingDeleteProtectedDataAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                try? lockService.reset()
+            }
+        } message: {
+            Text("This permanently deletes your app lock, sealed journal entries, and all other protected Fernlet data. This cannot be undone.")
+        }
+    }
+
     private var storageSpinner: some View {
         ZStack {
             Color.black.opacity(0.20).ignoresSafeArea()
@@ -317,8 +354,8 @@ struct PrivacyDataSettingsView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
                             ScreenHeader(
-                                title: "Delete iCloud data?",
-                                subtitle: "This only runs after you type DELETE."
+                                title: "Turn off iCloud sync?",
+                                subtitle: "Stop syncing now, or also delete iCloud data."
                             )
 
                             cloudCountsCard
@@ -341,22 +378,35 @@ struct PrivacyDataSettingsView: View {
                         .padding(20)
                     }
 
-                    HStack {
-                        Spacer()
-                        Button("Delete iCloud data") {
-                            disableICloudSyncAndDeleteCloudData()
+                    VStack(spacing: 12) {
+                        Button("Stop syncing, keep iCloud data") {
+                            stopSyncingKeepCloudData()
                         }
                         .buttonStyle(.plain)
                         .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 28)
+                        .foregroundStyle(Color.moss)
+                        .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(
-                            deleteConfirmationText.uppercased() == "DELETE" ? Color.moss : Color.moss.opacity(0.4),
-                            in: RoundedRectangle(cornerRadius: 16)
-                        )
-                        .disabled(deleteConfirmationText.uppercased() != "DELETE")
-                        .accessibilityIdentifier("privacy.icloud.confirmDelete")
+                        .background(Color.moss.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+                        .accessibilityIdentifier("privacy.icloud.stopSync")
+
+                        HStack {
+                            Spacer()
+                            Button("Delete iCloud data") {
+                                disableICloudSyncAndDeleteCloudData()
+                            }
+                            .buttonStyle(.plain)
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 28)
+                            .padding(.vertical, 16)
+                            .background(
+                                deleteConfirmationText.uppercased() == "DELETE" ? Color.moss : Color.moss.opacity(0.4),
+                                in: RoundedRectangle(cornerRadius: 16)
+                            )
+                            .disabled(deleteConfirmationText.uppercased() != "DELETE")
+                            .accessibilityIdentifier("privacy.icloud.confirmDelete")
+                        }
                     }
                     .padding(20)
                     .background(Color.parchment)
@@ -488,6 +538,7 @@ struct PrivacyDataSettingsView: View {
     }
 
     private func seedUITestPreferencesIfNeeded() {
+        #if DEBUG
         guard !didSeedUITestPreferences,
               ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1" else { return }
         didSeedUITestPreferences = true
@@ -500,13 +551,16 @@ struct PrivacyDataSettingsView: View {
                 )
             }
         }
+        #endif
     }
 
     private func verifyFreshAccess() {
+        #if DEBUG
         if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_AUTH"] == "1" {
             hasFreshVerification = true
             return
         }
+        #endif
 
         isVerifying = true
         verificationError = nil
@@ -539,6 +593,14 @@ struct PrivacyDataSettingsView: View {
         applyStoragePreferences(updated)
     }
 
+    private func stopSyncingKeepCloudData() {
+        FernletAuditLog.log("privacy.icloud.syncDisabled.keepData")
+        var updated = storagePreferencesStore.preferences
+        updated.iCloudSyncEnabled = false
+        applyStoragePreferences(updated)
+        isShowingDisableConfirmation = false
+    }
+
     private func disableICloudSyncAndDeleteCloudData() {
         guard deleteConfirmationText.uppercased() == "DELETE" else { return }
         FernletAuditLog.log("privacy.icloud.deletionInitiated")
@@ -546,17 +608,19 @@ struct PrivacyDataSettingsView: View {
         operationError = nil
         Task { @MainActor in
             do {
-                _ = try await cloudDataService.deleteAllCloudKitData(
-                    confirmation: DeletionConfirmation(userTypedConfirmation: deleteConfirmationText.uppercased())
-                )
                 var updated = storagePreferencesStore.preferences
                 updated.iCloudSyncEnabled = false
                 try await reloadPersistence(with: updated)
                 storagePreferencesStore.update { $0 = updated }
                 FernletAuditLog.log("privacy.icloud.syncDisabled")
+
+                _ = try await cloudDataService.deleteAllCloudKitData(
+                    confirmation: DeletionConfirmation(userTypedConfirmation: deleteConfirmationText.uppercased())
+                )
                 isShowingDisableConfirmation = false
             } catch {
                 operationError = error.localizedDescription
+                isShowingDisableConfirmation = false
             }
             isUpdatingStorage = false
         }

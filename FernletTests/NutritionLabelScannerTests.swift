@@ -1,8 +1,23 @@
+import Foundation
 import Testing
 @testable import Fernlet
 
 #if canImport(UIKit)
+import UIKit
+
 struct NutritionLabelScannerTests {
+    @MainActor
+    @Test func recognizeTextStartsVisionWorkOffMainThread() async throws {
+        let image = Self.diagnosticNutritionLabelImage()
+        let capture = ThreadCapture()
+
+        _ = try await NutritionLabelScanner.recognizeText(in: image) {
+            capture.record(isMainThread: Thread.isMainThread)
+        }
+
+        #expect(capture.value == false)
+    }
+
     @MainActor
     @Test func parsesStandardUSLabel() {
         let lines = [
@@ -227,6 +242,40 @@ struct NutritionLabelScannerTests {
 
         #expect(result.fat == 10)
         #expect(result.saturatedFat == 10.0)
+    }
+
+    private static func diagnosticNutritionLabelImage() -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 320, height: 160))
+        return renderer.image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 320, height: 160))
+
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 24, weight: .semibold),
+                .foregroundColor: UIColor.black
+            ]
+            NSString(string: "Nutrition Facts\nCalories 120\nProtein 8g").draw(
+                in: CGRect(x: 18, y: 18, width: 284, height: 124),
+                withAttributes: attributes
+            )
+        }
+    }
+}
+
+private final class ThreadCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValue: Bool?
+
+    var value: Bool? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedValue
+    }
+
+    func record(isMainThread: Bool) {
+        lock.lock()
+        storedValue = isMainThread
+        lock.unlock()
     }
 }
 #endif

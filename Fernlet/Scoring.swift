@@ -166,8 +166,35 @@ enum FernletScoring {
             completedPersonalCareTaskCount: store.personalCareProgress().completed,
             weights: GoalWeights.forGoal(store.settings.selectedGoal),
             isSick: store.settings.isSick,
+            nutrientGaps: dedupedNutrientGaps(from: store.derivedSignals.flatMap(\.nutrientGaps)),
             micronutrientDataCoverageRatio: micronutrientDataCoverageRatio(for: store.day.meals)
         )
+    }
+
+    /// The derived signals carry both a 7-day and a 14-day micronutrient record, each holding
+    /// the full nutrient set. Flattening them would let `micronutrientModifier` count a single
+    /// nutrient gap (or coverage) twice. Collapse to one entry per nutrient with a status-aware
+    /// tie-break: a `.gap` in any window must survive (the modifier penalises persistent gaps,
+    /// so a recent 7-day gap must not be masked by a 14-day `.covered`), and within the same
+    /// status the longer window wins — both keep `windowDays >= 7` so the filter still matches.
+    static func dedupedNutrientGaps(from gaps: [NutrientGap]) -> [NutrientGap] {
+        var byKey: [String: NutrientGap] = [:]
+        for gap in gaps {
+            guard let existing = byKey[gap.nutrientKey] else {
+                byKey[gap.nutrientKey] = gap
+                continue
+            }
+            if preferNutrientGap(gap, over: existing) {
+                byKey[gap.nutrientKey] = gap
+            }
+        }
+        return Array(byKey.values)
+    }
+
+    private static func preferNutrientGap(_ candidate: NutrientGap, over existing: NutrientGap) -> Bool {
+        if candidate.status == .gap && existing.status != .gap { return true }
+        if candidate.status != .gap && existing.status == .gap { return false }
+        return candidate.windowDays > existing.windowDays
     }
 
     static func micronutrientDataCoverageRatio(for meals: [Meal]) -> Double {
@@ -358,11 +385,31 @@ struct WorkoutSuggestionLibrary {
 }
 
 enum FernletDate {
+    private static let dayKeyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.calendar = Calendar(identifier: .gregorian)
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
     static func dayKey(for date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        dayKeyFormatter.string(from: date)
+    }
+
+    static func date(fromDayKey key: String) -> Date? {
+        dayKeyFormatter.date(from: key)
+    }
+
+    static func dayKeys(in interval: DateInterval, calendar: Calendar = .current) -> [String] {
+        var keys: [String] = []
+        var day = calendar.startOfDay(for: interval.start)
+        let end = calendar.startOfDay(for: interval.end)
+        while day <= end {
+            keys.append(dayKey(for: day))
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? day.addingTimeInterval(86_400)
+        }
+        return keys
     }
 
     static func niceDate(for date: Date = .now) -> String {

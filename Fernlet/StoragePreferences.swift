@@ -69,6 +69,10 @@ final class StoragePreferencesStore {
         KeychainItem.store(data, for: .storagePreferences, service: keychainService)
     }
 
+    static func currentPreferences(service: String = KeychainItem.storagePreferencesService) -> StoragePreferences {
+        loadPreferences(service: service)
+    }
+
     private static func loadPreferences(service: String) -> StoragePreferences {
         guard let data = KeychainItem.load(for: .storagePreferences, service: service),
               let decoded = try? JSONDecoder().decode(StoragePreferences.self, from: data) else {

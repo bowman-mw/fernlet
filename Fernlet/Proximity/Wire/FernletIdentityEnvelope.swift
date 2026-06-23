@@ -26,16 +26,21 @@ struct FernletIdentityEnvelope: Codable, Equatable {
 
 // MARK: - Canonical encoding
 
-/// Returns the deterministic byte sequence that is signed and verified.
-/// The `signature` field is zeroed so signing and verification produce identical input.
-func canonicalBytes(for envelope: FernletIdentityEnvelope) -> Data {
+/// Shared deterministic encoder for all canonical-bytes signing operations.
+/// Both FernletIdentityEnvelope and MeshAdmissionToken use this configuration — keep them in sync.
+func makeCanonicalSignatureEncoder() -> JSONEncoder {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     encoder.dateEncodingStrategy = .iso8601
+    return encoder
+}
+
+/// Returns the deterministic byte sequence that is signed and verified.
+/// The `signature` field is zeroed so signing and verification produce identical input.
+func canonicalBytes(for envelope: FernletIdentityEnvelope) -> Data {
     var copy = envelope
     copy.signature = Data()
-    // Encoding a well-formed struct with deterministic options to JSON cannot fail.
-    return try! encoder.encode(copy)
+    return try! makeCanonicalSignatureEncoder().encode(copy)
 }
 
 // MARK: - Verification
@@ -75,7 +80,7 @@ extension FernletIdentityEnvelope {
             throw VerifyError.sealingRequired
         }
 
-        try replayCache.recordIfNew(envelopeID: envelopeID)
+        try replayCache.recordIfNew(envelopeID: envelopeID, createdAt: createdAt)
 
         switch payloadEncryption {
         case .none:

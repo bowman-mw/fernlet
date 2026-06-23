@@ -51,6 +51,9 @@ struct HomeView: View {
                 isCompanionThoughtVisible = false
             }
         }
+        .onChange(of: activeSheet?.id) { _, new in
+            if new == nil { Task { await refreshRecentPeriodActivity() } }
+        }
     }
 
     @ViewBuilder
@@ -431,7 +434,7 @@ struct HomeView: View {
         case .care:
             activeSheet = .hygiene
         case .logPeriod:
-            activeSheet = .logPeriod(targetDate: nil)
+            activeSheet = .logPeriod(targetDate: nil, editingEntry: nil)
         case .periodTracking:
             privateHubSection = .period
             selectedTab = .personal
@@ -659,13 +662,8 @@ private struct CompanionCustomizationSheet: View {
 
 private extension Color {
     init?(fernletHex: String) {
-        let cleaned = fernletHex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        guard cleaned.count == 6, let value = Int(cleaned, radix: 16) else { return nil }
-        self.init(
-            red: Double((value >> 16) & 0xFF) / 255,
-            green: Double((value >> 8) & 0xFF) / 255,
-            blue: Double(value & 0xFF) / 255
-        )
+        guard let uiColor = UIColor(hex: fernletHex) else { return nil }
+        self.init(uiColor)
     }
 
     var fernletHexString: String? {
@@ -723,30 +721,36 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
 
                     LazyVGrid(columns: colorColumns, spacing: 6) {
                         ForEach(CompanionAssetColor.allCases) { color in
-                            Button {
-                                colorSelection = color
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Circle()
-                                        .fill(color.color(for: state))
-                                        .frame(width: 11, height: 11)
-                                    Text(color.label)
-                                        .font(.caption2.weight(.semibold))
-                                        .lineLimit(1)
-                                }
-                                .foregroundStyle(customColorHex == nil && colorSelection == color ? Color.cream : Color.bark)
-                                .frame(maxWidth: .infinity, minHeight: 34)
-                                .background(
-                                    customColorHex == nil && colorSelection == color ? Color.moss : Color.bark.opacity(0.05),
-                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                )
-                            }
-                            .buttonStyle(.plain)
+                            colorButton(for: color)
                         }
                     }
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func colorButton(for color: CompanionAssetColor) -> some View {
+        let isSelected = customColorHex == nil && colorSelection == color
+        Button {
+            colorSelection = color
+        } label: {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(color.color(for: state))
+                    .frame(width: 11, height: 11)
+                Text(color.label)
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isSelected ? Color.cream : Color.bark)
+            .frame(maxWidth: .infinity, minHeight: 34)
+            .background(
+                isSelected ? Color.moss : Color.bark.opacity(0.05),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

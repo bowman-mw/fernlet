@@ -10,6 +10,17 @@ import CoreData
 import Foundation
 import Observation
 
+enum PersistenceStoreLoadError: LocalizedError, Equatable {
+    case primaryStoreUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .primaryStoreUnavailable:
+            return "Fernlet couldn't open your local records. Your data was not deleted. Unlock your device if it was just restarted, free up storage if needed, then try again."
+        }
+    }
+}
+
 @Observable
 final class PersistenceController {
     static let shared: PersistenceController = {
@@ -31,6 +42,7 @@ final class PersistenceController {
     private(set) var didFailToLoad = false
     /// Fires when iCloud pushes a remote change to the local store.
     @ObservationIgnored let remoteChangePublisher: AnyPublisher<Notification, Never>
+    @ObservationIgnored var reloadStoreURLOverrideForTesting: URL?
 
     private let inMemory: Bool
     private let storeURL: URL?
@@ -56,8 +68,7 @@ final class PersistenceController {
         self.didFailToLoad = Self.loadPersistentStores(
             for: configuration.container,
             preferences: preferences,
-            inMemory: inMemory,
-            recoverOnFailure: true
+            inMemory: inMemory
         )
         configureViewContext(for: configuration.container)
         bindRemoteChanges(to: configuration.container)
@@ -82,9 +93,13 @@ final class PersistenceController {
             let oldContainer = container
             let oldContext = oldContainer.viewContext
             try saveAndLockViewContext(oldContext)
-            try removePersistentStores(from: oldContainer.persistentStoreCoordinator)
 
-            let configuration = Self.makeContainer(inMemory: inMemory, preferences: preferences, storeURL: storeURL, iCloudAvailabilityOverride: iCloudAvailabilityOverride)
+            let configuration = Self.makeContainer(
+                inMemory: inMemory,
+                preferences: preferences,
+                storeURL: reloadStoreURLOverrideForTesting ?? storeURL,
+                iCloudAvailabilityOverride: iCloudAvailabilityOverride
+            )
             try await Self.loadPersistentStoresAsync(
                 for: configuration.container,
                 preferences: preferences,
@@ -95,6 +110,11 @@ final class PersistenceController {
             container = configuration.container
             didFailToLoad = false
             bindRemoteChanges(to: configuration.container)
+            do {
+                try removePersistentStores(from: oldContainer.persistentStoreCoordinator)
+            } catch {
+                print("[Fernlet] Failed to remove old persistent stores after reload swap: \(error)")
+            }
             remoteChangeSubject.send(Notification(
                 name: .NSPersistentStoreRemoteChange,
                 object: configuration.container.persistentStoreCoordinator
@@ -170,8 +190,7 @@ final class PersistenceController {
     private static func loadPersistentStores(
         for container: NSPersistentContainer,
         preferences: StoragePreferences,
-        inMemory: Bool,
-        recoverOnFailure: Bool
+        inMemory: Bool
     ) -> Bool {
         var loadFailed = false
         let signpostID = StartupTiming.begin("PersistenceController.loadPersistentStores")
@@ -202,35 +221,9 @@ final class PersistenceController {
                     return
                 }
 
-                guard recoverOnFailure, let storeURL = storeDescription.url else {
-                    loadFailed = true
-                    endSignpost()
-                    return
-                }
-
-                do {
-                    try container.persistentStoreCoordinator.destroyPersistentStore(
-                        at: storeURL,
-                        ofType: storeDescription.type
-                    )
-                    container.loadPersistentStores { retryDescription, retryError in
-                        if let retryError {
-                            loadFailed = true
-                            assertionFailure("Persistent store recovery failed: \(retryError)")
-                        } else {
-                            applyBackupExclusionIfNeeded(
-                                preferences: preferences,
-                                storeDescription: retryDescription,
-                                inMemory: inMemory
-                            )
-                        }
-                        endSignpost()
-                    }
-                } catch {
-                    loadFailed = true
-                    assertionFailure("Failed to destroy corrupt store: \(error)")
-                    endSignpost()
-                }
+                loadFailed = true
+                endSignpost()
+                return
             } else {
                 applyBackupExclusionIfNeeded(
                     preferences: preferences,
@@ -288,16 +281,17 @@ final class PersistenceController {
         storeDescription: NSPersistentStoreDescription,
         inMemory: Bool
     ) {
-        guard preferences.localBackupExcludedFromiOSBackup,
-              inMemory == false,
-              let storeURL = storeDescription.url else {
-            return
-        }
-
-        do {
-            try (storeURL as NSURL).setResourceValue(true, forKey: URLResourceKey.isExcludedFromBackupKey)
-        } catch {
-            print("[Fernlet] Failed to exclude persistent store from iOS backup: \(error)")
+        guard inMemory == false, let storeURL = storeDescription.url else { return }
+        let excluded = preferences.localBackupExcludedFromiOSBackup
+        let sidecarURLs = [storeURL,
+                           URL(fileURLWithPath: storeURL.path + "-wal"),
+                           URL(fileURLWithPath: storeURL.path + "-shm")]
+        for url in sidecarURLs {
+            do {
+                try (url as NSURL).setResourceValue(excluded, forKey: URLResourceKey.isExcludedFromBackupKey)
+            } catch {
+                print("[Fernlet] Failed to set backup exclusion (\(excluded)) for \(url.lastPathComponent): \(error)")
+            }
         }
     }
 
@@ -367,6 +361,7 @@ final class PersistenceController {
             makeAttribute("protein", type: .integer64AttributeType, defaultValue: 0),
             makeAttribute("carbs", type: .integer64AttributeType, defaultValue: 0),
             makeAttribute("fat", type: .integer64AttributeType, defaultValue: 0),
+            makeAttribute("micronutrientsJSON", type: .stringAttributeType),
             makeAttribute("savedAt", type: .dateAttributeType)
         ]
         return entity

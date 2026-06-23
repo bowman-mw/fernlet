@@ -110,11 +110,11 @@ final class CloudKitDataService {
         isCloudKitSyncEnabled: (() -> Bool)? = nil,
         now: @escaping () -> Date = Date.init
     ) {
-        let storagePreferences = StoragePreferencesStore().preferences
+        let storagePreferencesStore = StoragePreferencesStore()
         self.accountProvider = SystemCloudKitAccountProvider(container: container)
         self.database = SystemCloudKitRecordDatabase(database: container.privateCloudDatabase)
         self.zoneIDOverride = nil
-        self.isCloudKitSyncEnabled = isCloudKitSyncEnabled ?? { storagePreferences.iCloudSyncEnabled }
+        self.isCloudKitSyncEnabled = isCloudKitSyncEnabled ?? { storagePreferencesStore.preferences.iCloudSyncEnabled }
         self.now = now
         self.decoder = Self.makeDecoder()
     }
@@ -299,7 +299,7 @@ final class CloudKitDataService {
 
     private func validate(_ confirmation: DeletionConfirmation) throws {
         let typed = confirmation.userTypedConfirmation.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !typed.isEmpty { return }
+        if typed.uppercased() == "DELETE" { return }
         if let verifiedAt = confirmation.biometricVerifiedAt,
            now().timeIntervalSince(verifiedAt) <= 60,
            verifiedAt <= now() {
@@ -445,18 +445,22 @@ private final class SystemCloudKitRecordDatabase: CloudKitRecordDatabase {
 
     func deleteRecords(with recordIDs: [CKRecord.ID]) async throws {
         guard !recordIDs.isEmpty else { return }
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            let operation = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: recordIDs)
-            operation.savePolicy = .changedKeys
-            operation.modifyRecordsResultBlock = { result in
-                switch result {
-                case .success:
-                    continuation.resume()
-                case .failure(let error):
-                    continuation.resume(throwing: error)
+        let batchSize = 400
+        for batchStart in stride(from: 0, to: recordIDs.count, by: batchSize) {
+            let batch = Array(recordIDs[batchStart..<min(batchStart + batchSize, recordIDs.count)])
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                let operation = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: batch)
+                operation.savePolicy = .changedKeys
+                operation.modifyRecordsResultBlock = { result in
+                    switch result {
+                    case .success:
+                        continuation.resume()
+                    case .failure(let error):
+                        continuation.resume(throwing: error)
+                    }
                 }
+                self.database.add(operation)
             }
-            database.add(operation)
         }
     }
 

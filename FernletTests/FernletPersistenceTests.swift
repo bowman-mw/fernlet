@@ -219,6 +219,47 @@ struct FernletPersistenceTests {
         #expect(cloudReloaded.day.meals.contains { $0.name.localizedCaseInsensitiveContains("salmon") })
     }
 
+    @MainActor
+    @Test func test_reloadFailureKeepsOriginalContainerAndStoreUsable() async throws {
+        let storeURL = makeTemporaryStoreURL()
+        let failingStoreURL = makeTemporaryStoreURL()
+        try FileManager.default.createDirectory(at: failingStoreURL, withIntermediateDirectories: true)
+        defer {
+            removeTemporaryStore(at: storeURL)
+            removeTemporaryStore(at: failingStoreURL)
+        }
+
+        let controller = PersistenceController(
+            preferences: preferences(iCloudSyncEnabled: false),
+            storeURL: storeURL
+        )
+        let originalContainer = controller.container
+        let store = makeStore(controller: controller)
+        store.addMeal(from: "lentil soup", type: .lunch)
+        store.flushPendingSnapshotSave()
+
+        controller.reloadStoreURLOverrideForTesting = failingStoreURL
+        var didThrow = false
+        do {
+            try await controller.reload(with: preferences(iCloudSyncEnabled: false))
+        } catch {
+            didThrow = true
+        }
+        controller.reloadStoreURLOverrideForTesting = nil
+
+        #expect(didThrow)
+        #expect(controller.container === originalContainer)
+        #expect(controller.container.persistentStoreCoordinator.persistentStores.isEmpty == false)
+
+        let reloaded = makeStore(controller: controller)
+        #expect(reloaded.day.meals.contains { $0.name.localizedCaseInsensitiveContains("lentil") })
+
+        reloaded.addMeal(from: "apple slices", type: .snack)
+        reloaded.flushPendingSnapshotSave()
+        let savedAfterFailure = makeStore(controller: controller)
+        #expect(savedAfterFailure.day.meals.contains { $0.name.localizedCaseInsensitiveContains("apple") })
+    }
+
     // MARK: - Test 8
 
     /// Verifies that reload reports true during the swap and false after completion.

@@ -131,11 +131,16 @@ private struct FoundationMealSelection {
         let validItems = items.compactMap { item -> FoodSelectionMealItem? in
             let validIngredients = item.ingredients.compactMap { ingredient -> FoodSelectionIngredient? in
                 guard let candidate = candidates.first(where: { $0.id == ingredient.candidateNumber }) else { return nil }
+                let normalizedUnitStr = normalizedUnit(ingredient.unit, fallback: candidate.foodItem.preferredRecipeUnit.rawValue)
+                let isWeightOrVolume = [RecipeUnit.gram.rawValue, RecipeUnit.milliliter.rawValue,
+                                        RecipeUnit.ounce.rawValue, RecipeUnit.pound.rawValue,
+                                        RecipeUnit.cup.rawValue].contains(normalizedUnitStr)
+                let quantityCap = isWeightOrVolume ? 1500.0 : 20.0
                 return FoodSelectionIngredient(
                     candidateId: candidate.id,
                     foodName: candidate.foodItem.name,
-                    quantity: max(ingredient.quantity, 0.01),
-                    unit: normalizedUnit(ingredient.unit, fallback: candidate.foodItem.preferredRecipeUnit.rawValue)
+                    quantity: min(max(ingredient.quantity, 0.01), quantityCap),
+                    unit: normalizedUnitStr
                 )
             }
             guard validIngredients.isEmpty == false else { return nil }

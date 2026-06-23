@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - FriendsView
 
@@ -13,6 +14,7 @@ struct FriendsView: View {
     @State private var sessionReady = false
     @State private var disconnectReviewPresented = false
     @State private var selectedForSave: Set<UUID> = []
+    @State private var photoSaveError: String? = nil
     @State private var selectedAlbumPostID: UUID?
     @State private var sessionSearchText = ""
 
@@ -61,10 +63,16 @@ struct FriendsView: View {
                 selectedIDs: $selectedForSave,
                 saveSelected: {
                     let toSave = manager.sessionPhotos.filter { selectedForSave.contains($0.id) }
-                    try? await FriendPhotoLibrarySaver.save(toSave)
-                    manager.finishSessionPhotos(keeping: selectedForSave)
-                    await manager.leaveSessionAfterNotifyingPeers()
-                    disconnectReviewPresented = false
+                    do {
+                        try await FriendPhotoLibrarySaver.save(toSave)
+                        manager.finishSessionPhotos(keeping: selectedForSave)
+                        await manager.leaveSessionAfterNotifyingPeers()
+                        disconnectReviewPresented = false
+                    } catch CocoaError.userCancelled {
+                        photoSaveError = "Fernlet needs access to your Photo Library to save photos. Open Settings to grant access."
+                    } catch {
+                        photoSaveError = "Could not save to your photo library. Please try again."
+                    }
                 },
                 discardAll: {
                     manager.deleteAllSessionPhotos()
@@ -74,6 +82,23 @@ struct FriendsView: View {
                     }
                 }
             )
+            .interactiveDismissDisabled()
+            .alert("Couldn't Save Photos", isPresented: Binding(
+                get: { photoSaveError != nil },
+                set: { if !$0 { photoSaveError = nil } }
+            )) {
+                if photoSaveError?.contains("Settings") == true {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                        photoSaveError = nil
+                    }
+                }
+                Button("OK", role: .cancel) { photoSaveError = nil }
+            } message: {
+                Text(photoSaveError ?? "")
+            }
         }
         .fullScreenCover(
             isPresented: Binding(

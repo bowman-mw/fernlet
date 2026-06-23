@@ -8,11 +8,14 @@ struct MealPhotoStore {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
-    @discardableResult
-    func save(_ data: Data) -> UUID {
+    func save(_ data: Data) -> UUID? {
         let id = UUID()
-        try? data.write(to: url(for: id), options: [.atomic, .completeFileProtection])
-        return id
+        do {
+            try data.write(to: url(for: id), options: [.atomic, .completeFileProtection])
+            return id
+        } catch {
+            return nil
+        }
     }
 
     func imageData(for id: UUID) -> Data? {

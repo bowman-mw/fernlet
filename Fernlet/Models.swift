@@ -116,8 +116,9 @@ struct FernletSettings: Codable {
     var proximityDisplayName: String = ""
     var showProximityDebugTools: Bool = false
     var allowNearbyRecipeShares: Bool = true
+    var companionName: String = ""
 
-    init() {}
+    nonisolated init() {}
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -145,6 +146,7 @@ struct FernletSettings: Codable {
         proximityDisplayName = try container.decodeIfPresent(String.self, forKey: .proximityDisplayName) ?? ""
         showProximityDebugTools = try container.decodeIfPresent(Bool.self, forKey: .showProximityDebugTools) ?? false
         allowNearbyRecipeShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyRecipeShares) ?? true
+        companionName = try container.decodeIfPresent(String.self, forKey: .companionName) ?? ""
     }
 }
 
@@ -1437,6 +1439,20 @@ struct DailyHealthScore: Identifiable, Codable, Equatable {
     var companionState: CompanionState
     var daySummaryText: String?
     var computedAt: Date
+
+    init(id: UUID = UUID(), dateKey: String, score: Double, companionState: CompanionState, daySummaryText: String? = nil, computedAt: Date) {
+        self.id = id; self.dateKey = dateKey; self.score = score; self.companionState = companionState; self.daySummaryText = daySummaryText; self.computedAt = computedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        dateKey = try c.decode(String.self, forKey: .dateKey)
+        score = try c.decode(Double.self, forKey: .score)
+        companionState = try c.decode(CompanionState.self, forKey: .companionState)
+        daySummaryText = try c.decodeIfPresent(String.self, forKey: .daySummaryText)
+        computedAt = try c.decodeIfPresent(Date.self, forKey: .computedAt) ?? Date()
+    }
 }
 
 struct MacroTotals: Equatable {
@@ -1715,6 +1731,9 @@ struct PlannedWorkout: Identifiable, Codable, Equatable {
     var muscleGroups: Set<MuscleGroup>
     var notes: String
     var duration: Int?
+    var targetDistanceMiles: Double?
+    var targetEnergyKcal: Double?
+    var targetEffort: Int?
     var createdAt = Date()
 
     var workoutType: WorkoutType { split.workoutType }
@@ -1729,6 +1748,9 @@ struct PlannedWorkout: Identifiable, Codable, Equatable {
             rpe: nil,
             notes: source.completionNote,
             duration: duration,
+            distanceMiles: targetDistanceMiles,
+            activeEnergyKcal: targetEnergyKcal,
+            effort: targetEffort,
             muscleGroups: muscleGroups,
             plannedWorkoutID: id,
             intensity: .moderate
@@ -1746,6 +1768,9 @@ struct PlannedWorkout: Identifiable, Codable, Equatable {
         muscleGroups: Set<MuscleGroup> = [],
         notes: String,
         duration: Int?,
+        targetDistanceMiles: Double? = nil,
+        targetEnergyKcal: Double? = nil,
+        targetEffort: Int? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -1758,6 +1783,9 @@ struct PlannedWorkout: Identifiable, Codable, Equatable {
         self.muscleGroups = muscleGroups
         self.notes = notes
         self.duration = duration
+        self.targetDistanceMiles = targetDistanceMiles
+        self.targetEnergyKcal = targetEnergyKcal
+        self.targetEffort = targetEffort
         self.createdAt = createdAt
     }
 
@@ -1773,11 +1801,15 @@ struct PlannedWorkout: Identifiable, Codable, Equatable {
         muscleGroups = try container.decodeIfPresent(Set<MuscleGroup>.self, forKey: .muscleGroups) ?? []
         notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
         duration = try container.decodeIfPresent(Int.self, forKey: .duration)
+        targetDistanceMiles = try container.decodeIfPresent(Double.self, forKey: .targetDistanceMiles)
+        targetEnergyKcal = try container.decodeIfPresent(Double.self, forKey: .targetEnergyKcal)
+        targetEffort = try container.decodeIfPresent(Int.self, forKey: .targetEffort)
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, split, source, mode, activityType, exercises, muscleGroups, notes, duration, createdAt
+        case id, name, split, source, mode, activityType, exercises, muscleGroups, notes, duration
+        case targetDistanceMiles, targetEnergyKcal, targetEffort, createdAt
     }
 }
 
@@ -2344,6 +2376,19 @@ struct JournalEntry: Identifiable, Codable, Equatable {
     var tag: FeelingTag
     var date = Date()
     var emotions: [String] = []
+
+    init(id: UUID = UUID(), text: String, tag: FeelingTag, date: Date = Date(), emotions: [String] = []) {
+        self.id = id; self.text = text; self.tag = tag; self.date = date; self.emotions = emotions
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        text = try c.decode(String.self, forKey: .text)
+        tag = try c.decode(FeelingTag.self, forKey: .tag)
+        date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        emotions = try c.decodeIfPresent([String].self, forKey: .emotions) ?? []
+    }
 }
 
 enum FeelingTag: String, Codable, CaseIterable, Identifiable {
@@ -2370,6 +2415,18 @@ struct SleepLog: Codable, Equatable {
     var quality: SleepQuality
     var note: String
     var loggedAt = Date()
+
+    init(hours: Double? = nil, quality: SleepQuality, note: String, loggedAt: Date = Date()) {
+        self.hours = hours; self.quality = quality; self.note = note; self.loggedAt = loggedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hours = try c.decodeIfPresent(Double.self, forKey: .hours)
+        quality = try c.decode(SleepQuality.self, forKey: .quality)
+        note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        loggedAt = try c.decodeIfPresent(Date.self, forKey: .loggedAt) ?? Date()
+    }
 }
 
 enum SleepQuality: String, Codable, CaseIterable, Identifiable {
@@ -2485,6 +2542,18 @@ struct MemoryNote: Identifiable, Codable, Equatable {
     var text: String
     var sourceDate = Date()
 
+    init(id: UUID = UUID(), category: String, text: String, sourceDate: Date = Date()) {
+        self.id = id; self.category = category; self.text = text; self.sourceDate = sourceDate
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        category = try c.decode(String.self, forKey: .category)
+        text = try c.decode(String.self, forKey: .text)
+        sourceDate = try c.decodeIfPresent(Date.self, forKey: .sourceDate) ?? Date()
+    }
+
     static func fromJournal(text: String, tag: FeelingTag) -> MemoryNote? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 20 else { return nil }
@@ -2501,6 +2570,21 @@ struct FitnessGoal: Identifiable, Codable, Equatable {
     var metric: String
     var milestones: [String] = []
     var weeklyStructure: String?
+
+    init(id: UUID = UUID(), type: GoalType, goal: String, timeframe: String, metric: String, milestones: [String] = [], weeklyStructure: String? = nil) {
+        self.id = id; self.type = type; self.goal = goal; self.timeframe = timeframe; self.metric = metric; self.milestones = milestones; self.weeklyStructure = weeklyStructure
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        type = try c.decode(GoalType.self, forKey: .type)
+        goal = try c.decode(String.self, forKey: .goal)
+        timeframe = try c.decodeIfPresent(String.self, forKey: .timeframe) ?? ""
+        metric = try c.decodeIfPresent(String.self, forKey: .metric) ?? ""
+        milestones = try c.decodeIfPresent([String].self, forKey: .milestones) ?? []
+        weeklyStructure = try c.decodeIfPresent(String.self, forKey: .weeklyStructure)
+    }
 }
 
 enum GoalType: String, Codable, CaseIterable, Identifiable {
@@ -2566,6 +2650,25 @@ struct WorkshopData: Codable, Equatable {
     var claudeNotesEntries: [TextureEntry] = [
         TextureEntry(title: "AI behavior", body: "External web AI calls are represented with deterministic local suggestions until an iOS API layer is added.", tags: [.tension])
     ]
+
+    nonisolated init() {}
+
+    init(textureEntries: [TextureEntry], handoffEntries: [TextureEntry], claudeNotesEntries: [TextureEntry]) {
+        self.textureEntries = textureEntries
+        self.handoffEntries = handoffEntries
+        self.claudeNotesEntries = claudeNotesEntries
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        textureEntries = try c.decodeIfPresent([TextureEntry].self, forKey: .textureEntries) ?? []
+        handoffEntries = try c.decodeIfPresent([TextureEntry].self, forKey: .handoffEntries) ?? [
+            TextureEntry(title: "Native handoff", body: "Core logging flows are now modeled as SwiftUI screens with local persistence.", tags: [.delight])
+        ]
+        claudeNotesEntries = try c.decodeIfPresent([TextureEntry].self, forKey: .claudeNotesEntries) ?? [
+            TextureEntry(title: "AI behavior", body: "External web AI calls are represented with deterministic local suggestions until an iOS API caller is added.", tags: [.tension])
+        ]
+    }
 }
 
 struct TextureEntry: Identifiable, Codable, Equatable {
@@ -2574,6 +2677,19 @@ struct TextureEntry: Identifiable, Codable, Equatable {
     var body: String
     var tags: Set<TextureTag>
     var createdAt = Date()
+
+    init(id: UUID = UUID(), title: String = FernletDate.shortDate(for: .now) + " observation", body: String, tags: Set<TextureTag> = [], createdAt: Date = Date()) {
+        self.id = id; self.title = title; self.body = body; self.tags = tags; self.createdAt = createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? (FernletDate.shortDate(for: .now) + " observation")
+        body = try c.decode(String.self, forKey: .body)
+        tags = try c.decodeIfPresent(Set<TextureTag>.self, forKey: .tags) ?? []
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
 }
 
 enum TextureTag: String, Codable, CaseIterable, Identifiable {
