@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 	<dict>
+		<key>ITSAppUsesNonExemptEncryption</key>
+		<false/>
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>remote-notification</string>
@@ -30,9 +32,11 @@
 		<key>NSFaceIDUsageDescription</key>
 		<string>Fernlet uses Face ID to unlock your private health data.</string>
 		<key>NSHealthShareUsageDescription</key>
-		<string>Fernlet reads your workouts, body metrics, and (optionally) cycle data from Apple Health to give you a complete picture of your activity.</string>
+		<string>Fernlet reads selected Health data only when you enable it — including workouts, body metrics, sleep, recovery, and (optionally) cycle data — to give you a complete, on-device picture of your wellbeing.</string>
 		<key>NSHealthUpdateUsageDescription</key>
-		<string>Fernlet writes the workouts you log into Apple Health so they appear in Apple Fitness and across your devices.</string>
+		<string>Fernlet writes the workouts and health observations you explicitly log into Apple Health, so they appear in Apple Fitness and across your devices.</string>
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>Fernlet uses your approximate location only to check the weather for gentle recovery prompts, when you turn that on.</string>
 		<key>UILaunchScreen</key>
 		<dict>
 			<key>UIColorName</key>

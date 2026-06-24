@@ -23,7 +23,7 @@ enum FernletVoice: CaseIterable {
     }
 }
 
-struct ScoringWeights: Equatable {
+struct ScoringWeights: Codable, Equatable {
     var journalWeight: Double
     var mealWeight: Double
     var workoutWeight: Double
@@ -88,6 +88,14 @@ enum GoalWeights {
     }
 }
 
+/// The overall score plus the per-component sub-scores and the exact (sickness-adjusted)
+/// weight vector that produced it. Persisted into `DailyHealthScore` for later inspection.
+struct ScoreBreakdown: Equatable {
+    var overall: Double
+    var components: [String: Double]
+    var appliedWeights: ScoringWeights
+}
+
 enum FernletScoring {
     static func tagScore(_ tag: FeelingTag?) -> Double {
         switch tag {
@@ -135,6 +143,41 @@ enum FernletScoring {
         nutrientGaps: [NutrientGap] = [],
         micronutrientDataCoverageRatio: Double = 0
     ) -> Double {
+        computeBreakdown(
+            journalTag: journalTag,
+            mealCount: mealCount,
+            workoutCount: workoutCount,
+            sleepQuality: sleepQuality,
+            bottleCount: bottleCount,
+            hydrationTarget: hydrationTarget,
+            hygiene: hygiene,
+            hygieneTaskCount: hygieneTaskCount,
+            completedPersonalCareTaskCount: completedPersonalCareTaskCount,
+            weights: weights,
+            isSick: isSick,
+            nutrientGaps: nutrientGaps,
+            micronutrientDataCoverageRatio: micronutrientDataCoverageRatio
+        ).overall
+    }
+
+    /// Computes the overall score along with the per-component sub-scores and the applied
+    /// (sickness-adjusted) weight vector. `compute` returns only `.overall`; callers that need
+    /// to persist the breakdown (`DailyHealthScore`) use this directly.
+    static func computeBreakdown(
+        journalTag: FeelingTag?,
+        mealCount: Int,
+        workoutCount: Int,
+        sleepQuality: SleepQuality?,
+        bottleCount: Int,
+        hydrationTarget: Int,
+        hygiene: Set<HygieneItem>,
+        hygieneTaskCount: Int = HygieneItem.allCases.count,
+        completedPersonalCareTaskCount: Int? = nil,
+        weights: ScoringWeights,
+        isSick: Bool = false,
+        nutrientGaps: [NutrientGap] = [],
+        micronutrientDataCoverageRatio: Double = 0
+    ) -> ScoreBreakdown {
         let baseMealScore = min(mealCount >= 3 ? 0.9 : mealCount >= 2 ? 0.75 : Double(mealCount) * 0.4, 1)
         let micronutrientModifier = micronutrientDataCoverageRatio >= 0.5 ? micronutrientModifier(from: nutrientGaps) : 0
         let mealScore = min(max(baseMealScore + micronutrientModifier, 0), 1)
@@ -144,14 +187,28 @@ enum FernletScoring {
         let adjustedWeights = weights.adjustedForSickness(isSick)
         let careCompletedCount = completedPersonalCareTaskCount ?? hygiene.count
         let careScore = hygieneScore(completedCount: careCompletedCount, taskCount: hygieneTaskCount)
-        return min(
-            tagScore(journalTag) * adjustedWeights.journalWeight +
+        let journalScore = tagScore(journalTag)
+        let sleepScoreValue = sleepScore(sleepQuality)
+        let overall = min(
+            journalScore * adjustedWeights.journalWeight +
             mealScore * adjustedWeights.mealWeight +
             workoutScore * adjustedWeights.workoutWeight +
-            sleepScore(sleepQuality) * adjustedWeights.sleepWeight +
+            sleepScoreValue * adjustedWeights.sleepWeight +
             hydrationScore * adjustedWeights.hydrationWeight +
             careScore * adjustedWeights.hygieneWeight,
             1
+        )
+        return ScoreBreakdown(
+            overall: overall,
+            components: [
+                "journal": journalScore,
+                "meal": mealScore,
+                "workout": workoutScore,
+                "sleep": sleepScoreValue,
+                "hydration": hydrationScore,
+                "hygiene": careScore
+            ],
+            appliedWeights: adjustedWeights
         )
     }
 
@@ -167,7 +224,7 @@ enum FernletScoring {
             hygieneTaskCount: store.personalCareTasks.count,
             completedPersonalCareTaskCount: store.personalCareProgress().completed,
             weights: GoalWeights.forGoal(store.settings.selectedGoal),
-            isSick: store.settings.isSick,
+            isSick: store.isSick(on: store.todayKey),
             nutrientGaps: dedupedNutrientGaps(from: store.derivedSignals.flatMap(\.nutrientGaps)),
             micronutrientDataCoverageRatio: micronutrientDataCoverageRatio(for: store.day.meals)
         )

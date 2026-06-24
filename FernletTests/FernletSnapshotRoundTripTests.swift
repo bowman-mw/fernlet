@@ -86,7 +86,7 @@ struct FernletSnapshotRoundTripTests {
         )
         var settings = FernletSettings()
         settings.selectedGoal = .strength
-        settings.isSick = true
+        settings.sickDays = ["2026-01-01": true]
         settings.aiStatus = .ready
         settings.showCalories = true
         settings.userProfile = UserNutritionProfile(age: 34, weightPounds: 165, heightInches: 67, sex: .female, activityLevel: .active)
@@ -222,7 +222,7 @@ struct FernletSnapshotRoundTripTests {
         #expect(actual.showDeveloperNotes == expected.showDeveloperNotes, sourceLocation: sourceLocation)
         #expect(actual.connectionInspectorMode == expected.connectionInspectorMode, sourceLocation: sourceLocation)
         #expect(actual.selectedGoal == expected.selectedGoal, sourceLocation: sourceLocation)
-        #expect(actual.isSick == expected.isSick, sourceLocation: sourceLocation)
+        #expect(actual.sickDays == expected.sickDays, sourceLocation: sourceLocation)
         #expect(actual.aiStatus == expected.aiStatus, sourceLocation: sourceLocation)
         #expect(actual.showCalories == expected.showCalories, sourceLocation: sourceLocation)
         #expect(actual.hasCompletedOnboarding == expected.hasCompletedOnboarding, sourceLocation: sourceLocation)

@@ -2,7 +2,7 @@ import CoreData
 import CryptoKit
 import Foundation
 
-struct MenstrualNarrative: Identifiable, Equatable {
+struct MenstrualNarrative: Identifiable, Codable, Equatable {
     var id: UUID
     var hkExternalUUID: String
     var dateKey: String

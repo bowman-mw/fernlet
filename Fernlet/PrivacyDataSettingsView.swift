@@ -43,14 +43,18 @@ struct PrivacyDataSettingsView: View {
     @State private var isDetectingCloudData = false
     @State private var operationError: String?
     @State private var didSeedUITestPreferences = false
+    @State private var pendingSealedBackupEnable: SealedBackupPayloadType?
 
     private let cloudDataService: any PrivacyCloudDataManaging
     private let persistenceController: any PrivacyPersistenceReloading
+    private let store: FernletStore?
 
     init(
+        store: FernletStore? = nil,
         cloudDataService: (any PrivacyCloudDataManaging)? = nil,
         persistenceController: (any PrivacyPersistenceReloading)? = nil
     ) {
+        self.store = store
         self.cloudDataService = cloudDataService ?? PrivacyDataServiceFactory.makeCloudDataService()
         self.persistenceController = persistenceController ?? PrivacyDataServiceFactory.makePersistenceReloader()
     }
@@ -82,6 +86,18 @@ struct PrivacyDataSettingsView: View {
             Button("Turn on") { enableICloudSync() }
         } message: {
             Text("Your local data will upload to iCloud and sync to your other Fernlet devices.")
+        }
+        .alert("Turn on encrypted backup?", isPresented: Binding(
+            get: { pendingSealedBackupEnable != nil },
+            set: { if !$0 { pendingSealedBackupEnable = nil } }
+        )) {
+            Button("Cancel", role: .cancel) { pendingSealedBackupEnable = nil }
+            Button("Encrypt & back up") {
+                if let payload = pendingSealedBackupEnable { applySealedBackup(payload, enabled: true) }
+                pendingSealedBackupEnable = nil
+            }
+        } message: {
+            Text(sealedBackupDisclosure(for: pendingSealedBackupEnable))
         }
         .task {
             #if DEBUG
@@ -483,25 +499,68 @@ struct PrivacyDataSettingsView: View {
     private var sealedSensitiveNotesBinding: Binding<Bool> {
         Binding(
             get: { storagePreferencesStore.preferences.sealedBackupSensitiveNotesEnabled },
-            set: { newValue in
-                FernletAuditLog.log("privacy.sealedBackup.sensitiveNotesChanged", context: [
-                    "enabled": newValue ? "true" : "false"
-                ])
-                storagePreferencesStore.update { $0.sealedBackupSensitiveNotesEnabled = newValue }
-            }
+            set: { newValue in handleSealedBackupToggle(.sensitiveNotes, enabled: newValue) }
         )
     }
 
     private var sealedPeriodBinding: Binding<Bool> {
         Binding(
             get: { storagePreferencesStore.preferences.sealedBackupPeriodEnabled },
-            set: { newValue in
-                FernletAuditLog.log("privacy.sealedBackup.periodChanged", context: [
-                    "enabled": newValue ? "true" : "false"
-                ])
-                storagePreferencesStore.update { $0.sealedBackupPeriodEnabled = newValue }
-            }
+            set: { newValue in handleSealedBackupToggle(.periodData, enabled: newValue) }
         )
+    }
+
+    private func handleSealedBackupToggle(_ payload: SealedBackupPayloadType, enabled: Bool) {
+        FernletAuditLog.log(
+            payload == .periodData ? "privacy.sealedBackup.periodChanged" : "privacy.sealedBackup.sensitiveNotesChanged",
+            context: ["enabled": enabled ? "true" : "false"]
+        )
+        if enabled {
+            // Require explicit, informed confirmation before any data leaves the device.
+            pendingSealedBackupEnable = payload
+        } else {
+            applySealedBackup(payload, enabled: false)
+        }
+    }
+
+    private func applySealedBackup(_ payload: SealedBackupPayloadType, enabled: Bool) {
+        guard let store else {
+            // No store (UI-test harness): just reflect the preference.
+            setSealedBackupPreference(payload, enabled)
+            return
+        }
+        Task {
+            let ok = await store.setSealedBackupEnabled(enabled, payloadType: payload)
+            await MainActor.run {
+                if enabled {
+                    if ok { setSealedBackupPreference(payload, true) }
+                } else {
+                    // Honor the user's "off" intent regardless of the delete outcome.
+                    setSealedBackupPreference(payload, false)
+                }
+            }
+        }
+    }
+
+    private func setSealedBackupPreference(_ payload: SealedBackupPayloadType, _ value: Bool) {
+        storagePreferencesStore.update {
+            switch payload {
+            case .periodData: $0.sealedBackupPeriodEnabled = value
+            case .sensitiveNotes: $0.sealedBackupSensitiveNotesEnabled = value
+            }
+        }
+    }
+
+    private func sealedBackupDisclosure(for payload: SealedBackupPayloadType?) -> String {
+        var lines = [
+            "Your data leaves this device only in encrypted form.",
+            "Apple can't read it.",
+            "If iCloud Keychain is ever permanently lost, this backup can't be recovered on a new device."
+        ]
+        if payload == .periodData {
+            lines.append("Period data is sensitive; it is uploaded only in this encrypted form.")
+        }
+        return lines.joined(separator: "\n\n")
     }
 
     private var localBackupIncludedBinding: Binding<Bool> {

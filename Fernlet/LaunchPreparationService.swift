@@ -103,9 +103,7 @@ final class LaunchPreparationService {
         // Keep launch work deterministic and cheap so the first screen can animate.
         store.photowallSeeds = buildPhotowallSeeds(store: store)
         statusMessage = "Reading your recent patterns..."
-        if let summary = await generateDaySummary(for: store) {
-            store.storeDaySummary(summary, for: yesterdayKey())
-        }
+        await backfillDaySummaries(for: store)
         store.storeCompanionThought(await generateCompanionThought(for: store))
         await store.backfillWorkoutsFromHealthIfNeeded()
 
@@ -162,40 +160,38 @@ final class LaunchPreparationService {
 
     // MARK: - Day summary
 
-    private func generateDaySummary(for store: FernletStore) async -> String? {
-        let key = yesterdayKey()
-        let targetDay = store.loadDay(for: key)
+    /// Generates day summaries for every logged day (except today) that is missing one, most recent
+    /// first. Gated to run at most once per calendar day per device (first open after midnight).
+    /// When Foundation Models is unavailable the day's slot is intentionally left empty (spec) rather
+    /// than filled with deterministic fallback text.
+    private func backfillDaySummaries(for store: FernletStore) async {
+        let todayKey = store.todayKey
+        if UserDefaults.standard.string(forKey: Self.daySummaryRunKeyDefault) == todayKey { return }
 
-        guard !targetDay.meals.isEmpty || !targetDay.workouts.isEmpty else { return nil }
-
-        // Skip if a summary already exists for yesterday.
-        if let existing = store.dailyScores.first(where: { $0.dateKey == key })?.daySummaryText,
-           !existing.isEmpty { return nil }
-
-        return await makeDaySummaryText(for: targetDay, store: store)
+        let dayKeys = store.loadDays().keys
+            .filter { $0 != todayKey }
+            .sorted(by: >)
+        for key in dayKeys {
+            if let existing = store.dailyScores.first(where: { $0.dateKey == key })?.daySummaryText,
+               !existing.isEmpty { continue }
+            let day = store.loadDay(for: key)
+            guard !day.meals.isEmpty || !day.workouts.isEmpty else { continue }
+            if let summary = await makeDaySummaryText(for: day, store: store), !summary.isEmpty {
+                store.storeDaySummary(summary, for: key)
+            }
+            // When the summary is nil, the slot is left empty on purpose (FM unavailable).
+        }
+        UserDefaults.standard.set(todayKey, forKey: Self.daySummaryRunKeyDefault)
     }
 
     private func makeDaySummaryText(for day: FernletDay, store: FernletStore) async -> String? {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *), isFoundationModelAvailable, store.settings.aiStatus != .off {
-            if let text = await foundationModelsDaySummary(for: day) { return text }
+            return await foundationModelsDaySummary(for: day)
         }
         #endif
-        return deterministicDaySummary(for: day)
-    }
-
-    private func deterministicDaySummary(for day: FernletDay) -> String {
-        var parts: [String] = []
-        if !day.meals.isEmpty { parts.append("\(day.meals.count) meal\(day.meals.count == 1 ? "" : "s")") }
-        if !day.workouts.isEmpty { parts.append(day.workouts.count == 1 ? "a workout" : "\(day.workouts.count) workouts") }
-        if let sleep = day.sleep {
-            let hours = sleep.hours.map { String(format: "%.1f", $0) + " hours" } ?? ""
-            parts.append([sleep.quality.label.lowercased(), hours].filter { !$0.isEmpty }.joined(separator: " ") + " sleep")
-        }
-        if day.bottleCount > 0 { parts.append("\(day.bottleCount) bottle\(day.bottleCount == 1 ? "" : "s") of water") }
-        if let tag = day.journals.last?.tag { parts.append("feeling \(tag.label.lowercased())") }
-        guard !parts.isEmpty else { return "" }
-        return parts.joined(separator: ", ").capitalized + "."
+        // Spec: leave the day-summary slot empty when Foundation Models is unavailable.
+        return nil
     }
 
     // MARK: - Companion thought
@@ -234,10 +230,8 @@ final class LaunchPreparationService {
         FoodSelectionAvailability.isFoundationModelAvailable
     }
 
-    private func yesterdayKey() -> String {
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
-        return FernletDate.dayKey(for: yesterday)
-    }
+    /// Device-local (not synced) UserDefaults key gating the once-per-day day-summary backfill.
+    private static let daySummaryRunKeyDefault = "fernlet.daySummary.lastRunKey"
 
     #if canImport(FoundationModels)
     @available(iOS 26.0, *)

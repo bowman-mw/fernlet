@@ -35,6 +35,21 @@ struct MoveView: View {
                         activeSheet = .goals
                     }
 
+                    if let readiness = store.derivedSignals.first(where: { $0.signalName == "intensityReadiness" }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "gauge.with.dots.needle.50percent")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.moss)
+                            Text("Today's readiness: \(readiness.value)")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(Color.bark)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(Color.moss.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+                    }
+
                     Button {
                         showingLocations = true
                     } label: {
@@ -486,9 +501,21 @@ struct WorkoutSuggestionSheet: View {
     @State private var showingSetup = false
     @State private var adjustRequest = ""
     @State private var isAdjusting = false
+    @State private var didApplyReadiness = false
 
     private var aiAdjustAvailable: Bool {
         store.settings.aiStatus != .off && FoodSelectionAvailability.isFoundationModelAvailable
+    }
+
+    /// Maps the derived intensity-readiness signal to a recommended workout intensity, if present.
+    private var recommendedIntensity: WorkoutIntensity? {
+        guard let r = store.derivedSignals.first(where: { $0.signalName == "intensityReadiness" }) else { return nil }
+        switch r.value {
+        case "ready for hard": return .hard
+        case "ready for light": return .light
+        case "ready for moderate": return .moderate
+        default: return nil
+        }
     }
 
     var body: some View {
@@ -550,11 +577,23 @@ struct WorkoutSuggestionSheet: View {
                         }
                     } else {
                         SheetField("How are you feeling?") {
-                            FlowLayout(spacing: 8) {
-                                ForEach(WorkoutIntensity.allCases) { intensity in
-                                    Button(intensity.rawValue.capitalized) { energy = intensity }
-                                        .buttonStyle(ChipButtonStyle(selected: energy == intensity))
+                            VStack(alignment: .leading, spacing: 8) {
+                                if let rec = recommendedIntensity {
+                                    Text("Today's readiness suggests \(rec.rawValue.lowercased()).")
+                                        .font(.caption)
+                                        .foregroundStyle(Color.slate)
                                 }
+                                FlowLayout(spacing: 8) {
+                                    ForEach(WorkoutIntensity.allCases) { intensity in
+                                        Button(intensity.rawValue.capitalized) { energy = intensity }
+                                            .buttonStyle(ChipButtonStyle(selected: energy == intensity))
+                                    }
+                                }
+                            }
+                            .onAppear {
+                                guard !didApplyReadiness else { return }
+                                didApplyReadiness = true
+                                if let rec = recommendedIntensity { energy = rec }
                             }
                         }
 

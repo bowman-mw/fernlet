@@ -71,6 +71,8 @@ struct HomeView: View {
             MacroCard(totals: store.macroTotals, targets: store.nutritionTargets, showCalories: store.settings.showCalories)
         case .hygiene:
             HygieneCard(store: store, activeSheet: $activeSheet)
+        case .ambient:
+            AmbientCardsView(store: store, activeSheet: $activeSheet)
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .trends:
             HomeActionWidget(widget: widget) {
                 handleHomeWidget(widget)
@@ -179,8 +181,81 @@ struct HomeView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
                 .background(store.companionState.color.opacity(0.13), in: Capsule())
+
+            signalsCard
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// A compact mood/energy/readiness chip row (plus a "resting today" sickness chip) that taps
+    /// through to the Trends modal. Reads the already-built derived signals.
+    @ViewBuilder
+    private var signalsCard: some View {
+        let chips = signalChips(from: store.derivedSignals)
+        let resting = store.isSick(on: store.todayKey)
+        if !chips.isEmpty || resting {
+            Button {
+                activeSheet = .trends
+            } label: {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        if resting {
+                            signalChip(text: "Resting today", color: .terracotta, icon: "thermometer.medium")
+                        }
+                        ForEach(chips) { chip in
+                            signalChip(text: chip.label, color: chip.color, icon: chip.icon)
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Wellbeing signals")
+            .accessibilityHint("Opens trends")
+        }
+    }
+
+    private struct HomeSignalChip: Identifiable {
+        let id = UUID()
+        let label: String
+        let color: Color
+        let icon: String
+    }
+
+    private func signalChips(from signals: [DerivedSignalRecord]) -> [HomeSignalChip] {
+        var chips: [HomeSignalChip] = []
+        if let mood = signals.first(where: { $0.signalName == "moodTrend" }) {
+            chips.append(HomeSignalChip(label: "Mood: \(compactSignalValue(mood.value))", color: .dustyRose, icon: "heart"))
+        }
+        if let energy = signals.first(where: { $0.signalName == "energyTrend" }) {
+            chips.append(HomeSignalChip(label: "Energy: \(compactSignalValue(energy.value))", color: .goldenrod, icon: "bolt"))
+        }
+        if let readiness = signals.first(where: { $0.signalName == "intensityReadiness" }) {
+            chips.append(HomeSignalChip(label: "Readiness: \(compactSignalValue(readiness.value))", color: .moss, icon: "figure.run"))
+        }
+        return chips
+    }
+
+    private func compactSignalValue(_ value: String) -> String {
+        switch value {
+        case "needs gentleness": return "gentle"
+        case "ready for hard": return "hard"
+        case "ready for light": return "light"
+        case "ready for moderate": return "moderate"
+        case "improving", "rising": return "up"
+        default: return value
+        }
+    }
+
+    private func signalChip(text: String, color: Color, icon: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(.caption2.weight(.semibold))
+            Text(text).font(.caption2.weight(.semibold))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(color.opacity(0.13), in: Capsule())
     }
 
     private var ambientThought: String {
@@ -313,13 +388,26 @@ struct HomeView: View {
                             .fernletWrappingText()
                     }
                     Spacer()
+                    Button {
+                        store.dismissTodayIntent()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.slate)
+                            .frame(width: 28, height: 28)
+                            .background(Color.slate.opacity(0.10), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss today's intent")
                 }
             }
         }
     }
 
     private var shouldShowTodayIntentPrompt: Bool {
-        Calendar.current.component(.hour, from: Date()) >= 14 && hasNoUserLogsToday
+        Calendar.current.component(.hour, from: Date()) >= 14
+            && hasNoUserLogsToday
+            && !store.isTodayIntentDismissed
     }
 
     private var hasNoUserLogsToday: Bool {
@@ -414,7 +502,7 @@ struct HomeView: View {
             activeSheet = .hygiene
         case .trends:
             activeSheet = .trends
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros:
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient:
             break
         }
     }
@@ -1046,7 +1134,7 @@ struct HomeActionWidget: View {
         case .water: "Update hydration."
         case .hygiene: "Open care tasks."
         case .trends: "Review local signals."
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros: ""
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient: ""
         }
     }
 }

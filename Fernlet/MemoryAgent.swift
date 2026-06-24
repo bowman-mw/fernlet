@@ -62,9 +62,17 @@ enum MemoryAgent {
 
     // MARK: - Diagnostic classifier
 
+    /// Returns `true` if the supplied text contains clinical/diagnostic language.
+    ///
+    /// Used both at read-time (before AI prompt injection) and at storage-time
+    /// (every proposed memory is screened before it is persisted — spec §8).
+    static func containsDiagnosticLanguage(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        return diagnosticPatterns.contains { lowered.contains($0) }
+    }
+
     /// Returns `true` if the record's text or evidence contains clinical/diagnostic language.
     static func containsDiagnosticLanguage(_ record: TierTwoMemoryRecord) -> Bool {
-        let combined = (record.text + " " + record.evidence).lowercased()
-        return diagnosticPatterns.contains { combined.contains($0) }
+        containsDiagnosticLanguage(record.text + " " + record.evidence)
     }
 }

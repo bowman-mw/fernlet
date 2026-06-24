@@ -88,7 +88,7 @@ struct SettingsSheet: View {
 
                 Section("Privacy") {
                     NavigationLink("Privacy & Data") {
-                        PrivacyDataSettingsView()
+                        PrivacyDataSettingsView(store: store)
                             .environment(lockService)
                     }
                     NavigationLink("App lock") {
@@ -812,7 +812,10 @@ struct SettingsSheet: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                 Divider().overlay(Color.bark.opacity(0.08))
-                Toggle("Sick mode", isOn: $store.settings.isSick)
+                Toggle("Sick mode", isOn: Binding(
+                    get: { store.isSick(on: store.todayKey) },
+                    set: { store.setSick($0, on: store.todayKey) }
+                ))
                 Toggle("Show calories", isOn: $store.settings.showCalories)
             }
             .padding(14)
@@ -851,6 +854,24 @@ struct SettingsSheet: View {
                 Toggle("Web nutrition lookup", isOn: $store.settings.webNutritionLookupEnabled)
                     .disabled(store.settings.aiStatus == .off)
                 Text("Fernlet can search the web for chain and packaged-food nutrition. Your meal description is sent to a search provider only when this is on.")
+                    .font(.caption.italic())
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                Divider().overlay(Color.bark.opacity(0.08))
+                Toggle("Weather-aware recovery prompts", isOn: Binding(
+                    get: { store.settings.weatherPromptsEnabled },
+                    set: { newValue in
+                        if newValue {
+                            Task {
+                                let granted = await WeatherKitService.shared.requestAuthorization()
+                                store.settings.weatherPromptsEnabled = granted
+                            }
+                        } else {
+                            store.settings.weatherPromptsEnabled = false
+                        }
+                    }
+                ))
+                Text("On heavy, gloomy days Fernlet can offer a gentle recovery nudge. Uses your approximate location for weather only, never stored or shared.")
                     .font(.caption.italic())
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()

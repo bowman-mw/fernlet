@@ -101,9 +101,17 @@ struct FernletSettings: Codable {
     var connectionInspectorMode: ConnectionInspectorMode = .live
     var companionAppearance: CompanionAppearance = .standard
     var selectedGoal: GoalType = .wellness
-    var isSick: Bool = false
+    /// Per-day sickness flags keyed by `yyyy-MM-dd`. Keyed by date so past-day scoring uses the
+    /// flag that was set for *that* day, and "today" naturally resets when the date rolls over.
+    var sickDays: [String: Bool] = [:]
+    /// Per-day dismissal of the "Today's intent" home prompt, keyed by `yyyy-MM-dd`.
+    var intentDismissedDays: [String: Bool] = [:]
+    /// Per-nutrient cooldown end dates for the preventive-care micronutrient nudge (2-week suppress).
+    var nutrientBubbleDismissedUntil: [String: Date] = [:]
     var aiStatus: AIStatus = .off
     var webNutritionLookupEnabled: Bool = false
+    /// Opt-in: weather-aware gentle recovery prompts (requests coarse location only when enabled).
+    var weatherPromptsEnabled: Bool = false
     var showCalories: Bool = false
     var hasCompletedOnboarding: Bool = false
     var hidePredictions: Bool = false
@@ -142,9 +150,12 @@ struct FernletSettings: Codable {
         connectionInspectorMode = try container.decodeIfPresent(ConnectionInspectorMode.self, forKey: .connectionInspectorMode) ?? .live
         companionAppearance = try container.decodeIfPresent(CompanionAppearance.self, forKey: .companionAppearance) ?? .standard
         selectedGoal = try container.decodeIfPresent(GoalType.self, forKey: .selectedGoal) ?? .wellness
-        isSick = try container.decodeIfPresent(Bool.self, forKey: .isSick) ?? false
+        sickDays = try container.decodeIfPresent([String: Bool].self, forKey: .sickDays) ?? [:]
+        intentDismissedDays = try container.decodeIfPresent([String: Bool].self, forKey: .intentDismissedDays) ?? [:]
+        nutrientBubbleDismissedUntil = try container.decodeIfPresent([String: Date].self, forKey: .nutrientBubbleDismissedUntil) ?? [:]
         aiStatus = try container.decodeIfPresent(AIStatus.self, forKey: .aiStatus) ?? .off
         webNutritionLookupEnabled = try container.decodeIfPresent(Bool.self, forKey: .webNutritionLookupEnabled) ?? false
+        weatherPromptsEnabled = try container.decodeIfPresent(Bool.self, forKey: .weatherPromptsEnabled) ?? false
         showCalories = try container.decodeIfPresent(Bool.self, forKey: .showCalories) ?? false
         hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
         hidePredictions = try container.decodeIfPresent(Bool.self, forKey: .hidePredictions) ?? false
@@ -248,8 +259,9 @@ enum HomeWidget: String, Codable, CaseIterable, Identifiable {
     case hygiene
     case macros
     case trends
+    case ambient
 
-    static let defaultWidgets: [HomeWidget] = [.companion, .todaySummary, .todayIntent, .quickLog, .macros]
+    static let defaultWidgets: [HomeWidget] = [.companion, .todaySummary, .todayIntent, .ambient, .quickLog, .macros, .trends]
 
     var id: String { rawValue }
 
@@ -269,6 +281,7 @@ enum HomeWidget: String, Codable, CaseIterable, Identifiable {
         case .hygiene: "Hygiene"
         case .macros: "Macros"
         case .trends: "Trends"
+        case .ambient: "Moments"
         }
     }
 
@@ -288,6 +301,7 @@ enum HomeWidget: String, Codable, CaseIterable, Identifiable {
         case .hygiene: "checklist"
         case .macros: "chart.pie"
         case .trends: "chart.line.uptrend.xyaxis"
+        case .ambient: "sparkles"
         }
     }
 
@@ -295,7 +309,7 @@ enum HomeWidget: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .hygiene, .trends:
             true
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros:
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient:
             false
         }
     }
@@ -1525,9 +1539,18 @@ struct DailyHealthScore: Identifiable, Codable, Equatable {
     var companionState: CompanionState
     var daySummaryText: String?
     var computedAt: Date
+    /// Per-component sub-scores (journal/meal/workout/sleep/hydration/hygiene) that produced `score`.
+    var componentScores: [String: Double]?
+    /// The exact (sickness-adjusted) weight vector applied for this day.
+    var weightVector: ScoringWeights?
+    /// Whether the day was scored with the sickness override active.
+    var sicknessOverride: Bool?
+    /// Optional menstrual-cycle phase label for this day (populated once the period bridge lands).
+    var periodPhase: String?
 
-    init(id: UUID = UUID(), dateKey: String, score: Double, companionState: CompanionState, daySummaryText: String? = nil, computedAt: Date) {
+    init(id: UUID = UUID(), dateKey: String, score: Double, companionState: CompanionState, daySummaryText: String? = nil, computedAt: Date, componentScores: [String: Double]? = nil, weightVector: ScoringWeights? = nil, sicknessOverride: Bool? = nil, periodPhase: String? = nil) {
         self.id = id; self.dateKey = dateKey; self.score = score; self.companionState = companionState; self.daySummaryText = daySummaryText; self.computedAt = computedAt
+        self.componentScores = componentScores; self.weightVector = weightVector; self.sicknessOverride = sicknessOverride; self.periodPhase = periodPhase
     }
 
     init(from decoder: Decoder) throws {
@@ -1538,6 +1561,10 @@ struct DailyHealthScore: Identifiable, Codable, Equatable {
         companionState = try c.decode(CompanionState.self, forKey: .companionState)
         daySummaryText = try c.decodeIfPresent(String.self, forKey: .daySummaryText)
         computedAt = try c.decodeIfPresent(Date.self, forKey: .computedAt) ?? Date()
+        componentScores = try c.decodeIfPresent([String: Double].self, forKey: .componentScores)
+        weightVector = try c.decodeIfPresent(ScoringWeights.self, forKey: .weightVector)
+        sicknessOverride = try c.decodeIfPresent(Bool.self, forKey: .sicknessOverride)
+        periodPhase = try c.decodeIfPresent(String.self, forKey: .periodPhase)
     }
 }
 
@@ -2648,6 +2675,9 @@ struct MemoryNote: Identifiable, Codable, Equatable {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 20 else { return nil }
         let prefix = String(trimmed.prefix(120))
+        // Spec §8: a diagnostic-language post-classifier runs on every proposed memory
+        // before storage; any match is silently rejected so clinical language never lands.
+        guard !MemoryAgent.containsDiagnosticLanguage(prefix) else { return nil }
         return MemoryNote(category: tag.rawValue, text: prefix)
     }
 }

@@ -18,6 +18,10 @@ struct MeshPhotoCacheStore {
     // Legitimately shared photos are downscaled to <=1400px, so these bounds leave wide headroom.
     private static let maxImagePixelDimension = 6_000
     private static let maxImagePixelCount = 24_000_000  // ~24 MP
+    // Spec §11: cap the on-device photo cache at 1000 (FIFO by recency), with a soft warning near 900.
+    // Newest photos are kept; oldest are evicted.
+    static let maxCachedPhotos = 1000
+    static let cacheWarningThreshold = 900
 
     init(indexURL: URL) {
         self.indexURL = indexURL
@@ -38,7 +42,7 @@ struct MeshPhotoCacheStore {
     }
 
     func save(_ photos: [FriendPhotoPayload]) {
-        let capped = Array(photos.sorted { $0.addedAt > $1.addedAt }.prefix(200))
+        let capped = Array(photos.sorted { $0.addedAt > $1.addedAt }.prefix(Self.maxCachedPhotos))
         createDirectories()
         for photo in capped {
             guard let imageData = photo.imageData else { continue }

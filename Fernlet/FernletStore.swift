@@ -179,7 +179,7 @@ final class FernletStore {
     }
 
     var companionState: CompanionState {
-        FernletScoring.state(for: score, isSick: settings.isSick)
+        FernletScoring.state(for: score, isSick: isSick(on: todayKey))
     }
 
     var macroTotals: MacroTotals {
@@ -919,8 +919,93 @@ final class FernletStore {
         return loaded
     }
 
-    func score(for targetDay: FernletDay) -> Double {
-        FernletScoring.compute(
+    /// Whether the given day (by `yyyy-MM-dd` key) is flagged sick.
+    func isSick(on dateKey: String) -> Bool {
+        settings.sickDays[dateKey] ?? false
+    }
+
+    /// Sets or clears the sickness flag for a specific day and persists the change.
+    func setSick(_ value: Bool, on dateKey: String) {
+        if value {
+            settings.sickDays[dateKey] = true
+        } else {
+            settings.sickDays.removeValue(forKey: dateKey)
+        }
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// Whether the "Today's intent" home prompt has been dismissed for the current day.
+    var isTodayIntentDismissed: Bool {
+        settings.intentDismissedDays[todayKey] ?? false
+    }
+
+    /// Dismisses the "Today's intent" prompt for today and persists the change.
+    func dismissTodayIntent() {
+        settings.intentDismissedDays[todayKey] = true
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// Whether the preventive-care micronutrient nudge for a nutrient is active (i.e. not within its
+    /// 2-week post-dismissal cooldown).
+    func isNutrientBubbleActive(for key: String) -> Bool {
+        guard let until = settings.nutrientBubbleDismissedUntil[key] else { return true }
+        return Date() >= until
+    }
+
+    /// Dismisses the micronutrient nudge for a nutrient, suppressing it for two weeks.
+    func dismissNutrientBubble(_ key: String) {
+        settings.nutrientBubbleDismissedUntil[key] = Date().addingTimeInterval(14 * 86_400)
+        snapshotSaveCoordinator.schedule()
+    }
+
+    // MARK: - Sealed CloudKit backup
+
+    enum SealedBackupWiringError: Error { case locked }
+
+    private func makeSealedBackupService() -> SealedBackupService? {
+        let identity = IdentityService()
+        do { try identity.ensureProvisioned() } catch { return nil }
+        return SealedBackupService(cloudDataService: CloudKitDataService(), identityService: identity)
+    }
+
+    /// Serializes the plaintext for a sealed-backup payload. Period data requires an unlocked
+    /// content key; sensitive notes are the Tier-2 behavioral memories.
+    private func sealedBackupPlaintext(for payloadType: SealedBackupPayloadType) throws -> Data {
+        switch payloadType {
+        case .sensitiveNotes:
+            return try JSONEncoder().encode(tierTwoMemories)
+        case .periodData:
+            guard let key = journalContentKey else { throw SealedBackupWiringError.locked }
+            let repo = MenstrualNarrativeRepository()
+            let interval = DateInterval(start: .distantPast, end: .distantFuture)
+            let narratives = try repo.narratives(in: interval, contentKey: key)
+            return try JSONEncoder().encode(narratives)
+        }
+    }
+
+    /// Seals + uploads (or deletes) the encrypted CloudKit backup for a payload. Returns whether it
+    /// succeeded; callers should only persist the "on" preference when this returns `true`.
+    @discardableResult
+    func setSealedBackupEnabled(_ enabled: Bool, payloadType: SealedBackupPayloadType) async -> Bool {
+        guard let service = makeSealedBackupService() else {
+            FernletAuditLog.log("sealedBackup.notProvisioned", context: ["payload": payloadType.rawValue])
+            return false
+        }
+        do {
+            let plaintext = enabled ? try sealedBackupPlaintext(for: payloadType) : Data()
+            try await service.reconcile(plaintext, payloadType: payloadType, enabled: enabled)
+            FernletAuditLog.log("sealedBackup.reconciled", context: [
+                "payload": payloadType.rawValue, "enabled": enabled ? "true" : "false"
+            ])
+            return true
+        } catch {
+            FernletAuditLog.log("sealedBackup.reconcileFailed", context: ["payload": payloadType.rawValue])
+            return false
+        }
+    }
+
+    func scoreBreakdown(for targetDay: FernletDay) -> ScoreBreakdown {
+        FernletScoring.computeBreakdown(
             journalTag: targetDay.journals.last?.tag,
             mealCount: targetDay.meals.count,
             workoutCount: targetDay.workouts.count,
@@ -931,9 +1016,13 @@ final class FernletStore {
             hygieneTaskCount: personalCareTasks.count,
             completedPersonalCareTaskCount: personalCareProgress(for: targetDay).completed,
             weights: GoalWeights.forGoal(settings.selectedGoal),
-            isSick: settings.isSick,
+            isSick: isSick(on: targetDay.date),
             micronutrientDataCoverageRatio: FernletScoring.micronutrientDataCoverageRatio(for: targetDay.meals)
         )
+    }
+
+    func score(for targetDay: FernletDay) -> Double {
+        scoreBreakdown(for: targetDay).overall
     }
 
     func dailyHealthScore(for dateKey: String, day targetDay: FernletDay) -> DailyHealthScore {
@@ -941,13 +1030,18 @@ final class FernletStore {
         if let stored = dailyScores.first(where: { $0.dateKey == dateKey }) {
             return stored
         }
-        let score = score(for: targetDay)
+        let sick = isSick(on: targetDay.date)
+        let breakdown = scoreBreakdown(for: targetDay)
         return DailyHealthScore(
             dateKey: dateKey,
-            score: score,
-            companionState: FernletScoring.state(for: score, isSick: settings.isSick),
+            score: breakdown.overall,
+            companionState: FernletScoring.state(for: breakdown.overall, isSick: sick),
             daySummaryText: nil,
-            computedAt: Date()
+            computedAt: Date(),
+            componentScores: breakdown.components,
+            weightVector: breakdown.appliedWeights,
+            sicknessOverride: sick,
+            periodPhase: nil
         )
     }
 

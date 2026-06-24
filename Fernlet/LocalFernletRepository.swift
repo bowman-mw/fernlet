@@ -942,6 +942,9 @@ enum TierTwoMemoryEngine {
         ].compactMap { $0 }
 
         for new in candidates {
+            // Spec §8: diagnostic-language post-classifier runs on every proposed memory
+            // before storage; any match is silently rejected.
+            if MemoryAgent.containsDiagnosticLanguage(new) { continue }
             let lastActive = updated
                 .filter { $0.category == new.category && $0.active }
                 .sorted { $0.extractedDate < $1.extractedDate }
