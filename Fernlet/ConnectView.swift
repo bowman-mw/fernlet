@@ -62,7 +62,9 @@ struct FriendsView: View {
                 photos: manager.sessionPhotos,
                 selectedIDs: $selectedForSave,
                 saveSelected: {
-                    let toSave = manager.sessionPhotos.filter { selectedForSave.contains($0.id) }
+                    // Session photos are stored metadata-only to bound memory; rehydrate the
+                    // selected ones from the disk cache before saving to the photo library.
+                    let toSave = manager.hydratedPhotos(manager.sessionPhotos.filter { selectedForSave.contains($0.id) })
                     do {
                         try await FriendPhotoLibrarySaver.save(toSave)
                         manager.finishSessionPhotos(keeping: selectedForSave)
@@ -80,7 +82,8 @@ struct FriendsView: View {
                         await manager.leaveSessionAfterNotifyingPeers()
                         disconnectReviewPresented = false
                     }
-                }
+                },
+                loadImageData: { manager.imageData(for: $0) }
             )
             .interactiveDismissDisabled()
             .alert("Couldn't Save Photos", isPresented: Binding(

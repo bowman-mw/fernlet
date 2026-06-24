@@ -35,7 +35,7 @@ struct FernletLockServiceTests {
                 Issue.record("Missing Keychain item for \(key.rawValue)")
                 continue
             }
-            #expect(attributes[kSecAttrAccessible as String] as? String == kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly as String)
+            #expect(attributes[kSecAttrAccessible as String] as? String == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
             #expect((attributes[kSecAttrSynchronizable as String] as? Bool) != true)
         }
 
@@ -50,7 +50,7 @@ struct FernletLockServiceTests {
                 Issue.record("Missing Keychain item for \(key.rawValue)")
                 continue
             }
-            #expect(attributes[kSecAttrAccessible as String] as? String == kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly as String)
+            #expect(attributes[kSecAttrAccessible as String] as? String == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
             #expect((attributes[kSecAttrSynchronizable as String] as? Bool) != true)
         }
 
@@ -321,7 +321,7 @@ struct FernletLockServiceTests {
 
         for key in [LockKeychainKey.cooldownMonotonicAnchor, .cooldownDurationSeconds] {
             let attributes = try #require(keychainAttributes(account: key.rawValue, service: harness.serviceID))
-            #expect(attributes[kSecAttrAccessible as String] as? String == kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly as String)
+            #expect(attributes[kSecAttrAccessible as String] as? String == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
             #expect((attributes[kSecAttrSynchronizable as String] as? Bool) != true)
         }
 

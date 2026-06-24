@@ -6,6 +6,9 @@
 import Foundation
 import Testing
 import CryptoKit
+#if canImport(UIKit)
+import UIKit
+#endif
 @testable import Fernlet
 
 @MainActor
@@ -148,8 +151,11 @@ struct MeshEncryptionTests {
             .appendingPathComponent("FernletMeshPhotoCacheTests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directoryURL) }
         let store = MeshPhotoCacheStore(indexURL: directoryURL.appendingPathComponent("MeshPhotoCache.json"))
+        // Use real image bytes: the cache now validates pixel dimensions on ingestion, so a
+        // non-image stand-in would (correctly) be rejected and never persisted.
+        let imageBytes = Self.tinyJPEGData()
         let photo = FriendPhotoPayload(
-            imageData: Data("image bytes".utf8),
+            imageData: imageBytes,
             senderName: "Alice",
             session: makePhotoSession()
         )
@@ -160,7 +166,17 @@ struct MeshEncryptionTests {
         #expect(loaded.id == photo.id)
         #expect(loaded.session == photo.session)
         #expect(loaded.imageData == nil)
-        #expect(store.imageData(for: loaded) == photo.imageData)
+        #expect(store.imageData(for: loaded) == imageBytes)
+    }
+
+    private static func tinyJPEGData() -> Data {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24), format: format)
+        return renderer.image { ctx in
+            UIColor.gray.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 24, height: 24))
+        }.jpegData(compressionQuality: 0.6)!
     }
 
     // MARK: - Epoch filtering on manifest

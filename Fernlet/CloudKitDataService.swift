@@ -110,11 +110,13 @@ final class CloudKitDataService {
         isCloudKitSyncEnabled: (() -> Bool)? = nil,
         now: @escaping () -> Date = Date.init
     ) {
-        let storagePreferencesStore = StoragePreferencesStore()
         self.accountProvider = SystemCloudKitAccountProvider(container: container)
         self.database = SystemCloudKitRecordDatabase(database: container.privateCloudDatabase)
         self.zoneIDOverride = nil
-        self.isCloudKitSyncEnabled = isCloudKitSyncEnabled ?? { storagePreferencesStore.preferences.iCloudSyncEnabled }
+        // Read the live value via the nonisolated static rather than capturing a @MainActor
+        // StoragePreferencesStore: this closure is invoked off the main actor (deleteAllCloudKitData),
+        // so reading a MainActor-isolated instance property here would be a data race.
+        self.isCloudKitSyncEnabled = isCloudKitSyncEnabled ?? { StoragePreferencesStore.currentPreferences().iCloudSyncEnabled }
         self.now = now
         self.decoder = Self.makeDecoder()
     }
@@ -341,7 +343,7 @@ final class CloudKitDataService {
     }
 
     private func summaryFromAggregateRecord(_ record: CKRecord) -> ExistingDataSummary {
-        guard let payload = record["payloadData"] as? Data,
+        guard let payload = Self.aggregatePayloadData(from: record),
               let localDatabase = try? decoder.decode(LocalFernletDatabase.self, from: payload) else {
             return .empty
         }
@@ -355,6 +357,27 @@ final class CloudKitDataService {
             hydrationLogCount: dayValues.reduce(0) { $0 + ($1.bottleCount > 0 ? 1 : 0) },
             sleepRecordCount: dayValues.reduce(0) { $0 + ($1.sleep == nil ? 0 : 1) }
         )
+    }
+
+    /// Extracts the aggregate database blob from a CKRecord. NSPersistentCloudKitContainer
+    /// mirrors the Core Data `payloadData` attribute under a `CD_` prefix, and stores it as a
+    /// CKAsset once it exceeds CloudKit's ~1 MB inline-field limit (which a full health
+    /// database routinely does). Reading the bare `payloadData` as inline `Data` therefore
+    /// always returned nil, making detection report "no cloud data" even when the cloud was
+    /// full of the user's data. Try both key spellings and both storage forms.
+    private static func aggregatePayloadData(from record: CKRecord) -> Data? {
+        for key in ["CD_payloadData", "payloadData"] {
+            guard let value = record[key] else { continue }
+            if let data = value as? Data {
+                return data
+            }
+            if let asset = value as? CKAsset,
+               let url = asset.fileURL,
+               let data = try? Data(contentsOf: url) {
+                return data
+            }
+        }
+        return nil
     }
 
     private static func makeDecoder() -> JSONDecoder {

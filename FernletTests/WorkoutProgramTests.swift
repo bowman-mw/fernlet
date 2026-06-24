@@ -93,6 +93,25 @@ struct WorkoutProgramTests {
         #expect(WorkoutSplitRecommender.desiredSpecificity(experience: .advanced, consistency: .high, activity: .veryActive) == .specialized)
     }
 
+    /// Regression for prior finding #15: equal-scoring splits must order deterministically by id
+    /// (Array.sorted(by:) is not guaranteed stable). `full-body-3` and `upper-lower-full-3` are
+    /// both balanced / 3-day / 3-session and both fit wellness & weightManagement, so they always
+    /// tie — the result must place `full-body-3` before `upper-lower-full-3` every run.
+    @Test func recommenderBreaksScoreTiesDeterministicallyByID() {
+        for goal in [GoalType.wellness, .weightManagement] {
+            let ids = WorkoutSplitRecommender.ranked(
+                goal: goal, experience: .intermediate, consistency: .medium,
+                activity: .moderate, preferredDays: 3
+            ).map(\.id)
+            let fullBody = ids.firstIndex(of: "full-body-3")
+            let upperLowerFull = ids.firstIndex(of: "upper-lower-full-3")
+            #expect(fullBody != nil && upperLowerFull != nil)
+            if let fullBody, let upperLowerFull {
+                #expect(fullBody < upperLowerFull, "tie must resolve by ascending id for goal \(goal)")
+            }
+        }
+    }
+
     @Test func granularEquipmentMapsToEngineCapabilities() {
         // 22 items across 5 categories.
         #expect(GymEquipment.allCases.count == 22)

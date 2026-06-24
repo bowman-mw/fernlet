@@ -50,6 +50,23 @@ struct WorkoutHealthKitSyncTests {
         #expect(context.upsertedWorkouts.isEmpty)
     }
 
+    /// Regression for prior finding #21: if the integration is disabled while a long-lived
+    /// workout observation query is still alive (disable ran on a different service
+    /// instance), reconcile must import nothing AND tear down the orphaned query so Apple
+    /// Health workouts stop flowing in.
+    @Test func reconcileStopsObservationWhenIntegrationDisabled() {
+        let context = FakeWorkoutSyncContext()
+        let sample = FakeHealthWorkoutSample()
+        let service = FakeWorkoutHealthKitService(authorizationStatuses: [:])
+        service.integrationAvailable = false
+        let sync = WorkoutHealthKitSync(context: context, service: service)
+
+        sync.reconcileWorkouts([sample])
+
+        #expect(context.upsertedWorkouts.isEmpty)
+        #expect(service.stopObservingWorkoutsCallCount == 1)
+    }
+
     @Test func saveIfAuthorizedNoOpsWhenWorkoutAuthorizationMissing() async {
         let context = FakeWorkoutSyncContext()
         let service = FakeWorkoutHealthKitService(authorizationStatuses: [:])
@@ -159,8 +176,10 @@ private final class FakeWorkoutSyncContext: WorkoutSyncContext {
 private final class FakeWorkoutHealthKitService: HealthKitServicing {
     var authorizationStatuses: [String: HKAuthorizationStatus]
     var observedWorkouts: [HKWorkout]
+    var integrationAvailable = true
     var saveWorkoutUUID = UUID()
     private(set) var saveWorkoutCallCount = 0
+    private(set) var stopObservingWorkoutsCallCount = 0
 
     init(authorizationStatuses: [String: HKAuthorizationStatus], observedWorkouts: [HKWorkout] = []) {
         self.authorizationStatuses = authorizationStatuses
@@ -170,13 +189,13 @@ private final class FakeWorkoutHealthKitService: HealthKitServicing {
     func isHealthDataAvailable() -> Bool { true }
     func requestAuthorization(for capability: HealthCapability) async throws -> AuthorizationOutcome { AuthorizationOutcome(writeStatuses: [:]) }
     func currentAuthorizationSnapshot() -> AuthorizationSnapshot {
-        AuthorizationSnapshot(isAvailable: true, writeStatuses: authorizationStatuses)
+        AuthorizationSnapshot(isAvailable: integrationAvailable, writeStatuses: authorizationStatuses)
     }
     func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws { }
     func startObservingWorkouts(handler: @escaping ([HKWorkout]) -> Void) async throws {
         handler(observedWorkouts)
     }
-    func stopObservingWorkouts() { }
+    func stopObservingWorkouts() { stopObservingWorkoutsCallCount += 1 }
     func recentWorkouts(since anchorDate: Date) async throws -> [HKWorkout] { [] }
     func backfillWorkoutsFromHealth(referenceDate: Date) async throws -> [HKWorkout] { observedWorkouts }
     func save(_ samples: [HKObject]) async throws { }

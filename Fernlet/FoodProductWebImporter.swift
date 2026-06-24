@@ -518,7 +518,9 @@ enum FoodProductWebImporter {
 
     private static func fetchImage(from url: URL) async -> UIImage? {
         guard url.scheme == "https" else { return nil }
-        var request = URLRequest(url: url)
+        // Explicit 15s timeout (vs the 60s default): up to 8 candidate images are fetched
+        // sequentially, so a stalling host would otherwise chain into a multi-minute hang.
+        var request = URLRequest(url: url, timeoutInterval: 15)
         request.setValue("image/*", forHTTPHeaderField: "Accept")
         request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")

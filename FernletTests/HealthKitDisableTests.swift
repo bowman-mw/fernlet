@@ -58,6 +58,32 @@ struct HealthKitDisableTests {
         #expect(snapshot.isAvailable == false)
     }
 
+    /// Regression for prior finding #20: the master toggle is flipped on a *different*
+    /// StoragePreferencesStore instance (the Privacy screen's). A long-lived
+    /// HealthKitService must observe that change live, not from a cached copy, so it
+    /// stops reporting available the moment the user disables HealthKit — no relaunch.
+    @Test func integrationStateReflectsExternalToggleWithoutRelaunch() {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let serviceID = "com.fernlet.healthkit-livetoggle.tests.\(UUID().uuidString)"
+        defer { KeychainItem.delete(for: .storagePreferences, service: serviceID) }
+
+        let prefsA = StoragePreferencesStore(keychainService: serviceID)
+        prefsA.update { $0.healthKitMasterEnabled = true }
+        let service = HealthKitService(
+            storeController: MockHealthKitStoreController(),
+            cacheCleaner: MockHealthKitCacheCleaner(),
+            preferencesStore: prefsA
+        )
+        #expect(service.currentAuthorizationSnapshot().isAvailable)
+
+        // A separate store (same keychain slot) disables HealthKit, as the Privacy screen does.
+        let prefsB = StoragePreferencesStore(keychainService: serviceID)
+        prefsB.update { $0.healthKitMasterEnabled = false }
+
+        // The original long-lived service must now report unavailable without re-instantiation.
+        #expect(service.currentAuthorizationSnapshot().isAvailable == false)
+    }
+
     @Test func workoutLoggingCapabilityHasNonEmptySummaryAndTitle() {
         #expect(!HealthCapability.workoutLogging.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         #expect(!HealthCapability.workoutLogging.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

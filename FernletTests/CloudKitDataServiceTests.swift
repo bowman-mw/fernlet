@@ -41,6 +41,24 @@ struct CloudKitDataServiceTests {
         #expect(summary == nil)
     }
 
+    /// Regression for prior finding #4: a full health database exceeds CloudKit's ~1 MB
+    /// inline field limit, so NSPersistentCloudKitContainer stores the mirrored
+    /// `CD_payloadData` as a CKAsset rather than inline Data. Detection must read the asset,
+    /// otherwise it reports "no cloud data" while the cloud is full of the user's data.
+    @Test func detectionReadsAssetBackedCDPayload() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        database.recordsByType["CD_FernletDatabaseRecord"] = [aggregateRecord(zoneID: zoneID, asAsset: true)]
+        let service = makeService(database: database, zoneID: zoneID)
+
+        let summary = try #require(try await service.detectExistingData())
+
+        #expect(summary.mealLogCount == 1)
+        #expect(summary.workoutCount == 1)
+        #expect(summary.journalEntryCount == 1)
+        #expect(summary.hasData)
+    }
+
     @Test func deletionRemovesAllRecordsAndReportsSyncImpact() async throws {
         let audit = AuditCapture()
         audit.install()
@@ -156,7 +174,7 @@ struct CloudKitDataServiceTests {
         )
     }
 
-    private func aggregateRecord(zoneID: CKRecordZone.ID) -> CKRecord {
+    private func aggregateRecord(zoneID: CKRecordZone.ID, asAsset: Bool = false) -> CKRecord {
         var localDatabase = LocalFernletDatabase()
         localDatabase.days = [
             "2026-05-22": FernletDay(
@@ -173,8 +191,19 @@ struct CloudKitDataServiceTests {
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
+        let data = try! encoder.encode(localDatabase)
+        // NSPersistentCloudKitContainer mirrors the attribute under the "CD_" prefix, and
+        // promotes large blobs to a CKAsset. Model both forms so detection is exercised the
+        // way the real cloud stores it.
         let cloudRecord = record(type: "CD_FernletDatabaseRecord", name: "primary", zoneID: zoneID)
-        cloudRecord["payloadData"] = try! encoder.encode(localDatabase) as CKRecordValue
+        if asAsset {
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("aggregate-\(UUID().uuidString).bin")
+            try! data.write(to: url)
+            cloudRecord["CD_payloadData"] = CKAsset(fileURL: url)
+        } else {
+            cloudRecord["CD_payloadData"] = data as CKRecordValue
+        }
         return cloudRecord
     }
 

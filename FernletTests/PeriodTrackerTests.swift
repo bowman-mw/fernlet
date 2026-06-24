@@ -245,6 +245,40 @@ struct PeriodTrackerTests {
         #expect(read.symptomFlags == [.bloating])
     }
 
+    /// Regression for prior finding #37: a partial failure while draining the pending
+    /// buffer must leave the buffer intact so the notes are retried on the next unlock,
+    /// never silently dropped. The first payload decodes and inserts fine; the second
+    /// has undecodable symptom bytes, so the drain throws partway through.
+    @Test func drainPendingBufferPreservesBufferOnPartialFailure() async throws {
+        let lock = MockLockService(state: .unlocked)
+        lock.pending = [
+            PendingNarrativePayload(
+                hkExternalUUID: "hk-good",
+                dateKey: "2026-05-20",
+                noteBytes: Data("good note".utf8),
+                symptomFlagsBytes: try JSONEncoder().encode([PeriodSymptom.cramps.rawValue]),
+                customSymptomScalesBytes: nil
+            ),
+            PendingNarrativePayload(
+                hkExternalUUID: "hk-bad",
+                dateKey: "2026-05-21",
+                noteBytes: Data("bad note".utf8),
+                symptomFlagsBytes: Data("not-json".utf8),   // fails JSONDecoder.decode([String])
+                customSymptomScalesBytes: nil
+            )
+        ]
+        let repository = makeRepository()
+        let key = SymmetricKey(data: Data(repeating: 7, count: 32))
+        let periodStore = PeriodTrackerStore(healthService: MockPeriodHealthKitService(), narrativeRepository: repository, lockService: lock)
+
+        await #expect(throws: (any Error).self) {
+            try await periodStore.drainPendingBuffer(contentKey: key)
+        }
+
+        // Buffer is NOT purged on failure, so the user's notes survive for the next attempt.
+        #expect(!lock.pending.isEmpty)
+    }
+
     @Test func currentPhaseUsesObservedFlowOnly() async throws {
         let health = MockPeriodHealthKitService()
         health.loadedSamples = try HealthKitService.periodSamples(for: UserLoggedCycleEvent(date: Date(), flowLevel: .light), externalUUID: UUID())

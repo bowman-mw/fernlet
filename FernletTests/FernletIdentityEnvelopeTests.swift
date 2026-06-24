@@ -376,12 +376,36 @@ struct FernletIdentityEnvelopeTests {
             expiresAt: expiresAt
         )
 
-        try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey, now: grantedAt.addingTimeInterval(60))
+        let meshID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey, expectedMeshID: meshID, now: grantedAt.addingTimeInterval(60))
         let canonicalBefore = canonicalBytes(for: token)
         token.admitterSignature = Data("tampered".utf8)
         #expect(canonicalBytes(for: token) == canonicalBefore)
         #expect(throws: MeshAdmissionToken.VerifyError.signatureInvalid) {
-            try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey, now: grantedAt.addingTimeInterval(60))
+            try token.verify(joinerSigningPublicKey: joiner.localSigningPublicKey, expectedMeshID: meshID, now: grantedAt.addingTimeInterval(60))
+        }
+    }
+
+    @Test func meshAdmissionTokenRejectsMismatchedMeshID() throws {
+        let (admitter, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (joiner, jid) = try makeIdentity()
+        defer { cleanup(jid) }
+        let grantedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let token = try MeshAdmissionToken.signed(
+            meshID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+            joinerFingerprint: joiner.localFingerprint,
+            joinerSigningPublicKey: joiner.localSigningPublicKey,
+            admitterIdentity: admitter,
+            grantedAt: grantedAt
+        )
+        // A token issued for mesh ...0002 must not verify when presented as a grant for ...0009.
+        #expect(throws: MeshAdmissionToken.VerifyError.meshMismatch) {
+            try token.verify(
+                joinerSigningPublicKey: joiner.localSigningPublicKey,
+                expectedMeshID: UUID(uuidString: "00000000-0000-0000-0000-000000000009")!,
+                now: grantedAt.addingTimeInterval(60)
+            )
         }
     }
 
@@ -402,6 +426,7 @@ struct FernletIdentityEnvelopeTests {
         )
         #expect(throws: MeshAdmissionToken.VerifyError.joinerKeyMismatch) {
             try token.verify(joinerSigningPublicKey: attacker.localSigningPublicKey,
+                             expectedMeshID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
                              now: grantedAt.addingTimeInterval(60))
         }
     }
@@ -422,6 +447,7 @@ struct FernletIdentityEnvelopeTests {
 
         try token.verify(
             joinerSigningPublicKey: joiner.localSigningPublicKey,
+            expectedMeshID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
             now: grantedAt.addingTimeInterval(60)
         )
     }

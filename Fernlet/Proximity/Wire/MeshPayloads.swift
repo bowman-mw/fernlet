@@ -151,6 +151,7 @@ extension MeshAdmissionToken {
         case fingerprintMismatch
         case joinerKeyMismatch
         case signatureInvalid
+        case meshMismatch
     }
 
     static func signed(
@@ -179,7 +180,10 @@ extension MeshAdmissionToken {
     /// Verifies the token against the key the local device actually holds.
     /// `presentedKey` must match the `joinerSigningPublicKey` bound into the token at issuance,
     /// preventing a fingerprint-collision attack from impersonating the intended joiner.
-    func verify(joinerSigningPublicKey presentedKey: Data, now: Date = Date()) throws {
+    /// `expectedMeshID` must match the signed `meshID`, so a token issued for one mesh cannot be
+    /// replayed inside a grant claiming a different mesh (the grant's outer meshID is unsigned).
+    func verify(joinerSigningPublicKey presentedKey: Data, expectedMeshID: UUID, now: Date = Date()) throws {
+        guard meshID == expectedMeshID else { throw VerifyError.meshMismatch }
         guard expiresAt >= now else { throw VerifyError.expired }
         guard presentedKey == joinerSigningPublicKey else { throw VerifyError.joinerKeyMismatch }
         guard IdentityService.fingerprintsMatch(

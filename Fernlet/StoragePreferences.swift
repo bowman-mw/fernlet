@@ -38,8 +38,11 @@ struct StoragePreferences: Codable, Equatable {
 final class StoragePreferencesStore {
     private(set) var preferences: StoragePreferences
 
+    /// The keychain service slot this store reads/writes. Exposed so long-lived
+    /// consumers (e.g. HealthKitService) can re-read the live value via
+    /// `currentPreferences(service:)` instead of trusting a stale in-memory copy.
     @ObservationIgnored
-    private let keychainService: String
+    let keychainService: String
     @ObservationIgnored
     private let now: () -> Date
     @ObservationIgnored
@@ -69,11 +72,13 @@ final class StoragePreferencesStore {
         KeychainItem.store(data, for: .storagePreferences, service: keychainService)
     }
 
-    static func currentPreferences(service: String = KeychainItem.storagePreferencesService) -> StoragePreferences {
+    // nonisolated: pure keychain read + JSON decode with no actor-isolated state, so it is safe
+    // to call from any executor (e.g. the non-MainActor CloudKitDataService sync-enabled closure).
+    nonisolated static func currentPreferences(service: String = KeychainItem.storagePreferencesService) -> StoragePreferences {
         loadPreferences(service: service)
     }
 
-    private static func loadPreferences(service: String) -> StoragePreferences {
+    nonisolated private static func loadPreferences(service: String) -> StoragePreferences {
         guard let data = KeychainItem.load(for: .storagePreferences, service: service),
               let decoded = try? JSONDecoder().decode(StoragePreferences.self, from: data) else {
             return StoragePreferences()

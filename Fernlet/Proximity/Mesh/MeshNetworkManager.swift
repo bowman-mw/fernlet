@@ -67,6 +67,13 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     @ObservationIgnored private var observationTask: Task<Void, Never>?
     private(set) var photosAddedThisSession = 0
     @ObservationIgnored private var sessionQuotaMeshID: UUID?
+    /// Distinct photo IDs accepted per *authenticated* peer this mesh session. Bounds the
+    /// receive path the same way `photosAddedThisSession` bounds the send path, so a single
+    /// connected peer cannot flood the session with unbounded photos (each decoded, cached,
+    /// and — when it claims the active session — retained in memory). Keyed on the
+    /// transport-authenticated fingerprint, not the spoofable `payload.senderFingerprint`.
+    @ObservationIgnored private var receivedPhotoIDsByFingerprint: [String: Set<UUID>] = [:]
+    @ObservationIgnored private var receiveQuotaMeshID: UUID?
     @ObservationIgnored private var photoSessionStartedAt: Date?
     @ObservationIgnored private var activePhotoSessionID: UUID?
     // voucherFingerprint → cached payload; never persisted across app launches
@@ -111,6 +118,12 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     private static let requiredStableDistanceSamples = 5
     private static let evictionHysteresis = 0.20
     private static let maxPhotosPerSenderPerSession = 10
+    /// Hard cap on the in-session photo list, defending against memory growth even if the
+    /// per-sender receive quota is bypassed by a future code path. With the per-sender cap
+    /// this is reached only by an implausible number of peers.
+    private static let maxSessionPhotos = 200
+    /// Hard cap on outstanding removal proposals (backstop against spoofed proposer fingerprints).
+    private static let maxPendingRemovalProposals = 16
 
     init(store: FernletStore) {
         self.store = store
@@ -252,6 +265,8 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         isSessionOpen = true
         photosAddedThisSession = 0
         sessionQuotaMeshID = nil
+        receivedPhotoIDsByFingerprint.removeAll()
+        receiveQuotaMeshID = nil
         sessionPhotos.removeAll()
         pendingRemovalProposals.removeAll()
         removedMemberFingerprints.removeAll()
@@ -275,6 +290,8 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         approvedRemovalProposalIDs.removeAll()
         photosAddedThisSession = 0
         sessionQuotaMeshID = nil
+        receivedPhotoIDsByFingerprint.removeAll()
+        receiveQuotaMeshID = nil
         clearGroupKeyState()
         stopSearching()
     }
@@ -500,6 +517,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         case .friendPhoto:
             if let payload = try? decoder.decode(FriendPhotoPayload.self, from: plaintext) {
                 if let fp = payload.senderFingerprint, store.isBlockedFingerprint(fp) { return }
+                guard allowIncomingPhoto(payload.id, from: peer?.fingerprint) else { return }
                 if payload.keyEpoch > 0 {
                     // Encrypted photo: decrypt before caching.
                     guard let key = currentGroupKey, key.epoch == payload.keyEpoch,
@@ -1012,7 +1030,14 @@ final class MeshNetworkManager: ProximityPayloadHandling {
 
     private func handleRemovalProposal(_ proposal: MeshRemovalProposalPayload, rebroadcast: Bool) {
         guard proposal.expiresAt > Date() else { return }
+        // Prune expired proposals so they cannot accumulate, then bound growth: dedup is by a
+        // sender-controlled id, so without a cap a connected peer could spam unlimited distinct
+        // proposals into this observed array (driving UI + memory). One active proposal per
+        // proposer, plus a hard total cap as the spoofed-fingerprint backstop.
+        pendingRemovalProposals.removeAll { $0.expiresAt <= Date() }
         guard !pendingRemovalProposals.contains(where: { $0.id == proposal.id }) else { return }
+        guard !pendingRemovalProposals.contains(where: { $0.proposerFingerprint == proposal.proposerFingerprint }) else { return }
+        guard pendingRemovalProposals.count < Self.maxPendingRemovalProposals else { return }
         pendingRemovalProposals.append(proposal)
         if rebroadcast {
             broadcastEnvelope(.meshRemovalProposal, encodable: proposal)
@@ -1080,7 +1105,9 @@ final class MeshNetworkManager: ProximityPayloadHandling {
 
     private func handleAdmissionGrant(_ grant: MeshAdmissionGrantPayload) {
         guard currentMesh == nil || currentMesh?.meshID == grant.meshID else { return }
-        do { try grant.token.verify(joinerSigningPublicKey: identity.localSigningPublicKey) } catch { return }
+        // Bind the signed token.meshID to the mesh being joined so a valid token for another
+        // mesh cannot be wrapped in a grant claiming this one (grant.meshID is unsigned).
+        do { try grant.token.verify(joinerSigningPublicKey: identity.localSigningPublicKey, expectedMeshID: grant.meshID) } catch { return }
 
         // Phase 3: unwrap the group key if one was included.
         if let bundle = grant.encryptedCurrentKey,
@@ -1105,8 +1132,30 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         meshPhotos = Array(meshPhotos.prefix(200))
         photoCacheStore.save(meshPhotos.map { $0.id == cachedPhoto.id ? cachedPhoto : $0 })
         if includeInSession {
-            sessionPhotos.insert(cachedPhoto, at: 0)
+            // Store metadata only; the full-resolution bytes were just persisted to the disk
+            // cache above and are rehydrated on demand (see sendRequestedPhotos / imageData()).
+            // Retaining raw bytes here grew unbounded in memory for the whole session.
+            sessionPhotos.insert(cachedPhoto.withoutImageData(), at: 0)
+            sessionPhotos = Array(sessionPhotos.prefix(Self.maxSessionPhotos))
         }
+    }
+
+    /// Enforces a per-authenticated-peer cap on *incoming* photos for the current mesh
+    /// session and records acceptance. Resets when the mesh changes. Returns false once a
+    /// peer has contributed `maxPhotosPerSenderPerSession` distinct photos; re-sends of an
+    /// already-accepted ID are allowed so legitimate manifest re-sync is not dropped.
+    private func allowIncomingPhoto(_ photoID: UUID, from authenticatedFingerprint: String?) -> Bool {
+        if currentMesh?.meshID != receiveQuotaMeshID {
+            receiveQuotaMeshID = currentMesh?.meshID
+            receivedPhotoIDsByFingerprint.removeAll()
+        }
+        let key = authenticatedFingerprint ?? ""
+        var accepted = receivedPhotoIDsByFingerprint[key, default: []]
+        if accepted.contains(photoID) { return true }
+        guard accepted.count < Self.maxPhotosPerSenderPerSession else { return false }
+        accepted.insert(photoID)
+        receivedPhotoIDsByFingerprint[key] = accepted
+        return true
     }
 
     func imageData(for photo: FriendPhotoPayload) -> Data? {

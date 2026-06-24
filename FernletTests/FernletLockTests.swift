@@ -324,8 +324,16 @@ struct FernletLockTests {
         #expect(drained[0].dateKey == "2026-05-20")
         #expect(drained[0].noteBytes == payload.noteBytes)
 
-        let drained2 = try buffer.drainAll()
-        #expect(drained2.isEmpty)
+        // drainAll() is non-destructive: re-draining returns the same entries
+        // until the caller has persisted them and explicitly purges. This guards
+        // against silently losing notes when a downstream insert fails partway.
+        let drainedAgain = try buffer.drainAll()
+        #expect(drainedAgain.count == 1)
+        #expect(drainedAgain[0].hkExternalUUID == payload.hkExternalUUID)
+
+        try buffer.purge()
+        let afterPurge = try buffer.drainAll()
+        #expect(afterPurge.isEmpty)
     }
 
     // MARK: - PendingNarrativeBuffer eviction at 50

@@ -63,7 +63,9 @@ struct FernletTests {
         })
         let roundedScores = Set(scores.values.map { ($0 * 10_000).rounded() / 10_000 })
 
-        #expect(roundedScores.count == 5)
+        // 7 GoalTypes with wellness==exploring colliding → 6 distinct scores (sportsPrep added a
+        // distinct goal after this test was written for 6 goals / 5 distinct).
+        #expect(roundedScores.count == 6)
         #expect(scores[.wellness] == scores[.exploring])
         #expect(scores[.wellness] != scores[.strength])
         #expect(scores[.strength] != scores[.weightManagement])
@@ -264,6 +266,40 @@ struct FernletTests {
         #expect(item.source == .usda)
         #expect(item.name == "Rice, fried, with chicken")
         #expect(item.portions.first?.description == "1 cup")
+    }
+
+    /// Regression for prior finding #10: for a branded FDC record whose labelNutrients are
+    /// missing a macro, the foodNutrients fallback (per 100 g) must be scaled to the per-serving
+    /// basis used by the micronutrients — otherwise carbs would be stored per-100g while sodium
+    /// is per-serving for the same 30 g item.
+    @Test func brandedLabelMacroFallbackSharesPerServingBasisWithMicros() throws {
+        let data = Data(#"""
+        [
+          {
+            "fdcId": 99999,
+            "description": "Test Branded Snack",
+            "dataType": "Branded",
+            "brandOwner": "Test Brand",
+            "servingSize": 30,
+            "servingSizeUnit": "g",
+            "labelNutrients": { "protein": { "value": 5 }, "fat": { "value": 3 } },
+            "foodNutrients": [
+              { "nutrientId": 1005, "amount": 50 },
+              { "nutrientId": 1093, "amount": 1000 }
+            ]
+          }
+        ]
+        """#.utf8)
+
+        let item = try #require(FoodDataCatalog.foodItems(from: data).first)
+
+        #expect(item.servingSize == 30)
+        #expect(item.macros.protein == 5)
+        #expect(item.macros.fat == 3)
+        // carbs absent from the label → foodNutrients 50 g/100g scaled to the 30 g serving = 15 g.
+        #expect(item.macros.carbs == 15)
+        // sodium (a micronutrient) is on the same per-serving basis: 1000 mg/100g × 0.3 = 300 mg.
+        #expect(item.micronutrients.sodium == 300)
     }
 
     @Test func surveyFoodsParticipateInBundledFoodSearch() throws {

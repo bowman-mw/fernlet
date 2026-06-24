@@ -47,6 +47,9 @@ struct FriendPhotoReviewSheet: View {
     @Binding var selectedIDs: Set<UUID>
     let saveSelected: () async -> Void
     let discardAll: () -> Void
+    /// Rehydrates a photo's bytes on demand (from the disk cache) for tiles whose in-memory
+    /// payload carries no image data — session photos are stored metadata-only to bound memory.
+    var loadImageData: ((FriendPhotoPayload) -> Data?)? = nil
     @State private var isSaving = false
 
     var body: some View {
@@ -67,7 +70,11 @@ struct FriendPhotoReviewSheet: View {
                             Button {
                                 toggle(photo.id)
                             } label: {
-                                FriendPhotoTile(photo: photo, selected: selectedIDs.contains(photo.id))
+                                FriendPhotoTile(
+                                    photo: photo,
+                                    selected: selectedIDs.contains(photo.id),
+                                    loadImageData: loadImageData.map { load in { load(photo) } }
+                                )
                             }
                             .buttonStyle(.plain)
                         }

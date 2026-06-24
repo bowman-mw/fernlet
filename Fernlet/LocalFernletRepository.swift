@@ -619,6 +619,9 @@ struct AIAnalysisRetryRecord: Identifiable, Codable, Equatable {
     var id = UUID()
     var payloadType: String
     var sourceId: UUID
+    /// Day the source meal was logged on (yyyy-MM-dd). Optional for backward-compatible decode of
+    /// records written before this field existed; nil is treated as "today" by the retry path.
+    var dayKey: String?
     var createdAt = Date()
     var lastAttemptAt: Date?
     var attemptCount = 0

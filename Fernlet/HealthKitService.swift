@@ -729,7 +729,13 @@ final class HealthKitService: HealthKitServicing {
     }
 
     private var isIntegrationEnabled: Bool {
-        isHealthDataAvailable() && preferencesStore.preferences.healthKitMasterEnabled
+        // Read the live keychain value rather than this instance's cached `preferences`.
+        // Multiple HealthKitService instances exist (FernletStore, Privacy settings, etc.),
+        // each with its own StoragePreferencesStore; the master toggle is flipped on a
+        // different instance, so a cached read would keep reporting the old state until
+        // relaunch — gating reads/writes/observation incorrectly.
+        isHealthDataAvailable()
+            && StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService).healthKitMasterEnabled
     }
 
     nonisolated private static func deliver(workoutSamples samples: [HKSample]?, anchor: HKQueryAnchor?, handler: @escaping ([HKWorkout]) -> Void) {

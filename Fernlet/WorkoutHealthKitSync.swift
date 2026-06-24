@@ -156,7 +156,15 @@ final class WorkoutHealthKitSync {
     }
 
     func reconcileWorkouts(_ samples: [some HealthWorkoutSample]) {
-        guard let context, service.currentAuthorizationSnapshot().isAvailable else { return }
+        guard let context else { return }
+        // The integration can be disabled by a *different* HealthKitService instance
+        // (the Privacy screen builds its own), which cannot reach this long-lived
+        // observation query. If we observe that it is now disabled, tear the query down
+        // here so Apple Health workouts stop importing instead of flowing in until relaunch.
+        guard service.currentAuthorizationSnapshot().isAvailable else {
+            stopObservation()
+            return
+        }
         for sample in samples {
             let externalID = sample.metadata?["fernlet.workoutID"] as? String
             let syncID = sample.metadata?[HKMetadataKeySyncIdentifier] as? String

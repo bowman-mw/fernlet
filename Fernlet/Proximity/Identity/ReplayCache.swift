@@ -10,10 +10,11 @@ import Foundation
 final class ReplayCache {
     private var seen: [UUID: Date] = [:]
     private let retentionInterval: TimeInterval = 24 * 60 * 60
-    private let maxEntries = 10_000
+    private let maxEntries: Int
     let dateProvider: @Sendable () -> Date
 
-    init(dateProvider: @escaping @Sendable () -> Date = { Date() }) {
+    init(maxEntries: Int = 10_000, dateProvider: @escaping @Sendable () -> Date = { Date() }) {
+        self.maxEntries = maxEntries
         self.dateProvider = dateProvider
     }
 
@@ -37,9 +38,12 @@ final class ReplayCache {
         let cutoff = dateProvider().addingTimeInterval(-retentionInterval)
         seen = seen.filter { $0.value >= cutoff }
         if seen.count > maxEntries {
-            // Keep oldest entries so a flush-then-replay of stale IDs cannot evict them.
+            // Keep the NEWEST entries. The stale-`createdAt` guard above already bounds the
+            // replay window, so dropping old IDs is safe; dropping new ones is not — under a
+            // >maxEntries flood it would evict the fingerprints of recent legitimate envelopes,
+            // letting those recent envelopes be replayed undetected.
             seen = Dictionary(
-                seen.sorted(by: { $0.value < $1.value }).prefix(maxEntries).map { ($0.key, $0.value) },
+                seen.sorted(by: { $0.value > $1.value }).prefix(maxEntries).map { ($0.key, $0.value) },
                 uniquingKeysWith: { a, _ in a }
             )
         }

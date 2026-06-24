@@ -106,12 +106,20 @@ struct USDAFoodItemRecord: Decodable {
         brandSource = try container.decodeIfPresent(String.self, forKey: .brandOwner)
             ?? container.decodeIfPresent(String.self, forKey: .brandName)
         let isBrandedLabel = labelNutrients != nil && (brandSource != nil || dataType?.localizedCaseInsensitiveContains("branded") == true)
+        // For a branded label, foodNutrients are per 100 g/ml while labelNutrients are per
+        // serving; nutrientScale converts the former to the per-serving basis. Defined before
+        // the macro block so the macro fallbacks share the same basis as the micronutrients —
+        // otherwise a label missing a macro stored that macro per-100g but micros per-serving.
+        let nutrientScale: Double = isBrandedLabel && (labelServingSize ?? 100) > 0
+            ? (labelServingSize ?? 100) / 100.0
+            : 1.0
+        func scaled(_ v: Double?) -> Double? { v.map { $0 * nutrientScale } }
         if isBrandedLabel, let labelServingSize, labelServingSize > 0 {
             servingSize = labelServingSize
             servingUnit = labelServingUnit ?? RecipeUnit.gram.rawValue
-            protein = labelNutrients?.protein?.value ?? nutrientValues[1003] ?? 0
-            carbs = labelNutrients?.carbohydrates?.value ?? nutrientValues[1005] ?? 0
-            fat = labelNutrients?.fat?.value ?? nutrientValues[1004] ?? 0
+            protein = labelNutrients?.protein?.value ?? scaled(nutrientValues[1003]) ?? 0
+            carbs = labelNutrients?.carbohydrates?.value ?? scaled(nutrientValues[1005]) ?? 0
+            fat = labelNutrients?.fat?.value ?? scaled(nutrientValues[1004]) ?? 0
         } else {
             servingSize = 100
             servingUnit = RecipeUnit.gram.rawValue
@@ -122,10 +130,6 @@ struct USDAFoodItemRecord: Decodable {
         category = categoryDescription ?? dataType ?? "USDA"
         tags = [dataType, categoryDescription, "usda"].compactMap { $0 }
         portions = Self.portions(from: fdcPortions, labelServingSize: labelServingSize, labelServingUnit: labelServingUnit, labelServingText: labelServingText)
-        let nutrientScale: Double = isBrandedLabel && (labelServingSize ?? 100) > 0
-            ? (labelServingSize ?? 100) / 100.0
-            : 1.0
-        func scaled(_ v: Double?) -> Double? { v.map { $0 * nutrientScale } }
         fiber = scaled(nutrientValues[1079])
         sugar = scaled(nutrientValues[2000] ?? nutrientValues[1063])
         saturatedFat = scaled(nutrientValues[1258])

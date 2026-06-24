@@ -75,7 +75,14 @@ final class JournalNarrativeRepository {
         request.predicate = NSPredicate(format: "dayKey == %@", dayKey)
         request.sortDescriptors = [NSSortDescriptor(key: "entryDate", ascending: true)]
         return try context.fetch(request).compactMap { object in
-            try decrypt(object, contentKey: contentKey)
+            // Skip an individual undecryptable row rather than rethrowing, which would
+            // make every valid journal narrative for the day disappear because callers
+            // wrap this in `try?`. Mirrors Menstrual/Intimacy narrative repositories.
+            do {
+                return try decrypt(object, contentKey: contentKey)
+            } catch {
+                return nil
+            }
         }
     }
 
@@ -85,7 +92,12 @@ final class JournalNarrativeRepository {
         request.predicate = NSPredicate(format: "dayKey IN %@", dayKeys)
         request.sortDescriptors = [NSSortDescriptor(key: "entryDate", ascending: true)]
         return try context.fetch(request).compactMap { object in
-            try decrypt(object, contentKey: contentKey)
+            // Skip an individual undecryptable row rather than rethrowing (see above).
+            do {
+                return try decrypt(object, contentKey: contentKey)
+            } catch {
+                return nil
+            }
         }
     }
 

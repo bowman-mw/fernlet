@@ -53,10 +53,13 @@ final class PendingNarrativeBuffer {
         try saveEntries(entries)
     }
 
+    /// Reads and returns the buffered payloads **without** removing them.
+    /// The buffer is only cleared once the caller has durably persisted the
+    /// payloads, via an explicit `purge()` call. Purging here would lose any
+    /// payloads the caller fails to persist (e.g. a partial insert failure),
+    /// silently dropping notes the user wrote while the app was locked.
     func drainAll() throws -> [PendingNarrativePayload] {
-        let entries = try loadEntries()
-        if !entries.isEmpty { try purge() }
-        return entries
+        try loadEntries()
     }
 
     func purge() throws {

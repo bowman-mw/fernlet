@@ -750,7 +750,13 @@ enum WorkoutSplitRecommender {
                 }
                 return (split, score)
             }
-            .sorted { $0.score > $1.score }
+            // Deterministic secondary sort on split id: Array.sorted(by:) is not guaranteed
+            // stable, and several splits tie at the top score, so without this the auto-selected
+            // program could silently change identity between launches. Mirrors the id/name
+            // tie-breaks used by bestExercise and the adjustment candidate builder.
+            .sorted { lhs, rhs in
+                lhs.score != rhs.score ? lhs.score > rhs.score : lhs.split.id < rhs.split.id
+            }
             .map(\.split)
     }
 

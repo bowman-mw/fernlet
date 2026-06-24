@@ -481,7 +481,7 @@ final class FernletStore {
         for newRecipe in resolution.createdRecipes { recipes.insert(newRecipe, at: 0) }
         resolution.meals.forEach { appendMeal($0, date: targetDate) }
         if resolution.isFallback {
-            resolution.meals.forEach { queueMealRetry($0) }
+            resolution.meals.forEach { queueMealRetry($0, dayKey: targetDate) }
         }
         return resolution.meals
     }
@@ -1416,8 +1416,8 @@ final class FernletStore {
         }
     }
 
-    func queueMealRetry(_ meal: Meal) {
-        aiRetryQueueService.queueMealRetry(meal)
+    func queueMealRetry(_ meal: Meal, dayKey: String? = nil) {
+        aiRetryQueueService.queueMealRetry(meal, dayKey: dayKey)
     }
 
     func clearRetryItem(_ id: UUID) {
@@ -1426,12 +1426,30 @@ final class FernletStore {
 
     func retryOldestMeal() async {
         guard let record = aiRetryQueueService.retryQueue.first else { return }
-        if let meal = day.meals.first(where: { $0.id == record.sourceId }) {
+        // Fallback meals can be queued for any date (back-filled logging), not just today, and
+        // the record carries the day it belongs to. Resolve against that day and re-commit on the
+        // same date instead of only ever looking in today's meals and silently discarding the rest.
+        let dayKey = record.dayKey ?? todayKey
+        if dayKey == todayKey {
+            guard let meal = day.meals.first(where: { $0.id == record.sourceId }) else {
+                aiRetryQueueService.clear(id: record.id)
+                return
+            }
             let description = meal.name
             deleteMeal(meal)
             await addResolvedMeals(from: description)
         } else {
-            aiRetryQueueService.clear(id: record.id)
+            guard let meal = loadDay(for: dayKey).meals.first(where: { $0.id == record.sourceId }) else {
+                aiRetryQueueService.clear(id: record.id)
+                return
+            }
+            let description = meal.name
+            aiRetryQueueService.clearForSourceID(meal.id)
+            batchSnapshotPersistence {
+                _ = mutateDay(date: dayKey) { $0.meals.removeAll { $0.id == meal.id } }
+                invalidateDaySummary(for: dayKey)
+            }
+            await addResolvedMeals(from: description, date: dayKey)
         }
     }
 

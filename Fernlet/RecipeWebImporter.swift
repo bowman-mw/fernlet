@@ -48,7 +48,7 @@ enum RecipeWebImporter {
     /// - Parameter aiEnabled: When false, the FoundationModels fallback is skipped so that
     ///   users who have disabled AI are not silently opted in via recipe import.
     static func importRecipe(from url: URL, foodItems: [FoodItem], aiEnabled: Bool) async throws -> ImportedRecipe {
-        guard url.scheme == "https" else {
+        guard isSafePublicHTTPSURL(url) else {
             throw RecipeWebImportError.invalidURL
         }
 
@@ -72,7 +72,10 @@ enum RecipeWebImporter {
 
         let (asyncBytes, response): (URLSession.AsyncBytes, URLResponse)
         do {
-            (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
+            // Validate every redirect hop, not just the initial URL: a public https page can 30x
+            // to an internal/link-local address. A rejected redirect surfaces the 3xx response,
+            // which the status-code guard below treats as a failed fetch.
+            (asyncBytes, response) = try await URLSession.shared.bytes(for: request, delegate: RedirectValidator())
         } catch {
             throw RecipeWebImportError.fetchFailed
         }
@@ -101,6 +104,52 @@ enum RecipeWebImporter {
             throw RecipeWebImportError.emptyHTML
         }
         return html
+    }
+
+    // MARK: - SSRF guard
+
+    /// A URL is safe to fetch only if it is https with a host that is not a loopback, private, or
+    /// link-local address literal. Applied to the initial URL and re-checked on every redirect.
+    static func isSafePublicHTTPSURL(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "https",
+              let host = url.host?.lowercased(), !host.isEmpty else {
+            return false
+        }
+        if host == "localhost" || host.hasSuffix(".localhost") { return false }
+        return !isPrivateOrLoopbackIPLiteral(host)
+    }
+
+    static func isPrivateOrLoopbackIPLiteral(_ host: String) -> Bool {
+        // IPv6 literals (URL.host strips the surrounding brackets).
+        if host == "::1" { return true }                                  // loopback
+        if host.hasPrefix("fe80:") { return true }                        // link-local
+        if host.hasPrefix("fc") || host.hasPrefix("fd") { return true }   // unique-local fc00::/7
+        // IPv4 literals.
+        let octets = host.split(separator: ".").compactMap { Int($0) }
+        guard octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else { return false }
+        let (a, b) = (octets[0], octets[1])
+        if a == 127 || a == 10 || a == 0 { return true }                  // loopback / private / this-network
+        if a == 192 && b == 168 { return true }                           // private
+        if a == 172 && (16...31).contains(b) { return true }              // private
+        if a == 169 && b == 254 { return true }                           // link-local
+        return false
+    }
+
+    /// Per-task delegate that re-validates each redirect target and cancels unsafe ones.
+    private final class RedirectValidator: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+        func urlSession(
+            _ session: URLSession,
+            task: URLSessionTask,
+            willPerformHTTPRedirection response: HTTPURLResponse,
+            newRequest request: URLRequest,
+            completionHandler: @escaping (URLRequest?) -> Void
+        ) {
+            if let url = request.url, RecipeWebImporter.isSafePublicHTTPSURL(url) {
+                completionHandler(request)
+            } else {
+                completionHandler(nil)   // refuse the redirect; the 3xx becomes the final response
+            }
+        }
     }
 
     private static func jsonLDRecipe(from html: String, sourceURL: URL, foodItems: [FoodItem]) throws -> ImportedRecipe? {

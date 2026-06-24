@@ -98,7 +98,7 @@ struct JournalNarrativeRepositoryTests {
 
     // MARK: - Security
 
-    @Test func wrongKeyThrowsOnDecrypt() throws {
+    @Test func wrongKeySkipsUndecryptableRows() throws {
         let repo = makeRepository()
         let key = makeKey()
         let wrongKey = makeKey()
@@ -108,9 +108,44 @@ struct JournalNarrativeRepositoryTests {
         )
         try repo.insert(narrative, contentKey: key)
 
-        #expect(throws: (any Error).self) {
-            try repo.narratives(forDayKey: "2026-05-28", contentKey: wrongKey)
-        }
+        // A row that cannot be decrypted is skipped, not rethrown. The fetch must not
+        // surface the wrong-key contents and must not blow up the whole fetch.
+        let fetched = try repo.narratives(forDayKey: "2026-05-28", contentKey: wrongKey)
+        #expect(fetched.isEmpty)
+    }
+
+    /// Regression for prior finding #122: a single undecryptable row must not wipe every
+    /// valid journal narrative for the day. Previously `try decrypt` inside compactMap
+    /// rethrew, and callers' `try?` turned that into an empty result, silently hiding
+    /// good entries alongside the corrupt one.
+    @Test func corruptRowDoesNotWipeValidRows() throws {
+        let controller = PrivatePersistenceController(inMemory: true)
+        let context = controller.container.viewContext
+        let repo = JournalNarrativeRepository(context: context)
+        let key = makeKey()
+
+        let good = JournalNarrative(
+            id: UUID(), dayKey: "2026-05-28", tag: .good, entryDate: Date(),
+            text: "Valid entry.", emotions: ["calm"], createdAt: Date(), updatedAt: Date()
+        )
+        let bad = JournalNarrative(
+            id: UUID(), dayKey: "2026-05-28", tag: .hard, entryDate: Date(),
+            text: "Corrupt entry.", emotions: [], createdAt: Date(), updatedAt: Date()
+        )
+        try repo.insert(good, contentKey: key)
+        try repo.insert(bad, contentKey: key)
+
+        // Corrupt the bad row's ciphertext directly so its decrypt throws.
+        let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
+        request.predicate = NSPredicate(format: "id == %@", bad.id as CVarArg)
+        let object = try #require(try context.fetch(request).first)
+        object.setValue(Data([0x00, 0x01, 0x02, 0x03]), forKey: "textCiphertext")
+        try context.save()
+
+        let fetched = try repo.narratives(forDayKey: "2026-05-28", contentKey: key)
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.id == good.id)
+        #expect(fetched.first?.text == "Valid entry.")
     }
 
     @Test func insertWithNilKeyThrowsLocked() throws {

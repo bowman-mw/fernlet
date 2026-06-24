@@ -104,6 +104,27 @@ struct MeshNetworkManagerTests {
                 "11th photo must set meshError — quota exceeded")
     }
 
+    /// Regression for prior finding #6: in-session photos must hold metadata only, not
+    /// full-resolution bytes (which previously accumulated in memory for the whole session
+    /// and could be flooded into an OOM). The bytes live in the disk cache and rehydrate.
+    @Test func sessionPhotos_holdMetadataOnlyNotRawBytes() throws {
+        let manager = MeshNetworkManager(store: store)
+        manager.currentMesh = makeTestMesh()
+
+        manager.addPhoto(makeTinyJPEG())
+
+        let cached = try #require(manager.sessionPhotos.first)
+        #expect(cached.imageData == nil,
+                "Session photo must not retain raw image bytes in memory")
+        // Display path (FriendPhotoReviewSheet tile loadImageData closure).
+        #expect(manager.imageData(for: cached) != nil,
+                "Full-resolution bytes remain available from the disk cache on demand")
+        // Library-save path (ConnectView rehydrates the selected session photos before saving).
+        let rehydrated = try #require(manager.hydratedPhotos([cached]).first)
+        #expect(rehydrated.imageData != nil,
+                "hydratedPhotos must repopulate bytes so the save flow does not silently save nothing")
+    }
+
     /// After leaveMesh() the counter resets: the next mesh allows 10 new photos.
     @Test func photoQuota_resetsAfterLeaveMesh() {
         let manager = MeshNetworkManager(store: store)

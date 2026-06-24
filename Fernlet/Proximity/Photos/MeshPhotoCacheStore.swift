@@ -12,6 +12,12 @@ struct MeshPhotoCacheStore {
     // Reject incoming photos larger than this to prevent decompression-bomb OOM.
     private static let maxIncomingPhotoBytes = 10 * 1024 * 1024  // 10 MB
     private static let thumbnailMaxPixelSize = 400
+    // A small, highly-compressed JPEG can decode to a multi-gigabyte bitmap, so the byte cap
+    // above is not sufficient. Reject by pixel dimensions/area before the full-resolution bytes
+    // are ever persisted (and therefore before any display/library-save sink decodes them).
+    // Legitimately shared photos are downscaled to <=1400px, so these bounds leave wide headroom.
+    private static let maxImagePixelDimension = 6_000
+    private static let maxImagePixelCount = 24_000_000  // ~24 MP
 
     init(indexURL: URL) {
         self.indexURL = indexURL
@@ -38,6 +44,10 @@ struct MeshPhotoCacheStore {
             guard let imageData = photo.imageData else { continue }
             guard imageData.count <= Self.maxIncomingPhotoBytes else {
                 print("[Fernlet] Dropped oversized peer photo (\(imageData.count) bytes)")
+                continue
+            }
+            guard Self.isWithinSafePixelBounds(imageData) else {
+                print("[Fernlet] Dropped peer photo exceeding safe pixel dimensions")
                 continue
             }
             try? imageData.write(to: imageURL(for: photo.id), options: [.atomic, .completeFileProtection])
@@ -75,6 +85,22 @@ struct MeshPhotoCacheStore {
             senderSigningPublicKey: photo.senderSigningPublicKey,
             session: photo.session
         )
+    }
+
+    /// Reads pixel dimensions via ImageIO (without decoding the pixels) and rejects images whose
+    /// dimensions or total area would decompress to an unreasonable bitmap, independent of the
+    /// on-the-wire byte size. Undeterminable dimensions are treated as unsafe.
+    static func isWithinSafePixelBounds(_ imageData: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(imageData as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0 else {
+            return false
+        }
+        return width <= maxImagePixelDimension
+            && height <= maxImagePixelDimension
+            && width * height <= maxImagePixelCount
     }
 
     // MARK: - Safe thumbnail generation
