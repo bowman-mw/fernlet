@@ -396,9 +396,36 @@ final class FernletStore {
 
     @discardableResult func addMeal(from description: String, type: MealType? = nil, date: String) -> Meal {
         assert(!date.isEmpty, "meal date required")
-        let parsed = MealParser.parse(description, fallbackType: type)
+        let parsed = enrichingFallbackMicronutrients(MealParser.parse(description, fallbackType: type), description: description)
         appendMeal(parsed, date: date)
         return parsed
+    }
+
+    /// Best-effort micronutrient estimate for a manually-parsed meal, resolved from the food catalog
+    /// so manual / heuristic-fallback meals no longer log an entirely empty micronutrient snapshot
+    /// (Item 3). Returns empty `Micronutrients` when nothing usable matches — the gap is then left
+    /// honest rather than fabricated. The estimate is the best catalog match's per-serving profile;
+    /// macros on these meals are themselves estimates, so an unscaled nutrient profile is consistent.
+    func fallbackMicronutrients(for description: String) -> Micronutrients {
+        let normalizedName = FoodItemSearch.normalized(MealParser.mealName(from: description))
+        if let exact = foodCatalog.exactNameMatch(forNormalized: normalizedName), exact.micronutrients.hasAnyValue {
+            return exact.micronutrients
+        }
+        if let best = foodCatalog.results(for: description, limit: 1).first, best.micronutrients.hasAnyValue {
+            return best.micronutrients
+        }
+        return Micronutrients()
+    }
+
+    /// Returns `meal` with a catalog-derived micronutrient snapshot filled in when it currently has
+    /// none. Leaves meals that already carry micronutrients (catalog/AI-resolved) untouched.
+    private func enrichingFallbackMicronutrients(_ meal: Meal, description: String) -> Meal {
+        guard meal.micronutrientSnapshot.hasAnyValue == false else { return meal }
+        let micros = fallbackMicronutrients(for: description)
+        guard micros.hasAnyValue else { return meal }
+        var enriched = meal
+        enriched.micronutrientSnapshot = micros
+        return enriched
     }
 
     @discardableResult func addResolvedMeal(from description: String, type: MealType? = nil, date: String? = nil) async -> Meal {
@@ -472,7 +499,8 @@ final class FernletStore {
         }
 
         // Keyword-heuristic fallback: fabricated macros, no catalog grounding — always reviewed.
-        let fallback = MealParser.parse(description, fallbackType: type)
+        // Still try to ground its micronutrients in the catalog so the snapshot isn't fully empty.
+        let fallback = enrichingFallbackMicronutrients(MealParser.parse(description, fallbackType: type), description: description)
         return MealResolution(meals: [fallback], createdRecipes: [], confidence: .low, isFallback: true)
     }
 
@@ -980,8 +1008,8 @@ final class FernletStore {
         case .periodData:
             guard let key = journalContentKey else { throw SealedBackupWiringError.locked }
             let repo = MenstrualNarrativeRepository()
-            let interval = DateInterval(start: .distantPast, end: .distantFuture)
-            let narratives = try repo.narratives(in: interval, contentKey: key)
+            // Unbounded fetch — `narratives(in:)` would enumerate every calendar day in the range.
+            let narratives = try repo.allNarratives(contentKey: key)
             return try JSONEncoder().encode(narratives)
         }
     }
@@ -1007,8 +1035,114 @@ final class FernletStore {
         }
     }
 
+    // MARK: - Sealed CloudKit backup: restore (new-device / fresh-install path)
+
+    /// Called once at launch (after the store is ready) to pull any sealed iCloud backups into the
+    /// local stores. No-ops unless iCloud sync is on, the payload's backup is enabled, and the local
+    /// store is a fresh install. Best-effort and non-fatal: failures are logged and retried next
+    /// launch. Gated by `FERNLET_SKIP_SEALED_RESTORE` so UI tests can opt out.
+    func restoreSealedBackupsIfNeeded() async {
+        guard ProcessInfo.processInfo.environment["FERNLET_SKIP_SEALED_RESTORE"] != "1" else { return }
+        let prefs = StoragePreferencesStore.currentPreferences()
+        guard prefs.iCloudSyncEnabled else { return }
+        if prefs.sealedBackupSensitiveNotesEnabled {
+            _ = await restoreSealedBackup(payloadType: .sensitiveNotes)
+        }
+        if prefs.sealedBackupPeriodEnabled {
+            _ = await restoreSealedBackup(payloadType: .periodData)
+        }
+    }
+
+    /// Fetches, decrypts, and writes a single sealed-backup payload into the local stores. Returns
+    /// `true` only when records were actually restored. Returns `false` (without mutating anything)
+    /// when the store already holds data (never clobbers), no backup exists, the device identity
+    /// can't open the record, the content key is locked (period data), or any decode/transport error
+    /// occurs — all of which are safe to retry on a later launch.
+    @discardableResult
+    func restoreSealedBackup(payloadType: SealedBackupPayloadType) async -> Bool {
+        guard isEmptyStoreForRestore(payloadType: payloadType) else {
+            FernletAuditLog.log("sealedBackup.restoreSkippedNonEmpty", context: ["payload": payloadType.rawValue])
+            return false
+        }
+        guard let service = makeSealedBackupService() else {
+            FernletAuditLog.log("sealedBackup.restoreNotProvisioned", context: ["payload": payloadType.rawValue])
+            return false
+        }
+        do {
+            guard let plaintext = try await service.restore(payloadType: payloadType) else {
+                return false
+            }
+            let restored = try applyRestoredPayload(plaintext, payloadType: payloadType)
+            guard restored > 0 else { return false }
+            FernletAuditLog.log("sealedBackup.restored", context: [
+                "payload": payloadType.rawValue, "count": String(restored)
+            ])
+            return true
+        } catch {
+            FernletAuditLog.log("sealedBackup.restoreFailed", context: ["payload": payloadType.rawValue])
+            return false
+        }
+    }
+
+    /// Decodes a decrypted sealed-backup payload and writes it into the local stores, returning the
+    /// number of records written. Separated from the CloudKit fetch so it is unit-testable without
+    /// iCloud. Period data re-seals each narrative with the current device's content key, so it
+    /// requires an unlocked key and throws `SealedBackupWiringError.locked` otherwise (retried next
+    /// launch after unlock).
+    @discardableResult
+    func applyRestoredPayload(
+        _ plaintext: Data,
+        payloadType: SealedBackupPayloadType,
+        narrativeRepository: MenstrualNarrativeRepository = MenstrualNarrativeRepository()
+    ) throws -> Int {
+        switch payloadType {
+        case .sensitiveNotes:
+            let records = try JSONDecoder().decode([TierTwoMemoryRecord].self, from: plaintext)
+            guard records.isEmpty == false else { return 0 }
+            repository.replaceTierTwoMemories(records)
+            return records.count
+        case .periodData:
+            guard let key = journalContentKey else { throw SealedBackupWiringError.locked }
+            let narratives = try JSONDecoder().decode([MenstrualNarrative].self, from: plaintext)
+            var restored = 0
+            for narrative in narratives {
+                do {
+                    try narrativeRepository.insert(narrative, contentKey: key)
+                    restored += 1
+                } catch {
+                    FernletAuditLog.log("sealedBackup.restoreNarrativeFailed", context: ["dateKey": narrative.dateKey])
+                }
+            }
+            return restored
+        }
+    }
+
+    /// Whether the local store is empty enough that restoring `payloadType` cannot clobber or
+    /// duplicate existing user data. Requires a fresh install for all payloads; sensitive-notes
+    /// additionally requires the (overwrite-style) Tier-2 store to be empty.
+    private func isEmptyStoreForRestore(payloadType: SealedBackupPayloadType) -> Bool {
+        guard isFreshInstallForRestore() else { return false }
+        switch payloadType {
+        case .sensitiveNotes: return tierTwoMemories.isEmpty
+        case .periodData: return true
+        }
+    }
+
+    /// True only when no day carries any logged content and the rolling in-memory caches are empty —
+    /// i.e. the user has not yet recorded anything on this device.
+    private func isFreshInstallForRestore() -> Bool {
+        let anyLoggedDay = repository.loadAllDays().values.contains { d in
+            !(d.meals.isEmpty && d.workouts.isEmpty && d.plannedWorkouts.isEmpty && d.journals.isEmpty
+              && d.sleep == nil && d.hygiene.isEmpty && d.completedPersonalCareTaskIDs.isEmpty
+              && d.bottleCount == 0 && d.healthContext == nil)
+        }
+        return !anyLoggedDay && previousJournals.isEmpty && memories.isEmpty && recentMeals.isEmpty
+    }
+
     func scoreBreakdown(for targetDay: FernletDay) -> ScoreBreakdown {
-        FernletScoring.computeBreakdown(
+        let body = targetDay.healthContext?.body
+        let activity = targetDay.healthContext?.activity
+        return FernletScoring.computeBreakdown(
             journalTag: targetDay.journals.last?.tag,
             mealCount: targetDay.meals.count,
             workoutCount: targetDay.workouts.count,
@@ -1020,7 +1154,12 @@ final class FernletStore {
             completedPersonalCareTaskCount: personalCareProgress(for: targetDay).completed,
             weights: GoalWeights.forGoal(settings.selectedGoal),
             isSick: isSick(on: targetDay.date),
-            micronutrientDataCoverageRatio: FernletScoring.micronutrientDataCoverageRatio(for: targetDay.meals)
+            micronutrientDataCoverageRatio: FernletScoring.micronutrientDataCoverageRatio(for: targetDay.meals),
+            sleepHours: body?.sleepHours,
+            sleepStages: body?.sleepStages,
+            activitySteps: activity?.steps,
+            activeEnergyKilocalories: activity?.activeEnergyKilocalories,
+            exerciseMinutes: activity?.exerciseMinutes
         )
     }
 
@@ -1044,7 +1183,9 @@ final class FernletStore {
             componentScores: breakdown.components,
             weightVector: breakdown.appliedWeights,
             sicknessOverride: sick,
-            periodPhase: nil
+            periodPhase: nil,
+            healthActivityContext: targetDay.healthContext?.activity,
+            healthBodyContext: targetDay.healthContext?.body
         )
     }
 

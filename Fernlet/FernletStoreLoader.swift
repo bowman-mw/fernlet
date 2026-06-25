@@ -37,6 +37,10 @@ final class FernletStoreLoader {
             await store.loadBundledFoodItemsForLaunch()
             statusMessage = "Getting Fernlet ready..."
             phase = .ready(store)
+            // Pull any sealed iCloud backup into local stores on a fresh install. Detached and
+            // best-effort so a slow/absent CloudKit fetch never delays launch; restored data
+            // surfaces as soon as it lands (and retries next launch on failure).
+            Task { await store.restoreSealedBackupsIfNeeded() }
         } catch {
             phase = .failed(error)
         }

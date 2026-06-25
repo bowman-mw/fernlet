@@ -552,7 +552,8 @@ final class HealthKitService: HealthKitServicing {
             context.body = HealthBodyContext(
                 sleepHours: try await sleepHours(referenceDate: referenceDate),
                 restingHeartRateBPM: try await latestQuantityValue(for: try Self.quantityType(.restingHeartRate), unit: HKUnit.count().unitDivided(by: .minute())).map(Self.roundedTenth),
-                heartRateVariabilityMS: try await latestQuantityValue(for: try Self.quantityType(.heartRateVariabilitySDNN), unit: HKUnit.secondUnit(with: .milli)).map(Self.roundedTenth)
+                heartRateVariabilityMS: try await latestQuantityValue(for: try Self.quantityType(.heartRateVariabilitySDNN), unit: HKUnit.secondUnit(with: .milli)).map(Self.roundedTenth),
+                sleepStages: try await sleepStages(referenceDate: referenceDate)
             )
         }
 
@@ -628,6 +629,53 @@ final class HealthKitService: HealthKitServicing {
         let totalSeconds = Self.mergedDuration(for: asleepIntervals)
         guard totalSeconds > 0 else { return nil }
         return Self.roundedTenth(totalSeconds / 3600)
+    }
+
+    /// Buckets last night's sleep-analysis samples into deep/core/REM/awake durations. Returns nil
+    /// when there are no asleep samples; the per-stage fields stay nil when a device only reports an
+    /// undifferentiated asleep total (e.g. third-party trackers without staging). Minutes are merged
+    /// per stage so overlapping samples from multiple sources don't double-count.
+    private func sleepStages(referenceDate: Date) async throws -> SleepStagesData? {
+        let sleepType = try Self.categoryType(.sleepAnalysis)
+        let interval = Self.sleepNightInterval(containing: referenceDate)
+        let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: .strictStartDate)
+        let samples = try await categorySamples(for: sleepType, predicate: predicate)
+
+        var deep: [DateInterval] = []
+        var core: [DateInterval] = []
+        var rem: [DateInterval] = []
+        var awake: [DateInterval] = []
+        var asleep: [DateInterval] = []
+        for sample in samples {
+            guard let value = HKCategoryValueSleepAnalysis(rawValue: sample.value) else { continue }
+            let start = max(sample.startDate, interval.start)
+            let end = min(sample.endDate, interval.end)
+            guard end > start else { continue }
+            let span = DateInterval(start: start, end: end)
+            switch value {
+            case .asleepDeep: deep.append(span); asleep.append(span)
+            case .asleepCore: core.append(span); asleep.append(span)
+            case .asleepREM: rem.append(span); asleep.append(span)
+            case .awake: awake.append(span)
+            default:
+                if HKCategoryValueSleepAnalysis.allAsleepValues.contains(value) { asleep.append(span) }
+            }
+        }
+
+        let totalAsleepSeconds = Self.mergedDuration(for: asleep)
+        guard totalAsleepSeconds > 0 else { return nil }
+
+        func minutes(_ intervals: [DateInterval]) -> Double? {
+            let seconds = Self.mergedDuration(for: intervals)
+            return seconds > 0 ? Self.roundedTenth(seconds / 60) : nil
+        }
+        return SleepStagesData(
+            deepMinutes: minutes(deep),
+            coreMinutes: minutes(core),
+            remMinutes: minutes(rem),
+            awakeMinutes: minutes(awake),
+            totalAsleepMinutes: Self.roundedTenth(totalAsleepSeconds / 60)
+        )
     }
 
     private func sumQuantity(_ identifier: HKQuantityTypeIdentifier, unit: HKUnit, in interval: DateInterval) async throws -> Double? {

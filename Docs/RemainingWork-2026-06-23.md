@@ -61,12 +61,29 @@ rest into one **"new items" PR done first**.
    tracked separately in §1.)
 2. **USDA → SQLite** — ✅ LANDED (2026-06-24). Read-only `FoodCatalog.sqlite` + `FoodCatalog`
    service replaces the in-memory bundled array; FTS5 candidate prefilter → existing scorer. See §3.
-3. **Food/recipe** (RecipeDefinition↔SavedRecipe merge) — hard dependency on #2. Fold in the
-   ingredient-search labels/dedup, live micros, and `.aiResolved` light items (all operate on
-   `FoodDataCatalog.FoodItemSearch`, which #2 rewrites — doing them earlier = rework).
-4. **SealedBackup restore** — Tier-2 setter + `MenstrualNarrative` Core Data writeback + onboarding
-   hook + empty-store guard. Store-heavy → serialized with #3/#5/#6.
-5. **HealthKit → scoring** — changes `compute`/`computeBreakdown`/`sleepScore` **first**.
+3. **Food/recipe** (RecipeDefinition↔SavedRecipe merge) — 🟡 PARTIAL (2026-06-24). Shipped the safe,
+   tested slices: per-row **data-source labels** (`FoodItem.dataSourceLabel`, wired into the
+   ingredient-search row) and **catalog-grounded fallback micronutrients** (`fallbackMicronutrients`
+   — manual / heuristic-fallback meals borrow the best catalog match's micro profile instead of
+   logging an empty snapshot). **Still open** (tracked in §1): the `SavedRecipe`→`RecipeDefinition`
+   structural merge (migration risk + many UI call sites + the proximity share codec → own PR with
+   on-device migration testing), `.aiResolved` inline FM ingredient parse (needs an immediate-vs-
+   deferred product call), live-micros recipe-builder UI (backend `micronutrientTotals(for:)` exists;
+   UI binding only), and ingredient dedup / disclosure grouping (UI-design-bound).
+4. **SealedBackup restore** — ✅ LANDED (2026-06-24). `restoreSealedBackup(payloadType:)` +
+   testable `applyRestoredPayload` decode-and-write seam; new repository `replaceTierTwoMemories`
+   Tier-2 writeback (Local + CoreData repos, survives derived-table rebuild on a fresh install);
+   `MenstrualNarrative` Core Data writeback via the existing `insert`; comprehensive empty-store guard
+   (never clobbers existing data); locked-content-key path skips + retries period data; non-blocking
+   launch-time trigger in `FernletStoreLoader` (`FERNLET_SKIP_SEALED_RESTORE`-gated). 6 new tests.
+   Full live-CloudKit + cross-device identity round-trip remains device-runtime verification.
+5. **HealthKit → scoring** — ✅ LANDED (2026-06-24). `sleepScore`/`compute`/`computeBreakdown` gained
+   optional HealthKit params (backward-compatible — quality/workout-only paths byte-identical); new
+   `exerciseIntensityScore` (steps/active-energy/exercise-minutes), `recoveryReadinessScore` (resting
+   HR/HRV), and sleep-stage refinement (`SleepStagesData` + a HealthKitService stage query);
+   `intensityReadiness` folds in recovery, `sleepEnergyScore` prefers HealthKit hours, `DailyHealthScore`
+   retains the HK context for audit. 15 new tests. Continuous heart-rate read still deferred (current
+   resting-HR/HRV behavior documented).
 6. **PeriodContextBridge + period-aware scoring + per-phase trends** — layers `adjustedForPeriod` onto
    #5's new signature.
 7. **S3 Swift-package split** — **last**; it edits `Models.swift` / `FernletStore.swift` /
@@ -97,12 +114,15 @@ not here.)
 - [ ] **Period `dateKey` accepted-risk note** — `MenstrualNarrative.dateKey/createdAt` are plaintext
   but local-only (spec met); unlike the journal entity it lacks the accepted-risk comment. →
   Obfuscate the lookup key or add the documented accepted-risk note.
-- [~] **Wire `SealedBackupService`** — DONE (export): `FernletStore.setSealedBackupEnabled(_:payloadType:)`
-  seals + uploads/deletes for BOTH payloads (period → MenstrualNarrative JSON; sensitive notes → Tier-2
-  memories); wired to the toggles via a disclosure-confirmation modal. **Remaining: restore-into-stores**
-  on a new device (needs a Tier-2 setter + Core Data writeback + onboarding hook + empty-store guard;
-  build-verified, needs device runtime verification for iCloud/provisioning). Original note: AES-GCM/HKDF crypto + CKAsset I/O fully built & unit-tested
-  but never instantiated (dead code). → Wire `reconcile` into the backup toggles + a restore path.
+- [x] **Wire `SealedBackupService`** — DONE (export + restore, 2026-06-24). Export:
+  `FernletStore.setSealedBackupEnabled(_:payloadType:)` seals + uploads/deletes for BOTH payloads
+  (period → MenstrualNarrative JSON; sensitive notes → Tier-2 memories), gated by a disclosure modal.
+  **Restore now wired**: `restoreSealedBackup(payloadType:)` (with the unit-testable `applyRestoredPayload`
+  decode seam) restores into the Tier-2 store (new `repository.replaceTierTwoMemories`) and the
+  `MenstrualNarrative` Core Data store (existing `insert`), behind a comprehensive empty-store guard
+  (never clobbers) and a locked-content-key skip+retry; triggered non-blocking at launch from
+  `FernletStoreLoader` (`FERNLET_SKIP_SEALED_RESTORE`-gated). 6 restore tests. Live-CloudKit +
+  cross-device identity round-trip still needs device runtime verification for iCloud/provisioning.
 - [x] **PendingNarrativeBuffer drain ordering (regression #37)** — RE-CONFIRMED FIXED (2026-06-24):
   `drainAll()` is non-destructive; `PeriodTrackerStore.drainPendingBuffer` purges only after all
   inserts succeed; `pendingNarrativeBufferAppendDrainRoundTrip` guards it. No change needed.
@@ -124,14 +144,19 @@ not here.)
   if exact parity required (else document the tuning).
 
 ### Meal Tracking, Food Search, Recipes & Micronutrients
-- [ ] **Ingredient-search UX** — no data-source label, no dedup, no brand-disclosure grouping. → Add
-  per-row source labels, collapse variants, disclosure grouping.
+- [~] **Ingredient-search UX** — DONE (labels): per-row **data-source labels** now render via
+  `FoodItem.dataSourceLabel` (USDA / brand / "Your foods" / "AI estimate"), wired into the ingredient
+  picker row. **Remaining:** variant dedup + brand-disclosure grouping (UI-design-bound).
 - [ ] **`.aiResolved` inline meal-parse** — only the web-product label path creates them. → Add an FM
-  inference branch that resolves unknown ingredients and persists as `.aiResolved`.
+  inference branch that resolves unknown ingredients and persists as `.aiResolved`. (Needs an
+  immediate-vs-deferred-queue product decision before building.)
 - [ ] **Live micronutrients in recipe builder** — builder shows macros only. → Surface per-serving
-  micros live as ingredients change.
-- [ ] **MealLog micronutrientSnapshot for manual fallback** — manual parses yield empty micros. →
-  Resolve fallback meals through the food store, or accept + document the gap.
+  micros live as ingredients change. (Backend `FernletStore.micronutrientTotals(for:)` already exists;
+  this is a UI binding.)
+- [x] **MealLog micronutrientSnapshot for manual fallback** — DONE (2026-06-24): `fallbackMicronutrients`
+  resolves a manual / heuristic-fallback meal's name against the catalog (exact-name then top search
+  match) and fills the snapshot from the best match's per-serving micros; wired into `addMeal(from:)`
+  and the `resolveMeals` keyword fallback. Empty when nothing matches (gap left honest, not fabricated).
 - [ ] **Merge dual recipe models** — `RecipeDefinition` + `SavedRecipe` coexist. → Merge the
   URL-imported `SavedRecipe` into `RecipeDefinition`.
 
@@ -145,12 +170,16 @@ not here.)
 
 ### HealthKit & Sensor Integration
 - [ ] **Continuous heart-rate read** — reads resting HR + HRV, not continuous `.heartRate`. → Add or
-  update spec.
-- [ ] **Sleep stages** — total asleep hours only. → Query stages for the derived-quality formula.
-- [ ] **Consume activity context** — `HealthActivitySummary` loaded but unused. → Feed steps/active
-  energy into the exercise score or surface it.
-- [ ] **Consume body context** — resting HR/HRV loaded but unused. → Feed into intensityReadiness /
-  recovery, or remove.
+  update spec. *(Deferred this pass; current resting-HR/HRV behavior is the documented baseline.)*
+- [x] **Sleep stages** — DONE (2026-06-24): `HealthKitService.sleepStages(referenceDate:)` buckets
+  deep/core/REM/awake minutes into `SleepStagesData` (on `HealthBodyContext`); `FernletScoring.sleepScore`
+  refines the quality score with a stage bonus + duration factor when present.
+- [x] **Consume activity context** — DONE (2026-06-24): `FernletScoring.exerciseIntensityScore` feeds
+  steps / active-energy / exercise-minutes into the workout component (and lifts an active-but-unlogged
+  day off the 0.45 floor); routed through `compute`/`computeBreakdown`.
+- [x] **Consume body context** — DONE (2026-06-24): `FernletScoring.recoveryReadinessScore` synthesises
+  resting HR + HRV (+ sleep) into a recovery signal folded into `intensityReadiness`; `sleepEnergyScore`
+  now prefers HealthKit sleep hours.
 - [ ] **Onboarding HK request decision** — permissions screen informational only. → Wire to request,
   or keep contextual deliberately (see Onboarding in §2).
 - [ ] **Mindfulness write** — read-authorized scaffolding only. → Add write+consumer or treat as
@@ -210,10 +239,10 @@ not here.)
   outcome + period flag; persist to disk if "records locally" implies durability.
 - [ ] **Import-boundary enforcement** — string-scan over 5 hardcoded files. → Convert to true
   package forbidden-import checks (ties into S3 split in §2).
-- [~] **Encrypted sealed CloudKit backup pipeline** — DONE for reconcile/upload+delete + disclosure
-  modal (restore-into-stores remains). crypto/transport built; `SealedBackupService`
-  never instantiated; toggles only flip a preference. → Wire reconcile/restore + required warning
-  modal. (shared with §1 Data)
+- [x] **Encrypted sealed CloudKit backup pipeline** — DONE (2026-06-24): reconcile/upload+delete +
+  disclosure modal (export) AND restore-into-stores (Tier-2 `replaceTierTwoMemories` + `MenstrualNarrative`
+  writeback, empty-store guard, launch trigger). Live-CloudKit round-trip = device runtime verification.
+  (shared with §1 Data "Wire `SealedBackupService`")
 - [ ] **Two-tier AI journal memory extraction** — Tier-2 deterministic; no AI
   `{coreMemories, sensitiveMemories}` pass, classifier runs at read-time not pre-storage. → Add the
   extraction pass (in scope only for the *classifier-before-storage* part; the AI extraction pass
@@ -226,10 +255,10 @@ not here.)
   flag, in-memory only. → Add fields + persistence. (OHTTP routing itself stays deferred.)
 
 ### iCloud Sync & Encrypted Sealed Backup (partial)
-- [~] **Sealed-backup upload/delete orchestration** — DONE: reconcile (upload-on-enable /
-  delete-on-disable) wired via `FernletStore.setSealedBackupEnabled`. Restore-on-new-device remains. →
-  Instantiate; collect plaintext on toggle + call reconcile; wire restore on the new-device path.
-  (same work as §1 Data "Wire SealedBackupService")
+- [x] **Sealed-backup upload/delete orchestration** — DONE (2026-06-24): reconcile (upload-on-enable /
+  delete-on-disable) via `FernletStore.setSealedBackupEnabled`, AND restore-on-new-device via
+  `restoreSealedBackup`/`applyRestoredPayload` (launch-triggered, empty-store-guarded). Live-CloudKit +
+  cross-device identity round-trip = device runtime verification. (same work as §1 Data "Wire `SealedBackupService`")
 
 ### Milestones / Screens (partial, low-risk fidelity)
 - [ ] **Starter customization scope** — name + 4 colors vs spec's full slot set. → Broaden if desired

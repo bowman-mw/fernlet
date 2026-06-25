@@ -109,14 +109,107 @@ enum FernletScoring {
         }
     }
 
-    static func sleepScore(_ quality: SleepQuality?) -> Double {
+    /// Maps a self-reported sleep quality to a 0–1 score, optionally refined with HealthKit
+    /// signals. With only `quality` supplied the result is identical to the original enum mapping
+    /// (so existing callers and snapshots are unaffected). When `sleepHours` is present the score
+    /// blends the subjective quality with an objective duration factor; when stage data is present
+    /// a small bonus/penalty is applied for deep/REM proportions.
+    static func sleepScore(_ quality: SleepQuality?, sleepHours: Double? = nil, stages: SleepStagesData? = nil) -> Double {
+        let base: Double
         switch quality {
-        case .great: 1
-        case .good: 0.8
-        case .ok: 0.6
-        case .poor: 0.35
-        case nil: 0.6
+        case .great: base = 1
+        case .good: base = 0.8
+        case .ok: base = 0.6
+        case .poor: base = 0.35
+        case nil: base = 0.6
         }
+        guard sleepHours != nil || (stages?.hasStageBreakdown ?? false) else { return base }
+
+        var score = base
+        if let sleepHours {
+            // 70% subjective quality, 30% objective duration — keeps the user's felt experience
+            // primary while letting an unusually short/long night move the needle.
+            score = base * 0.7 + sleepDurationFactor(sleepHours) * 0.3
+        }
+        if let bonus = sleepStageQualityBonus(stages) {
+            score += bonus
+        }
+        return min(max(score, 0), 1)
+    }
+
+    /// Objective duration quality, 0–1. 7–9 h is ideal; short sleep is penalised more steeply than
+    /// long sleep.
+    static func sleepDurationFactor(_ hours: Double) -> Double {
+        if hours >= 7 && hours <= 9 { return 1 }
+        if hours >= 6 && hours < 7 { return 0.85 }
+        if hours >= 5 && hours < 6 { return 0.65 }
+        if hours < 5 { return max(0.3, hours / 5 * 0.45) }
+        if hours > 9 && hours <= 10 { return 0.9 }
+        return 0.75 // > 10 h
+    }
+
+    /// Small ±bonus from sleep-stage proportions. Returns nil when there is no usable stage
+    /// breakdown. Healthy adult reference: deep ≈ 13–23 %, REM ≈ 20–25 % of total asleep time.
+    static func sleepStageQualityBonus(_ stages: SleepStagesData?) -> Double? {
+        guard let stages, stages.hasStageBreakdown,
+              let total = stages.totalAsleepMinutes, total > 0 else { return nil }
+        let deepPct = (stages.deepMinutes ?? 0) / total
+        let remPct = (stages.remMinutes ?? 0) / total
+        var bonus = 0.0
+        if deepPct >= 0.13 { bonus += 0.03 } else if deepPct < 0.08 { bonus -= 0.03 }
+        if remPct >= 0.20 { bonus += 0.03 } else if remPct < 0.13 { bonus -= 0.03 }
+        return bonus
+    }
+
+    /// Exercise/movement quality, 0–1. With no HealthKit activity supplied this reproduces the
+    /// original `workoutCount > 0 ? 0.9 : 0.45` behaviour exactly. When activity is present, a
+    /// genuinely active day lifts the score — most notably so that days with real movement but no
+    /// manually-logged workout are no longer flattened to 0.45.
+    static func exerciseIntensityScore(
+        workoutCount: Int,
+        steps: Int? = nil,
+        activeEnergyKilocalories: Double? = nil,
+        exerciseMinutes: Double? = nil
+    ) -> Double {
+        let base = workoutCount > 0 ? 0.9 : 0.45
+        guard steps != nil || activeEnergyKilocalories != nil || exerciseMinutes != nil else { return base }
+
+        let steps = steps ?? 0
+        let energy = activeEnergyKilocalories ?? 0
+        let exercise = exerciseMinutes ?? 0
+        let bonus: Double
+        if steps >= 10_000 || energy >= 500 || exercise >= 30 {
+            bonus = workoutCount > 0 ? 0.1 : 0.25
+        } else if steps >= 6_000 || energy >= 250 || exercise >= 15 {
+            bonus = workoutCount > 0 ? 0.05 : 0.15
+        } else {
+            bonus = 0
+        }
+        return min(max(base + bonus, 0), 1)
+    }
+
+    /// Autonomic recovery readiness, 0–1, synthesised from resting HR + HRV and sleep. Returns nil
+    /// when neither HR nor HRV is available (so callers can cleanly fall back to behaviour-only
+    /// signals). Higher HRV and lower resting HR indicate better recovery.
+    static func recoveryReadinessScore(
+        restingHeartRateBPM: Double?,
+        heartRateVariabilityMS: Double?,
+        sleepQuality: SleepQuality?,
+        sleepHours: Double?
+    ) -> Double? {
+        guard restingHeartRateBPM != nil || heartRateVariabilityMS != nil else { return nil }
+        var components: [Double] = []
+        if let hrv = heartRateVariabilityMS {
+            // ~10 ms → 0, ~80 ms → 1 (clamped). SDNN overnight is a coarse recovery proxy.
+            components.append(min(max((hrv - 10) / 70, 0), 1))
+        }
+        if let rhr = restingHeartRateBPM {
+            // ~45 bpm → 1, ~95 bpm → 0 (clamped).
+            components.append(min(max(1 - (rhr - 45) / 50, 0), 1))
+        }
+        components.append(sleepScore(sleepQuality, sleepHours: sleepHours))
+        guard components.isEmpty == false else { return nil }
+        return components.reduce(0, +) / Double(components.count)
     }
 
     static func hygieneScore(_ checked: Set<HygieneItem>) -> Double {
@@ -141,7 +234,12 @@ enum FernletScoring {
         weights: ScoringWeights,
         isSick: Bool = false,
         nutrientGaps: [NutrientGap] = [],
-        micronutrientDataCoverageRatio: Double = 0
+        micronutrientDataCoverageRatio: Double = 0,
+        sleepHours: Double? = nil,
+        sleepStages: SleepStagesData? = nil,
+        activitySteps: Int? = nil,
+        activeEnergyKilocalories: Double? = nil,
+        exerciseMinutes: Double? = nil
     ) -> Double {
         computeBreakdown(
             journalTag: journalTag,
@@ -156,7 +254,12 @@ enum FernletScoring {
             weights: weights,
             isSick: isSick,
             nutrientGaps: nutrientGaps,
-            micronutrientDataCoverageRatio: micronutrientDataCoverageRatio
+            micronutrientDataCoverageRatio: micronutrientDataCoverageRatio,
+            sleepHours: sleepHours,
+            sleepStages: sleepStages,
+            activitySteps: activitySteps,
+            activeEnergyKilocalories: activeEnergyKilocalories,
+            exerciseMinutes: exerciseMinutes
         ).overall
     }
 
@@ -176,19 +279,29 @@ enum FernletScoring {
         weights: ScoringWeights,
         isSick: Bool = false,
         nutrientGaps: [NutrientGap] = [],
-        micronutrientDataCoverageRatio: Double = 0
+        micronutrientDataCoverageRatio: Double = 0,
+        sleepHours: Double? = nil,
+        sleepStages: SleepStagesData? = nil,
+        activitySteps: Int? = nil,
+        activeEnergyKilocalories: Double? = nil,
+        exerciseMinutes: Double? = nil
     ) -> ScoreBreakdown {
         let baseMealScore = min(mealCount >= 3 ? 0.9 : mealCount >= 2 ? 0.75 : Double(mealCount) * 0.4, 1)
         let micronutrientModifier = micronutrientDataCoverageRatio >= 0.5 ? micronutrientModifier(from: nutrientGaps) : 0
         let mealScore = min(max(baseMealScore + micronutrientModifier, 0), 1)
-        let workoutScore = workoutCount > 0 ? 0.9 : 0.45
+        let workoutScore = exerciseIntensityScore(
+            workoutCount: workoutCount,
+            steps: activitySteps,
+            activeEnergyKilocalories: activeEnergyKilocalories,
+            exerciseMinutes: exerciseMinutes
+        )
         let target = max(isSick ? Int(ceil(Double(hydrationTarget) * 1.2)) : hydrationTarget, 1)
         let hydrationScore = min(Double(bottleCount) / Double(target), 1)
         let adjustedWeights = weights.adjustedForSickness(isSick)
         let careCompletedCount = completedPersonalCareTaskCount ?? hygiene.count
         let careScore = hygieneScore(completedCount: careCompletedCount, taskCount: hygieneTaskCount)
         let journalScore = tagScore(journalTag)
-        let sleepScoreValue = sleepScore(sleepQuality)
+        let sleepScoreValue = sleepScore(sleepQuality, sleepHours: sleepHours, stages: sleepStages)
         let overall = min(
             journalScore * adjustedWeights.journalWeight +
             mealScore * adjustedWeights.mealWeight +
@@ -213,7 +326,9 @@ enum FernletScoring {
     }
 
     static func compute(for store: FernletStore) -> Double {
-        compute(
+        let body = store.day.healthContext?.body
+        let activity = store.day.healthContext?.activity
+        return compute(
             journalTag: store.day.journals.last?.tag,
             mealCount: store.day.meals.count,
             workoutCount: store.day.workouts.count,
@@ -226,7 +341,12 @@ enum FernletScoring {
             weights: GoalWeights.forGoal(store.settings.selectedGoal),
             isSick: store.isSick(on: store.todayKey),
             nutrientGaps: dedupedNutrientGaps(from: store.derivedSignals.flatMap(\.nutrientGaps)),
-            micronutrientDataCoverageRatio: micronutrientDataCoverageRatio(for: store.day.meals)
+            micronutrientDataCoverageRatio: micronutrientDataCoverageRatio(for: store.day.meals),
+            sleepHours: body?.sleepHours,
+            sleepStages: body?.sleepStages,
+            activitySteps: activity?.steps,
+            activeEnergyKilocalories: activity?.activeEnergyKilocalories,
+            exerciseMinutes: activity?.exerciseMinutes
         )
     }
 

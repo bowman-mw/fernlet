@@ -199,6 +199,13 @@ final class CoreDataFernletRepository: FernletRepository, RemoteChangePublishing
         loadDatabase(todayKey: FernletDate.dayKey(for: .now)).tierTwoMemories
     }
 
+    @discardableResult func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
+        var database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))
+        database.tierTwoMemories = records
+        database.updatedAt = Date()
+        return saveDatabase(database)
+    }
+
     private func loadDatabase(todayKey: String) -> LocalFernletDatabase {
         assert(!todayKey.isEmpty, "today key required")
 

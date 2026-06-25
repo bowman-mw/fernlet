@@ -827,9 +827,17 @@ struct RecipeIngredientEditor: View {
                         } label: {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(foodItem.name)
-                                        .font(.subheadline.weight(.medium))
-                                        .foregroundStyle(Color.bark)
+                                    HStack(spacing: 6) {
+                                        Text(foodItem.name)
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundStyle(Color.bark)
+                                        Text(foodItem.dataSourceLabel)
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(Color.slate)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 1)
+                                            .background(Color.parchment, in: Capsule())
+                                    }
                                     Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
                                         .font(.caption)
                                         .foregroundStyle(Color.slate)

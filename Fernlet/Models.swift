@@ -79,6 +79,26 @@ struct HealthBodyContext: Codable, Equatable {
     var sleepHours: Double?
     var restingHeartRateBPM: Double?
     var heartRateVariabilityMS: Double?
+    /// Per-stage sleep breakdown from HealthKit (`HKCategoryValueSleepAnalysis`), when a wearable
+    /// supplies it. Optional: many users only have an `inBed`/`asleepUnspecified` total.
+    var sleepStages: SleepStagesData?
+}
+
+/// Sleep-stage durations (minutes) for a single night, derived from HealthKit sleep-analysis
+/// samples. All fields optional — stage data is only available from devices that classify sleep
+/// (e.g. Apple Watch). `totalAsleepMinutes` is the merged asleep total used to derive stage ratios.
+struct SleepStagesData: Codable, Equatable {
+    var deepMinutes: Double?
+    var coreMinutes: Double?
+    var remMinutes: Double?
+    var awakeMinutes: Double?
+    var totalAsleepMinutes: Double?
+
+    /// True when at least one classified asleep stage (deep/core/REM) is present — i.e. the data
+    /// is richer than a bare asleep total and worth feeding into the sleep-quality refinement.
+    var hasStageBreakdown: Bool {
+        (deepMinutes ?? 0) > 0 || (coreMinutes ?? 0) > 0 || (remMinutes ?? 0) > 0
+    }
 }
 
 struct HealthCycleContext: Codable, Equatable {
@@ -1047,6 +1067,27 @@ struct FoodItem: Identifiable, Codable, Equatable {
         macros.protein * 4 + macros.carbs * 4 + macros.fat * 9
     }
 
+    /// Short, human-readable provenance shown on ingredient-search rows so the user can tell where a
+    /// match came from (Item 3 ingredient-search UX). Branded/restaurant items prefer their brand
+    /// name; reference USDA foods read "USDA"; user and AI-derived foods are labelled distinctly.
+    var dataSourceLabel: String {
+        switch source {
+        case .manual:
+            return "Your foods"
+        case .aiResolved:
+            return "AI estimate"
+        case .usda:
+            switch dataType {
+            case .branded:
+                return brandSource?.isEmpty == false ? brandSource! : "Branded"
+            case .restaurant:
+                return brandSource?.isEmpty == false ? brandSource! : "Restaurant"
+            case .foundation, .survey, .srLegacy:
+                return "USDA"
+            }
+        }
+    }
+
     nonisolated init(
         id: UUID = UUID(),
         name: String,
@@ -1550,10 +1591,17 @@ struct DailyHealthScore: Identifiable, Codable, Equatable {
     var sicknessOverride: Bool?
     /// Optional menstrual-cycle phase label for this day (populated once the period bridge lands).
     var periodPhase: String?
+    /// The HealthKit activity context (steps/active-energy/exercise-minutes) that fed scoring this
+    /// day, retained for audit/inspection. Nil when HealthKit was unavailable or disabled.
+    var healthActivityContext: HealthActivitySummary?
+    /// The HealthKit body context (sleep hours/stages, resting HR, HRV) that fed scoring this day,
+    /// retained for audit/inspection. Nil when HealthKit was unavailable or disabled.
+    var healthBodyContext: HealthBodyContext?
 
-    init(id: UUID = UUID(), dateKey: String, score: Double, companionState: CompanionState, daySummaryText: String? = nil, computedAt: Date, componentScores: [String: Double]? = nil, weightVector: ScoringWeights? = nil, sicknessOverride: Bool? = nil, periodPhase: String? = nil) {
+    init(id: UUID = UUID(), dateKey: String, score: Double, companionState: CompanionState, daySummaryText: String? = nil, computedAt: Date, componentScores: [String: Double]? = nil, weightVector: ScoringWeights? = nil, sicknessOverride: Bool? = nil, periodPhase: String? = nil, healthActivityContext: HealthActivitySummary? = nil, healthBodyContext: HealthBodyContext? = nil) {
         self.id = id; self.dateKey = dateKey; self.score = score; self.companionState = companionState; self.daySummaryText = daySummaryText; self.computedAt = computedAt
         self.componentScores = componentScores; self.weightVector = weightVector; self.sicknessOverride = sicknessOverride; self.periodPhase = periodPhase
+        self.healthActivityContext = healthActivityContext; self.healthBodyContext = healthBodyContext
     }
 
     init(from decoder: Decoder) throws {
@@ -1568,6 +1616,8 @@ struct DailyHealthScore: Identifiable, Codable, Equatable {
         weightVector = try c.decodeIfPresent(ScoringWeights.self, forKey: .weightVector)
         sicknessOverride = try c.decodeIfPresent(Bool.self, forKey: .sicknessOverride)
         periodPhase = try c.decodeIfPresent(String.self, forKey: .periodPhase)
+        healthActivityContext = try c.decodeIfPresent(HealthActivitySummary.self, forKey: .healthActivityContext)
+        healthBodyContext = try c.decodeIfPresent(HealthBodyContext.self, forKey: .healthBodyContext)
     }
 }
 

@@ -14,6 +14,10 @@ protocol FernletRepository {
     func storageDescription() -> String
     func loadAllDays() -> [String: FernletDay]
     func loadTierTwoMemories() -> [TierTwoMemoryRecord]
+    /// Overwrites the persisted Tier-2 behavioral memories. Used by sealed-backup restore on a
+    /// fresh install to seed the inference base from an encrypted iCloud backup. Returns whether
+    /// the write succeeded.
+    @discardableResult func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool
     func loadDay(for dateKey: String, todayKey: String) -> FernletDay
 }
 
@@ -21,6 +25,10 @@ extension FernletRepository {
     func loadDay(for dateKey: String, todayKey: String) -> FernletDay {
         loadSnapshot(todayKey: dateKey).day
     }
+
+    // Default no-op so lightweight test doubles need not implement persistence. The two real
+    // repositories (`LocalFernletRepository`, `CoreDataFernletRepository`) override this.
+    @discardableResult func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool { false }
 }
 
 struct FernletSnapshot: Codable {
@@ -220,6 +228,13 @@ struct LocalFernletRepository: FernletRepository {
 
     func loadTierTwoMemories() -> [TierTwoMemoryRecord] {
         loadDatabase(todayKey: FernletDate.dayKey(for: .now)).tierTwoMemories
+    }
+
+    @discardableResult func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
+        var database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))
+        database.tierTwoMemories = records
+        database.updatedAt = Date()
+        return saveDatabase(database)
     }
 
     func loadDatabaseForMigration(todayKey: String) -> LocalFernletDatabase {
@@ -774,17 +789,31 @@ enum DerivedSignalFactory {
         let recentHardCount = recentDays.reduce(0) { count, day in
             count + day.1.workouts.prefix(FernletLimits.maxWorkoutsPerDay).filter { $0.intensity == .hard }.count
         }
+        // Autonomic recovery from HealthKit HR/HRV, averaged across the days that supplied it.
+        // Optional — many days won't have wearable data, in which case readiness stays
+        // behaviour-only (identical to the pre-HealthKit result).
+        let recoveryScores: [Double] = recentDays.compactMap { _, day in
+            guard let body = day.healthContext?.body else { return nil }
+            return FernletScoring.recoveryReadinessScore(
+                restingHeartRateBPM: body.restingHeartRateBPM,
+                heartRateVariabilityMS: body.heartRateVariabilityMS,
+                sleepQuality: day.sleep?.quality,
+                sleepHours: body.sleepHours ?? day.sleep?.hours
+            )
+        }
+        let recovery: Double? = recoveryScores.isEmpty ? nil : average(recoveryScores)
         let value: String
         if recentDays.isEmpty || (recentLoad == 0 && recentEnergy == 0 && recentMeals == 0) {
             value = "insufficient data"
-        } else if recentEnergy < 0.45 || recentHardCount >= 2 || recentLoad >= 260 {
+        } else if recentEnergy < 0.45 || recentHardCount >= 2 || recentLoad >= 260 || (recovery ?? 1) < 0.4 {
+            // Poor autonomic recovery (low HRV / elevated resting HR) caps the recommendation at light.
             value = "ready for light"
-        } else if recentEnergy >= 0.72 && recentHardCount == 0 && recentMeals >= recentDays.count * 2 {
+        } else if recentEnergy >= 0.72 && recentHardCount == 0 && recentMeals >= recentDays.count * 2 && (recovery ?? 1) >= 0.6 {
             value = "ready for hard"
         } else {
             value = "ready for moderate"
         }
-        return DerivedSignalRecord(signalName: "intensityReadiness", value: value, windowStart: start, windowEnd: end, sourceFields: ["workouts.intensity", "workouts.duration", "workouts.rpe", "sleep", "journals.tag", "meals.count"])
+        return DerivedSignalRecord(signalName: "intensityReadiness", value: value, windowStart: start, windowEnd: end, sourceFields: ["workouts.intensity", "workouts.duration", "workouts.rpe", "sleep", "journals.tag", "meals.count", "body.restingHeartRate", "body.heartRateVariability"])
     }
 
     private static func progressionTrend(from days: [(String, FernletDay)], start: String, end: String) -> DerivedSignalRecord {
@@ -843,7 +872,7 @@ enum DerivedSignalFactory {
         days.compactMap { _, day in
             var components: [Double] = []
             if let sleep = day.sleep {
-                components.append(sleepEnergyScore(sleep))
+                components.append(sleepEnergyScore(sleep, healthSleepHours: day.healthContext?.body?.sleepHours))
             }
             let journalScores = day.journals.prefix(FernletLimits.maxJournalsPerDay).map { moodScore($0.tag) }
             if journalScores.isEmpty == false {
@@ -880,7 +909,7 @@ enum DerivedSignalFactory {
         }
     }
 
-    private static func sleepEnergyScore(_ sleep: SleepLog) -> Double {
+    private static func sleepEnergyScore(_ sleep: SleepLog, healthSleepHours: Double? = nil) -> Double {
         let qualityScore: Double
         switch sleep.quality {
         case .great: qualityScore = 1
@@ -888,7 +917,8 @@ enum DerivedSignalFactory {
         case .ok: qualityScore = 0.6
         case .poor: qualityScore = 0.3
         }
-        guard let hours = sleep.hours else { return qualityScore }
+        // HealthKit is the source of truth for sleep duration; prefer it over the manual estimate.
+        guard let hours = healthSleepHours ?? sleep.hours else { return qualityScore }
         let hourScore = min(max(hours / 8, 0), 1)
         return hourScore * 0.6 + qualityScore * 0.4
     }

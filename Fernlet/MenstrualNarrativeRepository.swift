@@ -68,6 +68,22 @@ final class MenstrualNarrativeRepository {
         try PrivatePersistentHistoryPruner.prune(context: context)
     }
 
+    /// All stored narratives, decrypted. Used by the sealed-backup export, which needs every record
+    /// regardless of date — a no-predicate fetch, avoiding the per-day key enumeration that
+    /// `narratives(in:)` performs (catastrophic for an unbounded date range).
+    func allNarratives(contentKey: SymmetricKey?) throws -> [MenstrualNarrative] {
+        guard let contentKey else { return [] }
+        let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
+        request.sortDescriptors = [NSSortDescriptor(key: "dateKey", ascending: true)]
+        return try context.fetch(request).compactMap { object in
+            do {
+                return try decrypt(object, contentKey: contentKey)
+            } catch {
+                return nil
+            }
+        }
+    }
+
     func narratives(in dateRange: DateInterval, contentKey: SymmetricKey?) throws -> [MenstrualNarrative] {
         guard let contentKey else { return [] }
         let keys = Self.dateKeys(in: dateRange)
