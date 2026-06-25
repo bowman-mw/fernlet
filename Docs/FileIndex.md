@@ -130,7 +130,8 @@ This index maps the main project files to their responsibilities. It is intended
 | `Fernlet/Fernlet/Proximity/Wire/PayloadType.swift` | Peer-to-peer payload classification, envelope encryption mode, and payload summary models. |
 | `Fernlet/Fernlet/Proximity/Wire/MeshPayloads.swift` | Mesh descriptor, admission, removal, voucher, group-encryption, and coordinator-beacon wire models plus admission-token signing and verification. |
 | `Fernlet/Fernlet/Proximity/Wire/FriendPhotoPayloads.swift` | Friend-photo payload, session metadata, manifest, and missing-photo request wire models. |
-| `Fernlet/Fernlet/Proximity/Photos/MeshPhotoCacheStore.swift` | Disk-backed mesh photo index, full-image storage, thumbnail generation, hydration, and orphan cleanup. |
+| `Fernlet/Fernlet/Proximity/Photos/PrivateMediaStore.swift` | Disk-backed mesh photo index with **AES-256-GCM at-rest encryption** of image/thumbnail bytes, thumbnail generation, hydration, FIFO eviction (1000 cap / 900 warn), and orphan cleanup. (Formerly `MeshPhotoCacheStore`.) |
+| `Fernlet/Fernlet/Proximity/Photos/PrivateMediaKeyStore.swift` | `PrivateMediaKeyProviding` + keychain-backed (backup-restorable, `AfterFirstUnlock`) AES key provider for `PrivateMediaStore`. |
 | `Fernlet/Fernlet/Proximity/Photos/FriendPhotoImageHelpers.swift` | `UIImage` resizing and thumbnail JPEG helpers for friend-photo sharing. |
 | `Fernlet/Fernlet/Proximity/Identity/IdentityService.swift` | Per-device Ed25519 signing identity and X25519 key-agreement, with keys stored in Keychain under `AfterFirstUnlockThisDeviceOnly`. |
 | `Fernlet/Fernlet/Proximity/Identity/ReplayCache.swift` | Rolling 24-hour envelope-ID cache for replay-attack prevention; injectable clock for deterministic testing. |

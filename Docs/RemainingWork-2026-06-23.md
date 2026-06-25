@@ -55,8 +55,10 @@ rest into one **"new items" PR done first**.
 **Order:** `new-items batch → 1 photowall → 2 usda-sqlite → 3 food/recipe → 4 sealedbackup-restore →
 5 healthkit→scoring → 6 period-context-bridge → 7 s3-package-split`
 
-1. **Photowall gallery + `PrivateMediaStore`** — isolated in `Proximity/Photos/`. Fold in the per-photo
-   Save-to-Photos/delete + 900-warning UI light items.
+1. **Photowall gallery + `PrivateMediaStore`** — ✅ LANDED (2026-06-24). Isolated in `Proximity/Photos/`;
+   at-rest AES-256-GCM encryption (backup-restorable keychain key), per-photo Save-to-Photos + delete,
+   and the 900-warning banner all shipped. (Manual people-tagging + photo-surfacing exclusion remain,
+   tracked separately in §1.)
 2. **USDA → SQLite** — data-layer migration; **must precede food/recipe** (both edit `FoodDataCatalog`).
 3. **Food/recipe** (RecipeDefinition↔SavedRecipe merge) — hard dependency on #2. Fold in the
    ingredient-search labels/dedup, live micros, and `.aiResolved` light items (all operate on
@@ -158,20 +160,30 @@ not here.)
   exist + tested at the manager level; confirm they're wired into the redesigned live UI.
 
 ### Photowall & Friend Photos
-- [ ] **`PrivateMediaStore` at-rest encryption** — cache uses file-protection only. → Rename/refactor
-  to PrivateMediaStore or encrypt bytes at rest.
+- [x] **`PrivateMediaStore` at-rest encryption** — DONE (PR #1, 2026-06-24): `MeshPhotoCacheStore`
+  renamed/refactored to `PrivateMediaStore` (isolated in `Proximity/Photos/`); image + thumbnail bytes
+  are AES-256-GCM-encrypted before disk via an injectable `PrivateMediaKeyProviding`. Key is a dedicated
+  256-bit AES key in the keychain, stored **backup-restorable** (`kSecAttrAccessibleAfterFirstUnlock`,
+  not ThisDeviceOnly) so the cache survives device migration with the app-container backup. Legacy
+  plaintext files are recognised on read (positive image-bounds check) and re-encrypted in place on
+  first access; bytes that are neither openable nor a valid image (wrong/lost key, corruption) resolve
+  to nil rather than being handed back as garbage. Files keep `.completeFileProtection`. (Hardened per
+  an adversarial review of the diff — see the 7 confirmed findings now fixed.)
 - [ ] **Manual people-tagging UI** — only the handshake-metadata branch exists. → Add manual tag
-  assign/edit.
-- [ ] **Gallery Save-to-Photos** — only in the session review sheet. → Add per-photo save in the
-  persistent gallery.
-- [ ] **Gallery per-photo delete** — only whole-session delete. → Add per-photo/session delete
-  removing index + disk files.
-- [~] **Eviction policy** — DONE: cap raised to spec's **1000** (FIFO by recency) via
-  `MeshPhotoCacheStore.maxCachedPhotos`; `cacheWarningThreshold = 900` constant added. Remaining: surface
-  the 900 soft-warning in UI. Original note: caps at 200 vs spec's 1000/900-warn/FIFO. → Raise cap + add 900 warning +
-  explicit FIFO (or update spec to 200).
+  assign/edit. *(Out of scope for PR #1; separate follow-up.)*
+- [x] **Gallery Save-to-Photos** — DONE (PR #1): per-photo "Save to Photos" action added to the
+  persistent gallery carousel (`FriendPhotoCarouselPostView`), reusing `FriendPhotoLibrarySaver` with the
+  same add-only auth + Settings-deeplink error handling as the session review sheet.
+- [x] **Gallery per-photo delete** — DONE (PR #1): `MeshNetworkManager.deletePhoto(_:)` removes the
+  photo from the in-memory lists, clears favorite/cover prefs pointing at it, and re-saves so the store's
+  orphan cleanup deletes its image + thumbnail files; wired to a per-photo trash action with a
+  destructive confirmation dialog.
+- [x] **Eviction policy** — DONE (PR #1): cap is the spec's **1000** (FIFO by recency) via
+  `PrivateMediaStore.maxCachedPhotos`; the in-memory `meshPhotos` cap raised 200→1000 (metadata-only
+  entries) so the disk cap and the soft-warning are real; the **900-photo soft-warning banner** is now
+  surfaced (dismissible) in the Friends album.
 - [ ] **Photo-surfacing exclusion** — no excluded-people path. → Add the exclusion fact type + feed
-  into the selector.
+  into the selector. *(Out of scope for PR #1; depends on the deferred Sensitive Memory store.)*
 
 ### Ambient Features (partial set)
 - [x] **Preventive-care micronutrient bubble** — gap data computed + shown as trends bars; no

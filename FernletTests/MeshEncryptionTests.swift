@@ -150,7 +150,10 @@ struct MeshEncryptionTests {
         let directoryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("FernletMeshPhotoCacheTests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directoryURL) }
-        let store = MeshPhotoCacheStore(indexURL: directoryURL.appendingPathComponent("MeshPhotoCache.json"))
+        let store = PrivateMediaStore(
+            indexURL: directoryURL.appendingPathComponent("MeshPhotoCache.json"),
+            keyProvider: InMemoryPrivateMediaKeyProvider()
+        )
         // Use real image bytes: the cache now validates pixel dimensions on ingestion, so a
         // non-image stand-in would (correctly) be rejected and never persisted.
         let imageBytes = Self.tinyJPEGData()

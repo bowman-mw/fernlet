@@ -60,7 +60,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     @ObservationIgnored private let meshSession = MeshMultipeerSession()
     @ObservationIgnored private let identity: IdentityService
     @ObservationIgnored private let replayCache = ReplayCache()
-    @ObservationIgnored private let photoCacheStore: MeshPhotoCacheStore
+    @ObservationIgnored private let photoCacheStore: PrivateMediaStore
     @ObservationIgnored private let photoWallPreferencesStore: FriendPhotoWallPreferencesStore
     @ObservationIgnored private var photoWallPreferences: FriendPhotoWallPreferences
     @ObservationIgnored private var slotTrustPolicies: [UUID: FriendSessionTrustPolicy] = [:]
@@ -133,7 +133,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         let cacheURL = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         ).first!.appendingPathComponent("Fernlet/MeshPhotoCache.json")
-        self.photoCacheStore = MeshPhotoCacheStore(indexURL: cacheURL)
+        self.photoCacheStore = PrivateMediaStore(indexURL: cacheURL)
         let preferencesURL = cacheURL.deletingLastPathComponent().appendingPathComponent("MeshPhotoWallPreferences.json")
         let preferencesStore = FriendPhotoWallPreferencesStore(fileURL: preferencesURL)
         self.photoWallPreferencesStore = preferencesStore
@@ -228,6 +228,29 @@ final class MeshNetworkManager: ProximityPayloadHandling {
 
     func deleteAllSessionPhotos() {
         finishSessionPhotos(keeping: [])
+    }
+
+    /// Permanently removes a single cached photo from the persistent gallery: drops it from the
+    /// in-memory lists, clears any wall preference that pointed at it (favorite / aggregated cover),
+    /// and re-saves the cache so the store's orphan cleanup deletes its image + thumbnail files.
+    func deletePhoto(_ photoID: UUID) {
+        let existed = meshPhotos.contains { $0.id == photoID }
+        meshPhotos.removeAll { $0.id == photoID }
+        sessionPhotos.removeAll { $0.id == photoID }
+
+        var preferencesChanged = false
+        for (sessionID, favoriteID) in photoWallPreferences.favoritePhotoIDsBySession where favoriteID == photoID {
+            photoWallPreferences.favoritePhotoIDsBySession.removeValue(forKey: sessionID)
+            preferencesChanged = true
+        }
+        for (sessionID, coverID) in photoWallPreferences.coverPhotoIDsBySession where coverID == photoID {
+            photoWallPreferences.coverPhotoIDsBySession.removeValue(forKey: sessionID)
+            preferencesChanged = true
+        }
+        if preferencesChanged { persistPhotoWallPreferences() }
+
+        guard existed else { return }
+        photoCacheStore.save(meshPhotos)
     }
 
     // MARK: - Public API
@@ -1129,7 +1152,10 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         guard !meshPhotos.contains(where: { $0.id == photo.id }) else { return }
         let cachedPhoto = includeInSession ? photo.withSession(currentPhotoSessionMetadata()) : photo
         meshPhotos.insert(cachedPhoto.withoutImageData(), at: 0)
-        meshPhotos = Array(meshPhotos.prefix(200))
+        // Metadata-only entries (no image bytes), so the in-memory list can mirror the disk cap.
+        // Keeping it at the spec's 1000 makes the FIFO cap and the 900-photo soft-warning real;
+        // the full-resolution bytes stay on disk and rehydrate on demand.
+        meshPhotos = Array(meshPhotos.prefix(PrivateMediaStore.maxCachedPhotos))
         photoCacheStore.save(meshPhotos.map { $0.id == cachedPhoto.id ? cachedPhoto : $0 })
         if includeInSession {
             // Store metadata only; the full-resolution bytes were just persisted to the disk

@@ -17,6 +17,7 @@ struct FriendsView: View {
     @State private var photoSaveError: String? = nil
     @State private var selectedAlbumPostID: UUID?
     @State private var sessionSearchText = ""
+    @State private var cacheWarningDismissed = false
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
 
@@ -146,6 +147,7 @@ struct FriendsView: View {
                     if manager.meshPhotos.isEmpty {
                         emptyAlbumView
                     } else {
+                        cacheWarningBanner
                         sessionSearchField
                         photoGrid
                     }
@@ -201,6 +203,40 @@ struct FriendsView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Cache soft-warning (spec §11: 900-photo warning ahead of the 1000 FIFO cap)
+
+    @ViewBuilder
+    private var cacheWarningBanner: some View {
+        if manager.meshPhotos.count >= PrivateMediaStore.cacheWarningThreshold, !cacheWarningDismissed {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.circle")
+                    .foregroundStyle(Color.goldenrod)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Your photo shelf is nearly full")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.bark)
+                    Text("You're keeping \(manager.meshPhotos.count) of \(PrivateMediaStore.maxCachedPhotos) shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep.")
+                        .font(.caption)
+                        .foregroundStyle(Color.slate)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+                Button {
+                    cacheWarningDismissed = true
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.slate)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss")
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.goldenrod.opacity(0.35), lineWidth: 1))
         }
     }
 
@@ -353,6 +389,11 @@ private struct FriendPhotoFeedView: View {
             }
         }
         .background(Color.parchment)
+        .onChange(of: posts.isEmpty) { _, isEmpty in
+            // Deleting the last remaining photo empties the feed; dismiss instead of leaving the
+            // viewer on a blank screen.
+            if isEmpty { onDismiss() }
+        }
     }
 }
 
@@ -364,6 +405,9 @@ private struct FriendPhotoCarouselPostView: View {
     @State private var selectedPhotoID: UUID
     @State private var chromeVisible = true
     @State private var chromeTask: Task<Void, Never>?
+    @State private var pendingDeletePhotoID: UUID?
+    @State private var saveErrorMessage: String?
+    @State private var savedPhotoIDs: Set<UUID> = []
 
     init(post: FriendPhotoWallPost, manager: MeshNetworkManager, width: CGFloat) {
         self.post = post
@@ -415,7 +459,47 @@ private struct FriendPhotoCarouselPostView: View {
         .background(Color.parchment)
         .onAppear { scheduleChromeFade() }
         .onChange(of: selectedPhotoID) { _, _ in scheduleChromeFade() }
+        .onChange(of: post.photos) { _, newPhotos in
+            // A deleted photo can leave selectedPhotoID pointing at a now-missing page (the post id
+            // is stable for aggregated sessions, so this view is reused without re-init). Re-anchor
+            // to a surviving photo so the TabView page and indicators stay consistent.
+            if !newPhotos.contains(where: { $0.id == selectedPhotoID }) {
+                selectedPhotoID = newPhotos.first?.id ?? post.coverPhoto.id
+            }
+        }
         .onDisappear { chromeTask?.cancel() }
+        .confirmationDialog(
+            "Delete this picture?",
+            isPresented: Binding(
+                get: { pendingDeletePhotoID != nil },
+                set: { if !$0 { pendingDeletePhotoID = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let id = pendingDeletePhotoID { manager.deletePhoto(id) }
+                pendingDeletePhotoID = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletePhotoID = nil }
+        } message: {
+            Text("This removes it from this device. It can't be undone.")
+        }
+        .alert("Couldn't Save Photo", isPresented: Binding(
+            get: { saveErrorMessage != nil },
+            set: { if !$0 { saveErrorMessage = nil } }
+        )) {
+            if saveErrorMessage?.contains("Settings") == true {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                    saveErrorMessage = nil
+                }
+            }
+            Button("OK", role: .cancel) { saveErrorMessage = nil }
+        } message: {
+            Text(saveErrorMessage ?? "")
+        }
     }
 
     private var header: some View {
@@ -448,19 +532,68 @@ private struct FriendPhotoCarouselPostView: View {
             .frame(maxWidth: .infinity)
             .frame(height: width * 1.25)
             .overlay(alignment: .bottomTrailing) {
-                Button {
-                    manager.toggleFavorite(photoID: photo.id, in: post)
-                } label: {
-                    Image(systemName: manager.favoritePhotoID(for: post) == photo.id ? "heart.fill" : "heart")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(manager.favoritePhotoID(for: post) == photo.id ? Color.dustyRose : .white)
-                        .frame(width: 44, height: 44)
-                        .background(.black.opacity(0.38), in: Circle())
+                HStack(spacing: 10) {
+                    circleActionButton(
+                        systemName: savedPhotoIDs.contains(photo.id) ? "checkmark" : "square.and.arrow.down",
+                        tint: savedPhotoIDs.contains(photo.id) ? Color.moss : .white,
+                        accessibilityLabel: "Save this picture to your Photos library"
+                    ) { savePhoto(photo) }
+
+                    if post.session != nil {
+                        circleActionButton(
+                            systemName: manager.favoritePhotoID(for: post) == photo.id ? "heart.fill" : "heart",
+                            tint: manager.favoritePhotoID(for: post) == photo.id ? Color.dustyRose : .white,
+                            accessibilityLabel: "Use this picture as the session cover"
+                        ) { manager.toggleFavorite(photoID: photo.id, in: post) }
+                    }
+
+                    circleActionButton(
+                        systemName: "trash",
+                        tint: .white,
+                        accessibilityLabel: "Delete this picture"
+                    ) { pendingDeletePhotoID = photo.id }
                 }
-                .buttonStyle(.plain)
                 .padding(14)
-                .accessibilityLabel("Use this picture as the session cover")
             }
+    }
+
+    private func circleActionButton(
+        systemName: String,
+        tint: Color,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background(.black.opacity(0.38), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private func savePhoto(_ photo: FriendPhotoPayload) {
+        Task {
+            // Persistent-gallery photos are stored metadata-only in memory; rehydrate the bytes
+            // from the encrypted disk cache before handing them to the photo library.
+            let hydrated = manager.hydratedPhotos([photo])
+            // If the bytes can't be loaded/decrypted, don't report a false success.
+            guard !hydrated.isEmpty else {
+                saveErrorMessage = "Could not save to your photo library. Please try again."
+                return
+            }
+            do {
+                try await FriendPhotoLibrarySaver.save(hydrated)
+                savedPhotoIDs.insert(photo.id)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            } catch CocoaError.userCancelled {
+                saveErrorMessage = "Fernlet needs access to your Photo Library to save photos. Open Settings to grant access."
+            } catch {
+                saveErrorMessage = "Could not save to your photo library. Please try again."
+            }
+        }
     }
 
     private var selectedIndex: Int {

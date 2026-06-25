@@ -13,7 +13,7 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | Friend mesh lifecycle | `MeshNetworkManager.startJoin()`, `stopJoin()`, `leaveSession()`, `leaveSessionAfterNotifyingPeers()` |
 | Mesh membership/admission | `MeshNetworkManager.allowAdmission(_:)`, `declineAdmission(_:)`, `handleAdmissionRequest(_:)`, `handleAdmissionGrant(_:)` |
 | Mesh removal | `proposeRemoval(of:)`, `canSecondRemoval(_:)`, `secondRemoval(_:)`, `applyApprovedRemoval(_:)` |
-| Friend photos | `MeshNetworkManager.addPhoto(_:)`, `cachePhoto(_:)`, `syncPhotoManifest(to:)`, `MeshPhotoCacheStore` |
+| Friend photos | `MeshNetworkManager.addPhoto(_:)`, `cachePhoto(_:)`, `deletePhoto(_:)`, `syncPhotoManifest(to:)`, `PrivateMediaStore` |
 | Recipe sharing | `ProximityRecipeShareManager.start()`, `sendRecipeShare(_:to:)`, `proximityCoordinator(_:didReceive:plaintext:from:)` |
 | Audit/diagnostics | `ConnectionInspector`, `ConnectionSessionLog`, `TrainerAuditEvent`, `ProximityRecipeShareDiagnostics` |
 
@@ -443,20 +443,26 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `UIImage.resizedForFriendSharing(maxDimension:)` | Downscales images whose largest side exceeds the limit. |
 | `UIImage.friendPhotoThumbnailData(maxDimension:)` | Produces a compressed JPEG thumbnail. |
 
-### `MeshPhotoCacheStore.swift`
+### `PrivateMediaStore.swift` (formerly `MeshPhotoCacheStore.swift`)
 
 | Function | What It Does |
 | --- | --- |
-| `init(indexURL:)` | Configures index, image, thumbnail directories and ISO-8601 coders. |
+| `init(indexURL:keyProvider:)` | Configures index, image, thumbnail directories, ISO-8601 coders, and the at-rest key provider (defaults to the keychain-backed one). |
 | `load()` | Loads metadata index, re-saves for cleanup, and returns metadata-only payloads. |
-| `save(_:)` | Caps photos to 200, writes full images/thumbnails, writes metadata index, and removes orphan files. |
-| `imageData(for:)` | Returns inline image data or reads it from disk. |
-| `thumbnailData(for:)` | Reads existing thumbnail or generates/stores one from full image data. |
-| `hydrated(_:)` | Returns a decrypted/image-data payload by loading image bytes from disk. |
-| `createDirectories()` | Ensures image and thumbnail directories exist. |
-| `imageURL(for:)` | Builds full image file URL for a photo ID. |
-| `thumbnailURL(for:)` | Builds thumbnail file URL for a photo ID. |
-| `removeOrphanedFiles(keeping:)` | Deletes image/thumbnail files not present in retained IDs. |
+| `save(_:)` | Caps photos to `maxCachedPhotos` (1000, FIFO by recency), validates pixel bounds, **AES-256-GCM-encrypts** full images/thumbnails before writing, writes metadata index, and removes orphan files. |
+| `imageData(for:)` | Returns inline image data or reads + decrypts it from disk. |
+| `thumbnailData(for:)` | Reads + decrypts an existing thumbnail, or generates/encrypts/stores one from full image data. |
+| `hydrated(_:)` | Returns an image-data payload by loading + decrypting image bytes from disk. |
+| `encrypt(_:)` / `decrypt(_:)` | AES-256-GCM seal/open under the provider key; `decrypt` falls back to raw bytes for legacy pre-encryption (plaintext) files. |
+| `isWithinSafePixelBounds(_:)` | Rejects decompression-bomb dimensions/area via ImageIO before any decode. |
+| `removeOrphanedFiles(keeping:)` | Deletes image/thumbnail files not present in retained IDs (also the per-photo delete mechanism). |
+
+### `PrivateMediaKeyStore.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `PrivateMediaKeyProviding.mediaKey()` | Supplies the symmetric key for `PrivateMediaStore`; injectable for tests. |
+| `KeychainPrivateMediaKeyProvider.mediaKey()` | Loads or generates a 256-bit AES key stored backup-restorable (`kSecAttrAccessibleAfterFirstUnlock`); caches it in memory. |
 
 ### `FriendPhotoReviewSheet.swift`
 
