@@ -47,13 +47,13 @@ enum RecipeWebImporter {
 
     /// - Parameter aiEnabled: When false, the FoundationModels fallback is skipped so that
     ///   users who have disabled AI are not silently opted in via recipe import.
-    static func importRecipe(from url: URL, foodItems: [FoodItem], aiEnabled: Bool) async throws -> ImportedRecipe {
+    static func importRecipe(from url: URL, catalog: FoodCatalog, aiEnabled: Bool) async throws -> ImportedRecipe {
         guard isSafePublicHTTPSURL(url) else {
             throw RecipeWebImportError.invalidURL
         }
 
         let html = try await fetchHTML(from: url)
-        if let recipe = try jsonLDRecipe(from: html, sourceURL: url, foodItems: foodItems) {
+        if let recipe = try jsonLDRecipe(from: html, sourceURL: url, catalog: catalog) {
             return recipe
         }
 
@@ -62,7 +62,7 @@ enum RecipeWebImporter {
         }
 
         let cleanedText = try cleanedBodyText(from: html)
-        return try await extractWithFoundationModel(from: cleanedText, sourceURL: url, foodItems: foodItems)
+        return try await extractWithFoundationModel(from: cleanedText, sourceURL: url, catalog: catalog)
     }
 
     private static func fetchHTML(from url: URL) async throws -> String {
@@ -152,12 +152,12 @@ enum RecipeWebImporter {
         }
     }
 
-    private static func jsonLDRecipe(from html: String, sourceURL: URL, foodItems: [FoodItem]) throws -> ImportedRecipe? {
+    private static func jsonLDRecipe(from html: String, sourceURL: URL, catalog: FoodCatalog) throws -> ImportedRecipe? {
         for rawJSON in jsonLDScriptContents(from: html) {
             guard let jsonData = htmlDecoded(rawJSON).data(using: .utf8) else { continue }
             guard let object = try? JSONSerialization.jsonObject(with: jsonData) else { continue }
             if let recipe = recipeObject(in: object),
-               let imported = importedRecipe(from: recipe, sourceURL: sourceURL, foodItems: foodItems) {
+               let imported = importedRecipe(from: recipe, sourceURL: sourceURL, catalog: catalog) {
                 return imported
             }
         }
@@ -185,7 +185,7 @@ enum RecipeWebImporter {
         return String(normalized.prefix(12_000))
     }
 
-    private static func extractWithFoundationModel(from text: String, sourceURL: URL, foodItems: [FoodItem]) async throws -> ImportedRecipe {
+    private static func extractWithFoundationModel(from text: String, sourceURL: URL, catalog: FoodCatalog) async throws -> ImportedRecipe {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, visionOS 26.0, *) {
             guard RecipeExtractionAvailability.isFoundationModelAvailable else {
@@ -213,7 +213,7 @@ enum RecipeWebImporter {
             """
             let session = LanguageModelSession(instructions: instructions)
             let response = try await session.respond(to: prompt, generating: ExtractedRecipe.self)
-            return try response.content.importedRecipe(sourceURL: sourceURL, foodItems: foodItems)
+            return try response.content.importedRecipe(sourceURL: sourceURL, catalog: catalog)
         }
         #endif
 
@@ -276,7 +276,7 @@ enum RecipeWebImporter {
         return false
     }
 
-    private static func importedRecipe(from dictionary: [String: Any], sourceURL: URL, foodItems: [FoodItem]) -> ImportedRecipe? {
+    private static func importedRecipe(from dictionary: [String: Any], sourceURL: URL, catalog: FoodCatalog) -> ImportedRecipe? {
         let name = stringValue(dictionary["name"])
         let ingredients = stringArrayValue(dictionary["recipeIngredient"])
         let fullSummary = instructionsText(from: dictionary["recipeInstructions"])
@@ -298,7 +298,7 @@ enum RecipeWebImporter {
             fat = siteNutrition.fat
             micronutrients = siteNutrition.micronutrients
         } else {
-            (protein, carbs, fat) = estimateMacrosFromIngredients(ingredients, servings: servings, foodItems: foodItems)
+            (protein, carbs, fat) = estimateMacrosFromIngredients(ingredients, servings: servings, catalog: catalog)
             micronutrients = Micronutrients()
         }
 
@@ -375,13 +375,12 @@ enum RecipeWebImporter {
 
     // MARK: - USDA ingredient macro estimation
 
-    static func estimateMacrosFromIngredients(_ ingredients: [String], servings: Int, foodItems: [FoodItem]) -> (Int, Int, Int) {
-        let index = FoodItemSearch.Index(foodItems: foodItems)
+    static func estimateMacrosFromIngredients(_ ingredients: [String], servings: Int, catalog: FoodCatalog) -> (Int, Int, Int) {
         var totalProtein = 0.0, totalCarbs = 0.0, totalFat = 0.0
 
         for text in ingredients {
             guard let parsed = parseIngredient(text),
-                  let match = FoodItemSearch.results(for: parsed.name, in: index, limit: 1).first else { continue }
+                  let match = catalog.results(for: parsed.name, limit: 1).first else { continue }
             let ri = RecipeIngredient(foodItemId: match.id, quantity: parsed.quantity, unit: parsed.unit)
             let macros = ri.scaledMacros(using: match)
             totalProtein += Double(macros.protein)
@@ -639,7 +638,7 @@ struct ExtractedRecipe {
     var ingredients: [String]
     var summary: String
 
-    func importedRecipe(sourceURL: URL, foodItems: [FoodItem]) throws -> ImportedRecipe {
+    func importedRecipe(sourceURL: URL, catalog: FoodCatalog) throws -> ImportedRecipe {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedIngredients = ingredients
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -651,7 +650,7 @@ struct ExtractedRecipe {
         }
 
         let (protein, carbs, fat) = RecipeWebImporter.estimateMacrosFromIngredients(
-            trimmedIngredients, servings: 1, foodItems: foodItems
+            trimmedIngredients, servings: 1, catalog: catalog
         )
 
         return ImportedRecipe(

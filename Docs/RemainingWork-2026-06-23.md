@@ -59,7 +59,8 @@ rest into one **"new items" PR done first**.
    at-rest AES-256-GCM encryption (backup-restorable keychain key), per-photo Save-to-Photos + delete,
    and the 900-warning banner all shipped. (Manual people-tagging + photo-surfacing exclusion remain,
    tracked separately in §1.)
-2. **USDA → SQLite** — data-layer migration; **must precede food/recipe** (both edit `FoodDataCatalog`).
+2. **USDA → SQLite** — ✅ LANDED (2026-06-24). Read-only `FoodCatalog.sqlite` + `FoodCatalog`
+   service replaces the in-memory bundled array; FTS5 candidate prefilter → existing scorer. See §3.
 3. **Food/recipe** (RecipeDefinition↔SavedRecipe merge) — hard dependency on #2. Fold in the
    ingredient-search labels/dedup, live micros, and `.aiResolved` light items (all operate on
    `FoodDataCatalog.FoodItemSearch`, which #2 rewrites — doing them earlier = rework).
@@ -319,9 +320,16 @@ not here.)
 ## §3 — Deferred by design → SELECTED for this pass
 
 ### USDA → SQLite
-- [ ] **Bundled USDA store → SQLite** — currently a reduced read-only JSON resource
-  (`USDAFoodItems.json`, ~13k foods). → Build the SQLite repository the spec originally called for;
-  migrate the food lookup/search path off in-memory JSON.
+- [x] **Bundled USDA store → SQLite** — DONE (builds + all 584 FernletTests pass). Source JSON
+  (`USDAFoodItems.json` — actually **68,114** foods, not the ~13k the spec claims, + 202 curated)
+  moved out of the bundle to `FoodDataSource/` and converted to a read-only `FoodCatalog.sqlite`
+  (`food` table + contentless FTS5 index, ~34 MB) generated from the real `FoodItem` decoder by
+  `FoodCatalogDatabaseBuilder` (regenerate via the gated `FoodCatalogGenerationTests`). New
+  `FoodCatalog` service (`BundledFoodStore.swift` + `FoodCatalog.swift`) answers search via an FTS
+  candidate prefilter → existing `FoodItemSearch` scorer (ranking parity verified) and resolves
+  ingredient IDs via `SELECT … WHERE id IN (…)`. `FernletStore.bundledFoodItems`/`allFoodItems` and
+  the `BundledFoodSeedingService` (24 MB JSON parse + 68k-struct in-memory load + bplist cache) are
+  gone — only the small user-item set stays resident.
 
 ### WeatherKit
 - [x] **WeatherKit integration** — DONE (builds + signs for simulator): `WeatherKitService` (opt-in,

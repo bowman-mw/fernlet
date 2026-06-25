@@ -12,7 +12,7 @@ enum FoundationDishDecompositionModel {
     /// together with a confidence in how well it matches what was eaten.
     /// Returns `nil` when the model is unavailable, the result fails plausibility checks, or
     /// no components can be resolved to catalog entries.
-    static func decompose(_ payload: MealDecompositionPayload, index: FoodItemSearch.Index) async throws -> ResolvedMeal? {
+    static func decompose(_ payload: MealDecompositionPayload, catalog: FoodCatalog) async throws -> ResolvedMeal? {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             guard FoodSelectionAvailability.isFoundationModelAvailable else { return nil }
@@ -46,7 +46,7 @@ enum FoundationDishDecompositionModel {
             """
             let session = LanguageModelSession(instructions: instructions)
             let response = try await session.respond(to: prompt, generating: FoundationDishDecomposition.self)
-            return MealDecompositionResolver.resolve(from: response.content, payload: payload, index: index)
+            return MealDecompositionResolver.resolve(from: response.content, payload: payload, catalog: catalog)
         }
         #endif
         return nil
@@ -92,7 +92,7 @@ enum MealDecompositionResolver {
     static func resolve(
         from decomposition: FoundationDishDecomposition,
         payload: MealDecompositionPayload,
-        index: FoodItemSearch.Index
+        catalog: FoodCatalog
     ) -> ResolvedMeal? {
         let gramBounds = DishTemplateLexicon.componentGramBounds(description: payload.mealDescription)
         var minBindScore = Int.max
@@ -109,7 +109,7 @@ enum MealDecompositionResolver {
                 : "\(prep) \(ing)"
             // Bind to the best catalog hit, but drop the component when even the top match is junk
             // (matched only via category/tags with no real name signal).
-            guard let match = FoodItemSearch.scoredResults(for: query, in: index, limit: 1).first,
+            guard let match = catalog.scoredResults(for: query, limit: 1).first,
                   match.score >= FoodItemSearch.minimumBindScore else {
                 droppedComponents += 1
                 continue

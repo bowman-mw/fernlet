@@ -3,8 +3,11 @@ import XCTest
 
 /// Creates a FernletStore backed by an in-memory Core Data stack.
 /// All data is discarded when the store is deallocated.
+///
+/// `bundledFoodItems` seeds an in-memory food catalog (the SQLite-backed bundle is not loaded in
+/// tests), so tests stay deterministic — pass the specific USDA items a test needs.
 @MainActor
-func makeTestStore(date: Date = .now) -> FernletStore {
+func makeTestStore(date: Date = .now, bundledFoodItems: [FoodItem] = []) -> FernletStore {
     let controller = PersistenceController(inMemory: true)
     // Use a non-existent temp path so the legacy migration returns an empty database.
     let legacyURL = FileManager.default.temporaryDirectory
@@ -25,7 +28,13 @@ func makeTestStore(date: Date = .now) -> FernletStore {
     let journalNarrativeRepository = JournalNarrativeRepository(
         controller: PrivatePersistenceController(inMemory: true)
     )
-    return FernletStore(date: date, repository: repository, savedRecipeRepository: savedRecipeRepository, journalNarrativeRepository: journalNarrativeRepository)
+    return FernletStore(
+        date: date,
+        repository: repository,
+        savedRecipeRepository: savedRecipeRepository,
+        journalNarrativeRepository: journalNarrativeRepository,
+        foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems))
+    )
 }
 
 /// Creates a FernletStore pre-populated with N meals, a journal entry,

@@ -20,9 +20,9 @@ final class FernletStore {
     var memories: [MemoryNote]
     var goals: [FitnessGoal]
     var workshop: WorkshopData
-    var foodItems: [FoodItem]
-    var bundledFoodItems: [FoodItem] = []
-    var allFoodItems: [FoodItem] { bundledFoodItems + foodItems }
+    var foodItems: [FoodItem] {
+        didSet { foodCatalog.setUserItems(foodItems) }
+    }
     var webImportedFoodItems: [FoodItem] {
         foodItems.filter { $0.tags.contains("web-import") }
     }
@@ -52,9 +52,6 @@ final class FernletStore {
     }
     var companionThought: String?
     var photowallSeeds: [PhotowallSeed] = []
-    var bundledFoodSeedingState: BundledFoodSeedingService.State {
-        bundledFoodSeedingService.state
-    }
     var lockState: FernletLockState = .notConfigured
 
     private static let goodProteinThreshold = 25
@@ -76,7 +73,9 @@ final class FernletStore {
         buildSnapshot: { [unowned self] in self.currentSnapshot() },
         onAfterSave: { [weak self] in self?.rebuildDerivedSignals() }
     )
-    @ObservationIgnored private let bundledFoodSeedingService = BundledFoodSeedingService()
+    /// Read-only SQLite-backed bundled food store + user-item snapshot. Replaces the old in-memory
+    /// `bundledFoodItems` array; see FoodCatalog.swift.
+    @ObservationIgnored let foodCatalog: FoodCatalog
     @ObservationIgnored private var isReloadingFromRepository = false
     @ObservationIgnored private let mealPhotoStore = MealPhotoStore(
         directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
@@ -91,7 +90,7 @@ final class FernletStore {
     /// Used by currentSnapshot() to strip text before persisting to the cloud blob.
     @ObservationIgnored private var sealedJournalIDs: Set<UUID> = []
 
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: JournalNarrativeRepository? = nil) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: JournalNarrativeRepository? = nil, foodCatalog: FoodCatalog = .bundled()) {
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
 
@@ -118,6 +117,7 @@ final class FernletStore {
         self.memories = snapshot.memories
         self.goals = snapshot.goals
         self.workshop = snapshot.workshop
+        self.foodCatalog = foodCatalog
         self.foodItems = snapshot.foodItems.filter { $0.source != .usda }
         self.recipes = snapshot.recipes
         self.dailyScores = snapshot.dailyScores
@@ -128,6 +128,7 @@ final class FernletStore {
         )
         self.aiRetryQueueService = AIRetryQueueService(initial: snapshot.retryQueue)
         self.journalNarrativeRepository = journalNarrativeRepository ?? JournalNarrativeRepository()
+        foodCatalog.setUserItems(foodItems)
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -142,7 +143,8 @@ final class FernletStore {
         todayKey: String,
         repository: FernletRepository,
         savedRecipeService: SavedRecipeService,
-        healthKitService: (any HealthKitServicing)? = nil
+        healthKitService: (any HealthKitServicing)? = nil,
+        foodCatalog: FoodCatalog = .bundled()
     ) {
         self.todayKey = todayKey
         self.repository = repository
@@ -155,6 +157,7 @@ final class FernletStore {
         self.memories = snapshot.memories
         self.goals = snapshot.goals
         self.workshop = snapshot.workshop
+        self.foodCatalog = foodCatalog
         self.foodItems = snapshot.foodItems.filter { $0.source != .usda }
         self.recipes = snapshot.recipes
         self.dailyScores = snapshot.dailyScores
@@ -165,6 +168,7 @@ final class FernletStore {
         )
         self.aiRetryQueueService = AIRetryQueueService(initial: snapshot.retryQueue)
         self.journalNarrativeRepository = JournalNarrativeRepository()
+        foodCatalog.setUserItems(foodItems)
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -424,17 +428,16 @@ final class FernletStore {
         if settings.aiStatus != .off {
             // Primary (M1): model decomposes the dish from world knowledge, catalog supplies macros.
             do {
-                let index = FoodItemSearch.Index(foodItems: allFoodItems)
                 if let resolved = try await FoundationDishDecompositionModel.decompose(
                     MealDecompositionPayload(mealDescription: description, fallbackMealType: type),
-                    index: index
+                    catalog: foodCatalog
                 ) {
                     return MealResolution(meals: [resolved.meal], createdRecipes: [], confidence: resolved.confidence, isFallback: false)
                 }
             } catch {}
 
             // Secondary AI: candidate-constrained selection (catalog-grounded, high confidence).
-            let candidates = FoodSelectionCandidateBuilder.candidates(for: description, foodItems: allFoodItems)
+            let candidates = foodCatalog.candidates(for: description)
             do {
                 if let plan = try await FoundationFoodSelectionModel.resolve(
                     FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type)
@@ -442,7 +445,7 @@ final class FernletStore {
                     from: plan,
                     candidates: candidates,
                     recipes: recipes,
-                    foodItems: allFoodItems,
+                    foodItems: candidates.map(\.foodItem) + foodCatalog.items(forRecipes: recipes),
                     originalDescription: description
                 ), result.meals.isEmpty == false {
                     return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
@@ -451,18 +454,18 @@ final class FernletStore {
         }
 
         // Deterministic tier 1 (M2): dish template lexicon — handles composite dishes when AI is off.
-        if let lexiconMeals = DishTemplateLexicon.resolve(description: description, mealType: type, foodItems: allFoodItems) {
+        if let lexiconMeals = DishTemplateLexicon.resolve(description: description, mealType: type, catalog: foodCatalog) {
             return MealResolution(meals: lexiconMeals, createdRecipes: [], confidence: .high, isFallback: false)
         }
 
         // Deterministic tier 2: candidate-constrained plan.
-        let candidates = FoodSelectionCandidateBuilder.candidates(for: description, foodItems: allFoodItems)
+        let candidates = foodCatalog.candidates(for: description)
         if let plan = FoundationFoodSelectionModel.deterministicPlan(description: description, candidates: candidates, fallbackType: type),
            let result = MealBuilder.meals(
             from: plan,
             candidates: candidates,
             recipes: recipes,
-            foodItems: allFoodItems,
+            foodItems: candidates.map(\.foodItem) + foodCatalog.items(forRecipes: recipes),
             originalDescription: description
            ), result.meals.isEmpty == false {
             return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
@@ -624,7 +627,7 @@ final class FernletStore {
         let meal = MealBuilder.mealFromRecipe(
             recipe,
             mealType: mealType ?? MealParser.classifyMealType(recipe.name),
-            foodItems: allFoodItems
+            foodItems: foodCatalog.items(forRecipe: recipe)
         )
         batchSnapshotPersistence {
             mutateDay(date: targetDate) { $0.meals.append(meal) }
@@ -687,7 +690,7 @@ final class FernletStore {
             }
 
             do {
-                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, foodItems: allFoodItems, aiEnabled: settings.aiStatus != .off)
+                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: foodCatalog, aiEnabled: settings.aiStatus != .off)
                 addSavedRecipe(SavedRecipe(importedRecipe: importedRecipe))
                 queue.remove(record)
             } catch {
@@ -1289,7 +1292,7 @@ final class FernletStore {
         assert(!trimmedName.isEmpty, "recipe name required")
         let now = Date()
         return batchSnapshotPersistence {
-            let selectionCatalog = allFoodItems
+            let selectionCatalog = foodCatalog.items(ids: inputIngredients.compactMap(\.selectedFoodItemId))
             let recipeIngredients = CustomIngredientUpsert.recipeIngredients(
                 from: inputIngredients,
                 selectionCatalog: selectionCatalog,
@@ -1315,7 +1318,7 @@ final class FernletStore {
         assert(!trimmedName.isEmpty, "recipe name required")
         guard let index = recipes.firstIndex(where: { $0.id == recipe.id }) else { return }
         batchSnapshotPersistence {
-            let selectionCatalog = allFoodItems
+            let selectionCatalog = foodCatalog.items(ids: inputIngredients.compactMap(\.selectedFoodItemId))
             let recipeIngredients = CustomIngredientUpsert.recipeIngredients(
                 from: inputIngredients,
                 selectionCatalog: selectionCatalog,
@@ -1391,19 +1394,19 @@ final class FernletStore {
     }
 
     func macroTotals(for recipe: RecipeDefinition) -> MacroTotals {
-        MealBuilder.macroTotals(for: recipe, foodItems: allFoodItems)
+        MealBuilder.macroTotals(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {
-        MealBuilder.micronutrientTotals(for: recipe, foodItems: allFoodItems)
+        MealBuilder.micronutrientTotals(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
     func recipeShareText(for recipe: RecipeDefinition) -> String {
-        RecipeShareCodec.shareText(for: recipe, foodItems: allFoodItems)
+        RecipeShareCodec.shareText(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
     func proximityRecipeSharePayload(for recipe: RecipeDefinition) -> ProximityRecipeSharePayload {
-        RecipeShareCodec.proximityPayload(for: recipe, foodItems: allFoodItems)
+        RecipeShareCodec.proximityPayload(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
     func proximityRecipeSharePayload(for recipe: SavedRecipe) -> ProximityRecipeSharePayload {
@@ -1670,22 +1673,12 @@ final class FernletStore {
 
     func markLaunchScreenDismissed() {}
 
-    func loadBundledFoodItemsForLaunch() async {
-        guard bundledFoodSeedingService.state == .notStarted else { return }
+    /// The bundled food catalog is now a read-only SQLite store opened lazily by `FoodCatalog`, so
+    /// there is no heavyweight seed to await at launch. Kept as no-ops for the existing launch/UI
+    /// call sites (the 24 MB JSON parse + 13k-struct hydration they used to drive is gone).
+    func loadBundledFoodItemsForLaunch() async {}
 
-        let items = await bundledFoodSeedingService.load()
-        if !items.isEmpty {
-            bundledFoodItems = items
-        }
-    }
-
-    func ensureBundledFoodItemsSeeded() {
-        guard bundledFoodSeedingService.state == .notStarted else { return }
-
-        Task { @MainActor [weak self] in
-            await self?.loadBundledFoodItemsForLaunch()
-        }
-    }
+    func ensureBundledFoodItemsSeeded() {}
 }
 
 // MARK: - Sealed Journal Management (Phase S2)

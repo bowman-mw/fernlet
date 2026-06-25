@@ -325,21 +325,13 @@ private struct FDCMeasureUnit: Decodable {
 }
 
 enum FoodDataCatalog {
-    nonisolated static let resourceName = "USDAFoodItems"
-    nonisolated static let curatedSurveyResourceName = "CuratedSurveyFoodItems"
-    nonisolated private static let bundledResourceNames = [resourceName, curatedSurveyResourceName]
+    /// Source JSON file names (repo-only, under `FoodDataSource/`). These are no longer bundled
+    /// into the app — they are the build-time input to `FoodCatalogDatabaseBuilder`, which emits the
+    /// read-only `FoodCatalog.sqlite` resource the app actually ships. See FoodCatalog.swift.
+    nonisolated static let sourceResourceNames = ["USDAFoodItems", "CuratedSurveyFoodItems"]
 
-    nonisolated static func bundledFoodItems(bundle: Bundle = .main) -> [FoodItem] {
-        StartupTiming.timed("FoodDataCatalog.bundledFoodItems") {
-            if let cached = loadCachedItems(bundle: bundle) {
-                return cached
-            }
-            let items = bundledDataFiles(bundle: bundle).flatMap { foodItems(from: $0) }
-            saveCachedItems(items, bundle: bundle)
-            return items
-        }
-    }
-
+    /// Decodes a single USDA JSON payload (compact bundled schema *or* raw FDC envelope) into
+    /// `FoodItem`s. Used by both the database generator and the decoder unit tests.
     nonisolated static func foodItems(from data: Data) -> [FoodItem] {
         StartupTiming.timed("FoodDataCatalog.foodItems.decode") {
             guard !data.isEmpty else { return [] }
@@ -347,6 +339,18 @@ enum FoodDataCatalog {
             guard let records = try? decoder.decode([USDAFoodItemRecord].self, from: data) else { return [] }
             return addingCanonicalAliases(to: records.map { $0.foodItem() })
         }
+    }
+
+    /// Reads every source JSON file from `directory` and returns the merged `FoodItem`s with the
+    /// canonical aliases applied — the exact set the SQLite catalog is generated from. Generation
+    /// time only; the app reads `FoodCatalog.sqlite` at runtime, never these files.
+    nonisolated static func sourceJSONFoodItems(directory: URL) -> [FoodItem] {
+        let items = sourceResourceNames.flatMap { name -> [FoodItem] in
+            let url = directory.appendingPathComponent(name).appendingPathExtension("json")
+            guard let data = try? Data(contentsOf: url) else { return [] }
+            return foodItems(from: data)
+        }
+        return addingCanonicalAliases(to: items)
     }
 
     nonisolated private static func addingCanonicalAliases(to items: [FoodItem]) -> [FoodItem] {
@@ -363,53 +367,6 @@ enum FoodDataCatalog {
         aliased.name = "Chicken breast, roasted"
         aliased.tags = Array(Set(aliased.tags + ["chicken", "breast", "roasted", "poultry"])).sorted()
         return items + [aliased]
-    }
-
-    nonisolated private static func bundledDataFiles(bundle: Bundle) -> [Data] {
-        bundledResourceNames.compactMap { resourceName in
-            guard let url = bundle.url(forResource: resourceName, withExtension: "json") else { return nil }
-            return try? Data(contentsOf: url)
-        }
-    }
-
-    // MARK: - Binary plist cache
-
-    nonisolated private static func cacheURLs() -> (data: URL, key: URL) {
-        let base = URL(fileURLWithPath: NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true)[0])
-        return (
-            data: base.appendingPathComponent("food_catalog_v2.bplist"),
-            key: base.appendingPathComponent("food_catalog_v2.key")
-        )
-    }
-
-    nonisolated private static func bundledCacheKey(bundle: Bundle) -> String? {
-        let components = bundledResourceNames.compactMap { resourceName -> String? in
-            guard let url = bundle.url(forResource: resourceName, withExtension: "json"),
-                  let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
-                  let size = values.fileSize,
-                  let modified = values.contentModificationDate else { return nil }
-            return "\(resourceName):\(size)-\(modified.timeIntervalSinceReferenceDate)"
-        }
-        return components.isEmpty ? nil : components.joined(separator: "|")
-    }
-
-    nonisolated private static func loadCachedItems(bundle: Bundle) -> [FoodItem]? {
-        let urls = cacheURLs()
-        guard let key = bundledCacheKey(bundle: bundle),
-              let storedKey = try? String(contentsOf: urls.key, encoding: .utf8),
-              key == storedKey,
-              let data = try? Data(contentsOf: urls.data) else { return nil }
-        return try? PropertyListDecoder().decode([FoodItem].self, from: data)
-    }
-
-    nonisolated private static func saveCachedItems(_ items: [FoodItem], bundle: Bundle) {
-        let urls = cacheURLs()
-        guard let key = bundledCacheKey(bundle: bundle) else { return }
-        let encoder = PropertyListEncoder()
-        encoder.outputFormat = .binary
-        guard let data = try? encoder.encode(items) else { return }
-        try? data.write(to: urls.data, options: .atomic)
-        try? key.write(to: urls.key, atomically: true, encoding: .utf8)
     }
 }
 
@@ -710,5 +667,12 @@ enum FoodItemSearch {
             .split(separator: " ")
             .map(String.init)
             .filter { $0.count >= 2 }
+    }
+
+    /// The query tokens used by the scorer's hard match gate (normalized, length ≥ 2). Exposed so the
+    /// SQLite candidate source can build an FTS5 prefix-AND query that mirrors the gate exactly: a
+    /// row passes FTS iff every token matches some indexed token by equality or prefix.
+    nonisolated static func searchTokens(in text: String) -> [String] {
+        tokens(in: text)
     }
 }

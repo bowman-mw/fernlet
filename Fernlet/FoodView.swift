@@ -293,7 +293,7 @@ struct RecipeImportSheet: View {
 
         Task {
             do {
-                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, foodItems: store.allFoodItems, aiEnabled: store.settings.aiStatus != .off)
+                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: store.foodCatalog, aiEnabled: store.settings.aiStatus != .off)
                 store.addSavedRecipe(SavedRecipe(importedRecipe: importedRecipe))
                 notice = "\(importedRecipe.name) added to your recipes."
                 isImportingURL = false
@@ -482,7 +482,6 @@ struct RecipeSheet: View {
     @State private var notes = ""
     @State private var ingredients: [ManualRecipeIngredientInput] = []
     @State private var expandedId: UUID?
-    @State private var foodSearchIndex = FoodItemSearch.Index.empty
     @State private var scannerPath = false
     @State private var didStartScanner = false
 
@@ -492,7 +491,7 @@ struct RecipeSheet: View {
         self.isEmbeddedInNavigationStack = isEmbeddedInNavigationStack
         self.startsWithScanner = startsWithScanner
         if let recipe {
-            let loadedIngredients = Self.inputs(for: recipe, foodItems: store.allFoodItems)
+            let loadedIngredients = Self.inputs(for: recipe, foodItems: store.foodCatalog.items(forRecipe: recipe))
             _name = State(initialValue: recipe.name)
             _servings = State(initialValue: recipe.servings)
             _notes = State(initialValue: recipe.notes)
@@ -539,8 +538,7 @@ struct RecipeSheet: View {
                                 if expandedId == ingredient.id || ingredient.trimmedName.isEmpty {
                                     RecipeIngredientEditor(
                                         ingredient: $ingredient,
-                                        foodItems: store.allFoodItems,
-                                        foodSearchIndex: foodSearchIndex,
+                                        catalog: store.foodCatalog,
                                         onSaveCustomIngredient: { store.saveCustomIngredient($0) },
                                         onCollapse: ingredient.trimmedName.isEmpty ? nil : { expandedId = nil },
                                         onRemove: { removeIngredient(ingredient.id) }
@@ -551,7 +549,7 @@ struct RecipeSheet: View {
                                 } else {
                                     CollapsedIngredientRow(
                                         ingredient: ingredient,
-                                        foodItems: store.allFoodItems,
+                                        catalog: store.foodCatalog,
                                         onExpand: { expandedId = ingredient.id },
                                         onRemove: { removeIngredient(ingredient.id) }
                                     )
@@ -654,12 +652,6 @@ struct RecipeSheet: View {
             }
         }
         .background(Color.parchment)
-        .onAppear {
-            foodSearchIndex = FoodItemSearch.Index(foodItems: store.allFoodItems)
-        }
-        .onChange(of: store.allFoodItems) { _, newValue in
-            foodSearchIndex = FoodItemSearch.Index(foodItems: newValue)
-        }
         .navigationDestination(isPresented: $scannerPath) {
             NutritionLabelCameraSheet { result in
                 applyLabelScan(result)
@@ -678,9 +670,10 @@ struct RecipeSheet: View {
     }
 
     private var perServingTotals: MacroTotals {
+        let resolved = store.foodCatalog.items(ids: ingredients.compactMap(\.selectedFoodItemId))
         let totals = ingredients.reduce(into: MacroTotals()) { partial, ingredient in
             guard !ingredient.trimmedName.isEmpty else { return }
-            let macros = ingredient.resolvedMacros(foodItems: store.allFoodItems)
+            let macros = ingredient.resolvedMacros(foodItems: resolved)
             partial.protein += macros.protein
             partial.carbs += macros.carbs
             partial.fat += macros.fat
@@ -756,12 +749,12 @@ struct RecipeSheet: View {
 
 struct CollapsedIngredientRow: View {
     var ingredient: ManualRecipeIngredientInput
-    var foodItems: [FoodItem]
+    var catalog: FoodCatalog
     var onExpand: () -> Void
     var onRemove: () -> Void
 
     private var macros: Macros {
-        ingredient.resolvedMacros(foodItems: foodItems)
+        ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient))
     }
 
     private var calories: Int {
@@ -797,8 +790,7 @@ struct CollapsedIngredientRow: View {
 
 struct RecipeIngredientEditor: View {
     @Binding var ingredient: ManualRecipeIngredientInput
-    var foodItems: [FoodItem]
-    var foodSearchIndex: FoodItemSearch.Index
+    var catalog: FoodCatalog
     var onSaveCustomIngredient: (ManualRecipeIngredientInput) -> FoodItem?
     var onCollapse: (() -> Void)?
     var onRemove: () -> Void
@@ -884,7 +876,7 @@ struct RecipeIngredientEditor: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             if let selectedFoodItem {
-                LockedMacroSummary(foodItem: selectedFoodItem, macros: ingredient.resolvedMacros(foodItems: foodItems)) {
+                LockedMacroSummary(foodItem: selectedFoodItem, macros: ingredient.resolvedMacros(foodItems: catalog.resolved(for: ingredient))) {
                     ingredient.selectedFoodItemId = nil
                     ingredient.protein = selectedFoodItem.macros.protein
                     ingredient.carbs = selectedFoodItem.macros.carbs
@@ -903,11 +895,11 @@ struct RecipeIngredientEditor: View {
     }
 
     private var selectedFoodItem: FoodItem? {
-        ingredient.selectedFoodItem(in: foodItems)
+        ingredient.selectedFoodItem(in: catalog.resolved(for: ingredient))
     }
 
     private var matchingFoodItems: [FoodItem] {
-        FoodItemSearch.results(for: ingredient.trimmedName, in: foodSearchIndex)
+        catalog.results(for: ingredient.trimmedName)
     }
 
     private var canSaveCustomIngredient: Bool {
@@ -932,7 +924,7 @@ struct RecipeIngredientEditor: View {
         }
         guard ingredient.selectedFoodItemId == nil else { return }
         let normalizedName = FoodItemSearch.normalized(ingredient.trimmedName)
-        if let exact = foodSearchIndex.exactNameMatch(for: normalizedName) {
+        if let exact = catalog.exactNameMatch(forNormalized: normalizedName) {
             ingredient.selectedFoodItemId = exact.id
         }
     }
@@ -1134,7 +1126,7 @@ struct MealSheet: View {
                 #if canImport(UIKit)
                 let capturedPhoto = mealPhoto
                 #endif
-                if FoodProductWebSearch.shouldSearch(for: mealDescription, foodItems: store.allFoodItems) {
+                if FoodProductWebSearch.shouldSearch(for: mealDescription, foodItems: store.foodItems) {
                     if let cachedProduct = store.cachedWebImportedFoodProduct(for: mealDescription) {
                         let meal = store.logWebImportedFoodProduct(cachedProduct, mealType: selectedMealType)
                         onLogged([meal])

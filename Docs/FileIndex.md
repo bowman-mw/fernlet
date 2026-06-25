@@ -81,7 +81,10 @@ This index maps the main project files to their responsibilities. It is intended
 
 | File | Purpose |
 | --- | --- |
-| `Fernlet/Fernlet/FoodDataCatalog.swift` | USDA food item record model, bundled catalog loading, food search, and recipe search helpers. |
+| `Fernlet/Fernlet/FoodDataCatalog.swift` | USDA food item record decoder (compact + raw FDC), source-JSON loading for the DB generator, `FoodItemSearch` scorer, and recipe search helpers. |
+| `Fernlet/Fernlet/FoodCatalog.swift` | `FoodCatalog` service: merges the SQLite bundled food source with the in-memory user-item snapshot; search via FTS candidate prefilter → `FoodItemSearch` scorer, plus ID/exact-name resolution. Replaces the old in-memory `allFoodItems` array. |
+| `Fernlet/Fernlet/BundledFoodStore.swift` | `BundledFoodSource` protocol + read-only SQLite-backed `SQLiteBundledFoodSource` (FTS5 candidate query, id/exact lookups, hydration) and `InMemoryBundledFoodSource` for tests; shared `FoodCatalogSchema`. |
+| `Fernlet/Fernlet/FoodCatalogDatabaseBuilder.swift` | Build-time generator that converts the `FoodDataSource/*.json` foods into the shipped read-only `FoodCatalog.sqlite` (run via the gated `FoodCatalogGenerationTests`). Not used at runtime. |
 | `Fernlet/Fernlet/USDAFoodItems.json` | Bundled USDA food item dataset consumed by the food catalog. |
 | `Fernlet/Fernlet/WorkoutExercises.json` | Bundled exercise dataset consumed by the workout system. |
 | `Fernlet/Fernlet/FoundationFoodSelection.swift` | Foundation model availability and food selection model helpers. |
@@ -91,7 +94,6 @@ This index maps the main project files to their responsibilities. It is intended
 | `Fernlet/Fernlet/RecipeShareCodec.swift` | Encodes and decodes recipes into a shareable text format for peer-to-peer recipe sharing. |
 | `Fernlet/Fernlet/MealBuilder.swift` | Converts a `FoodSelectionPlan` and food candidates into structured `Meal` records and inline recipe definitions, with good-protein threshold logic. |
 | `Fernlet/Fernlet/CustomIngredientUpsert.swift` | Resolves manual recipe ingredient inputs into `FoodItem` records, creating or updating custom food entries in the catalog. |
-| `Fernlet/Fernlet/BundledFoodSeedingService.swift` | Observable service for seeding the food catalog from the bundled USDA dataset on first launch. |
 | `Fernlet/Fernlet/Scoring.swift` | Health scoring, goal weights, meal parsing, workout planning, workout suggestions, and date helpers. |
 
 ## Health And Launch Services
@@ -187,7 +189,7 @@ This index maps the main project files to their responsibilities. It is intended
 | `Fernlet/FernletTests/SavedRecipeServiceTests.swift` | Saved recipe service load, add, delete, and persistence tests. |
 | `Fernlet/FernletTests/SnapshotSaveCoordinatorTests.swift` | Snapshot save coordinator debounce and remote-reload tests. |
 | `Fernlet/FernletTests/WorkoutHealthKitSyncTests.swift` | HealthKit workout import and upsert logic tests. |
-| `Fernlet/FernletTests/BundledFoodSeedingServiceTests.swift` | Bundled food seeding state machine and catalog population tests. |
+| `Fernlet/FernletTests/FoodCatalogTests.swift` | SQLite food catalog round-trip/hydration, search parity with the in-memory scorer, user-item merging, and the gated `FoodCatalog.sqlite` regeneration test. |
 | `Fernlet/FernletTests/CustomIngredientUpsertTests.swift` | Custom ingredient resolution and food item creation tests. |
 
 ### Test Mocks

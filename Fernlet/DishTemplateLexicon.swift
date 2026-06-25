@@ -126,13 +126,11 @@ enum DishTemplateLexicon {
     static func resolve(
         description: String,
         mealType: MealType?,
-        foodItems: [FoodItem]
+        catalog: FoodCatalog
     ) -> [Meal]? {
-        guard !foodItems.isEmpty else { return nil }
         let items = MealItemSplitter.items(from: description)
         guard !items.isEmpty else { return nil }
 
-        let index = FoodItemSearch.Index(foodItems: foodItems)
         var resolvedMeals: [Meal] = []
 
         for itemName in items {
@@ -140,7 +138,7 @@ enum DishTemplateLexicon {
             guard let match = match else { return nil }  // require all items to match
             guard let meal = assemble(
                 match: match, count: count, itemName: itemName,
-                mealType: mealType, description: description, index: index
+                mealType: mealType, description: description, catalog: catalog
             ) else { return nil }
             resolvedMeals.append(meal)
         }
@@ -156,14 +154,14 @@ enum DishTemplateLexicon {
         itemName: String,
         mealType: MealType?,
         description: String,
-        index: FoodItemSearch.Index
+        catalog: FoodCatalog
     ) -> Meal? {
         let template = match.template
         let components = template.components + match.componentOverrides
         let resolvedIngredients: [(FoodSelectionIngredient, FoodItem)] = components.compactMap { component in
             let prep = component.preparation ?? ""
             let query = prep.isEmpty ? component.search : "\(prep) \(component.search)"
-            guard let foodItem = FoodItemSearch.results(for: query, in: index, limit: 1).first else { return nil }
+            guard let foodItem = catalog.results(for: query, limit: 1).first else { return nil }
             let grams = component.gramsPerUnit * count
             let ingredient = FoodSelectionIngredient(
                 candidateId: 0,

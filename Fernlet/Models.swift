@@ -1186,7 +1186,10 @@ enum FoodSelectionCandidateBuilder {
         }
     }
 
-    private static func searchPhrases(from description: String) -> [String] {
+    /// Splits a meal description into overlapping search phrases (3-, 2-, then 1-word), longest first.
+    /// Shared with `FoodCatalog.candidates(for:)` so the SQLite-backed candidate set matches the
+    /// in-memory array path.
+    static func searchPhrases(from description: String) -> [String] {
         let stopWords: Set<String> = [
             "and", "with", "plus", "then", "for", "the", "a", "an", "of", "my", "meal",
             "breakfast", "lunch", "dinner", "snack", "pre", "post", "workout"

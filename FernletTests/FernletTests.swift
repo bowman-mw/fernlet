@@ -206,7 +206,6 @@ struct FernletTests {
 
     @MainActor
     @Test func addRecipeKeepsSelectedBundledUSDAIngredient() throws {
-        let store = makeTestStore()
         let chicken = FoodItem(
             name: "Chicken breast",
             brandSource: "USDA",
@@ -218,7 +217,7 @@ struct FernletTests {
             source: .usda,
             tags: ["usda", "chicken"]
         )
-        store.bundledFoodItems = [chicken]
+        let store = makeTestStore(bundledFoodItems: [chicken])
         var ingredient = ManualRecipeIngredientInput()
         ingredient.name = chicken.name
         ingredient.selectedFoodItemId = chicken.id
@@ -360,10 +359,11 @@ struct FernletTests {
             surveyComponentFood(name: "Lettuce", tags: ["lettuce"])
         ]
 
+        let catalog = FoodCatalog(source: InMemoryBundledFoodSource([surveyTaco] + componentItems))
         let meals = try #require(DishTemplateLexicon.resolve(
             description: "taco",
             mealType: nil,
-            foodItems: [surveyTaco] + componentItems
+            catalog: catalog
         ))
         let meal = try #require(meals.first)
 
@@ -924,11 +924,13 @@ struct FernletTests {
         #expect(fourteenDaySignal.nutrientGaps.contains { $0.nutrientKey == "vitaminC" && $0.status == .covered })
     }
 
-    @Test func bundledUSDAFoodItemsAreAvailable() {
-        let items = FoodDataCatalog.bundledFoodItems()
+    @Test func bundledUSDAFoodItemsAreAvailable() throws {
+        let source = try #require(SQLiteBundledFoodSource(bundle: .main), "FoodCatalog.sqlite must be bundled")
 
-        #expect(items.isEmpty == false)
-        #expect(items.contains { $0.name == "Chicken breast, roasted" })
+        #expect(source.count > 0)
+        #expect(source.exactMatch(normalizedName: FoodItemSearch.normalized("Chicken breast, roasted")) != nil)
+        // Exercises the FTS candidate path against the real bundled DB on the simulator.
+        #expect(source.candidates(forQuery: "chicken").isEmpty == false)
     }
 
     private var testEncoder: JSONEncoder {
