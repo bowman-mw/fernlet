@@ -1093,8 +1093,11 @@ final class FernletStore {
     func applyRestoredPayload(
         _ plaintext: Data,
         payloadType: SealedBackupPayloadType,
-        narrativeRepository: MenstrualNarrativeRepository = MenstrualNarrativeRepository()
+        narrativeRepository: MenstrualNarrativeRepository? = nil
     ) throws -> Int {
+        // Constructed here rather than as a default argument: `MenstrualNarrativeRepository` is
+        // MainActor-isolated, and default-argument expressions evaluate in a nonisolated context.
+        let narrativeRepository = narrativeRepository ?? MenstrualNarrativeRepository()
         switch payloadType {
         case .sensitiveNotes:
             let records = try JSONDecoder().decode([TierTwoMemoryRecord].self, from: plaintext)
