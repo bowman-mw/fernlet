@@ -7,6 +7,9 @@ import SwiftUI
 struct AmbientCardsView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
+    /// Calendar-math next-period outlook, already gated by the caller for opt-in + hide-predictions.
+    /// Nil when there is nothing to show (locked, too few cycles, or surfacing turned off).
+    var periodPrediction: CyclePrediction? = nil
 
     @State private var didLoad = false
     @State private var lookBack: LookBack?
@@ -23,6 +26,7 @@ struct AmbientCardsView: View {
             forgottenFavoritesCard
             forgottenWorkoutCard
             weatherCard
+            periodPredictionBubble
             micronutrientBubble
         }
         .task {
@@ -217,6 +221,40 @@ struct AmbientCardsView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Period outlook
+
+    @ViewBuilder
+    private var periodPredictionBubble: some View {
+        if let prediction = periodPrediction {
+            FernletCard {
+                HStack(alignment: .top, spacing: 12) {
+                    ambientIcon("calendar", tint: .dustyRose)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Cycle outlook")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.dustyRose)
+                        Text(periodOutlookText(prediction))
+                            .font(.callout)
+                            .foregroundStyle(Color.bark)
+                            .fernletWrappingText()
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private func periodOutlookText(_ prediction: CyclePrediction) -> String {
+        let start = FernletDate.shortDate(for: prediction.likelyStartRange.lowerBound)
+        let end = FernletDate.shortDate(for: prediction.likelyStartRange.upperBound)
+        let window = start == end ? start : "\(start)–\(end)"
+        let qualifier: String
+        if prediction.confidence >= 0.7 { qualifier = "" }
+        else if prediction.confidence >= 0.4 { qualifier = ", still settling" }
+        else { qualifier = ", an early estimate" }
+        return "Your next period is likely around \(window)\(qualifier). Gentle planning, no pressure."
     }
 
     // MARK: - Preventive-care micronutrient bubble

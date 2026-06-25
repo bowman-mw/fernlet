@@ -61,9 +61,14 @@ struct SettingsSheet: View {
                 }
                 .listRowBackground(Color.cream)
 
-                Section("Period") {
+                Section {
                     Toggle("Hide predictions", isOn: hidePredictionsBinding)
                     Toggle("Hide fertile window", isOn: hideFertileWindowBinding)
+                    Toggle("Period-aware care", isOn: periodAwareScoringBinding)
+                } header: {
+                    Text("Period")
+                } footer: {
+                    Text("When on, gentle cycle-phase trends can soften your daily score and surface a cycle chip and outlook on Home. Off by default, and only takes effect after a few cycles are logged.")
                 }
                 .listRowBackground(Color.cream)
 
@@ -134,6 +139,13 @@ struct SettingsSheet: View {
         Binding(
             get: { store.settings.hideFertileWindow },
             set: { store.setHideFertileWindow($0) }
+        )
+    }
+
+    private var periodAwareScoringBinding: Binding<Bool> {
+        Binding(
+            get: { store.settings.periodAwareScoringEnabled },
+            set: { store.setPeriodAwareScoringEnabled($0) }
         )
     }
 

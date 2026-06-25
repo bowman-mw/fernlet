@@ -92,6 +92,13 @@ enum CyclePredictionEngine {
         )
     }
 
+    /// The detected period **start** dates (day-resolution, ascending). Exposes just the starts from the
+    /// internal period-detection pass so the phase resolver can anchor calendar-math phases without
+    /// duplicating the grouping logic. Returns `[]` when no flow days are observed.
+    static func detectedPeriodStarts(from entries: [CycleDayEntry], calendar: Calendar = .current) -> [Date] {
+        detectPeriods(from: entries, calendar: calendar).map(\.start)
+    }
+
     private static func detectPeriods(from entries: [CycleDayEntry], calendar: Calendar) -> [DetectedPeriod] {
         let observedDays = entries.compactMap { entry -> ObservedFlowDay? in
             guard let score = predictionScore(for: entry.flowLevel), score > 0 else { return nil }

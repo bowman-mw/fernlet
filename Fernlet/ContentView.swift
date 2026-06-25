@@ -11,6 +11,7 @@ struct ContentView: View {
     @Bindable var store: FernletStore
     @State private var launcher = LaunchPreparationService()
     @State private var periodStore = PeriodTrackerStore()
+    @State private var periodContext: PeriodContextBridge?
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
@@ -51,6 +52,16 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
             }
+            .onChange(of: activeSheet?.id) { oldID, newID in
+                // Logging/editing a period event persists to HealthKit but doesn't mutate the in-memory
+                // entries, so reload + refresh when the period sheet dismisses to keep the chip/outlook/
+                // trends/score current (catches logging from Home or the period screen alike).
+                guard newID == nil, oldID == "logPeriod" else { return }
+                Task {
+                    await loadPeriodEntriesIfPossible()
+                    refreshPeriodContext()
+                }
+            }
             .onChange(of: lockService.state) { _, newState in
                 store.lockState = newState
                 Task { await drainPendingPeriodNarrativesIfUnlocked(newState) }
@@ -75,6 +86,11 @@ struct ContentView: View {
             .animation(.easeOut(duration: 0.45), value: launcher.isDone)
             .task {
                 periodStore.attachLockService(lockService)
+                if periodContext == nil {
+                    let bridge = PeriodContextBridge(source: periodStore)
+                    store.attachPeriodScoringContext(bridge)
+                    periodContext = bridge
+                }
                 let initialLockState = lockService.state
                 store.lockState = initialLockState
                 if case .unlocked = initialLockState, let contentKey = lockService.contentKey() {
@@ -97,6 +113,8 @@ struct ContentView: View {
                 store.deferredPostLaunchTasks()
                 store.ensureBundledFoodItemsSeeded()
                 await store.processSharedRecipeImportQueue()
+                await loadPeriodEntriesIfPossible()
+                refreshPeriodContext()
             }
             .onChange(of: selectedTab) { oldTab, newTab in
                 tabResetTokens[oldTab, default: 0] += 1
@@ -198,7 +216,9 @@ struct ContentView: View {
                 selectedTab: $selectedTab,
                 privateHubSection: $privateHubSection,
                 isTabBarCompact: $isHomeTabBarCompact,
-                tabResetToken: resetTokenBinding(for: .home)
+                tabResetToken: resetTokenBinding(for: .home),
+                periodStore: periodStore,
+                periodContext: periodContext
             )
             .tag(FernletTab.home)
             FoodView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
@@ -207,7 +227,7 @@ struct ContentView: View {
                 .tag(FernletTab.move)
             SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
                 .tag(FernletTab.social)
-            PrivateHubView(store: store, periodStore: periodStore, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal))
+            PrivateHubView(store: store, periodStore: periodStore, periodContext: periodContext, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal))
                 .tag(FernletTab.personal)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
@@ -403,9 +423,29 @@ struct ContentView: View {
     }
 
     private func drainPendingPeriodNarrativesIfUnlocked(_ lockState: FernletLockState) async {
-        guard case .unlocked = lockState, let contentKey = lockService.contentKey() else { return }
+        guard case .unlocked = lockState, let contentKey = lockService.contentKey() else {
+            refreshPeriodContext()
+            return
+        }
         try? await periodStore.drainPendingBuffer(contentKey: contentKey)
         await periodStore.loadEntries(unlockedContentKey: contentKey)
+        refreshPeriodContext()
+    }
+
+    /// Loads period entries with whatever content key is currently available (nil when locked / no lock),
+    /// so the bridge has cycle data for phase resolution and trends.
+    private func loadPeriodEntriesIfPossible() async {
+        let contentKey = { if case .unlocked = lockService.state { return lockService.contentKey() } else { return nil } }()
+        await periodStore.loadEntries(unlockedContentKey: contentKey)
+    }
+
+    /// Recomputes the bridge's per-phase trends from current period data + the store's wellbeing scores.
+    /// Phase resolution itself always reads the live period store, so this only refreshes the (optional)
+    /// softening gate — staleness can only *withhold* softening, never apply it incorrectly.
+    private func refreshPeriodContext() {
+        guard let periodContext else { return }
+        let unlocked = { if case .unlocked = lockService.state { return true } else { return false } }()
+        periodContext.refresh(unlocked: unlocked, wellbeingByDay: store.periodWellbeingByDay)
     }
 
     private func refreshHealthContextForActiveTab(_ tab: FernletTab) async {

@@ -136,6 +136,11 @@ struct FernletSettings: Codable {
     var hasCompletedOnboarding: Bool = false
     var hidePredictions: Bool = false
     var hideFertileWindow: Bool = false
+    /// Opt-in: let medium/high-confidence cycle-phase trends gently soften scoring (default off; only takes
+    /// effect once 3+ cycles are logged). See `PeriodContextBridge` / `adjustedForPeriod`.
+    var periodAwareScoringEnabled: Bool = false
+    /// Whether the one-time period-context primer (explaining cycle awareness + the opt-in) has been shown.
+    var periodContextPrimerSeen: Bool = false
     var userProfile: UserNutritionProfile = UserNutritionProfile()
     var nutritionPreferences: UserNutritionPreferences = UserNutritionPreferences()
     var quickLogItems: [FernletShortcut] = FernletShortcut.defaultQuickLog
@@ -180,6 +185,8 @@ struct FernletSettings: Codable {
         hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
         hidePredictions = try container.decodeIfPresent(Bool.self, forKey: .hidePredictions) ?? false
         hideFertileWindow = try container.decodeIfPresent(Bool.self, forKey: .hideFertileWindow) ?? false
+        periodAwareScoringEnabled = try container.decodeIfPresent(Bool.self, forKey: .periodAwareScoringEnabled) ?? false
+        periodContextPrimerSeen = try container.decodeIfPresent(Bool.self, forKey: .periodContextPrimerSeen) ?? false
         userProfile = try container.decodeIfPresent(UserNutritionProfile.self, forKey: .userProfile) ?? UserNutritionProfile()
         nutritionPreferences = try container.decodeIfPresent(UserNutritionPreferences.self, forKey: .nutritionPreferences) ?? UserNutritionPreferences()
         let decodedQuickLogItems = try container.decodeIfPresent([FernletShortcut].self, forKey: .quickLogItems) ?? FernletShortcut.defaultQuickLog

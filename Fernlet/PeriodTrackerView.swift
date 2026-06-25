@@ -3,6 +3,7 @@ import SwiftUI
 struct PeriodTrackerView: View {
     var store: FernletStore
     var periodStore: PeriodTrackerStore
+    var periodContext: PeriodContextBridge? = nil
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
     @Binding var isTabBarCompact: Bool
@@ -17,9 +18,11 @@ struct PeriodTrackerView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header
+                    periodAwarePrimer
                     if showsPrediction {
                         PredictionsCard(prediction: periodStore.prediction)
                     }
+                    phaseTrendsCard
                     PeriodCalendarCard(
                         displayedMonth: $displayedMonth,
                         entriesByKey: entriesByKey,
@@ -46,6 +49,9 @@ struct PeriodTrackerView: View {
                     onDelete: {
                         Task {
                             try? await periodStore.deleteEntry(dayEntry)
+                            // Keep the bridge's cached trends from outliving the deleted data (§5.3
+                            // "deliberate forgetfulness"): recompute from the now-smaller entry set.
+                            refreshContext()
                             selectedDay = nil
                         }
                     }
@@ -57,6 +63,93 @@ struct PeriodTrackerView: View {
 
     var showsPrediction: Bool {
         !store.settings.hidePredictions
+    }
+
+    /// One-time first-use primer explaining period-aware care + the opt-in. Dismissal persists via
+    /// `settings.periodContextPrimerSeen`.
+    @ViewBuilder
+    private var periodAwarePrimer: some View {
+        if !store.settings.periodContextPrimerSeen {
+            FernletCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Period-aware care", systemImage: "sparkles")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(Color.bark)
+                    Text("Once you've logged a few cycles, Fernlet can gently soften your daily score on the phases that tend to be harder for you, and show a cycle chip and outlook on Home. It's optional, stays on this device, and never leaves the app.")
+                        .font(.callout)
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                    HStack(spacing: 10) {
+                        Button {
+                            store.setPeriodAwareScoringEnabled(true)
+                            store.markPeriodContextPrimerSeen()
+                        } label: {
+                            Text("Turn on")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color.cream)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color.moss, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        Button {
+                            store.markPeriodContextPrimerSeen()
+                        } label: {
+                            Text("Not now")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color.slate)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color.slate.opacity(0.10), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Per-phase wellbeing trends from the bridge — shown only when the user opted into period-aware care,
+    /// isn't hiding predictions, and there are medium/high-confidence trends to report. Abstract phrasing
+    /// only (no numbers): "Sleep tends to dip during your luteal phase."
+    @ViewBuilder
+    private var phaseTrendsCard: some View {
+        let trends = reportableTrends
+        if store.settings.periodAwareScoringEnabled, !store.settings.hidePredictions, !trends.isEmpty {
+            FernletCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel("How your phases tend to go")
+                    ForEach(Array(trends.enumerated()), id: \.offset) { index, trend in
+                        Text(phaseTrendSentence(trend))
+                            .font(.callout)
+                            .foregroundStyle(Color.bark)
+                            .fernletWrappingText()
+                        if index < trends.count - 1 { FernletRowDivider() }
+                    }
+                }
+            }
+        }
+    }
+
+    private var reportableTrends: [PeriodHealthTrend] {
+        (periodContext?.currentTrends ?? [])
+            .filter { $0.direction != .neutral && $0.confidence >= .medium && $0.phase != .unknown }
+            .sorted { $0.confidence > $1.confidence }
+            .prefix(4)
+            .map { $0 }
+    }
+
+    private func phaseTrendSentence(_ trend: PeriodHealthTrend) -> String {
+        let phase = trend.phase.title.lowercased()
+        let verb: String
+        switch trend.metric {
+        case .sleep: verb = trend.direction == .worse ? "Sleep tends to dip" : "Sleep tends to be steadier"
+        case .mood: verb = trend.direction == .worse ? "Mood tends to be tender" : "Mood tends to lift"
+        case .exercise: verb = trend.direction == .worse ? "Movement tends to ease off" : "Movement tends to pick up"
+        case .nutrition: verb = trend.direction == .worse ? "Eating tends to get lighter" : "Eating tends to feel steadier"
+        case .symptomLoad: verb = trend.direction == .worse ? "Symptoms tend to gather" : "Symptoms tend to settle"
+        }
+        return "\(verb) during your \(phase) phase."
     }
 
     private var privacyBanner: some View {
@@ -120,6 +213,13 @@ struct PeriodTrackerView: View {
             await authorization.request(.cycleTracking)
         }
         await periodStore.loadEntries(unlockedContentKey: contentKey)
+        refreshContext()
+    }
+
+    private func refreshContext() {
+        let unlocked: Bool
+        if case .unlocked = lockService.state { unlocked = true } else { unlocked = false }
+        periodContext?.refresh(unlocked: unlocked, wellbeingByDay: store.periodWellbeingByDay)
     }
 
     private func entry(for date: Date) -> CycleDayEntry {

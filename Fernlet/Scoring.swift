@@ -62,6 +62,20 @@ struct ScoringWeights: Codable, Equatable {
         adjusted.hygieneWeight += workout * 0.2
         return adjusted
     }
+
+    /// Gentle period-phase leniency: on a personally-harder phase, shift a *small* slice (30%) of the
+    /// workout demand toward restorative sleep/hydration, so a lower-movement day during a hard phase is
+    /// not penalised as sharply. Much milder than `adjustedForSickness` (which zeroes workout entirely).
+    /// `.none` is the identity, preserving byte-for-byte the period-unaware weight vector. Total stays 1.
+    func adjustedForPeriod(_ leniency: PeriodSignalStrength) -> ScoringWeights {
+        guard leniency == .suggested else { return self }
+        var adjusted = self
+        let shifted = workoutWeight * 0.3
+        adjusted.workoutWeight -= shifted
+        adjusted.sleepWeight += shifted * 0.6
+        adjusted.hydrationWeight += shifted * 0.4
+        return adjusted
+    }
 }
 
 enum GoalWeights {
@@ -239,7 +253,8 @@ enum FernletScoring {
         sleepStages: SleepStagesData? = nil,
         activitySteps: Int? = nil,
         activeEnergyKilocalories: Double? = nil,
-        exerciseMinutes: Double? = nil
+        exerciseMinutes: Double? = nil,
+        periodAdjustment: PeriodScoringAdjustment = .none
     ) -> Double {
         computeBreakdown(
             journalTag: journalTag,
@@ -259,7 +274,8 @@ enum FernletScoring {
             sleepStages: sleepStages,
             activitySteps: activitySteps,
             activeEnergyKilocalories: activeEnergyKilocalories,
-            exerciseMinutes: exerciseMinutes
+            exerciseMinutes: exerciseMinutes,
+            periodAdjustment: periodAdjustment
         ).overall
     }
 
@@ -284,7 +300,8 @@ enum FernletScoring {
         sleepStages: SleepStagesData? = nil,
         activitySteps: Int? = nil,
         activeEnergyKilocalories: Double? = nil,
-        exerciseMinutes: Double? = nil
+        exerciseMinutes: Double? = nil,
+        periodAdjustment: PeriodScoringAdjustment = .none
     ) -> ScoreBreakdown {
         let baseMealScore = min(mealCount >= 3 ? 0.9 : mealCount >= 2 ? 0.75 : Double(mealCount) * 0.4, 1)
         let micronutrientModifier = micronutrientDataCoverageRatio >= 0.5 ? micronutrientModifier(from: nutrientGaps) : 0
@@ -295,9 +312,16 @@ enum FernletScoring {
             activeEnergyKilocalories: activeEnergyKilocalories,
             exerciseMinutes: exerciseMinutes
         )
-        let target = max(isSick ? Int(ceil(Double(hydrationTarget) * 1.2)) : hydrationTarget, 1)
+        // Hydration target: the sickness multiplier (×1.2) and the period relief (×0.85, a *softer*
+        // expectation on a personally-harder phase) compose. With `.none` relief the target is
+        // byte-identical to the period-unaware result.
+        let sicknessTarget = isSick ? Int(ceil(Double(hydrationTarget) * 1.2)) : hydrationTarget
+        let reliefTarget = periodAdjustment.hydrationRelief == .suggested
+            ? Int((Double(sicknessTarget) * 0.85).rounded())
+            : sicknessTarget
+        let target = max(reliefTarget, 1)
         let hydrationScore = min(Double(bottleCount) / Double(target), 1)
-        let adjustedWeights = weights.adjustedForSickness(isSick)
+        let adjustedWeights = weights.adjustedForSickness(isSick).adjustedForPeriod(periodAdjustment.leniency)
         let careCompletedCount = completedPersonalCareTaskCount ?? hygiene.count
         let careScore = hygieneScore(completedCount: careCompletedCount, taskCount: hygieneTaskCount)
         let journalScore = tagScore(journalTag)
@@ -346,7 +370,8 @@ enum FernletScoring {
             sleepStages: body?.sleepStages,
             activitySteps: activity?.steps,
             activeEnergyKilocalories: activity?.activeEnergyKilocalories,
-            exerciseMinutes: activity?.exerciseMinutes
+            exerciseMinutes: activity?.exerciseMinutes,
+            periodAdjustment: store.periodAdjustment(for: store.todayKey)
         )
     }
 

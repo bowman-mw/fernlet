@@ -84,8 +84,19 @@ rest into one **"new items" PR done first**.
    `intensityReadiness` folds in recovery, `sleepEnergyScore` prefers HealthKit hours, `DailyHealthScore`
    retains the HK context for audit. 15 new tests. Continuous heart-rate read still deferred (current
    resting-HR/HRV behavior documented).
-6. **PeriodContextBridge + period-aware scoring + per-phase trends** — layers `adjustedForPeriod` onto
-   #5's new signature.
+6. **PeriodContextBridge + period-aware scoring + per-phase trends** — ✅ LANDED (2026-06-25). Read-only
+   abstract egress (`PeriodContextBridge`: `PeriodPhaseSignal`/`Band`, `PeriodNutritionSignal`/`ExerciseSignal`,
+   pre-gated `PeriodScoringAdjustment`) over a decoupled `PeriodContextSource`; deterministic
+   `CyclePhaseResolver` (calendar-math follicular/ovulatory/luteal) + `PeriodPhaseTrendEngine` (`PeriodHealthTrend`,
+   per-phase correlation, abstract confidence band). Scoring gained a trailing-optional `periodAdjustment`
+   (`adjustedForPeriod` weight leniency + hydration-target relief), **byte-identical** when `.none`. Gated:
+   opt-in `periodAwareScoringEnabled` (default off, gated in `FernletStore`), 3-**completed**-cycle floor,
+   medium/high-confidence personally-hard phases only, lock degradation (nutrition/exercise→`.noData`),
+   deletion→`.unknown`/`.noData` (recompute-on-demand). `DailyHealthScore.periodPhase` populated but **stripped
+   from the CloudKit-synced snapshot** (`storedDailyScores`) so no cycle metadata leaves the device. Home
+   surfacing (cycle chip + outlook bubble, opt-in-gated), Period-screen trends card + first-use primer
+   (onboarding), Settings toggle. Adversarially reviewed (10 confirmed findings fixed: the CloudKit leak,
+   stale-trend/log-edit refresh, 3-completed-cycle gate). 33 new tests (engines + bridge + scoring), all green.
 7. **S3 Swift-package split** — **last**; it edits `Models.swift` / `FernletStore.swift` /
    `project.pbxproj` that every other item also touches. Ship #6 against the existing grep boundary
    (`S3BoundaryTests`); retrofit compiler module walls here. (Only do S3 first if the bridge must be
@@ -169,12 +180,13 @@ not here.)
   device/simulator runtime check.
 
 ### Period Context Bridge & Intimate Tracking
-- [ ] **PrivateHealthStore facade / `PeriodHealthTrend` type** — functionality split across
-  PeriodTrackerStore/CyclePredictionEngine/MenstrualNarrativeRepository; no named facade, history
-  recomputed each load. → Consolidate into the spec facade (or accept split) + add the trend model.
-- [ ] **Period deletion → bridge `.noData` test** — add once the bridge exists (see §2).
-- [ ] **Period context first-use onboarding** — only HK `cycleTracking` permission requested. → Add a
-  baseline-cycle/goals prompt if intended.
+- [x] **PrivateHealthStore facade / `PeriodHealthTrend` type** — DONE (2026-06-25): accepted the split (no
+  rename) but added the named read-only facade `PeriodContextBridge` over a `PeriodContextSource` protocol,
+  plus the `PeriodHealthTrend` model emitted by the deterministic `PeriodPhaseTrendEngine`.
+- [x] **Period deletion → bridge `.noData` test** — DONE: `deletingPeriodDataReturnsUnknownAndNoData`
+  (entries cleared → `.unknown`/`.noData`) + recompute-on-demand test; delete path now refreshes the bridge.
+- [x] **Period context first-use onboarding** — DONE: dismissible first-use primer on the Period screen
+  (explains period-aware care + offers the opt-in), persisted via `settings.periodContextPrimerSeen`.
 
 ### HealthKit & Sensor Integration
 - [ ] **Continuous heart-rate read** — reads resting HR + HRV, not continuous `.heartRate`. → Add or
@@ -277,9 +289,9 @@ not here.)
   marks read-only "for now" (line 707). → Restrict to food/workout per spec, or update spec.
 - [ ] **Day Detail empty-day state** — copy differs, routes through one "Edit day" button. → Add
   distinct Log food / Log workout buttons + exact "Nothing logged this day." copy.
-- [ ] **Home render completeness** — heart-bonus health-bar render (depends on Hearts model, deferred)
-  and period-prediction bubbles on Home (depends on PeriodContextBridge — in scope §2). → Add the
-  period-prediction renderer once the bridge lands; defer the heart-bonus render.
+- [~] **Home render completeness** — period-prediction renderer DONE (2026-06-25): opt-in-gated cycle-phase
+  chip in the SignalsCard + next-period "cycle outlook" ambient bubble on Home (both honour
+  `periodAwareScoringEnabled` + `hidePredictions`). Heart-bonus health-bar render still deferred (Hearts model).
 
 ### App Store Compliance (partial — finished fully in §2)
 - [x] **Single HealthKit usage string** — defined twice with conflicting text (Info.plist vs pbxproj
@@ -299,15 +311,18 @@ not here.)
   effort (2026-06-24); revisit before App Store submission.*
 
 ### PeriodContextBridge + period-aware scoring
-- [ ] **PeriodContextBridge** — read-only bridge exporting abstract phase/nutrition/exercise signals;
-  returns `.unknown`/`.noData` on deletion or lock. Prereq (sealed boundaries) substantially met;
-  residual prereq is the S3 split (below).
-- [ ] **Period-aware scoring adjustments** — add `adjustedForPeriod`; soften hydration/scoring by
-  phase (medium/high-confidence only).
-- [ ] **Per-phase health trends** — statistical per-phase correlation engine
-  (sleep/mood/exercise/nutrition/symptoms) with confidence.
-- [ ] **Period screen adjustment toggles** — add period-aware-scoring toggles (only `hidePredictions`
-  exists today).
+- [x] **PeriodContextBridge** — DONE (2026-06-25): read-only `PeriodContextBridge` exports abstract
+  phase/band/nutrition/exercise signals only (no dates/counts/raw samples/confidence); returns
+  `.unknown`/`.noData` on deletion or lock; recompute-on-demand (no persisted bridge output). Shipped
+  against the existing grep boundary (`S3BoundaryTests`); S3 compiler walls still §2 below.
+- [x] **Period-aware scoring adjustments** — DONE: `periodAdjustment` on `compute`/`computeBreakdown`
+  (`ScoringWeights.adjustedForPeriod` leniency + hydration-target relief), byte-identical when `.none`,
+  gated to opt-in + 3-completed-cycles + medium/high-confidence personally-hard phases.
+- [x] **Per-phase health trends** — DONE: `PeriodPhaseTrendEngine` (deterministic, AI-free) correlates
+  sleep/mood/exercise/nutrition/symptom load by phase → `PeriodHealthTrend` with an abstract confidence band;
+  surfaced as a Period-screen trends card.
+- [x] **Period screen adjustment toggles** — DONE: "Period-aware care" toggle in Settings (+ first-use
+  primer with inline enable) alongside `hidePredictions`.
 
 ### S3 compile-time module split
 - [ ] **Swift package boundaries** — no `Package.swift`; boundaries are grep-enforced. → Carve sealed

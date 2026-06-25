@@ -89,6 +89,9 @@ final class FernletStore {
     /// IDs of journal entries whose text is sealed in JournalNarrativeRepository.
     /// Used by currentSnapshot() to strip text before persisting to the cloud blob.
     @ObservationIgnored private var sealedJournalIDs: Set<UUID> = []
+    /// Read-only abstract egress from the private cycle data into scoring. Nil until the app wires a
+    /// `PeriodContextBridge`; when nil (or the opt-in is off) scoring is byte-identical to period-unaware.
+    @ObservationIgnored private(set) var periodScoringContext: (any PeriodScoringContextProviding)?
 
     init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: JournalNarrativeRepository? = nil, foodCatalog: FoodCatalog = .bundled()) {
         let initSignpostID = StartupTiming.begin("FernletStore.init")
@@ -277,6 +280,49 @@ final class FernletStore {
     func setHideFertileWindow(_ hideFertileWindow: Bool) {
         settings.hideFertileWindow = hideFertileWindow
         snapshotSaveCoordinator.schedule()
+    }
+
+    func setPeriodAwareScoringEnabled(_ enabled: Bool) {
+        settings.periodAwareScoringEnabled = enabled
+        snapshotSaveCoordinator.schedule()
+    }
+
+    func markPeriodContextPrimerSeen() {
+        guard !settings.periodContextPrimerSeen else { return }
+        settings.periodContextPrimerSeen = true
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// Wires the read-only period→scoring bridge. Called once from `ContentView` after the period store
+    /// exists. Held only as the abstract `PeriodScoringContextProviding` — the store never sees a raw
+    /// cycle type.
+    func attachPeriodScoringContext(_ context: any PeriodScoringContextProviding) {
+        periodScoringContext = context
+    }
+
+    /// The pre-gated period adjustment for a day, or `.none` when period-aware scoring is opted out or no
+    /// bridge is attached. This is the single gate point for the opt-in; the bridge applies the 3-cycle and
+    /// confidence gates internally.
+    func periodAdjustment(for dayKey: String) -> PeriodScoringAdjustment {
+        guard settings.periodAwareScoringEnabled, let periodScoringContext else { return .none }
+        return periodScoringContext.scoringAdjustment(forDayKey: dayKey)
+    }
+
+    /// Non-sensitive per-day wellbeing component scores (sleep/mood/exercise/nutrition) fed into the period
+    /// bridge so its trend engine can correlate them against cycle phase. Sourced from already-computed
+    /// `dailyScores`; nothing sensitive flows out.
+    var periodWellbeingByDay: [String: PeriodWellbeingSample] {
+        var result: [String: PeriodWellbeingSample] = [:]
+        for score in dailyScores {
+            guard let components = score.componentScores else { continue }
+            result[score.dateKey] = PeriodWellbeingSample(
+                sleep: components["sleep"],
+                mood: components["journal"],
+                exercise: components["workout"],
+                nutrition: components["meal"]
+            )
+        }
+        return result
     }
 
     func setConnectionInspectorMode(_ mode: ConnectionInspectorMode) {
@@ -1162,7 +1208,8 @@ final class FernletStore {
             sleepStages: body?.sleepStages,
             activitySteps: activity?.steps,
             activeEnergyKilocalories: activity?.activeEnergyKilocalories,
-            exerciseMinutes: activity?.exerciseMinutes
+            exerciseMinutes: activity?.exerciseMinutes,
+            periodAdjustment: periodAdjustment(for: targetDay.date)
         )
     }
 
@@ -1186,7 +1233,7 @@ final class FernletStore {
             componentScores: breakdown.components,
             weightVector: breakdown.appliedWeights,
             sicknessOverride: sick,
-            periodPhase: nil,
+            periodPhase: periodAdjustment(for: targetDay.date).phase.persistedLabel,
             healthActivityContext: targetDay.healthContext?.activity,
             healthBodyContext: targetDay.healthContext?.body
         )
@@ -1782,12 +1829,26 @@ final class FernletStore {
             workshop: workshop,
             foodItems: foodItems,
             recipes: recipes,
-            dailyScores: dailyScores,
+            dailyScores: storedDailyScores,
             retryQueue: aiRetryQueueService.retryQueue,
             connectionSessionLogs: connectionSessionLogs,
             trustedProximityPeers: proximityTrustVault.trustedPeers,
             trainerAuditEvents: proximityTrustVault.auditEvents
         )
+    }
+
+    /// `dailyScores` with the cycle-phase label removed. `DailyHealthScore.periodPhase` is cycle-derived
+    /// metadata keyed by date, so — exactly like `healthContext.cycle` — it must never reach the
+    /// CloudKit-synced blob. The label stays only on the in-memory record (device-only audit); it is
+    /// scrubbed here before every persist, so a period-data wipe leaves no synced residue.
+    /// (Internal rather than private only so a regression test can assert the strip.)
+    var storedDailyScores: [DailyHealthScore] {
+        dailyScores.map { score in
+            guard score.periodPhase != nil else { return score }
+            var stripped = score
+            stripped.periodPhase = nil
+            return stripped
+        }
     }
 
     /// Returns copies of day and previousJournals with sealed-entry text, emotions, and

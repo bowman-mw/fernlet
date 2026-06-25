@@ -12,6 +12,9 @@ struct HomeView: View {
     @Binding var privateHubSection: PrivateHubSection
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
+    /// Shared period store + abstract bridge, threaded from ContentView for the (opt-in) cycle surfaces.
+    var periodStore: PeriodTrackerStore? = nil
+    var periodContext: PeriodContextBridge? = nil
     @State private var hasRecentPeriodEvent = false
     @State private var isCompanionThoughtVisible = true
     @State private var companionTapThought: String?
@@ -72,7 +75,7 @@ struct HomeView: View {
         case .hygiene:
             HygieneCard(store: store, activeSheet: $activeSheet)
         case .ambient:
-            AmbientCardsView(store: store, activeSheet: $activeSheet)
+            AmbientCardsView(store: store, activeSheet: $activeSheet, periodPrediction: homePeriodPrediction)
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .trends:
             HomeActionWidget(widget: widget) {
                 handleHomeWidget(widget)
@@ -193,7 +196,8 @@ struct HomeView: View {
     private var signalsCard: some View {
         let chips = signalChips(from: store.derivedSignals)
         let resting = store.isSick(on: store.todayKey)
-        if !chips.isEmpty || resting {
+        let phaseChip = periodPhaseChip
+        if !chips.isEmpty || resting || phaseChip != nil {
             Button {
                 activeSheet = .trends
             } label: {
@@ -201,6 +205,9 @@ struct HomeView: View {
                     HStack(spacing: 6) {
                         if resting {
                             signalChip(text: "Resting today", color: .terracotta, icon: "thermometer.medium")
+                        }
+                        if let phaseChip {
+                            signalChip(text: phaseChip.label, color: phaseChip.color, icon: phaseChip.icon)
                         }
                         ForEach(chips) { chip in
                             signalChip(text: chip.label, color: chip.color, icon: chip.icon)
@@ -213,6 +220,21 @@ struct HomeView: View {
             .accessibilityLabel("Wellbeing signals")
             .accessibilityHint("Opens trends")
         }
+    }
+
+    /// Abstract cycle-phase chip, shown only when the user has opted into period-aware care and isn't
+    /// hiding predictions. Reads the bridge's abstract phase (never raw cycle data) so a glance at Home
+    /// surfaces the phase without exposing dates or symptoms.
+    private var periodPhaseChip: HomeSignalChip? {
+        guard store.settings.periodAwareScoringEnabled, !store.settings.hidePredictions,
+              let phase = periodContext?.currentPhaseSignal(), phase != .unknown else { return nil }
+        return HomeSignalChip(label: "Cycle: \(phase.rawValue.capitalized)", color: .dustyRose, icon: "drop")
+    }
+
+    /// The next-period outlook for the Home ambient bubble, gated by the same opt-in + hide-predictions.
+    private var homePeriodPrediction: CyclePrediction? {
+        guard store.settings.periodAwareScoringEnabled, !store.settings.hidePredictions else { return nil }
+        return periodStore?.prediction
     }
 
     private struct HomeSignalChip: Identifiable {
