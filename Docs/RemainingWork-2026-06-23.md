@@ -61,15 +61,15 @@ rest into one **"new items" PR done first**.
    tracked separately in §1.)
 2. **USDA → SQLite** — ✅ LANDED (2026-06-24). Read-only `FoodCatalog.sqlite` + `FoodCatalog`
    service replaces the in-memory bundled array; FTS5 candidate prefilter → existing scorer. See §3.
-3. **Food/recipe** (RecipeDefinition↔SavedRecipe merge) — 🟡 PARTIAL (2026-06-24). Shipped the safe,
-   tested slices: per-row **data-source labels** (`FoodItem.dataSourceLabel`, wired into the
-   ingredient-search row) and **catalog-grounded fallback micronutrients** (`fallbackMicronutrients`
-   — manual / heuristic-fallback meals borrow the best catalog match's micro profile instead of
-   logging an empty snapshot). **Still open** (tracked in §1): the `SavedRecipe`→`RecipeDefinition`
-   structural merge (migration risk + many UI call sites + the proximity share codec → own PR with
-   on-device migration testing), `.aiResolved` inline FM ingredient parse (needs an immediate-vs-
-   deferred product call), live-micros recipe-builder UI (backend `micronutrientTotals(for:)` exists;
-   UI binding only), and ingredient dedup / disclosure grouping (UI-design-bound).
+3. **Food/recipe** (RecipeDefinition↔SavedRecipe merge) — 🟢 MERGE LANDED (2026-06-25). Earlier
+   (2026-06-24) shipped the safe slices: per-row **data-source labels** (`FoodItem.dataSourceLabel`)
+   and **catalog-grounded fallback micronutrients** (`fallbackMicronutrients`). Now the deferred
+   structural half is done in its own PR: `SavedRecipe` is folded into `RecipeDefinition` (optional
+   `RecipeWebImport` payload), with a non-lossy migration (same Core Data columns + legacy JSON
+   schema) and round-trip tests. **Still open** (tracked in §1): `.aiResolved` inline FM ingredient
+   parse (needs an immediate-vs-deferred product call), live-micros recipe-builder UI (backend
+   `micronutrientTotals(for:)` exists; UI binding only), and ingredient dedup / disclosure grouping
+   (UI-design-bound).
 4. **SealedBackup restore** — ✅ LANDED (2026-06-24). `restoreSealedBackup(payloadType:)` +
    testable `applyRestoredPayload` decode-and-write seam; new repository `replaceTierTwoMemories`
    Tier-2 writeback (Local + CoreData repos, survives derived-table rebuild on a fresh install);
@@ -157,8 +157,16 @@ not here.)
   resolves a manual / heuristic-fallback meal's name against the catalog (exact-name then top search
   match) and fills the snapshot from the best match's per-serving micros; wired into `addMeal(from:)`
   and the `resolveMeals` keyword fallback. Empty when nothing matches (gap left honest, not fabricated).
-- [ ] **Merge dual recipe models** — `RecipeDefinition` + `SavedRecipe` coexist. → Merge the
-  URL-imported `SavedRecipe` into `RecipeDefinition`.
+- [x] **Merge dual recipe models** — DONE (2026-06-25): the `SavedRecipe` struct is deleted; web
+  imports are now the canonical `RecipeDefinition` carrying an optional `RecipeWebImport` payload
+  (source URL + free-text ingredient lines + precomputed macros/micros, preserved verbatim so the
+  structured `ingredients` array stays empty for imports). Same `SavedRecipeRecord` Core Data
+  columns + legacy `SavedRecipes.json` schema (decoded via a private legacy DTO) → **no Core Data
+  migration, non-lossy** for pre-existing saved recipes. Proximity share keeps emitting the `.saved`
+  wire kind for imports (cross-version compat). New `SavedRecipeMigrationTests` (legacy on-disk JSON
+  → `RecipeDefinition` field-by-field + Core Data round-trip + missing-micros default). Full suite
+  green (613 FernletTests). Interactive "pre-existing recipes survive on a real install" remains a
+  device/simulator runtime check.
 
 ### Period Context Bridge & Intimate Tracking
 - [ ] **PrivateHealthStore facade / `PeriodHealthTrend` type** — functionality split across

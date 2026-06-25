@@ -90,7 +90,7 @@ struct SavedRecipeServiceTests {
         #expect(reloadedService.savedRecipes == [recipe])
     }
 
-    private func makeService(initialRecipes: [SavedRecipe] = []) -> SavedRecipeService {
+    private func makeService(initialRecipes: [RecipeDefinition] = []) -> SavedRecipeService {
         let controller = PersistenceController(inMemory: true)
         let legacyURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -111,18 +111,23 @@ struct SavedRecipeServiceTests {
         protein: Int = 12,
         carbs: Int = 24,
         fat: Int = 8
-    ) -> SavedRecipe {
-        SavedRecipe(
+    ) -> RecipeDefinition {
+        let savedAt = Date(timeIntervalSince1970: 1_779_664_800)
+        return RecipeDefinition(
             id: id,
-            sourceURL: URL(string: url)!,
             name: name,
-            ingredients: ["One", "Two"],
-            summary: "Summary",
             servings: 2,
-            protein: protein,
-            carbs: carbs,
-            fat: fat,
-            savedAt: Date(timeIntervalSince1970: 1_779_664_800)
+            ingredients: [],
+            notes: "Summary",
+            source: MealLogSource.webImport,
+            createdAt: savedAt,
+            updatedAt: savedAt,
+            webImport: RecipeWebImport(
+                sourceURLString: url,
+                ingredientLines: ["One", "Two"],
+                macros: Macros(protein: protein, carbs: carbs, fat: fat),
+                micronutrients: Micronutrients()
+            )
         )
     }
 }

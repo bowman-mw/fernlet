@@ -11,7 +11,7 @@ struct FoodView: View {
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
     @State private var editingRecipe: RecipeDefinition?
-    @State private var editingSavedRecipe: SavedRecipe?
+    @State private var editingSavedRecipe: RecipeDefinition?
     @State private var correctingMeal: Meal?
     @State private var showingRecipeBook = false
     @State private var recipeShareDraft: ProximityRecipeShareDraft?
@@ -179,7 +179,7 @@ struct FoodView: View {
 
 private enum RecentRecipePreview: Identifiable {
     case local(RecipeDefinition)
-    case saved(SavedRecipe)
+    case saved(RecipeDefinition)
 
     var id: String {
         switch self {
@@ -195,7 +195,7 @@ private enum RecentRecipePreview: Identifiable {
         case .local(let recipe):
             recipe.createdAt
         case .saved(let recipe):
-            recipe.savedAt
+            recipe.createdAt
         }
     }
 }
@@ -294,7 +294,7 @@ struct RecipeImportSheet: View {
         Task {
             do {
                 let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: store.foodCatalog, aiEnabled: store.settings.aiStatus != .off)
-                store.addSavedRecipe(SavedRecipe(importedRecipe: importedRecipe))
+                store.addSavedRecipe(RecipeDefinition(importedRecipe: importedRecipe))
                 notice = "\(importedRecipe.name) added to your recipes."
                 isImportingURL = false
                 try? await Task.sleep(for: .seconds(1.2))
@@ -311,7 +311,9 @@ struct RecipeImportSheet: View {
 }
 
 struct SavedRecipeRow: View {
-    var recipe: SavedRecipe
+    var recipe: RecipeDefinition
+
+    private var webImport: RecipeWebImport? { recipe.webImport }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -325,25 +327,29 @@ struct SavedRecipeRow: View {
                         .font(.headline)
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
-                    Text(recipe.sourceURL.host() ?? recipe.sourceURL.absoluteString)
-                        .font(.caption)
-                        .foregroundStyle(Color.slate)
-                        .lineLimit(1)
+                    if let sourceURL = webImport?.sourceURL {
+                        Text(sourceURL.host() ?? sourceURL.absoluteString)
+                            .font(.caption)
+                            .foregroundStyle(Color.slate)
+                            .lineLimit(1)
+                    }
                 }
             }
-            Text(recipe.summary)
-                .font(.callout)
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
-            Text(recipe.ingredients.prefix(4).joined(separator: " | "))
+            if !recipe.notes.isEmpty {
+                Text(recipe.notes)
+                    .font(.callout)
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+            }
+            Text((webImport?.ingredientLines ?? []).prefix(4).joined(separator: " | "))
                 .font(.caption)
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
-            if recipe.protein > 0 || recipe.carbs > 0 || recipe.fat > 0 {
+            if let macros = webImport?.macros, macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 {
                 HStack(spacing: 14) {
-                    Text("P \(recipe.protein)g").foregroundStyle(Color.moss)
-                    Text("C \(recipe.carbs)g")
-                    Text("F \(recipe.fat)g")
+                    Text("P \(macros.protein)g").foregroundStyle(Color.moss)
+                    Text("C \(macros.carbs)g")
+                    Text("F \(macros.fat)g")
                     if recipe.servings > 1 {
                         Text("· \(recipe.servings) servings")
                     }
@@ -361,13 +367,15 @@ struct SavedRecipeRow: View {
 struct SavedRecipeNotesSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
-    @State private var recipe: SavedRecipe
+    @State private var recipe: RecipeDefinition
     @State private var showingSafari = false
 
-    init(store: FernletStore, recipe: SavedRecipe) {
+    init(store: FernletStore, recipe: RecipeDefinition) {
         self.store = store
         _recipe = State(initialValue: recipe)
     }
+
+    private var webImport: RecipeWebImport? { recipe.webImport }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -378,31 +386,33 @@ struct SavedRecipeNotesSheet: View {
                             .font(.system(size: 28, weight: .bold, design: .serif))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
-                        Button {
-                            showingSafari = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "safari")
-                                    .font(.caption)
-                                Text(recipe.sourceURL.host() ?? recipe.sourceURL.absoluteString)
-                                    .font(.caption)
-                                    .underline()
+                        if let sourceURL = webImport?.sourceURL {
+                            Button {
+                                showingSafari = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "safari")
+                                        .font(.caption)
+                                    Text(sourceURL.host() ?? sourceURL.absoluteString)
+                                        .font(.caption)
+                                        .underline()
+                                }
+                                .foregroundStyle(Color.fern)
                             }
-                            .foregroundStyle(Color.fern)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
 
-                    if recipe.protein > 0 || recipe.carbs > 0 || recipe.fat > 0 {
+                    if let macros = webImport?.macros, macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(recipe.servings > 1 ? "PER SERVING" : "MACROS")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(Color.slate)
                                 .tracking(0.8)
                             HStack(spacing: 14) {
-                                Text("P \(recipe.protein)g").foregroundStyle(Color.moss)
-                                Text("C \(recipe.carbs)g")
-                                Text("F \(recipe.fat)g")
+                                Text("P \(macros.protein)g").foregroundStyle(Color.moss)
+                                Text("C \(macros.carbs)g")
+                                Text("F \(macros.fat)g")
                                 Spacer()
                                 if recipe.servings > 1 {
                                     Text("\(recipe.servings) servings")
@@ -419,13 +429,13 @@ struct SavedRecipeNotesSheet: View {
                     }
 
                     SheetField("Notes") {
-                        SheetTextEditor(text: $recipe.summary, placeholder: "cooking notes, substitutions, tips", minHeight: 120)
+                        SheetTextEditor(text: $recipe.notes, placeholder: "cooking notes, substitutions, tips", minHeight: 120)
                     }
 
-                    if !recipe.ingredients.isEmpty {
+                    if let ingredientLines = webImport?.ingredientLines, !ingredientLines.isEmpty {
                         SheetField("Ingredients") {
                             VStack(alignment: .leading, spacing: 6) {
-                                ForEach(recipe.ingredients, id: \.self) { ingredient in
+                                ForEach(ingredientLines, id: \.self) { ingredient in
                                     Text("• \(ingredient)")
                                         .font(.callout)
                                         .foregroundStyle(Color.bark)
@@ -457,8 +467,10 @@ struct SavedRecipeNotesSheet: View {
         }
         .background(Color.parchment)
         .sheet(isPresented: $showingSafari) {
-            SafariView(url: recipe.sourceURL)
-                .ignoresSafeArea()
+            if let sourceURL = webImport?.sourceURL {
+                SafariView(url: sourceURL)
+                    .ignoresSafeArea()
+            }
         }
     }
 }
@@ -2250,7 +2262,7 @@ struct RecipeBookSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     @Binding var editingRecipe: RecipeDefinition?
-    @Binding var editingSavedRecipe: SavedRecipe?
+    @Binding var editingSavedRecipe: RecipeDefinition?
     @State private var searchText = ""
     @State private var recipeShareDraft: ProximityRecipeShareDraft?
 
@@ -2373,7 +2385,7 @@ struct RecipeBookSheet: View {
         return sorted.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
-    private var filteredSavedRecipes: [SavedRecipe] {
+    private var filteredSavedRecipes: [RecipeDefinition] {
         let sorted = store.savedRecipes.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         guard !searchText.isEmpty else { return sorted }
         return sorted.filter { $0.name.localizedCaseInsensitiveContains(searchText) }

@@ -70,21 +70,22 @@ struct RecipeShareCodecTests {
     @MainActor
     @Test func proximityPayloadForSavedRecipePreservesSavedRecipeFields() throws {
         let recipe = makeSavedRecipe()
+        let webImport = try #require(recipe.webImport)
 
-        let payload = RecipeShareCodec.proximityPayload(for: recipe)
+        let payload = RecipeShareCodec.proximityPayload(for: recipe, foodItems: [])
         let decoded = try JSONDecoder().decode(ProximityRecipeSharePayload.self, from: JSONEncoder().encode(payload))
         let saved = try #require(decoded.recipe.saved)
 
         #expect(decoded.recipe.kind == .saved)
         #expect(decoded.recipe.local == nil)
         #expect(saved.name == recipe.name)
-        #expect(saved.sourceURLString == recipe.sourceURLString)
-        #expect(saved.ingredients == recipe.ingredients)
-        #expect(saved.summary == recipe.summary)
+        #expect(saved.sourceURLString == webImport.sourceURLString)
+        #expect(saved.ingredients == webImport.ingredientLines)
+        #expect(saved.summary == recipe.notes)
         #expect(saved.servings == recipe.servings)
-        #expect(saved.protein == recipe.protein)
-        #expect(saved.carbs == recipe.carbs)
-        #expect(saved.fat == recipe.fat)
+        #expect(saved.protein == webImport.macros.protein)
+        #expect(saved.carbs == webImport.macros.carbs)
+        #expect(saved.fat == webImport.macros.fat)
     }
 
     @MainActor
@@ -102,7 +103,7 @@ struct RecipeShareCodecTests {
 
     @MainActor
     @Test func omittingShareNotesRemovesSavedRecipeSummaryOnly() {
-        let payload = RecipeShareCodec.proximityPayload(for: makeSavedRecipe())
+        let payload = RecipeShareCodec.proximityPayload(for: makeSavedRecipe(), foodItems: [])
 
         let stripped = payload.omittingShareNotes()
 
@@ -132,26 +133,27 @@ struct RecipeShareCodecTests {
     @Test func importProximitySavedRecipeAddsSavedRecipe() throws {
         let store = makeTestStore()
         let recipe = makeSavedRecipe()
-        let payload = RecipeShareCodec.proximityPayload(for: recipe)
+        let webImport = try #require(recipe.webImport)
+        let payload = RecipeShareCodec.proximityPayload(for: recipe, foodItems: [])
 
         let importedName = try store.importProximityRecipeShare(payload)
         let imported = try #require(store.savedRecipes.first)
+        let importedWebImport = try #require(imported.webImport)
 
         #expect(importedName == recipe.name)
         #expect(imported.name == recipe.name)
-        #expect(imported.sourceURLString == recipe.sourceURLString)
-        #expect(imported.ingredients == recipe.ingredients)
-        #expect(imported.summary == recipe.summary)
+        #expect(importedWebImport.sourceURLString == webImport.sourceURLString)
+        #expect(importedWebImport.ingredientLines == webImport.ingredientLines)
+        #expect(imported.notes == recipe.notes)
         #expect(imported.servings == recipe.servings)
-        #expect(imported.protein == recipe.protein)
-        #expect(imported.carbs == recipe.carbs)
-        #expect(imported.fat == recipe.fat)
+        #expect(importedWebImport.macros == webImport.macros)
+        #expect(imported.isWebImport)
     }
 
     @MainActor
     @Test func importProximityRecipeRejectsUnsupportedVersion() {
         let store = makeTestStore()
-        var payload = RecipeShareCodec.proximityPayload(for: makeSavedRecipe())
+        var payload = RecipeShareCodec.proximityPayload(for: makeSavedRecipe(), foodItems: [])
         payload.version = 2
 
         #expect(throws: RecipeImportError.unsupportedFormat) {
@@ -194,19 +196,23 @@ struct RecipeShareCodecTests {
         return (recipe, [oats, yogurt, berries])
     }
 
-    private func makeSavedRecipe() -> SavedRecipe {
-        SavedRecipe(
+    private func makeSavedRecipe() -> RecipeDefinition {
+        let savedAt = Date(timeIntervalSince1970: 1_779_664_800)
+        return RecipeDefinition(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000777")!,
-            sourceURL: URL(string: "https://example.com/saved-training-bowl")!,
             name: "Saved Training Bowl",
-            ingredients: ["Oats", "Greek yogurt", "Blueberries"],
-            summary: "A saved web recipe summary.",
             servings: 3,
-            protein: 24,
-            carbs: 42,
-            fat: 6,
-            micronutrients: Micronutrients(),
-            savedAt: Date(timeIntervalSince1970: 1_779_664_800)
+            ingredients: [],
+            notes: "A saved web recipe summary.",
+            source: MealLogSource.webImport,
+            createdAt: savedAt,
+            updatedAt: savedAt,
+            webImport: RecipeWebImport(
+                sourceURLString: "https://example.com/saved-training-bowl",
+                ingredientLines: ["Oats", "Greek yogurt", "Blueberries"],
+                macros: Macros(protein: 24, carbs: 42, fat: 6),
+                micronutrients: Micronutrients()
+            )
         )
     }
 

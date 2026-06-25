@@ -41,32 +41,35 @@ struct RecipeShareCodec {
         )
     }
 
+    /// Builds the over-the-wire proximity payload for any recipe. Web-imported recipes (those with a
+    /// `webImport`) are sent as the `.saved` kind — preserving free-text ingredients + precomputed
+    /// nutrition + source URL, and keeping wire compatibility with peers running older builds.
+    /// User-built recipes are sent as the `.local` kind, resolved against `foodItems`.
     static func proximityPayload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> ProximityRecipeSharePayload {
-        ProximityRecipeSharePayload(
+        if let webImport = recipe.webImport {
+            return ProximityRecipeSharePayload(
+                recipe: ProximitySharedRecipe(
+                    kind: .saved,
+                    local: nil,
+                    saved: SharedSavedRecipePayload(
+                        name: recipe.name,
+                        sourceURLString: webImport.sourceURLString,
+                        ingredients: webImport.ingredientLines,
+                        summary: recipe.notes,
+                        servings: recipe.servings,
+                        protein: webImport.macros.protein,
+                        carbs: webImport.macros.carbs,
+                        fat: webImport.macros.fat,
+                        micronutrients: webImport.micronutrients
+                    )
+                )
+            )
+        }
+        return ProximityRecipeSharePayload(
             recipe: ProximitySharedRecipe(
                 kind: .local,
                 local: payload(for: recipe, foodItems: foodItems),
                 saved: nil
-            )
-        )
-    }
-
-    static func proximityPayload(for recipe: SavedRecipe) -> ProximityRecipeSharePayload {
-        ProximityRecipeSharePayload(
-            recipe: ProximitySharedRecipe(
-                kind: .saved,
-                local: nil,
-                saved: SharedSavedRecipePayload(
-                    name: recipe.name,
-                    sourceURLString: recipe.sourceURLString,
-                    ingredients: recipe.ingredients,
-                    summary: recipe.summary,
-                    servings: recipe.servings,
-                    protein: recipe.protein,
-                    carbs: recipe.carbs,
-                    fat: recipe.fat,
-                    micronutrients: recipe.micronutrients
-                )
             )
         )
     }

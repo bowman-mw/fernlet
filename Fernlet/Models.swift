@@ -1344,6 +1344,43 @@ extension RecipeIngredient {
     }
 }
 
+/// Extra fields a recipe carries only when it was imported from a web URL (e.g. via the share
+/// extension or pasteboard). User-built recipes leave this nil and derive nutrition from their
+/// structured `ingredients`; web-imported recipes keep their free-text ingredient lines and the
+/// precomputed nutrition extracted at import time, because those ingredients can't be resolved to
+/// `foodItemId`s without ambiguity. Bundling them here keeps `RecipeDefinition` the single recipe
+/// model while preserving the original imported data losslessly.
+struct RecipeWebImport: Codable, Equatable {
+    var sourceURLString: String
+    var ingredientLines: [String]
+    var macros: Macros
+    var micronutrients: Micronutrients
+
+    var sourceURL: URL {
+        URL(string: sourceURLString) ?? URL(fileURLWithPath: "/")
+    }
+
+    init(
+        sourceURLString: String,
+        ingredientLines: [String],
+        macros: Macros = Macros(protein: 0, carbs: 0, fat: 0),
+        micronutrients: Micronutrients = Micronutrients()
+    ) {
+        self.sourceURLString = sourceURLString
+        self.ingredientLines = ingredientLines
+        self.macros = macros
+        self.micronutrients = micronutrients
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sourceURLString = try container.decodeIfPresent(String.self, forKey: .sourceURLString) ?? ""
+        ingredientLines = try container.decodeIfPresent([String].self, forKey: .ingredientLines) ?? []
+        macros = try container.decodeIfPresent(Macros.self, forKey: .macros) ?? Macros(protein: 0, carbs: 0, fat: 0)
+        micronutrients = try container.decodeIfPresent(Micronutrients.self, forKey: .micronutrients) ?? Micronutrients()
+    }
+}
+
 struct RecipeDefinition: Identifiable, Codable, Equatable {
     var id = UUID()
     var name: String
@@ -1353,6 +1390,12 @@ struct RecipeDefinition: Identifiable, Codable, Equatable {
     var source: String
     var createdAt: Date
     var updatedAt: Date
+    /// Non-nil only for recipes imported from a web URL. See `RecipeWebImport`.
+    var webImport: RecipeWebImport?
+
+    /// True when this recipe was imported from the web (and therefore stores free-text ingredient
+    /// lines + precomputed nutrition rather than structured `ingredients`).
+    var isWebImport: Bool { webImport != nil }
 
     init(
         id: UUID = UUID(),
@@ -1362,7 +1405,8 @@ struct RecipeDefinition: Identifiable, Codable, Equatable {
         notes: String = "",
         source: String,
         createdAt: Date,
-        updatedAt: Date
+        updatedAt: Date,
+        webImport: RecipeWebImport? = nil
     ) {
         self.id = id
         self.name = name
@@ -1372,6 +1416,7 @@ struct RecipeDefinition: Identifiable, Codable, Equatable {
         self.source = source
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.webImport = webImport
     }
 
     init(from decoder: Decoder) throws {
@@ -1384,6 +1429,7 @@ struct RecipeDefinition: Identifiable, Codable, Equatable {
         source = try container.decode(String.self, forKey: .source)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        webImport = try container.decodeIfPresent(RecipeWebImport.self, forKey: .webImport)
     }
 }
 

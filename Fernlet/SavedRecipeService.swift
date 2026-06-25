@@ -4,7 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class SavedRecipeService {
-    private(set) var savedRecipes: [SavedRecipe] = []
+    private(set) var savedRecipes: [RecipeDefinition] = []
 
     @ObservationIgnored private let repository: SavedRecipeRepository
     @ObservationIgnored private var saveScheduled = false
@@ -13,7 +13,7 @@ final class SavedRecipeService {
         self.init(repository: SavedRecipeRepository())
     }
 
-    init(repository: SavedRecipeRepository, initialRecipes: [SavedRecipe] = []) {
+    init(repository: SavedRecipeRepository, initialRecipes: [RecipeDefinition] = []) {
         self.repository = repository
         self.savedRecipes = initialRecipes
     }
@@ -26,19 +26,21 @@ final class SavedRecipeService {
         savedRecipes = repository.load()
     }
 
-    func add(_ recipe: SavedRecipe) {
-        savedRecipes.removeAll { $0.sourceURLString == recipe.sourceURLString }
+    func add(_ recipe: RecipeDefinition) {
+        if let sourceURLString = recipe.webImport?.sourceURLString, !sourceURLString.isEmpty {
+            savedRecipes.removeAll { $0.webImport?.sourceURLString == sourceURLString }
+        }
         savedRecipes.insert(recipe, at: 0)
         scheduleSave()
     }
 
-    func update(_ recipe: SavedRecipe) {
+    func update(_ recipe: RecipeDefinition) {
         guard let index = savedRecipes.firstIndex(where: { $0.id == recipe.id }) else { return }
         savedRecipes[index] = recipe
         scheduleSave()
     }
 
-    func delete(_ recipe: SavedRecipe) {
+    func delete(_ recipe: RecipeDefinition) {
         savedRecipes.removeAll { $0.id == recipe.id }
         scheduleSave()
     }
@@ -55,30 +57,34 @@ final class SavedRecipeService {
         assert(saved, "saved recipes should save")
     }
 
-    func shareText(for recipe: SavedRecipe) -> String {
+    func shareText(for recipe: RecipeDefinition) -> String {
+        let webImport = recipe.webImport
+        let macros = webImport?.macros ?? Macros(protein: 0, carbs: 0, fat: 0)
         var lines: [String] = [recipe.name, ""]
-        if recipe.protein > 0 || recipe.carbs > 0 || recipe.fat > 0 {
+        if macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 {
             let servingNote = recipe.servings > 1 ? " (per serving, \(recipe.servings) servings)" : ""
-            lines += ["Macros\(servingNote): P \(recipe.protein)g · C \(recipe.carbs)g · F \(recipe.fat)g", ""]
+            lines += ["Macros\(servingNote): P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g", ""]
         }
-        if !recipe.summary.isEmpty {
-            lines += [recipe.summary, ""]
+        if !recipe.notes.isEmpty {
+            lines += [recipe.notes, ""]
         }
         lines += ["Ingredients:"]
-        lines += recipe.ingredients.map { "- \($0)" }
-        lines += ["", "Source: \(recipe.sourceURL.absoluteString)"]
+        lines += (webImport?.ingredientLines ?? []).map { "- \($0)" }
+        if let sourceURL = webImport?.sourceURL {
+            lines += ["", "Source: \(sourceURL.absoluteString)"]
+        }
         return lines.joined(separator: "\n")
     }
 
-    static func makeMeal(from recipe: SavedRecipe, mealType: MealType?) -> Meal {
-        let macros = Macros(protein: recipe.protein, carbs: recipe.carbs, fat: recipe.fat)
-        let hasMacros = recipe.protein > 0 || recipe.carbs > 0 || recipe.fat > 0
+    static func makeMeal(from recipe: RecipeDefinition, mealType: MealType?) -> Meal {
+        let macros = recipe.webImport?.macros ?? Macros(protein: 0, carbs: 0, fat: 0)
+        let hasMacros = macros.protein > 0 || macros.carbs > 0 || macros.fat > 0
         return Meal(
             name: recipe.name,
             mealType: mealType ?? MealParser.classifyMealType(recipe.name),
             macros: macros,
             macroSnapshot: macros,
-            micronutrientSnapshot: recipe.micronutrients,
+            micronutrientSnapshot: recipe.webImport?.micronutrients ?? Micronutrients(),
             mealSource: .recipe,
             isAIFallback: false,
             quality: macros.protein >= 25 ? .good : .ok,

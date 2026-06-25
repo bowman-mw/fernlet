@@ -1,62 +1,96 @@
 import Foundation
 import CoreData
 
-struct SavedRecipe: Identifiable, Codable, Equatable {
-    var id: UUID = UUID()
-    var sourceURLString: String
+// Web-imported recipes are now represented by the canonical `RecipeDefinition` model (carrying a
+// `RecipeWebImport` payload). The legacy `SavedRecipe` struct has been removed; the repositories
+// below load/save `RecipeDefinition`s while keeping the existing on-disk formats stable so that
+// recipes saved by older builds migrate without loss.
+
+/// Mirror of the legacy `SavedRecipe` JSON schema, used only to decode (and re-encode) the
+/// pre-merge `SavedRecipes.json` file so older saved recipes survive the model merge. Maps
+/// losslessly to/from `RecipeDefinition` via `webImport`.
+private struct LegacySavedRecipeDTO: Codable {
+    var id: UUID?
+    var sourceURLString: String?
     var name: String
-    var ingredients: [String]
-    var summary: String
-    var servings: Int = 1
-    var protein: Int = 0
-    var carbs: Int = 0
-    var fat: Int = 0
-    var micronutrients: Micronutrients = Micronutrients()
-    var savedAt: Date = Date()
+    var ingredients: [String]?
+    var summary: String?
+    var servings: Int?
+    var protein: Int?
+    var carbs: Int?
+    var fat: Int?
+    var micronutrients: Micronutrients?
+    var savedAt: Date?
 
-    var sourceURL: URL {
-        URL(string: sourceURLString) ?? URL(fileURLWithPath: "/")
+    init(recipe: RecipeDefinition) {
+        let webImport = recipe.webImport
+        id = recipe.id
+        sourceURLString = webImport?.sourceURLString ?? ""
+        name = recipe.name
+        ingredients = webImport?.ingredientLines ?? []
+        summary = recipe.notes
+        servings = recipe.servings
+        protein = webImport?.macros.protein ?? 0
+        carbs = webImport?.macros.carbs ?? 0
+        fat = webImport?.macros.fat ?? 0
+        micronutrients = webImport?.micronutrients ?? Micronutrients()
+        savedAt = recipe.createdAt
     }
 
-    init(
-        id: UUID = UUID(),
-        sourceURL: URL,
+    func toRecipeDefinition() -> RecipeDefinition {
+        SavedRecipeMapping.recipe(
+            id: id ?? UUID(),
+            sourceURLString: sourceURLString ?? "",
+            name: name,
+            ingredientLines: ingredients ?? [],
+            summary: summary ?? "",
+            servings: servings ?? 1,
+            protein: protein ?? 0,
+            carbs: carbs ?? 0,
+            fat: fat ?? 0,
+            micronutrients: micronutrients ?? Micronutrients(),
+            savedAt: savedAt ?? Date()
+        )
+    }
+}
+
+/// Single source of truth for translating the legacy saved-recipe columns/fields (free-text
+/// ingredients + precomputed nutrition + source URL) into a `RecipeDefinition` with a `webImport`
+/// payload. Shared by the Core Data and legacy-JSON repositories so both migrate identically.
+enum SavedRecipeMapping {
+    static func recipe(
+        id: UUID,
+        sourceURLString: String,
         name: String,
-        ingredients: [String],
+        ingredientLines: [String],
         summary: String,
-        servings: Int = 1,
-        protein: Int = 0,
-        carbs: Int = 0,
-        fat: Int = 0,
-        micronutrients: Micronutrients = Micronutrients(),
-        savedAt: Date = Date()
-    ) {
-        self.id = id
-        self.sourceURLString = sourceURL.absoluteString
-        self.name = name
-        self.ingredients = ingredients
-        self.summary = summary
-        self.servings = max(servings, 1)
-        self.protein = max(protein, 0)
-        self.carbs = max(carbs, 0)
-        self.fat = max(fat, 0)
-        self.micronutrients = micronutrients
-        self.savedAt = savedAt
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        sourceURLString = try container.decode(String.self, forKey: .sourceURLString)
-        name = try container.decode(String.self, forKey: .name)
-        ingredients = try container.decodeIfPresent([String].self, forKey: .ingredients) ?? []
-        summary = try container.decodeIfPresent(String.self, forKey: .summary) ?? ""
-        servings = max(try container.decodeIfPresent(Int.self, forKey: .servings) ?? 1, 1)
-        protein = max(try container.decodeIfPresent(Int.self, forKey: .protein) ?? 0, 0)
-        carbs = max(try container.decodeIfPresent(Int.self, forKey: .carbs) ?? 0, 0)
-        fat = max(try container.decodeIfPresent(Int.self, forKey: .fat) ?? 0, 0)
-        micronutrients = try container.decodeIfPresent(Micronutrients.self, forKey: .micronutrients) ?? Micronutrients()
-        savedAt = try container.decodeIfPresent(Date.self, forKey: .savedAt) ?? Date()
+        servings: Int,
+        protein: Int,
+        carbs: Int,
+        fat: Int,
+        micronutrients: Micronutrients,
+        savedAt: Date
+    ) -> RecipeDefinition {
+        RecipeDefinition(
+            id: id,
+            name: name,
+            servings: max(servings, 1),
+            ingredients: [],
+            notes: summary,
+            source: MealLogSource.webImport,
+            createdAt: savedAt,
+            updatedAt: savedAt,
+            webImport: RecipeWebImport(
+                sourceURLString: sourceURLString,
+                ingredientLines: ingredientLines.filter { !$0.isEmpty },
+                macros: Macros(
+                    protein: max(protein, 0),
+                    carbs: max(carbs, 0),
+                    fat: max(fat, 0)
+                ),
+                micronutrients: micronutrients
+            )
+        )
     }
 }
 
@@ -78,7 +112,7 @@ struct SavedRecipeRepository {
 
     private static let migrationCompletedKey = "com.fernlet.savedRecipeMigrationCompleted"
 
-    func load() -> [SavedRecipe] {
+    func load() -> [RecipeDefinition] {
         StartupTiming.timed("SavedRecipeRepository.load") {
             let recipes = loadCoreDataRecipes()
             if recipes.isEmpty && !defaults.bool(forKey: Self.migrationCompletedKey) {
@@ -93,7 +127,7 @@ struct SavedRecipeRepository {
         }
     }
 
-    func loadAsync() async -> [SavedRecipe] {
+    func loadAsync() async -> [RecipeDefinition] {
         StartupTiming.timed("SavedRecipeRepository.loadAsync") {
             let recipes = loadCoreDataRecipes()
             guard recipes.isEmpty && !defaults.bool(forKey: Self.migrationCompletedKey) else { return recipes }
@@ -109,7 +143,7 @@ struct SavedRecipeRepository {
         }
     }
 
-    private func loadCoreDataRecipes() -> [SavedRecipe] {
+    private func loadCoreDataRecipes() -> [RecipeDefinition] {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
         request.sortDescriptors = [NSSortDescriptor(key: "savedAt", ascending: false)]
@@ -122,7 +156,7 @@ struct SavedRecipeRepository {
         return records.compactMap(Self.recipe(from:))
     }
 
-    @discardableResult func save(_ recipes: [SavedRecipe]) -> Bool {
+    @discardableResult func save(_ recipes: [RecipeDefinition]) -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
 
@@ -154,11 +188,9 @@ struct SavedRecipeRepository {
         }
     }
 
-    private static func recipe(from record: NSManagedObject) -> SavedRecipe? {
+    private static func recipe(from record: NSManagedObject) -> RecipeDefinition? {
         guard let idString = record.value(forKey: "idString") as? String,
               let id = UUID(uuidString: idString),
-              let sourceURLString = record.value(forKey: "sourceURLString") as? String,
-              let sourceURL = URL(string: sourceURLString),
               let name = record.value(forKey: "name") as? String else {
             return nil
         }
@@ -172,11 +204,11 @@ struct SavedRecipeRepository {
         } else {
             micronutrients = Micronutrients()
         }
-        return SavedRecipe(
+        return SavedRecipeMapping.recipe(
             id: id,
-            sourceURL: sourceURL,
+            sourceURLString: record.value(forKey: "sourceURLString") as? String ?? "",
             name: name,
-            ingredients: ingredientsText.components(separatedBy: "\n").filter { !$0.isEmpty },
+            ingredientLines: ingredientsText.components(separatedBy: "\n"),
             summary: record.value(forKey: "summary") as? String ?? "",
             servings: (record.value(forKey: "servings") as? NSNumber)?.intValue ?? 1,
             protein: (record.value(forKey: "protein") as? NSNumber)?.intValue ?? 0,
@@ -187,21 +219,23 @@ struct SavedRecipeRepository {
         )
     }
 
-    private static func apply(_ recipe: SavedRecipe, to record: NSManagedObject) {
+    private static func apply(_ recipe: RecipeDefinition, to record: NSManagedObject) {
+        let webImport = recipe.webImport
         record.setValue(recipe.id.uuidString, forKey: "idString")
-        record.setValue(recipe.sourceURLString, forKey: "sourceURLString")
+        record.setValue(webImport?.sourceURLString ?? "", forKey: "sourceURLString")
         record.setValue(recipe.name, forKey: "name")
-        record.setValue(recipe.ingredients.joined(separator: "\n"), forKey: "ingredientsText")
-        record.setValue(recipe.summary, forKey: "summary")
+        record.setValue((webImport?.ingredientLines ?? []).joined(separator: "\n"), forKey: "ingredientsText")
+        record.setValue(recipe.notes, forKey: "summary")
         record.setValue(recipe.servings, forKey: "servings")
-        record.setValue(recipe.protein, forKey: "protein")
-        record.setValue(recipe.carbs, forKey: "carbs")
-        record.setValue(recipe.fat, forKey: "fat")
-        if let data = try? JSONEncoder().encode(recipe.micronutrients),
+        record.setValue(webImport?.macros.protein ?? 0, forKey: "protein")
+        record.setValue(webImport?.macros.carbs ?? 0, forKey: "carbs")
+        record.setValue(webImport?.macros.fat ?? 0, forKey: "fat")
+        if let micros = webImport?.micronutrients,
+           let data = try? JSONEncoder().encode(micros),
            let json = String(data: data, encoding: .utf8) {
             record.setValue(json, forKey: "micronutrientsJSON")
         }
-        record.setValue(recipe.savedAt, forKey: "savedAt")
+        record.setValue(recipe.createdAt, forKey: "savedAt")
     }
 }
 
@@ -216,22 +250,22 @@ struct LegacySavedRecipeJSONRepository {
         self.decoder = Self.makeDecoder()
     }
 
-    func load() -> [SavedRecipe] {
+    func load() -> [RecipeDefinition] {
         guard FileManager.default.fileExists(atPath: fileURL.path),
               let data = try? Data(contentsOf: fileURL),
-              let recipes = try? decoder.decode([SavedRecipe].self, from: data) else {
+              let recipes = try? decoder.decode([LegacySavedRecipeDTO].self, from: data) else {
             return []
         }
-        return recipes
+        return recipes.map { $0.toRecipeDefinition() }
     }
 
-    @discardableResult func save(_ recipes: [SavedRecipe]) -> Bool {
+    @discardableResult func save(_ recipes: [RecipeDefinition]) -> Bool {
         do {
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            let data = try encoder.encode(recipes)
+            let data = try encoder.encode(recipes.map(LegacySavedRecipeDTO.init(recipe:)))
             try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
             return true
         } catch {

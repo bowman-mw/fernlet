@@ -696,16 +696,19 @@ struct FernletTests {
     @Test func legacySavedRecipeJSONRepositoryPersistsRecipes() throws {
         let url = temporaryDatabaseURL("saved-recipes")
         let repository = LegacySavedRecipeJSONRepository(fileURL: url)
-        let recipe = SavedRecipe(
-            sourceURL: try #require(URL(string: "https://example.com/recipe")),
+        let recipe = RecipeDefinition(
             name: "Lentil Soup",
-            ingredients: ["lentils", "carrots", "stock"],
-            summary: "Simmer until tender.",
             servings: 4,
-            protein: 18,
-            carbs: 42,
-            fat: 6,
-            savedAt: try fixedDate()
+            ingredients: [],
+            notes: "Simmer until tender.",
+            source: MealLogSource.webImport,
+            createdAt: try fixedDate(),
+            updatedAt: try fixedDate(),
+            webImport: RecipeWebImport(
+                sourceURLString: "https://example.com/recipe",
+                ingredientLines: ["lentils", "carrots", "stock"],
+                macros: Macros(protein: 18, carbs: 42, fat: 6)
+            )
         )
 
         #expect(repository.save([recipe]))
@@ -714,8 +717,8 @@ struct FernletTests {
         let stored = try #require(loaded.first)
         #expect(loaded.count == 1)
         #expect(stored.id == recipe.id)
-        #expect(stored.sourceURL == recipe.sourceURL)
-        #expect(stored.ingredients == recipe.ingredients)
+        #expect(stored.webImport?.sourceURLString == recipe.webImport?.sourceURLString)
+        #expect(stored.webImport?.ingredientLines == recipe.webImport?.ingredientLines)
         #expect(stored.servings == 4)
     }
 
@@ -723,43 +726,59 @@ struct FernletTests {
     @Test func savedRecipeRepositoryPersistsRecipesInCoreData() throws {
         let controller = PersistenceController(inMemory: true)
         let repository = SavedRecipeRepository(controller: controller, legacyRepository: LegacySavedRecipeJSONRepository(fileURL: temporaryDatabaseURL("empty-legacy-saved-recipes")))
-        let soup = SavedRecipe(
-            sourceURL: try #require(URL(string: "https://example.com/soup")),
+        let soup = RecipeDefinition(
             name: "Lentil Soup",
-            ingredients: ["lentils", "carrots", "stock"],
-            summary: "Simmer until tender.",
             servings: 4,
-            protein: 18,
-            carbs: 42,
-            fat: 6,
-            savedAt: try fixedDate()
+            ingredients: [],
+            notes: "Simmer until tender.",
+            source: MealLogSource.webImport,
+            createdAt: try fixedDate(),
+            updatedAt: try fixedDate(),
+            webImport: RecipeWebImport(
+                sourceURLString: "https://example.com/soup",
+                ingredientLines: ["lentils", "carrots", "stock"],
+                macros: Macros(protein: 18, carbs: 42, fat: 6)
+            )
         )
-        let oats = SavedRecipe(
-            sourceURL: try #require(URL(string: "https://example.com/oats")),
+        let oatsDate = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 5, day: 18)))
+        let oats = RecipeDefinition(
             name: "Overnight Oats",
-            ingredients: ["oats", "milk"],
-            summary: "Chill overnight.",
-            savedAt: try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 5, day: 18)))
+            servings: 1,
+            ingredients: [],
+            notes: "Chill overnight.",
+            source: MealLogSource.webImport,
+            createdAt: oatsDate,
+            updatedAt: oatsDate,
+            webImport: RecipeWebImport(
+                sourceURLString: "https://example.com/oats",
+                ingredientLines: ["oats", "milk"]
+            )
         )
 
         #expect(repository.save([soup, oats]))
 
         let loaded = repository.load()
         #expect(loaded.map(\.name) == ["Overnight Oats", "Lentil Soup"])
-        #expect(loaded.first?.ingredients == ["oats", "milk"])
-        #expect(loaded.last?.protein == 18)
+        #expect(loaded.first?.webImport?.ingredientLines == ["oats", "milk"])
+        #expect(loaded.last?.webImport?.macros.protein == 18)
     }
 
     @MainActor
     @Test func savedRecipeRepositoryMigratesLegacyJSONOnFirstLoad() throws {
         let legacyURL = temporaryDatabaseURL("legacy-saved-recipes")
         let legacyRepository = LegacySavedRecipeJSONRepository(fileURL: legacyURL)
-        let recipe = SavedRecipe(
-            sourceURL: try #require(URL(string: "https://example.com/migrated")),
+        let recipe = RecipeDefinition(
             name: "Migrated Recipe",
-            ingredients: ["beans", "rice"],
-            summary: "Legacy recipe.",
-            savedAt: try fixedDate()
+            servings: 1,
+            ingredients: [],
+            notes: "Legacy recipe.",
+            source: MealLogSource.webImport,
+            createdAt: try fixedDate(),
+            updatedAt: try fixedDate(),
+            webImport: RecipeWebImport(
+                sourceURLString: "https://example.com/migrated",
+                ingredientLines: ["beans", "rice"]
+            )
         )
         #expect(legacyRepository.save([recipe]))
 
@@ -774,7 +793,7 @@ struct FernletTests {
 
         #expect(migrated.map(\.id) == [recipe.id])
         #expect(reloaded.map(\.id) == [recipe.id])
-        #expect(reloaded.first?.ingredients == ["beans", "rice"])
+        #expect(reloaded.first?.webImport?.ingredientLines == ["beans", "rice"])
     }
 
     @MainActor

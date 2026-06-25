@@ -236,31 +236,39 @@ struct FernletSnapshotRoundTripTests {
         #expect(actual.proximityDisplayName == expected.proximityDisplayName, sourceLocation: sourceLocation)
     }
 
-    private func baselineSavedRecipes() throws -> [SavedRecipe] {
-        [
-            SavedRecipe(
+    private func baselineSavedRecipes() throws -> [RecipeDefinition] {
+        let bowlDate = Date(timeIntervalSince1970: 1_779_588_000)
+        let oatsDate = Date(timeIntervalSince1970: 1_779_584_400)
+        return [
+            RecipeDefinition(
                 id: try uuid("00000000-0000-0000-0000-000000002001"),
-                sourceURL: try #require(URL(string: "https://example.com/bowl")),
                 name: "Saved Bowl",
-                ingredients: ["rice", "chicken", "sauce"],
-                summary: "Combine and serve.",
                 servings: 2,
-                protein: 38,
-                carbs: 52,
-                fat: 12,
-                savedAt: Date(timeIntervalSince1970: 1_779_588_000)
+                ingredients: [],
+                notes: "Combine and serve.",
+                source: MealLogSource.webImport,
+                createdAt: bowlDate,
+                updatedAt: bowlDate,
+                webImport: RecipeWebImport(
+                    sourceURLString: "https://example.com/bowl",
+                    ingredientLines: ["rice", "chicken", "sauce"],
+                    macros: Macros(protein: 38, carbs: 52, fat: 12)
+                )
             ),
-            SavedRecipe(
+            RecipeDefinition(
                 id: try uuid("00000000-0000-0000-0000-000000002002"),
-                sourceURL: try #require(URL(string: "https://example.com/oats")),
                 name: "Saved Oats",
-                ingredients: ["oats", "yogurt", "berries"],
-                summary: "Chill overnight.",
                 servings: 1,
-                protein: 24,
-                carbs: 48,
-                fat: 7,
-                savedAt: Date(timeIntervalSince1970: 1_779_584_400)
+                ingredients: [],
+                notes: "Chill overnight.",
+                source: MealLogSource.webImport,
+                createdAt: oatsDate,
+                updatedAt: oatsDate,
+                webImport: RecipeWebImport(
+                    sourceURLString: "https://example.com/oats",
+                    ingredientLines: ["oats", "yogurt", "berries"],
+                    macros: Macros(protein: 24, carbs: 48, fat: 7)
+                )
             )
         ]
     }
@@ -355,7 +363,7 @@ struct FernletSnapshotRoundTripTests {
         ]
     }
 
-    private func sortSavedRecipes(_ lhs: SavedRecipe, _ rhs: SavedRecipe) -> Bool {
+    private func sortSavedRecipes(_ lhs: RecipeDefinition, _ rhs: RecipeDefinition) -> Bool {
         lhs.id.uuidString < rhs.id.uuidString
     }
 

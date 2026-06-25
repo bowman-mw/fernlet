@@ -142,18 +142,29 @@ struct SharedRecipeImportQueue {
     }
 }
 
-extension SavedRecipe {
-    init(importedRecipe: ImportedRecipe) {
+extension RecipeDefinition {
+    /// Builds the canonical recipe model from a freshly web-imported recipe. The free-text
+    /// ingredient lines and precomputed nutrition are preserved verbatim under `webImport`; the
+    /// structured `ingredients` array stays empty (web imports aren't resolved to food items).
+    init(importedRecipe: ImportedRecipe, now: Date = Date()) {
         self.init(
-            sourceURL: importedRecipe.sourceURL,
             name: importedRecipe.name,
-            ingredients: importedRecipe.ingredients,
-            summary: importedRecipe.summary,
-            servings: importedRecipe.servings,
-            protein: importedRecipe.protein,
-            carbs: importedRecipe.carbs,
-            fat: importedRecipe.fat,
-            micronutrients: importedRecipe.micronutrients
+            servings: max(importedRecipe.servings, 1),
+            ingredients: [],
+            notes: importedRecipe.summary,
+            source: MealLogSource.webImport,
+            createdAt: now,
+            updatedAt: now,
+            webImport: RecipeWebImport(
+                sourceURLString: importedRecipe.sourceURL.absoluteString,
+                ingredientLines: importedRecipe.ingredients,
+                macros: Macros(
+                    protein: max(importedRecipe.protein, 0),
+                    carbs: max(importedRecipe.carbs, 0),
+                    fat: max(importedRecipe.fat, 0)
+                ),
+                micronutrients: importedRecipe.micronutrients
+            )
         )
     }
 }

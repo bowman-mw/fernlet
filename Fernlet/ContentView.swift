@@ -23,7 +23,7 @@ struct ContentView: View {
     @State private var activeSheet: FernletSheet?
     @State private var mealLogNotification: MealLogNotification?
     @State private var editingRecipeFromHome: RecipeDefinition?
-    @State private var editingSavedRecipeFromHome: SavedRecipe?
+    @State private var editingSavedRecipeFromHome: RecipeDefinition?
     @State private var didAutoImportHealthProfile = false
     @State private var didAutoImportHealthContext = false
     @State private var discoveryTimeoutTask: Task<Void, Never>?

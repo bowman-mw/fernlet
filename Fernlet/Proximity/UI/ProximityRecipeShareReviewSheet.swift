@@ -148,7 +148,7 @@ struct ProximityRecipeShareReviewSheet: View {
             return "You already have a recipe with this name."
         case .saved:
             guard let saved = share.payload.recipe.saved else { return nil }
-            if store.savedRecipes.contains(where: { $0.sourceURLString == saved.sourceURLString }) {
+            if store.savedRecipes.contains(where: { $0.webImport?.sourceURLString == saved.sourceURLString }) {
                 return "You already saved this source recipe."
             }
             if store.savedRecipes.contains(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == title }) {

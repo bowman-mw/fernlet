@@ -35,7 +35,7 @@ final class FernletStore {
     var showConnectionInspector = false
     var connectionInspector = ConnectionInspector()
     var isDisposableCameraLandscape = false
-    var savedRecipes: [SavedRecipe] {
+    var savedRecipes: [RecipeDefinition] {
         savedRecipeService.savedRecipes
     }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] {
@@ -666,7 +666,7 @@ final class FernletStore {
         return meal
     }
 
-    @discardableResult func logSavedRecipe(_ recipe: SavedRecipe, mealType: MealType? = nil, date: String? = nil) -> Meal {
+    @discardableResult func logSavedRecipe(_ recipe: RecipeDefinition, mealType: MealType? = nil, date: String? = nil) -> Meal {
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "saved recipe meal date required")
         let meal = SavedRecipeService.makeMeal(from: recipe, mealType: mealType)
@@ -692,11 +692,11 @@ final class FernletStore {
         return meal
     }
 
-    func savedRecipeShareText(for recipe: SavedRecipe) -> String {
+    func savedRecipeShareText(for recipe: RecipeDefinition) -> String {
         savedRecipeService.shareText(for: recipe)
     }
 
-    func addSavedRecipe(_ recipe: SavedRecipe) {
+    func addSavedRecipe(_ recipe: RecipeDefinition) {
         savedRecipeService.add(recipe)
     }
 
@@ -719,7 +719,7 @@ final class FernletStore {
 
             do {
                 let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: foodCatalog, aiEnabled: settings.aiStatus != .off)
-                addSavedRecipe(SavedRecipe(importedRecipe: importedRecipe))
+                addSavedRecipe(RecipeDefinition(importedRecipe: importedRecipe))
                 queue.remove(record)
             } catch {
                 let description = (error as? LocalizedError)?.errorDescription ?? "Could not import that recipe."
@@ -732,11 +732,11 @@ final class FernletStore {
         }
     }
 
-    func updateSavedRecipe(_ recipe: SavedRecipe) {
+    func updateSavedRecipe(_ recipe: RecipeDefinition) {
         savedRecipeService.update(recipe)
     }
 
-    func deleteSavedRecipe(_ recipe: SavedRecipe) {
+    func deleteSavedRecipe(_ recipe: RecipeDefinition) {
         savedRecipeService.delete(recipe)
     }
 
@@ -1550,10 +1550,6 @@ final class FernletStore {
         RecipeShareCodec.proximityPayload(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
-    func proximityRecipeSharePayload(for recipe: SavedRecipe) -> ProximityRecipeSharePayload {
-        RecipeShareCodec.proximityPayload(for: recipe)
-    }
-
     @discardableResult func importProximityRecipeShare(_ payload: ProximityRecipeSharePayload) throws -> String {
         guard payload.format == "fernlet.proximity.recipe", payload.version == 1 else {
             throw RecipeImportError.unsupportedFormat
@@ -1567,21 +1563,30 @@ final class FernletStore {
             return try importRecipe(from: text).name
         case .saved:
             guard let savedPayload = payload.recipe.saved,
-                  let sourceURL = URL(string: savedPayload.sourceURLString) else {
+                  URL(string: savedPayload.sourceURLString) != nil else {
                 throw RecipeImportError.invalidPayload
             }
             let trimmedName = savedPayload.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmedName.isEmpty else { throw RecipeImportError.emptyRecipe }
-            let recipe = SavedRecipe(
-                sourceURL: sourceURL,
+            let now = Date()
+            let recipe = RecipeDefinition(
                 name: trimmedName,
-                ingredients: savedPayload.ingredients,
-                summary: savedPayload.summary.trimmingCharacters(in: .whitespacesAndNewlines),
-                servings: savedPayload.servings,
-                protein: savedPayload.protein,
-                carbs: savedPayload.carbs,
-                fat: savedPayload.fat,
-                micronutrients: savedPayload.micronutrients
+                servings: max(savedPayload.servings, 1),
+                ingredients: [],
+                notes: savedPayload.summary.trimmingCharacters(in: .whitespacesAndNewlines),
+                source: MealLogSource.webImport,
+                createdAt: now,
+                updatedAt: now,
+                webImport: RecipeWebImport(
+                    sourceURLString: savedPayload.sourceURLString,
+                    ingredientLines: savedPayload.ingredients,
+                    macros: Macros(
+                        protein: max(savedPayload.protein, 0),
+                        carbs: max(savedPayload.carbs, 0),
+                        fat: max(savedPayload.fat, 0)
+                    ),
+                    micronutrients: savedPayload.micronutrients
+                )
             )
             addSavedRecipe(recipe)
             return recipe.name
