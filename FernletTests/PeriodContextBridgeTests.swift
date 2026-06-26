@@ -118,6 +118,33 @@ struct PeriodContextBridgeTests {
         #expect(bridge.currentPhaseSignal() == .menstrual)
     }
 
+    /// The memoized `cachedPeriodStarts` (the per-render scoring optimization) must be rebuilt on every
+    /// `refresh()`. A newer detected period start re-anchors the cycle math, so the same query day resolves
+    /// to a different non-bleeding phase after refresh — which only happens if the starts memo invalidated.
+    @Test func refreshRebuildsCachedPeriodStartsAfterEntriesChange() {
+        let mar1 = PeriodTestSupport.date(2026, 3, 1, calendar: calendar)
+        let source = makeSource(
+            entries: [PeriodTestSupport.entry(on: mar1, flow: .medium)],
+            prediction: PeriodTestSupport.prediction(cycleLength: 28, cyclesObserved: 4)
+        )
+        let bridge = PeriodContextBridge(source: source, calendar: calendar)
+        bridge.refresh(unlocked: true, wellbeingByDay: [:])
+
+        // Mar 21 is day 20 of the lone Mar 1 cycle → luteal.
+        let queryKey = FernletDate.dayKey(for: PeriodTestSupport.date(2026, 3, 21, calendar: calendar))
+        #expect(bridge.scoringAdjustment(forDayKey: queryKey).phase == .luteal)
+
+        // A second period start on Mar 18 re-anchors the cycle; Mar 21 is now cycle-day 3 → menstrual.
+        // A stale Mar 1 anchor (un-invalidated memo) would keep returning luteal.
+        let mar18 = PeriodTestSupport.date(2026, 3, 18, calendar: calendar)
+        source.entries = [
+            PeriodTestSupport.entry(on: mar1, flow: .medium),
+            PeriodTestSupport.entry(on: mar18, flow: .medium)
+        ]
+        bridge.refresh(unlocked: true, wellbeingByDay: [:])
+        #expect(bridge.scoringAdjustment(forDayKey: queryKey).phase == .menstrual)
+    }
+
     /// Four period starts (= 3 completed cycles, the gate), flow on the first 4 days of each, with low sleep
     /// on every luteal day and high sleep elsewhere, so the trend engine reliably flags luteal sleep as
     /// historically worse.

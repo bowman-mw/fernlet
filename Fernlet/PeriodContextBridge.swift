@@ -107,18 +107,24 @@ enum CyclePhaseResolver {
     private static let menstrualWindow = 5
     private static let lutealLength = 14
 
+    /// - Parameter periodStarts: the detected period starts for `entries`, if the caller already has them
+    ///   memoized. When `nil` they are recomputed from `entries` — passing them in is a pure performance
+    ///   optimization and never changes the result (they must equal `detectedPeriodStarts(from: entries)`).
+    ///   The observed-flow check (step 1) always reads `entries` live, so a memoized `periodStarts` can only
+    ///   ever affect the calendar-math phases, never the "is today a bleeding day" decision.
     static func phase(
         on date: Date,
         entries: [CycleDayEntry],
         prediction: CyclePrediction?,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        periodStarts: [Date]? = nil
     ) -> CyclePhase {
         // 1) An observed flow day always wins (highest precedence).
         if hasObservedFlow(on: date, entries: entries, calendar: calendar) { return .menstrual }
         // 2) Without a prediction we can't derive the non-bleeding phases (the 3-cycle floor).
         guard let prediction else { return .unknown }
 
-        let starts = CyclePredictionEngine.detectedPeriodStarts(from: entries, calendar: calendar)
+        let starts = periodStarts ?? CyclePredictionEngine.detectedPeriodStarts(from: entries, calendar: calendar)
         let day = calendar.startOfDay(for: date)
         guard let lastStart = starts
             .map({ calendar.startOfDay(for: $0) })
@@ -162,13 +168,20 @@ enum CyclePhaseResolver {
 // MARK: - Bridge
 
 /// The single read-only path from private cycle data to scoring / companion / food / move suggestions.
-/// Recomputes every signal on demand from the live `PeriodTrackerStore` (no independent caching), so
-/// deleting period data immediately makes outputs return `.unknown`/`.noData` — the "deliberate
-/// forgetfulness" the spec requires.
+/// Recomputes every signal on demand from the live `PeriodTrackerStore`, so deleting period data
+/// immediately makes outputs return `.unknown`/`.noData` — the "deliberate forgetfulness" the spec requires.
+///
+/// The one memo is `cachedPeriodStarts` (the detected period starts): scoring reads `score` ~12×/render and
+/// each read would otherwise re-group up to 240 days of flow entries via `detectPeriods`. It is recomputed
+/// lazily from `source.entries` and invalidated in `refresh()` — the same lifecycle that already rebuilds
+/// `trends` on every mutation (launch / lock-change / delete / log-edit). The observed-flow check stays live
+/// (it never consults the cache), so a wiped entry still resolves to `.unknown` on the very next read.
 ///
 /// Degradation:
 /// - **< 3 cycles or locked** (`prediction == nil`): only observed flow can place the user, so phase is
 ///   `.menstrual`/`.unknown`, band follows, and nutrition/exercise are `.noData`. No scoring softening.
+///   (This is intentionally stricter than period-intimacy-plan §5.3, which would have non-bleeding phases
+///   resolve while locked from HK alone; see that section's note. The lock is a "forget the cycle" gate.)
 /// - **Unlocked, ≥ 3 cycles**: full phase/band + phase-appropriate nutrition/exercise hints, and scoring
 ///   softening on phases the per-phase trends mark as historically harder (medium/high confidence only).
 @MainActor
@@ -183,6 +196,11 @@ final class PeriodContextBridge: PeriodScoringContextProviding {
     @ObservationIgnored private let calendar: Calendar
     private var unlocked = false
     private(set) var trends: [PeriodHealthTrend] = []
+
+    /// Memoized detected period starts for the current `source.entries`. Recomputed lazily and cleared in
+    /// `refresh()`; see the type doc. `@ObservationIgnored` because it is a pure derived cache — mutating it
+    /// during a read must not churn the view graph.
+    @ObservationIgnored private var cachedPeriodStarts: [Date]?
 
     init(source: any PeriodContextSource, calendar: Calendar = .current) {
         self.source = source
@@ -201,6 +219,9 @@ final class PeriodContextBridge: PeriodScoringContextProviding {
     /// Cheap and idempotent; call after period data, lock state, or daily scores change. Not persisted.
     func refresh(unlocked: Bool, wellbeingByDay: [String: PeriodWellbeingSample]) {
         self.unlocked = unlocked
+        // Authoritative invalidation point: entries / lock / prediction just changed, so the memoized starts
+        // must be rebuilt from the now-current entries before any phase or trend is recomputed.
+        cachedPeriodStarts = nil
         guard let source, let prediction = activePrediction else {
             trends = []
             return
@@ -247,7 +268,10 @@ final class PeriodContextBridge: PeriodScoringContextProviding {
     func scoringAdjustment(forDayKey dayKey: String) -> PeriodScoringAdjustment {
         guard let source, let prediction = activePrediction,
               let date = FernletDate.date(fromDayKey: dayKey) else { return .none }
-        let phase = CyclePhaseResolver.phase(on: date, entries: source.entries, prediction: prediction, calendar: calendar)
+        let phase = CyclePhaseResolver.phase(
+            on: date, entries: source.entries, prediction: prediction,
+            calendar: calendar, periodStarts: periodStarts(for: source.entries)
+        )
         guard phase != .unknown else { return .none }
         // The phase label is always carried (for the audit field); softening is gated to historically
         // harder phases at medium/high confidence.
@@ -264,8 +288,25 @@ final class PeriodContextBridge: PeriodScoringContextProviding {
     private func resolvedPhase(on date: Date) -> CyclePhase {
         guard let source else { return .unknown }
         // `activePrediction` is nil when locked or below the 3-completed-cycle gate; the resolver then
-        // places the user only from observed flow (.menstrual / .unknown).
-        return CyclePhaseResolver.phase(on: date, entries: source.entries, prediction: activePrediction, calendar: calendar)
+        // places the user only from observed flow (.menstrual / .unknown) — no starts needed, so the memo
+        // stays untouched in the degraded state.
+        guard let prediction = activePrediction else {
+            return CyclePhaseResolver.phase(on: date, entries: source.entries, prediction: nil, calendar: calendar)
+        }
+        return CyclePhaseResolver.phase(
+            on: date, entries: source.entries, prediction: prediction,
+            calendar: calendar, periodStarts: periodStarts(for: source.entries)
+        )
+    }
+
+    /// Detected period starts for `entries`, memoized so the ~12 score reads per render don't each re-group
+    /// up to 240 days of flow. The cache is cleared in `refresh()` (the single mutation lifecycle), so the
+    /// `entries` passed here are always the post-mutation set — never a stale snapshot.
+    private func periodStarts(for entries: [CycleDayEntry]) -> [Date] {
+        if let cachedPeriodStarts { return cachedPeriodStarts }
+        let starts = CyclePredictionEngine.detectedPeriodStarts(from: entries, calendar: calendar)
+        cachedPeriodStarts = starts
+        return starts
     }
 
     /// A phase is "historically hard" for this user when a medium/high-confidence trend shows worse sleep,
@@ -284,8 +325,12 @@ final class PeriodContextBridge: PeriodScoringContextProviding {
         prediction: CyclePrediction,
         wellbeingByDay: [String: PeriodWellbeingSample]
     ) -> [PeriodPhaseTrendEngine.DayObservation] {
-        entries.compactMap { entry in
-            let phase = CyclePhaseResolver.phase(on: entry.date, entries: entries, prediction: prediction, calendar: calendar)
+        let starts = periodStarts(for: entries)
+        return entries.compactMap { entry in
+            let phase = CyclePhaseResolver.phase(
+                on: entry.date, entries: entries, prediction: prediction,
+                calendar: calendar, periodStarts: starts
+            )
             guard phase != .unknown else { return nil }
             let wellbeing = wellbeingByDay[entry.dateKey]
             let symptomLoad = entry.narrative.map { Double($0.symptomFlags.count) / Double(PeriodSymptom.allCases.count) }

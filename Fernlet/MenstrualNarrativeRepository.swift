@@ -47,25 +47,31 @@ final class MenstrualNarrativeRepository {
 
     func insert(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
-        let object = NSEntityDescription.insertNewObject(forEntityName: "MenstrualNarrative", into: context)
-        try apply(narrative, to: object, contentKey: contentKey, createdAt: narrative.createdAt)
-        try context.save()
+        try context.performAndWait {
+            let object = NSEntityDescription.insertNewObject(forEntityName: "MenstrualNarrative", into: context)
+            try apply(narrative, to: object, contentKey: contentKey, createdAt: narrative.createdAt)
+            try context.save()
+        }
     }
 
     func update(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
-        let request = request(id: narrative.id)
-        guard let object = try context.fetch(request).first else { return }
-        let createdAt = object.value(forKey: "createdAt") as? Date ?? narrative.createdAt
-        try apply(narrative, to: object, contentKey: contentKey, createdAt: createdAt)
-        try context.save()
+        try context.performAndWait {
+            let request = request(id: narrative.id)
+            guard let object = try context.fetch(request).first else { return }
+            let createdAt = object.value(forKey: "createdAt") as? Date ?? narrative.createdAt
+            try apply(narrative, to: object, contentKey: contentKey, createdAt: createdAt)
+            try context.save()
+        }
     }
 
     func delete(id: UUID) throws {
-        let request = request(id: id)
-        try context.fetch(request).forEach(context.delete)
-        try context.save()
-        try PrivatePersistentHistoryPruner.prune(context: context)
+        try context.performAndWait {
+            let request = request(id: id)
+            try context.fetch(request).forEach(context.delete)
+            try context.save()
+            try PrivatePersistentHistoryPruner.prune(context: context)
+        }
     }
 
     /// All stored narratives, decrypted. Used by the sealed-backup export, which needs every record
@@ -73,13 +79,15 @@ final class MenstrualNarrativeRepository {
     /// `narratives(in:)` performs (catastrophic for an unbounded date range).
     func allNarratives(contentKey: SymmetricKey?) throws -> [MenstrualNarrative] {
         guard let contentKey else { return [] }
-        let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
-        request.sortDescriptors = [NSSortDescriptor(key: "dateKey", ascending: true)]
-        return try context.fetch(request).compactMap { object in
-            do {
-                return try decrypt(object, contentKey: contentKey)
-            } catch {
-                return nil
+        return try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
+            request.sortDescriptors = [NSSortDescriptor(key: "dateKey", ascending: true)]
+            return try context.fetch(request).compactMap { object in
+                do {
+                    return try decrypt(object, contentKey: contentKey)
+                } catch {
+                    return nil
+                }
             }
         }
     }
@@ -88,25 +96,29 @@ final class MenstrualNarrativeRepository {
         guard let contentKey else { return [] }
         let keys = Self.dateKeys(in: dateRange)
         guard !keys.isEmpty else { return [] }
-        let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
-        request.predicate = NSPredicate(format: "dateKey IN %@", keys)
-        request.sortDescriptors = [NSSortDescriptor(key: "dateKey", ascending: true)]
-        return try context.fetch(request).compactMap { object in
-            do {
-                return try decrypt(object, contentKey: contentKey)
-            } catch {
-                return nil
+        return try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
+            request.predicate = NSPredicate(format: "dateKey IN %@", keys)
+            request.sortDescriptors = [NSSortDescriptor(key: "dateKey", ascending: true)]
+            return try context.fetch(request).compactMap { object in
+                do {
+                    return try decrypt(object, contentKey: contentKey)
+                } catch {
+                    return nil
+                }
             }
         }
     }
 
     func narrative(forHKUUID hkExternalUUID: String, contentKey: SymmetricKey?) throws -> MenstrualNarrative? {
         guard let contentKey else { return nil }
-        let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
-        request.fetchLimit = 1
-        request.predicate = NSPredicate(format: "hkExternalUUID == %@", hkExternalUUID)
-        guard let object = try context.fetch(request).first else { return nil }
-        return try decrypt(object, contentKey: contentKey)
+        return try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
+            request.fetchLimit = 1
+            request.predicate = NSPredicate(format: "hkExternalUUID == %@", hkExternalUUID)
+            guard let object = try context.fetch(request).first else { return nil }
+            return try decrypt(object, contentKey: contentKey)
+        }
     }
 
     private func apply(_ narrative: MenstrualNarrative, to object: NSManagedObject, contentKey: SymmetricKey, createdAt: Date) throws {

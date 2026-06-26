@@ -97,6 +97,15 @@ rest into one **"new items" PR done first**.
    surfacing (cycle chip + outlook bubble, opt-in-gated), Period-screen trends card + first-use primer
    (onboarding), Settings toggle. Adversarially reviewed (10 confirmed findings fixed: the CloudKit leak,
    stale-trend/log-edit refresh, 3-completed-cycle gate). 33 new tests (engines + bridge + scoring), all green.
+   **Follow-up pass (2026-06-26):** the two remaining LOW findings resolved — A1 *locked-state phase* kept
+   intentionally conservative (only `.menstrual`/`.unknown` when locked) and documented as a deliberate
+   deviation from plan §5.3 (the lock is a "forget the whole cycle" gate); A2 *hot-path perf* fixed with a
+   single `cachedPeriodStarts` memo in the bridge (invalidated in `refresh()`, observed-flow stays live) so
+   the ~12 score reads/render no longer re-group 240 days of flow. Separately fixed a **pre-existing flaky
+   Core Data crash**: the sealed-narrative repos now run their context fetch/save/delete/prune inside
+   `context.performAndWait` (production callers are all `@MainActor`, so reentrant/no-op there; parallel
+   off-main test callers now serialize onto the context queue instead of corrupting the heap). 3 clean
+   full-suite runs + a new bridge cache-invalidation test; byte-identical + phase-strip invariants verified.
 7. **S3 Swift-package split** — **last**; it edits `Models.swift` / `FernletStore.swift` /
    `project.pbxproj` that every other item also touches. Ship #6 against the existing grep boundary
    (`S3BoundaryTests`); retrofit compiler module walls here. (Only do S3 first if the bridge must be

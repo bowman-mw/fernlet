@@ -61,47 +61,55 @@ final class IntimacyLogRepository {
 
     func insert(_ log: IntimacyLog, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
-        let object = NSEntityDescription.insertNewObject(forEntityName: "IntimacyLog", into: context)
-        object.setValue(log.id, forKey: "id")
-        object.setValue(log.dayKey, forKey: "dayKey")
-        object.setValue(log.eventDate, forKey: "eventDate")
-        object.setValue(try crypto.sealString(log.note, contentKey: contentKey), forKey: "noteCiphertext")
-        object.setValue(log.healthKitExternalUUID, forKey: "healthKitExternalUUID")
-        object.setValue(log.createdAt, forKey: "createdAt")
-        object.setValue(log.updatedAt, forKey: "updatedAt")
-        try context.save()
+        try context.performAndWait {
+            let object = NSEntityDescription.insertNewObject(forEntityName: "IntimacyLog", into: context)
+            object.setValue(log.id, forKey: "id")
+            object.setValue(log.dayKey, forKey: "dayKey")
+            object.setValue(log.eventDate, forKey: "eventDate")
+            object.setValue(try crypto.sealString(log.note, contentKey: contentKey), forKey: "noteCiphertext")
+            object.setValue(log.healthKitExternalUUID, forKey: "healthKitExternalUUID")
+            object.setValue(log.createdAt, forKey: "createdAt")
+            object.setValue(log.updatedAt, forKey: "updatedAt")
+            try context.save()
+        }
     }
 
     func logs(contentKey: SymmetricKey?) throws -> [IntimacyLog] {
         guard let contentKey else { return [] }
-        let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
-        request.sortDescriptors = [NSSortDescriptor(key: "eventDate", ascending: false)]
-        return try context.fetch(request).compactMap { object in
-            do {
-                return try decryptLog(object, contentKey: contentKey)
-            } catch {
-                return nil
+        return try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
+            request.sortDescriptors = [NSSortDescriptor(key: "eventDate", ascending: false)]
+            return try context.fetch(request).compactMap { object in
+                do {
+                    return try decryptLog(object, contentKey: contentKey)
+                } catch {
+                    return nil
+                }
             }
         }
     }
 
     func delete(id: UUID) throws {
-        let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
-        request.fetchLimit = 1
-        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
-        try context.fetch(request).forEach(context.delete)
-        try context.save()
-        try PrivatePersistentHistoryPruner.prune(context: context)
+        try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
+            request.fetchLimit = 1
+            request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+            try context.fetch(request).forEach(context.delete)
+            try context.save()
+            try PrivatePersistentHistoryPruner.prune(context: context)
+        }
     }
 
     func markSavedToHealthKit(id: UUID, externalUUID: UUID) throws {
-        let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
-        request.fetchLimit = 1
-        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
-        guard let object = try context.fetch(request).first else { return }
-        object.setValue(externalUUID.uuidString, forKey: "healthKitExternalUUID")
-        object.setValue(Date(), forKey: "updatedAt")
-        try context.save()
+        try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
+            request.fetchLimit = 1
+            request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+            guard let object = try context.fetch(request).first else { return }
+            object.setValue(externalUUID.uuidString, forKey: "healthKitExternalUUID")
+            object.setValue(Date(), forKey: "updatedAt")
+            try context.save()
+        }
     }
 
     private func decryptLog(_ object: NSManagedObject, contentKey: SymmetricKey) throws -> IntimacyLog? {

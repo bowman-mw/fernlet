@@ -41,14 +41,16 @@ final class PrivatePersistenceController {
 
     func purgeEncryptedEntities() throws {
         let context = container.viewContext
-        for entityName in ["MenstrualNarrative", "JournalNarrative", "IntimacyLog"] {
-            let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
-            try context.fetch(request).forEach(context.delete)
+        try context.performAndWait {
+            for entityName in ["MenstrualNarrative", "JournalNarrative", "IntimacyLog"] {
+                let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
+                try context.fetch(request).forEach(context.delete)
+            }
+            if context.hasChanges {
+                try context.save()
+            }
+            try PrivatePersistentHistoryPruner.prune(context: context)
         }
-        if context.hasChanges {
-            try context.save()
-        }
-        try PrivatePersistentHistoryPruner.prune(context: context)
     }
 
     // MARK: - Model

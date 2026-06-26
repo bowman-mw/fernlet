@@ -79,7 +79,10 @@ struct SnapshotSaveCoordinatorTests {
     }
 
     private func waitUntil(
-        timeout: Duration = .seconds(1),
+        // Generous headroom: these debounces are 20ms, but under full-suite CPU saturation the timer can
+        // fire late. The loop returns as soon as the condition holds, so a longer ceiling never slows a
+        // passing run — it only stops a saturated scheduler from tripping a false timeout.
+        timeout: Duration = .seconds(10),
         condition: @escaping @MainActor () -> Bool
     ) async {
         let clock = ContinuousClock()
