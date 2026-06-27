@@ -479,3 +479,84 @@ under `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`, with the gate (batch C p
   routes to the PURE `diary.appendWorkout` so a workout imported FROM HealthKit isn't re-saved to HealthKit. (5)
   `sealedBackupContentKey` is the one context member NOT forwarded (→ `journalSealingCoordinator.contentKey`); the key never
   enters DiaryStore. Behavior-identical: full `FernletTests` ALL-GREEN, zero test files changed.
+
+## 14. Step 9 handoff — platform shims extracted (executed 2026-06-27, session 4)
+
+**Branch:** `claude/laughing-goldstine-c8b9e9`. Base: HEAD `3da080c` (which already fully contained
+`main`, incl. the sealed-backup chunking `fc42532` — the requested "merge main first" was a no-op).
+**Status:** step 9 (the four platform shims) DONE, one commit per module, each build-green under
+`DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` with its targeted test batch; FULL suite at the
+step-9 boundary. The umbrella `FernletKit` product now has **21 targets**.
+
+### Modules extracted (commit → module)
+- `2260ebc` **HealthKitGateway** (layer 6, MainActor): HealthKitService + WorkoutHealthKitSync +
+  ActivityTypeCatalog. Deps PrivateHealthStore (the `extension HealthKitService:
+  PeriodHealthKitServicing` seam — an ALLOWED edge) + DomainModel + FernletFoundation.
+- `e8a065c` **FernletLock** (layer 6, MainActor): FernletLockService only. Deps FernletFoundation +
+  DomainModel + PrivateStoreCore + PrivateHealthStore + the external **CryptoSwift** package.
+- `6016f18` **AppServices** (layer 6, NO defaultIsolation): NotificationService, WeatherKitService
+  (@MainActor), NutritionLabelScanner, SharedRecipeImportQueue. Deps DomainModel + AIProviders.
+- `649858e` **ProximityKit** (layer 6, MainActor): 21 of the 27 Proximity/ files as one black-box
+  target. Deps PrivateMediaStore + DomainModel + FernletFoundation.
+
+### Deviations / decisions worth knowing
+- **Two `swiftLanguageMode(.v5)` targets: HealthKitGateway and ProximityKit.** Both wrap callback-heavy
+  Apple frameworks whose `nonisolated` delegate/completion handlers hop to `@MainActor` via `Task` while
+  capturing non-Sendable framework objects — HealthKit anchored-object-query handlers; NISessionDelegate
+  /MCSessionDelegate callbacks (NISession, [NINearbyObject], MCSession). This compiled under the app
+  target's Swift 5 mode but is a hard data-race error under the package's Swift 6 default. v5 on these two
+  targets preserves the exact original concurrency contract rather than rewriting working transport code.
+  (The other 19 targets stay Swift 6.)
+- **Cache-cleaner seam (HealthKitGateway):** the concrete `CoreDataHealthKitCacheCleaner` needs
+  CloudKitSync's `PersistenceController` + LocalPersistence's `LocalFernletDatabase`, which the gateway
+  must not depend on, so it STAYS in the app (`Fernlet/CoreDataHealthKitCacheCleaner.swift`) and is
+  injected via `HealthKitService.defaultCacheClearer` (no-op default in the gateway), set in
+  `FernletApp.init()` before any HealthKitService is built. The `HealthKitCacheClearing` protocol moved
+  to the gateway (public).
+- **CryptoSwift is FernletKit's first external package dependency** — `.upToNextMinor(from: "1.10.0")`,
+  matching the app's pbxproj reference exactly so SPM resolves a single shared CryptoSwift. Only
+  FernletLock uses it (Scrypt KDF).
+- **Spurious-import trap caught at the gateway step:** the HealthKitGateway extraction added
+  `import HealthKitGateway` to `Proximity/ProximityHost.swift` (WorkoutSyncContext is doc-comment-only
+  there); the orchestrator removed it because ProximityHost.swift later moves to ProximityKit, which has
+  no HealthKitGateway dep — under the wall flag that would have been a hard error in the ProximityKit step.
+
+### ProximityKit split (the only module that left files behind)
+6 of the 27 Proximity/ files STAY in the app (backward edges; FernletUI isn't carved out yet):
+`Audit/ConnectionInspector.swift` (holds `weak var store: FernletStore?`), the 4 `UI/*` SwiftUI views
+(app Color extensions + FernletCard/SectionLabel/ScreenHeader + FernletStore), and
+`Photos/FriendPhotoReviewSheet.swift` (app Color + ChipButtonStyle). `ProximityHostAdapter.swift` (the
+FernletStore→ProximityHost conformance) also stays. The 21 movers are self-contained (verified: no mover
+references a staying type, and no lower module references a mover — the proximity persistence DTOs +
+ProximityCoordinator's nested enums were already hoisted to DomainModel in step 4 prep, so cross
+references are downward typealiases). `ConnectionSessionLog` is in DomainModel and crosses freely.
+
+### Boundary FULL-suite result + pre-existing failures fixed/flagged
+The step-9 boundary FULL suite (batches A–E) surfaced THREE failures, all PRE-EXISTING from earlier
+sessions (the prior handoffs' "ALL-GREEN" was at a commit before these were broken; the full suite was
+not re-run at `3da080c`). `git diff 3da080c..HEAD` proves step 9 touched none of the relevant code paths:
+- `PeriodPredictionUITests.predictionPathDoesNotReferenceAICode` / `...DoesNotWritePredictionsToHealthKit`
+  read source via `#filePath` with hardcoded paths to `Fernlet/CyclePredictionEngine.swift` +
+  `Fernlet/PeriodTrackerStore.swift`, which moved to `FernletKit/Sources/PrivateHealthStore/` in **step 6**.
+  **FIXED** in `9cc94b0` (paths updated; no assertion changed) — both pass.
+- `FernletPersistenceTests.test_reload_updatesReloadingState` is a **load-sensitive FLAKY** observation
+  race: `withObservationTracking`'s single-shot `onChange` schedules a `Task { @MainActor in … }` that
+  reads `PersistenceController.isReloading` after the `@MainActor reload()` may have already flipped it
+  back to false. It failed once under the full-suite's parallel sim-clone load but PASSES 3/3 in isolation.
+  Pre-existing since `PersistenceController` became `nonisolated` in step 8 (CloudKitSync). NOT fixed — it
+  is unrelated prior-session test debt; recommend hardening the test (deterministic observation) or a
+  retry annotation in a follow-up. **All other suites green.**
+
+### Hardcoded-source-path tests to track across future moves (now FOUR)
+`S3BoundaryTests` (walks both Fernlet/ AND FernletKit/Sources, robust), `PeriodTrackerTests.menstrualFlow
+CountReferenceIsRestrictedToAllowedFiles` (allowlist), the two FernletLock `#filePath` tests
+(FernletLockServiceTests/FernletLockCryptoTests), and now `PeriodPredictionUITests.runGitGrep`. Any file
+move/rename of the symbols they scan must update their hardcoded paths/allowlists.
+
+### Remaining work (next session)
+1. (Optional) the 3 deferred AI-file inversions (§12 item 5) to put all 6 AI providers behind the wall:
+   FoundationDishDecomposition, FoodProductWebImporter, LaunchPreparationService.
+2. Carving `FernletUI` is the blocker for the 6 app-resident Proximity UI files + the lock SwiftUI views
+   to finish moving into their modules.
+3. (Optional) harden the flaky `test_reload_updatesReloadingState`.
+4. DO NOT do step 10 (delete S3BoundaryTests / per-target test targets) — post-review.
