@@ -24,7 +24,12 @@ protocol SealedBackupContext: AnyObject {
 /// store/core path.
 @MainActor
 final class SealedBackupCoordinator {
-    enum SealedBackupWiringError: Error { case locked }
+    enum SealedBackupWiringError: Error, Equatable {
+        /// Period-data sealing/restore attempted while the content key is locked.
+        case locked
+        /// Restore attempted into a store that already holds user data — refused to avoid clobbering.
+        case storeNotEmpty
+    }
 
     private unowned let host: any SealedBackupContext
 
@@ -126,12 +131,24 @@ final class SealedBackupCoordinator {
     /// iCloud. Period data re-seals each narrative with the current device's content key, so it
     /// requires an unlocked key and throws `SealedBackupWiringError.locked` otherwise (retried next
     /// launch after unlock).
+    ///
+    /// Precondition: the store must be empty for `payloadType` (see `isEmptyStoreForRestore`). This
+    /// is enforced here — not just in `restoreSealedBackup` — so the no-clobber invariant holds for
+    /// every caller (defense in depth) and throws `SealedBackupWiringError.storeNotEmpty` otherwise.
+    /// The production caller already gates on this before any network work, so the re-check is cheap
+    /// insurance; it also closes the window where the store gains data during `restore`'s `await`.
     @discardableResult
     func applyRestoredPayload(
         _ plaintext: Data,
         payloadType: SealedBackupPayloadType,
         narrativeRepository: MenstrualNarrativeRepository? = nil
     ) throws -> Int {
+        // No-clobber guard: refuse to overwrite/insert into a store that already holds user data,
+        // regardless of how this method was reached.
+        guard isEmptyStoreForRestore(payloadType: payloadType) else {
+            FernletAuditLog.log("sealedBackup.applySkippedNonEmpty", context: ["payload": payloadType.rawValue])
+            throw SealedBackupWiringError.storeNotEmpty
+        }
         // Constructed here rather than as a default argument: `MenstrualNarrativeRepository` is
         // MainActor-isolated, and default-argument expressions evaluate in a nonisolated context.
         let narrativeRepository = narrativeRepository ?? MenstrualNarrativeRepository()

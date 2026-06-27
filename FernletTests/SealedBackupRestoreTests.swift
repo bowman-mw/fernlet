@@ -29,6 +29,34 @@ struct SealedBackupRestoreTests {
         #expect(store.tierTwoMemories == before)
     }
 
+    @MainActor
+    @Test func applyRestoredSensitiveNotesRefusesToClobberPopulatedStore() throws {
+        // Defense in depth: even called directly (bypassing restoreSealedBackup's guard),
+        // applyRestoredPayload must not overwrite an existing store.
+        let store = makePopulatedTestStore()
+        let before = store.tierTwoMemories
+        let data = try JSONEncoder().encode([
+            TierTwoMemoryRecord(category: "consistency", text: "Should not be written.", state: "steady")
+        ])
+        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
+            try store.applyRestoredPayload(data, payloadType: .sensitiveNotes)
+        }
+        #expect(store.tierTwoMemories == before)
+    }
+
+    @MainActor
+    @Test func applyRestoredPeriodRefusesToClobberPopulatedStore() throws {
+        // The no-clobber guard runs before the locked-key check, so a populated store throws
+        // `storeNotEmpty` even when no content key is active.
+        let store = makePopulatedTestStore()
+        let data = try JSONEncoder().encode([
+            MenstrualNarrative(hkExternalUUID: "uuid-1", dateKey: "2026-06-01", note: "x", symptomFlags: [])
+        ])
+        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
+            try store.applyRestoredPayload(data, payloadType: .periodData)
+        }
+    }
+
     // MARK: - Tier-2 (sensitive notes) writeback
 
     @MainActor
