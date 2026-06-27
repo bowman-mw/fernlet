@@ -326,15 +326,15 @@ private struct FDCMeasureUnit: Decodable {
     let abbreviation: String?
 }
 
-enum FoodDataCatalog {
+public enum FoodDataCatalog {
     /// Source JSON file names (repo-only, under `FoodDataSource/`). These are no longer bundled
     /// into the app — they are the build-time input to `FoodCatalogDatabaseBuilder`, which emits the
     /// read-only `FoodCatalog.sqlite` resource the app actually ships. See FoodCatalog.swift.
-    nonisolated static let sourceResourceNames = ["USDAFoodItems", "CuratedSurveyFoodItems"]
+    public nonisolated static let sourceResourceNames = ["USDAFoodItems", "CuratedSurveyFoodItems"]
 
     /// Decodes a single USDA JSON payload (compact bundled schema *or* raw FDC envelope) into
     /// `FoodItem`s. Used by both the database generator and the decoder unit tests.
-    nonisolated static func foodItems(from data: Data) -> [FoodItem] {
+    public nonisolated static func foodItems(from data: Data) -> [FoodItem] {
         StartupTiming.timed("FoodDataCatalog.foodItems.decode") {
             guard !data.isEmpty else { return [] }
             let decoder = JSONDecoder()
@@ -346,7 +346,7 @@ enum FoodDataCatalog {
     /// Reads every source JSON file from `directory` and returns the merged `FoodItem`s with the
     /// canonical aliases applied — the exact set the SQLite catalog is generated from. Generation
     /// time only; the app reads `FoodCatalog.sqlite` at runtime, never these files.
-    nonisolated static func sourceJSONFoodItems(directory: URL) -> [FoodItem] {
+    public nonisolated static func sourceJSONFoodItems(directory: URL) -> [FoodItem] {
         let items = sourceResourceNames.flatMap { name -> [FoodItem] in
             let url = directory.appendingPathComponent(name).appendingPathExtension("json")
             guard let data = try? Data(contentsOf: url) else { return [] }
@@ -372,7 +372,7 @@ enum FoodDataCatalog {
     }
 }
 
-enum CompositeFoodLexicon {
+public enum CompositeFoodLexicon {
     nonisolated private static let singleTokenComposites: Set<String> = [
         "sandwich", "burger", "cheeseburger", "hamburger", "bowl", "taco", "tacos",
         "wrap", "burrito", "quesadilla", "enchilada", "fajita", "sub", "hoagie",
@@ -384,7 +384,7 @@ enum CompositeFoodLexicon {
         "french dip", "club sandwich", "egg salad", "tuna melt", "chicken parm"
     ]
 
-    nonisolated static func isComposite(_ itemName: String) -> Bool {
+    public nonisolated static func isComposite(_ itemName: String) -> Bool {
         let normalized = FoodItemSearch.normalized(itemName)
         for term in multiWordComposites where normalized.contains(FoodItemSearch.normalized(term)) {
             return true

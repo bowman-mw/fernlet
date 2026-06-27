@@ -1,6 +1,7 @@
 import Foundation
 import FernletDomainModel
 import FernletScoring
+import FoodCatalog
 
 // MARK: - JSON types
 
@@ -38,7 +39,7 @@ private struct DishTemplateFile: Decodable {
 // MARK: - Lexicon
 
 /// Loads DishTemplates.json once and provides deterministic dish lookup for the M2 fallback path.
-enum DishTemplateLexicon {
+public enum DishTemplateLexicon {
     /// Single lazy load — both templates and the name index built together.
     private static let catalog: (templates: [DishTemplate], index: [String: DishTemplateMatch]) = {
         guard
@@ -101,7 +102,7 @@ enum DishTemplateLexicon {
 
     // MARK: Component bounds
 
-    static func componentGramBounds(description: String) -> [String: ClosedRange<Double>] {
+    public static func componentGramBounds(description: String) -> [String: ClosedRange<Double>] {
         var bounds: [String: ClosedRange<Double>] = [:]
         for itemName in MealItemSplitter.items(from: description) {
             let (match, count) = matchDetailsWithCount(itemName)
@@ -125,7 +126,7 @@ enum DishTemplateLexicon {
     ///
     /// All items split from the description must be found in the lexicon for this to return non-nil;
     /// if any item is unrecognised the whole call returns nil so the next fallback tier can handle it.
-    static func resolve(
+    public static func resolve(
         description: String,
         mealType: MealType?,
         catalog: FoodCatalog

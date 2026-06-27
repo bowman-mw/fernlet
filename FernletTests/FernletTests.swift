@@ -12,6 +12,7 @@ import HealthKit
 import Testing
 import FernletDomainModel
 import FernletScoring
+import FoodCatalog
 @testable import Fernlet
 
 struct FernletTests {
@@ -946,7 +947,7 @@ struct FernletTests {
     }
 
     @Test func bundledUSDAFoodItemsAreAvailable() throws {
-        let source = try #require(SQLiteBundledFoodSource(bundle: .main), "FoodCatalog.sqlite must be bundled")
+        let source = try #require(SQLiteBundledFoodSource(), "FoodCatalog.sqlite must be bundled")
 
         #expect(source.count > 0)
         #expect(source.exactMatch(normalizedName: FoodItemSearch.normalized("Chicken breast, roasted")) != nil)

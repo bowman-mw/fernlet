@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletScoring
+import FoodCatalog
 
 #if canImport(UIKit)
 import UIKit

@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog"]),
     ],
     targets: [
         .target(
@@ -57,6 +57,20 @@ let package = Package(
         .target(
             name: "FernletScoring",
             dependencies: ["FernletFoundation", "FernletDomainModel"]
+        ),
+        // Layer 1 — USDA food search/scoring + dish lexicon. Owns the bundled
+        // read-only resources (loaded via Bundle.module, NOT Bundle.main). Pure
+        // services (nonisolated), so no defaultIsolation.
+        .target(
+            name: "FoodCatalog",
+            dependencies: ["FernletFoundation", "FernletDomainModel", "FernletScoring"],
+            // DishTemplates.json + DishTemplateLexicon stay in the app target:
+            // DishTemplateLexicon.resolve assembles meals via the @MainActor,
+            // AI-coupled app service MealBuilder, so it can't live in this
+            // nonisolated layer-1 module. Only FoodCatalog.sqlite is owned here.
+            resources: [
+                .copy("Resources/FoodCatalog.sqlite"),
+            ]
         ),
     ]
 )

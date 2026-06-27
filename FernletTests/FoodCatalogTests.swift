@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import FoodCatalog
 @testable import Fernlet
 
 struct FoodCatalogTests {
@@ -175,7 +176,7 @@ struct FoodCatalogTests {
 ///     -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' \
 ///     -only-testing:FernletTests/FoodCatalogGenerationTests
 ///
-/// Rebuild afterwards so the synced `Fernlet/` group bundles the refreshed resource.
+/// Rebuild afterwards so the FoodCatalog package target bundles the refreshed resource.
 struct FoodCatalogGenerationTests {
     @Test func regenerateFoodCatalogDatabase() throws {
         // Xcode forwards `TEST_RUNNER_`-prefixed vars to the simulator test process (usually with the
@@ -187,7 +188,7 @@ struct FoodCatalogGenerationTests {
             .deletingLastPathComponent()   // FernletTests/
             .deletingLastPathComponent()   // repo root
         let jsonDirectory = repoRoot.appendingPathComponent("FoodDataSource")
-        let outputURL = repoRoot.appendingPathComponent("Fernlet/FoodCatalog.sqlite")
+        let outputURL = repoRoot.appendingPathComponent("FernletKit/Sources/FoodCatalog/Resources/FoodCatalog.sqlite")
 
         let items = FoodDataCatalog.sourceJSONFoodItems(directory: jsonDirectory)
         #expect(items.count > 10_000, "expected the full USDA subset; got \(items.count) — is FoodDataSource present?")

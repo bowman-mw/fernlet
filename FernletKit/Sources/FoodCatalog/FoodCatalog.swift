@@ -10,18 +10,20 @@ import FernletDomainModel
 /// Thread-safe: the SQLite source serializes its own access and the user-items snapshot is guarded by
 /// a lock, so the catalog can be queried from any actor (the AI meal-resolution path runs off the
 /// main actor).
-nonisolated final class FoodCatalog: @unchecked Sendable {
+public nonisolated final class FoodCatalog: @unchecked Sendable {
     private let source: BundledFoodSource
     private let lock = NSLock()
     private var _userItems: [FoodItem] = []
 
-    init(source: BundledFoodSource) {
+    public init(source: BundledFoodSource) {
         self.source = source
     }
 
     /// Convenience for production: opens the bundled `FoodCatalog.sqlite`, falling back to an empty
-    /// catalog (user items only) if the resource is missing.
-    static func bundled(bundle: Bundle = .main) -> FoodCatalog {
+    /// catalog (user items only) if the resource is missing. `bundle` defaults to this module's
+    /// resource bundle (`.module`); it is passed as `nil` here because `.module` is synthesized as
+    /// internal and cannot appear as a default-argument value in this public API.
+    public static func bundled(bundle: Bundle? = nil) -> FoodCatalog {
         FoodCatalog(source: SQLiteBundledFoodSource(bundle: bundle) ?? InMemoryBundledFoodSource())
     }
 
@@ -31,24 +33,24 @@ nonisolated final class FoodCatalog: @unchecked Sendable {
     }
 
     /// Keeps the catalog's view of user-added foods in sync with `FernletStore.foodItems`.
-    func setUserItems(_ items: [FoodItem]) {
+    public func setUserItems(_ items: [FoodItem]) {
         lock.lock(); _userItems = items; lock.unlock()
     }
 
     /// Number of bundled foods — used by callers that previously guarded on `!foodItems.isEmpty`.
-    var bundledCount: Int { source.count }
+    public var bundledCount: Int { source.count }
 
     // MARK: - Search
 
-    func results(for query: String, limit: Int = 6) -> [FoodItem] {
+    public func results(for query: String, limit: Int = 6) -> [FoodItem] {
         FoodItemSearch.results(for: query, in: index(for: query), limit: limit)
     }
 
-    func scoredResults(for query: String, limit: Int = 6) -> [(item: FoodItem, score: Int)] {
+    public func scoredResults(for query: String, limit: Int = 6) -> [(item: FoodItem, score: Int)] {
         FoodItemSearch.scoredResults(for: query, in: index(for: query), limit: limit)
     }
 
-    func exactNameMatch(forNormalized normalizedName: String) -> FoodItem? {
+    public func exactNameMatch(forNormalized normalizedName: String) -> FoodItem? {
         let users = userItems
         // Manual user entries win ties (source priority manual > usda > aiResolved), matching the old
         // in-memory `Index.exactNameMatch`.
@@ -61,7 +63,7 @@ nonisolated final class FoodCatalog: @unchecked Sendable {
 
     /// Builds the candidate pool a meal description should be resolved against, mirroring the legacy
     /// `FoodSelectionCandidateBuilder.candidates(for:foodItems:)` but sourcing matches from SQLite.
-    func candidates(for description: String, limit: Int = 18) -> [FoodSelectionCandidate] {
+    public func candidates(for description: String, limit: Int = 18) -> [FoodSelectionCandidate] {
         var selected: [FoodItem] = []
         for phrase in FoodSelectionCandidateBuilder.searchPhrases(from: description) {
             for match in results(for: phrase, limit: 4) where !selected.contains(where: { $0.id == match.id }) {
@@ -79,11 +81,11 @@ nonisolated final class FoodCatalog: @unchecked Sendable {
 
     // MARK: - Resolution
 
-    func item(id: UUID) -> FoodItem? {
+    public func item(id: UUID) -> FoodItem? {
         userItems.first(where: { $0.id == id }) ?? source.item(id: id)
     }
 
-    func items(ids: [UUID]) -> [FoodItem] {
+    public func items(ids: [UUID]) -> [FoodItem] {
         guard !ids.isEmpty else { return [] }
         let wanted = Set(ids)
         let users = userItems.filter { wanted.contains($0.id) }
@@ -94,19 +96,19 @@ nonisolated final class FoodCatalog: @unchecked Sendable {
 
     /// The foods referenced by a single recipe's ingredients — what callers pass to MealBuilder /
     /// RecipeShareCodec instead of the whole catalog.
-    func items(forRecipe recipe: RecipeDefinition) -> [FoodItem] {
+    public func items(forRecipe recipe: RecipeDefinition) -> [FoodItem] {
         items(ids: recipe.ingredients.map(\.foodItemId))
     }
 
     /// The foods referenced across several recipes (deduplicated) — for the meal-plan builder, which
     /// may match any existing recipe.
-    func items(forRecipes recipes: [RecipeDefinition]) -> [FoodItem] {
+    public func items(forRecipes recipes: [RecipeDefinition]) -> [FoodItem] {
         items(ids: Array(Set(recipes.flatMap { $0.ingredients.map(\.foodItemId) })))
     }
 
     /// The (zero or one) food a recipe-editor input is currently bound to — enough to resolve its
     /// locked macros without materializing the full catalog.
-    func resolved(for input: ManualRecipeIngredientInput) -> [FoodItem] {
+    public func resolved(for input: ManualRecipeIngredientInput) -> [FoodItem] {
         items(ids: [input.selectedFoodItemId].compactMap { $0 })
     }
 }

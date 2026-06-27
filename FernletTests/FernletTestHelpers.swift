@@ -1,5 +1,6 @@
 import XCTest
 import FernletDomainModel
+import FoodCatalog
 @testable import Fernlet
 
 /// Creates a FernletStore backed by an in-memory Core Data stack.

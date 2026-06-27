@@ -6,7 +6,7 @@ import FernletDomainModel
 
 /// SQLite asks, via this sentinel destructor, that it copy bound text immediately so the Swift
 /// String backing the bind can be transient. Used by both the generator and the read path.
-nonisolated func sqliteBindText(_ stmt: OpaquePointer?, _ index: Int32, _ value: String?) {
+public nonisolated func sqliteBindText(_ stmt: OpaquePointer?, _ index: Int32, _ value: String?) {
     let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
     if let value {
         sqlite3_bind_text(stmt, index, value, -1, transient)
@@ -15,7 +15,7 @@ nonisolated func sqliteBindText(_ stmt: OpaquePointer?, _ index: Int32, _ value:
     }
 }
 
-nonisolated func sqliteColumnText(_ stmt: OpaquePointer?, _ index: Int32) -> String? {
+public nonisolated func sqliteColumnText(_ stmt: OpaquePointer?, _ index: Int32) -> String? {
     guard let cString = sqlite3_column_text(stmt, index) else { return nil }
     return String(cString: cString)
 }
@@ -25,24 +25,24 @@ nonisolated func sqliteColumnText(_ stmt: OpaquePointer?, _ index: Int32) -> Str
 /// Single source of truth for the `FoodCatalog.sqlite` shape, shared by the generator
 /// (`FoodCatalogDatabaseBuilder`) and the read path (`SQLiteBundledFoodSource`). The generator's
 /// INSERT column list and the reader's SELECT column list must both agree with these names.
-nonisolated enum FoodCatalogSchema {
-    static let userVersion: Int32 = 1
-    static let resourceName = "FoodCatalog"
-    static let resourceExtension = "sqlite"
+public nonisolated enum FoodCatalogSchema {
+    public static let userVersion: Int32 = 1
+    public static let resourceName = "FoodCatalog"
+    public static let resourceExtension = "sqlite"
 
     /// Caps how many FTS candidates are hydrated for a single query before the in-memory scorer
     /// ranks them. Far above any realistic gate-passing set (the broadest single tokens match a few
     /// hundred rows), so ranking parity with the old all-items scorer is preserved in practice.
-    static let candidateFetchLimit = 6000
+    public static let candidateFetchLimit = 6000
 
     /// Columns selected (in this order) when hydrating a `FoodItem`. Index positions are mirrored in
     /// `SQLiteBundledFoodSource.hydrate`.
-    static let selectColumns = """
+    public static let selectColumns = """
     id, name, brand_source, serving_size, serving_unit, protein, carbs, fat, category, source, \
     data_type, serving_description, verification_policy_days, is_flagged, micronutrients, tags, portions
     """
 
-    static let createFoodTableSQL = """
+    public static let createFoodTableSQL = """
     CREATE TABLE food (
         food_id INTEGER PRIMARY KEY,
         id TEXT NOT NULL,
@@ -66,7 +66,7 @@ nonisolated enum FoodCatalogSchema {
     );
     """
 
-    static let createIndexesSQL = """
+    public static let createIndexesSQL = """
     CREATE INDEX idx_food_id ON food(id);
     CREATE INDEX idx_food_normalized_name ON food(normalized_name);
     """
@@ -74,7 +74,7 @@ nonisolated enum FoodCatalogSchema {
     // Mirrors the normalization the scorer applies, so the FTS gate matches the scorer gate.
     // Contentless (`content=''`, `columnsize=0`): candidates() only reads matching rowids back
     // (= food_id) and never the indexed text, so storing a copy of it would just bloat the file.
-    static let createFTSSQL = """
+    public static let createFTSSQL = """
     CREATE VIRTUAL TABLE food_fts USING fts5(name, category, tags, content='', columnsize=0, tokenize='unicode61');
     """
 }
@@ -84,7 +84,7 @@ nonisolated enum FoodCatalogSchema {
 /// The read-only bundled food set (the ~13k USDA/curated foods). Backed by SQLite in production and
 /// by an in-memory array in tests. Returns candidate rows for a query plus point lookups; ranking is
 /// left to `FoodItemSearch` via `FoodCatalog`.
-nonisolated protocol BundledFoodSource: Sendable {
+public nonisolated protocol BundledFoodSource: Sendable {
     /// All rows whose name/category/tags satisfy the search gate for `query` (every query token must
     /// match an indexed token by equality or prefix). May return more than the caller needs — the
     /// scorer trims and ranks.
@@ -99,21 +99,24 @@ nonisolated protocol BundledFoodSource: Sendable {
 
 /// Opens the bundled `FoodCatalog.sqlite` read-only and answers candidate/point queries. All access
 /// is serialized on a private queue so the single connection is safe to share across actors.
-nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unchecked Sendable {
+public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unchecked Sendable {
     private let db: OpaquePointer?
     private let queue = DispatchQueue(label: "com.fernlet.foodcatalog.sqlite")
-    let count: Int
+    public let count: Int
 
-    /// Locates `FoodCatalog.sqlite` in `bundle`. Returns nil when the resource is absent so callers
-    /// can fall back to a user-items-only catalog rather than crashing.
-    convenience init?(bundle: Bundle = .main) {
+    /// Locates `FoodCatalog.sqlite` in `bundle` (defaults to this module's resource bundle). Returns
+    /// nil when the resource is absent so callers can fall back to a user-items-only catalog rather
+    /// than crashing. `nil` resolves to `.module`; `.module` is synthesized as internal, so it cannot
+    /// appear as a default-argument value in this public initializer.
+    public convenience init?(bundle: Bundle? = nil) {
+        let bundle = bundle ?? .module
         guard let url = bundle.url(forResource: FoodCatalogSchema.resourceName, withExtension: FoodCatalogSchema.resourceExtension) else {
             return nil
         }
         self.init(url: url)
     }
 
-    init?(url: URL) {
+    public init?(url: URL) {
         var handle: OpaquePointer?
         guard sqlite3_open_v2(url.path, &handle, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let handle else {
             sqlite3_close(handle)
@@ -125,7 +128,7 @@ nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unchecked S
 
     deinit { sqlite3_close(db) }
 
-    func candidates(forQuery query: String) -> [FoodItem] {
+    public func candidates(forQuery query: String) -> [FoodItem] {
         let tokens = FoodItemSearch.searchTokens(in: query)
         guard !tokens.isEmpty else { return [] }
         // Prefix-AND across all FTS columns mirrors the scorer's hard gate exactly. Tokens are
@@ -141,12 +144,12 @@ nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unchecked S
         return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, match) }
     }
 
-    func item(id: UUID) -> FoodItem? {
+    public func item(id: UUID) -> FoodItem? {
         let sql = "SELECT \(FoodCatalogSchema.selectColumns) FROM food WHERE id = ? LIMIT 1;"
         return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, id.uuidString) }.first
     }
 
-    func items(ids: [UUID]) -> [FoodItem] {
+    public func items(ids: [UUID]) -> [FoodItem] {
         guard !ids.isEmpty else { return [] }
         let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ", ")
         let sql = "SELECT \(FoodCatalogSchema.selectColumns) FROM food WHERE id IN (\(placeholders));"
@@ -157,7 +160,7 @@ nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unchecked S
         }
     }
 
-    func exactMatch(normalizedName: String) -> FoodItem? {
+    public func exactMatch(normalizedName: String) -> FoodItem? {
         let sql = "SELECT \(FoodCatalogSchema.selectColumns) FROM food WHERE normalized_name = ? ORDER BY name LIMIT 1;"
         return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, normalizedName) }.first
     }
@@ -226,26 +229,26 @@ nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unchecked S
 /// A trivial bundled source backed by an in-memory array — used by tests so they don't need the
 /// generated database. `candidates(forQuery:)` returns everything; `FoodCatalog`'s scorer applies the
 /// real gate and ranking, so results match the SQLite path for the same item set.
-nonisolated struct InMemoryBundledFoodSource: BundledFoodSource {
-    let items: [FoodItem]
+public nonisolated struct InMemoryBundledFoodSource: BundledFoodSource, @unchecked Sendable {
+    public let items: [FoodItem]
 
-    init(_ items: [FoodItem] = []) { self.items = items }
+    public init(_ items: [FoodItem] = []) { self.items = items }
 
-    func candidates(forQuery query: String) -> [FoodItem] { items }
+    public func candidates(forQuery query: String) -> [FoodItem] { items }
 
-    func item(id: UUID) -> FoodItem? { items.first { $0.id == id } }
+    public func item(id: UUID) -> FoodItem? { items.first { $0.id == id } }
 
-    func items(ids: [UUID]) -> [FoodItem] {
+    public func items(ids: [UUID]) -> [FoodItem] {
         let wanted = Set(ids)
         return items.filter { wanted.contains($0.id) }
     }
 
-    func exactMatch(normalizedName: String) -> FoodItem? {
+    public func exactMatch(normalizedName: String) -> FoodItem? {
         items
             .filter { FoodItemSearch.normalized($0.name) == normalizedName }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             .first
     }
 
-    var count: Int { items.count }
+    public var count: Int { items.count }
 }

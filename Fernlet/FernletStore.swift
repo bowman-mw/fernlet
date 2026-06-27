@@ -5,6 +5,7 @@ import Observation
 import SwiftUI
 import FernletDomainModel
 import FernletScoring
+import FoodCatalog
 
 @MainActor
 @Observable
