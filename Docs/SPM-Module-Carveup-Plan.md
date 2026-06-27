@@ -346,10 +346,20 @@ git tag **`spm-carveup-baseline`** (known-good rollback point). Commits `0fc138c
 - **`SealedBackupWiringError`** is referenced by tests as `FernletStore.SealedBackupWiringError` → kept a
   `typealias` to `SealedBackupCoordinator.SealedBackupWiringError`. Don't drop it.
 - **Store wrappers that MUST stay** (external/test callers): `restoreSealedBackup`, `applyRestoredPayload`,
-  `fallbackMicronutrients`, `resolveMeals`, `activate{NoLock,Sealed}Journals`, `deactivateSealedJournals`,
-  `loadDayWithDecryptedJournals`, plus the workout/health wrappers. The `init(journalNarrativeRepository:)`
-  param is used by `FernletTestHelpers` + `FernletPersistenceTests` — kept (captured as
-  `providedJournalNarrativeRepository` for the lazy coordinator).
+  `applyRestoredChunks`, `fallbackMicronutrients`, `resolveMeals`, `activate{NoLock,Sealed}Journals`,
+  `deactivateSealedJournals`, `loadDayWithDecryptedJournals`, plus the workout/health wrappers. The
+  `init(journalNarrativeRepository:)` param is used by `FernletTestHelpers` + `FernletPersistenceTests` —
+  kept (captured as `providedJournalNarrativeRepository` for the lazy coordinator).
+- **Period sealed-backup export is chunked** (2026-06-27 hardening of the security-review item: the old
+  `MenstrualNarrativeRepository.allNarratives` materialized the entire cycle history before sealing). The
+  export now pages the repo (`narrativeCount` + `narratives(offset:limit:)`, stable `dateKey`+`hkExternalUUID`
+  order) and seals one `SealedBackupCoordinator.periodBackupChunkSize` (250) page per CloudKit record via
+  `SealedBackupService.reconcileChunked`. Each chunk is an independent AES-GCM record named
+  `sealed-backup.periodData[.chunk.<i>]`; the head (chunk 0) carries `chunkCount` and is written **last** as
+  the commit marker, then stale higher chunks are pruned. `chunkIndex`/`chunkCount` are bound into the GCM
+  AAD and re-checked in `CloudKitDataService.sealedBackupChunks`, so an incomplete or mixed-generation set
+  fails closed on restore (`restoreChunks` → `applyRestoredChunks`). Sensitive-notes stays a single record.
+  This is sealed end-to-end before egress — it was a memory/availability fix, not a confidentiality one.
 - **Cycle-strip trap still pending.** `currentSnapshot`/`strippedForStorage`/`storedDailyScores` remain in
   the store; the journal-text strip now calls `journalSealingCoordinator.isSealed(_:)`. When
   `FernletPersistence` is extracted, this strip (journal text + `healthContext.cycle/intimate` +

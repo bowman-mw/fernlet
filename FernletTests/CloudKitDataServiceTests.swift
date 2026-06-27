@@ -1,4 +1,6 @@
 import CloudKit
+import CoreData
+import CryptoKit
 import Foundation
 import Testing
 @testable import Fernlet
@@ -128,6 +130,131 @@ struct CloudKitDataServiceTests {
 
         try await service.deleteSealedBackup(payloadType: .sensitiveNotes)
         #expect(try await service.sealedBackup(payloadType: .sensitiveNotes) == nil)
+    }
+
+    // MARK: - Chunked sealed backup
+
+    @Test func sealedBackupChunkSetFetchesInOrder() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let service = makeService(database: database, zoneID: zoneID)
+        for index in 0..<3 {
+            try await service.saveSealedBackup(sealedBackupChunk(index, of: 3))
+        }
+
+        let fetched = try await service.sealedBackupChunks(payloadType: .periodData)
+        #expect(fetched.map(\.chunkIndex) == [0, 1, 2])
+        #expect(fetched.allSatisfy { $0.chunkCount == 3 })
+        // The head keeps the un-suffixed name so single-record payloads are unaffected.
+        let names = Set((database.recordsByType["SealedBackupRecord"] ?? []).map(\.recordID.recordName))
+        #expect(names == [
+            "sealed-backup.periodData",
+            "sealed-backup.periodData.chunk.1",
+            "sealed-backup.periodData.chunk.2"
+        ])
+    }
+
+    @Test func sealedBackupChunkSetFailsClosedOnMissingChunk() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let service = makeService(database: database, zoneID: zoneID)
+        // Head announces 3 chunks but only the head and chunk 1 ever land.
+        try await service.saveSealedBackup(sealedBackupChunk(0, of: 3))
+        try await service.saveSealedBackup(sealedBackupChunk(1, of: 3))
+
+        await #expect(throws: SealedBackupError.malformedRecord) {
+            _ = try await service.sealedBackupChunks(payloadType: .periodData)
+        }
+    }
+
+    @Test func deleteSealedBackupRemovesEveryChunk() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let service = makeService(database: database, zoneID: zoneID)
+        for index in 0..<3 {
+            try await service.saveSealedBackup(sealedBackupChunk(index, of: 3))
+        }
+
+        try await service.deleteSealedBackup(payloadType: .periodData)
+        #expect(try await service.sealedBackupChunks(payloadType: .periodData).isEmpty)
+        #expect((database.recordsByType["SealedBackupRecord"] ?? []).isEmpty)
+    }
+
+    @Test func deleteSealedBackupChunksPrunesOnlyHigherIndices() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let service = makeService(database: database, zoneID: zoneID)
+        for index in 0..<4 {
+            try await service.saveSealedBackup(sealedBackupChunk(index, of: 4))
+        }
+
+        // Simulate a backup shrinking to two chunks: everything at index >= 2 is stale.
+        try await service.deleteSealedBackupChunks(payloadType: .periodData, withIndexAtLeast: 2)
+
+        let names = Set((database.recordsByType["SealedBackupRecord"] ?? []).map(\.recordID.recordName))
+        #expect(names == ["sealed-backup.periodData", "sealed-backup.periodData.chunk.1"])
+    }
+
+    /// End-to-end: page a real (in-memory) narrative history, seal it into multiple chunks through the
+    /// crypto + CloudKit layers, then restore and reassemble it — proving the chunked export round-trips
+    /// without ever materializing the whole history. Uses the CloudKit mock so it needs no iCloud, but a
+    /// real device identity so the AES-GCM seal/open is exercised for real.
+    @Test func periodBackupSealsInChunksAndRestoresFullHistory() async throws {
+        let serviceID = "com.fernlet.sealed-backup.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let identity = IdentityService(keychainService: serviceID)
+        try identity.ensureProvisioned()
+
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let cloud = makeService(database: database, zoneID: zoneID)
+        let service = SealedBackupService(cloudDataService: cloud, identityService: identity)
+
+        let key = SymmetricKey(size: .bits256)
+        let repo = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext
+        )
+        let total = 5
+        for index in 0..<total {
+            let dateKey = String(format: "2026-03-%02d", index + 1)
+            try repo.insert(
+                MenstrualNarrative(hkExternalUUID: "uuid-\(index)", dateKey: dateKey, note: "note \(index)"),
+                contentKey: key
+            )
+        }
+
+        // Force several chunks (mirrors SealedBackupCoordinator.reconcilePeriodBackup with a tiny page).
+        let pageSize = 2
+        let chunkCount = (total + pageSize - 1) / pageSize
+        #expect(chunkCount > 1)
+        try await service.reconcileChunked(payloadType: .periodData, chunkCount: chunkCount) { index in
+            try JSONEncoder().encode(repo.narratives(offset: index * pageSize, limit: pageSize, contentKey: key))
+        }
+
+        #expect(database.recordsByType["SealedBackupRecord"]?.count == chunkCount)
+
+        let chunks = try #require(try await service.restoreChunks(payloadType: .periodData))
+        #expect(chunks.count == chunkCount)
+        let restored = try chunks.flatMap { try JSONDecoder().decode([MenstrualNarrative].self, from: $0) }
+        #expect(restored.count == total)
+        #expect(Set(restored.map(\.hkExternalUUID)) == Set((0..<total).map { "uuid-\($0)" }))
+
+        try await cloud.deleteSealedBackup(payloadType: .periodData)
+        #expect(try await service.restoreChunks(payloadType: .periodData) == nil)
+    }
+
+    private func sealedBackupChunk(_ index: Int, of count: Int) -> SealedBackupRecord {
+        SealedBackupRecord(
+            payloadType: .periodData,
+            signingPublicKey: Data("signing".utf8),
+            keyAgreementPublicKey: Data("agreement".utf8),
+            nonce: Data(repeating: 1, count: 12),
+            ciphertext: Data("chunk-\(index)".utf8),
+            tag: Data(repeating: 2, count: 16),
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            chunkIndex: index,
+            chunkCount: count
+        )
     }
 
     @Test func notSignedInStateThrowsRightErrorForBothMethods() async throws {

@@ -31,6 +31,10 @@ final class SealedBackupCoordinator {
         case storeNotEmpty
     }
 
+    /// Narratives per sealed chunk on the period export. Bounds the plaintext/ciphertext held in
+    /// memory while sealing to ~this many records regardless of how long the cycle history is.
+    static let periodBackupChunkSize = 250
+
     private unowned let host: any SealedBackupContext
 
     init(host: any SealedBackupContext) {
@@ -43,19 +47,10 @@ final class SealedBackupCoordinator {
         return SealedBackupService(cloudDataService: CloudKitDataService(), identityService: identity)
     }
 
-    /// Serializes the plaintext for a sealed-backup payload. Period data requires an unlocked
-    /// content key; sensitive notes are the Tier-2 behavioral memories.
-    private func sealedBackupPlaintext(for payloadType: SealedBackupPayloadType) throws -> Data {
-        switch payloadType {
-        case .sensitiveNotes:
-            return try JSONEncoder().encode(host.tierTwoMemories)
-        case .periodData:
-            guard let key = host.sealedBackupContentKey else { throw SealedBackupWiringError.locked }
-            let repo = MenstrualNarrativeRepository()
-            // Unbounded fetch — `narratives(in:)` would enumerate every calendar day in the range.
-            let narratives = try repo.allNarratives(contentKey: key)
-            return try JSONEncoder().encode(narratives)
-        }
+    /// Serializes the sensitive-notes payload (the Tier-2 behavioral memories). Period data is sealed
+    /// separately and in chunks — see `reconcilePeriodBackup` — so it never builds one giant blob.
+    private func sensitiveNotesPlaintext() throws -> Data {
+        try JSONEncoder().encode(host.tierTwoMemories)
     }
 
     /// Seals + uploads (or deletes) the encrypted CloudKit backup for a payload. Returns whether it
@@ -67,8 +62,14 @@ final class SealedBackupCoordinator {
             return false
         }
         do {
-            let plaintext = enabled ? try sealedBackupPlaintext(for: payloadType) : Data()
-            try await service.reconcile(plaintext, payloadType: payloadType, enabled: enabled)
+            switch (payloadType, enabled) {
+            case (.sensitiveNotes, _):
+                try await service.reconcile(try sensitiveNotesPlaintext(), payloadType: payloadType, enabled: enabled)
+            case (.periodData, true):
+                try await reconcilePeriodBackup(using: service)
+            case (.periodData, false):
+                try await service.reconcile(Data(), payloadType: .periodData, enabled: false)
+            }
             FernletAuditLog.log("sealedBackup.reconciled", context: [
                 "payload": payloadType.rawValue, "enabled": enabled ? "true" : "false"
             ])
@@ -76,6 +77,23 @@ final class SealedBackupCoordinator {
         } catch {
             FernletAuditLog.log("sealedBackup.reconcileFailed", context: ["payload": payloadType.rawValue])
             return false
+        }
+    }
+
+    /// Seals + uploads the period backup one bounded chunk at a time. The narrative count is read up
+    /// front to size the chunk set, then `reconcileChunked` pages the repository so only one chunk's
+    /// worth of plaintext/ciphertext is ever resident — the rest of the (possibly very long) history
+    /// stays on disk. Requires an unlocked content key, matching the locked-key guard on restore.
+    private func reconcilePeriodBackup(using service: SealedBackupService) async throws {
+        guard let key = host.sealedBackupContentKey else { throw SealedBackupWiringError.locked }
+        let repository = MenstrualNarrativeRepository()
+        let pageSize = Self.periodBackupChunkSize
+        let total = try repository.narrativeCount()
+        // Always at least one chunk so an empty (but enabled) backup still writes a head record.
+        let chunkCount = max(1, (total + pageSize - 1) / pageSize)
+        try await service.reconcileChunked(payloadType: .periodData, chunkCount: chunkCount) { index in
+            let page = try repository.narratives(offset: index * pageSize, limit: pageSize, contentKey: key)
+            return try JSONEncoder().encode(page)
         }
     }
 
@@ -111,10 +129,10 @@ final class SealedBackupCoordinator {
             return false
         }
         do {
-            guard let plaintext = try await service.restore(payloadType: payloadType) else {
+            guard let chunks = try await service.restoreChunks(payloadType: payloadType) else {
                 return false
             }
-            let restored = try applyRestoredPayload(plaintext, payloadType: payloadType)
+            let restored = try applyRestoredChunks(chunks, payloadType: payloadType)
             guard restored > 0 else { return false }
             FernletAuditLog.log("sealedBackup.restored", context: [
                 "payload": payloadType.rawValue, "count": String(restored)
@@ -126,20 +144,35 @@ final class SealedBackupCoordinator {
         }
     }
 
-    /// Decodes a decrypted sealed-backup payload and writes it into the local stores, returning the
-    /// number of records written. Separated from the CloudKit fetch so it is unit-testable without
-    /// iCloud. Period data re-seals each narrative with the current device's content key, so it
-    /// requires an unlocked key and throws `SealedBackupWiringError.locked` otherwise (retried next
-    /// launch after unlock).
-    ///
-    /// Precondition: the store must be empty for `payloadType` (see `isEmptyStoreForRestore`). This
-    /// is enforced here — not just in `restoreSealedBackup` — so the no-clobber invariant holds for
-    /// every caller (defense in depth) and throws `SealedBackupWiringError.storeNotEmpty` otherwise.
-    /// The production caller already gates on this before any network work, so the re-check is cheap
-    /// insurance; it also closes the window where the store gains data during `restore`'s `await`.
+    /// Decodes a single decrypted sealed-backup payload and writes it into the local stores. Thin
+    /// wrapper over `applyRestoredChunks` (a single blob is just a one-element chunk set), kept for the
+    /// restore tests and any single-record caller.
     @discardableResult
     func applyRestoredPayload(
         _ plaintext: Data,
+        payloadType: SealedBackupPayloadType,
+        narrativeRepository: MenstrualNarrativeRepository? = nil
+    ) throws -> Int {
+        try applyRestoredChunks([plaintext], payloadType: payloadType, narrativeRepository: narrativeRepository)
+    }
+
+    /// Decodes the decrypted chunks of a sealed-backup payload and writes them into the local stores,
+    /// returning the number of records written. Separated from the CloudKit fetch so it is
+    /// unit-testable without iCloud. Sensitive notes is an overwrite payload (chunks are concatenated
+    /// then replace the Tier-2 store); period data inserts each narrative incrementally and re-seals it
+    /// with the current device's content key, so it requires an unlocked key and throws
+    /// `SealedBackupWiringError.locked` otherwise (retried next launch after unlock). Decoding one
+    /// chunk at a time keeps the working set bounded even for a long restored history.
+    ///
+    /// Precondition: the store must be empty for `payloadType` (see `isEmptyStoreForRestore`). This
+    /// is enforced here — the lowest write point every caller funnels through (the `applyRestoredPayload`
+    /// wrapper and the production `restoreSealedBackup` path alike) — so the no-clobber invariant holds
+    /// for every caller (defense in depth) and throws `SealedBackupWiringError.storeNotEmpty` otherwise.
+    /// The production caller already gates on this before any network work, so the re-check is cheap
+    /// insurance; it also closes the window where the store gains data during `restore`'s `await`.
+    @discardableResult
+    func applyRestoredChunks(
+        _ chunks: [Data],
         payloadType: SealedBackupPayloadType,
         narrativeRepository: MenstrualNarrativeRepository? = nil
     ) throws -> Int {
@@ -154,20 +187,25 @@ final class SealedBackupCoordinator {
         let narrativeRepository = narrativeRepository ?? MenstrualNarrativeRepository()
         switch payloadType {
         case .sensitiveNotes:
-            let records = try JSONDecoder().decode([TierTwoMemoryRecord].self, from: plaintext)
+            var records: [TierTwoMemoryRecord] = []
+            for chunk in chunks {
+                records.append(contentsOf: try JSONDecoder().decode([TierTwoMemoryRecord].self, from: chunk))
+            }
             guard records.isEmpty == false else { return 0 }
             host.replaceTierTwoMemories(records)
             return records.count
         case .periodData:
             guard let key = host.sealedBackupContentKey else { throw SealedBackupWiringError.locked }
-            let narratives = try JSONDecoder().decode([MenstrualNarrative].self, from: plaintext)
             var restored = 0
-            for narrative in narratives {
-                do {
-                    try narrativeRepository.insert(narrative, contentKey: key)
-                    restored += 1
-                } catch {
-                    FernletAuditLog.log("sealedBackup.restoreNarrativeFailed", context: ["dateKey": narrative.dateKey])
+            for chunk in chunks {
+                let narratives = try JSONDecoder().decode([MenstrualNarrative].self, from: chunk)
+                for narrative in narratives {
+                    do {
+                        try narrativeRepository.insert(narrative, contentKey: key)
+                        restored += 1
+                    } catch {
+                        FernletAuditLog.log("sealedBackup.restoreNarrativeFailed", context: ["dateKey": narrative.dateKey])
+                    }
                 }
             }
             return restored

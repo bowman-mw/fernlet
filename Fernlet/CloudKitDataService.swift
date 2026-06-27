@@ -226,7 +226,7 @@ final class CloudKitDataService {
 
         let cloudRecord = CKRecord(
             recordType: "SealedBackupRecord",
-            recordID: sealedBackupRecordID(payloadType: record.payloadType)
+            recordID: sealedBackupRecordID(payloadType: record.payloadType, chunkIndex: record.chunkIndex)
         )
         cloudRecord["payloadType"] = record.payloadType.rawValue as CKRecordValue
         cloudRecord["signingPublicKey"] = record.signingPublicKey as CKRecordValue
@@ -234,11 +234,19 @@ final class CloudKitDataService {
         cloudRecord["nonce"] = record.nonce as CKRecordValue
         cloudRecord["tag"] = record.tag as CKRecordValue
         cloudRecord["updatedAt"] = record.updatedAt as CKRecordValue
+        cloudRecord["chunkIndex"] = record.chunkIndex as CKRecordValue
+        cloudRecord["chunkCount"] = record.chunkCount as CKRecordValue
         cloudRecord["encryptedBlob"] = CKAsset(fileURL: fileURL)
         try await database.saveRecords([cloudRecord])
-        FernletAuditLog.log("cloudkit.sealedBackup.saved", context: ["payloadType": record.payloadType.rawValue])
+        FernletAuditLog.log("cloudkit.sealedBackup.saved", context: [
+            "payloadType": record.payloadType.rawValue,
+            "chunkIndex": String(record.chunkIndex),
+            "chunkCount": String(record.chunkCount)
+        ])
     }
 
+    /// Fetches the single head record for a payload (chunk 0). Used for unchunked payloads and as the
+    /// entry point for `sealedBackupChunks`.
     func sealedBackup(payloadType: SealedBackupPayloadType) async throws -> SealedBackupRecord? {
         try await ensureSignedIn()
         let recordID = sealedBackupRecordID(payloadType: payloadType)
@@ -252,15 +260,69 @@ final class CloudKitDataService {
         return try decodeSealedBackup(record)
     }
 
+    /// Fetches the full, ordered chunk set for a payload: the head (chunk 0) carries `chunkCount`, then
+    /// chunks `1...chunkCount-1` are fetched by their deterministic record IDs. Returns `[]` when no
+    /// backup exists. Throws `SealedBackupError.malformedRecord` if the set is incomplete or
+    /// inconsistent (a missing chunk, or a chunk left over from a differently-sized prior backup), so
+    /// the caller restores all-or-nothing rather than reassembling a corrupt history.
+    func sealedBackupChunks(payloadType: SealedBackupPayloadType) async throws -> [SealedBackupRecord] {
+        guard let head = try await sealedBackup(payloadType: payloadType) else { return [] }
+        guard head.chunkCount > 1 else { return [head] }
+
+        let remainingIDs = (1..<head.chunkCount).map {
+            sealedBackupRecordID(payloadType: payloadType, chunkIndex: $0)
+        }
+        let fetched = try await database.records(for: remainingIDs)
+        let records = ([head] + (try fetched.map { try decodeSealedBackup($0) }))
+            .sorted { $0.chunkIndex < $1.chunkIndex }
+
+        let isContiguous = records.count == head.chunkCount
+            && records.enumerated().allSatisfy { $0.offset == $0.element.chunkIndex }
+        let sameGeneration = records.allSatisfy { $0.chunkCount == head.chunkCount }
+        guard isContiguous, sameGeneration else { throw SealedBackupError.malformedRecord }
+        return records
+    }
+
+    /// Deletes a payload's entire backup — head plus every chunk — found by record-name prefix, so a
+    /// disable tears down both single-record and multi-record backups.
     func deleteSealedBackup(payloadType: SealedBackupPayloadType) async throws {
         try await ensureSignedIn()
-        let recordID = sealedBackupRecordID(payloadType: payloadType)
+        try await deleteSealedBackupRecordIDs(payloadType: payloadType, minChunkIndex: 0)
+        FernletAuditLog.log("cloudkit.sealedBackup.deleted", context: ["payloadType": payloadType.rawValue])
+    }
+
+    /// Prunes only the suffixed chunks at or above `minIndex` (never the head), used after a chunked
+    /// upload shrinks to fewer chunks than a prior generation. A no-op when nothing is stale.
+    func deleteSealedBackupChunks(payloadType: SealedBackupPayloadType, withIndexAtLeast minIndex: Int) async throws {
+        try await ensureSignedIn()
+        try await deleteSealedBackupRecordIDs(payloadType: payloadType, minChunkIndex: max(1, minIndex))
+    }
+
+    private func deleteSealedBackupRecordIDs(payloadType: SealedBackupPayloadType, minChunkIndex: Int) async throws {
+        let ids = try await sealedBackupRecordIDs(payloadType: payloadType, minChunkIndex: minChunkIndex)
+        guard !ids.isEmpty else { return }
         do {
-            try await database.deleteRecords(with: [recordID])
+            try await database.deleteRecords(with: ids)
         } catch let error as CKError where error.code == .unknownItem {
             return
         }
-        FernletAuditLog.log("cloudkit.sealedBackup.deleted", context: ["payloadType": payloadType.rawValue])
+    }
+
+    /// Record IDs belonging to a payload's backup, filtered by chunk index. `minChunkIndex <= 0`
+    /// includes the head; `>= 1` returns only suffixed chunks at or above that index. Found by
+    /// enumerating `SealedBackupRecord` IDs and matching the deterministic name scheme, since the
+    /// chunk count isn't known up front when tearing a backup down.
+    private func sealedBackupRecordIDs(payloadType: SealedBackupPayloadType, minChunkIndex: Int) async throws -> [CKRecord.ID] {
+        let base = sealedBackupRecordBaseName(payloadType: payloadType)
+        let chunkPrefix = "\(base).chunk."
+        let zoneIDs = try await appZoneIDs()
+        let all = try await recordIDsForExistingType("SealedBackupRecord", in: zoneIDs)
+        return all.filter { id in
+            let name = id.recordName
+            if name == base { return minChunkIndex <= 0 }
+            guard name.hasPrefix(chunkPrefix), let index = Int(name.dropFirst(chunkPrefix.count)) else { return false }
+            return index >= minChunkIndex
+        }
     }
 
     private func ensureSignedIn() async throws {
@@ -268,11 +330,16 @@ final class CloudKitDataService {
         guard status == .available else { throw CloudKitDataServiceError.notSignedIn }
     }
 
-    private func sealedBackupRecordID(payloadType: SealedBackupPayloadType) -> CKRecord.ID {
-        CKRecord.ID(
-            recordName: "sealed-backup.\(payloadType.rawValue)",
-            zoneID: zoneIDOverride ?? Self.appZoneID
-        )
+    private func sealedBackupRecordBaseName(payloadType: SealedBackupPayloadType) -> String {
+        "sealed-backup.\(payloadType.rawValue)"
+    }
+
+    /// Deterministic record name for a chunk: the bare base for the head (`chunkIndex == 0`) so
+    /// single-record payloads keep their original name, and a `.chunk.<index>` suffix otherwise.
+    private func sealedBackupRecordID(payloadType: SealedBackupPayloadType, chunkIndex: Int = 0) -> CKRecord.ID {
+        let base = sealedBackupRecordBaseName(payloadType: payloadType)
+        let name = chunkIndex == 0 ? base : "\(base).chunk.\(chunkIndex)"
+        return CKRecord.ID(recordName: name, zoneID: zoneIDOverride ?? Self.appZoneID)
     }
 
     private func decodeSealedBackup(_ record: CKRecord) throws -> SealedBackupRecord {
@@ -288,6 +355,10 @@ final class CloudKitDataService {
               let ciphertext = try? Data(contentsOf: fileURL) else {
             throw SealedBackupError.malformedRecord
         }
+        // Chunk fields are absent on records written before chunking existed; default to a
+        // single-record payload (chunk 0 of 1) so those still decode.
+        let chunkIndex = (record["chunkIndex"] as? Int) ?? 0
+        let chunkCount = (record["chunkCount"] as? Int) ?? 1
         return SealedBackupRecord(
             payloadType: payloadType,
             signingPublicKey: signingPublicKey,
@@ -295,7 +366,9 @@ final class CloudKitDataService {
             nonce: nonce,
             ciphertext: ciphertext,
             tag: tag,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            chunkIndex: chunkIndex,
+            chunkCount: chunkCount
         )
     }
 
