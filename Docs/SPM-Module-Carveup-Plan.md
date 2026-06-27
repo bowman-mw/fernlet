@@ -294,3 +294,81 @@ the empty package (step 1) and move `Models`/`Scoring`/`Crypto` as the first rea
 - [ ] Move resources to `Bundle.module`; verify `FoodCatalog.sqlite` loads.
 - [ ] Ensure the cycle-strip moved with `FernletSnapshot` into `FernletPersistence`.
 - [ ] Delete `S3BoundaryTests.swift`; add per-target test targets (pure-logic tests run on Linux).
+
+---
+
+## 11. Handoff notes (Phases 0–2 executed 2026-06-26)
+
+**Status:** Phases 0–2 (the serial gate) are done and committed green, one commit per step, on top of
+git tag **`spm-carveup-baseline`** (known-good rollback point). Commits `0fc138c` (detangle) →
+`b034fad` (JournalSealing). FernletStore went 2,222 → ~1,560 lines.
+
+### Done
+- **§5a–5c detangle in place.** `Scoring.swift` → `import Foundation`; `compute(for store:)` deleted
+  (field extraction inlined into `FernletStore.score`). `Models.swift` (3,195 lines) split into the §5c
+  files; all SwiftUI `Color`/`color(for:)` members stripped into `ModelColors.swift`. **§5e
+  (`LocalFernletRepository` split) was NOT done** — out of scope for this gate.
+- **FernletKit package** stood up empty (`FernletFoundation` target only), linked to the app.
+- **§5d decomposition: 6 of 7 units** extracted behind narrow context protocols — `ProximityHost`,
+  `WorkoutPlanningService`, `MealResolutionService`, `SealedBackupCoordinator`, `HealthSyncCoordinator`,
+  `JournalSealingCoordinator`. **`DiaryStore` deferred by decision** → do it AS PART OF the StoreCore
+  module extraction (it's ~70% of the store and needs app-wide `@Observable` forwarding: `day`×74,
+  `settings`×58, `snapshotSaveCoordinator`×36, `batchSnapshotPersistence`×34 refs — high-risk churn
+  that gets re-touched at module time, so don't do it in-target).
+
+### Deviations from this plan
+- **`swift-tools-version: 6.2`, not the §6.1 literal `6.0`.** The `.defaultIsolation(MainActor.self)`
+  swiftSetting that §7 mandates is a Swift 6.2 manifest API; 6.0 can't express it. Toolchain in use:
+  Swift 6.3.2 / Xcode 26.5. Keep 6.2 (or higher) for every target.
+- The seam protocols defined so far are the per-coordinator `*Context` protocols (mirroring the existing
+  `WorkoutSyncContext`), **not** the layer-0 `SecureKeyValueStore`/`BiometricGate`/`HealthSampleSource`/
+  `CloudSyncTransport` from §10 — those are still TODO for the real module cuts.
+
+### Gotchas the next session would otherwise rediscover
+- **There is a SECOND grep-wall beyond `S3BoundaryTests`.**
+  `FernletTests/PeriodTrackerTests.menstrualFlowCountReferenceIsRestrictedToAllowedFiles` keeps its own
+  hardcoded file allowlist (it scans for `menstrualFlowEventCount`). Splitting `Models.swift` broke it;
+  it was updated `Models.swift` → `WellbeingModels.swift` (where `HealthCycleContext` now lives). Any
+  further file split/rename touching that symbol must update this allowlist too.
+- **The "retain cycle" in §5d is really a TYPE-coupling fix.** `MeshNetworkManager`/
+  `ProximityRecipeShareManager` held `unowned let store: FernletStore` (non-retaining already), and
+  `WorkoutHealthKitSync` holds its context `weak`. `ProximityHost` was about removing the concrete-type
+  dependency so the subtree can become `ProximityKit`, not plugging a leak.
+- **`ProximityHost` minimal-churn shape:** kept the param **label** `store:` and widened only the *type*
+  to `any ProximityHost`, so all 17 call sites (incl. 15 in `MeshNetworkManagerTests`) compile
+  unchanged. The protocol is `AnyObject`-bound (required for `unowned` on the existential).
+- **Coordinator idiom:** each coordinator reads/mutates via a narrow `*Context` protocol that
+  `FernletStore` conforms to. `scheduleSnapshotSave()` satisfies BOTH `HealthSyncContext` and
+  `JournalSealingContext` — it's defined once; don't redefine it per conformance (duplicate-method error).
+- **`journalContentKey` is still private on the store** and surfaced to `SealedBackupCoordinator` via a
+  `sealedBackupContentKey` accessor whose conformance lives **in FernletStore.swift** (so it can read the
+  private field). When `JournalSealingCoordinator`/`DiaryStore` fully own this, re-route the accessor.
+- **`SealedBackupWiringError`** is referenced by tests as `FernletStore.SealedBackupWiringError` → kept a
+  `typealias` to `SealedBackupCoordinator.SealedBackupWiringError`. Don't drop it.
+- **Store wrappers that MUST stay** (external/test callers): `restoreSealedBackup`, `applyRestoredPayload`,
+  `fallbackMicronutrients`, `resolveMeals`, `activate{NoLock,Sealed}Journals`, `deactivateSealedJournals`,
+  `loadDayWithDecryptedJournals`, plus the workout/health wrappers. The `init(journalNarrativeRepository:)`
+  param is used by `FernletTestHelpers` + `FernletPersistenceTests` — kept (captured as
+  `providedJournalNarrativeRepository` for the lazy coordinator).
+- **Cycle-strip trap still pending.** `currentSnapshot`/`strippedForStorage`/`storedDailyScores` remain in
+  the store; the journal-text strip now calls `journalSealingCoordinator.isSealed(_:)`. When
+  `FernletPersistence` is extracted, this strip (journal text + `healthContext.cycle/intimate` +
+  `DailyHealthScore.periodPhase`) must travel WITH `FernletSnapshot` (see §8).
+- **pbxproj wiring for a LOCAL package** (objectVersion 77 / Xcode 16+): `FernletKit` is a sibling of the
+  synced `Fernlet/` (NOT inside it); `relativePath = FernletKit`. Needs: `XCLocalSwiftPackageReference`,
+  add to project `packageReferences`, an `XCSwiftPackageProductDependency` (**no `package =` line** for a
+  local product), add to the app target's `packageProductDependencies`, and a `PBXBuildFile` in the app's
+  `PBXFrameworksBuildPhase`. App target id `6869C2E12FB8D39D0098A0F3`, its Frameworks phase
+  `6869C2DF2FB8D39D0098A0F3`. `.swiftpm/` and `.build/` are now in `.gitignore`.
+
+### Build/test hygiene (cost me a red commit once)
+- **Don't `tail` the build log to check success** — `xcodebuild … | tail -40` drops the actual `error:`
+  lines, and a `grep` that matches the `FAILED` summary still exits 0. Capture FULL output to a file and
+  gate on the **exit code** + `** TEST (BUILD|EXECUTE) SUCCEEDED **`. (A red SealedBackup build slipped
+  through this way and was `--amend`ed green.)
+- **Full `FernletTests` ≈ 7 min**; some suites dominate (e.g. `FernletLockTests` ~8s/test). Batch by
+  suite (`-only-testing:FernletTests/<Suite>`) — build the test target once, then `test-without-building`
+  per batch.
+- Live UI verify needs the **computer-use MCP**; `idb` is not installed and Accessibility (osascript)
+  is denied, so `simctl` screenshots are the only no-MCP option. App launches clean to onboarding and to
+  the main UI via the `-completeOnboarding` launch arg.
