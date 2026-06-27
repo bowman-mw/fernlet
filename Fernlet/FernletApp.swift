@@ -1,4 +1,5 @@
 import SwiftUI
+import CloudKitSync
 import FernletFoundation
 #if canImport(UIKit)
 import UIKit

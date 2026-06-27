@@ -4,20 +4,36 @@ import FernletFoundation
 import Foundation
 import FernletDomainModel
 
-struct ExistingDataSummary: Equatable {
-    var mealLogCount: Int
-    var journalEntryCount: Int
-    var workoutCount: Int
-    var hygieneLogCount: Int
-    var hydrationLogCount: Int
-    var sleepRecordCount: Int
+public struct ExistingDataSummary: Equatable {
+    public var mealLogCount: Int
+    public var journalEntryCount: Int
+    public var workoutCount: Int
+    public var hygieneLogCount: Int
+    public var hydrationLogCount: Int
+    public var sleepRecordCount: Int
 
-    var hasData: Bool {
+    public init(
+        mealLogCount: Int,
+        journalEntryCount: Int,
+        workoutCount: Int,
+        hygieneLogCount: Int,
+        hydrationLogCount: Int,
+        sleepRecordCount: Int
+    ) {
+        self.mealLogCount = mealLogCount
+        self.journalEntryCount = journalEntryCount
+        self.workoutCount = workoutCount
+        self.hygieneLogCount = hygieneLogCount
+        self.hydrationLogCount = hydrationLogCount
+        self.sleepRecordCount = sleepRecordCount
+    }
+
+    public var hasData: Bool {
         mealLogCount > 0 || journalEntryCount > 0 || workoutCount > 0 ||
         hygieneLogCount > 0 || hydrationLogCount > 0 || sleepRecordCount > 0
     }
 
-    mutating func merge(_ other: ExistingDataSummary) {
+    public mutating func merge(_ other: ExistingDataSummary) {
         mealLogCount += other.mealLogCount
         journalEntryCount += other.journalEntryCount
         workoutCount += other.workoutCount
@@ -26,7 +42,7 @@ struct ExistingDataSummary: Equatable {
         sleepRecordCount += other.sleepRecordCount
     }
 
-    static let empty = ExistingDataSummary(
+    public static let empty = ExistingDataSummary(
         mealLogCount: 0,
         journalEntryCount: 0,
         workoutCount: 0,
@@ -36,27 +52,32 @@ struct ExistingDataSummary: Equatable {
     )
 }
 
-struct DeletionConfirmation {
-    var userTypedConfirmation: String
-    var biometricVerifiedAt: Date?
+public struct DeletionConfirmation {
+    public var userTypedConfirmation: String
+    public var biometricVerifiedAt: Date?
 
-    init(userTypedConfirmation: String = "", biometricVerifiedAt: Date? = nil) {
+    public init(userTypedConfirmation: String = "", biometricVerifiedAt: Date? = nil) {
         self.userTypedConfirmation = userTypedConfirmation
         self.biometricVerifiedAt = biometricVerifiedAt
     }
 }
 
-struct DeletionResult: Equatable {
-    var deletedRecordCount: Int
-    var mayAffectOtherDevices: Bool
+public struct DeletionResult: Equatable {
+    public var deletedRecordCount: Int
+    public var mayAffectOtherDevices: Bool
+
+    public init(deletedRecordCount: Int, mayAffectOtherDevices: Bool) {
+        self.deletedRecordCount = deletedRecordCount
+        self.mayAffectOtherDevices = mayAffectOtherDevices
+    }
 }
 
-enum CloudKitDataServiceError: Error, LocalizedError, Equatable {
+public enum CloudKitDataServiceError: Error, LocalizedError, Equatable {
     case notSignedIn
     case confirmationRequired
     case cloudKitOperationFailed(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .notSignedIn:
             return "Sign in to iCloud to check or delete Fernlet cloud data."
@@ -68,11 +89,11 @@ enum CloudKitDataServiceError: Error, LocalizedError, Equatable {
     }
 }
 
-protocol CloudKitAccountStatusProviding {
+public protocol CloudKitAccountStatusProviding {
     func accountStatus() async throws -> CKAccountStatus
 }
 
-protocol CloudKitRecordDatabase {
+public protocol CloudKitRecordDatabase {
     func recordZoneIDs() async throws -> [CKRecordZone.ID]
     func recordIDs(matching recordType: String, in zoneID: CKRecordZone.ID) async throws -> [CKRecord.ID]
     func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord]
@@ -80,9 +101,9 @@ protocol CloudKitRecordDatabase {
     func deleteRecords(with recordIDs: [CKRecord.ID]) async throws
 }
 
-final class CloudKitDataService {
-    nonisolated private static let containerIdentifier = "iCloud.MBO.Fernlet"
-    private static let appZoneID = CKRecordZone.default().zoneID
+public final class CloudKitDataService {
+    nonisolated public static let containerIdentifier = "iCloud.MBO.Fernlet"
+    nonisolated public static let appZoneID = CKRecordZone.default().zoneID
     private static let aggregateDatabaseRecordTypes = ["CD_FernletDatabaseRecord", "FernletDatabaseRecord"]
     private static let allRecordTypes = [
         "CD_FernletDatabaseRecord",
@@ -108,7 +129,7 @@ final class CloudKitDataService {
     private let decoder: JSONDecoder
 
     @MainActor
-    init(
+    public init(
         container: CKContainer = CKContainer(identifier: CloudKitDataService.containerIdentifier),
         isCloudKitSyncEnabled: (() -> Bool)? = nil,
         now: @escaping () -> Date = Date.init
@@ -124,7 +145,7 @@ final class CloudKitDataService {
         self.decoder = Self.makeDecoder()
     }
 
-    init(
+    public init(
         accountProvider: CloudKitAccountStatusProviding,
         database: CloudKitRecordDatabase,
         zoneID: CKRecordZone.ID = CloudKitDataService.appZoneID,
@@ -139,7 +160,7 @@ final class CloudKitDataService {
         self.decoder = Self.makeDecoder()
     }
 
-    func detectExistingData() async throws -> ExistingDataSummary? {
+    public func detectExistingData() async throws -> ExistingDataSummary? {
         FernletAuditLog.log("cloudkit.detect.attempt")
         do {
             try await ensureSignedIn()
@@ -181,7 +202,7 @@ final class CloudKitDataService {
         }
     }
 
-    func deleteAllCloudKitData(confirmation: DeletionConfirmation) async throws -> DeletionResult {
+    public func deleteAllCloudKitData(confirmation: DeletionConfirmation) async throws -> DeletionResult {
         FernletAuditLog.log("cloudkit.delete.attempt")
         do {
             try validate(confirmation)
@@ -219,7 +240,7 @@ final class CloudKitDataService {
         }
     }
 
-    func saveSealedBackup(_ record: SealedBackupRecord) async throws {
+    public func saveSealedBackup(_ record: SealedBackupRecord) async throws {
         try await ensureSignedIn()
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -250,7 +271,7 @@ final class CloudKitDataService {
 
     /// Fetches the single head record for a payload (chunk 0). Used for unchunked payloads and as the
     /// entry point for `sealedBackupChunks`.
-    func sealedBackup(payloadType: SealedBackupPayloadType) async throws -> SealedBackupRecord? {
+    public func sealedBackup(payloadType: SealedBackupPayloadType) async throws -> SealedBackupRecord? {
         try await ensureSignedIn()
         let recordID = sealedBackupRecordID(payloadType: payloadType)
         let records: [CKRecord]
@@ -268,7 +289,7 @@ final class CloudKitDataService {
     /// backup exists. Throws `SealedBackupError.malformedRecord` if the set is incomplete or
     /// inconsistent (a missing chunk, or a chunk left over from a differently-sized prior backup), so
     /// the caller restores all-or-nothing rather than reassembling a corrupt history.
-    func sealedBackupChunks(payloadType: SealedBackupPayloadType) async throws -> [SealedBackupRecord] {
+    public func sealedBackupChunks(payloadType: SealedBackupPayloadType) async throws -> [SealedBackupRecord] {
         guard let head = try await sealedBackup(payloadType: payloadType) else { return [] }
         guard head.chunkCount > 1 else { return [head] }
 
@@ -288,7 +309,7 @@ final class CloudKitDataService {
 
     /// Deletes a payload's entire backup — head plus every chunk — found by record-name prefix, so a
     /// disable tears down both single-record and multi-record backups.
-    func deleteSealedBackup(payloadType: SealedBackupPayloadType) async throws {
+    public func deleteSealedBackup(payloadType: SealedBackupPayloadType) async throws {
         try await ensureSignedIn()
         try await deleteSealedBackupRecordIDs(payloadType: payloadType, minChunkIndex: 0)
         FernletAuditLog.log("cloudkit.sealedBackup.deleted", context: ["payloadType": payloadType.rawValue])
@@ -296,7 +317,7 @@ final class CloudKitDataService {
 
     /// Prunes only the suffixed chunks at or above `minIndex` (never the head), used after a chunked
     /// upload shrinks to fewer chunks than a prior generation. A no-op when nothing is stale.
-    func deleteSealedBackupChunks(payloadType: SealedBackupPayloadType, withIndexAtLeast minIndex: Int) async throws {
+    public func deleteSealedBackupChunks(payloadType: SealedBackupPayloadType, withIndexAtLeast minIndex: Int) async throws {
         try await ensureSignedIn()
         try await deleteSealedBackupRecordIDs(payloadType: payloadType, minChunkIndex: max(1, minIndex))
     }

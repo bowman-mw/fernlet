@@ -8,6 +8,7 @@ import FernletDomainModel
 import PrivateMemoryStore
 import FernletPersistence
 import PrivateStoreCore
+import CloudKitSync
 @testable import Fernlet
 
 struct FernletPersistenceTests {

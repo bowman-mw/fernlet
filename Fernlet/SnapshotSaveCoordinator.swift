@@ -5,11 +5,6 @@ import FernletFoundation
 import FernletPersistence
 
 @MainActor
-protocol RemoteChangePublishingRepository: FernletRepository {
-    var remoteChangePublisher: AnyPublisher<Void, Never> { get }
-}
-
-@MainActor
 final class SnapshotSaveCoordinator {
     private let repository: FernletRepository
     private let debounce: Duration

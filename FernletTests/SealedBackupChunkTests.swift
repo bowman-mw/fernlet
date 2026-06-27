@@ -17,6 +17,7 @@ import Testing
 import FernletDomainModel
 import PrivateStoreCore
 import PrivateHealthStore
+import CloudKitSync
 @testable import Fernlet
 
 struct SealedBackupChunkTests {

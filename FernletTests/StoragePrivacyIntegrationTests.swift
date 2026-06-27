@@ -8,6 +8,7 @@ import Security
 import Testing
 import FernletDomainModel
 import FernletPersistence
+import CloudKitSync
 @testable import Fernlet
 
 // MARK: - Suite

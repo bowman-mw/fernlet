@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import CloudKitSync
 @testable import Fernlet
 
 /// Guards the `SavedRecipe` → `RecipeDefinition` model merge: web-imported recipes saved by older

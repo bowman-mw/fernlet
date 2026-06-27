@@ -11,7 +11,7 @@ import FernletDomainModel
 /// Mirror of the legacy `SavedRecipe` JSON schema, used only to decode (and re-encode) the
 /// pre-merge `SavedRecipes.json` file so older saved recipes survive the model merge. Maps
 /// losslessly to/from `RecipeDefinition` via `webImport`.
-private struct LegacySavedRecipeDTO: Codable {
+nonisolated private struct LegacySavedRecipeDTO: Codable {
     var id: UUID?
     var sourceURLString: String?
     var name: String
@@ -59,7 +59,7 @@ private struct LegacySavedRecipeDTO: Codable {
 /// Single source of truth for translating the legacy saved-recipe columns/fields (free-text
 /// ingredients + precomputed nutrition + source URL) into a `RecipeDefinition` with a `webImport`
 /// payload. Shared by the Core Data and legacy-JSON repositories so both migrate identically.
-enum SavedRecipeMapping {
+nonisolated enum SavedRecipeMapping {
     static func recipe(
         id: UUID,
         sourceURLString: String,
@@ -97,16 +97,16 @@ enum SavedRecipeMapping {
 }
 
 @MainActor
-struct SavedRecipeRepository {
+public struct SavedRecipeRepository {
     private let controller: PersistenceController
     private let legacyRepository: LegacySavedRecipeJSONRepository
     private let defaults: UserDefaults
 
-    init() {
+    public init() {
         self.init(controller: .shared, legacyRepository: LegacySavedRecipeJSONRepository(), defaults: .standard)
     }
 
-    init(controller: PersistenceController, legacyRepository: LegacySavedRecipeJSONRepository, defaults: UserDefaults = .standard) {
+    public init(controller: PersistenceController, legacyRepository: LegacySavedRecipeJSONRepository, defaults: UserDefaults = .standard) {
         self.controller = controller
         self.legacyRepository = legacyRepository
         self.defaults = defaults
@@ -114,7 +114,7 @@ struct SavedRecipeRepository {
 
     private static let migrationCompletedKey = "com.fernlet.savedRecipeMigrationCompleted"
 
-    func load() -> [RecipeDefinition] {
+    public func load() -> [RecipeDefinition] {
         StartupTiming.timed("SavedRecipeRepository.load") {
             let recipes = loadCoreDataRecipes()
             if recipes.isEmpty && !defaults.bool(forKey: Self.migrationCompletedKey) {
@@ -129,7 +129,7 @@ struct SavedRecipeRepository {
         }
     }
 
-    func loadAsync() async -> [RecipeDefinition] {
+    public func loadAsync() async -> [RecipeDefinition] {
         StartupTiming.timed("SavedRecipeRepository.loadAsync") {
             let recipes = loadCoreDataRecipes()
             guard recipes.isEmpty && !defaults.bool(forKey: Self.migrationCompletedKey) else { return recipes }
@@ -158,7 +158,7 @@ struct SavedRecipeRepository {
         return records.compactMap(Self.recipe(from:))
     }
 
-    @discardableResult func save(_ recipes: [RecipeDefinition]) -> Bool {
+    @discardableResult public func save(_ recipes: [RecipeDefinition]) -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
 
@@ -241,18 +241,18 @@ struct SavedRecipeRepository {
     }
 }
 
-struct LegacySavedRecipeJSONRepository {
+nonisolated public struct LegacySavedRecipeJSONRepository {
     private let fileURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    init(fileURL: URL? = nil) {
+    public init(fileURL: URL? = nil) {
         self.fileURL = fileURL ?? Self.defaultFileURL()
         self.encoder = Self.makeEncoder()
         self.decoder = Self.makeDecoder()
     }
 
-    func load() -> [RecipeDefinition] {
+    public func load() -> [RecipeDefinition] {
         guard FileManager.default.fileExists(atPath: fileURL.path),
               let data = try? Data(contentsOf: fileURL),
               let recipes = try? decoder.decode([LegacySavedRecipeDTO].self, from: data) else {
@@ -261,7 +261,7 @@ struct LegacySavedRecipeJSONRepository {
         return recipes.map { $0.toRecipeDefinition() }
     }
 
-    @discardableResult func save(_ recipes: [RecipeDefinition]) -> Bool {
+    @discardableResult public func save(_ recipes: [RecipeDefinition]) -> Bool {
         do {
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),

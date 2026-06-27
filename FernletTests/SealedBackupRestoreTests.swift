@@ -19,6 +19,7 @@ import FernletDomainModel
 import FernletPersistence
 import PrivateStoreCore
 import PrivateHealthStore
+import CloudKitSync
 @testable import Fernlet
 
 struct SealedBackupRestoreTests {

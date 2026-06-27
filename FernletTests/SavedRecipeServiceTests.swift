@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import FernletDomainModel
 import FernletScoring
+import CloudKitSync
 @testable import Fernlet
 
 @MainActor

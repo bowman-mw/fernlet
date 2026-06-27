@@ -1,4 +1,5 @@
 import LocalAuthentication
+import CloudKitSync
 import FernletFoundation
 import SwiftUI
 import FernletDomainModel

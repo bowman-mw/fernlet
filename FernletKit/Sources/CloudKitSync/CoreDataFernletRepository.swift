@@ -7,7 +7,7 @@ import FernletDomainModel
 import FernletPersistence
 
 @MainActor
-final class CoreDataFernletRepository: FernletRepository, RemoteChangePublishingRepository {
+public final class CoreDataFernletRepository: FernletRepository, @MainActor RemoteChangePublishingRepository {
     private static let primaryRecordID = "primary"
 
     private let controller: PersistenceController
@@ -25,13 +25,13 @@ final class CoreDataFernletRepository: FernletRepository, RemoteChangePublishing
     private var isMergingSave = false
 
     /// Fires after the local cache is invalidated due to a remote change.
-    let remoteChangeSubject = PassthroughSubject<Void, Never>()
+    public let remoteChangeSubject = PassthroughSubject<Void, Never>()
 
-    var remoteChangePublisher: AnyPublisher<Void, Never> {
+    public var remoteChangePublisher: AnyPublisher<Void, Never> {
         remoteChangeSubject.eraseToAnyPublisher()
     }
 
-    init(controller: PersistenceController? = nil, legacyRepository: LocalFernletRepository? = nil) {
+    public init(controller: PersistenceController? = nil, legacyRepository: LocalFernletRepository? = nil) {
         self.controller = controller ?? .shared
         self.legacyRepository = legacyRepository ?? LocalFernletRepository(fileURL: LocalFernletRepository.defaultFileURL())
         self.encoder = Self.makeEncoder()
@@ -43,7 +43,7 @@ final class CoreDataFernletRepository: FernletRepository, RemoteChangePublishing
             }
     }
 
-    func loadSnapshot(todayKey: String) -> FernletSnapshot {
+    public func loadSnapshot(todayKey: String) -> FernletSnapshot {
         StartupTiming.timed("CoreDataFernletRepository.loadSnapshot") {
             assert(!todayKey.isEmpty, "today key required")
             let database = loadDatabase(todayKey: todayKey)
@@ -51,59 +51,60 @@ final class CoreDataFernletRepository: FernletRepository, RemoteChangePublishing
         }
     }
 
-    func loadSnapshotAsync(todayKey: String) async -> FernletSnapshot {
-        await StartupTiming.timed("CoreDataFernletRepository.loadSnapshotAsync") {
-            assert(!todayKey.isEmpty, "today key required")
+    public func loadSnapshotAsync(todayKey: String) async -> FernletSnapshot {
+        let signpostID = StartupTiming.begin("CoreDataFernletRepository.loadSnapshotAsync")
+        defer { StartupTiming.end("CoreDataFernletRepository.loadSnapshotAsync", signpostID: signpostID) }
 
-            if let cached = cachedDatabase {
-                return snapshot(from: cached, todayKey: todayKey)
-            }
+        assert(!todayKey.isEmpty, "today key required")
 
-            let record: NSManagedObject
-            switch fetchRecordResult() {
-            case .found(let fetchedRecord):
-                record = fetchedRecord
-            case .missing:
-                clearReadOnlyRecoveryFlags()
-                let migrated = migrateDatabase(todayKey: todayKey)
-                _ = saveDatabase(migrated)
-                return snapshot(from: migrated, todayKey: todayKey)
-            case .failed(let error):
-                markPersistenceBlockedByFetchFailure(error)
-                return snapshot(from: LocalFernletDatabase(), todayKey: todayKey)
-            }
-            guard let payload = record.value(forKey: "payloadData") as? Data else {
-                print("[Fernlet] Core Data record exists but payloadData is nil; entering read-only recovery mode.")
-                markPersistenceBlockedByDecodeFailure()
-                return snapshot(from: LocalFernletDatabase(), todayKey: todayKey)
-            }
+        if let cached = cachedDatabase {
+            return snapshot(from: cached, todayKey: todayKey)
+        }
 
-            do {
-                let decodedAt = record.value(forKey: "updatedAt") as? Date
-                let database = try await Self.decodeDatabaseAsync(from: payload)
-                // A concurrent saveDatabase() may have installed a fresher cache while we decoded.
-                if let fresh = cachedDatabase {
-                    return snapshot(from: fresh, todayKey: todayKey)
-                }
-                clearReadOnlyRecoveryFlags()
-                cachedDatabase = database
-                cachedRecordUpdatedAt = decodedAt
-                return snapshot(from: database, todayKey: todayKey)
-            } catch {
-                print("[Fernlet] Core Data record decode failed; entering read-only recovery mode: \(error.localizedDescription)")
-                markPersistenceBlockedByDecodeFailure()
-                return snapshot(from: LocalFernletDatabase(), todayKey: todayKey)
+        let record: NSManagedObject
+        switch fetchRecordResult() {
+        case .found(let fetchedRecord):
+            record = fetchedRecord
+        case .missing:
+            clearReadOnlyRecoveryFlags()
+            let migrated = migrateDatabase(todayKey: todayKey)
+            _ = saveDatabase(migrated)
+            return snapshot(from: migrated, todayKey: todayKey)
+        case .failed(let error):
+            markPersistenceBlockedByFetchFailure(error)
+            return snapshot(from: LocalFernletDatabase(), todayKey: todayKey)
+        }
+        guard let payload = record.value(forKey: "payloadData") as? Data else {
+            print("[Fernlet] Core Data record exists but payloadData is nil; entering read-only recovery mode.")
+            markPersistenceBlockedByDecodeFailure()
+            return snapshot(from: LocalFernletDatabase(), todayKey: todayKey)
+        }
+
+        do {
+            let decodedAt = record.value(forKey: "updatedAt") as? Date
+            let database = try await Self.decodeDatabaseAsync(from: payload)
+            // A concurrent saveDatabase() may have installed a fresher cache while we decoded.
+            if let fresh = cachedDatabase {
+                return snapshot(from: fresh, todayKey: todayKey)
             }
+            clearReadOnlyRecoveryFlags()
+            cachedDatabase = database
+            cachedRecordUpdatedAt = decodedAt
+            return snapshot(from: database, todayKey: todayKey)
+        } catch {
+            print("[Fernlet] Core Data record decode failed; entering read-only recovery mode: \(error.localizedDescription)")
+            markPersistenceBlockedByDecodeFailure()
+            return snapshot(from: LocalFernletDatabase(), todayKey: todayKey)
         }
     }
 
-    func loadDay(for dateKey: String, todayKey: String) -> FernletDay {
+    public func loadDay(for dateKey: String, todayKey: String) -> FernletDay {
         assert(!dateKey.isEmpty, "date key required")
         let database = loadDatabase(todayKey: todayKey)
         return database.days[dateKey] ?? FernletDay(date: dateKey)
     }
 
-    @discardableResult func saveSnapshot(_ snapshot: FernletSnapshot) -> Bool {
+    @discardableResult public func saveSnapshot(_ snapshot: FernletSnapshot) -> Bool {
         assert(!snapshot.todayKey.isEmpty, "snapshot key required")
         var database = loadDatabase(todayKey: snapshot.todayKey)
         database.apply(snapshot)
@@ -111,7 +112,7 @@ final class CoreDataFernletRepository: FernletRepository, RemoteChangePublishing
         return saveDatabase(database)
     }
 
-    @discardableResult func updateDay(_ day: FernletDay, for dateKey: String, todayKey: String) -> Bool {
+    @discardableResult public func updateDay(_ day: FernletDay, for dateKey: String, todayKey: String) -> Bool {
         assert(!dateKey.isEmpty, "date key required")
         assert(!todayKey.isEmpty, "today key required")
         assert(day.date == dateKey, "day date mismatch")
@@ -121,17 +122,17 @@ final class CoreDataFernletRepository: FernletRepository, RemoteChangePublishing
         return saveDatabase(database)
     }
 
-    func storageDescription() -> String {
+    public func storageDescription() -> String {
         "Core Data + iCloud"
     }
 
-    func invalidateCache() {
+    public func invalidateCache() {
         cachedDatabase = nil
         cachedRecordUpdatedAt = nil
         remoteChangeSubject.send()
     }
 
-    func forceNextFetchFailureForTesting(_ error: Error = CocoaError(.fileReadUnknown)) {
+    public func forceNextFetchFailureForTesting(_ error: Error = CocoaError(.fileReadUnknown)) {
         forcedFetchFailureForTesting = error
     }
 
@@ -195,15 +196,15 @@ final class CoreDataFernletRepository: FernletRepository, RemoteChangePublishing
         return (merged, true)
     }
 
-    func loadAllDays() -> [String: FernletDay] {
+    public func loadAllDays() -> [String: FernletDay] {
         loadDatabase(todayKey: FernletDate.dayKey(for: .now)).days
     }
 
-    func loadTierTwoMemories() -> [TierTwoMemoryRecord] {
+    public func loadTierTwoMemories() -> [TierTwoMemoryRecord] {
         loadDatabase(todayKey: FernletDate.dayKey(for: .now)).tierTwoMemories
     }
 
-    @discardableResult func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
+    @discardableResult public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
         var database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))
         database.tierTwoMemories = records
         database.updatedAt = Date()

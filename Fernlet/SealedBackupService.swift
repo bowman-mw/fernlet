@@ -1,30 +1,7 @@
 import CryptoKit
 import Foundation
 import FernletDomainModel
-
-enum SealedBackupPayloadType: String, Codable, CaseIterable {
-    case sensitiveNotes
-    case periodData
-}
-
-struct SealedBackupRecord: Equatable {
-    var payloadType: SealedBackupPayloadType
-    var signingPublicKey: Data
-    var keyAgreementPublicKey: Data
-    var nonce: Data
-    var ciphertext: Data
-    var tag: Data
-    var updatedAt: Date
-    /// Position of this record within a payload's chunk set. A non-chunked payload (sensitive
-    /// notes, or a short period history) is a single record at `chunkIndex == 0, chunkCount == 1`.
-    var chunkIndex: Int = 0
-    var chunkCount: Int = 1
-}
-
-enum SealedBackupError: Error, Equatable {
-    case keyAgreementIdentityMismatch
-    case malformedRecord
-}
+import CloudKitSync
 
 enum SealedBackupCrypto {
     @MainActor

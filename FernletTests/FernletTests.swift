@@ -15,6 +15,7 @@ import FernletDomainModel
 import FernletScoring
 import FernletPersistence
 import FoodCatalog
+import CloudKitSync
 @testable import Fernlet
 
 struct FernletTests {

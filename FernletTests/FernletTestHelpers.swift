@@ -5,6 +5,7 @@ import PrivateMemoryStore
 import FernletPersistence
 import FoodCatalog
 import PrivateStoreCore
+import CloudKitSync
 @testable import Fernlet
 
 /// Creates a FernletStore backed by an in-memory Core Data stack.

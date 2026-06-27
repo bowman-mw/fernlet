@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-public nonisolated struct StoragePreferences: Codable, Equatable {
+public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     public var iCloudSyncEnabled: Bool
     public var localBackupExcludedFromiOSBackup: Bool
     public var healthKitMasterEnabled: Bool

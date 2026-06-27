@@ -12,10 +12,10 @@ import Foundation
 import Observation
 import FernletDomainModel
 
-enum PersistenceStoreLoadError: LocalizedError, Equatable {
+public enum PersistenceStoreLoadError: LocalizedError, Equatable {
     case primaryStoreUnavailable
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .primaryStoreUnavailable:
             return "Fernlet couldn't open your local records. Your data was not deleted. Unlock your device if it was just restarted, free up storage if needed, then try again."
@@ -24,8 +24,8 @@ enum PersistenceStoreLoadError: LocalizedError, Equatable {
 }
 
 @Observable
-final class PersistenceController {
-    static let shared: PersistenceController = {
+nonisolated public final class PersistenceController {
+    nonisolated(unsafe) public static let shared: PersistenceController = {
         let data = KeychainItem.load(for: .storagePreferences, service: KeychainItem.storagePreferencesService)
         var startupPreferences = data.flatMap { try? JSONDecoder().decode(StoragePreferences.self, from: $0) } ?? StoragePreferences()
         startupPreferences.iCloudSyncEnabled = false
@@ -33,18 +33,18 @@ final class PersistenceController {
     }()
 
     @MainActor
-    static let preview: PersistenceController = {
+    public static let preview: PersistenceController = {
         let result = PersistenceController(inMemory: true, preferences: StoragePreferences(iCloudSyncEnabled: false))
         return result
     }()
 
-    private(set) var isReloading = false
+    public private(set) var isReloading = false
 
-    @ObservationIgnored private(set) var container: NSPersistentContainer
-    private(set) var didFailToLoad = false
+    @ObservationIgnored public private(set) var container: NSPersistentContainer
+    public private(set) var didFailToLoad = false
     /// Fires when iCloud pushes a remote change to the local store.
-    @ObservationIgnored let remoteChangePublisher: AnyPublisher<Notification, Never>
-    @ObservationIgnored var reloadStoreURLOverrideForTesting: URL?
+    @ObservationIgnored public let remoteChangePublisher: AnyPublisher<Notification, Never>
+    @ObservationIgnored public var reloadStoreURLOverrideForTesting: URL?
 
     private let inMemory: Bool
     private let storeURL: URL?
@@ -54,7 +54,7 @@ final class PersistenceController {
     @ObservationIgnored private let remoteChangeSubject = PassthroughSubject<Notification, Never>()
     @ObservationIgnored private var remoteChangeCancellable: AnyCancellable?
 
-    init(
+    public init(
         inMemory: Bool = false,
         preferences: StoragePreferences = StoragePreferences(),
         storeURL: URL? = nil,
@@ -77,7 +77,7 @@ final class PersistenceController {
     }
 
     @MainActor
-    func reload(with preferences: StoragePreferences) async throws {
+    public func reload(with preferences: StoragePreferences) async throws {
         FernletAuditLog.log("persistence.reload.started", context: [
             "iCloudSync": preferences.iCloudSyncEnabled ? "enabled" : "disabled"
         ])
@@ -128,11 +128,11 @@ final class PersistenceController {
         }
     }
 
-    var activeStoreDescription: NSPersistentStoreDescription? {
+    public var activeStoreDescription: NSPersistentStoreDescription? {
         container.persistentStoreDescriptions.first
     }
 
-    var activeStoreURL: URL? {
+    public var activeStoreURL: URL? {
         activeStoreDescription?.url
     }
 
@@ -298,7 +298,7 @@ final class PersistenceController {
     }
 
     private func configureViewContext(for container: NSPersistentContainer) {
-        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        container.viewContext.mergePolicy = NSMergePolicy.mergeByPropertyObjectTrump
         container.viewContext.automaticallyMergesChangesFromParent = true
     }
 

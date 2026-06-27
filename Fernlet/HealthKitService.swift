@@ -1,5 +1,6 @@
 import Observation
 import LocalPersistence
+import CloudKitSync
 import FernletFoundation
 import PrivateHealthStore
 import CoreData

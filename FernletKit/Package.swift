@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync"]),
     ],
     targets: [
         .target(
@@ -177,6 +177,19 @@ let package = Package(
         .target(
             name: "AIProviders",
             dependencies: ["AIContext", "FernletDomainModel", "FernletScoring", "FoodCatalog"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
+        ),
+        // Layer 6 — iCloud-synced persistence. THE OTHER WALLED CONSUMER. The CoreData +
+        // CloudKit repository, sync service, persistence controller, and the synced
+        // SavedRecipe entity. Its dependency list OMITS every Private* store — the synced
+        // blob must never name a sealed type (it references sealed entity names only as
+        // string literals for iCloud EXCLUSION). Enforced as a hard error by the
+        // DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR build flag. MainActor.
+        .target(
+            name: "CloudKitSync",
+            dependencies: ["FernletPersistence", "LocalPersistence", "FernletFoundation", "FernletDomainModel"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
