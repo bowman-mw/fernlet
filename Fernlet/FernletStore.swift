@@ -5,6 +5,7 @@ import HealthKit
 import Observation
 import SwiftUI
 import FernletDomainModel
+import PrivateMemoryStore
 import FernletScoring
 import FernletPersistence
 import FoodCatalog

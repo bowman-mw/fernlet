@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore"]),
     ],
     targets: [
         .target(
@@ -117,6 +117,17 @@ let package = Package(
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
+        ),
+        // Layer 3 — sealed journal store (S3). Just the raw at-rest journal repository
+        // (JournalNarrativeRepository). NONisolated (plain final class; its CoreData
+        // performAndWait closures run nonisolated under strict concurrency). Note: the
+        // memory "gatekeeper" MemoryAgent + the AIAuditLog sink are NOT here — they are
+        // pure, AI-facing control plane (every AI provider calls them) and live in
+        // FernletDomainModel, so placing them in this sealed module would have been an
+        // AIProviders -> Private* wall violation.
+        .target(
+            name: "PrivateMemoryStore",
+            dependencies: ["PrivateStoreCore", "FernletCrypto", "FernletFoundation", "FernletDomainModel"]
         ),
     ]
 )

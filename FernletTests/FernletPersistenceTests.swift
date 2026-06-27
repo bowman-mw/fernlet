@@ -5,6 +5,7 @@ import Observation
 import Testing
 import Foundation
 import FernletDomainModel
+import PrivateMemoryStore
 import FernletPersistence
 import PrivateStoreCore
 @testable import Fernlet

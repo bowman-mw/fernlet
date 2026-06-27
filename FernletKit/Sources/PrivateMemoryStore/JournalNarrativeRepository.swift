@@ -6,30 +6,41 @@ import FernletDomainModel
 import FernletFoundation
 import PrivateStoreCore
 
-struct JournalNarrative: Identifiable, Equatable {
-    var id: UUID
-    var dayKey: String
-    var tag: FeelingTag
-    var entryDate: Date
-    var text: String
-    var emotions: [String]
-    var createdAt: Date
-    var updatedAt: Date
+public struct JournalNarrative: Identifiable, Equatable {
+    public var id: UUID
+    public var dayKey: String
+    public var tag: FeelingTag
+    public var entryDate: Date
+    public var text: String
+    public var emotions: [String]
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(id: UUID, dayKey: String, tag: FeelingTag, entryDate: Date, text: String, emotions: [String], createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.dayKey = dayKey
+        self.tag = tag
+        self.entryDate = entryDate
+        self.text = text
+        self.emotions = emotions
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
 }
 
-final class JournalNarrativeRepository {
+public final class JournalNarrativeRepository {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "journal-narrative")
 
-    init(controller: PrivatePersistenceController? = nil) {
+    public init(controller: PrivatePersistenceController? = nil) {
         self.context = (controller ?? .shared).container.viewContext
     }
 
-    init(context: NSManagedObjectContext) {
+    public init(context: NSManagedObjectContext) {
         self.context = context
     }
 
-    func insert(_ narrative: JournalNarrative, contentKey: SymmetricKey?) throws {
+    public func insert(_ narrative: JournalNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
             let isNew: Bool
@@ -54,7 +65,7 @@ final class JournalNarrativeRepository {
         }
     }
 
-    func update(_ narrative: JournalNarrative, contentKey: SymmetricKey?) throws {
+    public func update(_ narrative: JournalNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
             let request = request(id: narrative.id)
@@ -70,7 +81,7 @@ final class JournalNarrativeRepository {
         }
     }
 
-    func delete(id: UUID) throws {
+    public func delete(id: UUID) throws {
         try context.performAndWait {
             let request = request(id: id)
             try context.fetch(request).forEach(context.delete)
@@ -79,7 +90,7 @@ final class JournalNarrativeRepository {
         }
     }
 
-    func narratives(forDayKey dayKey: String, contentKey: SymmetricKey?) throws -> [JournalNarrative] {
+    public func narratives(forDayKey dayKey: String, contentKey: SymmetricKey?) throws -> [JournalNarrative] {
         guard let contentKey else { return [] }
         return try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
@@ -98,7 +109,7 @@ final class JournalNarrativeRepository {
         }
     }
 
-    func narratives(forDayKeys dayKeys: [String], contentKey: SymmetricKey?) throws -> [JournalNarrative] {
+    public func narratives(forDayKeys dayKeys: [String], contentKey: SymmetricKey?) throws -> [JournalNarrative] {
         guard let contentKey, !dayKeys.isEmpty else { return [] }
         return try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")

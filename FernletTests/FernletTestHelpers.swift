@@ -1,6 +1,7 @@
 import XCTest
 import LocalPersistence
 import FernletDomainModel
+import PrivateMemoryStore
 import FernletPersistence
 import FoodCatalog
 import PrivateStoreCore

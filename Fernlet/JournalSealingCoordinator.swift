@@ -2,6 +2,7 @@ import CryptoKit
 import FernletFoundation
 import Foundation
 import FernletDomainModel
+import PrivateMemoryStore
 
 /// The state the journal-sealing flow reads/mutates on the app store. Mirrors the
 /// `WorkoutSyncContext` host-protocol pattern so `JournalSealingCoordinator` depends

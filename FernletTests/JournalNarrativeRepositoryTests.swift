@@ -2,6 +2,7 @@ import CoreData
 import CryptoKit
 import Testing
 import FernletDomainModel
+import PrivateMemoryStore
 import FernletFoundation
 import PrivateStoreCore
 @testable import Fernlet
