@@ -1,4 +1,4 @@
-import SwiftUI
+import Foundation
 
 enum FernletVoice: CaseIterable {
     case mealAnalysisFailed
@@ -346,32 +346,6 @@ enum FernletScoring {
                 "hygiene": careScore
             ],
             appliedWeights: adjustedWeights
-        )
-    }
-
-    static func compute(for store: FernletStore) -> Double {
-        let body = store.day.healthContext?.body
-        let activity = store.day.healthContext?.activity
-        return compute(
-            journalTag: store.day.journals.last?.tag,
-            mealCount: store.day.meals.count,
-            workoutCount: store.day.workouts.count,
-            sleepQuality: store.day.sleep?.quality,
-            bottleCount: store.day.bottleCount,
-            hydrationTarget: store.settings.hydrationTarget,
-            hygiene: store.day.hygiene,
-            hygieneTaskCount: store.personalCareTasks.count,
-            completedPersonalCareTaskCount: store.personalCareProgress().completed,
-            weights: GoalWeights.forGoal(store.settings.selectedGoal),
-            isSick: store.isSick(on: store.todayKey),
-            nutrientGaps: dedupedNutrientGaps(from: store.derivedSignals.flatMap(\.nutrientGaps)),
-            micronutrientDataCoverageRatio: micronutrientDataCoverageRatio(for: store.day.meals),
-            sleepHours: body?.sleepHours,
-            sleepStages: body?.sleepStages,
-            activitySteps: activity?.steps,
-            activeEnergyKilocalories: activity?.activeEnergyKilocalories,
-            exerciseMinutes: activity?.exerciseMinutes,
-            periodAdjustment: store.periodAdjustment(for: store.todayKey)
         )
     }
 

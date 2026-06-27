@@ -182,7 +182,29 @@ final class FernletStore {
 
 
     var score: Double {
-        FernletScoring.compute(for: self)
+        let body = day.healthContext?.body
+        let activity = day.healthContext?.activity
+        return FernletScoring.compute(
+            journalTag: day.journals.last?.tag,
+            mealCount: day.meals.count,
+            workoutCount: day.workouts.count,
+            sleepQuality: day.sleep?.quality,
+            bottleCount: day.bottleCount,
+            hydrationTarget: settings.hydrationTarget,
+            hygiene: day.hygiene,
+            hygieneTaskCount: personalCareTasks.count,
+            completedPersonalCareTaskCount: personalCareProgress().completed,
+            weights: GoalWeights.forGoal(settings.selectedGoal),
+            isSick: isSick(on: todayKey),
+            nutrientGaps: FernletScoring.dedupedNutrientGaps(from: derivedSignals.flatMap(\.nutrientGaps)),
+            micronutrientDataCoverageRatio: FernletScoring.micronutrientDataCoverageRatio(for: day.meals),
+            sleepHours: body?.sleepHours,
+            sleepStages: body?.sleepStages,
+            activitySteps: activity?.steps,
+            activeEnergyKilocalories: activity?.activeEnergyKilocalories,
+            exerciseMinutes: activity?.exerciseMinutes,
+            periodAdjustment: periodAdjustment(for: todayKey)
+        )
     }
 
     var companionState: CompanionState {

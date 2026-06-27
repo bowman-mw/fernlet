@@ -1,0 +1,770 @@
+// WorkoutModels.swift
+// Split out of Models.swift (SPM carve-up §5c). Workout, exercise, muscle, and equipment models.
+
+import Foundation
+
+struct Workout: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var name: String
+    var type: WorkoutType
+    var mode: WorkoutMode = .strengthTraining
+    var activityType: WorkoutActivityType?
+    var exercises: String
+    var rpe: Double?
+    var notes: String
+    var duration: Int?
+    var distanceMiles: Double?
+    var activeEnergyKcal: Double?
+    var effort: Int?
+    var muscleGroups: Set<MuscleGroup> = []
+    var healthKitUUID: UUID?
+    var plannedWorkoutID: UUID?
+    var intensity: WorkoutIntensity
+    var completedAt = Date()
+    var loggedAt = Date()
+
+    var exerciseLines: [String] {
+        exercises
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    var inferredCategory: WorkoutType {
+        if mode == .activity, let activityType {
+            return activityType.fernletCategory
+        }
+
+        if !muscleGroups.isEmpty {
+            let regions = muscleGroups.map { $0.region }
+            let upper = regions.filter { $0 == .upper }.count
+            let lower = regions.filter { $0 == .lower }.count
+            let core = regions.filter { $0 == .core }.count
+            let total = max(upper + lower + core, 1)
+
+            if Double(upper) / Double(total) >= 0.7 { return .upper }
+            if Double(lower) / Double(total) >= 0.7 { return .lower }
+            if Double(core) / Double(total) >= 0.7 { return .fullBody }
+            return .fullBody
+        }
+
+        return WorkoutExerciseCatalog.inferredCategory(for: self)
+    }
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        type: WorkoutType,
+        mode: WorkoutMode = .strengthTraining,
+        activityType: WorkoutActivityType? = nil,
+        exercises: String,
+        rpe: Double?,
+        notes: String,
+        duration: Int?,
+        distanceMiles: Double? = nil,
+        activeEnergyKcal: Double? = nil,
+        effort: Int? = nil,
+        muscleGroups: Set<MuscleGroup> = [],
+        healthKitUUID: UUID? = nil,
+        plannedWorkoutID: UUID? = nil,
+        intensity: WorkoutIntensity,
+        completedAt: Date = Date(),
+        loggedAt: Date? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.type = type
+        self.mode = mode
+        self.activityType = activityType
+        self.exercises = exercises
+        self.rpe = rpe
+        self.notes = notes
+        self.duration = duration
+        self.distanceMiles = distanceMiles
+        self.activeEnergyKcal = activeEnergyKcal
+        self.effort = effort
+        self.muscleGroups = muscleGroups
+        self.healthKitUUID = healthKitUUID
+        self.plannedWorkoutID = plannedWorkoutID
+        self.intensity = intensity
+        self.completedAt = completedAt
+        self.loggedAt = loggedAt ?? completedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        type = try container.decode(WorkoutType.self, forKey: .type)
+        mode = try container.decodeIfPresent(WorkoutMode.self, forKey: .mode) ?? .strengthTraining
+        activityType = try container.decodeIfPresent(WorkoutActivityType.self, forKey: .activityType)
+        exercises = try container.decode(String.self, forKey: .exercises)
+        rpe = try container.decodeIfPresent(Double.self, forKey: .rpe)
+        notes = try container.decode(String.self, forKey: .notes)
+        duration = try container.decodeIfPresent(Int.self, forKey: .duration)
+        distanceMiles = try container.decodeIfPresent(Double.self, forKey: .distanceMiles)
+        activeEnergyKcal = try container.decodeIfPresent(Double.self, forKey: .activeEnergyKcal)
+        effort = try container.decodeIfPresent(Int.self, forKey: .effort)
+        muscleGroups = try container.decodeIfPresent(Set<MuscleGroup>.self, forKey: .muscleGroups) ?? []
+        healthKitUUID = try container.decodeIfPresent(UUID.self, forKey: .healthKitUUID)
+        plannedWorkoutID = try container.decodeIfPresent(UUID.self, forKey: .plannedWorkoutID)
+        intensity = try container.decode(WorkoutIntensity.self, forKey: .intensity)
+        completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt) ?? Date()
+        loggedAt = try container.decodeIfPresent(Date.self, forKey: .loggedAt) ?? completedAt
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(type, forKey: .type)
+        try container.encode(mode, forKey: .mode)
+        try container.encodeIfPresent(activityType, forKey: .activityType)
+        try container.encode(exercises, forKey: .exercises)
+        try container.encodeIfPresent(rpe, forKey: .rpe)
+        try container.encode(notes, forKey: .notes)
+        try container.encodeIfPresent(duration, forKey: .duration)
+        try container.encodeIfPresent(distanceMiles, forKey: .distanceMiles)
+        try container.encodeIfPresent(activeEnergyKcal, forKey: .activeEnergyKcal)
+        try container.encodeIfPresent(effort, forKey: .effort)
+        try container.encode(muscleGroups, forKey: .muscleGroups)
+        try container.encodeIfPresent(healthKitUUID, forKey: .healthKitUUID)
+        try container.encodeIfPresent(plannedWorkoutID, forKey: .plannedWorkoutID)
+        try container.encode(intensity, forKey: .intensity)
+        try container.encode(completedAt, forKey: .completedAt)
+        try container.encode(loggedAt, forKey: .loggedAt)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, type, mode, activityType, exercises, rpe, notes, duration
+        case distanceMiles, activeEnergyKcal, effort, muscleGroups, healthKitUUID, plannedWorkoutID
+        case intensity, completedAt, loggedAt
+    }
+}
+
+struct PlannedWorkout: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var name: String
+    var split: WorkoutSplit
+    var source: WorkoutPlanSource
+    var mode: WorkoutMode
+    var activityType: WorkoutActivityType?
+    var exercises: String
+    var muscleGroups: Set<MuscleGroup>
+    var notes: String
+    var duration: Int?
+    var targetDistanceMiles: Double?
+    var targetEnergyKcal: Double?
+    var targetEffort: Int?
+    var createdAt = Date()
+
+    var workoutType: WorkoutType { split.workoutType }
+
+    var completedWorkout: Workout {
+        Workout(
+            name: name,
+            type: workoutType,
+            mode: mode,
+            activityType: activityType,
+            exercises: exercises.isEmpty ? notes : exercises,
+            rpe: nil,
+            notes: source.completionNote,
+            duration: duration,
+            distanceMiles: targetDistanceMiles,
+            activeEnergyKcal: targetEnergyKcal,
+            effort: targetEffort,
+            muscleGroups: muscleGroups,
+            plannedWorkoutID: id,
+            intensity: .moderate
+        )
+    }
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        split: WorkoutSplit,
+        source: WorkoutPlanSource,
+        mode: WorkoutMode = .strengthTraining,
+        activityType: WorkoutActivityType? = nil,
+        exercises: String = "",
+        muscleGroups: Set<MuscleGroup> = [],
+        notes: String,
+        duration: Int?,
+        targetDistanceMiles: Double? = nil,
+        targetEnergyKcal: Double? = nil,
+        targetEffort: Int? = nil,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.split = split
+        self.source = source
+        self.mode = mode
+        self.activityType = activityType
+        self.exercises = exercises
+        self.muscleGroups = muscleGroups
+        self.notes = notes
+        self.duration = duration
+        self.targetDistanceMiles = targetDistanceMiles
+        self.targetEnergyKcal = targetEnergyKcal
+        self.targetEffort = targetEffort
+        self.createdAt = createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        split = try container.decode(WorkoutSplit.self, forKey: .split)
+        source = try container.decodeIfPresent(WorkoutPlanSource.self, forKey: .source) ?? .user
+        mode = try container.decodeIfPresent(WorkoutMode.self, forKey: .mode) ?? .strengthTraining
+        activityType = try container.decodeIfPresent(WorkoutActivityType.self, forKey: .activityType)
+        exercises = try container.decodeIfPresent(String.self, forKey: .exercises) ?? ""
+        muscleGroups = try container.decodeIfPresent(Set<MuscleGroup>.self, forKey: .muscleGroups) ?? []
+        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        duration = try container.decodeIfPresent(Int.self, forKey: .duration)
+        targetDistanceMiles = try container.decodeIfPresent(Double.self, forKey: .targetDistanceMiles)
+        targetEnergyKcal = try container.decodeIfPresent(Double.self, forKey: .targetEnergyKcal)
+        targetEffort = try container.decodeIfPresent(Int.self, forKey: .targetEffort)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, split, source, mode, activityType, exercises, muscleGroups, notes, duration
+        case targetDistanceMiles, targetEnergyKcal, targetEffort, createdAt
+    }
+}
+
+enum WorkoutPlanSource: String, Codable, CaseIterable, Identifiable {
+    case user
+    case coach
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .user: "User"
+        case .coach: "Coach"
+        }
+    }
+
+    var completionNote: String {
+        switch self {
+        case .user: "Completed from user plan."
+        case .coach: "Completed from coach plan."
+        }
+    }
+}
+
+enum WorkoutSplit: String, Codable, CaseIterable, Identifiable {
+    case workout
+    case upper
+    case lower
+    case fullBody
+    case push
+    case pull
+    case legs
+    case cardio
+    case recovery
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .workout: "Workout"
+        case .upper: "Upper"
+        case .lower: "Lower"
+        case .fullBody: "Full Body"
+        case .push: "Push"
+        case .pull: "Pull"
+        case .legs: "Legs"
+        case .cardio: "Cardio"
+        case .recovery: "Recovery"
+        }
+    }
+
+    var workoutType: WorkoutType {
+        switch self {
+        case .workout: .cardio
+        case .upper, .push, .pull: .upper
+        case .lower, .legs: .lower
+        case .fullBody, .recovery: .fullBody
+        case .cardio: .cardio
+        }
+    }
+}
+
+enum WorkoutType: String, Codable, CaseIterable, Identifiable {
+    case upper = "Upper"
+    case lower = "Lower"
+    case armsBack = "Arms/Back"
+    case mixed = "Upper/Mixed"
+    case fullBody = "Full Body"
+    case cardio = "Cardio"
+    case run = "C210K Run"
+    case hike = "Hike"
+
+    static let allCases: [WorkoutType] = [.upper, .lower, .fullBody, .cardio]
+
+    var id: String { rawValue }
+}
+
+public enum WorkoutMode: String, Codable, CaseIterable, Identifiable {
+    case strengthTraining
+    case activity
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .strengthTraining: "Strength Training"
+        case .activity: "Workouts"
+        }
+    }
+
+    public var pickerTitle: String {
+        switch self {
+        case .strengthTraining: "Exercise"
+        case .activity: "Class"
+        }
+    }
+
+    public var searchPlaceholder: String {
+        switch self {
+        case .strengthTraining: "Search exercise or muscle"
+        case .activity: "Search class, e.g. Pilates"
+        }
+    }
+
+    public var addLabel: String {
+        switch self {
+        case .strengthTraining: "Add exercise"
+        case .activity: "Add class"
+        }
+    }
+}
+
+public enum BodyRegion: String, Codable, CaseIterable {
+    case upper
+    case lower
+    case core
+    case full
+}
+
+public enum MuscleGroup: String, Codable, CaseIterable, Identifiable {
+    case chest
+    case upperBack
+    case lats
+    case lowerBack
+    case traps
+    case frontDelts
+    case sideDelts
+    case rearDelts
+    case biceps
+    case triceps
+    case forearms
+    case abs
+    case obliques
+    case quads
+    case hamstrings
+    case glutes
+    case calves
+    case adductors
+    case abductors
+    case fullBody
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .chest: "Chest"
+        case .upperBack: "Upper Back"
+        case .lats: "Lats"
+        case .lowerBack: "Lower Back"
+        case .traps: "Traps"
+        case .frontDelts: "Front Delts"
+        case .sideDelts: "Side Delts"
+        case .rearDelts: "Rear Delts"
+        case .biceps: "Biceps"
+        case .triceps: "Triceps"
+        case .forearms: "Forearms"
+        case .abs: "Abs"
+        case .obliques: "Obliques"
+        case .quads: "Quads"
+        case .hamstrings: "Hamstrings"
+        case .glutes: "Glutes"
+        case .calves: "Calves"
+        case .adductors: "Adductors"
+        case .abductors: "Abductors"
+        case .fullBody: "Full Body"
+        }
+    }
+
+    public var region: BodyRegion {
+        switch self {
+        case .chest, .upperBack, .lats, .lowerBack, .traps, .frontDelts, .sideDelts, .rearDelts, .biceps, .triceps, .forearms:
+            .upper
+        case .quads, .hamstrings, .glutes, .calves, .adductors, .abductors:
+            .lower
+        case .abs, .obliques:
+            .core
+        case .fullBody:
+            .full
+        }
+    }
+}
+
+extension MuscleGroup {
+    nonisolated static func fromLegacyString(_ s: String) -> MuscleGroup? {
+        switch s.lowercased() {
+        case "chest": .chest
+        case "triceps": .triceps
+        case "biceps": .biceps
+        case "shoulders": .frontDelts
+        case "back": .upperBack
+        case "lats": .lats
+        case "core": .abs
+        case "quads": .quads
+        case "hamstrings": .hamstrings
+        case "glutes": .glutes
+        case "calves": .calves
+        case "full body": .fullBody
+        case "legs": .quads
+        case "cardio", "mobility", "balance", "coordination", "sport", "class": nil
+        default: nil
+        }
+    }
+}
+
+public enum MovementPattern: String, Codable, CaseIterable {
+    case push
+    case pull
+    case hinge
+    case squat
+    case lunge
+    case carry
+    case twist
+    case isolation
+    case locomotion
+}
+
+public enum Equipment: String, Codable, CaseIterable, Identifiable {
+    case barbell
+    case dumbbell
+    case machine
+    case cable
+    case bodyweight
+    case kettlebell
+    case band
+    case bench
+    case cardio
+    case none
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .barbell: "Barbell"
+        case .dumbbell: "Dumbbell"
+        case .machine: "Machine"
+        case .cable: "Cable"
+        case .bodyweight: "Bodyweight"
+        case .kettlebell: "Kettlebell"
+        case .band: "Band"
+        case .bench: "Bench"
+        case .cardio: "Cardio"
+        case .none: "None"
+        }
+    }
+}
+
+enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
+    case running, walking, hiking, cycling, indoorCycling
+    case yoga, pilates, barre, dance, socialDance
+    case swimmingPool, swimmingOpenWater, rowing, elliptical, stairClimbing, stairs
+    case hiit, kickboxing, martialArts, climbing, jumpRope
+    case tennis, basketball, soccer, pickleball, badminton, tableTennis, racquetball, squash
+    case coreTraining, flexibility, mindAndBody, taiChi
+    case functionalStrengthTraining, traditionalStrengthTraining
+    case crossTraining, mixedCardio, preparationAndRecovery, cooldown
+    case other
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .running: "Running"
+        case .walking: "Walking"
+        case .hiking: "Hiking"
+        case .cycling: "Cycling"
+        case .indoorCycling: "Indoor Cycling"
+        case .yoga: "Yoga"
+        case .pilates: "Pilates"
+        case .barre: "Barre"
+        case .dance: "Dance"
+        case .socialDance: "Social Dance"
+        case .swimmingPool: "Pool Swim"
+        case .swimmingOpenWater: "Open Water Swim"
+        case .rowing: "Rowing"
+        case .elliptical: "Elliptical"
+        case .stairClimbing: "Stair Climbing"
+        case .stairs: "Stairs"
+        case .hiit: "HIIT"
+        case .kickboxing: "Kickboxing"
+        case .martialArts: "Martial Arts"
+        case .climbing: "Climbing"
+        case .jumpRope: "Jump Rope"
+        case .tennis: "Tennis"
+        case .basketball: "Basketball"
+        case .soccer: "Soccer"
+        case .pickleball: "Pickleball"
+        case .badminton: "Badminton"
+        case .tableTennis: "Table Tennis"
+        case .racquetball: "Racquetball"
+        case .squash: "Squash"
+        case .coreTraining: "Core Training"
+        case .flexibility: "Flexibility"
+        case .mindAndBody: "Mind and Body"
+        case .taiChi: "Tai Chi"
+        case .functionalStrengthTraining: "Functional Strength Training"
+        case .traditionalStrengthTraining: "Traditional Strength Training"
+        case .crossTraining: "Cross Training"
+        case .mixedCardio: "Mixed Cardio"
+        case .preparationAndRecovery: "Preparation and Recovery"
+        case .cooldown: "Cooldown"
+        case .other: "Other"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .running: "figure.run"
+        case .walking: "figure.walk"
+        case .hiking: "figure.hiking"
+        case .cycling, .indoorCycling: "figure.outdoor.cycle"
+        case .yoga, .mindAndBody: "figure.mind.and.body"
+        case .pilates: "figure.pilates"
+        case .barre: "figure.barre"
+        case .dance, .socialDance: "figure.dance"
+        case .swimmingPool, .swimmingOpenWater: "figure.pool.swim"
+        case .rowing: "figure.rower"
+        case .elliptical: "figure.elliptical"
+        case .stairClimbing, .stairs: "figure.stairs"
+        case .hiit, .crossTraining, .mixedCardio: "figure.highintensity.intervaltraining"
+        case .kickboxing: "figure.kickboxing"
+        case .martialArts: "figure.martial.arts"
+        case .climbing: "figure.climbing"
+        case .jumpRope: "figure.jumprope"
+        case .tennis: "figure.tennis"
+        case .basketball: "figure.basketball"
+        case .soccer: "figure.soccer"
+        case .pickleball: "figure.pickleball"
+        case .badminton: "figure.badminton"
+        case .tableTennis: "figure.table.tennis"
+        case .racquetball: "figure.racquetball"
+        case .squash: "figure.squash"
+        case .coreTraining: "figure.core.training"
+        case .flexibility, .cooldown, .preparationAndRecovery: "figure.flexibility"
+        case .taiChi: "figure.taichi"
+        case .functionalStrengthTraining, .traditionalStrengthTraining: "figure.strengthtraining.traditional"
+        case .other: "figure.mixed.cardio"
+        }
+    }
+
+    var expectsDistance: Bool {
+        switch self {
+        case .running, .walking, .hiking, .cycling, .swimmingPool, .swimmingOpenWater, .rowing:
+            true
+        case .indoorCycling, .yoga, .pilates, .barre, .dance, .socialDance, .elliptical, .stairClimbing, .stairs, .hiit, .kickboxing, .martialArts, .climbing, .jumpRope, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash, .coreTraining, .flexibility, .mindAndBody, .taiChi, .functionalStrengthTraining, .traditionalStrengthTraining, .crossTraining, .mixedCardio, .preparationAndRecovery, .cooldown, .other:
+            false
+        }
+    }
+
+    var expectsPace: Bool {
+        switch self {
+        case .running, .walking, .hiking:
+            true
+        case .cycling, .indoorCycling, .yoga, .pilates, .barre, .dance, .socialDance, .swimmingPool, .swimmingOpenWater, .rowing, .elliptical, .stairClimbing, .stairs, .hiit, .kickboxing, .martialArts, .climbing, .jumpRope, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash, .coreTraining, .flexibility, .mindAndBody, .taiChi, .functionalStrengthTraining, .traditionalStrengthTraining, .crossTraining, .mixedCardio, .preparationAndRecovery, .cooldown, .other:
+            false
+        }
+    }
+
+    var defaultDurationMinutes: Int {
+        switch self {
+        case .functionalStrengthTraining, .traditionalStrengthTraining:
+            30
+        case .yoga, .pilates, .barre, .flexibility, .mindAndBody, .taiChi:
+            60
+        case .running, .walking, .hiking, .cycling, .indoorCycling, .dance, .socialDance, .swimmingPool, .swimmingOpenWater, .rowing, .elliptical, .stairClimbing, .stairs, .hiit, .kickboxing, .martialArts, .climbing, .jumpRope, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash, .coreTraining, .crossTraining, .mixedCardio, .preparationAndRecovery, .cooldown, .other:
+            45
+        }
+    }
+
+    var fernletCategory: WorkoutType {
+        switch self {
+        case .running, .walking, .hiking, .cycling, .indoorCycling, .swimmingPool, .swimmingOpenWater, .rowing, .elliptical, .stairClimbing, .stairs, .jumpRope, .hiit, .crossTraining, .mixedCardio, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash:
+            .cardio
+        case .yoga, .pilates, .barre, .dance, .socialDance, .flexibility, .mindAndBody, .taiChi, .coreTraining, .functionalStrengthTraining, .traditionalStrengthTraining, .other, .preparationAndRecovery, .cooldown, .kickboxing, .martialArts, .climbing:
+            .fullBody
+        }
+    }
+}
+
+enum WorkoutIntensity: String, Codable, CaseIterable, Identifiable {
+    case light, moderate, hard
+    var id: String { rawValue }
+}
+
+enum ExerciseInputKind: String, Codable {
+    case strength
+    case treadmill
+    case none
+}
+
+struct ExerciseTarget: Identifiable, Codable, Equatable {
+    var id: String { name }
+    var name: String
+    var primaryMuscles: Set<MuscleGroup>
+    var secondaryMuscles: Set<MuscleGroup>
+    var equipment: Equipment
+    var movementPattern: MovementPattern
+    var inputKind: ExerciseInputKind
+
+    var bodyRegion: BodyRegion {
+        let regions = Set(primaryMuscles.map { $0.region })
+        if regions == [.upper] { return .upper }
+        if regions == [.lower] { return .lower }
+        if regions == [.core] { return .core }
+        return .full
+    }
+
+    var category: WorkoutType {
+        switch bodyRegion {
+        case .upper: .upper
+        case .lower: .lower
+        case .core: .fullBody
+        case .full: .fullBody
+        }
+    }
+
+    var muscles: [String] {
+        (primaryMuscles.union(secondaryMuscles))
+            .sorted { $0.displayName < $1.displayName }
+            .map(\.displayName)
+    }
+
+    init(
+        name: String,
+        primaryMuscles: Set<MuscleGroup>,
+        secondaryMuscles: Set<MuscleGroup> = [],
+        equipment: Equipment = .none,
+        movementPattern: MovementPattern = .isolation,
+        inputKind: ExerciseInputKind = .strength
+    ) {
+        self.name = name
+        self.primaryMuscles = primaryMuscles
+        self.secondaryMuscles = secondaryMuscles
+        self.equipment = equipment
+        self.movementPattern = movementPattern
+        self.inputKind = inputKind
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        inputKind = try container.decodeIfPresent(ExerciseInputKind.self, forKey: .inputKind) ?? .strength
+        equipment = try container.decodeIfPresent(Equipment.self, forKey: .equipment) ?? .none
+        movementPattern = try container.decodeIfPresent(MovementPattern.self, forKey: .movementPattern) ?? .isolation
+
+        if let prim = try container.decodeIfPresent(Set<MuscleGroup>.self, forKey: .primaryMuscles) {
+            primaryMuscles = prim
+            secondaryMuscles = try container.decodeIfPresent(Set<MuscleGroup>.self, forKey: .secondaryMuscles) ?? []
+        } else {
+            let legacy = try container.decodeIfPresent([String].self, forKey: .legacyMuscles) ?? []
+            primaryMuscles = Set(legacy.compactMap(MuscleGroup.fromLegacyString))
+            secondaryMuscles = []
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(primaryMuscles, forKey: .primaryMuscles)
+        try container.encode(secondaryMuscles, forKey: .secondaryMuscles)
+        try container.encode(equipment, forKey: .equipment)
+        try container.encode(movementPattern, forKey: .movementPattern)
+        try container.encode(inputKind, forKey: .inputKind)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, primaryMuscles, secondaryMuscles, equipment, movementPattern, inputKind
+        case legacyMuscles = "muscles"
+    }
+}
+
+enum WorkoutExerciseCatalog {
+    static let baseExercises: [ExerciseTarget] = loadBaseExercises()
+
+    static func inferredCategory(for workout: Workout) -> WorkoutType {
+        inferredCategory(for: "\(workout.name)\n\(workout.exercises)")
+    }
+
+    static func inferredCategory(for text: String) -> WorkoutType {
+        let lowercasedText = text.lowercased()
+        var scores: [WorkoutType: Int] = [.upper: 0, .lower: 0, .fullBody: 0, .cardio: 0]
+        for exercise in baseExercises {
+            let tokens = exercise.name.lowercased().split(separator: " ").map(String.init)
+            if tokens.allSatisfy({ lowercasedText.contains($0) }) || lowercasedText.contains(exercise.name.lowercased()) {
+                scores[exercise.category, default: 0] += 2
+            }
+        }
+        if lowercasedText.contains("upper") { scores[.upper, default: 0] += 2 }
+        if lowercasedText.contains("lower") || lowercasedText.contains("leg") { scores[.lower, default: 0] += 2 }
+        if lowercasedText.contains("full body") || lowercasedText.contains("full-body") { scores[.fullBody, default: 0] += 2 }
+        if lowercasedText.contains("cardio") { scores[.cardio, default: 0] += 2 }
+
+        let sorted = scores.sorted { first, second in
+            if first.value != second.value { return first.value > second.value }
+            return WorkoutType.allCases.firstIndex(of: first.key) ?? 0 < WorkoutType.allCases.firstIndex(of: second.key) ?? 0
+        }
+        let best = sorted.first ?? (.fullBody, 0)
+        let second = sorted.dropFirst().first?.value ?? 0
+        if best.value == 0 { return .fullBody }
+        if best.value == second && best.key != .cardio { return .fullBody }
+        return best.key
+    }
+
+    static func targetSummary(for workout: Workout) -> String {
+        let text = "\(workout.name)\n\(workout.exercises)".lowercased()
+        let muscles = baseExercises
+            .filter { target in
+                let name = target.name.lowercased()
+                return text.contains(name) || name.split(separator: " ").allSatisfy { text.contains($0) }
+            }
+            .flatMap(\.muscles)
+        let unique = muscles.reduce(into: [String]()) { result, muscle in
+            if !result.contains(muscle) { result.append(muscle) }
+        }
+        return unique.prefix(4).joined(separator: ", ")
+    }
+
+    static func search(_ query: String) -> [ExerciseTarget] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return baseExercises }
+        let normalized = trimmed.lowercased()
+        return baseExercises.filter { exercise in
+            exercise.name.lowercased().contains(normalized)
+                || exercise.category.rawValue.lowercased().contains(normalized)
+                || exercise.muscles.contains { $0.lowercased().contains(normalized) }
+        }
+    }
+
+    private static func loadBaseExercises() -> [ExerciseTarget] {
+        guard let url = Bundle.main.url(forResource: "WorkoutExercises", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let exercises = try? JSONDecoder().decode([ExerciseTarget].self, from: data) else {
+            return []
+        }
+        return exercises
+    }
+}

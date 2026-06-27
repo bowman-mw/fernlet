@@ -327,7 +327,7 @@ struct PeriodTrackerTests {
         let allowed: Set<String> = [
             "ContentView.swift",
             "HealthKitService.swift",
-            "Models.swift",
+            "WellbeingModels.swift",
             "PeriodTrackerStore.swift",
             "PeriodTrackerView.swift",
             "LogPeriodSheet.swift"
