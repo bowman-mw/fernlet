@@ -25,6 +25,16 @@ xcodebuild test-without-building -scheme Fernlet -destination 'platform=iOS Simu
 ```
 Targets: `Fernlet` (app), `FernletTests` (unit), `FernletUITests`, `FernletShareExtension` (recipe share).
 
+**SPM "S3 wall" enforcement:** the on-device source is being carved into the `FernletKit` local
+package (see [Docs/SPM-Module-Carveup-Plan.md](Docs/SPM-Module-Carveup-Plan.md)). The walled AI
+(`AIProviders`) and iCloud-sync (`CloudKitSync`) modules must never reach the sealed `Private*`
+stores. This is a **hard build error**, enforced by building with
+`DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` (a forbidden cross-wall `import` then fails with
+`error: '<module>' is missing a dependency on '<sealed module>'`). Run the check — and use it in CI —
+with `Scripts/spm-wall-check.sh`. The flag must be on the build command (it does not reach the
+synthesized SwiftPM targets from the pbxproj). `FernletTests/S3BoundaryTests` is the complementary
+grep-wall.
+
 ## Index & reference files
 
 Consult these before adding code so existing behavior is reused, not duplicated:
