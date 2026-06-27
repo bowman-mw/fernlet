@@ -76,14 +76,8 @@ final class MealResolutionService {
             do {
                 if let plan = try await FoundationFoodSelectionModel.resolve(
                     FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type)
-                ), let result = MealBuilder.meals(
-                    from: plan,
-                    candidates: candidates,
-                    recipes: host.recipes,
-                    foodItems: candidates.map(\.foodItem) + host.foodCatalog.items(forRecipes: host.recipes),
-                    originalDescription: description
-                ), result.meals.isEmpty == false {
-                    return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
+                ), let resolution = highConfidenceResolution(from: plan, candidates: candidates, description: description) {
+                    return resolution
                 }
             } catch {}
         }
@@ -96,19 +90,31 @@ final class MealResolutionService {
         // Deterministic tier 2: candidate-constrained plan.
         let candidates = host.foodCatalog.candidates(for: description)
         if let plan = FoundationFoodSelectionModel.deterministicPlan(description: description, candidates: candidates, fallbackType: type),
-           let result = MealBuilder.meals(
-            from: plan,
-            candidates: candidates,
-            recipes: host.recipes,
-            foodItems: candidates.map(\.foodItem) + host.foodCatalog.items(forRecipes: host.recipes),
-            originalDescription: description
-           ), result.meals.isEmpty == false {
-            return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
+           let resolution = highConfidenceResolution(from: plan, candidates: candidates, description: description) {
+            return resolution
         }
 
         // Keyword-heuristic fallback: fabricated macros, no catalog grounding — always reviewed.
         // Still try to ground its micronutrients in the catalog so the snapshot isn't fully empty.
         let fallback = enrichingFallbackMicronutrients(MealParser.parse(description, fallbackType: type), description: description)
         return MealResolution(meals: [fallback], createdRecipes: [], confidence: .low, isFallback: true)
+    }
+
+    /// Builds a high-confidence resolution from a candidate-constrained selection plan, or `nil`
+    /// when the plan yields no meals. Shared by the AI-secondary and deterministic tier-2 paths,
+    /// which differ only in how they obtain `plan`.
+    private func highConfidenceResolution(
+        from plan: FoodSelectionPlan,
+        candidates: [FoodSelectionCandidate],
+        description: String
+    ) -> MealResolution? {
+        guard let result = MealBuilder.meals(
+            from: plan,
+            candidates: candidates,
+            recipes: host.recipes,
+            foodItems: candidates.map(\.foodItem) + host.foodCatalog.items(forRecipes: host.recipes),
+            originalDescription: description
+        ), result.meals.isEmpty == false else { return nil }
+        return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
     }
 }

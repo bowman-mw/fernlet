@@ -670,7 +670,7 @@ struct WorkoutSuggestionSheet: View {
         let request = adjustRequest
         isAdjusting = true
         Task {
-            let adjusted = await store.adjustWorkoutDayPlan(plan, request: request, intensity: energy)
+            let adjusted = await store.adjustWorkoutDayPlan(plan, request: request)
             dayPlan = adjusted
             adjustRequest = ""
             isAdjusting = false

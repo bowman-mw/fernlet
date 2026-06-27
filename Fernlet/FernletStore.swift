@@ -1196,8 +1196,8 @@ final class FernletStore {
     /// Applies a natural-language adjustment to a generated day plan using on-device Foundation
     /// Models, constrained to the equipment/injury-filtered catalog. Returns the plan unchanged when
     /// AI is off/unavailable or the request is empty.
-    func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String, intensity: WorkoutIntensity) async -> WorkoutProgram.DayPlan {
-        await workoutPlanningService.adjustWorkoutDayPlan(plan, request: request, intensity: intensity)
+    func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String) async -> WorkoutProgram.DayPlan {
+        await workoutPlanningService.adjustWorkoutDayPlan(plan, request: request)
     }
 
     func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {

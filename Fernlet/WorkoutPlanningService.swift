@@ -82,7 +82,7 @@ final class WorkoutPlanningService {
     /// Applies a natural-language adjustment to a generated day plan using on-device Foundation
     /// Models, constrained to the equipment/injury-filtered catalog. Returns the plan unchanged when
     /// AI is off/unavailable or the request is empty.
-    func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String, intensity: WorkoutIntensity) async -> WorkoutProgram.DayPlan {
+    func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String) async -> WorkoutProgram.DayPlan {
         let trimmed = request.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false, host.settings.aiStatus != .off else { return plan }
         let location = host.settings.activeWorkoutLocation
