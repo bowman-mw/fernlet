@@ -68,6 +68,7 @@ final class FernletStore {
         context: self,
         service: healthKitService ?? HealthKitService()
     )
+    @ObservationIgnored private lazy var workoutPlanningService = WorkoutPlanningService(host: self)
     @ObservationIgnored private lazy var snapshotSaveCoordinator = SnapshotSaveCoordinator(
         repository: repository,
         buildSnapshot: { [unowned self] in self.currentSnapshot() },
@@ -1395,57 +1396,24 @@ final class FernletStore {
 
     /// How consistently the user has trained over the last 4 weeks — a recommendation input.
     func workoutConsistency() -> WorkoutConsistency {
-        let history = loadDays()
-        let calendar = Calendar.current
-        let today = Date()
-        var daysWithWorkout = 0
-        for offset in 0..<28 {
-            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
-            let key = FernletDate.dayKey(for: date)
-            let dayRecord = (key == todayKey) ? day : history[key]
-            if let dayRecord, dayRecord.workouts.isEmpty == false { daysWithWorkout += 1 }
-        }
-        let perWeek = Double(daysWithWorkout) / 4.0
-        if perWeek >= 3.5 { return .high }
-        if perWeek >= 1.5 { return .medium }
-        return .low
+        workoutPlanningService.workoutConsistency()
     }
 
     /// Splits ranked for this user (goal + activity level + consistency + preferred days).
     func recommendedSplits() -> [TrainingSplit] {
-        WorkoutSplitRecommender.ranked(
-            goal: settings.selectedGoal,
-            experience: settings.workoutProfile.experience,
-            consistency: workoutConsistency(),
-            activity: settings.userProfile.activityLevel,
-            preferredDays: settings.workoutProfile.trainingDaysPerWeek
-        )
+        workoutPlanningService.recommendedSplits()
     }
 
     /// The user's chosen split, or the top recommendation when on auto.
     func activeWorkoutSplit() -> TrainingSplit {
-        if let id = settings.workoutProfile.selectedSplitID,
-           let chosen = WorkoutSplitCatalog.all.first(where: { $0.id == id }) {
-            return chosen
-        }
-        return recommendedSplits().first ?? WorkoutSplitCatalog.fallback
+        workoutPlanningService.activeWorkoutSplit()
     }
 
     /// Builds today's session(s) from the active split, rotating by weekday so the program is
     /// consistent week to week. Equipment + injuries are applied deterministically by the engine,
     /// and reps/sets reflect logged progression.
     func workoutDayPlan(intensity: WorkoutIntensity, context: String) -> WorkoutProgram.DayPlan {
-        let rotation = Calendar.current.component(.weekday, from: Date())
-        return WorkoutProgram.dayPlan(
-            goal: settings.selectedGoal,
-            intensity: intensity,
-            profile: settings.workoutProfile,
-            location: settings.activeWorkoutLocation,
-            context: context,
-            split: activeWorkoutSplit(),
-            rotationIndex: rotation,
-            progression: settings.workoutProgression
-        )
+        workoutPlanningService.workoutDayPlan(intensity: intensity, context: context)
     }
 
     /// Records that catalog exercises were completed, advancing their week-to-week progression.
@@ -1461,33 +1429,7 @@ final class FernletStore {
     /// Models, constrained to the equipment/injury-filtered catalog. Returns the plan unchanged when
     /// AI is off/unavailable or the request is empty.
     func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String, intensity: WorkoutIntensity) async -> WorkoutProgram.DayPlan {
-        let trimmed = request.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false, settings.aiStatus != .off else { return plan }
-        let location = settings.activeWorkoutLocation
-        let profile = settings.workoutProfile
-
-        var sessions = plan.sessions
-        for index in sessions.indices {
-            let session = sessions[index]
-            guard session.kind == .strength || session.kind == .fullBody || session.kind == .sport else { continue }
-            let currentNames = session.catalogExerciseNames
-            let candidates = WorkoutAdjustmentCandidateBuilder.candidates(
-                currentNames: currentNames, request: trimmed, location: location, profile: profile
-            )
-            guard candidates.isEmpty == false else { continue }
-            let payload = WorkoutAdjustmentPayload(request: trimmed, currentExercises: currentNames, candidateCount: candidates.count)
-            do {
-                if let adjusted = try await FoundationWorkoutAdjustmentModel.adjust(
-                    payload, candidates: candidates, currentLines: session.exercises.map(\.line)
-                ) {
-                    sessions[index] = WorkoutProgram.applyAdjustment(to: session, exercises: adjusted)
-                }
-            } catch {}
-        }
-        return WorkoutProgram.DayPlan(
-            splitName: plan.splitName, dayTitle: plan.dayTitle, sessions: sessions,
-            droppedSlots: plan.droppedSlots, locationName: plan.locationName
-        )
+        await workoutPlanningService.adjustWorkoutDayPlan(plan, request: request, intensity: intensity)
     }
 
     func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {
@@ -2218,5 +2160,7 @@ extension FernletStore {
 }
 
 extension FernletStore: ProximityTrustPolicy {}
+
+extension FernletStore: WorkoutPlanningContext {}
 
 // MARK: - Models
