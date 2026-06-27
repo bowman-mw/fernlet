@@ -278,22 +278,29 @@ struct FernletPersistenceTests {
             preferences: preferences(iCloudSyncEnabled: false),
             storeURL: storeURL
         )
-        let recorder = ReloadingObservationRecorder(initialState: controller.isReloading)
 
+        #expect(controller.isReloading == false)
+
+        // Observation fires `onChange` synchronously, inline in the property's
+        // `willSet`, on whatever actor performs the mutation. `reload` flips
+        // `isReloading` only on the main actor, so this callback runs on the main
+        // actor too. Because the flag starts `false`, the first tracked change is
+        // necessarily the `false -> true` transition at the start of `reload` — the
+        // firing itself proves `isReloading` went true, with no dependency on task
+        // scheduling or the timing of the store swap.
+        let recorder = ReloadingObservationRecorder()
         withObservationTracking {
             _ = controller.isReloading
         } onChange: {
-            Task { @MainActor in
-                recorder.recordWillChange(from: controller)
+            MainActor.assumeIsolated {
+                recorder.recordReloadingBegan()
             }
         }
 
         try await controller.reload(with: preferences(iCloudSyncEnabled: false))
-        await Task.yield()
-        recorder.record(controller.isReloading)
 
-        #expect(recorder.observedStates.contains(true))
-        #expect(recorder.observedStates.last == false)
+        #expect(recorder.reloadingBegan)
+        #expect(controller.isReloading == false)
     }
 
     // MARK: - Test 9
@@ -378,19 +385,10 @@ struct FernletPersistenceTests {
 
 @MainActor
 private final class ReloadingObservationRecorder {
-    private(set) var observedStates: [Bool]
+    private(set) var reloadingBegan = false
 
-    init(initialState: Bool) {
-        self.observedStates = [initialState]
-    }
-
-    func recordWillChange(from controller: PersistenceController) {
-        // Observation reports before mutation; for this Bool toggle, the next state is the inverse.
-        observedStates.append(!controller.isReloading)
-    }
-
-    func record(_ state: Bool) {
-        observedStates.append(state)
+    func recordReloadingBegan() {
+        reloadingBegan = true
     }
 }
 
