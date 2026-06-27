@@ -1,4 +1,5 @@
 import CoreData
+import FernletCrypto
 import CryptoKit
 import Foundation
 

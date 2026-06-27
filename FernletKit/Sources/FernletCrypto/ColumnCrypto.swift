@@ -4,22 +4,26 @@ import Foundation
 // Shared ChaChaPoly column-encryption helper for private-store repositories.
 // Each repository creates one instance with its own HKDF label so journal,
 // menstrual, and intimacy ciphertexts remain isolated even under the same content key.
-struct ColumnCrypto {
+public struct ColumnCrypto {
     let label: String
+
+    public init(label: String) {
+        self.label = label
+    }
 
     // MARK: - String
 
-    func sealString(_ value: String, contentKey: SymmetricKey) throws -> Data {
+    public func sealString(_ value: String, contentKey: SymmetricKey) throws -> Data {
         try ChaChaPoly.seal(Data(value.utf8), using: columnKey(from: contentKey)).combined
     }
 
     /// Returns nil when value is nil or empty (nothing to seal).
-    func sealOptionalString(_ value: String?, contentKey: SymmetricKey) throws -> Data? {
+    public func sealOptionalString(_ value: String?, contentKey: SymmetricKey) throws -> Data? {
         guard let value, !value.isEmpty else { return nil }
         return try sealString(value, contentKey: contentKey)
     }
 
-    func openString(_ data: Data?, contentKey: SymmetricKey) throws -> String? {
+    public func openString(_ data: Data?, contentKey: SymmetricKey) throws -> String? {
         guard let data else { return nil }
         let plaintext = try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: columnKey(from: contentKey))
         return String(data: plaintext, encoding: .utf8)
@@ -27,12 +31,12 @@ struct ColumnCrypto {
 
     // MARK: - Codable
 
-    func seal<T: Encodable>(_ value: T, contentKey: SymmetricKey) throws -> Data {
+    public func seal<T: Encodable>(_ value: T, contentKey: SymmetricKey) throws -> Data {
         let plaintext = try JSONEncoder().encode(value)
         return try ChaChaPoly.seal(plaintext, using: columnKey(from: contentKey)).combined
     }
 
-    func open<T: Decodable>(_ data: Data?, contentKey: SymmetricKey) throws -> T? {
+    public func open<T: Decodable>(_ data: Data?, contentKey: SymmetricKey) throws -> T? {
         guard let data else { return nil }
         let plaintext = try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: columnKey(from: contentKey))
         return try JSONDecoder().decode(T.self, from: plaintext)

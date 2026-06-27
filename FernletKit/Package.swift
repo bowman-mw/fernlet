@@ -18,11 +18,19 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto"]),
     ],
     targets: [
         .target(
             name: "FernletFoundation",
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
+        ),
+        // Layer 0 — pure sealing primitives (CryptoKit only). References no
+        // FernletFoundation symbols, so it declares no in-package dependency.
+        .target(
+            name: "FernletCrypto",
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
