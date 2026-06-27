@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "AppServices"]),
     ],
     dependencies: [
         // CryptoSwift supplies the memory-hard Scrypt KDF used by FernletLock's passphrase
@@ -271,6 +271,17 @@ let package = Package(
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
+        ),
+        // Layer 6 — assorted app platform services ([S]): NotificationService (UserNotifications),
+        // WeatherKitService (@MainActor; WeatherKit + CoreLocation delegate), NutritionLabelScanner
+        // (Vision/CoreImage OCR, nonisolated static helpers), and SharedRecipeImportQueue (App-Group
+        // recipe-import queue + the RecipeDefinition(importedRecipe:) bridge, which needs AIProviders'
+        // ImportedRecipe — a wall-legal downward edge). NO defaultIsolation: isolation is mixed
+        // (WeatherKitService is explicitly @MainActor; the rest are nonisolated value types / off-main
+        // Vision helpers), matching the FoodCatalog/StoreCore stance.
+        .target(
+            name: "AppServices",
+            dependencies: ["FernletDomainModel", "AIProviders"]
         ),
     ]
 )

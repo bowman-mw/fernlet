@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import AppServices
 @testable import Fernlet
 
 struct FoodProductWebImportTests {

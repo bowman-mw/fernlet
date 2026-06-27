@@ -1,5 +1,6 @@
 import Foundation
 import AIContext
+import AppServices
 
 #if canImport(UIKit)
 import UIKit

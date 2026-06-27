@@ -9,6 +9,7 @@ import FernletDomainModel
 import FernletLock
 import FernletScoring
 import HealthKitGateway
+import AppServices
 
 struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss

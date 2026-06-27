@@ -4,6 +4,7 @@ import SwiftUI
 import PhotosUI
 import UIKit
 import FernletDomainModel
+import AppServices
 
 struct NutritionLabelCameraSheet: View {
     @Environment(\.dismiss) private var dismiss

@@ -18,6 +18,7 @@ import PeriodContextBridge
 import StoreCore
 import DiaryStore
 import HealthKitGateway
+import AppServices
 
 @MainActor
 @Observable

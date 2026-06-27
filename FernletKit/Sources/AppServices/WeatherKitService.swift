@@ -10,8 +10,8 @@ import FernletDomainModel
 /// gracefully — returning `nil` on any missing permission, missing entitlement, or network error —
 /// so nothing ever blocks or nags.
 @MainActor
-final class WeatherKitService: NSObject, CLLocationManagerDelegate {
-    static let shared = WeatherKitService()
+public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
+    public static let shared = WeatherKitService()
 
     private let locationManager = CLLocationManager()
     private var authContinuation: CheckedContinuation<Bool, Never>?
@@ -31,7 +31,7 @@ final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     }
 
     /// Requests when-in-use authorization. Returns whether it ended up granted.
-    func requestAuthorization() async -> Bool {
+    public func requestAuthorization() async -> Bool {
         switch locationManager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways: return true
         case .denied, .restricted: return false
@@ -46,7 +46,7 @@ final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     }
 
     /// A gentle recovery prompt when conditions are heavy/gloomy, or `nil` when unavailable or fine.
-    func moodRecoveryPrompt() async -> String? {
+    public func moodRecoveryPrompt() async -> String? {
         #if canImport(WeatherKit)
         guard isAuthorized, let location = await currentLocation() else { return nil }
         do {
@@ -72,7 +72,7 @@ final class WeatherKitService: NSObject, CLLocationManagerDelegate {
 
     // MARK: - CLLocationManagerDelegate
 
-    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    nonisolated public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         Task { @MainActor in
             guard let continuation = authContinuation else { return }
@@ -89,7 +89,7 @@ final class WeatherKitService: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    nonisolated public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         Task { @MainActor in
             guard let continuation = locationContinuation else { return }
             locationContinuation = nil
@@ -97,7 +97,7 @@ final class WeatherKitService: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    nonisolated public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
             guard let continuation = locationContinuation else { return }
             locationContinuation = nil

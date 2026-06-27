@@ -2,19 +2,19 @@ import Foundation
 import FernletDomainModel
 import AIProviders
 
-struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
-    var id: UUID
-    var urlString: String
-    var queuedAt: Date
-    var attemptCount: Int
-    var lastAttemptAt: Date?
-    var lastErrorDescription: String?
+public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
+    public var id: UUID
+    public var urlString: String
+    public var queuedAt: Date
+    public var attemptCount: Int
+    public var lastAttemptAt: Date?
+    public var lastErrorDescription: String?
 
-    var url: URL? {
+    public var url: URL? {
         URL(string: urlString)
     }
 
-    init(
+    public init(
         id: UUID = UUID(),
         url: URL,
         queuedAt: Date = Date(),
@@ -31,7 +31,7 @@ struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
     }
 }
 
-struct SharedRecipeImportQueue {
+public struct SharedRecipeImportQueue {
     static let appGroupIdentifier = "group.MBO.Fernlet"
 
     private let fileManager: FileManager
@@ -39,14 +39,14 @@ struct SharedRecipeImportQueue {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    init(fileManager: FileManager = .default, fileURL: URL? = nil) {
+    public init(fileManager: FileManager = .default, fileURL: URL? = nil) {
         self.fileManager = fileManager
         self.fileURL = fileURL ?? Self.defaultFileURL(fileManager: fileManager)
         self.encoder = Self.makeEncoder()
         self.decoder = Self.makeDecoder()
     }
 
-    func records() -> [SharedRecipeImportRecord] {
+    public func records() -> [SharedRecipeImportRecord] {
         var result: [SharedRecipeImportRecord] = []
         var coordinatorError: NSError?
         let coordinator = NSFileCoordinator()
@@ -59,11 +59,11 @@ struct SharedRecipeImportQueue {
         return result
     }
 
-    func remove(_ record: SharedRecipeImportRecord) {
+    public func remove(_ record: SharedRecipeImportRecord) {
         modifyRecords { $0.removeAll { $0.id == record.id } }
     }
 
-    func markAttempt(_ record: SharedRecipeImportRecord, errorDescription: String?) {
+    public func markAttempt(_ record: SharedRecipeImportRecord, errorDescription: String?) {
         modifyRecords { records in
             guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
             records[index].attemptCount += 1
@@ -148,7 +148,7 @@ extension RecipeDefinition {
     /// Builds the canonical recipe model from a freshly web-imported recipe. The free-text
     /// ingredient lines and precomputed nutrition are preserved verbatim under `webImport`; the
     /// structured `ingredients` array stays empty (web imports aren't resolved to food items).
-    init(importedRecipe: ImportedRecipe, now: Date = Date()) {
+    public init(importedRecipe: ImportedRecipe, now: Date = Date()) {
         self.init(
             name: importedRecipe.name,
             servings: max(importedRecipe.servings, 1),

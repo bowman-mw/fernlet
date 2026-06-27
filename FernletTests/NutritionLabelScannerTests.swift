@@ -5,6 +5,7 @@ import Testing
 #if canImport(UIKit)
 import UIKit
 import FernletDomainModel
+import AppServices
 
 struct NutritionLabelScannerTests {
     @MainActor

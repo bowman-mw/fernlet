@@ -7,40 +7,102 @@ import Vision
 import UIKit
 import FernletDomainModel
 
-struct NutritionLabelResult: Equatable, Hashable {
-    var servingSize: String?
-    var servingsPerContainer: Int?
-    var calories: Int?
+public struct NutritionLabelResult: Equatable, Hashable {
+    public var servingSize: String?
+    public var servingsPerContainer: Int?
+    public var calories: Int?
 
-    var protein: Int?
-    var carbs: Int?
-    var fat: Int?
+    public var protein: Int?
+    public var carbs: Int?
+    public var fat: Int?
 
-    var fiber: Double?
-    var sugar: Double?
-    var addedSugar: Double?
-    var saturatedFat: Double?
-    var transFat: Double?
-    var cholesterol: Double?
-    var vitaminA: Double?
-    var vitaminC: Double?
-    var vitaminD: Double?
-    var vitaminE: Double?
-    var vitaminB12: Double?
-    var thiamin: Double?
-    var riboflavin: Double?
-    var niacin: Double?
-    var folate: Double?
-    var calcium: Double?
-    var iron: Double?
-    var magnesium: Double?
-    var phosphorus: Double?
-    var potassium: Double?
-    var sodium: Double?
-    var zinc: Double?
-    var omega3: Double?
+    public var fiber: Double?
+    public var sugar: Double?
+    public var addedSugar: Double?
+    public var saturatedFat: Double?
+    public var transFat: Double?
+    public var cholesterol: Double?
+    public var vitaminA: Double?
+    public var vitaminC: Double?
+    public var vitaminD: Double?
+    public var vitaminE: Double?
+    public var vitaminB12: Double?
+    public var thiamin: Double?
+    public var riboflavin: Double?
+    public var niacin: Double?
+    public var folate: Double?
+    public var calcium: Double?
+    public var iron: Double?
+    public var magnesium: Double?
+    public var phosphorus: Double?
+    public var potassium: Double?
+    public var sodium: Double?
+    public var zinc: Double?
+    public var omega3: Double?
 
-    func micronutrients() -> Micronutrients {
+    public init(
+        servingSize: String? = nil,
+        servingsPerContainer: Int? = nil,
+        calories: Int? = nil,
+        protein: Int? = nil,
+        carbs: Int? = nil,
+        fat: Int? = nil,
+        fiber: Double? = nil,
+        sugar: Double? = nil,
+        addedSugar: Double? = nil,
+        saturatedFat: Double? = nil,
+        transFat: Double? = nil,
+        cholesterol: Double? = nil,
+        vitaminA: Double? = nil,
+        vitaminC: Double? = nil,
+        vitaminD: Double? = nil,
+        vitaminE: Double? = nil,
+        vitaminB12: Double? = nil,
+        thiamin: Double? = nil,
+        riboflavin: Double? = nil,
+        niacin: Double? = nil,
+        folate: Double? = nil,
+        calcium: Double? = nil,
+        iron: Double? = nil,
+        magnesium: Double? = nil,
+        phosphorus: Double? = nil,
+        potassium: Double? = nil,
+        sodium: Double? = nil,
+        zinc: Double? = nil,
+        omega3: Double? = nil
+    ) {
+        self.servingSize = servingSize
+        self.servingsPerContainer = servingsPerContainer
+        self.calories = calories
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+        self.fiber = fiber
+        self.sugar = sugar
+        self.addedSugar = addedSugar
+        self.saturatedFat = saturatedFat
+        self.transFat = transFat
+        self.cholesterol = cholesterol
+        self.vitaminA = vitaminA
+        self.vitaminC = vitaminC
+        self.vitaminD = vitaminD
+        self.vitaminE = vitaminE
+        self.vitaminB12 = vitaminB12
+        self.thiamin = thiamin
+        self.riboflavin = riboflavin
+        self.niacin = niacin
+        self.folate = folate
+        self.calcium = calcium
+        self.iron = iron
+        self.magnesium = magnesium
+        self.phosphorus = phosphorus
+        self.potassium = potassium
+        self.sodium = sodium
+        self.zinc = zinc
+        self.omega3 = omega3
+    }
+
+    public func micronutrients() -> Micronutrients {
         Micronutrients(
             fiber: fiber,
             sugar: sugar,
@@ -68,18 +130,30 @@ struct NutritionLabelResult: Equatable, Hashable {
 }
 
 // Returned when the label has two side-by-side columns (e.g. "dry mix" vs "as prepared").
-struct DualColumnScanResult {
-    var col1Header: String
-    var col2Header: String
-    var col1: NutritionLabelResult
-    var col2: NutritionLabelResult
+public struct DualColumnScanResult {
+    public var col1Header: String
+    public var col2Header: String
+    public var col1: NutritionLabelResult
+    public var col2: NutritionLabelResult
+
+    public init(
+        col1Header: String,
+        col2Header: String,
+        col1: NutritionLabelResult,
+        col2: NutritionLabelResult
+    ) {
+        self.col1Header = col1Header
+        self.col2Header = col2Header
+        self.col1 = col1
+        self.col2 = col2
+    }
 }
 
-enum NutritionLabelScanError: LocalizedError {
+public enum NutritionLabelScanError: LocalizedError {
     case noTextFound
     case imageConversionFailed
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .noTextFound:
             "Could not read any text from that image. Try a clearer photo of the nutrition label."
@@ -89,7 +163,7 @@ enum NutritionLabelScanError: LocalizedError {
     }
 }
 
-final class NutritionLabelScanner {
+public final class NutritionLabelScanner {
     static func scan(image: UIImage) async throws -> NutritionLabelResult {
         let lines = try await recognizeText(in: image)
         guard lines.isEmpty == false else { throw NutritionLabelScanError.noTextFound }
@@ -97,14 +171,14 @@ final class NutritionLabelScanner {
     }
 
     // Returns the primary result plus dual-column info when the label has two columns.
-    static func scanAll(image: UIImage) async throws -> (primary: NutritionLabelResult, dualColumn: DualColumnScanResult?) {
+    public static func scanAll(image: UIImage) async throws -> (primary: NutritionLabelResult, dualColumn: DualColumnScanResult?) {
         let lines = try await recognizeText(in: image)
         guard lines.isEmpty == false else { throw NutritionLabelScanError.noTextFound }
         let dual = detectAndParseDualColumn(from: lines)
         return (dual?.col1 ?? parse(lines: lines), dual)
     }
 
-    nonisolated static func recognizeText(
+    nonisolated public static func recognizeText(
         in image: UIImage,
         workDidStart: (@Sendable () -> Void)? = nil
     ) async throws -> [String] {
@@ -229,7 +303,7 @@ final class NutritionLabelScanner {
 
     // matchIndex: 0 = first (left) column, 1 = second (right) column.
     // Defaults to 0 so all existing callers are unaffected.
-    static func parse(lines: [String], matchIndex: Int = 0) -> NutritionLabelResult {
+    public static func parse(lines: [String], matchIndex: Int = 0) -> NutritionLabelResult {
         var result = NutritionLabelResult()
         let normalized = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
 

@@ -3,6 +3,7 @@ import AIContext
 import AIProviders
 import FernletScoring
 import FoodCatalog
+import AppServices
 
 #if canImport(UIKit)
 import UIKit
