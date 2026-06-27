@@ -1,15 +1,6 @@
 import Foundation
 import FernletDomainModel
 
-// MARK: - Destination
-
-/// Where the AI call is routed. Currently only on-device FoundationModels are used.
-/// Adding any cloud/OHTTP destination here requires S3 to be fully complete first.
-enum AIDestination: String, Codable, Sendable {
-    case onDeviceFoundationModels
-    case webNutritionLookup
-}
-
 // MARK: - Payload protocol
 
 /// Marker protocol for all AI context payloads.

@@ -3,6 +3,7 @@ import FernletCrypto
 import CryptoKit
 import Foundation
 import FernletDomainModel
+import FernletFoundation
 
 struct JournalNarrative: Identifiable, Equatable {
     var id: UUID

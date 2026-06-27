@@ -10,6 +10,7 @@ import Foundation
 import CryptoKit
 import Security
 import FernletDomainModel
+import FernletFoundation
 
 // MARK: - Payload
 

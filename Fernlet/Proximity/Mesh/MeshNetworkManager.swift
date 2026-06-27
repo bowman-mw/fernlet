@@ -4,6 +4,7 @@ import Observation
 import UIKit
 import CryptoKit
 import FernletDomainModel
+import FernletFoundation
 
 // MARK: - Supporting types
 

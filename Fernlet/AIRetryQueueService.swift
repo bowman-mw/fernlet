@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import FernletDomainModel
+import FernletFoundation
 import FernletScoring
 
 @MainActor

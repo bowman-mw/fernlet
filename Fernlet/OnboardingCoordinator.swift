@@ -1,6 +1,7 @@
 import Observation
 import SwiftUI
 import FernletDomainModel
+import FernletFoundation
 import FernletScoring
 
 protocol ExistingCloudDataDetecting {
