@@ -9,6 +9,7 @@ import Testing
 import FernletDomainModel
 import PrivateStoreCore
 import PrivateHealthStore
+import HealthKitGateway
 @testable import Fernlet
 
 @MainActor

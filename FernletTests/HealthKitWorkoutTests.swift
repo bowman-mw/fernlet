@@ -1,6 +1,7 @@
 import HealthKit
 import Testing
 import FernletDomainModel
+import HealthKitGateway
 @testable import Fernlet
 
 @MainActor

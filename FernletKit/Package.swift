@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway"]),
     ],
     targets: [
         .target(
@@ -222,6 +222,32 @@ let package = Package(
             dependencies: ["StoreCore", "FernletPersistence", "LocalPersistence", "FernletScoring", "FernletDomainModel", "FernletFoundation", "FoodCatalog"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
+            ]
+        ),
+        // Layer 6 — HealthKit platform shim ([S]). HealthKitService (@MainActor),
+        // WorkoutHealthKitSync, ActivityTypeCatalog + the seam types the app/store consume
+        // (HealthKitServicing, WorkoutSyncContext, HealthCapability, Authorization*/HealthBodyProfile,
+        // HealthKitCacheClearing, HealthAuthorizationPresentation). Depends on PrivateHealthStore for
+        // the `extension HealthKitService: PeriodHealthKitServicing` seam conformance — that is an
+        // ALLOWED edge (the wall only forbids AIProviders/CloudKitSync from reaching the Private*
+        // stores, not the platform gateways). The concrete CoreDataHealthKitCacheCleaner STAYS in the
+        // app (it needs CloudKitSync's PersistenceController + LocalPersistence's LocalFernletDatabase)
+        // and is injected through the HealthKitCacheClearing seam via an app-set static provider, so
+        // this target needs NO CloudKitSync/LocalPersistence edge. MainActor (@MainActor service +
+        // @Observable HealthKitAuthorizationViewModel).
+        .target(
+            name: "HealthKitGateway",
+            dependencies: ["PrivateHealthStore", "FernletDomainModel", "FernletFoundation"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+                // Swift 5 language mode (matching the app target's SWIFT_VERSION = 5.0 +
+                // SWIFT_APPROACHABLE_CONCURRENCY) so HealthKit's `@Sendable` query completion
+                // handlers that capture the non-Sendable observation `handler` closures keep
+                // compiling exactly as they did in the app target. The handlers already hop to
+                // `@MainActor` via `Task { @MainActor in … }` before touching any state, so this
+                // is the source's original, behavior-identical concurrency contract — not a
+                // relaxation introduced by the move.
+                .swiftLanguageMode(.v5),
             ]
         ),
     ]

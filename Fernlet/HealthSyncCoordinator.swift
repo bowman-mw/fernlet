@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import FernletDomainModel
+import HealthKitGateway
 
 /// The state the health sync flow needs from the app store. Refines `WorkoutSyncContext`
 /// so the same host can back the owned `WorkoutHealthKitSync`. Mirrors the

@@ -2,6 +2,7 @@ import SwiftUI
 import FernletFoundation
 import FernletDomainModel
 import PrivateHealthStore
+import HealthKitGateway
 
 struct LogIntimacySheet: View {
     @Environment(FernletLockService.self) private var lockService

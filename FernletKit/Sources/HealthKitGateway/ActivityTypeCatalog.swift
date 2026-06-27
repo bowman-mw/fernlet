@@ -2,10 +2,10 @@ import Foundation
 import HealthKit
 import FernletDomainModel
 
-enum ActivityTypeCatalog {
+public enum ActivityTypeCatalog {
     static let allTypes: [WorkoutActivityType] = WorkoutActivityType.allCases
 
-    static func search(_ query: String) -> [WorkoutActivityType] {
+    public static func search(_ query: String) -> [WorkoutActivityType] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !trimmed.isEmpty else { return allTypes }
 
@@ -15,7 +15,7 @@ enum ActivityTypeCatalog {
         }
     }
 
-    static func hkActivityType(for type: WorkoutActivityType) -> HKWorkoutActivityType {
+    public static func hkActivityType(for type: WorkoutActivityType) -> HKWorkoutActivityType {
         switch type {
         case .running: .running
         case .walking: .walking
@@ -58,7 +58,7 @@ enum ActivityTypeCatalog {
         }
     }
 
-    static func fernletType(for hk: HKWorkoutActivityType) -> WorkoutActivityType {
+    public static func fernletType(for hk: HKWorkoutActivityType) -> WorkoutActivityType {
         switch hk {
         case .running: .running
         case .walking: .walking

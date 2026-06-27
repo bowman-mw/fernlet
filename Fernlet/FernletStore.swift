@@ -16,6 +16,7 @@ import PrivateMediaStore
 import PeriodContextBridge
 import StoreCore
 import DiaryStore
+import HealthKitGateway
 
 @MainActor
 @Observable

@@ -4,7 +4,7 @@ import HealthKit
 import FernletDomainModel
 
 @MainActor
-protocol WorkoutSyncContext: AnyObject {
+public protocol WorkoutSyncContext: AnyObject {
     var todayKey: String { get }
     func workoutExists(id: UUID) -> Bool
     func workoutExists(healthKitUUID: UUID) -> Bool
@@ -12,7 +12,7 @@ protocol WorkoutSyncContext: AnyObject {
     func upsertWorkout(_ workout: Workout, date: String)
 }
 
-protocol HealthWorkoutSample {
+public protocol HealthWorkoutSample {
     var uuid: UUID { get }
     var workoutActivityType: HKWorkoutActivityType { get }
     var duration: TimeInterval { get }
@@ -22,30 +22,38 @@ protocol HealthWorkoutSample {
 }
 
 extension HKWorkout: HealthWorkoutSample {
-    func sumQuantity(for type: HKQuantityType) -> HKQuantity? {
+    public func sumQuantity(for type: HKQuantityType) -> HKQuantity? {
         statistics(for: type)?.sumQuantity()
     }
 }
 
-struct WorkoutHealthKitMetadata {
-    let muscleGroups: Set<MuscleGroup>
-    let exercises: String
-    let notes: String
-    let effort: Int?
-    let plannedWorkoutID: UUID?
+public struct WorkoutHealthKitMetadata {
+    public let muscleGroups: Set<MuscleGroup>
+    public let exercises: String
+    public let notes: String
+    public let effort: Int?
+    public let plannedWorkoutID: UUID?
+
+    public init(muscleGroups: Set<MuscleGroup>, exercises: String, notes: String, effort: Int?, plannedWorkoutID: UUID?) {
+        self.muscleGroups = muscleGroups
+        self.exercises = exercises
+        self.notes = notes
+        self.effort = effort
+        self.plannedWorkoutID = plannedWorkoutID
+    }
 }
 
 @MainActor
-final class WorkoutHealthKitSync {
+public final class WorkoutHealthKitSync {
     private weak var context: WorkoutSyncContext?
     private let service: any HealthKitServicing
 
-    init(context: WorkoutSyncContext, service: any HealthKitServicing) {
+    public init(context: WorkoutSyncContext, service: any HealthKitServicing) {
         self.context = context
         self.service = service
     }
 
-    func saveIfAuthorized(_ workout: Workout, date: String) async {
+    public func saveIfAuthorized(_ workout: Workout, date: String) async {
         let snapshot = service.currentAuthorizationSnapshot()
         guard Self.isWorkoutLoggingAuthorized(snapshot) else { return }
         do {
@@ -56,7 +64,7 @@ final class WorkoutHealthKitSync {
         }
     }
 
-    func refreshFromHealth() async {
+    public func refreshFromHealth() async {
         do {
             try await service.startObservingWorkouts { [weak self] workouts in
                 self?.reconcileWorkouts(workouts)
@@ -66,7 +74,7 @@ final class WorkoutHealthKitSync {
         }
     }
 
-    func backfillIfNeeded(defaults: UserDefaults = .standard) async {
+    public func backfillIfNeeded(defaults: UserDefaults = .standard) async {
         guard HealthKitService.shouldRunWorkoutBackfill(defaults: defaults) else { return }
 
         do {
@@ -130,7 +138,7 @@ final class WorkoutHealthKitSync {
         )
     }
 
-    static func parseFernletMetadata(_ metadata: [String: Any]?) -> WorkoutHealthKitMetadata {
+    public static func parseFernletMetadata(_ metadata: [String: Any]?) -> WorkoutHealthKitMetadata {
         let muscleGroupsRaw = (metadata?["fernlet.muscleGroups"] as? String) ?? ""
         let muscleGroups = Set(muscleGroupsRaw.split(separator: ",").compactMap { rawValue in
             MuscleGroup(rawValue: String(rawValue).trimmingCharacters(in: .whitespacesAndNewlines))
@@ -148,16 +156,16 @@ final class WorkoutHealthKitSync {
         )
     }
 
-    static func isWorkoutLoggingAuthorized(_ snapshot: AuthorizationSnapshot) -> Bool {
+    public static func isWorkoutLoggingAuthorized(_ snapshot: AuthorizationSnapshot) -> Bool {
         snapshot.status(for: HKObjectType.workoutType().identifier) == .sharingAuthorized ||
         snapshot.status(for: HealthCapability.workoutLogging.rawValue) == .sharingAuthorized
     }
 
-    func stopObservation() {
+    public func stopObservation() {
         service.stopObservingWorkouts()
     }
 
-    func reconcileWorkouts(_ samples: [some HealthWorkoutSample]) {
+    public func reconcileWorkouts(_ samples: [some HealthWorkoutSample]) {
         guard let context else { return }
         // The integration can be disabled by a *different* HealthKitService instance
         // (the Privacy screen builds its own), which cannot reach this long-lived

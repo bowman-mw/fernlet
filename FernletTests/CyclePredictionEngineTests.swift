@@ -4,6 +4,7 @@ import HealthKit
 import Testing
 import FernletDomainModel
 import PrivateHealthStore
+import HealthKitGateway
 @testable import Fernlet
 
 struct CyclePredictionEngineTests {

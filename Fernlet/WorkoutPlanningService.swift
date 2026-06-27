@@ -3,6 +3,7 @@ import AIContext
 import AIProviders
 import FernletFoundation
 import FernletDomainModel
+import HealthKitGateway
 
 /// Read-side context the workout planner needs from the app store. Mirrors the
 /// `WorkoutSyncContext` host-protocol pattern so `WorkoutPlanningService` depends on

@@ -1,6 +1,4 @@
 import Observation
-import LocalPersistence
-import CloudKitSync
 import FernletFoundation
 import PrivateHealthStore
 import CoreData
@@ -14,7 +12,7 @@ import FernletDomainModel
 #endif
 
 @MainActor
-protocol HealthKitServicing {
+public protocol HealthKitServicing {
     func isHealthDataAvailable() -> Bool
     func requestAuthorization(for capability: HealthCapability) async throws -> AuthorizationOutcome
     func currentAuthorizationSnapshot() -> AuthorizationSnapshot
@@ -37,7 +35,7 @@ protocol HealthKitServicing {
     func openHealthPrivacySettings() async
 }
 
-enum HealthCapability: String, CaseIterable, Identifiable {
+public enum HealthCapability: String, CaseIterable, Identifiable {
     case bodyProfile
     case cycleTracking
     case bodyContext
@@ -46,9 +44,9 @@ enum HealthCapability: String, CaseIterable, Identifiable {
     case mindfulness
     case intimateLogging
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .bodyProfile: "Body profile"
         case .cycleTracking: "Cycle tracking"
@@ -60,7 +58,7 @@ enum HealthCapability: String, CaseIterable, Identifiable {
         }
     }
 
-    var summary: String {
+    public var summary: String {
         switch self {
         case .bodyProfile:
             "Read age, biological sex, height, and weight from Apple Health. Fernlet can write height and weight changes back when Health access allows it."
@@ -80,21 +78,32 @@ enum HealthCapability: String, CaseIterable, Identifiable {
     }
 }
 
-struct AuthorizationOutcome {
-    let writeStatuses: [String: HKAuthorizationStatus]
+public struct AuthorizationOutcome {
+    public let writeStatuses: [String: HKAuthorizationStatus]
+
+    public init(writeStatuses: [String: HKAuthorizationStatus]) {
+        self.writeStatuses = writeStatuses
+    }
 }
 
-struct HealthBodyProfile {
-    var age: Int?
-    var sex: BiologicalSex?
-    var heightInches: Double?
-    var weightPounds: Double?
+public struct HealthBodyProfile {
+    public var age: Int?
+    public var sex: BiologicalSex?
+    public var heightInches: Double?
+    public var weightPounds: Double?
 
-    var appliedFieldCount: Int {
+    public init(age: Int? = nil, sex: BiologicalSex? = nil, heightInches: Double? = nil, weightPounds: Double? = nil) {
+        self.age = age
+        self.sex = sex
+        self.heightInches = heightInches
+        self.weightPounds = weightPounds
+    }
+
+    public var appliedFieldCount: Int {
         [age != nil, sex != nil, heightInches != nil, weightPounds != nil].filter { $0 }.count
     }
 
-    var missingFieldNames: [String] {
+    public var missingFieldNames: [String] {
         var names: [String] = []
         if age == nil { names.append("age") }
         if sex == nil { names.append("sex") }
@@ -103,7 +112,7 @@ struct HealthBodyProfile {
         return names
     }
 
-    func applying(to profile: UserNutritionProfile) -> UserNutritionProfile {
+    public func applying(to profile: UserNutritionProfile) -> UserNutritionProfile {
         var updated = profile
         if let age { updated.age = min(max(age, 13), 100) }
         if let sex { updated.sex = sex }
@@ -113,17 +122,22 @@ struct HealthBodyProfile {
     }
 }
 
-struct AuthorizationSnapshot {
-    let isAvailable: Bool
-    let writeStatuses: [String: HKAuthorizationStatus]
+public struct AuthorizationSnapshot {
+    public let isAvailable: Bool
+    public let writeStatuses: [String: HKAuthorizationStatus]
 
-    func status(for identifier: String) -> HKAuthorizationStatus? {
+    public init(isAvailable: Bool, writeStatuses: [String: HKAuthorizationStatus]) {
+        self.isAvailable = isAvailable
+        self.writeStatuses = writeStatuses
+    }
+
+    public func status(for identifier: String) -> HKAuthorizationStatus? {
         writeStatuses[identifier]
     }
 }
 
-struct HealthAuthorizationPresentation {
-    static func writeTypeIdentifiers(for capability: HealthCapability) -> [String] {
+public struct HealthAuthorizationPresentation {
+    public static func writeTypeIdentifiers(for capability: HealthCapability) -> [String] {
         switch capability {
         case .bodyProfile:
             [
@@ -155,11 +169,11 @@ struct HealthAuthorizationPresentation {
     }
 }
 
-enum HealthKitServiceError: LocalizedError {
+public enum HealthKitServiceError: LocalizedError {
     case healthDataUnavailable
     case missingHealthType(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .healthDataUnavailable:
             "Health data is not available on this device."
@@ -169,7 +183,7 @@ enum HealthKitServiceError: LocalizedError {
     }
 }
 
-protocol HealthKitStoreControlling: AnyObject {
+public protocol HealthKitStoreControlling: AnyObject {
     func requestAuthorization(toShare shareTypes: Set<HKSampleType>, read readTypes: Set<HKObjectType>) async throws
     func authorizationStatus(for type: HKObjectType) -> HKAuthorizationStatus
     func execute(_ query: HKQuery)
@@ -216,104 +230,77 @@ final class SystemHealthKitStoreController: HealthKitStoreControlling {
     }
 }
 
-protocol HealthKitCacheClearing {
+public protocol HealthKitCacheClearing {
     func clearHealthKitCachedValues() throws
 }
 
-struct CoreDataHealthKitCacheCleaner: HealthKitCacheClearing {
-    func clearHealthKitCachedValues() throws {
-        let controller = PersistenceController.shared
-        let context = controller.container.viewContext
-        let request = NSFetchRequest<NSManagedObject>(entityName: "FernletDatabaseRecord")
-        let records = try context.fetch(request)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-
-        for record in records {
-            guard let payload = record.value(forKey: "payloadData") as? Data else { continue }
-            var database = try decoder.decode(LocalFernletDatabase.self, from: payload)
-            var changed = false
-            for key in database.days.keys {
-                guard var day = database.days[key], let context = day.healthContext else { continue }
-                if let healthSleepHours = context.body?.sleepHours,
-                   let sleep = day.sleep,
-                   sleep.note.isEmpty,
-                   sleep.hours == healthSleepHours {
-                    day.sleep = nil
-                }
-                day.healthContext = nil
-                database.days[key] = day
-                changed = true
-            }
-            if changed {
-                let todayKey = database.days.keys.sorted().last ?? FernletDate.dayKey(for: .now)
-                database.rebuildDerivedTables(todayKey: todayKey)
-                record.setValue(try encoder.encode(database), forKey: "payloadData")
-                record.setValue(Date(), forKey: "updatedAt")
-            }
-        }
-        if context.hasChanges {
-            try context.save()
-        }
-    }
+/// Default no-op cleaner used when the app has not installed a concrete provider.
+/// The real `CoreDataHealthKitCacheCleaner` lives app-side (it needs CloudKitSync's
+/// PersistenceController + LocalPersistence's LocalFernletDatabase) and is installed
+/// via `HealthKitService.defaultCacheClearer` at app launch.
+struct NoopHealthKitCacheClearer: HealthKitCacheClearing {
+    func clearHealthKitCachedValues() throws {}
 }
 
-struct HealthKitAnchorKeychain {
-    static let service = "com.fernlet.healthkit-anchors"
-    static let accountPrefix = "healthKitAnchors."
-    static let workoutAnchorKey = "fernlet.healthkit.workoutAnchor"
+public struct HealthKitAnchorKeychain {
+    public static let service = "com.fernlet.healthkit-anchors"
+    public static let accountPrefix = "healthKitAnchors."
+    public static let workoutAnchorKey = "fernlet.healthkit.workoutAnchor"
 
-    static func account(for identifier: String) -> String {
+    public static func account(for identifier: String) -> String {
         accountPrefix + identifier
     }
 
-    static func deleteAll(for identifiers: [String]) {
+    public static func deleteAll(for identifiers: [String]) {
         for identifier in identifiers {
             delete(identifier: identifier)
         }
     }
 
-    static func delete(identifier: String) {
+    public static func delete(identifier: String) {
         KeychainItem.delete(account: account(for: identifier), service: service)
     }
 
-    static func deleteWorkoutAnchor() {
+    public static func deleteWorkoutAnchor() {
         KeychainItem.delete(account: workoutAnchorKey, service: service)
     }
 
-    static func loadWorkoutAnchor() -> HKQueryAnchor? {
+    public static func loadWorkoutAnchor() -> HKQueryAnchor? {
         KeychainItem.load(account: workoutAnchorKey, service: service).flatMap { data in
             try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
         }
     }
 
-    static func storeWorkoutAnchor(_ anchor: HKQueryAnchor) {
+    public static func storeWorkoutAnchor(_ anchor: HKQueryAnchor) {
         guard let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) else { return }
         KeychainItem.store(data, account: workoutAnchorKey, service: service, accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
 
-    static func store(_ data: Data, identifier: String) {
+    public static func store(_ data: Data, identifier: String) {
         KeychainItem.store(data, account: account(for: identifier), service: service, accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
 
-    static func loadAnchor(for identifier: String) -> HKQueryAnchor? {
+    public static func loadAnchor(for identifier: String) -> HKQueryAnchor? {
         KeychainItem.load(account: account(for: identifier), service: service).flatMap { data in
             try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
         }
     }
 
-    static func storeAnchor(_ anchor: HKQueryAnchor, for identifier: String) {
+    public static func storeAnchor(_ anchor: HKQueryAnchor, for identifier: String) {
         guard let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) else { return }
         KeychainItem.store(data, account: account(for: identifier), service: service, accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
 }
 
 @MainActor
-final class HealthKitService: HealthKitServicing {
-    let healthStore: HKHealthStore
+public final class HealthKitService: HealthKitServicing {
+    /// App-installed default cache cleaner. The concrete `CoreDataHealthKitCacheCleaner`
+    /// lives in the app target (it needs CloudKitSync + LocalPersistence), so the app
+    /// sets this provider at launch before any HealthKitService is constructed. Until
+    /// then it is a no-op, keeping this gateway off the CloudKitSync/LocalPersistence edge.
+    public static var defaultCacheClearer: HealthKitCacheClearing = NoopHealthKitCacheClearer()
+
+    public let healthStore: HKHealthStore
     private let storeController: HealthKitStoreControlling
     private let cacheCleaner: HealthKitCacheClearing
     private let preferencesStore: StoragePreferencesStore
@@ -321,7 +308,7 @@ final class HealthKitService: HealthKitServicing {
     private var activeQueries: [HKQuery] = []
     private var observationRegistrations: [String: (type: HKSampleType, handler: (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void)] = [:]
 
-    init(
+    public init(
         healthStore: HKHealthStore = HKHealthStore(),
         storeController: HealthKitStoreControlling? = nil,
         cacheCleaner: HealthKitCacheClearing? = nil,
@@ -329,22 +316,22 @@ final class HealthKitService: HealthKitServicing {
     ) {
         self.healthStore = healthStore
         self.storeController = storeController ?? SystemHealthKitStoreController(healthStore: healthStore)
-        self.cacheCleaner = cacheCleaner ?? CoreDataHealthKitCacheCleaner()
+        self.cacheCleaner = cacheCleaner ?? Self.defaultCacheClearer
         self.preferencesStore = preferencesStore ?? StoragePreferencesStore()
     }
 
-    func isHealthDataAvailable() -> Bool {
+    public func isHealthDataAvailable() -> Bool {
         HKHealthStore.isHealthDataAvailable()
     }
 
-    func requestAuthorization(for capability: HealthCapability) async throws -> AuthorizationOutcome {
+    public func requestAuthorization(for capability: HealthCapability) async throws -> AuthorizationOutcome {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         let types = try Self.types(for: capability)
         try await storeController.requestAuthorization(toShare: types.share, read: types.read)
         return AuthorizationOutcome(writeStatuses: writeStatuses(for: types.share))
     }
 
-    func currentAuthorizationSnapshot() -> AuthorizationSnapshot {
+    public func currentAuthorizationSnapshot() -> AuthorizationSnapshot {
         let shareTypes = HealthCapability.allCases.flatMap { capability in
             (try? Self.types(for: capability).share) ?? []
         }
@@ -354,13 +341,13 @@ final class HealthKitService: HealthKitServicing {
         )
     }
 
-    func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws {
+    public func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         observationRegistrations[type.identifier] = (type, handler)
         startAnchoredQuery(for: type, handler: handler)
     }
 
-    func startObservingWorkouts(handler: @escaping ([HKWorkout]) -> Void) async throws {
+    public func startObservingWorkouts(handler: @escaping ([HKWorkout]) -> Void) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         stopObservingWorkouts()
 
@@ -386,14 +373,14 @@ final class HealthKitService: HealthKitServicing {
         storeController.execute(query)
     }
 
-    func stopObservingWorkouts() {
+    public func stopObservingWorkouts() {
         guard let query = workoutObservationQuery else { return }
         storeController.stop(query)
         activeQueries.removeAll { $0 === query }
         workoutObservationQuery = nil
     }
 
-    func recentWorkouts(since anchorDate: Date) async throws -> [HKWorkout] {
+    public func recentWorkouts(since anchorDate: Date) async throws -> [HKWorkout] {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         let workoutType = HKObjectType.workoutType()
         let predicate = HKQuery.predicateForSamples(withStart: anchorDate, end: nil, options: [])
@@ -410,21 +397,21 @@ final class HealthKitService: HealthKitServicing {
         }
     }
 
-    func backfillWorkoutsFromHealth(referenceDate: Date = .now) async throws -> [HKWorkout] {
+    public func backfillWorkoutsFromHealth(referenceDate: Date = .now) async throws -> [HKWorkout] {
         try await recentWorkouts(since: Self.workoutBackfillStartDate(referenceDate: referenceDate))
     }
 
-    func save(_ samples: [HKObject]) async throws {
+    public func save(_ samples: [HKObject]) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         try await storeController.save(samples)
     }
 
-    func delete(_ samples: [HKSample]) async throws {
+    public func delete(_ samples: [HKSample]) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         try await storeController.delete(samples)
     }
 
-    func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics] {
+    public func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics] {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsCollectionQuery(
@@ -453,13 +440,13 @@ final class HealthKitService: HealthKitServicing {
         }
     }
 
-    func requestBodyProfileAuthorization() async throws -> HealthBodyProfile {
+    public func requestBodyProfileAuthorization() async throws -> HealthBodyProfile {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         try await storeController.requestAuthorization(toShare: try Self.bodyProfileWriteTypes(), read: try Self.bodyProfileReadTypes())
         return try await loadBodyProfile()
     }
 
-    func loadBodyProfile() async throws -> HealthBodyProfile {
+    public func loadBodyProfile() async throws -> HealthBodyProfile {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         async let heightInches = latestQuantityValue(for: try Self.quantityType(.height), unit: .inch())
         async let weightPounds = latestQuantityValue(for: try Self.quantityType(.bodyMass), unit: .pound())
@@ -471,7 +458,7 @@ final class HealthKitService: HealthKitServicing {
         )
     }
 
-    func saveBodyProfileMeasurements(_ profile: UserNutritionProfile) async throws {
+    public func saveBodyProfileMeasurements(_ profile: UserNutritionProfile) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         let now = Date()
         let samples = try [
@@ -491,7 +478,7 @@ final class HealthKitService: HealthKitServicing {
         try await healthStore.save(samples)
     }
 
-    func saveWorkout(_ workout: Workout) async throws -> UUID {
+    public func saveWorkout(_ workout: Workout) async throws -> UUID {
         guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
 
         let config = Self.makeConfiguration(for: workout)
@@ -534,12 +521,12 @@ final class HealthKitService: HealthKitServicing {
         return saved.uuid
     }
 
-    func loadLastNightSleepHours(referenceDate: Date = Date()) async throws -> Double? {
+    public func loadLastNightSleepHours(referenceDate: Date = Date()) async throws -> Double? {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         return try await sleepHours(referenceDate: referenceDate)
     }
 
-    func loadDailyHealthContext(referenceDate: Date = Date(), capabilities: Set<HealthCapability>? = nil) async throws -> HealthDailyContext {
+    public func loadDailyHealthContext(referenceDate: Date = Date(), capabilities: Set<HealthCapability>? = nil) async throws -> HealthDailyContext {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         let requested = capabilities ?? Set(HealthCapability.allCases)
         let dayInterval = Self.dayInterval(containing: referenceDate)
@@ -584,7 +571,7 @@ final class HealthKitService: HealthKitServicing {
         return context
     }
 
-    func loadIntimacyEventsByDay(for month: Date) async throws -> [String: Int] {
+    public func loadIntimacyEventsByDay(for month: Date) async throws -> [String: Int] {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         let cal = Calendar.current
         guard let interval = cal.dateInterval(of: .month, for: month) else { return [:] }
@@ -599,7 +586,7 @@ final class HealthKitService: HealthKitServicing {
         return result
     }
 
-    func saveIntimacyEvent(date: Date, protectionUsed: Bool?, externalUUID: UUID) async throws {
+    public func saveIntimacyEvent(date: Date, protectionUsed: Bool?, externalUUID: UUID) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         var metadata: [String: Any] = [
             HKMetadataKeyExternalUUID: externalUUID.uuidString
@@ -726,7 +713,7 @@ final class HealthKitService: HealthKitServicing {
         }
     }
 
-    func disableIntegration() async throws {
+    public func disableIntegration() async throws {
         FernletAuditLog.log("healthkit.disable.attempt")
         do {
             for query in activeQueries {
@@ -752,7 +739,7 @@ final class HealthKitService: HealthKitServicing {
         }
     }
 
-    func enableIntegration() async throws {
+    public func enableIntegration() async throws {
         FernletAuditLog.log("healthkit.enable.attempt")
         guard isHealthDataAvailable() else {
             FernletAuditLog.log("healthkit.enable.failed", context: ["error": "healthDataUnavailable"])
@@ -767,7 +754,7 @@ final class HealthKitService: HealthKitServicing {
         FernletAuditLog.log("healthkit.enable.completed")
     }
 
-    func openHealthPrivacySettings() async {
+    public func openHealthPrivacySettings() async {
         #if canImport(UIKit)
         let candidateURLs = [
             URL(string: "App-Prefs:HEALTH&path=SOURCES_ITEM_Fernlet"),
@@ -932,7 +919,7 @@ final class HealthKitService: HealthKitServicing {
         }
     }
 
-    internal static func makeConfiguration(for workout: Workout) -> HKWorkoutConfiguration {
+    public static func makeConfiguration(for workout: Workout) -> HKWorkoutConfiguration {
         let config = HKWorkoutConfiguration()
         switch workout.mode {
         case .strengthTraining:
@@ -955,7 +942,7 @@ final class HealthKitService: HealthKitServicing {
         return config
     }
 
-    internal static func makeMetadata(for workout: Workout) -> [String: Any] {
+    public static func makeMetadata(for workout: Workout) -> [String: Any] {
         var metadata: [String: Any] = [
             "fernlet.workoutID": workout.id.uuidString,
             "fernlet.activityName": workout.name,
@@ -988,7 +975,7 @@ final class HealthKitService: HealthKitServicing {
         return metadata
     }
 
-    internal static func defaultDuration(for workout: Workout) -> Int {
+    public static func defaultDuration(for workout: Workout) -> Int {
         switch workout.mode {
         case .strengthTraining:
             30
@@ -997,15 +984,15 @@ final class HealthKitService: HealthKitServicing {
         }
     }
 
-    static func workoutBackfillStartDate(referenceDate: Date, calendar: Calendar = .current) -> Date {
+    public static func workoutBackfillStartDate(referenceDate: Date, calendar: Calendar = .current) -> Date {
         calendar.date(byAdding: .day, value: -30, to: referenceDate) ?? referenceDate
     }
 
-    static func shouldRunWorkoutBackfill(defaults: UserDefaults = .standard) -> Bool {
+    public static func shouldRunWorkoutBackfill(defaults: UserDefaults = .standard) -> Bool {
         !defaults.bool(forKey: workoutBackfillCompletedKey)
     }
 
-    static func markWorkoutBackfillCompleted(defaults: UserDefaults = .standard) {
+    public static func markWorkoutBackfillCompleted(defaults: UserDefaults = .standard) {
         defaults.set(true, forKey: workoutBackfillCompletedKey)
     }
 
@@ -1113,14 +1100,14 @@ final class HealthKitService: HealthKitServicing {
         return type
     }
 
-    nonisolated static func quantityType(_ identifier: HKQuantityTypeIdentifier) throws -> HKQuantityType {
+    nonisolated public static func quantityType(_ identifier: HKQuantityTypeIdentifier) throws -> HKQuantityType {
         guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else {
             throw HealthKitServiceError.missingHealthType(identifier.rawValue)
         }
         return type
     }
 
-    nonisolated static func categoryType(_ identifier: HKCategoryTypeIdentifier) throws -> HKCategoryType {
+    nonisolated public static func categoryType(_ identifier: HKCategoryTypeIdentifier) throws -> HKCategoryType {
         guard let type = HKCategoryType.categoryType(forIdentifier: identifier) else {
             throw HealthKitServiceError.missingHealthType(identifier.rawValue)
         }
@@ -1130,16 +1117,16 @@ final class HealthKitService: HealthKitServicing {
 
 @MainActor
 @Observable
-final class HealthKitAuthorizationViewModel {
-    private(set) var snapshot: AuthorizationSnapshot
-    private(set) var statusMessage: String = ""
-    private(set) var isRequesting = false
+public final class HealthKitAuthorizationViewModel {
+    public private(set) var snapshot: AuthorizationSnapshot
+    public private(set) var statusMessage: String = ""
+    public private(set) var isRequesting = false
     private(set) var requestedCapabilities: Set<HealthCapability>
 
     @ObservationIgnored
     private let service: HealthKitServicing
 
-    init(service: HealthKitServicing? = nil) {
+    public init(service: HealthKitServicing? = nil) {
         let resolvedService = service ?? HealthKitService()
         self.service = resolvedService
         self.snapshot = resolvedService.currentAuthorizationSnapshot()
@@ -1149,15 +1136,15 @@ final class HealthKitAuthorizationViewModel {
         }
     }
 
-    func refresh() {
+    public func refresh() {
         snapshot = service.currentAuthorizationSnapshot()
     }
 
-    func hasRequested(_ capability: HealthCapability) -> Bool {
+    public func hasRequested(_ capability: HealthCapability) -> Bool {
         requestedCapabilities.contains(capability)
     }
 
-    func request(_ capability: HealthCapability) async {
+    public func request(_ capability: HealthCapability) async {
         isRequesting = true
         statusMessage = ""
         defer { isRequesting = false }
@@ -1172,23 +1159,23 @@ final class HealthKitAuthorizationViewModel {
         }
     }
 
-    func showRevocationInstructions(for capability: HealthCapability) {
+    public func showRevocationInstructions(for capability: HealthCapability) {
         statusMessage = "To revoke \(capability.title.lowercased()) access, open Settings > Privacy & Security > Health > Fernlet. iOS does not allow apps to revoke Health permissions directly."
     }
 
-    func showIntimateLoggingAgeWallMessage() {
+    public func showIntimateLoggingAgeWallMessage() {
         statusMessage = "Intimate logging is available only when the manual body profile age is 18 or older."
     }
 
-    func importBodyProfile(current profile: UserNutritionProfile) async -> UserNutritionProfile? {
+    public func importBodyProfile(current profile: UserNutritionProfile) async -> UserNutritionProfile? {
         await loadBodyProfile(current: profile, requestsAuthorization: true)
     }
 
-    func updateBodyProfile(current profile: UserNutritionProfile) async -> UserNutritionProfile? {
+    public func updateBodyProfile(current profile: UserNutritionProfile) async -> UserNutritionProfile? {
         await loadBodyProfile(current: profile, requestsAuthorization: false)
     }
 
-    func syncBodyProfileMeasurements(_ profile: UserNutritionProfile) async {
+    public func syncBodyProfileMeasurements(_ profile: UserNutritionProfile) async {
         guard snapshot.status(for: HKQuantityTypeIdentifier.height.rawValue) == .sharingAuthorized,
               snapshot.status(for: HKQuantityTypeIdentifier.bodyMass.rawValue) == .sharingAuthorized else { return }
         do {
@@ -1199,7 +1186,7 @@ final class HealthKitAuthorizationViewModel {
         }
     }
 
-    func updateHealthContext(for capability: HealthCapability) async -> HealthDailyContext? {
+    public func updateHealthContext(for capability: HealthCapability) async -> HealthDailyContext? {
         isRequesting = true
         statusMessage = ""
         defer { isRequesting = false }
@@ -1260,7 +1247,7 @@ final class HealthKitAuthorizationViewModel {
 }
 
 extension HKAuthorizationStatus {
-    var fernletLabel: String {
+    public var fernletLabel: String {
         switch self {
         case .notDetermined: "Not requested"
         case .sharingDenied: "Write denied"
@@ -1274,7 +1261,7 @@ extension HKAuthorizationStatus {
 // `PeriodTrackerStore` (in the PrivateHealthStore module). This conformance lives app-side because
 // it reaches into `HealthKitService` internals (`save`, `healthStore`, `categoryType`/`quantityType`).
 extension HealthKitService: PeriodHealthKitServicing {
-    func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample] {
+    public func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample] {
         guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
         let samples = try Self.periodSamples(for: event, externalUUID: externalUUID)
         if !samples.isEmpty {
@@ -1284,7 +1271,7 @@ extension HealthKitService: PeriodHealthKitServicing {
         return samples
     }
 
-    func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample] {
+    public func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample] {
         guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
         let predicate = HKQuery.predicateForSamples(withStart: dateRange.start, end: dateRange.end, options: .strictStartDate)
         var allSamples: [HKSample] = []
@@ -1294,7 +1281,7 @@ extension HealthKitService: PeriodHealthKitServicing {
         return allSamples.sorted { $0.startDate < $1.startDate }
     }
 
-    nonisolated static func periodSamples(for event: UserLoggedCycleEvent, externalUUID: UUID) throws -> [HKSample] {
+    nonisolated public static func periodSamples(for event: UserLoggedCycleEvent, externalUUID: UUID) throws -> [HKSample] {
         let start = event.date
         let end = max(event.date.addingTimeInterval(60), event.date)
         var metadata: [String: Any] = [

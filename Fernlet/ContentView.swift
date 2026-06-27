@@ -10,6 +10,7 @@ import FernletFoundation
 import FernletDomainModel
 import PrivateHealthStore
 import PeriodContextBridge
+import HealthKitGateway
 
 struct ContentView: View {
     @Bindable var store: FernletStore

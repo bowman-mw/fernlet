@@ -9,6 +9,7 @@ import Testing
 import FernletDomainModel
 import FernletPersistence
 import CloudKitSync
+import HealthKitGateway
 @testable import Fernlet
 
 // MARK: - Suite

@@ -5,6 +5,7 @@ import Testing
 import SwiftUI
 import FernletDomainModel
 import PrivateHealthStore
+import HealthKitGateway
 @testable import Fernlet
 
 @MainActor

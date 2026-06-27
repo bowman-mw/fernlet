@@ -1,6 +1,7 @@
 import SwiftUI
 import CloudKitSync
 import FernletFoundation
+import HealthKitGateway
 #if canImport(UIKit)
 import UIKit
 import FernletDomainModel
@@ -17,6 +18,12 @@ struct FernletApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // Install the concrete HealthKit cache cleaner before any HealthKitService is
+        // constructed. The gateway module defaults to a no-op cleaner; the real cleaner
+        // reaches CloudKitSync/LocalPersistence (which the gateway must not depend on) and
+        // therefore lives app-side and is injected through this static seam.
+        HealthKitService.defaultCacheClearer = CoreDataHealthKitCacheCleaner()
+
         StartupTiming.beginAppLaunch()
 
         #if DEBUG

@@ -4,6 +4,7 @@ import FernletFoundation
 import Foundation
 import FernletDomainModel
 import PrivateHealthStore
+import HealthKitGateway
 
 /// The state the sealed-backup flow needs from the app store. Mirrors the
 /// `WorkoutSyncContext` host-protocol pattern so `SealedBackupCoordinator` depends

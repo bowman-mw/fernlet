@@ -3,6 +3,7 @@ import CloudKitSync
 import FernletFoundation
 import SwiftUI
 import FernletDomainModel
+import HealthKitGateway
 
 @MainActor
 protocol PrivacyCloudDataManaging {

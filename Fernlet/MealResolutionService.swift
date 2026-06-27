@@ -4,6 +4,7 @@ import AIProviders
 import FernletDomainModel
 import FernletScoring
 import FoodCatalog
+import HealthKitGateway
 
 /// Read-side context the meal resolver needs from the app store. Mirrors the
 /// `WorkoutSyncContext` host-protocol pattern so `MealResolutionService` depends on
