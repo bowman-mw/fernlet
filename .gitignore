@@ -1,2 +1,6 @@
 # Claude Code local tooling (settings, scratch worktrees) — not part of the project
 .claude/
+
+# Swift Package Manager local build/metadata (FernletKit)
+.build/
+.swiftpm/
