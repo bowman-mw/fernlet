@@ -64,10 +64,7 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
     @ObservationIgnored let derivedSignalsService = DerivedSignalsService()
     @ObservationIgnored private let healthKitService: (any HealthKitServicing)?
-    @ObservationIgnored private lazy var workoutHealthKitSync = WorkoutHealthKitSync(
-        context: self,
-        service: healthKitService ?? HealthKitService()
-    )
+    @ObservationIgnored private lazy var healthSyncCoordinator = HealthSyncCoordinator(host: self, healthKitService: healthKitService)
     @ObservationIgnored private lazy var workoutPlanningService = WorkoutPlanningService(host: self)
     @ObservationIgnored private lazy var mealResolutionService = MealResolutionService(host: self)
     @ObservationIgnored private lazy var sealedBackupCoordinator = SealedBackupCoordinator(host: self)
@@ -750,7 +747,7 @@ final class FernletStore {
         }
         guard workout.healthKitUUID == nil else { return }
         Task { [weak self] in
-            await self?.workoutHealthKitSync.saveIfAuthorized(workout, date: date)
+            await self?.healthSyncCoordinator.saveWorkoutToHealthIfAuthorized(workout, date: date)
         }
     }
 
@@ -808,15 +805,15 @@ final class FernletStore {
     }
 
     func refreshWorkoutsFromHealth() async {
-        await workoutHealthKitSync.refreshFromHealth()
+        await healthSyncCoordinator.refreshWorkoutsFromHealth()
     }
 
     func backfillWorkoutsFromHealthIfNeeded(defaults: UserDefaults = .standard) async {
-        await workoutHealthKitSync.backfillIfNeeded(defaults: defaults)
+        await healthSyncCoordinator.backfillWorkoutsFromHealthIfNeeded(defaults: defaults)
     }
 
     func stopHealthKitWorkoutObservation() {
-        workoutHealthKitSync.stopObservation()
+        healthSyncCoordinator.stopWorkoutObservation()
     }
 
     func addJournal(text: String, tag: FeelingTag) {
@@ -838,29 +835,10 @@ final class FernletStore {
         snapshotSaveCoordinator.schedule()
     }
 
-    func setHealthSleepHours(_ hours: Double) {
-        guard hours > 0 else { return }
-        let roundedHours = (hours * 10).rounded() / 10
-        let current = day.sleep
-        day.sleep = SleepLog(
-            hours: roundedHours,
-            quality: current?.quality ?? .ok,
-            note: current?.note ?? ""
-        )
-        snapshotSaveCoordinator.schedule()
-    }
-
+    /// Merges a HealthKit daily context (and any HealthKit-derived sleep) into today.
+    /// Delegates to `HealthSyncCoordinator`.
     func updateHealthContext(_ context: HealthDailyContext) {
-        if var existing = day.healthContext {
-            existing.merge(context)
-            day.healthContext = existing
-        } else {
-            day.healthContext = context
-        }
-        if let sleepHours = context.body?.sleepHours {
-            setHealthSleepHours(sleepHours)
-        }
-        snapshotSaveCoordinator.schedule()
+        healthSyncCoordinator.updateHealthContext(context)
     }
 
     func addBottle() {
@@ -1988,6 +1966,10 @@ extension FernletStore: SealedBackupContext {
     func loadAllDaysFromRepository() -> [String: FernletDay] {
         repository.loadAllDays()
     }
+}
+
+extension FernletStore: HealthSyncContext {
+    func scheduleSnapshotSave() { snapshotSaveCoordinator.schedule() }
 }
 
 // MARK: - Models
