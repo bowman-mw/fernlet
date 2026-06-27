@@ -8,6 +8,7 @@ import FernletDomainModel
 import FernletScoring
 import FernletPersistence
 import FoodCatalog
+import PrivateHealthStore
 
 @MainActor
 @Observable

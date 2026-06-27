@@ -2,31 +2,58 @@ import Foundation
 import HealthKit
 import FernletDomainModel
 
-struct CyclePrediction: Equatable {
-    let nextStart: Date
-    let likelyStartRange: ClosedRange<Date>
-    let predictedCycleLength: Int
-    let averageCycleLength: Int
-    let variationDays: Int
-    let confidence: Double
-    let cyclesObserved: Int
-    let predictedFlow: [PredictedFlowDay]
+public nonisolated struct CyclePrediction: Equatable {
+    public let nextStart: Date
+    public let likelyStartRange: ClosedRange<Date>
+    public let predictedCycleLength: Int
+    public let averageCycleLength: Int
+    public let variationDays: Int
+    public let confidence: Double
+    public let cyclesObserved: Int
+    public let predictedFlow: [PredictedFlowDay]
+
+    public init(
+        nextStart: Date,
+        likelyStartRange: ClosedRange<Date>,
+        predictedCycleLength: Int,
+        averageCycleLength: Int,
+        variationDays: Int,
+        confidence: Double,
+        cyclesObserved: Int,
+        predictedFlow: [PredictedFlowDay]
+    ) {
+        self.nextStart = nextStart
+        self.likelyStartRange = likelyStartRange
+        self.predictedCycleLength = predictedCycleLength
+        self.averageCycleLength = averageCycleLength
+        self.variationDays = variationDays
+        self.confidence = confidence
+        self.cyclesObserved = cyclesObserved
+        self.predictedFlow = predictedFlow
+    }
 }
 
 /// Fernlet-only prediction/UI levels. `spotting` is intentionally not mapped back to a HealthKit menstrual-flow value.
-enum PredictedFlowLevel: Int, CaseIterable, Codable {
+public nonisolated enum PredictedFlowLevel: Int, CaseIterable, Codable {
     case none = 0, spotting = 1, light = 2, medium = 3, heavy = 4
 }
 
-struct PredictedFlowDay: Equatable {
-    let date: Date
-    let dayIndex: Int
-    let level: PredictedFlowLevel
-    let confidence: Double
+public nonisolated struct PredictedFlowDay: Equatable {
+    public let date: Date
+    public let dayIndex: Int
+    public let level: PredictedFlowLevel
+    public let confidence: Double
+
+    public init(date: Date, dayIndex: Int, level: PredictedFlowLevel, confidence: Double) {
+        self.date = date
+        self.dayIndex = dayIndex
+        self.level = level
+        self.confidence = confidence
+    }
 }
 
-enum CyclePredictionEngine {
-    static func predict(
+public nonisolated enum CyclePredictionEngine {
+    public static func predict(
         from entries: [CycleDayEntry],
         today: Date,
         calendar: Calendar = .current
@@ -96,7 +123,7 @@ enum CyclePredictionEngine {
     /// The detected period **start** dates (day-resolution, ascending). Exposes just the starts from the
     /// internal period-detection pass so the phase resolver can anchor calendar-math phases without
     /// duplicating the grouping logic. Returns `[]` when no flow days are observed.
-    static func detectedPeriodStarts(from entries: [CycleDayEntry], calendar: Calendar = .current) -> [Date] {
+    public static func detectedPeriodStarts(from entries: [CycleDayEntry], calendar: Calendar = .current) -> [Date] {
         detectPeriods(from: entries, calendar: calendar).map(\.start)
     }
 
@@ -243,12 +270,12 @@ enum CyclePredictionEngine {
     }
 }
 
-private struct ObservedFlowDay {
+private nonisolated struct ObservedFlowDay {
     let date: Date
     let score: Int
 }
 
-private struct DetectedPeriod {
+private nonisolated struct DetectedPeriod {
     let start: Date
     let end: Date
     let scoresByDayIndex: [Int: Int]
@@ -262,13 +289,13 @@ private struct DetectedPeriod {
     }
 }
 
-private struct ClassifiedInterval {
+private nonisolated struct ClassifiedInterval {
     let days: Int
     let useForFit: Bool
     let suspectedMissedLog: Bool
 }
 
-private func weightedMedian(_ values: [Double], weights: [Double]) -> Double {
+private nonisolated func weightedMedian(_ values: [Double], weights: [Double]) -> Double {
     guard !values.isEmpty, values.count == weights.count else { return 0 }
     let pairs = zip(values, weights).sorted { $0.0 < $1.0 }
     let totalWeight = pairs.reduce(0.0) { $0 + max(0.0, $1.1) }
@@ -283,7 +310,7 @@ private func weightedMedian(_ values: [Double], weights: [Double]) -> Double {
     return pairs[pairs.count - 1].0
 }
 
-private func weightedMode(_ values: [Int], weights: [Double], tieBreaker: Int) -> Int? {
+private nonisolated func weightedMode(_ values: [Int], weights: [Double], tieBreaker: Int) -> Int? {
     guard values.count == weights.count, !values.isEmpty else { return nil }
     var totals: [Int: Double] = [:]
     for (value, weight) in zip(values, weights) {
@@ -298,7 +325,7 @@ private func weightedMode(_ values: [Int], weights: [Double], tieBreaker: Int) -
     }.first?.key
 }
 
-private func ewma(_ values: [Double], alpha: Double) -> Double {
+private nonisolated func ewma(_ values: [Double], alpha: Double) -> Double {
     guard var current = values.first else { return 0 }
     for value in values.dropFirst() {
         current = alpha * value + (1.0 - alpha) * current
@@ -306,7 +333,7 @@ private func ewma(_ values: [Double], alpha: Double) -> Double {
     return current
 }
 
-private func recencyWeights(count: Int, halfLife: Double) -> [Double] {
+private nonisolated func recencyWeights(count: Int, halfLife: Double) -> [Double] {
     guard count > 0 else { return [] }
     return (0..<count).map { index in
         let lag = Double(count - 1 - index)
@@ -314,7 +341,7 @@ private func recencyWeights(count: Int, halfLife: Double) -> [Double] {
     }
 }
 
-private func categoryConcentration(chosenScore: Int, observations: [(score: Int, weight: Double)]) -> Double {
+private nonisolated func categoryConcentration(chosenScore: Int, observations: [(score: Int, weight: Double)]) -> Double {
     let totalWeight = observations.reduce(0.0) { $0 + max(0.0, $1.weight) }
     guard totalWeight > 0 else { return 0 }
     let chosenWeight = observations.reduce(0.0) { partial, observation in
@@ -323,6 +350,6 @@ private func categoryConcentration(chosenScore: Int, observations: [(score: Int,
     return chosenWeight / totalWeight
 }
 
-private func clamp<T: Comparable>(_ value: T, min lower: T, max upper: T) -> T {
+private nonisolated func clamp<T: Comparable>(_ value: T, min lower: T, max upper: T) -> T {
     Swift.min(Swift.max(value, lower), upper)
 }

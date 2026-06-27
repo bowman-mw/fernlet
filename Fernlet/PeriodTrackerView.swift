@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletFoundation
 import FernletDomainModel
+import PrivateHealthStore
 
 struct PeriodTrackerView: View {
     var store: FernletStore

@@ -6,17 +6,17 @@ import Foundation
 import FernletDomainModel
 import PrivateStoreCore
 
-struct MenstrualNarrative: Identifiable, Codable, Equatable {
-    var id: UUID
-    var hkExternalUUID: String
-    var dateKey: String
-    var note: String?
-    var symptomFlags: [PeriodSymptom]
-    var customSymptomScales: [String: Int]
-    var createdAt: Date
-    var updatedAt: Date
+public nonisolated struct MenstrualNarrative: Identifiable, Codable, Equatable {
+    public var id: UUID
+    public var hkExternalUUID: String
+    public var dateKey: String
+    public var note: String?
+    public var symptomFlags: [PeriodSymptom]
+    public var customSymptomScales: [String: Int]
+    public var createdAt: Date
+    public var updatedAt: Date
 
-    init(
+    public init(
         id: UUID = UUID(),
         hkExternalUUID: String,
         dateKey: String,
@@ -37,19 +37,19 @@ struct MenstrualNarrative: Identifiable, Codable, Equatable {
     }
 }
 
-final class MenstrualNarrativeRepository {
+public nonisolated final class MenstrualNarrativeRepository {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "menstrual-narrative")
 
-    init(controller: PrivatePersistenceController? = nil) {
+    public init(controller: PrivatePersistenceController? = nil) {
         self.context = (controller ?? .shared).container.viewContext
     }
 
-    init(context: NSManagedObjectContext) {
+    public init(context: NSManagedObjectContext) {
         self.context = context
     }
 
-    func insert(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
+    public func insert(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
             let object = NSEntityDescription.insertNewObject(forEntityName: "MenstrualNarrative", into: context)
@@ -58,7 +58,7 @@ final class MenstrualNarrativeRepository {
         }
     }
 
-    func update(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
+    public func update(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
             let request = request(id: narrative.id)
@@ -69,7 +69,7 @@ final class MenstrualNarrativeRepository {
         }
     }
 
-    func delete(id: UUID) throws {
+    public func delete(id: UUID) throws {
         try context.performAndWait {
             let request = request(id: id)
             try context.fetch(request).forEach(context.delete)
@@ -81,7 +81,7 @@ final class MenstrualNarrativeRepository {
     /// Total number of stored narratives, counted without decrypting (or even faulting in) any rows.
     /// Lets the sealed-backup export size its chunks up front so it never materializes the whole
     /// history at once — see `narratives(offset:limit:contentKey:)`.
-    func narrativeCount() throws -> Int {
+    public func narrativeCount() throws -> Int {
         try context.performAndWait {
             try context.count(for: NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative"))
         }
@@ -94,7 +94,7 @@ final class MenstrualNarrativeRepository {
     /// successive pages neither overlap nor skip rows. Replaces the former unbounded
     /// `allNarratives` (and avoids the per-day key enumeration that `narratives(in:)` performs,
     /// catastrophic for an unbounded date range).
-    func narratives(offset: Int, limit: Int, contentKey: SymmetricKey?) throws -> [MenstrualNarrative] {
+    public func narratives(offset: Int, limit: Int, contentKey: SymmetricKey?) throws -> [MenstrualNarrative] {
         guard let contentKey, limit > 0 else { return [] }
         return try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
@@ -114,7 +114,7 @@ final class MenstrualNarrativeRepository {
         }
     }
 
-    func narratives(in dateRange: DateInterval, contentKey: SymmetricKey?) throws -> [MenstrualNarrative] {
+    public func narratives(in dateRange: DateInterval, contentKey: SymmetricKey?) throws -> [MenstrualNarrative] {
         guard let contentKey else { return [] }
         let keys = Self.dateKeys(in: dateRange)
         guard !keys.isEmpty else { return [] }
@@ -132,7 +132,7 @@ final class MenstrualNarrativeRepository {
         }
     }
 
-    func narrative(forHKUUID hkExternalUUID: String, contentKey: SymmetricKey?) throws -> MenstrualNarrative? {
+    public func narrative(forHKUUID hkExternalUUID: String, contentKey: SymmetricKey?) throws -> MenstrualNarrative? {
         guard let contentKey else { return nil }
         return try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")

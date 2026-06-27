@@ -1,5 +1,6 @@
 import Testing
 import FernletDomainModel
+import PrivateHealthStore
 @testable import Fernlet
 
 /// Pure, deterministic tests for the AI-free per-phase correlation engine.

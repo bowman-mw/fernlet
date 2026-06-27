@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FernletDomainModel
+import PrivateHealthStore
 
 extension Color {
     static let parchment = Color(UIColor { trait in

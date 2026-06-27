@@ -8,11 +8,12 @@
 import SwiftUI
 import FernletFoundation
 import FernletDomainModel
+import PrivateHealthStore
 
 struct ContentView: View {
     @Bindable var store: FernletStore
     @State private var launcher = LaunchPreparationService()
-    @State private var periodStore = PeriodTrackerStore()
+    @State private var periodStore = PeriodTrackerStore(healthService: HealthKitService())
     @State private var periodContext: PeriodContextBridge?
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore

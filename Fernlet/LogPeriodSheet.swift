@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletDomainModel
+import PrivateHealthStore
 
 struct LogPeriodSheet: View {
     var periodStore: PeriodTrackerStore

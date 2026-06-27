@@ -2,6 +2,7 @@ import SwiftUI
 import LocalPersistence
 import FernletFoundation
 import FernletDomainModel
+import PrivateHealthStore
 
 /// Gentle, low-cost "ambient" home surfaces (spec §12): a looking-back journal card, a macro-gap
 /// meal nudge, forgotten-favorite meal chips, a forgotten-good workout nudge, and a dismissible

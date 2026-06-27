@@ -6,35 +6,61 @@ import HealthKit
 import FernletDomainModel
 import PrivateStoreCore
 
-struct UserLoggedCycleEvent: Equatable {
-    var date: Date = Date()
-    var flowLevel: PeriodFlowLevel?
-    var basalBodyTemperature: Double?
-    var temperatureUnit: PeriodTemperatureUnit = .fahrenheit
-    var cervicalMucusQuality: CervicalMucusQuality?
-    var ovulationTestResult: OvulationTestResult?
-    var hasIntermenstrualBleeding = false
-    var isCycleStart = false
-    var note: String = ""
-    var symptoms: Set<PeriodSymptom> = []
-    var customSymptomScales: [String: Int] = [:]
+public nonisolated struct UserLoggedCycleEvent: Equatable {
+    public var date: Date = Date()
+    public var flowLevel: PeriodFlowLevel?
+    public var basalBodyTemperature: Double?
+    public var temperatureUnit: PeriodTemperatureUnit = .fahrenheit
+    public var cervicalMucusQuality: CervicalMucusQuality?
+    public var ovulationTestResult: OvulationTestResult?
+    public var hasIntermenstrualBleeding = false
+    public var isCycleStart = false
+    public var note: String = ""
+    public var symptoms: Set<PeriodSymptom> = []
+    public var customSymptomScales: [String: Int] = [:]
 
-    var hasNarrative: Bool {
+    public init(
+        date: Date = Date(),
+        flowLevel: PeriodFlowLevel? = nil,
+        basalBodyTemperature: Double? = nil,
+        temperatureUnit: PeriodTemperatureUnit = .fahrenheit,
+        cervicalMucusQuality: CervicalMucusQuality? = nil,
+        ovulationTestResult: OvulationTestResult? = nil,
+        hasIntermenstrualBleeding: Bool = false,
+        isCycleStart: Bool = false,
+        note: String = "",
+        symptoms: Set<PeriodSymptom> = [],
+        customSymptomScales: [String: Int] = [:]
+    ) {
+        self.date = date
+        self.flowLevel = flowLevel
+        self.basalBodyTemperature = basalBodyTemperature
+        self.temperatureUnit = temperatureUnit
+        self.cervicalMucusQuality = cervicalMucusQuality
+        self.ovulationTestResult = ovulationTestResult
+        self.hasIntermenstrualBleeding = hasIntermenstrualBleeding
+        self.isCycleStart = isCycleStart
+        self.note = note
+        self.symptoms = symptoms
+        self.customSymptomScales = customSymptomScales
+    }
+
+    public var hasNarrative: Bool {
         !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !symptoms.isEmpty || !customSymptomScales.isEmpty
     }
 }
 
-enum PeriodLogResult: Equatable {
+public nonisolated enum PeriodLogResult: Equatable {
     case saved
     case savedWithBufferedNarrative
     case savedWithDroppedNarrative
 }
 
-enum PeriodFlowLevel: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum PeriodFlowLevel: String, CaseIterable, Identifiable, Codable {
     case none, light, medium, heavy, unspecified
-    var id: String { rawValue }
-    var title: String { rawValue == "none" ? "None" : rawValue.capitalized }
-    nonisolated var hkValue: Int {
+    public var id: String { rawValue }
+    public var title: String { rawValue == "none" ? "None" : rawValue.capitalized }
+    public var hkValue: Int {
         switch self {
         case .none: HKCategoryValueVaginalBleeding.none.rawValue
         case .light: HKCategoryValueVaginalBleeding.light.rawValue
@@ -45,17 +71,17 @@ enum PeriodFlowLevel: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum PeriodTemperatureUnit: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum PeriodTemperatureUnit: String, CaseIterable, Identifiable, Codable {
     case fahrenheit, celsius
-    var id: String { rawValue }
-    var symbol: String { self == .fahrenheit ? "F" : "C" }
+    public var id: String { rawValue }
+    public var symbol: String { self == .fahrenheit ? "F" : "C" }
 }
 
-enum CervicalMucusQuality: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum CervicalMucusQuality: String, CaseIterable, Identifiable, Codable {
     case dry, sticky, creamy, watery, eggWhite
-    var id: String { rawValue }
-    var title: String { self == .eggWhite ? "Egg White" : rawValue.capitalized }
-    nonisolated var hkValue: Int {
+    public var id: String { rawValue }
+    public var title: String { self == .eggWhite ? "Egg White" : rawValue.capitalized }
+    public var hkValue: Int {
         switch self {
         case .dry: HKCategoryValueCervicalMucusQuality.dry.rawValue
         case .sticky: HKCategoryValueCervicalMucusQuality.sticky.rawValue
@@ -66,11 +92,11 @@ enum CervicalMucusQuality: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum OvulationTestResult: String, CaseIterable, Identifiable, Codable {
+public nonisolated enum OvulationTestResult: String, CaseIterable, Identifiable, Codable {
     case negative, positive, indeterminate
-    var id: String { rawValue }
-    var title: String { rawValue.capitalized }
-    nonisolated var hkValue: Int {
+    public var id: String { rawValue }
+    public var title: String { rawValue.capitalized }
+    public var hkValue: Int {
         switch self {
         case .negative: HKCategoryValueOvulationTestResult.negative.rawValue
         case .positive: HKCategoryValueOvulationTestResult.luteinizingHormoneSurge.rawValue
@@ -79,10 +105,10 @@ enum OvulationTestResult: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum PeriodSymptom: String, CaseIterable, Identifiable, Codable, Comparable {
+public nonisolated enum PeriodSymptom: String, CaseIterable, Identifiable, Codable, Comparable {
     case cramps, headache, breastTenderness, moodSwings, fatigue, bloating, acne, backPain, foodCravings
-    var id: String { rawValue }
-    var title: String {
+    public var id: String { rawValue }
+    public var title: String {
         switch self {
         case .cramps: "Cramps"
         case .headache: "Headache"
@@ -95,30 +121,44 @@ enum PeriodSymptom: String, CaseIterable, Identifiable, Codable, Comparable {
         case .foodCravings: "Food cravings"
         }
     }
-    static func < (lhs: PeriodSymptom, rhs: PeriodSymptom) -> Bool {
+    public static func < (lhs: PeriodSymptom, rhs: PeriodSymptom) -> Bool {
         Self.allCases.firstIndex(of: lhs)! < Self.allCases.firstIndex(of: rhs)!
     }
 }
 
-enum CyclePhase: String, CaseIterable, Identifiable {
+public nonisolated enum CyclePhase: String, CaseIterable, Identifiable {
     case menstrual, follicular, ovulatory, luteal, unknown
-    var id: String { rawValue }
-    var title: String { rawValue.capitalized }
+    public var id: String { rawValue }
+    public var title: String { rawValue.capitalized }
 }
 
-struct CycleDayEntry: Identifiable, Equatable {
-    var id: String { dateKey }
-    var date: Date
-    var dateKey: String
-    var samples: [HKSample]
-    var narrative: MenstrualNarrative?
-    var phase: CyclePhase
+public nonisolated struct CycleDayEntry: Identifiable, Equatable {
+    public var id: String { dateKey }
+    public var date: Date
+    public var dateKey: String
+    public var samples: [HKSample]
+    public var narrative: MenstrualNarrative?
+    public var phase: CyclePhase
 
-    var hasObservedEvent: Bool { !samples.isEmpty || narrative != nil }
-    var menstrualFlowSamples: [HKCategorySample] {
+    public init(
+        date: Date,
+        dateKey: String,
+        samples: [HKSample],
+        narrative: MenstrualNarrative?,
+        phase: CyclePhase
+    ) {
+        self.date = date
+        self.dateKey = dateKey
+        self.samples = samples
+        self.narrative = narrative
+        self.phase = phase
+    }
+
+    public var hasObservedEvent: Bool { !samples.isEmpty || narrative != nil }
+    public var menstrualFlowSamples: [HKCategorySample] {
         samples.compactMap { $0 as? HKCategorySample }.filter { $0.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue }
     }
-    var flowLevel: PeriodFlowLevel? {
+    public var flowLevel: PeriodFlowLevel? {
         guard let sample = menstrualFlowSamples.first else { return nil }
         switch HKCategoryValueVaginalBleeding(rawValue: sample.value) {
         case .some(HKCategoryValueVaginalBleeding.none): return PeriodFlowLevel.none
@@ -128,7 +168,7 @@ struct CycleDayEntry: Identifiable, Equatable {
         default: return .unspecified
         }
     }
-    var flowLabel: String {
+    public var flowLabel: String {
         guard let value = menstrualFlowSamples.first?.value else { return "No flow" }
         switch HKCategoryValueVaginalBleeding(rawValue: value) {
         case .some(.none): return "None"
@@ -138,131 +178,74 @@ struct CycleDayEntry: Identifiable, Equatable {
         default: return "Unspecified"
         }
     }
-    var isCycleStart: Bool {
+    public var isCycleStart: Bool {
         menstrualFlowSamples.first?.metadata?[HKMetadataKeyMenstrualCycleStart] as? Bool ?? false
     }
-    var hasIntermenstrualBleeding: Bool {
+    public var hasIntermenstrualBleeding: Bool {
         samples.contains { ($0 as? HKCategorySample)?.categoryType.identifier == HKCategoryTypeIdentifier.intermenstrualBleeding.rawValue }
     }
-    var cervicalMucusQuality: CervicalMucusQuality? {
+    public var cervicalMucusQuality: CervicalMucusQuality? {
         guard let sample = samples.compactMap({ $0 as? HKCategorySample }).first(where: { $0.categoryType.identifier == HKCategoryTypeIdentifier.cervicalMucusQuality.rawValue }) else { return nil }
         return CervicalMucusQuality.allCases.first { $0.hkValue == sample.value }
     }
-    var ovulationTestResult: OvulationTestResult? {
+    public var ovulationTestResult: OvulationTestResult? {
         guard let sample = samples.compactMap({ $0 as? HKCategorySample }).first(where: { $0.categoryType.identifier == HKCategoryTypeIdentifier.ovulationTestResult.rawValue }) else { return nil }
         return OvulationTestResult.allCases.first { $0.hkValue == sample.value }
     }
-    var basalBodyTemperatureFahrenheit: Double? {
+    public var basalBodyTemperatureFahrenheit: Double? {
         guard let sample = samples.compactMap({ $0 as? HKQuantitySample }).first(where: { $0.quantityType.identifier == HKQuantityTypeIdentifier.basalBodyTemperature.rawValue }) else { return nil }
         return sample.quantity.doubleValue(for: .degreeFahrenheit())
     }
 }
 
-protocol PeriodHealthKitServicing: HealthKitServicing {
+/// Narrow HealthKit seam consumed by `PeriodTrackerStore`. The concrete `HealthKitService`
+/// conformance lives app-side (it uses HealthKitService internals); this module only needs the
+/// three cycle operations and never refines the fat `HealthKitServicing` protocol.
+public protocol PeriodHealthKitServicing: AnyObject {
     func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample]
     func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample]
+    func delete(_ samples: [HKSample]) async throws
 }
 
-extension HealthKitService: PeriodHealthKitServicing {
-    func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample] {
-        guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
-        let samples = try Self.periodSamples(for: event, externalUUID: externalUUID)
-        if !samples.isEmpty {
-            try await save(samples)
-        }
-        FernletAuditLog.log("hk.write.saved", context: ["type": "cycle", "externalUUID": externalUUID.uuidString])
-        return samples
-    }
-
-    func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample] {
-        guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
-        let predicate = HKQuery.predicateForSamples(withStart: dateRange.start, end: dateRange.end, options: .strictStartDate)
-        var allSamples: [HKSample] = []
-        for sampleType in try Self.periodSampleTypes() {
-            allSamples += try await samples(for: sampleType, predicate: predicate)
-        }
-        return allSamples.sorted { $0.startDate < $1.startDate }
-    }
-
-    nonisolated static func periodSamples(for event: UserLoggedCycleEvent, externalUUID: UUID) throws -> [HKSample] {
-        let start = event.date
-        let end = max(event.date.addingTimeInterval(60), event.date)
-        var metadata: [String: Any] = [
-            HKMetadataKeyExternalUUID: externalUUID.uuidString,
-            HKMetadataKeyMenstrualCycleStart: event.isCycleStart
-        ]
-        var samples: [HKSample] = []
-
-        if let flowLevel = event.flowLevel {
-            samples.append(HKCategorySample(type: try categoryType(.menstrualFlow), value: flowLevel.hkValue, start: start, end: end, metadata: metadata))
-        }
-
-        if let temperature = event.basalBodyTemperature {
-            let unit: HKUnit = event.temperatureUnit == .fahrenheit ? .degreeFahrenheit() : .degreeCelsius()
-            samples.append(HKQuantitySample(type: try quantityType(.basalBodyTemperature), quantity: HKQuantity(unit: unit, doubleValue: temperature), start: start, end: end, metadata: metadata))
-        }
-        if let mucus = event.cervicalMucusQuality {
-            samples.append(HKCategorySample(type: try categoryType(.cervicalMucusQuality), value: mucus.hkValue, start: start, end: end, metadata: metadata))
-        }
-        if let ovulation = event.ovulationTestResult {
-            samples.append(HKCategorySample(type: try categoryType(.ovulationTestResult), value: ovulation.hkValue, start: start, end: end, metadata: metadata))
-        }
-        if event.hasIntermenstrualBleeding {
-            metadata[HKMetadataKeyMenstrualCycleStart] = false
-            samples.append(HKCategorySample(type: try categoryType(.intermenstrualBleeding), value: HKCategoryValue.notApplicable.rawValue, start: start, end: end, metadata: metadata))
-        }
-        return samples
-    }
-
-    nonisolated static func periodSampleTypes() throws -> [HKSampleType] {
-        [
-            try categoryType(.menstrualFlow),
-            try quantityType(.basalBodyTemperature),
-            try categoryType(.cervicalMucusQuality),
-            try categoryType(.ovulationTestResult),
-            try categoryType(.intermenstrualBleeding)
-        ]
-    }
-
-    private func samples(for type: HKSampleType, predicate: NSPredicate?) async throws -> [HKSample] {
-        try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
-                if let error { continuation.resume(throwing: error) } else { continuation.resume(returning: samples ?? []) }
-            }
-            healthStore.execute(query)
-        }
-    }
+/// Narrow lock seam consumed by `PeriodTrackerStore` for buffering narratives while the app is
+/// locked. The fat app-side `FernletLockServicing` refines this so the store stays decoupled from
+/// the lock service's full surface.
+public protocol PeriodLockContext: AnyObject {
+    var isLockConfigured: Bool { get }
+    func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws
+    func drainPendingNarratives() throws -> [PendingNarrativePayload]
+    func purgePendingNarratives() throws
 }
 
 @MainActor
 @Observable
-final class PeriodTrackerStore {
-    var entries: [CycleDayEntry] = []
-    var currentPhase: CyclePhase = .unknown
-    var prediction: CyclePrediction?
+public final class PeriodTrackerStore {
+    public var entries: [CycleDayEntry] = []
+    public var currentPhase: CyclePhase = .unknown
+    public var prediction: CyclePrediction?
 
     @ObservationIgnored private let healthService: PeriodHealthKitServicing
     @ObservationIgnored private let narrativeRepository: MenstrualNarrativeRepository
-    @ObservationIgnored private var lockService: FernletLockServicing?
+    @ObservationIgnored private var lockService: (any PeriodLockContext)?
     @ObservationIgnored private let calendar: Calendar
 
-    init(
-        healthService: PeriodHealthKitServicing? = nil,
+    public init(
+        healthService: PeriodHealthKitServicing,
         narrativeRepository: MenstrualNarrativeRepository? = nil,
-        lockService: FernletLockServicing? = nil,
+        lockService: (any PeriodLockContext)? = nil,
         calendar: Calendar = .current
     ) {
-        self.healthService = healthService ?? HealthKitService()
+        self.healthService = healthService
         self.narrativeRepository = narrativeRepository ?? MenstrualNarrativeRepository()
         self.lockService = lockService
         self.calendar = calendar
     }
 
-    func attachLockService(_ lockService: FernletLockServicing) {
+    public func attachLockService(_ lockService: any PeriodLockContext) {
         self.lockService = lockService
     }
 
-    func loadEntries(unlockedContentKey: SymmetricKey?) async {
+    public func loadEntries(unlockedContentKey: SymmetricKey?) async {
         let range = DateInterval(start: calendar.date(byAdding: .day, value: -240, to: Date()) ?? Date().addingTimeInterval(-240 * 86_400), end: Date())
         do {
             let samples = try await healthService.loadPeriodEvents(in: range)
@@ -282,7 +265,7 @@ final class PeriodTrackerStore {
         }
     }
 
-    func logEvent(_ event: UserLoggedCycleEvent, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
+    public func logEvent(_ event: UserLoggedCycleEvent, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
         let externalUUID = UUID()
         _ = try await healthService.savePeriodEvent(event, externalUUID: externalUUID)
         guard event.hasNarrative else { return .saved }
@@ -300,7 +283,7 @@ final class PeriodTrackerStore {
             return .saved
         }
 
-        if lockService?.state == .notConfigured {
+        if lockService?.isLockConfigured == false {
             return .savedWithDroppedNarrative
         }
 
@@ -314,7 +297,7 @@ final class PeriodTrackerStore {
         return .savedWithBufferedNarrative
     }
 
-    func editEvent(_ event: UserLoggedCycleEvent, replacingEntry entry: CycleDayEntry, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
+    public func editEvent(_ event: UserLoggedCycleEvent, replacingEntry entry: CycleDayEntry, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
         let bundleID = Bundle.main.bundleIdentifier ?? ""
         let ownedSamples = entry.samples.filter { $0.sourceRevision.source.bundleIdentifier == bundleID }
         if !ownedSamples.isEmpty {
@@ -326,7 +309,7 @@ final class PeriodTrackerStore {
         return try await logEvent(event, unlockedContentKey: unlockedContentKey)
     }
 
-    func deleteEntry(_ entry: CycleDayEntry) async throws {
+    public func deleteEntry(_ entry: CycleDayEntry) async throws {
         let bundleID = Bundle.main.bundleIdentifier ?? ""
         let ownedSamples = entry.samples.filter { $0.sourceRevision.source.bundleIdentifier == bundleID }
         if !ownedSamples.isEmpty {
@@ -340,7 +323,7 @@ final class PeriodTrackerStore {
         currentPhase = currentPhaseFromObservations()
     }
 
-    func drainPendingBuffer(contentKey: SymmetricKey) async throws {
+    public func drainPendingBuffer(contentKey: SymmetricKey) async throws {
         guard let lockService else { return }
         let pending = try lockService.drainPendingNarratives()
         guard !pending.isEmpty else { return }
@@ -359,7 +342,7 @@ final class PeriodTrackerStore {
         try lockService.purgePendingNarratives()
     }
 
-    func currentPhaseFromObservations() -> CyclePhase {
+    public func currentPhaseFromObservations() -> CyclePhase {
         let todayKey = FernletDate.dayKey(for: Date())
         guard let entry = entries.first(where: { $0.dateKey == todayKey }) else { return .unknown }
         let hasActualFlow = entry.menstrualFlowSamples.contains { sample in

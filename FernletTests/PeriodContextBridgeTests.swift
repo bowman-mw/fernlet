@@ -3,6 +3,7 @@ import FernletFoundation
 import Foundation
 import FernletDomainModel
 import FernletScoring
+import PrivateHealthStore
 @testable import Fernlet
 
 @MainActor

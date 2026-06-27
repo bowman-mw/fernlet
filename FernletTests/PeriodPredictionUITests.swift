@@ -4,13 +4,14 @@ import HealthKit
 import Testing
 import SwiftUI
 import FernletDomainModel
+import PrivateHealthStore
 @testable import Fernlet
 
 @MainActor
 struct PeriodPredictionUITests {
     @Test func showsPredictionIsFalseWhenPredictionsAreHidden() throws {
         let store = makeTestStore()
-        let periodStore = PeriodTrackerStore()
+        let periodStore = PeriodTrackerStore(healthService: HealthKitService())
         periodStore.prediction = try syntheticPrediction(in: gregorianCalendar(), month: 6)
         store.settings.hidePredictions = true
         var activeSheet: FernletSheet?

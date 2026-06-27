@@ -3,6 +3,7 @@ import CryptoKit
 import Testing
 import FernletDomainModel
 import PrivateStoreCore
+import PrivateHealthStore
 @testable import Fernlet
 
 @Suite(.serialized)

@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import FernletDomainModel
+import PrivateHealthStore
 @testable import Fernlet
 
 struct CyclePhaseResolverTests {

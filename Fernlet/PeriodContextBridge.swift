@@ -4,6 +4,7 @@ import HealthKit
 import Observation
 import FernletDomainModel
 import FernletScoring
+import PrivateHealthStore
 
 // MARK: - Abstract egress vocabulary
 //

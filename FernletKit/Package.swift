@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore"]),
     ],
     targets: [
         .target(
@@ -102,6 +102,21 @@ let package = Package(
         .target(
             name: "PrivateStoreCore",
             dependencies: ["FernletFoundation", "FernletDomainModel"]
+        ),
+        // Layer 3 — sealed cycle/intimacy store (S3). PeriodTrackerStore (@Observable),
+        // CyclePredictionEngine, MenstrualNarrativeRepository, IntimacyLogRepository +
+        // the RAW cycle value types (CyclePhase, CycleDayEntry, UserLoggedCycleEvent, …).
+        // Raw cycle types deliberately live HERE, not in FernletDomainModel: AIProviders
+        // imports DomainModel, so exposing CyclePhase there would defeat the
+        // PeriodContextBridge abstraction. Imports HealthKit ([S]) via a narrow injected
+        // PeriodHealthKitServicing seam (the HealthKitService conformance stays app-side).
+        // MainActor: PeriodTrackerStore is @Observable.
+        .target(
+            name: "PrivateHealthStore",
+            dependencies: ["PrivateStoreCore", "FernletCrypto", "FernletFoundation", "FernletDomainModel"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
         ),
     ]
 )

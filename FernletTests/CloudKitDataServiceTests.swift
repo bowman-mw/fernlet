@@ -7,6 +7,7 @@ import Foundation
 import Testing
 import FernletDomainModel
 import PrivateStoreCore
+import PrivateHealthStore
 @testable import Fernlet
 
 @MainActor

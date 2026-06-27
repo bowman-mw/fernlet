@@ -3,6 +3,7 @@ import FernletFoundation
 import HealthKit
 import FernletDomainModel
 import FernletScoring
+import PrivateHealthStore
 @testable import Fernlet
 
 /// Deterministic fixtures + a scoring-context stub shared by the period-aware tests. Kept non-private so

@@ -1,6 +1,7 @@
 import HealthKit
 import SwiftUI
 import FernletDomainModel
+import PrivateHealthStore
 
 struct PeriodDayDetailView: View {
     var entry: CycleDayEntry

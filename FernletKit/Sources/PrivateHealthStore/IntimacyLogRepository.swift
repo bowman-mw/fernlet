@@ -6,16 +6,16 @@ import Foundation
 import FernletDomainModel
 import PrivateStoreCore
 
-struct IntimacyLog: Identifiable, Equatable {
-    var id: UUID
-    var dayKey: String
-    var eventDate: Date
-    var note: String
-    var healthKitExternalUUID: String?
-    var createdAt: Date
-    var updatedAt: Date
+public nonisolated struct IntimacyLog: Identifiable, Equatable {
+    public var id: UUID
+    public var dayKey: String
+    public var eventDate: Date
+    public var note: String
+    public var healthKitExternalUUID: String?
+    public var createdAt: Date
+    public var updatedAt: Date
 
-    init(
+    public init(
         id: UUID = UUID(),
         eventDate: Date,
         note: String,
@@ -32,7 +32,7 @@ struct IntimacyLog: Identifiable, Equatable {
         self.updatedAt = updatedAt
     }
 
-    init(
+    public init(
         id: UUID,
         dayKey: String,
         eventDate: Date,
@@ -51,19 +51,19 @@ struct IntimacyLog: Identifiable, Equatable {
     }
 }
 
-final class IntimacyLogRepository {
+public nonisolated final class IntimacyLogRepository {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "intimacy-log")
 
-    init(controller: PrivatePersistenceController? = nil) {
+    public init(controller: PrivatePersistenceController? = nil) {
         self.context = (controller ?? .shared).container.viewContext
     }
 
-    init(context: NSManagedObjectContext) {
+    public init(context: NSManagedObjectContext) {
         self.context = context
     }
 
-    func insert(_ log: IntimacyLog, contentKey: SymmetricKey?) throws {
+    public func insert(_ log: IntimacyLog, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
             let object = NSEntityDescription.insertNewObject(forEntityName: "IntimacyLog", into: context)
@@ -78,7 +78,7 @@ final class IntimacyLogRepository {
         }
     }
 
-    func logs(contentKey: SymmetricKey?) throws -> [IntimacyLog] {
+    public func logs(contentKey: SymmetricKey?) throws -> [IntimacyLog] {
         guard let contentKey else { return [] }
         return try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
@@ -93,7 +93,7 @@ final class IntimacyLogRepository {
         }
     }
 
-    func delete(id: UUID) throws {
+    public func delete(id: UUID) throws {
         try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
             request.fetchLimit = 1
@@ -104,7 +104,7 @@ final class IntimacyLogRepository {
         }
     }
 
-    func markSavedToHealthKit(id: UUID, externalUUID: UUID) throws {
+    public func markSavedToHealthKit(id: UUID, externalUUID: UUID) throws {
         try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
             request.fetchLimit = 1

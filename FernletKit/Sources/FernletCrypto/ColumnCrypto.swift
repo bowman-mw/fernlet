@@ -4,7 +4,13 @@ import Foundation
 // Shared ChaChaPoly column-encryption helper for private-store repositories.
 // Each repository creates one instance with its own HKDF label so journal,
 // menstrual, and intimacy ciphertexts remain isolated even under the same content key.
-public struct ColumnCrypto {
+//
+// Explicitly `nonisolated` (overriding this module's MainActor default isolation):
+// it is a pure, stateless crypto value type called synchronously from the
+// `NSManagedObjectContext.performAndWait` closures of the (nonisolated) sealed-store
+// repositories, which under the package's Swift 6 language mode run in a nonisolated
+// context. MainActor isolation here would make those synchronous calls illegal.
+public nonisolated struct ColumnCrypto {
     let label: String
 
     public init(label: String) {

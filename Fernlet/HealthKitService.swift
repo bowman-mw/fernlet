@@ -1,6 +1,7 @@
 import Observation
 import LocalPersistence
 import FernletFoundation
+import PrivateHealthStore
 import CoreData
 import Foundation
 import HealthKit
@@ -1264,6 +1265,80 @@ extension HKAuthorizationStatus {
         case .sharingDenied: "Write denied"
         case .sharingAuthorized: "Write allowed"
         @unknown default: "Unknown"
+        }
+    }
+}
+
+// Cycle-event read/write conformance for the narrow `PeriodHealthKitServicing` seam used by
+// `PeriodTrackerStore` (in the PrivateHealthStore module). This conformance lives app-side because
+// it reaches into `HealthKitService` internals (`save`, `healthStore`, `categoryType`/`quantityType`).
+extension HealthKitService: PeriodHealthKitServicing {
+    func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample] {
+        guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
+        let samples = try Self.periodSamples(for: event, externalUUID: externalUUID)
+        if !samples.isEmpty {
+            try await save(samples)
+        }
+        FernletAuditLog.log("hk.write.saved", context: ["type": "cycle", "externalUUID": externalUUID.uuidString])
+        return samples
+    }
+
+    func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample] {
+        guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
+        let predicate = HKQuery.predicateForSamples(withStart: dateRange.start, end: dateRange.end, options: .strictStartDate)
+        var allSamples: [HKSample] = []
+        for sampleType in try Self.periodSampleTypes() {
+            allSamples += try await samples(for: sampleType, predicate: predicate)
+        }
+        return allSamples.sorted { $0.startDate < $1.startDate }
+    }
+
+    nonisolated static func periodSamples(for event: UserLoggedCycleEvent, externalUUID: UUID) throws -> [HKSample] {
+        let start = event.date
+        let end = max(event.date.addingTimeInterval(60), event.date)
+        var metadata: [String: Any] = [
+            HKMetadataKeyExternalUUID: externalUUID.uuidString,
+            HKMetadataKeyMenstrualCycleStart: event.isCycleStart
+        ]
+        var samples: [HKSample] = []
+
+        if let flowLevel = event.flowLevel {
+            samples.append(HKCategorySample(type: try categoryType(.menstrualFlow), value: flowLevel.hkValue, start: start, end: end, metadata: metadata))
+        }
+
+        if let temperature = event.basalBodyTemperature {
+            let unit: HKUnit = event.temperatureUnit == .fahrenheit ? .degreeFahrenheit() : .degreeCelsius()
+            samples.append(HKQuantitySample(type: try quantityType(.basalBodyTemperature), quantity: HKQuantity(unit: unit, doubleValue: temperature), start: start, end: end, metadata: metadata))
+        }
+        if let mucus = event.cervicalMucusQuality {
+            samples.append(HKCategorySample(type: try categoryType(.cervicalMucusQuality), value: mucus.hkValue, start: start, end: end, metadata: metadata))
+        }
+        if let ovulation = event.ovulationTestResult {
+            samples.append(HKCategorySample(type: try categoryType(.ovulationTestResult), value: ovulation.hkValue, start: start, end: end, metadata: metadata))
+        }
+        if event.hasIntermenstrualBleeding {
+            metadata[HKMetadataKeyMenstrualCycleStart] = false
+            samples.append(HKCategorySample(type: try categoryType(.intermenstrualBleeding), value: HKCategoryValue.notApplicable.rawValue, start: start, end: end, metadata: metadata))
+        }
+        return samples
+    }
+
+    nonisolated static func periodSampleTypes() throws -> [HKSampleType] {
+        [
+            try categoryType(.menstrualFlow),
+            try quantityType(.basalBodyTemperature),
+            try categoryType(.cervicalMucusQuality),
+            try categoryType(.ovulationTestResult),
+            try categoryType(.intermenstrualBleeding)
+        ]
+    }
+
+    private func samples(for type: HKSampleType, predicate: NSPredicate?) async throws -> [HKSample] {
+        try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+                if let error { continuation.resume(throwing: error) } else { continuation.resume(returning: samples ?? []) }
+            }
+            healthStore.execute(query)
         }
     }
 }

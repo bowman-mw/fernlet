@@ -3,6 +3,7 @@ import LocalPersistence
 import FernletFoundation
 import SwiftUI
 import FernletScoring
+import PrivateHealthStore
 
 #if canImport(UIKit)
 import UIKit

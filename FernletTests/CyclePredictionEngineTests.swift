@@ -3,6 +3,7 @@ import FernletFoundation
 import HealthKit
 import Testing
 import FernletDomainModel
+import PrivateHealthStore
 @testable import Fernlet
 
 struct CyclePredictionEngineTests {

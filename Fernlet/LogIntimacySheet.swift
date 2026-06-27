@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletFoundation
 import FernletDomainModel
+import PrivateHealthStore
 
 struct LogIntimacySheet: View {
     @Environment(FernletLockService.self) private var lockService

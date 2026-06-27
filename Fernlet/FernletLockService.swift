@@ -15,11 +15,12 @@ import CryptoSwift
 import Observation
 import FernletDomainModel
 import PrivateStoreCore
+import PrivateHealthStore
 
 // MARK: - Public types
 
 @MainActor
-protocol FernletLockServicing: AnyObject {
+protocol FernletLockServicing: PeriodLockContext {
     var state: FernletLockState { get }
     var statePublisher: AnyPublisher<FernletLockState, Never> { get }
     var requiresReset: Bool { get }
@@ -36,9 +37,12 @@ protocol FernletLockServicing: AnyObject {
     func reset() throws
     func setBiometricEnabled(_ enabled: Bool, passcode: String) async throws
     func contentKey() -> SymmetricKey?
-    func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws
-    func drainPendingNarratives() throws -> [PendingNarrativePayload]
-    func purgePendingNarratives() throws
+}
+
+extension FernletLockServicing {
+    // Satisfies the narrow `PeriodLockContext.isLockConfigured` seam without each conformer
+    // reimplementing it: a lock is "configured" once it leaves the `.notConfigured` state.
+    var isLockConfigured: Bool { state != .notConfigured }
 }
 
 enum FernletLockState: Equatable {
