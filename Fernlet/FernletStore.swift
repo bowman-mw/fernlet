@@ -1,5 +1,6 @@
 import CryptoKit
 import CloudKitSync
+import FernletLock
 import LocalPersistence
 import AIProviders
 import FernletFoundation

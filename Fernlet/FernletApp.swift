@@ -1,6 +1,7 @@
 import SwiftUI
 import CloudKitSync
 import FernletFoundation
+import FernletLock
 import HealthKitGateway
 #if canImport(UIKit)
 import UIKit

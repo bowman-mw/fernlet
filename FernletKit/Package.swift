@@ -18,7 +18,14 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock"]),
+    ],
+    dependencies: [
+        // CryptoSwift supplies the memory-hard Scrypt KDF used by FernletLock's passphrase
+        // derivation (the ONE external package the carve-up needs). Requirement mirrors the
+        // app target's pbxproj reference exactly (upToNextMinor from 1.10.0) so SPM resolves
+        // a single shared CryptoSwift across the .xcodeproj reference and this local package.
+        .package(url: "https://github.com/krzyzanowskim/CryptoSwift", .upToNextMinor(from: "1.10.0")),
     ],
     targets: [
         .target(
@@ -248,6 +255,21 @@ let package = Package(
                 // is the source's original, behavior-identical concurrency contract — not a
                 // relaxation introduced by the move.
                 .swiftLanguageMode(.v5),
+            ]
+        ),
+        // Layer 6 — app-lock platform shim ([S]). FernletLockService (@Observable @MainActor)
+        // + its lock-state/credential/crypto-provider seam types. Drains the sealed
+        // PendingNarrativeBuffer on unlock and defines FernletLockServicing: PeriodLockContext
+        // (the PeriodLockContext seam is owned by PrivateHealthStore — a one-directional edge;
+        // PrivateHealthStore never names FernletLock). Uses CryptoSwift's Scrypt directly. The
+        // SwiftUI lock views (FernletLockGate/FernletLockView/OnboardingLockSetupView) stay in
+        // the app (they use app Color/UI components). MainActor; crypto/date/uptime providers
+        // are marked nonisolated within.
+        .target(
+            name: "FernletLock",
+            dependencies: ["FernletFoundation", "FernletDomainModel", "PrivateStoreCore", "PrivateHealthStore", "CryptoSwift"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
             ]
         ),
     ]

@@ -10,6 +10,7 @@ import LocalAuthentication
 import Combine
 import FernletDomainModel
 import FernletFoundation
+import FernletLock
 
 // MARK: - Setup view
 

@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletFoundation
 import FernletDomainModel
+import FernletLock
 import PrivateHealthStore
 import HealthKitGateway
 

@@ -16,6 +16,7 @@
 
 import SwiftUI
 import FernletDomainModel
+import FernletLock
 
 // MARK: - View modifier
 

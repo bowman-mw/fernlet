@@ -20,7 +20,7 @@ import PrivateHealthStore
 // MARK: - Public types
 
 @MainActor
-protocol FernletLockServicing: PeriodLockContext {
+public protocol FernletLockServicing: PeriodLockContext {
     var state: FernletLockState { get }
     var statePublisher: AnyPublisher<FernletLockState, Never> { get }
     var requiresReset: Bool { get }
@@ -42,25 +42,25 @@ protocol FernletLockServicing: PeriodLockContext {
 extension FernletLockServicing {
     // Satisfies the narrow `PeriodLockContext.isLockConfigured` seam without each conformer
     // reimplementing it: a lock is "configured" once it leaves the `.notConfigured` state.
-    var isLockConfigured: Bool { state != .notConfigured }
+    public var isLockConfigured: Bool { state != .notConfigured }
 }
 
-enum FernletLockState: Equatable {
+public enum FernletLockState: Equatable {
     case notConfigured
     case locked(cooldownDeadline: Date?)
     case unlocked
 }
 
-enum FernletLockCredentialKind: String, Codable {
+public enum FernletLockCredentialKind: String, Codable {
     case pin4, pin6, alphanumeric
 }
 
-enum FernletLockCredential {
+public enum FernletLockCredential {
     case pin4(String)
     case pin6(String)
     case alphanumeric(String)
 
-    var kind: FernletLockCredentialKind {
+    public var kind: FernletLockCredentialKind {
         switch self {
         case .pin4: .pin4
         case .pin6: .pin6
@@ -68,13 +68,13 @@ enum FernletLockCredential {
         }
     }
 
-    var rawValue: String {
+    public var rawValue: String {
         switch self {
         case .pin4(let value), .pin6(let value), .alphanumeric(let value): value
         }
     }
 
-    func validate() throws {
+    public func validate() throws {
         switch self {
         case .pin4(let value):
             guard value.count == 4, value.allSatisfy(\.isNumber) else {
@@ -92,7 +92,7 @@ enum FernletLockCredential {
     }
 }
 
-enum FernletLockReason {
+public enum FernletLockReason {
     case viewDisappeared, background, protectedDataUnavailable, manual, failedAttempts
 
     var auditLabel: String {
@@ -106,26 +106,30 @@ enum FernletLockReason {
     }
 }
 
-enum UnlockMethod {
+public enum UnlockMethod {
     case passcode, biometric
 }
 
-struct UnlockResult {
-    let method: UnlockMethod
+public struct UnlockResult {
+    public let method: UnlockMethod
+
+    public init(method: UnlockMethod) {
+        self.method = method
+    }
 }
 
 // MARK: - Cryptographic primitives
 
-enum FernletLockCrypto {
-    nonisolated static let scryptN: Int = 65536
-    nonisolated static let scryptR: Int = 8
-    nonisolated static let scryptP: Int = 1
-    nonisolated static let keyLength: Int = 32
-    nonisolated static let saltLength: Int = 16
-    nonisolated static let aeadNonceLength: Int = 12
-    nonisolated static let aeadTagLength: Int = 16
+public enum FernletLockCrypto {
+    nonisolated public static let scryptN: Int = 65536
+    nonisolated public static let scryptR: Int = 8
+    nonisolated public static let scryptP: Int = 1
+    nonisolated public static let keyLength: Int = 32
+    nonisolated public static let saltLength: Int = 16
+    nonisolated public static let aeadNonceLength: Int = 12
+    nonisolated public static let aeadTagLength: Int = 16
 
-    nonisolated static func deriveVerifier(passcode: String, salt: Data, n: Int = scryptN) async throws -> Data {
+    nonisolated public static func deriveVerifier(passcode: String, salt: Data, n: Int = scryptN) async throws -> Data {
         let password = Array(passcode.utf8)
         let saltBytes = Array(salt)
         let dkLen = keyLength
@@ -145,7 +149,7 @@ enum FernletLockCrypto {
         }.value
     }
 
-    nonisolated static func generateSalt() throws -> Data {
+    nonisolated public static func generateSalt() throws -> Data {
         var bytes = [UInt8](repeating: 0, count: saltLength)
         guard SecRandomCopyBytes(kSecRandomDefault, saltLength, &bytes) == errSecSuccess else {
             throw FernletLockError.internalError("salt generation failed")
@@ -153,23 +157,23 @@ enum FernletLockCrypto {
         return Data(bytes)
     }
 
-    nonisolated static func generateContentKey() -> Data {
+    nonisolated public static func generateContentKey() -> Data {
         let key = SymmetricKey(size: .bits256)
         return key.withUnsafeBytes { Data($0) }
     }
 
-    nonisolated static func wrapContentKey(_ contentKey: Data, using wrappingKeyData: Data) throws -> Data {
+    nonisolated public static func wrapContentKey(_ contentKey: Data, using wrappingKeyData: Data) throws -> Data {
         let wrappingKey = SymmetricKey(data: wrappingKeyData)
         return try ChaChaPoly.seal(contentKey, using: wrappingKey).combined
     }
 
-    nonisolated static func unwrapContentKey(_ wrappedContentKey: Data, using wrappingKeyData: Data) throws -> Data {
+    nonisolated public static func unwrapContentKey(_ wrappedContentKey: Data, using wrappingKeyData: Data) throws -> Data {
         let wrappingKey = SymmetricKey(data: wrappingKeyData)
         let sealedBox = try ChaChaPoly.SealedBox(combined: wrappedContentKey)
         return try ChaChaPoly.open(sealedBox, using: wrappingKey)
     }
 
-    nonisolated static func deriveColumnKey(contentKey: Data, info: String, outputByteCount: Int) -> Data {
+    nonisolated public static func deriveColumnKey(contentKey: Data, info: String, outputByteCount: Int) -> Data {
         let inputKey = SymmetricKey(data: contentKey)
         let derivedKey = HKDF<SHA256>.deriveKey(
             inputKeyMaterial: inputKey,
@@ -180,7 +184,8 @@ enum FernletLockCrypto {
     }
 }
 
-protocol FernletLockCryptoProviding: AnyObject {
+@MainActor
+public protocol FernletLockCryptoProviding: AnyObject {
     func generateSalt() throws -> Data
     func deriveVerifier(passcode: String, salt: Data, n: Int) async throws -> Data
     func generateContentKey() -> Data
@@ -220,7 +225,7 @@ private func cooldownDuration(for level: Int) -> TimeInterval {
     }
 }
 
-enum LockKeychainKey: String {
+public enum LockKeychainKey: String {
     case salt = "com.fernlet.lock.salt"
     case verifier = "com.fernlet.lock.verifier"
     case kind = "com.fernlet.lock.kind"
@@ -236,7 +241,8 @@ enum LockKeychainKey: String {
     case scryptN = "com.fernlet.lock.scryptN"
 }
 
-protocol FernletDateProviding: AnyObject {
+@MainActor
+public protocol FernletDateProviding: AnyObject {
     var now: Date { get }
 }
 
@@ -244,7 +250,8 @@ final class SystemFernletDateProvider: FernletDateProviding {
     var now: Date { Date() }
 }
 
-protocol FernletUptimeProviding: AnyObject {
+@MainActor
+public protocol FernletUptimeProviding: AnyObject {
     var systemUptime: TimeInterval { get }
 }
 
@@ -265,11 +272,11 @@ extension KeychainItem {
         )
     }
 
-    static func load(for key: LockKeychainKey, service: String) -> Data? {
+    public static func load(for key: LockKeychainKey, service: String) -> Data? {
         load(account: key.rawValue, service: service)
     }
 
-    static func delete(for key: LockKeychainKey, service: String) {
+    public static func delete(for key: LockKeychainKey, service: String) {
         delete(account: key.rawValue, service: service)
     }
 
@@ -366,19 +373,19 @@ private func constantTimeEqual(_ a: Data, _ b: Data) -> Bool {
 
 @MainActor
 @Observable
-final class FernletLockService: FernletLockServicing {
+public final class FernletLockService: @MainActor FernletLockServicing {
     @ObservationIgnored
     private let stateSubject = PassthroughSubject<FernletLockState, Never>()
 
-    private(set) var state: FernletLockState = .notConfigured {
+    public private(set) var state: FernletLockState = .notConfigured {
         didSet { stateSubject.send(state) }
     }
     private(set) var hasAutoPromptedBiometricForCurrentLockSession = false
-    private(set) var isPerformingBiometricUnlock = false
+    public private(set) var isPerformingBiometricUnlock = false
 
-    var statePublisher: AnyPublisher<FernletLockState, Never> { stateSubject.eraseToAnyPublisher() }
+    public var statePublisher: AnyPublisher<FernletLockState, Never> { stateSubject.eraseToAnyPublisher() }
 
-    let keychainService: String
+    public let keychainService: String
     @ObservationIgnored private let dateProvider: FernletDateProviding
     @ObservationIgnored private let uptimeProvider: FernletUptimeProviding
     @ObservationIgnored private let cryptoProvider: FernletLockCryptoProviding
@@ -389,7 +396,7 @@ final class FernletLockService: FernletLockServicing {
     @ObservationIgnored private var _contentKey: SymmetricKey?
     @ObservationIgnored private let buffer = PendingNarrativeBuffer()
 
-    init(
+    public init(
         keychainService: String = KeychainItem.productionService,
         dateProvider: FernletDateProviding? = nil,
         uptimeProvider: FernletUptimeProviding? = nil,
@@ -419,15 +426,15 @@ final class FernletLockService: FernletLockServicing {
         }
     }
 
-    var requiresReset: Bool {
+    public var requiresReset: Bool {
         keychainLoad(.requiresReset, keychainService) != nil
     }
 
-    var biometricEnabled: Bool {
+    public var biometricEnabled: Bool {
         keychainLoad(.biometricEnabledFlag, keychainService) != nil
     }
 
-    var biometricType: LABiometryType {
+    public var biometricType: LABiometryType {
         let context = LAContext()
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
@@ -436,25 +443,25 @@ final class FernletLockService: FernletLockServicing {
         return context.biometryType
     }
 
-    var credentialKind: FernletLockCredentialKind? {
+    public var credentialKind: FernletLockCredentialKind? {
         guard let data = keychainLoad(.kind, keychainService),
               let string = String(data: data, encoding: .utf8) else { return nil }
         return FernletLockCredentialKind(rawValue: string)
     }
 
-    var currentAttemptCount: Int {
+    public var currentAttemptCount: Int {
         guard let data = keychainLoad(.attemptCount, keychainService),
               let byte = data.first else { return 0 }
         return Int(byte)
     }
 
-    func consumeAutoBiometricPromptOpportunity() -> Bool {
+    public func consumeAutoBiometricPromptOpportunity() -> Bool {
         guard !hasAutoPromptedBiometricForCurrentLockSession else { return false }
         hasAutoPromptedBiometricForCurrentLockSession = true
         return true
     }
 
-    func configure(credential: FernletLockCredential) async throws {
+    public func configure(credential: FernletLockCredential) async throws {
         try credential.validate()
 
         let saltData = try cryptoProvider.generateSalt()
@@ -483,7 +490,7 @@ final class FernletLockService: FernletLockServicing {
         FernletAuditLog.log("lock.configured", context: ["kind": credential.kind.rawValue])
     }
 
-    func changeCredential(current: String, new: FernletLockCredential) async throws {
+    public func changeCredential(current: String, new: FernletLockCredential) async throws {
         try new.validate()
         guard let saltData = KeychainItem.load(for: .salt, service: keychainService),
               let storedVerifier = KeychainItem.load(for: .verifier, service: keychainService),
@@ -518,7 +525,7 @@ final class FernletLockService: FernletLockServicing {
         FernletAuditLog.log("lock.kindChanged", context: ["newKind": new.kind.rawValue])
     }
 
-    func unlock(passcode: String) async throws -> UnlockResult {
+    public func unlock(passcode: String) async throws -> UnlockResult {
         guard !requiresReset else { throw FernletLockError.resetRequired }
         if let deadline = activeCooldownDeadline() {
             state = .locked(cooldownDeadline: deadline)
@@ -547,7 +554,7 @@ final class FernletLockService: FernletLockServicing {
         return UnlockResult(method: .passcode)
     }
 
-    func unlockWithBiometrics() async throws -> UnlockResult {
+    public func unlockWithBiometrics() async throws -> UnlockResult {
         guard !requiresReset else { throw FernletLockError.resetRequired }
         isPerformingBiometricUnlock = true
         defer { isPerformingBiometricUnlock = false }
@@ -582,14 +589,14 @@ final class FernletLockService: FernletLockServicing {
         return UnlockResult(method: .biometric)
     }
 
-    func lock(reason: FernletLockReason) {
+    public func lock(reason: FernletLockReason) {
         guard case .unlocked = state else { return }
         scrubContentKey()
         state = .locked(cooldownDeadline: activeCooldownDeadline())
         FernletAuditLog.log("lock.engaged", context: ["reason": reason.auditLabel])
     }
 
-    func reset() throws {
+    public func reset() throws {
         KeychainItem.deleteAll(service: keychainService)
         try buffer.purge()
         try privatePersistenceController.purgeEncryptedEntities()
@@ -600,7 +607,7 @@ final class FernletLockService: FernletLockServicing {
         FernletAuditLog.log("lock.reset")
     }
 
-    func setBiometricEnabled(_ enabled: Bool, passcode: String) async throws {
+    public func setBiometricEnabled(_ enabled: Bool, passcode: String) async throws {
         if enabled {
             guard let saltData = KeychainItem.load(for: .salt, service: keychainService),
                   let storedVerifier = KeychainItem.load(for: .verifier, service: keychainService),
@@ -622,19 +629,19 @@ final class FernletLockService: FernletLockServicing {
         }
     }
 
-    func contentKey() -> SymmetricKey? {
+    public func contentKey() -> SymmetricKey? {
         _contentKey
     }
 
-    func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws {
+    public func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws {
         try buffer.append(payload)
     }
 
-    func drainPendingNarratives() throws -> [PendingNarrativePayload] {
+    public func drainPendingNarratives() throws -> [PendingNarrativePayload] {
         try buffer.drainAll()
     }
 
-    func purgePendingNarratives() throws {
+    public func purgePendingNarratives() throws {
         try buffer.purge()
     }
 
@@ -772,7 +779,7 @@ final class FernletLockService: FernletLockServicing {
 }
 
 extension LockKeychainKey: CaseIterable {
-    static var allCases: [LockKeychainKey] {
+    public static var allCases: [LockKeychainKey] {
         [
             .salt,
             .verifier,

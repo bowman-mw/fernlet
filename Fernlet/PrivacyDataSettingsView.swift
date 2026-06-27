@@ -1,6 +1,7 @@
 import LocalAuthentication
 import CloudKitSync
 import FernletFoundation
+import FernletLock
 import SwiftUI
 import FernletDomainModel
 import HealthKitGateway

@@ -4,6 +4,7 @@ import Security
 import Testing
 import FernletDomainModel
 import FernletFoundation
+import FernletLock
 @testable import Fernlet
 
 @Suite(.serialized)
@@ -275,7 +276,7 @@ struct FernletLockCryptoTests {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Fernlet/FernletLockService.swift")
+            .appendingPathComponent("FernletKit/Sources/FernletLock/FernletLockService.swift")
     }
 
     private func loadKeychainData(account: String, service: String) -> Data? {

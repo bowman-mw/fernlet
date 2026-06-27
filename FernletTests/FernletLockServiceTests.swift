@@ -5,6 +5,7 @@ import Security
 import Testing
 import FernletDomainModel
 import PrivateStoreCore
+import FernletLock
 @testable import Fernlet
 
 // Cooldown tests use constructor-injected FernletDateProviding so restart behavior and exact deadlines
@@ -673,5 +674,5 @@ private func lockServiceSourceURL() -> URL {
     URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
         .deletingLastPathComponent()
-        .appendingPathComponent("Fernlet/FernletLockService.swift")
+        .appendingPathComponent("FernletKit/Sources/FernletLock/FernletLockService.swift")
 }

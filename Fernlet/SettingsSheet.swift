@@ -6,6 +6,7 @@ import HealthKit
 import LocalAuthentication
 import SwiftUI
 import FernletDomainModel
+import FernletLock
 import FernletScoring
 import HealthKitGateway
 

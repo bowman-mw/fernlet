@@ -10,6 +10,7 @@ import FernletDomainModel
 import PrivateStoreCore
 import PrivateHealthStore
 import HealthKitGateway
+import FernletLock
 @testable import Fernlet
 
 @MainActor
