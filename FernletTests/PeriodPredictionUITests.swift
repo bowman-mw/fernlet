@@ -103,8 +103,8 @@ struct PeriodPredictionUITests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let paths = [
-            "Fernlet/CyclePredictionEngine.swift",
-            "Fernlet/PeriodTrackerStore.swift",
+            "FernletKit/Sources/PrivateHealthStore/CyclePredictionEngine.swift",
+            "FernletKit/Sources/PrivateHealthStore/PeriodTrackerStore.swift",
             "Fernlet/PeriodTrackerView.swift"
         ]
         let regex = try NSRegularExpression(pattern: pattern)
