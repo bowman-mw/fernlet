@@ -6,13 +6,6 @@ import SwiftUI
 @MainActor
 @Observable
 final class FernletStore {
-    private enum JournalActivationMode {
-        case inactive
-        case noLock
-        case sealedUnlocked
-        case sealedLocked
-    }
-
     var day: FernletDay
     var settings: FernletSettings
     var recentMeals: [Meal]
@@ -81,14 +74,14 @@ final class FernletStore {
         directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
             .appendingPathComponent("MealPhotos", isDirectory: true)
     )
-    @ObservationIgnored private let journalNarrativeRepository: JournalNarrativeRepository
+    /// Injected (or nil → default) journal narrative repository, captured so the lazily-built
+    /// `journalSealingCoordinator` can own it.
+    @ObservationIgnored private let providedJournalNarrativeRepository: JournalNarrativeRepository?
+    @ObservationIgnored private lazy var journalSealingCoordinator = JournalSealingCoordinator(
+        host: self,
+        narrativeRepository: providedJournalNarrativeRepository ?? JournalNarrativeRepository()
+    )
     @ObservationIgnored private var isProcessingSharedRecipeImportQueue = false
-    /// Content key available while the lock is open; nil when locked.
-    @ObservationIgnored private var journalContentKey: SymmetricKey?
-    @ObservationIgnored private var journalActivationMode: JournalActivationMode = .inactive
-    /// IDs of journal entries whose text is sealed in JournalNarrativeRepository.
-    /// Used by currentSnapshot() to strip text before persisting to the cloud blob.
-    @ObservationIgnored private var sealedJournalIDs: Set<UUID> = []
     /// Read-only abstract egress from the private cycle data into scoring. Nil until the app wires a
     /// `PeriodContextBridge`; when nil (or the opt-in is off) scoring is byte-identical to period-unaware.
     @ObservationIgnored private(set) var periodScoringContext: (any PeriodScoringContextProviding)?
@@ -130,7 +123,7 @@ final class FernletStore {
             initialAudit: snapshot.trainerAuditEvents
         )
         self.aiRetryQueueService = AIRetryQueueService(initial: snapshot.retryQueue)
-        self.journalNarrativeRepository = journalNarrativeRepository ?? JournalNarrativeRepository()
+        self.providedJournalNarrativeRepository = journalNarrativeRepository
         foodCatalog.setUserItems(foodItems)
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -170,7 +163,7 @@ final class FernletStore {
             initialAudit: snapshot.trainerAuditEvents
         )
         self.aiRetryQueueService = AIRetryQueueService(initial: snapshot.retryQueue)
-        self.journalNarrativeRepository = JournalNarrativeRepository()
+        self.providedJournalNarrativeRepository = nil
         foodCatalog.setUserItems(foodItems)
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -818,7 +811,7 @@ final class FernletStore {
 
     func addJournal(text: String, tag: FeelingTag) {
         let entry = JournalEntry(text: text, tag: tag)
-        sealJournalEntry(entry, dayKey: todayKey)
+        journalSealingCoordinator.seal(entry, dayKey: todayKey)
         batchSnapshotPersistence {
             day.journals.append(entry)
             previousJournals.insert(entry, at: 0)
@@ -914,16 +907,7 @@ final class FernletStore {
     }
 
     func loadDayWithDecryptedJournals(for dateKey: String) -> FernletDay {
-        var loaded = loadDay(for: dateKey)
-        let emptyEntries = loaded.journals.filter { $0.text.isEmpty }
-        guard !emptyEntries.isEmpty, let key = activeJournalRefreshKey() else { return loaded }
-        let narratives = (try? journalNarrativeRepository.narratives(forDayKey: dateKey, contentKey: key)) ?? []
-        let byID = Dictionary(narratives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        loaded.journals = loaded.journals.map { entry in
-            guard entry.text.isEmpty, let n = byID[entry.id] else { return entry }
-            return JournalEntry(id: entry.id, text: n.text, tag: entry.tag, date: entry.date, emotions: n.emotions)
-        }
-        return loaded
+        journalSealingCoordinator.hydratingDecryptedJournals(into: loadDay(for: dateKey), dateKey: dateKey)
     }
 
     /// Whether the given day (by `yyyy-MM-dd` key) is flagged sick.
@@ -1057,7 +1041,7 @@ final class FernletStore {
     func addJournal(text: String, tag: FeelingTag, date: String) {
         assert(!date.isEmpty, "journal date required")
         let entry = JournalEntry(text: text, tag: tag)
-        sealJournalEntry(entry, dayKey: date)
+        journalSealingCoordinator.seal(entry, dayKey: date)
         mutateDay(date: date) { $0.journals.append(entry) }
         if date == todayKey {
             previousJournals.insert(entry, at: 0)
@@ -1077,14 +1061,7 @@ final class FernletStore {
         updatedEntry.text = trimmed
         updatedEntry.tag = tag
 
-        if sealedJournalIDs.contains(entry.id), let key = activeJournalRefreshKey() {
-            let updated = JournalNarrative(
-                id: entry.id, dayKey: date, tag: tag, entryDate: entry.date,
-                text: trimmed, emotions: entry.emotions,
-                createdAt: entry.date, updatedAt: Date()
-            )
-            try? journalNarrativeRepository.update(updated, contentKey: key)
-        }
+        journalSealingCoordinator.updateSealedNarrative(for: entry, text: trimmed, tag: tag, dayKey: date)
 
         batchSnapshotPersistence {
             mutateDay(date: date) { targetDay in
@@ -1099,8 +1076,7 @@ final class FernletStore {
 
     func deleteJournal(_ entry: JournalEntry, date: String) {
         assert(!date.isEmpty, "journal date required")
-        try? journalNarrativeRepository.delete(id: entry.id)
-        sealedJournalIDs.remove(entry.id)
+        journalSealingCoordinator.deleteSealed(id: entry.id)
         batchSnapshotPersistence {
             mutateDay(date: date) { $0.journals.removeAll { $0.id == entry.id } }
             previousJournals.removeAll { $0.id == entry.id }
@@ -1567,7 +1543,7 @@ final class FernletStore {
         aiRetryQueueService.apply(snapshot.retryQueue)
         proximityTrustVault.apply(peers: snapshot.trustedProximityPeers, audit: snapshot.trainerAuditEvents)
         connectionInspector.attachStore(self)
-        refreshSealedJournalsAfterSnapshotApply()
+        journalSealingCoordinator.refreshAfterSnapshotApply()
         rebuildDerivedSignals()
     }
 
@@ -1615,7 +1591,7 @@ final class FernletStore {
         previousJournals: [JournalEntry]
     ) -> (FernletDay, [JournalEntry]) {
         func strip(_ entry: JournalEntry) -> JournalEntry {
-            guard sealedJournalIDs.contains(entry.id) else { return entry }
+            guard journalSealingCoordinator.isSealed(entry.id) else { return entry }
             return JournalEntry(id: entry.id, text: "", tag: entry.tag, date: entry.date, emotions: [])
         }
         var strippedDay = day
@@ -1647,182 +1623,14 @@ final class FernletStore {
     func ensureBundledFoodItemsSeeded() {}
 }
 
-// MARK: - Sealed Journal Management (Phase S2)
+// MARK: - Sealed Journal Management (Phase S2) — see JournalSealingCoordinator
 
-extension FernletStore {
-    /// Call at startup when no lock is configured: seals any legacy plaintext blob entries
-    /// with the device key and populates in-memory journal text from the device-key-sealed store.
-    func activateNoLockJournals() {
-        journalActivationMode = .noLock
-        let key = deviceJournalKey
-        migrateExistingJournalsToSealedStore(contentKey: key)
-        refreshSealedJournals(contentKey: key)
-    }
-
-    /// Call on unlock: migrates any device-key-sealed entries, sets the content key,
-    /// populates in-memory journal text from the sealed store, and migrates legacy plaintext entries.
+extension FernletStore: JournalSealingContext {
+    func activateNoLockJournals() { journalSealingCoordinator.activateNoLockJournals() }
     func activateSealedJournals(contentKey: SymmetricKey) {
-        journalContentKey = contentKey
-        journalActivationMode = .sealedUnlocked
-        migrateDeviceKeyEntriesToUserKey(userKey: contentKey)
-        refreshSealedJournals(contentKey: contentKey)
-        migrateExistingJournalsToSealedStore(contentKey: contentKey)
+        journalSealingCoordinator.activateSealedJournals(contentKey: contentKey)
     }
-
-    /// Call on lock: scrubs in-memory journal text for sealed entries and clears the key.
-    func deactivateSealedJournals() {
-        let ids = sealedJournalIDs
-        if !ids.isEmpty {
-            day.journals = day.journals.map { entry in
-                guard ids.contains(entry.id) else { return entry }
-                return JournalEntry(id: entry.id, text: "", tag: entry.tag, date: entry.date, emotions: [])
-            }
-            previousJournals = previousJournals.map { entry in
-                guard ids.contains(entry.id) else { return entry }
-                return JournalEntry(id: entry.id, text: "", tag: entry.tag, date: entry.date, emotions: [])
-            }
-            sealedJournalIDs.removeAll()
-        }
-        journalContentKey = nil
-        journalActivationMode = .sealedLocked
-    }
-
-    // MARK: Private helpers
-
-    private func activeJournalRefreshKey() -> SymmetricKey? {
-        switch journalActivationMode {
-        case .inactive, .sealedLocked:
-            return nil
-        case .noLock:
-            return deviceJournalKey
-        case .sealedUnlocked:
-            return journalContentKey
-        }
-    }
-
-    private func refreshSealedJournalsAfterSnapshotApply() {
-        guard let key = activeJournalRefreshKey() else { return }
-        refreshSealedJournals(contentKey: key)
-    }
-
-    /// Device-bound key generated on first use and stored in Keychain (not iCloud-synced).
-    /// Used to seal journal text when no user lock is configured, ensuring text never reaches the blob.
-    private var deviceJournalKey: SymmetricKey {
-        if let data = KeychainItem.load(for: .deviceJournalKey, service: KeychainItem.journalService) {
-            return SymmetricKey(data: data)
-        }
-        let key = SymmetricKey(size: .bits256)
-        let keyData = key.withUnsafeBytes { Data($0) }
-        KeychainItem.store(keyData, for: .deviceJournalKey, service: KeychainItem.journalService)
-        return key
-    }
-
-    /// Seals a journal entry into JournalNarrativeRepository.
-    /// Uses the user content key when a lock is configured; falls back to the device key so that
-    /// journal text is never written to the iCloud-synced blob even without a lock.
-    private func sealJournalEntry(_ entry: JournalEntry, dayKey: String) {
-        let key = journalContentKey ?? deviceJournalKey
-        let narrative = JournalNarrative(
-            id: entry.id, dayKey: dayKey, tag: entry.tag, entryDate: entry.date,
-            text: entry.text, emotions: entry.emotions,
-            createdAt: entry.date, updatedAt: entry.date
-        )
-        do {
-            try journalNarrativeRepository.insert(narrative, contentKey: key)
-            sealedJournalIDs.insert(entry.id)
-        } catch {
-            print("[Fernlet] Journal sealing failed for \(entry.id): \(error)")
-            // Do NOT add the entry to sealedJournalIDs on failure. Leaving it unsealed keeps
-            // its plaintext in the local snapshot (so the user's text is never lost) and lets
-            // migrateExistingJournalsToSealedStore (run from activateNoLockJournals /
-            // activateSealedJournals on the next launch or unlock) retry sealing it, since it
-            // targets exactly `!text.isEmpty && !sealedJournalIDs.contains(id)` entries.
-            // We prioritise no-data-loss over the rare transient case where the text briefly
-            // remains in the user's own (already-encrypted) private store instead of the
-            // app-sealed narrative store.
-        }
-    }
-
-    /// When the user sets up a lock for the first time, re-encrypts entries that were previously
-    /// sealed with the device key so they become protected by the user's content key.
-    private func migrateDeviceKeyEntriesToUserKey(userKey: SymmetricKey) {
-        let dKey = deviceJournalKey
-        let todayNarratives = (try? journalNarrativeRepository.narratives(
-            forDayKey: todayKey, contentKey: dKey)) ?? []
-        let prevDayKeys = Array(Set(
-            previousJournals.filter { $0.text.isEmpty }.map { FernletDate.dayKey(for: $0.date) }
-        ))
-        let prevNarratives = prevDayKeys.isEmpty ? [] :
-            ((try? journalNarrativeRepository.narratives(
-                forDayKeys: prevDayKeys, contentKey: dKey)) ?? [])
-        for narrative in todayNarratives + prevNarratives {
-            try? journalNarrativeRepository.update(narrative, contentKey: userKey)
-        }
-    }
-
-    /// Loads decrypted text from the sealed store into in-memory journal entries that have empty text.
-    private func refreshSealedJournals(contentKey: SymmetricKey) {
-        // Today's journals
-        let emptyToday = day.journals.filter { $0.text.isEmpty }
-        if !emptyToday.isEmpty {
-            let narratives = (try? journalNarrativeRepository.narratives(forDayKey: todayKey, contentKey: contentKey)) ?? []
-            let byID = Dictionary(narratives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            day.journals = day.journals.map { entry in
-                guard entry.text.isEmpty, let n = byID[entry.id] else { return entry }
-                sealedJournalIDs.insert(entry.id)
-                return JournalEntry(id: entry.id, text: n.text, tag: entry.tag, date: entry.date, emotions: n.emotions)
-            }
-        }
-
-        // Cross-day previousJournals
-        let emptyPrevious = previousJournals.filter { $0.text.isEmpty }
-        if !emptyPrevious.isEmpty {
-            let dayKeys = Array(Set(emptyPrevious.map { FernletDate.dayKey(for: $0.date) }))
-            let narratives = (try? journalNarrativeRepository.narratives(forDayKeys: dayKeys, contentKey: contentKey)) ?? []
-            let byID = Dictionary(narratives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            previousJournals = previousJournals.map { entry in
-                guard entry.text.isEmpty, let n = byID[entry.id] else { return entry }
-                sealedJournalIDs.insert(entry.id)
-                return JournalEntry(id: entry.id, text: n.text, tag: entry.tag, date: entry.date, emotions: n.emotions)
-            }
-        }
-    }
-
-    /// One-time migration: seals legacy journal entries that still have plaintext in the blob,
-    /// then schedules a save so the stripped version is persisted.
-    private func migrateExistingJournalsToSealedStore(contentKey: SymmetricKey) {
-        var anyMigrated = false
-
-        for entry in previousJournals where !entry.text.isEmpty && !sealedJournalIDs.contains(entry.id) {
-            let dayKey = FernletDate.dayKey(for: entry.date)
-            let narrative = JournalNarrative(
-                id: entry.id, dayKey: dayKey, tag: entry.tag, entryDate: entry.date,
-                text: entry.text, emotions: entry.emotions,
-                createdAt: entry.date, updatedAt: entry.date
-            )
-            if (try? journalNarrativeRepository.insert(narrative, contentKey: contentKey)) != nil {
-                sealedJournalIDs.insert(entry.id)
-                anyMigrated = true
-            }
-        }
-
-        for entry in day.journals where !entry.text.isEmpty && !sealedJournalIDs.contains(entry.id) {
-            let narrative = JournalNarrative(
-                id: entry.id, dayKey: todayKey, tag: entry.tag, entryDate: entry.date,
-                text: entry.text, emotions: entry.emotions,
-                createdAt: entry.date, updatedAt: entry.date
-            )
-            if (try? journalNarrativeRepository.insert(narrative, contentKey: contentKey)) != nil {
-                sealedJournalIDs.insert(entry.id)
-                anyMigrated = true
-            }
-        }
-
-        if anyMigrated {
-            // Trigger a save so the stripped (empty-text) version replaces the plaintext in the blob.
-            snapshotSaveCoordinator.schedule()
-        }
-    }
+    func deactivateSealedJournals() { journalSealingCoordinator.deactivateSealedJournals() }
 }
 
 extension FernletStore {
@@ -1959,7 +1767,7 @@ extension FernletStore: MealResolutionContext {}
 
 extension FernletStore: SealedBackupContext {
     /// Narrow read of the (private) journal content key for sealed period-data backup.
-    var sealedBackupContentKey: SymmetricKey? { journalContentKey }
+    var sealedBackupContentKey: SymmetricKey? { journalSealingCoordinator.contentKey }
     func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) {
         repository.replaceTierTwoMemories(records)
     }
