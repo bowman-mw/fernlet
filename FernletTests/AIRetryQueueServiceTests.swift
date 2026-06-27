@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import StoreCore
 @testable import Fernlet
 
 @MainActor

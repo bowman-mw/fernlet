@@ -5,7 +5,7 @@ import FernletFoundation
 import FernletPersistence
 
 @MainActor
-final class SnapshotSaveCoordinator {
+public final class SnapshotSaveCoordinator {
     private let repository: FernletRepository
     private let debounce: Duration
     private let buildSnapshot: @MainActor () -> FernletSnapshot
@@ -15,7 +15,7 @@ final class SnapshotSaveCoordinator {
     private var remoteReloadTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
 
-    init(
+    public init(
         repository: FernletRepository,
         debounce: Duration = .seconds(1),
         buildSnapshot: @escaping @MainActor () -> FernletSnapshot,
@@ -27,7 +27,7 @@ final class SnapshotSaveCoordinator {
         self.onAfterSave = onAfterSave
     }
 
-    func schedule() {
+    public func schedule() {
         snapshotSaveTask?.cancel()
         let debounce = debounce
         snapshotSaveTask = Task { [weak self] in
@@ -41,14 +41,14 @@ final class SnapshotSaveCoordinator {
         }
     }
 
-    func flushPending() {
+    public func flushPending() {
         guard snapshotSaveTask != nil else { return }
         snapshotSaveTask?.cancel()
         snapshotSaveTask = nil
         performSnapshotSave()
     }
 
-    func subscribeRemote(
+    public func subscribeRemote(
         remoteReloadDebounce: Duration = .milliseconds(750),
         handler: @escaping @MainActor () async -> Void
     ) {

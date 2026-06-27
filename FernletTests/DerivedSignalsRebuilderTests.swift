@@ -2,6 +2,7 @@ import Foundation
 import LocalPersistence
 import Testing
 import FernletDomainModel
+import StoreCore
 @testable import Fernlet
 
 struct DerivedSignalsRebuilderTests {

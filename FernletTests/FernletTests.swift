@@ -16,6 +16,7 @@ import FernletScoring
 import FernletPersistence
 import FoodCatalog
 import CloudKitSync
+import StoreCore
 @testable import Fernlet
 
 struct FernletTests {

@@ -3,6 +3,7 @@ import Testing
 import FernletDomainModel
 import FernletScoring
 import CloudKitSync
+import StoreCore
 @testable import Fernlet
 
 @MainActor

@@ -1,7 +1,7 @@
 import FernletDomainModel
 import LocalPersistence
-struct DerivedSignalsRebuilder {
-    static func rebuild(
+public struct DerivedSignalsRebuilder {
+    public static func rebuild(
         allDays: [String: FernletDay],
         todayKey: String,
         windowDays: Int = FernletLimits.signalWindowDays

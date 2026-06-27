@@ -2,6 +2,7 @@ import Foundation
 import FernletFoundation
 import CoreData
 import FernletDomainModel
+import FernletPersistence
 
 // Web-imported recipes are now represented by the canonical `RecipeDefinition` model (carrying a
 // `RecipeWebImport` payload). The legacy `SavedRecipe` struct has been removed; the repositories
@@ -240,6 +241,8 @@ public struct SavedRecipeRepository {
         record.setValue(recipe.createdAt, forKey: "savedAt")
     }
 }
+
+extension SavedRecipeRepository: SavedRecipeRepositoring {}
 
 nonisolated public struct LegacySavedRecipeJSONRepository {
     private let fileURL: URL

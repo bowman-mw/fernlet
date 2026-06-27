@@ -3,6 +3,7 @@ import Foundation
 import Testing
 import FernletDomainModel
 import FernletPersistence
+import StoreCore
 @testable import Fernlet
 
 @MainActor

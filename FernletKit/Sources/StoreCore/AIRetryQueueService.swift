@@ -6,8 +6,8 @@ import FernletScoring
 
 @MainActor
 @Observable
-final class AIRetryQueueService {
-    private(set) var retryQueue: [AIAnalysisRetryRecord] = []
+public final class AIRetryQueueService {
+    public private(set) var retryQueue: [AIAnalysisRetryRecord] = []
 
     private static let maxQueueSize = 20
     /// Records older than this are aged out so long-abandoned retries don't permanently occupy slots.
@@ -15,19 +15,19 @@ final class AIRetryQueueService {
 
     @ObservationIgnored private let now: () -> Date
     // Mutable so FernletStore can wire it after all stored properties are initialized.
-    @ObservationIgnored var onChange: () -> Void = {}
+    @ObservationIgnored public var onChange: () -> Void = {}
 
-    init(initial: [AIAnalysisRetryRecord] = [], now: @escaping () -> Date = Date.init, onChange: @escaping () -> Void = {}) {
+    public init(initial: [AIAnalysisRetryRecord] = [], now: @escaping () -> Date = Date.init, onChange: @escaping () -> Void = {}) {
         self.retryQueue = initial
         self.now = now
         self.onChange = onChange
     }
 
-    var pendingCount: Int { retryQueue.count }
+    public var pendingCount: Int { retryQueue.count }
 
     /// Queue a meal-analysis retry. Future retry kinds (workout, recipe, daily-summary)
     /// should be added as new methods, not by overloading this one.
-    func queueMealRetry(_ meal: Meal, dayKey: String? = nil) {
+    public func queueMealRetry(_ meal: Meal, dayKey: String? = nil) {
         guard !retryQueue.contains(where: { $0.sourceId == meal.id }) else { return }
         // Age out stale records first so the cap is reached only by genuinely-pending retries.
         let cutoff = now().addingTimeInterval(-Self.recordTTL)
@@ -46,21 +46,21 @@ final class AIRetryQueueService {
         onChange()
     }
 
-    func clear(id: UUID) {
+    public func clear(id: UUID) {
         retryQueue.removeAll { $0.id == id }
         onChange()
     }
 
-    func clearForSourceID(_ sourceID: UUID) {
+    public func clearForSourceID(_ sourceID: UUID) {
         retryQueue.removeAll { $0.sourceId == sourceID }
         onChange()
     }
 
-    func apply(_ queue: [AIAnalysisRetryRecord]) {
+    public func apply(_ queue: [AIAnalysisRetryRecord]) {
         retryQueue = queue
     }
 
-    func reset() {
+    public func reset() {
         retryQueue = []
     }
 }

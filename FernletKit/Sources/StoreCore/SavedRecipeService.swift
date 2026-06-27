@@ -1,35 +1,31 @@
 import Foundation
 import Observation
-import CloudKitSync
+import FernletPersistence
 import FernletDomainModel
 import FernletScoring
 
 @MainActor
 @Observable
-final class SavedRecipeService {
-    private(set) var savedRecipes: [RecipeDefinition] = []
+public final class SavedRecipeService {
+    public private(set) var savedRecipes: [RecipeDefinition] = []
 
-    @ObservationIgnored private let repository: SavedRecipeRepository
+    @ObservationIgnored private let repository: any SavedRecipeRepositoring
     @ObservationIgnored private var saveScheduled = false
 
-    convenience init() {
-        self.init(repository: SavedRecipeRepository())
-    }
-
-    init(repository: SavedRecipeRepository, initialRecipes: [RecipeDefinition] = []) {
+    public init(repository: any SavedRecipeRepositoring, initialRecipes: [RecipeDefinition] = []) {
         self.repository = repository
         self.savedRecipes = initialRecipes
     }
 
-    func loadAsync() async {
+    public func loadAsync() async {
         savedRecipes = await repository.loadAsync()
     }
 
-    func loadSync() {
+    public func loadSync() {
         savedRecipes = repository.load()
     }
 
-    func add(_ recipe: RecipeDefinition) {
+    public func add(_ recipe: RecipeDefinition) {
         if let sourceURLString = recipe.webImport?.sourceURLString, !sourceURLString.isEmpty {
             savedRecipes.removeAll { $0.webImport?.sourceURLString == sourceURLString }
         }
@@ -37,30 +33,30 @@ final class SavedRecipeService {
         scheduleSave()
     }
 
-    func update(_ recipe: RecipeDefinition) {
+    public func update(_ recipe: RecipeDefinition) {
         guard let index = savedRecipes.firstIndex(where: { $0.id == recipe.id }) else { return }
         savedRecipes[index] = recipe
         scheduleSave()
     }
 
-    func delete(_ recipe: RecipeDefinition) {
+    public func delete(_ recipe: RecipeDefinition) {
         savedRecipes.removeAll { $0.id == recipe.id }
         scheduleSave()
     }
 
-    func reset() {
+    public func reset() {
         savedRecipes = []
         scheduleSave()
     }
 
-    func flushPendingSave() {
+    public func flushPendingSave() {
         guard saveScheduled else { return }
         saveScheduled = false
         let saved = repository.save(savedRecipes)
         assert(saved, "saved recipes should save")
     }
 
-    func shareText(for recipe: RecipeDefinition) -> String {
+    public func shareText(for recipe: RecipeDefinition) -> String {
         let webImport = recipe.webImport
         let macros = webImport?.macros ?? Macros(protein: 0, carbs: 0, fat: 0)
         var lines: [String] = [recipe.name, ""]
@@ -79,7 +75,7 @@ final class SavedRecipeService {
         return lines.joined(separator: "\n")
     }
 
-    static func makeMeal(from recipe: RecipeDefinition, mealType: MealType?) -> Meal {
+    public static func makeMeal(from recipe: RecipeDefinition, mealType: MealType?) -> Meal {
         let macros = recipe.webImport?.macros ?? Macros(protein: 0, carbs: 0, fat: 0)
         let hasMacros = macros.protein > 0 || macros.carbs > 0 || macros.fat > 0
         return Meal(

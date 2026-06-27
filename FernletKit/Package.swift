@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore"]),
     ],
     targets: [
         .target(
@@ -193,6 +193,18 @@ let package = Package(
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
+        ),
+        // Layer 7 — the central store-side services lifted out of the app target:
+        // DerivedSignalsService/DerivedSignalsRebuilder (derived-signal rebuild),
+        // SnapshotSaveCoordinator (debounced snapshot persistence), AIRetryQueueService
+        // (meal-analysis retry queue), and SavedRecipeService (saved-recipe state). The
+        // 4 service classes are individually @MainActor; DerivedSignalsRebuilder is a
+        // plain nonisolated struct — so NO defaultIsolation(MainActor.self) here.
+        // SavedRecipeService was inverted onto the SavedRecipeRepositoring protocol
+        // (in FernletPersistence) so this module needs NO dependency on CloudKitSync.
+        .target(
+            name: "StoreCore",
+            dependencies: ["FernletFoundation", "FernletDomainModel", "FernletScoring", "FernletPersistence", "LocalPersistence"]
         ),
     ]
 )

@@ -6,13 +6,15 @@ import FernletDomainModel
 
 @MainActor
 @Observable
-final class DerivedSignalsService {
-    private(set) var derivedSignals: [DerivedSignalRecord] = []
+public final class DerivedSignalsService {
+    public private(set) var derivedSignals: [DerivedSignalRecord] = []
 
     @ObservationIgnored private var deferredStarted = false
     @ObservationIgnored private var pendingDeferredRebuild: (@MainActor () -> Void)?
 
-    func rebuild(allDays: [String: FernletDay], todayKey: String) {
+    public init() {}
+
+    public func rebuild(allDays: [String: FernletDay], todayKey: String) {
         StartupTiming.timed("FernletStore.rebuildDerivedSignals") {
             derivedSignals = DerivedSignalsRebuilder.rebuild(
                 allDays: allDays,
@@ -22,7 +24,7 @@ final class DerivedSignalsService {
     }
 
     /// Schedules a low-priority rebuild after launch. Runs exactly once.
-    func scheduleDeferredRebuild(
+    public func scheduleDeferredRebuild(
         allDaysProvider: @escaping @MainActor () -> [String: FernletDay],
         todayKey: String
     ) {
@@ -41,7 +43,7 @@ final class DerivedSignalsService {
         }
     }
 
-    func flushDeferredRebuild() {
+    public func flushDeferredRebuild() {
         pendingDeferredRebuild?()
     }
 }

@@ -14,6 +14,7 @@ import FoodCatalog
 import PrivateHealthStore
 import PrivateMediaStore
 import PeriodContextBridge
+import StoreCore
 
 @MainActor
 @Observable
@@ -1731,7 +1732,7 @@ extension FernletStore {
             repository ?? CoreDataFernletRepository(controller: sharedPersistenceController)
         }
         let savedRecipeService = StartupTiming.timed("SavedRecipeService.init") {
-            SavedRecipeService()
+            SavedRecipeService(repository: SavedRecipeRepository())
         }
 
         statusUpdate("Reading recent days...")
