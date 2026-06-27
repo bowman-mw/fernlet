@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "AppServices"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "AppServices", "ProximityKit"]),
     ],
     dependencies: [
         // CryptoSwift supplies the memory-hard Scrypt KDF used by FernletLock's passphrase
@@ -282,6 +282,31 @@ let package = Package(
         .target(
             name: "AppServices",
             dependencies: ["FernletDomainModel", "AIProviders"]
+        ),
+        // Layer 6 — the Proximity peer-to-peer subsystem as ONE black-box shim ([S]): mesh
+        // transport (MultipeerConnectivity), identity/replay (CryptoKit Ed25519/X25519), trust
+        // vault, NI ranging, recipe-share + friend-photo managers, wire payloads, and the
+        // ProximityHost seam protocol. "Outward edges only": the 6 files with backward edges to
+        // the app (ConnectionInspector → FernletStore; the SwiftUI views on app Color/UI
+        // components + FernletStore) STAY in the app, as does ProximityHostAdapter (the
+        // FernletStore→ProximityHost conformance). Deps: PrivateMediaStore (MeshNetworkManager's
+        // photo cache) + FernletDomainModel + FernletFoundation. defaultIsolation(MainActor.self)
+        // (the managers are @Observable @MainActor).
+        .target(
+            name: "ProximityKit",
+            dependencies: ["PrivateMediaStore", "FernletDomainModel", "FernletFoundation"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+                // Swift 5 language mode (matching the app target's SWIFT_VERSION = 5.0 +
+                // SWIFT_APPROACHABLE_CONCURRENCY), exactly as HealthKitGateway needs. The
+                // NISessionDelegate / MCSessionDelegate callbacks are `nonisolated` and hop to
+                // `@MainActor` via `Task { @MainActor in … }` before touching any state, capturing
+                // the non-Sendable framework objects (NISession, [NINearbyObject]) the delegate
+                // hands them. That is the source's original, behavior-identical concurrency contract
+                // — under Swift 6 mode the package would (newly) reject those task-isolated captures
+                // as data races, so v5 preserves the app target's exact compilation, not a relaxation.
+                .swiftLanguageMode(.v5),
+            ]
         ),
     ]
 )

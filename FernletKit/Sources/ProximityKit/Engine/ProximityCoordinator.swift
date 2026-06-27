@@ -6,7 +6,7 @@ import UIKit
 import FernletDomainModel
 
 @MainActor
-protocol ProximityInspectorRecording: AnyObject {
+public protocol ProximityInspectorRecording: AnyObject {
     func beginSession(role: ProximityCoordinator.Role, mode: ProximityCoordinator.Mode, localFingerprint: String)
     func recordCoordinatorEvent(_ message: String)
     func recordEnvelope(_ record: ConnectionSessionLog.EnvelopeRecord)
@@ -19,7 +19,7 @@ protocol ProximityInspectorRecording: AnyObject {
 }
 
 @MainActor
-protocol ProximityPayloadHandling: AnyObject {
+public protocol ProximityPayloadHandling: AnyObject {
     func proximityCoordinator(
         _ coordinator: ProximityCoordinator,
         didReceive envelope: FernletIdentityEnvelope,
@@ -29,21 +29,23 @@ protocol ProximityPayloadHandling: AnyObject {
 }
 
 extension ProximityInspectorRecording {
-    func beginSession(role: ProximityCoordinator.Role, mode: ProximityCoordinator.Mode, localFingerprint: String) {}
-    func recordEnvelope(_ record: ConnectionSessionLog.EnvelopeRecord) {}
-    func recordRangingSample(_ sample: ConnectionSessionLog.DistanceSample) {}
-    func updatePeer(_ peer: ConnectionSessionLog.PeerInfo) {}
-    func updateTransport(_ block: (inout ConnectionSessionLog.TransportInfo) -> Void) {}
-    func updateRangingMode(_ mode: ProximityCoordinator.RangingMode) {}
-    func recordError(domain: String, message: String, recoverable: Bool) {}
-    func endSession(endState: String) {}
+    public func beginSession(role: ProximityCoordinator.Role, mode: ProximityCoordinator.Mode, localFingerprint: String) {}
+    public func recordEnvelope(_ record: ConnectionSessionLog.EnvelopeRecord) {}
+    public func recordRangingSample(_ sample: ConnectionSessionLog.DistanceSample) {}
+    public func updatePeer(_ peer: ConnectionSessionLog.PeerInfo) {}
+    public func updateTransport(_ block: (inout ConnectionSessionLog.TransportInfo) -> Void) {}
+    public func updateRangingMode(_ mode: ProximityCoordinator.RangingMode) {}
+    public func recordError(domain: String, message: String, recoverable: Bool) {}
+    public func endSession(endState: String) {}
 }
 
 @MainActor
-final class ProximityInspectorEventRecorder: ProximityInspectorRecording {
-    private(set) var events: [String] = []
+public final class ProximityInspectorEventRecorder: ProximityInspectorRecording {
+    public private(set) var events: [String] = []
 
-    func recordCoordinatorEvent(_ message: String) {
+    public init() {}
+
+    public func recordCoordinatorEvent(_ message: String) {
         events.append(message)
     }
 }
@@ -67,15 +69,15 @@ private struct SessionHeartbeatPayload: Codable {
 
 @MainActor
 @Observable
-final class ProximityCoordinator {
+public final class ProximityCoordinator {
     // Role/Mode/RangingMode hoisted to FernletDomainModel (ProximityRole/ProximityMode/
     // ProximityRangingMode); typealiases keep every `ProximityCoordinator.Role` / bare `Role`
     // reference across the proximity subtree compiling unchanged.
-    typealias Role = ProximityRole
-    typealias Mode = ProximityMode
+    public typealias Role = ProximityRole
+    public typealias Mode = ProximityMode
 
-    private(set) var state: State = .idle
-    private(set) var lastKnownDistance: RangingDistance?
+    public private(set) var state: State = .idle
+    public private(set) var lastKnownDistance: RangingDistance?
 
     @ObservationIgnored private let identity: IdentityService
     @ObservationIgnored private let transport: any MultipeerTransport
@@ -113,7 +115,7 @@ final class ProximityCoordinator {
     // Ephemeral per-session random ID advertised in Bonjour TXT instead of the persistent fingerprint.
     @ObservationIgnored private var sessionID = UUID().uuidString
 
-    init(
+    public init(
         identity: IdentityService,
         transport: any MultipeerTransport,
         ranging: any RangingProvider,
@@ -161,7 +163,7 @@ final class ProximityCoordinator {
         self.payloadHandler = payloadHandler
     }
 
-    func begin(role: Role, mode: Mode) async {
+    public func begin(role: Role, mode: Mode) async {
         await transport.disconnect()
         do {
             try prepareSession(role: role, mode: mode)
@@ -181,7 +183,7 @@ final class ProximityCoordinator {
         }
     }
 
-    func beginFriendJoin() async {
+    public func beginFriendJoin() async {
         await transport.disconnect()
         do {
             try prepareSession(role: .browser, mode: .friend)
@@ -225,7 +227,7 @@ final class ProximityCoordinator {
         armTimeoutIfNeeded()
     }
 
-    func acceptPendingInvite() async {
+    public func acceptPendingInvite() async {
         guard let invite = pendingInvite else {
             fail("No pending invite to accept")
             return
@@ -247,7 +249,7 @@ final class ProximityCoordinator {
         }
     }
 
-    func rejectPendingInvite() async {
+    public func rejectPendingInvite() async {
         if case .awaitingUserConfirmation = state {
             await end(.userCancelled)
             return
@@ -260,12 +262,12 @@ final class ProximityCoordinator {
         inspector?.recordCoordinatorEvent("invite rejected")
     }
 
-    func tapToConfirm() async {
+    public func tapToConfirm() async {
         guard case .awaitingTapConfirmation(let peer) = state else { return }
         await finishTapConfirmation(for: peer)
     }
 
-    func confirmPeerIdentity() async {
+    public func confirmPeerIdentity() async {
         guard let peer = pendingPeerIdentity else {
             fail("No peer identity awaiting confirmation")
             return
@@ -286,7 +288,7 @@ final class ProximityCoordinator {
         inspector?.recordCoordinatorEvent("identity confirmed \(peer.fingerprint)")
     }
 
-    func send(_ envelope: FernletIdentityEnvelope) async throws {
+    public func send(_ envelope: FernletIdentityEnvelope) async throws {
         guard let peer = currentTransportPeer, let identity = connectedIdentity else {
             throw CoordinatorError.notConnected
         }
@@ -336,7 +338,7 @@ final class ProximityCoordinator {
         return (ciphertext, .sealedTo(recipientKeyAgreementPublicKey: kaKey))
     }
 
-    func cancel() async {
+    public func cancel() async {
         autoReconnect = false
         reconnectTask?.cancel()
         reconnectTask = nil
@@ -999,7 +1001,7 @@ final class ProximityCoordinator {
         }
     }
 
-    var heartbeatInterval: TimeInterval {
+    public var heartbeatInterval: TimeInterval {
         switch state {
         case .idle, .ended, .failed:
             return 0
@@ -1016,7 +1018,7 @@ final class ProximityCoordinator {
         }
     }
 
-    func heartbeatTick() async {
+    public func heartbeatTick() async {
         let interval = heartbeatInterval
         guard interval > 0 else { return }
         if case .connected = state, let lastInboundHeartbeatAt,
@@ -1090,7 +1092,7 @@ final class ProximityCoordinator {
 }
 
 extension ProximityCoordinator {
-    enum State: Equatable {
+    public enum State: Equatable {
         case idle
         case starting
         case discovering
@@ -1106,7 +1108,7 @@ extension ProximityCoordinator {
         case ended(reason: EndReason)
         case failed(reason: String)
 
-        var debugLabel: String {
+        public var debugLabel: String {
             switch self {
             case .idle: return "idle"
             case .starting: return "starting"
@@ -1126,19 +1128,37 @@ extension ProximityCoordinator {
         }
     }
 
-    struct PeerIdentity: Equatable, Identifiable {
-        let id: UUID
-        let displayName: String
-        let signingPublicKey: Data
-        let keyAgreementPublicKey: Data
-        let fingerprint: String
-        let rangingMode: RangingMode
-        let firstSeenAt: Date
+    public struct PeerIdentity: Equatable, Identifiable {
+        public let id: UUID
+        public let displayName: String
+        public let signingPublicKey: Data
+        public let keyAgreementPublicKey: Data
+        public let fingerprint: String
+        public let rangingMode: RangingMode
+        public let firstSeenAt: Date
+
+        public init(
+            id: UUID,
+            displayName: String,
+            signingPublicKey: Data,
+            keyAgreementPublicKey: Data,
+            fingerprint: String,
+            rangingMode: RangingMode,
+            firstSeenAt: Date
+        ) {
+            self.id = id
+            self.displayName = displayName
+            self.signingPublicKey = signingPublicKey
+            self.keyAgreementPublicKey = keyAgreementPublicKey
+            self.fingerprint = fingerprint
+            self.rangingMode = rangingMode
+            self.firstSeenAt = firstSeenAt
+        }
     }
 
-    typealias RangingMode = ProximityRangingMode
+    public typealias RangingMode = ProximityRangingMode
 
-    enum EndReason: Equatable {
+    public enum EndReason: Equatable {
         case userCancelled
         case peerCancelled
         case timeout
@@ -1147,7 +1167,7 @@ extension ProximityCoordinator {
         case completedSuccessfully
     }
 
-    enum CoordinatorError: Error, Equatable {
+    public enum CoordinatorError: Error, Equatable {
         case notConnected
         case fingerprintMismatch
     }

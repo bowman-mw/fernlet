@@ -1,3 +1,4 @@
+import ProximityKit
 import HealthKit
 import LocalPersistence
 import FernletFoundation

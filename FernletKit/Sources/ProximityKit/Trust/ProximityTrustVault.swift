@@ -4,14 +4,14 @@ import FernletDomainModel
 
 @MainActor
 @Observable
-final class ProximityTrustVault: ProximityTrustPolicy {
-    private(set) var trustedPeers: [ProximityTrustedPeerRecord] = []
-    private(set) var auditEvents: [TrainerAuditEvent] = []
+public final class ProximityTrustVault: ProximityTrustPolicy {
+    public private(set) var trustedPeers: [ProximityTrustedPeerRecord] = []
+    public private(set) var auditEvents: [TrainerAuditEvent] = []
 
     // Mutable so FernletStore can wire it after all stored properties are initialized.
-    @ObservationIgnored var onChange: () -> Void = {}
+    @ObservationIgnored public var onChange: () -> Void = {}
 
-    init(
+    public init(
         initialPeers: [ProximityTrustedPeerRecord] = [],
         initialAudit: [TrainerAuditEvent] = [],
         onChange: @escaping () -> Void = {}
@@ -23,32 +23,32 @@ final class ProximityTrustVault: ProximityTrustPolicy {
 
     // MARK: - Reads
 
-    func peer(signingPublicKey: Data) -> ProximityTrustedPeerRecord? {
+    public func peer(signingPublicKey: Data) -> ProximityTrustedPeerRecord? {
         trustedPeers.first { $0.signingPublicKey == signingPublicKey }
     }
 
-    func peer(displayName: String) -> ProximityTrustedPeerRecord? {
+    public func peer(displayName: String) -> ProximityTrustedPeerRecord? {
         trustedPeers
             .filter { $0.displayName == displayName }
             .sorted { $0.lastSeenAt > $1.lastSeenAt }
             .first
     }
 
-    func isTrustedProximityPeer(signingPublicKey: Data) -> Bool {
+    public func isTrustedProximityPeer(signingPublicKey: Data) -> Bool {
         return trustedPeers.contains {
             $0.signingPublicKey == signingPublicKey && $0.revokedAt == nil
         }
     }
 
-    func isRevokedProximitySigningKey(_ publicKey: Data) -> Bool {
+    public func isRevokedProximitySigningKey(_ publicKey: Data) -> Bool {
         trustedPeers.contains { $0.signingPublicKey == publicKey && $0.revokedAt != nil }
     }
 
-    func isBlockedProximitySigningKey(_ publicKey: Data) -> Bool {
+    public func isBlockedProximitySigningKey(_ publicKey: Data) -> Bool {
         trustedPeers.contains { $0.signingPublicKey == publicKey && $0.blockedAt != nil }
     }
 
-    func isBlockedFingerprint(_ fingerprint: String) -> Bool {
+    public func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         trustedPeers.contains {
             IdentityService.fingerprintsMatch($0.fingerprint, fingerprint) && $0.blockedAt != nil
         }
@@ -56,7 +56,7 @@ final class ProximityTrustVault: ProximityTrustPolicy {
 
     // MARK: - Writes
 
-    func trust(_ peer: ProximityCoordinator.PeerIdentity, mode: ProximityCoordinator.Mode) {
+    public func trust(_ peer: ProximityCoordinator.PeerIdentity, mode: ProximityCoordinator.Mode) {
         let fingerprint = IdentityService.fingerprint(of: peer.signingPublicKey)
         if let index = trustedPeers.firstIndex(where: { $0.signingPublicKey == peer.signingPublicKey }) {
             trustedPeers[index].displayName = peer.displayName
@@ -78,7 +78,7 @@ final class ProximityTrustVault: ProximityTrustPolicy {
         onChange()
     }
 
-    func block(signingPublicKey: Data) {
+    public func block(signingPublicKey: Data) {
         let now = Date()
         guard let index = trustedPeers.firstIndex(where: { $0.signingPublicKey == signingPublicKey }) else {
             let fingerprint = IdentityService.fingerprint(of: signingPublicKey)
@@ -107,14 +107,14 @@ final class ProximityTrustVault: ProximityTrustPolicy {
         onChange()
     }
 
-    func unblock(signingPublicKey: Data) {
+    public func unblock(signingPublicKey: Data) {
         guard let index = trustedPeers.firstIndex(where: { $0.signingPublicKey == signingPublicKey }) else { return }
         trustedPeers[index].blockedAt = nil
         // Do not touch revokedAt: block and revoke are independent states.
         onChange()
     }
 
-    func revoke(signingPublicKey: Data) {
+    public func revoke(signingPublicKey: Data) {
         guard let index = trustedPeers.firstIndex(where: { $0.signingPublicKey == signingPublicKey }) else { return }
         trustedPeers[index].revokedAt = Date()
         recordAuditWithoutSaving(TrainerAuditEvent(
@@ -126,14 +126,14 @@ final class ProximityTrustVault: ProximityTrustPolicy {
         onChange()
     }
 
-    func recordTrainerAudit(_ event: TrainerAuditEvent) {
+    public func recordTrainerAudit(_ event: TrainerAuditEvent) {
         recordAuditWithoutSaving(event)
         onChange()
     }
 
     // MARK: - Snapshot
 
-    func apply(peers: [ProximityTrustedPeerRecord], audit: [TrainerAuditEvent]) {
+    public func apply(peers: [ProximityTrustedPeerRecord], audit: [TrainerAuditEvent]) {
         trustedPeers = Self.normalized(peers)
         auditEvents = audit
     }

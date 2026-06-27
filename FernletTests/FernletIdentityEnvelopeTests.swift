@@ -4,6 +4,7 @@
 // Tests for FernletIdentityEnvelope, PayloadEncryption, ReplayCache (Phase 7.2).
 // Each test uses UUID-scoped Keychain services cleaned up via defer.
 
+import ProximityKit
 import Foundation
 import FernletFoundation
 import Testing

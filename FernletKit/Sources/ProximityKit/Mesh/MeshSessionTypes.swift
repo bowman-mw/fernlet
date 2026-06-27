@@ -6,18 +6,18 @@ enum MeshEncryptionError: Error {
     case encryptionFailed
 }
 
-enum SlotKind {
+public enum SlotKind {
     case active      // full payload routing, up to 3
     case lightweight // heartbeats only, up to 2
 }
 
-struct PeerSlot: Identifiable {
-    let id: UUID  // == peer.id
-    let peer: MultipeerPeer
+public struct PeerSlot: Identifiable {
+    public let id: UUID  // == peer.id
+    public let peer: MultipeerPeer
     let channel: PeerChannelTransport
-    let coordinator: ProximityCoordinator
-    var kind: SlotKind
-    var fingerprint: String?
+    public let coordinator: ProximityCoordinator
+    public var kind: SlotKind
+    public var fingerprint: String?
     // Handshake-verified Ed25519 key used for key-based block operations.
     var verifiedSigningPublicKey: Data? = nil
     // Handshake-verified X25519 key agreement public key used for group key wrapping.
@@ -31,10 +31,16 @@ struct PeerSlot: Identifiable {
 
 /// In-memory symmetric group key for the current mesh session.
 /// Never written to disk or keychain; lost on app termination or mesh leave.
-struct MeshGroupKey {
-    let epoch: Int
-    let keyBytes: Data   // 32 bytes
-    let activeSince: Date
+public struct MeshGroupKey {
+    public let epoch: Int
+    public let keyBytes: Data   // 32 bytes
+    public let activeSince: Date
+
+    public init(epoch: Int, keyBytes: Data, activeSince: Date) {
+        self.epoch = epoch
+        self.keyBytes = keyBytes
+        self.activeSince = activeSince
+    }
 }
 
 struct MeshDistanceSample: Equatable {
@@ -42,10 +48,16 @@ struct MeshDistanceSample: Equatable {
     let meters: Double
 }
 
-struct MeshSessionParticipant: Identifiable, Equatable {
-    var id: String { fingerprint }
+public struct MeshSessionParticipant: Identifiable, Equatable {
+    public var id: String { fingerprint }
 
-    let fingerprint: String
-    let displayName: String
-    let isLocal: Bool
+    public let fingerprint: String
+    public let displayName: String
+    public let isLocal: Bool
+
+    public init(fingerprint: String, displayName: String, isLocal: Bool) {
+        self.fingerprint = fingerprint
+        self.displayName = displayName
+        self.isLocal = isLocal
+    }
 }

@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ProximityKit
 import UIKit
 import LocalPersistence
 #endif

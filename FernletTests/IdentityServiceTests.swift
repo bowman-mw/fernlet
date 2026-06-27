@@ -5,6 +5,7 @@
 // Every test uses a UUID-scoped Keychain service and cleans up in a defer block
 // so tests never touch each other's state and never reach the production service.
 
+import ProximityKit
 import Foundation
 import FernletFoundation
 import Testing

@@ -8,13 +8,13 @@ import Foundation
 import FernletDomainModel
 
 @MainActor
-final class ReplayCache {
+public final class ReplayCache {
     private var seen: [UUID: Date] = [:]
     private let retentionInterval: TimeInterval = 24 * 60 * 60
     private let maxEntries: Int
-    let dateProvider: @Sendable () -> Date
+    public let dateProvider: @Sendable () -> Date
 
-    init(maxEntries: Int = 10_000, dateProvider: @escaping @Sendable () -> Date = { Date() }) {
+    public init(maxEntries: Int = 10_000, dateProvider: @escaping @Sendable () -> Date = { Date() }) {
         self.maxEntries = maxEntries
         self.dateProvider = dateProvider
     }
@@ -22,7 +22,7 @@ final class ReplayCache {
     /// Records `envelopeID` as seen at the current time.
     /// Throws `.replayDetected` if the same ID was already seen within the retention window,
     /// or if `createdAt` is older than the retention window (stale envelope, flush-and-replay defence).
-    func recordIfNew(envelopeID: UUID, createdAt: Date) throws {
+    public func recordIfNew(envelopeID: UUID, createdAt: Date) throws {
         let now = dateProvider()
         let cutoff = now.addingTimeInterval(-retentionInterval)
         guard createdAt >= cutoff else {

@@ -3,11 +3,11 @@ import MultipeerConnectivity
 import Combine
 import FernletDomainModel
 
-nonisolated enum MultipeerServiceType {
-    static let trainer = "fernlet-coach"
+nonisolated public enum MultipeerServiceType {
+    public static let trainer = "fernlet-coach"
 }
 
-enum MultipeerTransportState: Equatable {
+public enum MultipeerTransportState: Equatable {
     case idle
     case advertising
     case browsing
@@ -19,7 +19,7 @@ enum MultipeerTransportState: Equatable {
     case disconnected(reason: String)
     case failed(MultipeerTransportError)
 
-    static func == (lhs: MultipeerTransportState, rhs: MultipeerTransportState) -> Bool {
+    public static func == (lhs: MultipeerTransportState, rhs: MultipeerTransportState) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle), (.advertising, .advertising), (.browsing, .browsing):
             return true
@@ -35,32 +35,51 @@ enum MultipeerTransportState: Equatable {
     }
 }
 
-struct MultipeerPendingInvite: Equatable {
-    let peer: MultipeerPeer
-    let advertisedInfo: [String: String]
-    let context: Data?
-    let respond: (Bool) -> Void
+public struct MultipeerPendingInvite: Equatable {
+    public let peer: MultipeerPeer
+    public let advertisedInfo: [String: String]
+    public let context: Data?
+    public let respond: (Bool) -> Void
 
-    static func == (lhs: Self, rhs: Self) -> Bool {
+    public init(
+        peer: MultipeerPeer,
+        advertisedInfo: [String: String],
+        context: Data?,
+        respond: @escaping (Bool) -> Void
+    ) {
+        self.peer = peer
+        self.advertisedInfo = advertisedInfo
+        self.context = context
+        self.respond = respond
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.peer == rhs.peer && lhs.advertisedInfo == rhs.advertisedInfo && lhs.context == rhs.context
     }
 }
 
-enum MultipeerTransportError: Equatable, Error {
+public enum MultipeerTransportError: Equatable, Error {
     case wifiUnavailable, bluetoothUnavailable, peerIDLoadFailed
     case sessionRejected, sessionTimeout, unexpectedState
     case sendFailed(reason: String)
 }
 
-struct MultipeerInboundMessage {
-    let peer: MultipeerPeer
-    let data: Data
-    let receivedAt: Date
-    let bytesReceived: Int
+public struct MultipeerInboundMessage {
+    public let peer: MultipeerPeer
+    public let data: Data
+    public let receivedAt: Date
+    public let bytesReceived: Int
+
+    public init(peer: MultipeerPeer, data: Data, receivedAt: Date, bytesReceived: Int) {
+        self.peer = peer
+        self.data = data
+        self.receivedAt = receivedAt
+        self.bytesReceived = bytesReceived
+    }
 }
 
 @MainActor
-protocol MultipeerTransport: AnyObject {
+public protocol MultipeerTransport: AnyObject {
     var state: AnyPublisher<MultipeerTransportState, Never> { get }
     var inbound: AnyPublisher<MultipeerInboundMessage, Never> { get }
     var connectedPeers: [MultipeerPeer] { get }

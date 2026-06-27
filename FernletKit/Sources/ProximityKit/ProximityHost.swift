@@ -12,7 +12,7 @@ import FernletDomainModel
 /// pattern. Surface is exactly what `MeshNetworkManager` + `ProximityRecipeShareManager`
 /// consume: display name, trusted peers + vault, and the block/fingerprint checks.
 @MainActor
-protocol ProximityHost: AnyObject {
+public protocol ProximityHost: AnyObject {
     var proximityDisplayName: String { get }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { get }
     var proximityTrustVault: ProximityTrustVault { get }

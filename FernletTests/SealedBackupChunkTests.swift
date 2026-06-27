@@ -9,6 +9,7 @@
 //  round-trip lives in CloudKitDataServiceTests (it reuses the CloudKit mock there).
 //
 
+import ProximityKit
 import CoreData
 import FernletFoundation
 import CryptoKit

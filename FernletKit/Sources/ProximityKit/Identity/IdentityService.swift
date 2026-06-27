@@ -25,7 +25,7 @@ private enum IdentityKeychainKey: String {
 
 // MARK: - Errors
 
-enum IdentityError: Error, Equatable {
+public enum IdentityError: Error, Equatable {
     case notProvisioned
     case invalidKeyData
     case sealFailed
@@ -35,39 +35,39 @@ enum IdentityError: Error, Equatable {
 // MARK: - IdentityService
 
 @MainActor
-final class IdentityService {
+public final class IdentityService {
 
-    let keychainService: String
+    public let keychainService: String
 
     private var signingKey: Curve25519.Signing.PrivateKey?
     private var keyAgreementKey: Curve25519.KeyAgreement.PrivateKey?
     private var backupEscrowKey: Curve25519.KeyAgreement.PrivateKey?
 
-    init(keychainService: String = "com.fernlet.identity") {
+    public init(keychainService: String = "com.fernlet.identity") {
         self.keychainService = keychainService
     }
 
     // MARK: - Public surface
 
-    var localFingerprint: String {
+    public var localFingerprint: String {
         guard let key = signingKey else { return "" }
         return Self.fingerprint(of: key.publicKey.rawRepresentation)
     }
 
-    var localSigningPublicKey: Data {
+    public var localSigningPublicKey: Data {
         signingKey?.publicKey.rawRepresentation ?? Data()
     }
 
-    var localKeyAgreementPublicKey: Data {
+    public var localKeyAgreementPublicKey: Data {
         keyAgreementKey?.publicKey.rawRepresentation ?? Data()
     }
 
-    func sign(_ data: Data) throws -> Data {
+    public func sign(_ data: Data) throws -> Data {
         guard let key = signingKey else { throw IdentityError.notProvisioned }
         return try key.signature(for: data)
     }
 
-    func sealedBackupKey() throws -> SymmetricKey {
+    public func sealedBackupKey() throws -> SymmetricKey {
         guard let backupEscrowKey else { throw IdentityError.notProvisioned }
         return HKDF<SHA256>.deriveKey(
             inputKeyMaterial: SymmetricKey(data: backupEscrowKey.rawRepresentation),
@@ -77,14 +77,14 @@ final class IdentityService {
         )
     }
 
-    static func verify(_ signature: Data, of data: Data, by publicKeyData: Data) -> Bool {
+    public static func verify(_ signature: Data, of data: Data, by publicKeyData: Data) -> Bool {
         guard let publicKey = try? Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData) else { return false }
         return publicKey.isValidSignature(signature, for: data)
     }
 
     /// X25519 ECDH → HKDF-SHA256 → ChaCha20-Poly1305 seal with forward secrecy.
     /// Wire form: ephemeralPubKey (32 B) || sealedBox.combined (nonce 12 B || ciphertext || tag 16 B).
-    func seal(_ plaintext: Data, to peerKeyAgreementPublicKey: Data) throws -> Data {
+    public func seal(_ plaintext: Data, to peerKeyAgreementPublicKey: Data) throws -> Data {
         guard let senderKey = keyAgreementKey else { throw IdentityError.notProvisioned }
         guard let peerPubKey = try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: peerKeyAgreementPublicKey) else {
             throw IdentityError.sealFailed
@@ -108,7 +108,7 @@ final class IdentityService {
     }
 
     /// Inverse of seal. `peerKeyAgreementPublicKey` is the sender's long-term X25519 public key.
-    func open(_ ciphertext: Data, from peerKeyAgreementPublicKey: Data) throws -> Data {
+    public func open(_ ciphertext: Data, from peerKeyAgreementPublicKey: Data) throws -> Data {
         guard let recipientKey = keyAgreementKey else { throw IdentityError.notProvisioned }
         // Wire format: eskPub (32 B) || combined (nonce 12 B || ciphertext || tag 16 B)
         guard ciphertext.count >= 32 + 12 + 16 else { throw IdentityError.openFailed }
@@ -139,7 +139,7 @@ final class IdentityService {
 
     /// Wraps a 32-byte group key for one recipient using ephemeral X25519 ECDH → HKDF-SHA256 → AES-256-GCM.
     /// Wire form: ephemeralPubKey (32 B) || nonce (12 B) || ciphertext (32 B) || tag (16 B) = 92 B total.
-    func encryptGroupKey(_ key: Data, for recipientPublicKey: Data) throws -> Data {
+    public func encryptGroupKey(_ key: Data, for recipientPublicKey: Data) throws -> Data {
         guard key.count == 32 else { throw IdentityError.sealFailed }
         guard let recipientKey = try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: recipientPublicKey) else {
             throw IdentityError.sealFailed
@@ -164,7 +164,7 @@ final class IdentityService {
     }
 
     /// Unwraps a group key bundle produced by `encryptGroupKey`.
-    func decryptGroupKey(_ bundle: Data) throws -> Data {
+    public func decryptGroupKey(_ bundle: Data) throws -> Data {
         guard let recipientKey = keyAgreementKey else { throw IdentityError.notProvisioned }
         guard bundle.count == 92 else { throw IdentityError.openFailed }
 
@@ -201,7 +201,7 @@ final class IdentityService {
     /// Key separation: the proximity KA key is ThisDeviceOnly (never syncs); the backup escrow key
     /// is synchronizable so it can be recovered on another device. On existing installs the KA key
     /// is migrated to device-only and a fresh backup escrow key is generated if absent.
-    func ensureProvisioned() throws {
+    public func ensureProvisioned() throws {
         if signingKey != nil && keyAgreementKey != nil && backupEscrowKey != nil { return }
 
         let deviceOnly = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as CFString
@@ -318,7 +318,7 @@ final class IdentityService {
     }
 
     /// Wipes identity. Breaks every existing trust relationship.
-    func wipe() throws {
+    public func wipe() throws {
         KeychainItem.deleteAll(service: keychainService)
         signingKey = nil
         keyAgreementKey = nil
@@ -326,7 +326,7 @@ final class IdentityService {
     }
 
     /// 16-char lowercase hex prefix of SHA-256(publicKey). Suitable for user-facing display.
-    static func fingerprint(of publicKey: Data) -> String {
+    public static func fingerprint(of publicKey: Data) -> String {
         let hash = SHA256.hash(data: publicKey)
         let hex = hash.compactMap { String(format: "%02x", $0) }.joined()
         return String(hex.prefix(16))
@@ -334,7 +334,7 @@ final class IdentityService {
 
     /// Matches canonical 16-char fingerprints and legacy 8-char values stored by older builds.
     /// Fingerprints remain display and routing metadata only; authorization uses full key bytes.
-    static func fingerprintsMatch(_ first: String, _ second: String) -> Bool {
+    public static func fingerprintsMatch(_ first: String, _ second: String) -> Bool {
         let lhs = first.lowercased()
         let rhs = second.lowercased()
         guard [8, 16].contains(lhs.count), [8, 16].contains(rhs.count) else { return false }

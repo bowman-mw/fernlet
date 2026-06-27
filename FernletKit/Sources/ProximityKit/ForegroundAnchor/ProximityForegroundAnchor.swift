@@ -6,7 +6,7 @@ import FernletDomainModel
 #endif
 
 @MainActor
-protocol ProximityForegroundAnchoring: AnyObject {
+public protocol ProximityForegroundAnchoring: AnyObject {
     var isActive: Bool { get }
     func start(peerName: String, startedAt: Date) async
     func update(bytesSent: Int, bytesReceived: Int) async

@@ -1,20 +1,20 @@
 import Foundation
 import FernletDomainModel
 
-final class ProximityCommitDetector {
+public final class ProximityCommitDetector {
     private var thresholdEntryTime: Date?
     private var closeSampleCount = 0
     private let proximityThreshold: Double
     private let dwellSeconds: Double
     private let minimumSamples: Int
 
-    init(proximityThreshold: Double = 0.15, dwellSeconds: Double = 0.8, minimumSamples: Int = 3) {
+    public init(proximityThreshold: Double = 0.15, dwellSeconds: Double = 0.8, minimumSamples: Int = 3) {
         self.proximityThreshold = proximityThreshold
         self.dwellSeconds = dwellSeconds
         self.minimumSamples = minimumSamples
     }
 
-    func ingest(distanceMeters: Double, at timestamp: Date) -> Bool {
+    public func ingest(distanceMeters: Double, at timestamp: Date) -> Bool {
         guard distanceMeters < proximityThreshold else {
             reset()
             return false
@@ -34,7 +34,7 @@ final class ProximityCommitDetector {
         return true
     }
 
-    func reset() {
+    public func reset() {
         thresholdEntryTime = nil
         closeSampleCount = 0
     }

@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import UIKit
 import FernletDomainModel
+import ProximityKit
 
 // MARK: - Camera preview (UIViewRepresentable)
 

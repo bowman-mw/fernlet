@@ -3,11 +3,11 @@ import Combine
 import simd
 import FernletDomainModel
 
-enum RangingDistance: Equatable {
+public enum RangingDistance: Equatable {
     case unknown
     case meters(Double, direction: simd_float3?)
 
-    static func == (lhs: RangingDistance, rhs: RangingDistance) -> Bool {
+    public static func == (lhs: RangingDistance, rhs: RangingDistance) -> Bool {
         switch (lhs, rhs) {
         case (.unknown, .unknown): return true
         case (.meters(let d1, let dir1), .meters(let d2, let dir2)):
@@ -17,7 +17,7 @@ enum RangingDistance: Equatable {
     }
 }
 
-enum RangingState: Equatable {
+public enum RangingState: Equatable {
     case idle
     case running
     case invalidated(reason: String)
@@ -25,7 +25,7 @@ enum RangingState: Equatable {
 }
 
 @MainActor
-protocol RangingProvider: AnyObject {
+public protocol RangingProvider: AnyObject {
     var distance: AnyPublisher<RangingDistance, Never> { get }
     var state: AnyPublisher<RangingState, Never> { get }
     var isHardwareSupported: Bool { get }

@@ -1,3 +1,4 @@
+import ProximityKit
 import Foundation
 import Combine
 import simd

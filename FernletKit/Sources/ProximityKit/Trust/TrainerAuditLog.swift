@@ -6,7 +6,7 @@ import FernletDomainModel
 // persistence layer can reference them without an upward edge. The audit-log LOGIC stays here.
 
 @MainActor
-protocol ProximityTrustPolicy: AnyObject {
+public protocol ProximityTrustPolicy: AnyObject {
     func isRevokedProximitySigningKey(_ publicKey: Data) -> Bool
     func isBlockedProximitySigningKey(_ publicKey: Data) -> Bool
     func isTrustedProximityPeer(signingPublicKey: Data) -> Bool

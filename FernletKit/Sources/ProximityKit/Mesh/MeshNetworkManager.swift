@@ -9,13 +9,25 @@ import PrivateMediaStore
 
 // MARK: - Supporting types
 
-struct FriendPhotoWallPost: Identifiable {
-    let id: UUID
-    let session: FriendPhotoSessionMetadata?
-    let photos: [FriendPhotoPayload]
-    let coverPhoto: FriendPhotoPayload
+public struct FriendPhotoWallPost: Identifiable {
+    public let id: UUID
+    public let session: FriendPhotoSessionMetadata?
+    public let photos: [FriendPhotoPayload]
+    public let coverPhoto: FriendPhotoPayload
 
-    var isCarousel: Bool { photos.count > 1 }
+    public init(
+        id: UUID,
+        session: FriendPhotoSessionMetadata?,
+        photos: [FriendPhotoPayload],
+        coverPhoto: FriendPhotoPayload
+    ) {
+        self.id = id
+        self.session = session
+        self.photos = photos
+        self.coverPhoto = coverPhoto
+    }
+
+    public var isCarousel: Bool { photos.count > 1 }
 }
 
 private struct FriendPhotoWallPreferences: Codable {
@@ -46,18 +58,18 @@ private struct FriendPhotoWallPreferencesStore {
 
 @MainActor
 @Observable
-final class MeshNetworkManager: ProximityPayloadHandling {
+public final class MeshNetworkManager: ProximityPayloadHandling {
 
     // Published state
-    var slots: [PeerSlot] = []
-    var currentMesh: MeshDescriptor?
-    var pendingAdmissionRequests: [MeshAdmissionRequestPayload] = []
-    var pendingRemovalProposals: [MeshRemovalProposalPayload] = []
-    var meshPhotos: [FriendPhotoPayload] = []
+    public var slots: [PeerSlot] = []
+    public var currentMesh: MeshDescriptor?
+    public var pendingAdmissionRequests: [MeshAdmissionRequestPayload] = []
+    public var pendingRemovalProposals: [MeshRemovalProposalPayload] = []
+    public var meshPhotos: [FriendPhotoPayload] = []
     /// Photos taken/received during the current proximity-join session (cleared on leaveSession).
-    private(set) var sessionPhotos: [FriendPhotoPayload] = []
-    var isSearching = false
-    var meshError: String?
+    public private(set) var sessionPhotos: [FriendPhotoPayload] = []
+    public var isSearching = false
+    public var meshError: String?
 
     @ObservationIgnored private unowned let store: any ProximityHost
     @ObservationIgnored private let meshSession = MeshMultipeerSession()
@@ -68,7 +80,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     @ObservationIgnored private var photoWallPreferences: FriendPhotoWallPreferences
     @ObservationIgnored private var slotTrustPolicies: [UUID: FriendSessionTrustPolicy] = [:]
     @ObservationIgnored private var observationTask: Task<Void, Never>?
-    private(set) var photosAddedThisSession = 0
+    public private(set) var photosAddedThisSession = 0
     @ObservationIgnored private var sessionQuotaMeshID: UUID?
     /// Distinct photo IDs accepted per *authenticated* peer this mesh session. Bounds the
     /// receive path the same way `photosAddedThisSession` bounds the send path, so a single
@@ -128,7 +140,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     /// Hard cap on outstanding removal proposals (backstop against spoofed proposer fingerprints).
     private static let maxPendingRemovalProposals = 16
 
-    init(store: any ProximityHost) {
+    public init(store: any ProximityHost) {
         self.store = store
         let id = IdentityService()
         try? id.ensureProvisioned()
@@ -149,23 +161,23 @@ final class MeshNetworkManager: ProximityPayloadHandling {
 
     /// True while a proximity-join session is active (started via startJoin).
     /// Controls auto-invite-all and 25 s uncommitted-channel TTL behaviour.
-    private(set) var isProximityJoin = false
+    public private(set) var isProximityJoin = false
 
     /// Controls whether additional friends can join the active Friends session.
     /// This applies before pairwise sessions are promoted to a mesh descriptor.
-    private(set) var isSessionOpen = true
+    public private(set) var isSessionOpen = true
 
     /// True when at least one peer is committed (pairwise) or a mesh exists.
-    var isInSession: Bool {
+    public var isInSession: Bool {
         currentMesh != nil || slots.contains(where: { $0.fingerprint != nil })
     }
 
     /// Shots remaining for this session (10 minus sent count, clamped to ≥ 0).
-    var filmRemaining: Int { max(0, Self.maxPhotosPerSenderPerSession - photosAddedThisSession) }
+    public var filmRemaining: Int { max(0, Self.maxPhotosPerSenderPerSession - photosAddedThisSession) }
 
-    var localFingerprint: String { identity.localFingerprint }
+    public var localFingerprint: String { identity.localFingerprint }
 
-    var sessionParticipants: [MeshSessionParticipant] {
+    public var sessionParticipants: [MeshSessionParticipant] {
         var participants = [
             MeshSessionParticipant(
                 fingerprint: identity.localFingerprint,
@@ -204,7 +216,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
 
     /// End the current session (pairwise or mesh) and clear session photos.
     /// Call this after the develop/review flow completes.
-    func leaveSession() {
+    public func leaveSession() {
         sessionPhotos.removeAll()
         photoSessionStartedAt = nil
         activePhotoSessionID = nil
@@ -212,14 +224,14 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     }
 
     /// Notify connected peers before tearing down transport so they can review their session photos.
-    func leaveSessionAfterNotifyingPeers() async {
+    public func leaveSessionAfterNotifyingPeers() async {
         for slot in slots {
             await sendEnvelope(.sessionGoodbye, encodable: PayloadSummary(title: "Session ended"), via: slot)
         }
         leaveSession()
     }
 
-    func finishSessionPhotos(keeping keptPhotoIDs: Set<UUID>) {
+    public func finishSessionPhotos(keeping keptPhotoIDs: Set<UUID>) {
         finalizeCurrentPhotoSessionMetadata()
         let sessionPhotoIDs = Set(sessionPhotos.map(\.id))
         meshPhotos.removeAll { photo in
@@ -229,14 +241,14 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         photoCacheStore.save(meshPhotos)
     }
 
-    func deleteAllSessionPhotos() {
+    public func deleteAllSessionPhotos() {
         finishSessionPhotos(keeping: [])
     }
 
     /// Permanently removes a single cached photo from the persistent gallery: drops it from the
     /// in-memory lists, clears any wall preference that pointed at it (favorite / aggregated cover),
     /// and re-saves the cache so the store's orphan cleanup deletes its image + thumbnail files.
-    func deletePhoto(_ photoID: UUID) {
+    public func deletePhoto(_ photoID: UUID) {
         let existed = meshPhotos.contains { $0.id == photoID }
         meshPhotos.removeAll { $0.id == photoID }
         sessionPhotos.removeAll { $0.id == photoID }
@@ -258,7 +270,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
 
     // MARK: - Public API
 
-    func startNewMesh(name: String? = nil) {
+    public func startNewMesh(name: String? = nil) {
         let meshName = name ?? MeshNameGenerator.generate()
         let now = Date()
         let localFP = identity.localFingerprint
@@ -286,7 +298,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     /// Entry point for the Connect-tab proximity-join flow.
     /// Advertises + browses `fernlet-friend`, auto-invites every discovered peer,
     /// and gates commit on a 15 cm / 0.8 s dwell via ProximityCommitDetector.
-    func startJoin() {
+    public func startJoin() {
         isProximityJoin = true
         isSessionOpen = true
         photosAddedThisSession = 0
@@ -302,12 +314,12 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         startSearching()
     }
 
-    func stopJoin() {
+    public func stopJoin() {
         isProximityJoin = false
         stopSearching()
     }
 
-    func leaveMesh() {
+    public func leaveMesh() {
         currentMesh = nil
         isSessionOpen = true
         pendingAdmissionRequests.removeAll()
@@ -322,7 +334,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         stopSearching()
     }
 
-    func proposeRemoval(of participant: MeshSessionParticipant) {
+    public func proposeRemoval(of participant: MeshSessionParticipant) {
         guard !participant.isLocal else { return }
         let otherParticipants = sessionParticipants.filter { !$0.isLocal }
         if otherParticipants.count == 1, otherParticipants[0].fingerprint == participant.fingerprint {
@@ -341,14 +353,14 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         handleRemovalProposal(proposal, rebroadcast: true)
     }
 
-    func canSecondRemoval(_ proposal: MeshRemovalProposalPayload) -> Bool {
+    public func canSecondRemoval(_ proposal: MeshRemovalProposalPayload) -> Bool {
         proposal.expiresAt > Date()
             && proposal.proposerFingerprint != identity.localFingerprint
             && proposal.targetFingerprint != identity.localFingerprint
             && !approvedRemovalProposalIDs.contains(proposal.id)
     }
 
-    func secondRemoval(_ proposal: MeshRemovalProposalPayload) {
+    public func secondRemoval(_ proposal: MeshRemovalProposalPayload) {
         guard canSecondRemoval(proposal) else { return }
         handleRemovalSecond(
             MeshRemovalSecondPayload(
@@ -374,7 +386,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         epochLog.removeAll()
     }
 
-    func renameMesh(_ name: String) {
+    public func renameMesh(_ name: String) {
         guard var mesh = currentMesh else { return }
         let now = Date()
         mesh.name = name
@@ -384,7 +396,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         broadcastMeshDescriptor()
     }
 
-    func setMeshMode(_ mode: MeshMode) {
+    public func setMeshMode(_ mode: MeshMode) {
         guard var mesh = currentMesh else { return }
         let now = Date()
         isSessionOpen = mode == .open
@@ -396,7 +408,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         broadcastMeshDescriptor()
     }
 
-    func setSessionOpen(_ isOpen: Bool) {
+    public func setSessionOpen(_ isOpen: Bool) {
         isSessionOpen = isOpen
         if currentMesh != nil {
             setMeshMode(isOpen ? .open : .closed)
@@ -408,7 +420,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         }
     }
 
-    func addPhoto(_ data: Data) {
+    public func addPhoto(_ data: Data) {
         // Reset counter when the mesh changes between calls.
         if currentMesh?.meshID != sessionQuotaMeshID {
             sessionQuotaMeshID = currentMesh?.meshID
@@ -463,7 +475,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         }
     }
 
-    func allowAdmission(_ request: MeshAdmissionRequestPayload) {
+    public func allowAdmission(_ request: MeshAdmissionRequestPayload) {
         pendingAdmissionRequests.removeAll { $0.requesterSigningPublicKey == request.requesterSigningPublicKey }
         guard var mesh = currentMesh, mesh.meshID == request.meshID else { return }
         let newMember = MeshMember(
@@ -511,13 +523,13 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         }
     }
 
-    func declineAdmission(_ request: MeshAdmissionRequestPayload) {
+    public func declineAdmission(_ request: MeshAdmissionRequestPayload) {
         pendingAdmissionRequests.removeAll { $0.requesterSigningPublicKey == request.requesterSigningPublicKey }
     }
 
     // MARK: - ProximityPayloadHandling
 
-    func proximityCoordinator(
+    public func proximityCoordinator(
         _ coordinator: ProximityCoordinator,
         didReceive envelope: FernletIdentityEnvelope,
         plaintext: Data,
@@ -611,14 +623,14 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     // MARK: - Friend-of-friend labels
 
     /// Returns a label like "Friend of Aisha" if any cached voucher lists this fingerprint as trusted.
-    func vouchLabel(for fingerprint: String) -> String? {
+    public func vouchLabel(for fingerprint: String) -> String? {
         let now = Date()
         return vouchCache.values
             .first { $0.expiresAt > now && $0.trustedFingerprints.contains(fingerprint) }
             .map { "Friend of \($0.voucherDisplayName)" }
     }
 
-    func block(_ participant: MeshSessionParticipant) {
+    public func block(_ participant: MeshSessionParticipant) {
         let signingPublicKey = currentMesh?.members
             .first { $0.fingerprint == participant.fingerprint }?
             .signingPublicKey
@@ -713,7 +725,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         slotTrustPolicies.removeAll()
     }
 
-    func currentDiscoveryInfo() -> [String: String] {
+    public func currentDiscoveryInfo() -> [String: String] {
         var info: [String: String] = [
             "v": "1",
             "sid": sessionID,
@@ -903,7 +915,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     }
 
     /// Expose per-slot manual-commit requests to the UI (non-UWB fallback).
-    var pendingManualCommits: [(slotID: UUID, peerName: String)] {
+    public var pendingManualCommits: [(slotID: UUID, peerName: String)] {
         slots.compactMap { slot in
             if case .awaitingManualCommit(let peer) = slot.coordinator.state {
                 return (slot.id, peer.displayName)
@@ -912,7 +924,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         }
     }
 
-    func commitManualProximity(slotID: UUID) {
+    public func commitManualProximity(slotID: UUID) {
         guard let slot = slots.first(where: { $0.id == slotID }) else { return }
         Task { await slot.coordinator.commitManualProximity() }
     }
@@ -1187,29 +1199,29 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         return true
     }
 
-    func imageData(for photo: FriendPhotoPayload) -> Data? {
+    public func imageData(for photo: FriendPhotoPayload) -> Data? {
         photoCacheStore.imageData(for: photo)
     }
 
-    func thumbnailData(for photo: FriendPhotoPayload) -> Data? {
+    public func thumbnailData(for photo: FriendPhotoPayload) -> Data? {
         photoCacheStore.thumbnailData(for: photo)
     }
 
-    func thumbnailData(forPhotoID photoID: UUID) -> Data? {
+    public func thumbnailData(forPhotoID photoID: UUID) -> Data? {
         guard let photo = meshPhotos.first(where: { $0.id == photoID }) else { return nil }
         return thumbnailData(for: photo)
     }
 
-    func hydratedPhotos(_ photos: [FriendPhotoPayload]) -> [FriendPhotoPayload] {
+    public func hydratedPhotos(_ photos: [FriendPhotoPayload]) -> [FriendPhotoPayload] {
         photos.compactMap { photoCacheStore.hydrated($0) }
     }
 
-    func favoritePhotoID(for post: FriendPhotoWallPost) -> UUID? {
+    public func favoritePhotoID(for post: FriendPhotoWallPost) -> UUID? {
         guard let sessionID = post.session?.id else { return nil }
         return photoWallPreferences.favoritePhotoIDsBySession[sessionID]
     }
 
-    func toggleFavorite(photoID: UUID, in post: FriendPhotoWallPost) {
+    public func toggleFavorite(photoID: UUID, in post: FriendPhotoWallPost) {
         guard let sessionID = post.session?.id else { return }
         if photoWallPreferences.favoritePhotoIDsBySession[sessionID] == photoID {
             photoWallPreferences.favoritePhotoIDsBySession.removeValue(forKey: sessionID)
@@ -1219,12 +1231,12 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         persistPhotoWallPreferences()
     }
 
-    var photoWallPosts: [FriendPhotoWallPost] {
+    public var photoWallPosts: [FriendPhotoWallPost] {
         progressivelyAggregatePhotoSessions()
         return makePhotoWallPosts()
     }
 
-    var savedPhotoSessions: [FriendPhotoSessionMetadata] {
+    public var savedPhotoSessions: [FriendPhotoSessionMetadata] {
         Dictionary(grouping: meshPhotos.compactMap(\.session), by: \.id)
             .compactMap { $0.value.first }
             .sorted { $0.startedAt > $1.startedAt }
@@ -1398,7 +1410,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
 
     /// AES-256-GCM encrypt `imageData` using the group key.
     /// Returns (ciphertext + 16-byte tag, 12-byte nonce) stored separately in FriendPhotoPayload.
-    static func encryptPhoto(_ imageData: Data, key: MeshGroupKey) throws -> (ciphertext: Data, nonce: Data) {
+    public static func encryptPhoto(_ imageData: Data, key: MeshGroupKey) throws -> (ciphertext: Data, nonce: Data) {
         let symKey = SymmetricKey(data: key.keyBytes)
         let gcmNonce = AES.GCM.Nonce()
         let sealedBox = try AES.GCM.seal(imageData, using: symKey, nonce: gcmNonce)
@@ -1409,7 +1421,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
         return (ciphertextWithTag, nonce)
     }
 
-    static func decryptPhoto(_ ciphertextWithTag: Data, nonce nonceData: Data, key: MeshGroupKey) throws -> Data {
+    public static func decryptPhoto(_ ciphertextWithTag: Data, nonce nonceData: Data, key: MeshGroupKey) throws -> Data {
         guard ciphertextWithTag.count > 16 else { throw MeshEncryptionError.decryptionFailed }
         let symKey = SymmetricKey(data: key.keyBytes)
         let gcmNonce = try AES.GCM.Nonce(data: nonceData)
@@ -1762,7 +1774,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
 
     // MARK: - UI test injection
 
-    func injectUITestStateIfNeeded() {
+    public func injectUITestStateIfNeeded() {
         let env = ProcessInfo.processInfo.environment
         let now = Date()
         let hostFP = "aa:bb:cc:dd:00:11:test"

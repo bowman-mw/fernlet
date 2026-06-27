@@ -6,25 +6,25 @@ import FernletDomainModel
 // MARK: - NIRangingSession
 
 @MainActor
-final class NIRangingSession: NSObject, RangingProvider {
+public final class NIRangingSession: NSObject, RangingProvider {
 
-    enum RangingError: Error {
+    public enum RangingError: Error {
         case hardwareUnsupported
         case tokenUnavailable
         case invalidPeerToken
     }
 
-    let isHardwareSupported: Bool
+    public let isHardwareSupported: Bool
 
     private var niSession: NISession?
     private var lastConfig: NINearbyPeerConfiguration?
     private let distanceSubject = PassthroughSubject<RangingDistance, Never>()
     private let stateSubject = CurrentValueSubject<RangingState, Never>(.idle)
 
-    var distance: AnyPublisher<RangingDistance, Never> { distanceSubject.eraseToAnyPublisher() }
-    var state: AnyPublisher<RangingState, Never> { stateSubject.eraseToAnyPublisher() }
+    public var distance: AnyPublisher<RangingDistance, Never> { distanceSubject.eraseToAnyPublisher() }
+    public var state: AnyPublisher<RangingState, Never> { stateSubject.eraseToAnyPublisher() }
 
-    init(isHardwareSupported: Bool? = nil) {
+    public init(isHardwareSupported: Bool? = nil) {
         if let override = isHardwareSupported {
             self.isHardwareSupported = override
         } else if #available(iOS 16.0, *) {
@@ -38,7 +38,7 @@ final class NIRangingSession: NSObject, RangingProvider {
         }
     }
 
-    func myDiscoveryToken() async throws -> Data {
+    public func myDiscoveryToken() async throws -> Data {
         guard isHardwareSupported else { throw RangingError.hardwareUnsupported }
         let session = getOrCreateSession()
         // NISession.discoveryToken can be nil briefly after init; wait one tick for it to populate.
@@ -49,7 +49,7 @@ final class NIRangingSession: NSObject, RangingProvider {
         return try NSKeyedArchiver.archivedData(withRootObject: token, requiringSecureCoding: true)
     }
 
-    func start(with peerTokenData: Data) async throws {
+    public func start(with peerTokenData: Data) async throws {
         guard isHardwareSupported else {
             stateSubject.send(.fallback(rssiOnly: true))
             return
@@ -64,7 +64,7 @@ final class NIRangingSession: NSObject, RangingProvider {
         stateSubject.send(.running)
     }
 
-    func stop() async {
+    public func stop() async {
         niSession?.invalidate()
         niSession = nil
         stateSubject.send(.idle)
@@ -82,7 +82,7 @@ final class NIRangingSession: NSObject, RangingProvider {
 // MARK: - NISessionDelegate
 
 extension NIRangingSession: NISessionDelegate {
-    nonisolated func session(_ session: NISession, didUpdate nearbyObjects: [NINearbyObject]) {
+    nonisolated public func session(_ session: NISession, didUpdate nearbyObjects: [NINearbyObject]) {
         Task { @MainActor [weak self] in
             guard let self, let first = nearbyObjects.first else { return }
             if let dist = first.distance {
@@ -93,7 +93,7 @@ extension NIRangingSession: NISessionDelegate {
         }
     }
 
-    nonisolated func session(_ session: NISession, didInvalidateWith error: Error) {
+    nonisolated public func session(_ session: NISession, didInvalidateWith error: Error) {
         Task { @MainActor [weak self] in
             if self?.niSession === session {
                 self?.niSession = nil
@@ -102,13 +102,13 @@ extension NIRangingSession: NISessionDelegate {
         }
     }
 
-    nonisolated func sessionWasSuspended(_ session: NISession) {
+    nonisolated public func sessionWasSuspended(_ session: NISession) {
         Task { @MainActor [weak self] in
             self?.stateSubject.send(.fallback(rssiOnly: false))
         }
     }
 
-    nonisolated func sessionSuspensionEnded(_ session: NISession) {
+    nonisolated public func sessionSuspensionEnded(_ session: NISession) {
         Task { @MainActor [weak self] in
             guard let self, let config = self.lastConfig, let niSession = self.niSession else { return }
             niSession.run(config)

@@ -1,3 +1,4 @@
+import ProximityKit
 import CryptoKit
 import Foundation
 import FernletDomainModel

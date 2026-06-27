@@ -12,22 +12,22 @@ private struct RecipeShareConnection: Identifiable {
     var verifiedKeyAgreementPublicKey: Data?
 }
 
-struct ProximityRecipeShareDiagnosticEvent: Identifiable, Equatable {
-    let id: UUID
-    let timestamp: Date
-    let message: String
+public struct ProximityRecipeShareDiagnosticEvent: Identifiable, Equatable {
+    public let id: UUID
+    public let timestamp: Date
+    public let message: String
 
-    init(id: UUID = UUID(), timestamp: Date = Date(), message: String) {
+    public init(id: UUID = UUID(), timestamp: Date = Date(), message: String) {
         self.id = id
         self.timestamp = timestamp
         self.message = message
     }
 }
 
-enum ProximityRecipeShareDiagnostics {
-    static let maxEvents = 40
+public enum ProximityRecipeShareDiagnostics {
+    public static let maxEvents = 40
 
-    static func appending(
+    public static func appending(
         _ event: ProximityRecipeShareDiagnosticEvent,
         to events: [ProximityRecipeShareDiagnosticEvent],
         maxCount: Int = maxEvents
@@ -39,8 +39,8 @@ enum ProximityRecipeShareDiagnostics {
 
 @MainActor
 @Observable
-final class ProximityRecipeShareManager: ProximityPayloadHandling {
-    enum SendState: Equatable {
+public final class ProximityRecipeShareManager: ProximityPayloadHandling {
+    public enum SendState: Equatable {
         case idle
         case connecting(recipientName: String)
         case sending(recipientName: String)
@@ -48,10 +48,10 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         case failed(message: String)
     }
 
-    private(set) var nearbyRecipients: [ProximityRecipeShareRecipient] = []
-    private(set) var sendState: SendState = .idle
-    private(set) var diagnosticEvents: [ProximityRecipeShareDiagnosticEvent] = []
-    var pendingRecipeShares: [PendingProximityRecipeShare] = []
+    public private(set) var nearbyRecipients: [ProximityRecipeShareRecipient] = []
+    public private(set) var sendState: SendState = .idle
+    public private(set) var diagnosticEvents: [ProximityRecipeShareDiagnosticEvent] = []
+    public var pendingRecipeShares: [PendingProximityRecipeShare] = []
 
     @ObservationIgnored private unowned let store: any ProximityHost
     @ObservationIgnored private let session = MeshMultipeerSession()
@@ -71,7 +71,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
     private static let perSenderRateLimitSeconds: TimeInterval = 3
     @ObservationIgnored private var lastAcceptedBySender: [String: Date] = [:]
 
-    init(store: any ProximityHost) {
+    public init(store: any ProximityHost) {
         self.store = store
         let id = IdentityService()
         try? id.ensureProvisioned()
@@ -79,7 +79,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         setupSession()
     }
 
-    func start() {
+    public func start() {
         guard !isRunning else { return }
         isRunning = true
         recordDiagnostic("Recipe share discovery started.")
@@ -87,7 +87,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         startObserving()
     }
 
-    func stop() {
+    public func stop() {
         if isRunning {
             recordDiagnostic("Recipe share discovery stopped.")
         }
@@ -104,7 +104,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         sendState = .idle
     }
 
-    func refreshDiscovery() {
+    public func refreshDiscovery() {
         let shouldRestart = isRunning
         recordDiagnostic("Recipe share discovery refreshed.")
         observationTask?.cancel()
@@ -121,7 +121,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         }
     }
 
-    func sendRecipeShare(_ payload: ProximityRecipeSharePayload, to recipient: ProximityRecipeShareRecipient) {
+    public func sendRecipeShare(_ payload: ProximityRecipeSharePayload, to recipient: ProximityRecipeShareRecipient) {
         start()
         pendingOutgoing = (payload, recipient)
         sendState = .connecting(recipientName: recipient.displayName)
@@ -142,15 +142,15 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
         session.invite(peer)
     }
 
-    func dismissRecipeShare(_ share: PendingProximityRecipeShare) {
+    public func dismissRecipeShare(_ share: PendingProximityRecipeShare) {
         pendingRecipeShares.removeAll { $0.id == share.id }
     }
 
-    func dismissRecipeShare(id: UUID) {
+    public func dismissRecipeShare(id: UUID) {
         pendingRecipeShares.removeAll { $0.id == id }
     }
 
-    func proximityCoordinator(
+    public func proximityCoordinator(
         _ coordinator: ProximityCoordinator,
         didReceive envelope: FernletIdentityEnvelope,
         plaintext: Data,

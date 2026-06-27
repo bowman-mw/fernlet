@@ -5,6 +5,7 @@
 //  Created by Michael Bowman on 5/16/26.
 //
 
+import ProximityKit
 import SwiftUI
 import FernletFoundation
 import FernletDomainModel

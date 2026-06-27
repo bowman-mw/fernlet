@@ -1,3 +1,4 @@
+import ProximityKit
 import SwiftUI
 import AIContext
 import AIProviders

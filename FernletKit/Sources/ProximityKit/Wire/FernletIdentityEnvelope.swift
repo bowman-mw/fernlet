@@ -9,27 +9,57 @@ import FernletDomainModel
 
 // MARK: - Envelope
 
-struct FernletIdentityEnvelope: Codable, Equatable {
-    let schemaVersion: Int                        // 1
-    let envelopeID: UUID                          // for replay protection + Inspector log correlation
-    let senderSigningPublicKey: Data              // Ed25519 raw, 32 B
-    let senderKeyAgreementPublicKey: Data         // X25519 raw, 32 B
-    let senderDisplayName: String
-    let recipientFingerprint: String?             // 16-char SHA-256 prefix; nil = broadcast
-    let payloadType: PayloadType
-    let payloadEncryption: PayloadEncryption
-    let payloadSummary: PayloadSummary
-    let payload: Data
-    let createdAt: Date
-    let expiresAt: Date?
-    var signature: Data                           // Ed25519 over canonical JSON (this field is zeroed during signing)
+public struct FernletIdentityEnvelope: Codable, Equatable {
+    public let schemaVersion: Int                 // 1
+    public let envelopeID: UUID                   // for replay protection + Inspector log correlation
+    public let senderSigningPublicKey: Data       // Ed25519 raw, 32 B
+    public let senderKeyAgreementPublicKey: Data  // X25519 raw, 32 B
+    public let senderDisplayName: String
+    public let recipientFingerprint: String?      // 16-char SHA-256 prefix; nil = broadcast
+    public let payloadType: PayloadType
+    public let payloadEncryption: PayloadEncryption
+    public let payloadSummary: PayloadSummary
+    public let payload: Data
+    public let createdAt: Date
+    public let expiresAt: Date?
+    public var signature: Data                     // Ed25519 over canonical JSON (this field is zeroed during signing)
+
+    public init(
+        schemaVersion: Int,
+        envelopeID: UUID,
+        senderSigningPublicKey: Data,
+        senderKeyAgreementPublicKey: Data,
+        senderDisplayName: String,
+        recipientFingerprint: String?,
+        payloadType: PayloadType,
+        payloadEncryption: PayloadEncryption,
+        payloadSummary: PayloadSummary,
+        payload: Data,
+        createdAt: Date,
+        expiresAt: Date?,
+        signature: Data
+    ) {
+        self.schemaVersion = schemaVersion
+        self.envelopeID = envelopeID
+        self.senderSigningPublicKey = senderSigningPublicKey
+        self.senderKeyAgreementPublicKey = senderKeyAgreementPublicKey
+        self.senderDisplayName = senderDisplayName
+        self.recipientFingerprint = recipientFingerprint
+        self.payloadType = payloadType
+        self.payloadEncryption = payloadEncryption
+        self.payloadSummary = payloadSummary
+        self.payload = payload
+        self.createdAt = createdAt
+        self.expiresAt = expiresAt
+        self.signature = signature
+    }
 }
 
 // MARK: - Canonical encoding
 
 /// Shared deterministic encoder for all canonical-bytes signing operations.
 /// Both FernletIdentityEnvelope and MeshAdmissionToken use this configuration — keep them in sync.
-func makeCanonicalSignatureEncoder() -> JSONEncoder {
+public func makeCanonicalSignatureEncoder() -> JSONEncoder {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     encoder.dateEncodingStrategy = .iso8601
@@ -38,7 +68,7 @@ func makeCanonicalSignatureEncoder() -> JSONEncoder {
 
 /// Returns the deterministic byte sequence that is signed and verified.
 /// The `signature` field is zeroed so signing and verification produce identical input.
-func canonicalBytes(for envelope: FernletIdentityEnvelope) -> Data {
+public func canonicalBytes(for envelope: FernletIdentityEnvelope) -> Data {
     var copy = envelope
     copy.signature = Data()
     return try! makeCanonicalSignatureEncoder().encode(copy)
@@ -47,7 +77,7 @@ func canonicalBytes(for envelope: FernletIdentityEnvelope) -> Data {
 // MARK: - Verification
 
 extension FernletIdentityEnvelope {
-    enum VerifyError: Error, Equatable {
+    public enum VerifyError: Error, Equatable {
         case schemaVersionUnsupported
         case expired
         case signatureInvalid
@@ -63,7 +93,7 @@ extension FernletIdentityEnvelope {
     private static let sealingRequiredTypes: Set<PayloadType> = [.friendPhoto, .recipeShare]
 
     /// Verifies the envelope signature, recipient, expiry, and replay status; returns the plaintext payload.
-    func verify(identityService: IdentityService, replayCache: ReplayCache) throws -> Data {
+    public func verify(identityService: IdentityService, replayCache: ReplayCache) throws -> Data {
         guard schemaVersion == 1 else { throw VerifyError.schemaVersionUnsupported }
         if let expiresAt, expiresAt < Date() { throw VerifyError.expired }
 
@@ -100,7 +130,7 @@ extension FernletIdentityEnvelope {
 
 extension FernletIdentityEnvelope {
     /// Creates a signed envelope. `signature` is computed over the canonical JSON of all other fields.
-    static func signed(
+    public static func signed(
         identityService: IdentityService,
         envelopeID: UUID = UUID(),
         senderDisplayName: String,
