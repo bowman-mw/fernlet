@@ -1,4 +1,5 @@
 import Foundation
+import LocalPersistence
 import Testing
 import FernletDomainModel
 @testable import Fernlet

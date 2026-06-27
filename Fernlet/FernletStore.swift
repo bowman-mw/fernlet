@@ -1,4 +1,5 @@
 import CryptoKit
+import LocalPersistence
 import FernletFoundation
 import HealthKit
 import Observation

@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import UIKit
+import LocalPersistence
 #endif
 import HealthKit
 import LocalAuthentication

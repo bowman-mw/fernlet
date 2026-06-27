@@ -1,4 +1,5 @@
 import HealthKit
+import LocalPersistence
 import FernletFoundation
 import SwiftUI
 import FernletScoring

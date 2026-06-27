@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import LocalPersistence
 import Combine
 import CoreData
 import HealthKit

@@ -1,4 +1,5 @@
 import Observation
+import LocalPersistence
 import FernletFoundation
 import CoreData
 import Foundation

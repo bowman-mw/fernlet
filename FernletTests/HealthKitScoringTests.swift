@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import LocalPersistence
 import Testing
 import FernletDomainModel
 import FernletScoring

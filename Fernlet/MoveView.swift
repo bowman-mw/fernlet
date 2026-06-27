@@ -1,4 +1,5 @@
 import SwiftUI
+import LocalPersistence
 import FernletFoundation
 import FernletDomainModel
 

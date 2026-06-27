@@ -10,6 +10,7 @@
 //
 
 import CoreData
+import LocalPersistence
 import FernletFoundation
 import CryptoKit
 import Foundation

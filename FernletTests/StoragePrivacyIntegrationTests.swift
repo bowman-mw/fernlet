@@ -1,4 +1,5 @@
 import CloudKit
+import LocalPersistence
 import FernletFoundation
 import CoreData
 import Foundation
