@@ -1,4 +1,5 @@
 import Foundation
+import AIContext
 
 #if canImport(FoundationModels)
 import FoundationModels

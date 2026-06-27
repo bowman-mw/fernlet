@@ -1,4 +1,5 @@
 import SwiftUI
+import AIContext
 import FernletScoring
 import FoodCatalog
 

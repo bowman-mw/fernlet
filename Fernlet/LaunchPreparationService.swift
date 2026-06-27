@@ -1,4 +1,5 @@
 import Foundation
+import AIContext
 import LocalPersistence
 import FernletFoundation
 import Observation

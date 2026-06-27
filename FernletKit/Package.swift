@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext"]),
     ],
     targets: [
         .target(
@@ -152,6 +152,14 @@ let package = Package(
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
+        ),
+        // Layer 4 — sanctioned egress: the typed AI context payloads (the
+        // de-identification contract). Pure Sendable DTOs — AIProviders consume ONLY
+        // these typed payloads, never raw sealed data. deps [FernletDomainModel] (uses
+        // AIDestination). Nonisolated.
+        .target(
+            name: "AIContext",
+            dependencies: ["FernletDomainModel"]
         ),
     ]
 )

@@ -1,4 +1,5 @@
 import Foundation
+import AIContext
 
 #if canImport(UIKit)
 import UIKit

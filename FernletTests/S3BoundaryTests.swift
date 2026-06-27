@@ -22,13 +22,27 @@ struct S3BoundaryTests {
     ]
 
     @Test func aiFacingSourcesCannotReachRawPrivateStoreTypes() throws {
-        let sourceRoot = URL(fileURLWithPath: #filePath)
+        let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Fernlet")
+
+        func locate(_ filename: String) -> URL? {
+            for root in [repoRoot.appendingPathComponent("Fernlet"),
+                         repoRoot.appendingPathComponent("FernletKit/Sources")] {
+                guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { continue }
+                for case let url as URL in enumerator where url.lastPathComponent == filename {
+                    return url
+                }
+            }
+            return nil
+        }
 
         for file in aiFacingFiles {
-            let source = try String(contentsOf: sourceRoot.appendingPathComponent(file), encoding: .utf8)
+            guard let url = locate(file) else {
+                Issue.record("could not locate AI-facing source \(file)")
+                continue
+            }
+            let source = try String(contentsOf: url, encoding: .utf8)
             for token in forbiddenPrivateStoreTokens {
                 #expect(
                     !source.contains(token),

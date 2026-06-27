@@ -1,4 +1,5 @@
 import Foundation
+import AIContext
 import FernletDomainModel
 import FernletScoring
 import FoodCatalog

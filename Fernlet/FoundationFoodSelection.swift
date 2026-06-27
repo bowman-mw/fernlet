@@ -1,4 +1,5 @@
 import Foundation
+import AIContext
 import FoodCatalog
 
 #if canImport(FoundationModels)

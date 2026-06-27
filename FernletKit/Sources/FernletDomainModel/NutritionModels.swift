@@ -308,7 +308,7 @@ public nonisolated struct MealResolution {
     public var needsReview: Bool { confidence.needsReview || isFallback }
 }
 
-public nonisolated struct Macros: Codable, Equatable {
+public nonisolated struct Macros: Codable, Equatable, Sendable {
     public var protein: Int
     public var carbs: Int
     public var fat: Int
@@ -322,7 +322,7 @@ public nonisolated struct Macros: Codable, Equatable {
     public var calories: Int { protein * 4 + carbs * 4 + fat * 9 }
 }
 
-public nonisolated struct Micronutrients: Codable, Equatable {
+public nonisolated struct Micronutrients: Codable, Equatable, Sendable {
     public var fiber: Double?
     public var sugar: Double?
     public var saturatedFat: Double?
@@ -638,7 +638,7 @@ public nonisolated enum MicronutrientGapAnalyzer {
     }
 }
 
-public nonisolated enum FoodDataType: String, Codable {
+public nonisolated enum FoodDataType: String, Codable, Sendable {
     case foundation   // USDA Foundation Foods
     case survey       // USDA/FNDDS survey foods
     case srLegacy     // USDA SR Legacy reference
@@ -646,7 +646,7 @@ public nonisolated enum FoodDataType: String, Codable {
     case restaurant   // Restaurant chain item
 }
 
-public nonisolated enum FoodItemSource: String, Codable {
+public nonisolated enum FoodItemSource: String, Codable, Sendable {
     case usda
     case aiResolved
     case manual
@@ -661,7 +661,7 @@ public nonisolated enum MealLogSource {
     nonisolated public static let foundationModelFoodSelection = "foundation-model-food-selection"
 }
 
-public nonisolated struct FoodItem: Identifiable, Codable, Equatable {
+public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
     public var id = UUID()
     public var name: String
     public var brandSource: String?
@@ -765,7 +765,7 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable {
     }
 }
 
-public nonisolated struct FoodPortion: Codable, Equatable {
+public nonisolated struct FoodPortion: Codable, Equatable, Sendable {
 
     public init(amount: Double, unit: String, gramWeight: Double, description: String? = nil) {
         self.amount = amount
@@ -779,7 +779,7 @@ public nonisolated struct FoodPortion: Codable, Equatable {
     public var description: String?
 }
 
-public nonisolated struct FoodSelectionCandidate: Identifiable, Equatable {
+public nonisolated struct FoodSelectionCandidate: Identifiable, Equatable, Sendable {
 
     public init(id: Int, foodItem: FoodItem) {
         self.id = id
@@ -1428,7 +1428,7 @@ public nonisolated enum NutritionTargetCalculator {
     }
 }
 
-public nonisolated enum MealType: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum MealType: String, Codable, CaseIterable, Identifiable, Sendable {
     case breakfast = "Breakfast"
     case lunch = "Lunch"
     case dinner = "Dinner"
