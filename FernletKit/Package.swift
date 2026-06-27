@@ -14,7 +14,11 @@ let package = Package(
         .iOS(.v26),
     ],
     products: [
-        .library(name: "FernletFoundation", targets: ["FernletFoundation"]),
+        // Single umbrella product: the app and test targets link this ONE product
+        // and can then `import` ANY target listed here. Each later module is added
+        // to this `targets:` list (and gets its own `.target` below) with NO further
+        // Xcode project surgery — the pbxproj references this product by name only.
+        .library(name: "FernletKit", targets: ["FernletFoundation"]),
     ],
     targets: [
         .target(
