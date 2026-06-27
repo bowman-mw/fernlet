@@ -69,6 +69,7 @@ final class FernletStore {
         service: healthKitService ?? HealthKitService()
     )
     @ObservationIgnored private lazy var workoutPlanningService = WorkoutPlanningService(host: self)
+    @ObservationIgnored private lazy var mealResolutionService = MealResolutionService(host: self)
     @ObservationIgnored private lazy var snapshotSaveCoordinator = SnapshotSaveCoordinator(
         repository: repository,
         buildSnapshot: { [unowned self] in self.currentSnapshot() },
@@ -465,36 +466,15 @@ final class FernletStore {
 
     @discardableResult func addMeal(from description: String, type: MealType? = nil, date: String) -> Meal {
         assert(!date.isEmpty, "meal date required")
-        let parsed = enrichingFallbackMicronutrients(MealParser.parse(description, fallbackType: type), description: description)
+        let parsed = mealResolutionService.enrichingFallbackMicronutrients(MealParser.parse(description, fallbackType: type), description: description)
         appendMeal(parsed, date: date)
         return parsed
     }
 
-    /// Best-effort micronutrient estimate for a manually-parsed meal, resolved from the food catalog
-    /// so manual / heuristic-fallback meals no longer log an entirely empty micronutrient snapshot
-    /// (Item 3). Returns empty `Micronutrients` when nothing usable matches — the gap is then left
-    /// honest rather than fabricated. The estimate is the best catalog match's per-serving profile;
-    /// macros on these meals are themselves estimates, so an unscaled nutrient profile is consistent.
+    /// Catalog-grounded micronutrient fallback for manually-parsed meals. Delegates to
+    /// `MealResolutionService`; kept as a wrapper for the existing call sites + test.
     func fallbackMicronutrients(for description: String) -> Micronutrients {
-        let normalizedName = FoodItemSearch.normalized(MealParser.mealName(from: description))
-        if let exact = foodCatalog.exactNameMatch(forNormalized: normalizedName), exact.micronutrients.hasAnyValue {
-            return exact.micronutrients
-        }
-        if let best = foodCatalog.results(for: description, limit: 1).first, best.micronutrients.hasAnyValue {
-            return best.micronutrients
-        }
-        return Micronutrients()
-    }
-
-    /// Returns `meal` with a catalog-derived micronutrient snapshot filled in when it currently has
-    /// none. Leaves meals that already carry micronutrients (catalog/AI-resolved) untouched.
-    private func enrichingFallbackMicronutrients(_ meal: Meal, description: String) -> Meal {
-        guard meal.micronutrientSnapshot.hasAnyValue == false else { return meal }
-        let micros = fallbackMicronutrients(for: description)
-        guard micros.hasAnyValue else { return meal }
-        var enriched = meal
-        enriched.micronutrientSnapshot = micros
-        return enriched
+        mealResolutionService.fallbackMicronutrients(for: description)
     }
 
     @discardableResult func addResolvedMeal(from description: String, type: MealType? = nil, date: String? = nil) async -> Meal {
@@ -518,59 +498,7 @@ final class FernletStore {
     /// resolved meals plus a confidence. Separating resolve from commit lets the UI review a
     /// low-confidence / fabricated result before it counts toward the day's totals.
     func resolveMeals(from description: String, type: MealType? = nil, date: String? = nil) async -> MealResolution {
-        let targetDate = date ?? todayKey
-        assert(!targetDate.isEmpty, "meal date required")
-
-        if settings.aiStatus != .off {
-            // Primary (M1): model decomposes the dish from world knowledge, catalog supplies macros.
-            do {
-                if let resolved = try await FoundationDishDecompositionModel.decompose(
-                    MealDecompositionPayload(mealDescription: description, fallbackMealType: type),
-                    catalog: foodCatalog
-                ) {
-                    return MealResolution(meals: [resolved.meal], createdRecipes: [], confidence: resolved.confidence, isFallback: false)
-                }
-            } catch {}
-
-            // Secondary AI: candidate-constrained selection (catalog-grounded, high confidence).
-            let candidates = foodCatalog.candidates(for: description)
-            do {
-                if let plan = try await FoundationFoodSelectionModel.resolve(
-                    FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type)
-                ), let result = MealBuilder.meals(
-                    from: plan,
-                    candidates: candidates,
-                    recipes: recipes,
-                    foodItems: candidates.map(\.foodItem) + foodCatalog.items(forRecipes: recipes),
-                    originalDescription: description
-                ), result.meals.isEmpty == false {
-                    return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
-                }
-            } catch {}
-        }
-
-        // Deterministic tier 1 (M2): dish template lexicon — handles composite dishes when AI is off.
-        if let lexiconMeals = DishTemplateLexicon.resolve(description: description, mealType: type, catalog: foodCatalog) {
-            return MealResolution(meals: lexiconMeals, createdRecipes: [], confidence: .high, isFallback: false)
-        }
-
-        // Deterministic tier 2: candidate-constrained plan.
-        let candidates = foodCatalog.candidates(for: description)
-        if let plan = FoundationFoodSelectionModel.deterministicPlan(description: description, candidates: candidates, fallbackType: type),
-           let result = MealBuilder.meals(
-            from: plan,
-            candidates: candidates,
-            recipes: recipes,
-            foodItems: candidates.map(\.foodItem) + foodCatalog.items(forRecipes: recipes),
-            originalDescription: description
-           ), result.meals.isEmpty == false {
-            return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
-        }
-
-        // Keyword-heuristic fallback: fabricated macros, no catalog grounding — always reviewed.
-        // Still try to ground its micronutrients in the catalog so the snapshot isn't fully empty.
-        let fallback = enrichingFallbackMicronutrients(MealParser.parse(description, fallbackType: type), description: description)
-        return MealResolution(meals: [fallback], createdRecipes: [], confidence: .low, isFallback: true)
+        await mealResolutionService.resolveMeals(from: description, type: type, date: date)
     }
 
     /// Commits a resolved meal set to the diary: registers any created recipes, appends each meal,
@@ -2162,5 +2090,7 @@ extension FernletStore {
 extension FernletStore: ProximityTrustPolicy {}
 
 extension FernletStore: WorkoutPlanningContext {}
+
+extension FernletStore: MealResolutionContext {}
 
 // MARK: - Models
