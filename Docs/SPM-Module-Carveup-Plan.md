@@ -434,12 +434,48 @@ DomainModel); a `FernletStore` launch seam. All 3 are verified to reference ZERO
 grep-covered by S3BoundaryTests.
 
 ### Remaining work (next session)
-1. Confirm the step-8 boundary FULL suite passed (launched at handoff → `scratchpad/step8-fullsuite.log`).
-2. Add the committed wall-enforcement artifact: a build/CI script that runs the build with
-   `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`, and note it in CLAUDE.md's build section.
-3. **Step 4c — StoreCore + DiaryStore** (the hardest; ~70% of FernletStore).
-4. **Step 9 — shims:** HealthKitGateway (will dep PrivateHealthStore for the period extension — OK, not a wall edge),
-   FernletLock (redeclare CryptoSwift; deps PrivateStoreCore + PrivateHealthStore), AppServices, ProximityKit (27-file
-   black box; deps PrivateMediaStore+DomainModel; ProximityHost seam already breaks app coupling).
+1. ~~Confirm the step-8 boundary FULL suite passed.~~ DONE (session 3) — `OVERALL: ALL-GREEN`.
+2. ~~Add the committed wall-enforcement artifact.~~ DONE (session 3, `6274f1e`) — `Scripts/spm-wall-check.sh` + CLAUDE.md note.
+3. ~~**Step 4c — StoreCore + DiaryStore** (the hardest).~~ DONE (session 3) — see §13.
+4. **Step 9 — shims:** HealthKitGateway (will dep PrivateHealthStore for the period extension — OK, not a wall edge;
+   note WorkoutSyncContext lives in WorkoutHealthKitSync.swift and the FernletStore facade conforms to it — keep the
+   protocol reachable), FernletLock (redeclare CryptoSwift; deps PrivateStoreCore + PrivateHealthStore), AppServices,
+   ProximityKit (27-file black box; deps PrivateMediaStore+DomainModel; ProximityHost seam already breaks app coupling).
 5. (Optional) the 3 deferred AI-file inversions above, to put all 6 AI providers behind the wall.
 - DO NOT do step 10 (delete S3BoundaryTests / per-target test targets) — post-review.
+
+## 13. Step 4c + wall artifact handoff (executed 2026-06-27, session 3)
+
+**Branch:** `claude/laughing-goldstine-c8b9e9`. **HEAD:** `176d61e`. Tree clean. Each module its own commit, build-green
+under `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`, with the gate (batch C per module; FULL A1–E at the step boundary).
+
+- `6274f1e` **Wall artifact** — `Scripts/spm-wall-check.sh` runs `build-for-testing` with the enforcement flag (CI-runnable;
+  derives repo root; `FERNLET_DESTINATION` override). Documented in CLAUDE.md. The honest DAG + this flag IS the wall.
+- `e61d551` **StoreCore** (step 4c part 1; portable layer-2, deps FernletPersistence+LocalPersistence+FernletScoring+
+  DomainModel+FernletFoundation; NO defaultIsolation — services are individually `@MainActor`, `DerivedSignalsRebuilder` is a
+  pure struct). Moved the 5 sub-services. **Inversion to keep StoreCore portable:** new `SavedRecipeRepositoring` protocol in
+  FernletPersistence (mirrors `FernletRepository`); concrete `SavedRecipeRepository` conforms in CloudKitSync — so StoreCore
+  has NO backwards edge to layer-6 CloudKitSync.
+- `176d61e` **DiaryStore** (step 4c part 2, the hardest; new layer-2.5 module, `defaultIsolation(MainActor)`, deps
+  StoreCore+FernletPersistence+LocalPersistence+FernletScoring+DomainModel+FernletFoundation+FoodCatalog, NO app/sealed dep).
+  Split the 1782-line `@Observable FernletStore` into `FernletKit/Sources/DiaryStore/DiaryStore.swift` (853 lines: pure synced
+  state + pure methods + per-day scoring + snapshot round-trip) and the app `FernletStore` facade (1465 lines).
+
+  **Design — the facade pattern (lowest-risk).** The facade owns `@ObservationIgnored let diary: DiaryStore` + ALL app-only
+  collaborators and forwards every diary member (settable forwarders write through; observation rides on DiaryStore via
+  `diary.<prop>` access). DiaryStore depends on no app/sealed module because TWO injected closures decouple it:
+  `scheduleSnapshotSave` (replaces `snapshotSaveCoordinator.schedule()`) and `periodAdjustment` (replaces the facade-only
+  `PeriodContextBridge` read; default `.none`). Init builds the diary with no-op hooks then `rewireHooks([weak self]…)`
+  post-init — the diary is a `let`, so this avoids an init-order cycle. The facade keeps its 5 context-protocol conformances
+  (Meal/Workout/Journal/Health/SealedBackup) by forwarding to the diary.
+
+  **Five traps the carve resolves (these correct/extend §5d):** (1) the persistence snapshot mixes diary state AND app-only
+  proximity/retry state, so `currentSnapshot`/`reloadFromRepository`/`apply`/`snapshotSaveCoordinator` STAY in the facade
+  (the manifest wrongly placed them in DiaryStore). (2) `aiRetryQueueService`/`derivedSignalsService`/`savedRecipeService` are
+  portable StoreCore *types* but stay facade-side because they're snapshot-wired — pulling the retry/derived/saved meal
+  methods back to the facade. (3) `MealPhotoStore` lives in the sealed `PrivateMediaStore`, and `MealBuilder` +
+  `HealthCapability` are still app-target types, so those methods (meal-correction, logRecipe, macro totals, photos,
+  visibleHealthCapabilities) stay facade-side — a portable diary core must not import a sealed/app type. (4) `upsertWorkout`
+  routes to the PURE `diary.appendWorkout` so a workout imported FROM HealthKit isn't re-saved to HealthKit. (5)
+  `sealedBackupContentKey` is the one context member NOT forwarded (→ `journalSealingCoordinator.contentKey`); the key never
+  enters DiaryStore. Behavior-identical: full `FernletTests` ALL-GREEN, zero test files changed.
