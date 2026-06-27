@@ -1,0 +1,365 @@
+{
+  "version": 1,
+  "dishes": [
+    {
+      "name": "nigiri",
+      "aliases": ["sushi nigiri", "nigiri sushi", "salmon nigiri", "tuna nigiri", "shrimp nigiri"],
+      "isComposite": true,
+      "unit": "piece",
+      "defaultCount": 1,
+      "components": [
+        { "search": "fish raw", "gramsPerUnit": 17, "preparation": "raw" },
+        { "search": "rice white cooked", "gramsPerUnit": 18, "preparation": "steamed" }
+      ]
+    },
+    {
+      "name": "sashimi",
+      "aliases": ["salmon sashimi", "tuna sashimi"],
+      "isComposite": false,
+      "unit": "piece",
+      "defaultCount": 1,
+      "components": [
+        { "search": "fish raw", "gramsPerUnit": 28, "preparation": "raw" }
+      ]
+    },
+    {
+      "name": "sushi roll",
+      "aliases": ["maki", "maki roll", "california roll", "spicy tuna roll", "dragon roll", "rainbow roll"],
+      "isComposite": true,
+      "unit": "piece",
+      "defaultCount": 8,
+      "components": [
+        { "search": "fish raw", "gramsPerUnit": 10, "preparation": "raw" },
+        { "search": "rice white cooked", "gramsPerUnit": 20, "preparation": "steamed" }
+      ]
+    },
+    {
+      "name": "poke bowl",
+      "aliases": ["poke", "ahi poke", "poke poke"],
+      "isComposite": true,
+      "unit": "bowl",
+      "defaultCount": 1,
+      "components": [
+        { "search": "tuna raw", "gramsPerUnit": 140, "preparation": "raw" },
+        { "search": "rice white cooked", "gramsPerUnit": 150 },
+        { "search": "avocado", "gramsPerUnit": 50 },
+        { "search": "edamame", "gramsPerUnit": 40 }
+      ]
+    },
+    {
+      "name": "grilled cheese",
+      "aliases": ["grilled cheese sandwich"],
+      "isComposite": true,
+      "unit": "sandwich",
+      "defaultCount": 1,
+      "components": [
+        { "search": "bread white", "gramsPerUnit": 50 },
+        { "search": "cheese american", "gramsPerUnit": 42 },
+        { "search": "butter", "gramsPerUnit": 10 }
+      ]
+    },
+    {
+      "name": "tuna sandwich",
+      "aliases": ["tuna salad sandwich", "tuna on bread"],
+      "isComposite": true,
+      "unit": "sandwich",
+      "defaultCount": 1,
+      "components": [
+        { "search": "bread white", "gramsPerUnit": 50 },
+        { "search": "tuna canned water", "gramsPerUnit": 85, "preparation": "canned" },
+        { "search": "mayonnaise", "gramsPerUnit": 20 }
+      ]
+    },
+    {
+      "name": "tuna melt",
+      "aliases": [],
+      "isComposite": true,
+      "unit": "sandwich",
+      "defaultCount": 1,
+      "components": [
+        { "search": "bread white", "gramsPerUnit": 50 },
+        { "search": "tuna canned water", "gramsPerUnit": 85, "preparation": "canned" },
+        { "search": "cheddar cheese", "gramsPerUnit": 28 },
+        { "search": "mayonnaise", "gramsPerUnit": 15 }
+      ]
+    },
+    {
+      "name": "BLT",
+      "aliases": ["blt sandwich"],
+      "isComposite": true,
+      "unit": "sandwich",
+      "defaultCount": 1,
+      "components": [
+        { "search": "bread white", "gramsPerUnit": 50 },
+        { "search": "bacon cooked", "gramsPerUnit": 24, "preparation": "cooked" },
+        { "search": "lettuce", "gramsPerUnit": 15 },
+        { "search": "tomato", "gramsPerUnit": 40 },
+        { "search": "mayonnaise", "gramsPerUnit": 15 }
+      ]
+    },
+    {
+      "name": "burger",
+      "aliases": ["hamburger", "beef burger", "chicken burger"],
+      "aliasOverrides": [
+        {
+          "alias": "cheeseburger",
+          "componentOverrides": [
+            { "search": "cheese american", "gramsPerUnit": 21 }
+          ]
+        }
+      ],
+      "isComposite": true,
+      "unit": "burger",
+      "defaultCount": 1,
+      "components": [
+        { "search": "beef patty ground", "gramsPerUnit": 113, "preparation": "grilled" },
+        { "search": "hamburger bun", "gramsPerUnit": 50 },
+        { "search": "lettuce", "gramsPerUnit": 15 },
+        { "search": "tomato", "gramsPerUnit": 30 }
+      ]
+    },
+    {
+      "name": "burrito",
+      "aliases": ["chicken burrito", "beef burrito", "steak burrito", "pork burrito"],
+      "isComposite": true,
+      "unit": "burrito",
+      "defaultCount": 1,
+      "components": [
+        { "search": "tortilla flour", "gramsPerUnit": 72 },
+        { "search": "chicken grilled", "gramsPerUnit": 120, "preparation": "grilled" },
+        { "search": "rice white cooked", "gramsPerUnit": 100 },
+        { "search": "beans black cooked", "gramsPerUnit": 80 },
+        { "search": "cheese shredded", "gramsPerUnit": 28 }
+      ]
+    },
+    {
+      "name": "burrito bowl",
+      "aliases": ["chipotle bowl", "rice bowl", "chicken rice bowl", "chicken bowl"],
+      "isComposite": true,
+      "unit": "bowl",
+      "defaultCount": 1,
+      "components": [
+        { "search": "chicken grilled", "gramsPerUnit": 150, "preparation": "grilled" },
+        { "search": "rice white cooked", "gramsPerUnit": 150 },
+        { "search": "beans black cooked", "gramsPerUnit": 90 },
+        { "search": "cheese shredded", "gramsPerUnit": 28 }
+      ]
+    },
+    {
+      "name": "taco",
+      "aliases": ["tacos", "chicken taco", "beef taco", "fish taco", "street taco"],
+      "isComposite": true,
+      "unit": "taco",
+      "defaultCount": 2,
+      "components": [
+        { "search": "beef ground cooked", "gramsPerUnit": 60, "preparation": "cooked" },
+        { "search": "tortilla corn", "gramsPerUnit": 26 },
+        { "search": "cheese shredded", "gramsPerUnit": 14 },
+        { "search": "lettuce", "gramsPerUnit": 10 }
+      ]
+    },
+    {
+      "name": "quesadilla",
+      "aliases": ["chicken quesadilla", "cheese quesadilla"],
+      "isComposite": true,
+      "unit": "quesadilla",
+      "defaultCount": 1,
+      "components": [
+        { "search": "tortilla flour", "gramsPerUnit": 60 },
+        { "search": "cheese shredded", "gramsPerUnit": 60 },
+        { "search": "chicken grilled", "gramsPerUnit": 80, "preparation": "grilled" }
+      ]
+    },
+    {
+      "name": "stir fry",
+      "aliases": ["stir-fry", "chicken stir fry", "beef stir fry", "vegetable stir fry"],
+      "isComposite": true,
+      "unit": "serving",
+      "defaultCount": 1,
+      "components": [
+        { "search": "chicken breast cooked", "gramsPerUnit": 150, "preparation": "cooked" },
+        { "search": "broccoli cooked", "gramsPerUnit": 100 },
+        { "search": "rice white cooked", "gramsPerUnit": 150 }
+      ]
+    },
+    {
+      "name": "fried rice",
+      "aliases": ["chicken fried rice", "shrimp fried rice", "vegetable fried rice"],
+      "isComposite": true,
+      "unit": "serving",
+      "defaultCount": 1,
+      "components": [
+        { "search": "rice white cooked", "gramsPerUnit": 200, "preparation": "fried" },
+        { "search": "egg whole", "gramsPerUnit": 50 },
+        { "search": "soy sauce", "gramsPerUnit": 15 }
+      ]
+    },
+    {
+      "name": "pad thai",
+      "aliases": [],
+      "isComposite": true,
+      "unit": "serving",
+      "defaultCount": 1,
+      "components": [
+        { "search": "rice noodle cooked", "gramsPerUnit": 180 },
+        { "search": "egg whole", "gramsPerUnit": 50 },
+        { "search": "shrimp cooked", "gramsPerUnit": 80, "preparation": "cooked" },
+        { "search": "peanut", "gramsPerUnit": 20 }
+      ]
+    },
+    {
+      "name": "bibimbap",
+      "aliases": [],
+      "isComposite": true,
+      "unit": "bowl",
+      "defaultCount": 1,
+      "components": [
+        { "search": "rice white cooked", "gramsPerUnit": 150 },
+        { "search": "beef sirloin cooked", "gramsPerUnit": 80, "preparation": "cooked" },
+        { "search": "egg fried", "gramsPerUnit": 50 },
+        { "search": "spinach cooked", "gramsPerUnit": 50 }
+      ]
+    },
+    {
+      "name": "pho",
+      "aliases": ["pho soup", "beef pho", "chicken pho", "pho bo"],
+      "isComposite": true,
+      "unit": "bowl",
+      "defaultCount": 1,
+      "components": [
+        { "search": "rice noodle cooked", "gramsPerUnit": 150 },
+        { "search": "beef round raw", "gramsPerUnit": 100, "preparation": "raw" },
+        { "search": "beef broth", "gramsPerUnit": 300 }
+      ]
+    },
+    {
+      "name": "ramen",
+      "aliases": ["ramen bowl", "chicken ramen", "tonkotsu ramen"],
+      "isComposite": true,
+      "unit": "bowl",
+      "defaultCount": 1,
+      "components": [
+        { "search": "noodle wheat cooked", "gramsPerUnit": 200 },
+        { "search": "pork belly cooked", "gramsPerUnit": 80, "preparation": "cooked" },
+        { "search": "egg soft boiled", "gramsPerUnit": 50 },
+        { "search": "chicken broth", "gramsPerUnit": 300 }
+      ]
+    },
+    {
+      "name": "avocado toast",
+      "aliases": ["avocado on toast"],
+      "isComposite": true,
+      "unit": "slice",
+      "defaultCount": 1,
+      "components": [
+        { "search": "bread whole grain", "gramsPerUnit": 40 },
+        { "search": "avocado", "gramsPerUnit": 75 }
+      ]
+    },
+    {
+      "name": "spaghetti bolognese",
+      "aliases": ["pasta bolognese", "bolognese", "spaghetti meat sauce"],
+      "isComposite": true,
+      "unit": "serving",
+      "defaultCount": 1,
+      "components": [
+        { "search": "spaghetti pasta cooked", "gramsPerUnit": 200 },
+        { "search": "beef ground cooked", "gramsPerUnit": 120, "preparation": "cooked" },
+        { "search": "tomato sauce", "gramsPerUnit": 80 }
+      ]
+    },
+    {
+      "name": "caesar salad",
+      "aliases": ["chicken caesar salad", "caesar"],
+      "isComposite": true,
+      "unit": "serving",
+      "defaultCount": 1,
+      "components": [
+        { "search": "romaine lettuce", "gramsPerUnit": 100 },
+        { "search": "chicken breast grilled", "gramsPerUnit": 100, "preparation": "grilled" },
+        { "search": "caesar dressing", "gramsPerUnit": 30 },
+        { "search": "parmesan cheese", "gramsPerUnit": 15 }
+      ]
+    },
+    {
+      "name": "pizza",
+      "aliases": ["cheese pizza", "pepperoni pizza", "margherita pizza"],
+      "isComposite": true,
+      "unit": "slice",
+      "defaultCount": 2,
+      "components": [
+        { "search": "pizza dough crust", "gramsPerUnit": 60 },
+        { "search": "mozzarella cheese", "gramsPerUnit": 40 },
+        { "search": "tomato sauce", "gramsPerUnit": 30 }
+      ]
+    },
+    {
+      "name": "shawarma",
+      "aliases": ["chicken shawarma", "beef shawarma", "lamb shawarma"],
+      "isComposite": true,
+      "unit": "wrap",
+      "defaultCount": 1,
+      "components": [
+        { "search": "chicken thigh cooked", "gramsPerUnit": 150, "preparation": "grilled" },
+        { "search": "pita bread", "gramsPerUnit": 65 },
+        { "search": "tomato", "gramsPerUnit": 40 }
+      ]
+    },
+    {
+      "name": "curry",
+      "aliases": ["chicken curry", "beef curry", "vegetable curry", "thai curry", "indian curry"],
+      "isComposite": true,
+      "unit": "serving",
+      "defaultCount": 1,
+      "components": [
+        { "search": "chicken breast cooked", "gramsPerUnit": 150, "preparation": "cooked" },
+        { "search": "tomato cream sauce", "gramsPerUnit": 120 },
+        { "search": "rice white cooked", "gramsPerUnit": 150 }
+      ]
+    },
+    {
+      "name": "tomato soup",
+      "aliases": ["cream of tomato", "tomato bisque"],
+      "isComposite": false,
+      "unit": "bowl",
+      "defaultCount": 1,
+      "components": [
+        { "search": "tomato soup", "gramsPerUnit": 244 }
+      ]
+    },
+    {
+      "name": "chicken noodle soup",
+      "aliases": [],
+      "isComposite": true,
+      "unit": "bowl",
+      "defaultCount": 1,
+      "components": [
+        { "search": "chicken cooked", "gramsPerUnit": 60, "preparation": "cooked" },
+        { "search": "pasta noodle cooked", "gramsPerUnit": 80 },
+        { "search": "chicken broth", "gramsPerUnit": 200 }
+      ]
+    },
+    {
+      "name": "oatmeal",
+      "aliases": ["porridge", "oat porridge", "overnight oats"],
+      "isComposite": false,
+      "unit": "bowl",
+      "defaultCount": 1,
+      "components": [
+        { "search": "oatmeal cooked oats", "gramsPerUnit": 234 }
+      ]
+    },
+    {
+      "name": "smoothie",
+      "aliases": ["protein smoothie", "fruit smoothie", "green smoothie", "protein shake"],
+      "isComposite": true,
+      "unit": "smoothie",
+      "defaultCount": 1,
+      "components": [
+        { "search": "banana", "gramsPerUnit": 100 },
+        { "search": "milk whole", "gramsPerUnit": 240 },
+        { "search": "protein powder whey", "gramsPerUnit": 30 }
+      ]
+    }
+  ]
+}
