@@ -11,6 +11,7 @@ import CoreData
 import HealthKit
 import Testing
 import FernletDomainModel
+import FernletScoring
 @testable import Fernlet
 
 struct FernletTests {

@@ -3,6 +3,7 @@ import FernletFoundation
 import HealthKit
 import Observation
 import FernletDomainModel
+import FernletScoring
 
 // MARK: - Abstract egress vocabulary
 //
@@ -12,16 +13,10 @@ import FernletDomainModel
 // types (CycleDayEntry, MenstrualNarrative, CyclePrediction) are visible *to* the bridge; the bridge never
 // re-exposes them.
 
-/// Coarse strength of an abstract suggestion. Never a quantity.
-enum PeriodSignalStrength: String, Equatable {
-    case none, suggested
-}
-
-/// Abstract menstrual-cycle phase. Mirrors `CyclePhase` but is the *exported* type, kept distinct so raw
-/// cycle types stay behind the boundary.
-enum PeriodPhaseSignal: String, Equatable {
-    case menstrual, follicular, ovulatory, luteal, unknown
-
+// `PeriodSignalStrength`, `PeriodPhaseSignal`, and `PeriodScoringAdjustment` now live in `FernletScoring`
+// (the scoring layer consumes them). Only the raw→abstract conversion stays here, where `CyclePhase` (a
+// raw cycle type that must not cross down into scoring) is visible.
+extension PeriodPhaseSignal {
     init(_ phase: CyclePhase) {
         switch phase {
         case .menstrual: self = .menstrual
@@ -31,10 +26,6 @@ enum PeriodPhaseSignal: String, Equatable {
         case .unknown: self = .unknown
         }
     }
-
-    /// The label persisted on `DailyHealthScore.periodPhase`. `.unknown` persists `nil` so an unresolved
-    /// or wiped cycle leaves no residue in the score record.
-    var persistedLabel: String? { self == .unknown ? nil : rawValue }
 }
 
 /// Coarse position within the current cycle. No "days until" / "started N days ago" — just a band.
@@ -56,19 +47,6 @@ enum PeriodExerciseSignal: Equatable {
     case gentleness(PeriodSignalStrength)
     case strengthFriendly(PeriodSignalStrength)
     case noData
-}
-
-/// Pre-gated, abstract directive handed to the scoring engine. Carries the resolved phase (for the audit
-/// label only) plus two coarse strengths — never a date, count, or confidence value. `.none` is the
-/// identity: with it, scoring is byte-identical to the period-unaware result.
-struct PeriodScoringAdjustment: Equatable {
-    var phase: PeriodPhaseSignal
-    var hydrationRelief: PeriodSignalStrength
-    var leniency: PeriodSignalStrength
-
-    static let none = PeriodScoringAdjustment(phase: .unknown, hydrationRelief: .none, leniency: .none)
-
-    var softensScoring: Bool { hydrationRelief == .suggested || leniency == .suggested }
 }
 
 /// Non-sensitive per-day wellbeing component scores supplied *into* the period module by `FernletStore` so

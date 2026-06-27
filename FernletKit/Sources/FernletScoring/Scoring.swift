@@ -2,14 +2,14 @@ import Foundation
 import FernletFoundation
 import FernletDomainModel
 
-enum FernletVoice: CaseIterable {
+public enum FernletVoice: CaseIterable, Sendable {
     case mealAnalysisFailed
     case workoutSuggestionUnavailable
     case journalAnalysisQueued
     case retryAvailable
     case aiUnavailable
 
-    static func message(for voice: FernletVoice) -> String {
+    public static func message(for voice: FernletVoice) -> String {
         switch voice {
         case .mealAnalysisFailed:
             "I saved this with a local estimate. We can give it another look later."
@@ -33,7 +33,7 @@ extension ScoringWeights {
     ///
     /// Lives here (app layer) rather than on the carved-down `ScoringWeights` value type because it
     /// depends on `PeriodSignalStrength`, which sits above the domain layer (period-module egress).
-    func adjustedForPeriod(_ leniency: PeriodSignalStrength) -> ScoringWeights {
+    public func adjustedForPeriod(_ leniency: PeriodSignalStrength) -> ScoringWeights {
         guard leniency == .suggested else { return self }
         var adjusted = self
         let shifted = workoutWeight * 0.3
@@ -44,8 +44,8 @@ extension ScoringWeights {
     }
 }
 
-enum GoalWeights {
-    static func forGoal(_ goal: GoalType) -> ScoringWeights {
+public enum GoalWeights {
+    public static func forGoal(_ goal: GoalType) -> ScoringWeights {
         let weights: ScoringWeights
         switch goal {
         case .wellness:
@@ -70,14 +70,20 @@ enum GoalWeights {
 
 /// The overall score plus the per-component sub-scores and the exact (sickness-adjusted)
 /// weight vector that produced it. Persisted into `DailyHealthScore` for later inspection.
-struct ScoreBreakdown: Equatable {
-    var overall: Double
-    var components: [String: Double]
-    var appliedWeights: ScoringWeights
+public struct ScoreBreakdown: Equatable {
+    public var overall: Double
+    public var components: [String: Double]
+    public var appliedWeights: ScoringWeights
+
+    public init(overall: Double, components: [String: Double], appliedWeights: ScoringWeights) {
+        self.overall = overall
+        self.components = components
+        self.appliedWeights = appliedWeights
+    }
 }
 
-enum FernletScoring {
-    static func tagScore(_ tag: FeelingTag?) -> Double {
+public enum FernletScoring {
+    public static func tagScore(_ tag: FeelingTag?) -> Double {
         switch tag {
         case .bright: 1
         case .good: 0.85
@@ -94,7 +100,7 @@ enum FernletScoring {
     /// (so existing callers and snapshots are unaffected). When `sleepHours` is present the score
     /// blends the subjective quality with an objective duration factor; when stage data is present
     /// a small bonus/penalty is applied for deep/REM proportions.
-    static func sleepScore(_ quality: SleepQuality?, sleepHours: Double? = nil, stages: SleepStagesData? = nil) -> Double {
+    public static func sleepScore(_ quality: SleepQuality?, sleepHours: Double? = nil, stages: SleepStagesData? = nil) -> Double {
         let base: Double
         switch quality {
         case .great: base = 1
@@ -119,7 +125,7 @@ enum FernletScoring {
 
     /// Objective duration quality, 0–1. 7–9 h is ideal; short sleep is penalised more steeply than
     /// long sleep.
-    static func sleepDurationFactor(_ hours: Double) -> Double {
+    public static func sleepDurationFactor(_ hours: Double) -> Double {
         if hours >= 7 && hours <= 9 { return 1 }
         if hours >= 6 && hours < 7 { return 0.85 }
         if hours >= 5 && hours < 6 { return 0.65 }
@@ -130,7 +136,7 @@ enum FernletScoring {
 
     /// Small ±bonus from sleep-stage proportions. Returns nil when there is no usable stage
     /// breakdown. Healthy adult reference: deep ≈ 13–23 %, REM ≈ 20–25 % of total asleep time.
-    static func sleepStageQualityBonus(_ stages: SleepStagesData?) -> Double? {
+    public static func sleepStageQualityBonus(_ stages: SleepStagesData?) -> Double? {
         guard let stages, stages.hasStageBreakdown,
               let total = stages.totalAsleepMinutes, total > 0 else { return nil }
         let deepPct = (stages.deepMinutes ?? 0) / total
@@ -145,7 +151,7 @@ enum FernletScoring {
     /// original `workoutCount > 0 ? 0.9 : 0.45` behaviour exactly. When activity is present, a
     /// genuinely active day lifts the score — most notably so that days with real movement but no
     /// manually-logged workout are no longer flattened to 0.45.
-    static func exerciseIntensityScore(
+    public static func exerciseIntensityScore(
         workoutCount: Int,
         steps: Int? = nil,
         activeEnergyKilocalories: Double? = nil,
@@ -171,7 +177,7 @@ enum FernletScoring {
     /// Autonomic recovery readiness, 0–1, synthesised from resting HR + HRV and sleep. Returns nil
     /// when neither HR nor HRV is available (so callers can cleanly fall back to behaviour-only
     /// signals). Higher HRV and lower resting HR indicate better recovery.
-    static func recoveryReadinessScore(
+    public static func recoveryReadinessScore(
         restingHeartRateBPM: Double?,
         heartRateVariabilityMS: Double?,
         sleepQuality: SleepQuality?,
@@ -192,16 +198,16 @@ enum FernletScoring {
         return components.reduce(0, +) / Double(components.count)
     }
 
-    static func hygieneScore(_ checked: Set<HygieneItem>) -> Double {
+    public static func hygieneScore(_ checked: Set<HygieneItem>) -> Double {
         hygieneScore(completedCount: checked.count, taskCount: HygieneItem.allCases.count)
     }
 
-    static func hygieneScore(completedCount: Int, taskCount: Int) -> Double {
+    public static func hygieneScore(completedCount: Int, taskCount: Int) -> Double {
         guard taskCount > 0 else { return 0 }
         return min(Double(completedCount) / Double(taskCount), 1)
     }
 
-    static func compute(
+    public static func compute(
         journalTag: FeelingTag?,
         mealCount: Int,
         workoutCount: Int,
@@ -248,7 +254,7 @@ enum FernletScoring {
     /// Computes the overall score along with the per-component sub-scores and the applied
     /// (sickness-adjusted) weight vector. `compute` returns only `.overall`; callers that need
     /// to persist the breakdown (`DailyHealthScore`) use this directly.
-    static func computeBreakdown(
+    public static func computeBreakdown(
         journalTag: FeelingTag?,
         mealCount: Int,
         workoutCount: Int,
@@ -321,7 +327,7 @@ enum FernletScoring {
     /// tie-break: a `.gap` in any window must survive (the modifier penalises persistent gaps,
     /// so a recent 7-day gap must not be masked by a 14-day `.covered`), and within the same
     /// status the longer window wins — both keep `windowDays >= 7` so the filter still matches.
-    static func dedupedNutrientGaps(from gaps: [NutrientGap]) -> [NutrientGap] {
+    public static func dedupedNutrientGaps(from gaps: [NutrientGap]) -> [NutrientGap] {
         var byKey: [String: NutrientGap] = [:]
         for gap in gaps {
             guard let existing = byKey[gap.nutrientKey] else {
@@ -341,11 +347,11 @@ enum FernletScoring {
         return candidate.windowDays > existing.windowDays
     }
 
-    static func micronutrientDataCoverageRatio(for meals: [Meal]) -> Double {
+    public static func micronutrientDataCoverageRatio(for meals: [Meal]) -> Double {
         MicronutrientGapAnalyzer.micronutrientDataCoverageRatio(for: meals)
     }
 
-    static func micronutrientModifier(from nutrientGaps: [NutrientGap]) -> Double {
+    public static func micronutrientModifier(from nutrientGaps: [NutrientGap]) -> Double {
         let reliableSignals = nutrientGaps.filter { $0.dataCoverageRatio >= 0.5 }
         guard reliableSignals.isEmpty == false else { return 0 }
         let persistentGaps = reliableSignals.filter { $0.status == .gap && $0.windowDays >= 7 }
@@ -356,7 +362,7 @@ enum FernletScoring {
         return min(Double(covered.count) * 0.01, 0.03)
     }
 
-    static func state(for score: Double, isSick: Bool = false) -> CompanionState {
+    public static func state(for score: Double, isSick: Bool = false) -> CompanionState {
         if isSick { return .sick }
         if score >= 0.75 { return .thriving }
         if score >= 0.50 { return .okay }
@@ -365,8 +371,8 @@ enum FernletScoring {
     }
 }
 
-enum MealParser {
-    static func parse(_ description: String, fallbackType: MealType? = nil) -> Meal {
+public enum MealParser {
+    public static func parse(_ description: String, fallbackType: MealType? = nil) -> Meal {
         let type = fallbackType ?? classifyMealType(description)
         let macros = estimateMacros(description, type: type)
         return Meal(
@@ -380,7 +386,7 @@ enum MealParser {
         )
     }
 
-    static func classifyMealType(_ description: String, hour: Int = Calendar.current.component(.hour, from: .now)) -> MealType {
+    public static func classifyMealType(_ description: String, hour: Int = Calendar.current.component(.hour, from: .now)) -> MealType {
         let lower = description.lowercased()
         if lower.contains("breakfast") || lower.contains("oatmeal") || lower.contains("pancake") || lower.contains("waffle") { return .breakfast }
         if lower.contains("lunch") || lower.contains("sandwich") { return .lunch }
@@ -394,7 +400,7 @@ enum MealParser {
         return .dinner
     }
 
-    static func mealName(from description: String) -> String {
+    public static func mealName(from description: String) -> String {
         let words = description
             .replacingOccurrences(of: "from", with: " ")
             .split(separator: " ")
@@ -439,8 +445,8 @@ enum MealParser {
     }
 }
 
-enum WorkoutPlanner {
-    static func suggestion(energy: WorkoutIntensity, goal: String, context: String, goals: [FitnessGoal]) -> Workout {
+public enum WorkoutPlanner {
+    public static func suggestion(energy: WorkoutIntensity, goal: String, context: String, goals: [FitnessGoal]) -> Workout {
         let alignedGoal = goals.first?.goal ?? goal
         let duration = energy == .light ? 25 : energy == .moderate ? 40 : 55
         let exercises: String
@@ -456,7 +462,7 @@ enum WorkoutPlanner {
         return Workout(name: "Suggested \(energy.rawValue.capitalized)", type: .mixed, exercises: exercises, rpe: nil, notes: note, duration: duration, intensity: energy)
     }
 
-    static func defaultGoals(level: String, interests: String, constraints: String) -> [FitnessGoal] {
+    public static func defaultGoals(level: String, interests: String, constraints: String) -> [FitnessGoal] {
         let focus = interests.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "general strength" : interests
         let limits = constraints.trimmingCharacters(in: .whitespacesAndNewlines)
         let weekly = limits.isEmpty ? "Three flexible sessions with one easier day between harder efforts." : "Three flexible sessions shaped around: \(limits)."
@@ -468,8 +474,8 @@ enum WorkoutPlanner {
     }
 }
 
-struct WorkoutSuggestionLibrary {
-    static func suggestions(for goal: GoalType, intensity: WorkoutIntensity) -> [WorkoutSuggestion] {
+public struct WorkoutSuggestionLibrary {
+    public static func suggestions(for goal: GoalType, intensity: WorkoutIntensity) -> [WorkoutSuggestion] {
         let base = templates[goal] ?? templates[.wellness] ?? []
         let matching = base.filter { $0.intensity == intensity }.map(\.suggestion)
         if matching.isEmpty {
@@ -478,7 +484,10 @@ struct WorkoutSuggestionLibrary {
         return matching
     }
 
-    private static let templates: [GoalType: [(intensity: WorkoutIntensity, suggestion: WorkoutSuggestion)]] = [
+    // Read-only constant lookup table; its element type (`WorkoutSuggestion` from FernletDomainModel) is
+    // not `Sendable`, so under the target's nonisolated default this immutable static needs the unsafe
+    // opt-out. It is never mutated, so the opt-out is sound.
+    nonisolated(unsafe) private static let templates: [GoalType: [(intensity: WorkoutIntensity, suggestion: WorkoutSuggestion)]] = [
         .wellness: [
             (.light, WorkoutSuggestion(name: "Steady Care Walk", exercises: "Easy walk - 20 min\nGentle stretch - 5 min", notes: "A simple local fallback for a balanced day.")),
             (.moderate, WorkoutSuggestion(name: "Balanced Strength Circuit", exercises: "Goblet squat - 3 x 8\nDB row - 3 x 10\nIncline push-up - 3 x 8", notes: "Enough movement to feel grounded."))

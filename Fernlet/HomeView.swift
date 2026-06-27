@@ -1,6 +1,7 @@
 import HealthKit
 import FernletFoundation
 import SwiftUI
+import FernletScoring
 
 #if canImport(UIKit)
 import UIKit

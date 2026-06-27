@@ -1,6 +1,7 @@
 import Observation
 import SwiftUI
 import FernletDomainModel
+import FernletScoring
 
 protocol ExistingCloudDataDetecting {
     func detectExistingData() async throws -> ExistingDataSummary?

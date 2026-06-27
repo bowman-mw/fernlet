@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring"]),
     ],
     targets: [
         .target(
@@ -49,6 +49,14 @@ let package = Package(
         .target(
             name: "FernletDomainModel",
             dependencies: ["FernletFoundation"]
+        ),
+        // Layer 1 — scoring/goal-weight/meal-parse/workout-plan engine + the
+        // abstract period-scoring SIGNAL types that scoring consumes (the raw→
+        // abstract conversion stays up in PeriodContextBridge). Pure logic, no
+        // @Observable, so NO defaultIsolation (nonisolated, like DomainModel).
+        .target(
+            name: "FernletScoring",
+            dependencies: ["FernletFoundation", "FernletDomainModel"]
         ),
     ]
 )

@@ -4,6 +4,7 @@ import HealthKit
 import Observation
 import SwiftUI
 import FernletDomainModel
+import FernletScoring
 
 @MainActor
 @Observable

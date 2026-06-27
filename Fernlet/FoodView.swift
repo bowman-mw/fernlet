@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletScoring
 
 #if canImport(UIKit)
 import UIKit

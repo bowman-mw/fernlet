@@ -8,6 +8,7 @@
 import Foundation
 import FernletFoundation
 import FernletDomainModel
+import FernletScoring
 
 protocol FernletRepository {
     func loadSnapshot(todayKey: String) -> FernletSnapshot

@@ -1,5 +1,6 @@
 import Foundation
 import FernletDomainModel
+import FernletScoring
 
 // MARK: - JSON types
 

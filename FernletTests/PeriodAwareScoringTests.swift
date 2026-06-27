@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import FernletDomainModel
+import FernletScoring
 @testable import Fernlet
 
 @MainActor
