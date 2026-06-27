@@ -7,6 +7,7 @@ import Security
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+import FernletDomainModel
 #endif
 
 @MainActor

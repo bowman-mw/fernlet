@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import FernletDomainModel
 
 struct S3BoundaryTests {
     private let aiFacingFiles = [

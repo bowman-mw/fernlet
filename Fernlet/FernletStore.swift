@@ -3,6 +3,7 @@ import FernletFoundation
 import HealthKit
 import Observation
 import SwiftUI
+import FernletDomainModel
 
 @MainActor
 @Observable

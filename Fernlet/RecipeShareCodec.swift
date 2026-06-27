@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 struct RecipeShareCodec {
     static func shareText(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> String {

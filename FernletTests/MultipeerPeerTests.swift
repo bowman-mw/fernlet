@@ -1,6 +1,7 @@
 import Foundation
 import MultipeerConnectivity
 import Testing
+import FernletDomainModel
 @testable import Fernlet
 
 struct MultipeerPeerTests {

@@ -14,6 +14,7 @@ import FernletFoundation
 import CryptoKit
 import Foundation
 import Testing
+import FernletDomainModel
 @testable import Fernlet
 
 struct SealedBackupChunkTests {

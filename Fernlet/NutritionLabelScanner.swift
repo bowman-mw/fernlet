@@ -5,6 +5,7 @@ import Vision
 
 #if canImport(UIKit)
 import UIKit
+import FernletDomainModel
 
 struct NutritionLabelResult: Equatable, Hashable {
     var servingSize: String?

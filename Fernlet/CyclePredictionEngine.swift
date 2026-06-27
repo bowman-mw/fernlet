@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import FernletDomainModel
 
 struct CyclePrediction: Equatable {
     let nextStart: Date

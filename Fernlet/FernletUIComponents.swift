@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FernletDomainModel
 
 extension Color {
     static let parchment = Color(UIColor { trait in

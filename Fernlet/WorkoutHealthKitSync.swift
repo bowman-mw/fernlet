@@ -1,6 +1,7 @@
 import Foundation
 import FernletFoundation
 import HealthKit
+import FernletDomainModel
 
 @MainActor
 protocol WorkoutSyncContext: AnyObject {

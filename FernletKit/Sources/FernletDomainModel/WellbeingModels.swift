@@ -3,19 +3,19 @@
 
 import Foundation
 
-struct FernletDay: Codable {
-    var date: String
-    var meals: [Meal]
-    var workouts: [Workout]
-    var plannedWorkouts: [PlannedWorkout]
-    var journals: [JournalEntry]
-    var sleep: SleepLog?
-    var bottleCount: Int
-    var hygiene: Set<HygieneItem>
-    var completedPersonalCareTaskIDs: Set<String>
-    var healthContext: HealthDailyContext?
+public nonisolated struct FernletDay: Codable {
+    public var date: String
+    public var meals: [Meal]
+    public var workouts: [Workout]
+    public var plannedWorkouts: [PlannedWorkout]
+    public var journals: [JournalEntry]
+    public var sleep: SleepLog?
+    public var bottleCount: Int
+    public var hygiene: Set<HygieneItem>
+    public var completedPersonalCareTaskIDs: Set<String>
+    public var healthContext: HealthDailyContext?
 
-    init(
+    public init(
         date: String,
         meals: [Meal] = [],
         workouts: [Workout] = [],
@@ -39,7 +39,7 @@ struct FernletDay: Codable {
         self.healthContext = healthContext
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         date = try container.decode(String.self, forKey: .date)
         meals = try container.decodeIfPresent([Meal].self, forKey: .meals) ?? []
@@ -54,15 +54,24 @@ struct FernletDay: Codable {
     }
 }
 
-struct HealthDailyContext: Codable, Equatable {
-    var syncedAt = Date()
-    var activity: HealthActivitySummary?
-    var body: HealthBodyContext?
-    var cycle: HealthCycleContext?
-    var mindfulness: HealthMindfulnessContext?
-    var intimate: HealthIntimateContext?
+public nonisolated struct HealthDailyContext: Codable, Equatable {
 
-    mutating func merge(_ other: HealthDailyContext) {
+    public init(syncedAt: Date = Date(), activity: HealthActivitySummary? = nil, body: HealthBodyContext? = nil, cycle: HealthCycleContext? = nil, mindfulness: HealthMindfulnessContext? = nil, intimate: HealthIntimateContext? = nil) {
+        self.syncedAt = syncedAt
+        self.activity = activity
+        self.body = body
+        self.cycle = cycle
+        self.mindfulness = mindfulness
+        self.intimate = intimate
+    }
+    public var syncedAt = Date()
+    public var activity: HealthActivitySummary?
+    public var body: HealthBodyContext?
+    public var cycle: HealthCycleContext?
+    public var mindfulness: HealthMindfulnessContext?
+    public var intimate: HealthIntimateContext?
+
+    public mutating func merge(_ other: HealthDailyContext) {
         syncedAt = other.syncedAt
         activity = other.activity ?? activity
         body = other.body ?? body
@@ -72,80 +81,114 @@ struct HealthDailyContext: Codable, Equatable {
     }
 }
 
-struct HealthActivitySummary: Codable, Equatable {
-    var steps: Int?
-    var activeEnergyKilocalories: Double?
-    var exerciseMinutes: Double?
+public nonisolated struct HealthActivitySummary: Codable, Equatable {
+
+    public init(steps: Int? = nil, activeEnergyKilocalories: Double? = nil, exerciseMinutes: Double? = nil) {
+        self.steps = steps
+        self.activeEnergyKilocalories = activeEnergyKilocalories
+        self.exerciseMinutes = exerciseMinutes
+    }
+    public var steps: Int?
+    public var activeEnergyKilocalories: Double?
+    public var exerciseMinutes: Double?
 }
 
-struct HealthBodyContext: Codable, Equatable {
-    var sleepHours: Double?
-    var restingHeartRateBPM: Double?
-    var heartRateVariabilityMS: Double?
+public nonisolated struct HealthBodyContext: Codable, Equatable {
+
+    public init(sleepHours: Double? = nil, restingHeartRateBPM: Double? = nil, heartRateVariabilityMS: Double? = nil, sleepStages: SleepStagesData? = nil) {
+        self.sleepHours = sleepHours
+        self.restingHeartRateBPM = restingHeartRateBPM
+        self.heartRateVariabilityMS = heartRateVariabilityMS
+        self.sleepStages = sleepStages
+    }
+    public var sleepHours: Double?
+    public var restingHeartRateBPM: Double?
+    public var heartRateVariabilityMS: Double?
     /// Per-stage sleep breakdown from HealthKit (`HKCategoryValueSleepAnalysis`), when a wearable
     /// supplies it. Optional: many users only have an `inBed`/`asleepUnspecified` total.
-    var sleepStages: SleepStagesData?
+    public var sleepStages: SleepStagesData?
 }
 
 /// Sleep-stage durations (minutes) for a single night, derived from HealthKit sleep-analysis
 /// samples. All fields optional — stage data is only available from devices that classify sleep
 /// (e.g. Apple Watch). `totalAsleepMinutes` is the merged asleep total used to derive stage ratios.
-struct SleepStagesData: Codable, Equatable {
-    var deepMinutes: Double?
-    var coreMinutes: Double?
-    var remMinutes: Double?
-    var awakeMinutes: Double?
-    var totalAsleepMinutes: Double?
+public nonisolated struct SleepStagesData: Codable, Equatable {
+
+    public init(deepMinutes: Double? = nil, coreMinutes: Double? = nil, remMinutes: Double? = nil, awakeMinutes: Double? = nil, totalAsleepMinutes: Double? = nil) {
+        self.deepMinutes = deepMinutes
+        self.coreMinutes = coreMinutes
+        self.remMinutes = remMinutes
+        self.awakeMinutes = awakeMinutes
+        self.totalAsleepMinutes = totalAsleepMinutes
+    }
+    public var deepMinutes: Double?
+    public var coreMinutes: Double?
+    public var remMinutes: Double?
+    public var awakeMinutes: Double?
+    public var totalAsleepMinutes: Double?
 
     /// True when at least one classified asleep stage (deep/core/REM) is present — i.e. the data
     /// is richer than a bare asleep total and worth feeding into the sleep-quality refinement.
-    var hasStageBreakdown: Bool {
+    public var hasStageBreakdown: Bool {
         (deepMinutes ?? 0) > 0 || (coreMinutes ?? 0) > 0 || (remMinutes ?? 0) > 0
     }
 }
 
-struct HealthCycleContext: Codable, Equatable {
-    var menstrualFlowEventCount: Int?
-    var latestCycleEventAt: Date?
+public nonisolated struct HealthCycleContext: Codable, Equatable {
+
+    public init(menstrualFlowEventCount: Int? = nil, latestCycleEventAt: Date? = nil) {
+        self.menstrualFlowEventCount = menstrualFlowEventCount
+        self.latestCycleEventAt = latestCycleEventAt
+    }
+    public var menstrualFlowEventCount: Int?
+    public var latestCycleEventAt: Date?
 }
 
-struct HealthMindfulnessContext: Codable, Equatable {
-    var mindfulSessionMinutes: Double?
+public nonisolated struct HealthMindfulnessContext: Codable, Equatable {
+
+    public init(mindfulSessionMinutes: Double? = nil) {
+        self.mindfulSessionMinutes = mindfulSessionMinutes
+    }
+    public var mindfulSessionMinutes: Double?
 }
 
-struct HealthIntimateContext: Codable, Equatable {
-    var eventCount: Int?
+public nonisolated struct HealthIntimateContext: Codable, Equatable {
+
+    public init(eventCount: Int? = nil) {
+        self.eventCount = eventCount
+    }
+    public var eventCount: Int?
 }
 
-struct DailyHealthScore: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var dateKey: String
-    var score: Double
-    var companionState: CompanionState
-    var daySummaryText: String?
-    var computedAt: Date
+public nonisolated struct DailyHealthScore: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var dateKey: String
+    public var score: Double
+    public var companionState: CompanionState
+    public var daySummaryText: String?
+    public var computedAt: Date
     /// Per-component sub-scores (journal/meal/workout/sleep/hydration/hygiene) that produced `score`.
-    var componentScores: [String: Double]?
+    public var componentScores: [String: Double]?
     /// The exact (sickness-adjusted) weight vector applied for this day.
-    var weightVector: ScoringWeights?
+    public var weightVector: ScoringWeights?
     /// Whether the day was scored with the sickness override active.
-    var sicknessOverride: Bool?
+    public var sicknessOverride: Bool?
     /// Optional menstrual-cycle phase label for this day (populated once the period bridge lands).
-    var periodPhase: String?
+    public var periodPhase: String?
     /// The HealthKit activity context (steps/active-energy/exercise-minutes) that fed scoring this
     /// day, retained for audit/inspection. Nil when HealthKit was unavailable or disabled.
-    var healthActivityContext: HealthActivitySummary?
+    public var healthActivityContext: HealthActivitySummary?
     /// The HealthKit body context (sleep hours/stages, resting HR, HRV) that fed scoring this day,
     /// retained for audit/inspection. Nil when HealthKit was unavailable or disabled.
-    var healthBodyContext: HealthBodyContext?
+    public var healthBodyContext: HealthBodyContext?
 
-    init(id: UUID = UUID(), dateKey: String, score: Double, companionState: CompanionState, daySummaryText: String? = nil, computedAt: Date, componentScores: [String: Double]? = nil, weightVector: ScoringWeights? = nil, sicknessOverride: Bool? = nil, periodPhase: String? = nil, healthActivityContext: HealthActivitySummary? = nil, healthBodyContext: HealthBodyContext? = nil) {
+    public init(id: UUID = UUID(), dateKey: String, score: Double, companionState: CompanionState, daySummaryText: String? = nil, computedAt: Date, componentScores: [String: Double]? = nil, weightVector: ScoringWeights? = nil, sicknessOverride: Bool? = nil, periodPhase: String? = nil, healthActivityContext: HealthActivitySummary? = nil, healthBodyContext: HealthBodyContext? = nil) {
         self.id = id; self.dateKey = dateKey; self.score = score; self.companionState = companionState; self.daySummaryText = daySummaryText; self.computedAt = computedAt
         self.componentScores = componentScores; self.weightVector = weightVector; self.sicknessOverride = sicknessOverride; self.periodPhase = periodPhase
         self.healthActivityContext = healthActivityContext; self.healthBodyContext = healthBodyContext
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         dateKey = try c.decode(String.self, forKey: .dateKey)
@@ -162,18 +205,18 @@ struct DailyHealthScore: Identifiable, Codable, Equatable {
     }
 }
 
-struct JournalEntry: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var text: String
-    var tag: FeelingTag
-    var date = Date()
-    var emotions: [String] = []
+public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var text: String
+    public var tag: FeelingTag
+    public var date = Date()
+    public var emotions: [String] = []
 
-    init(id: UUID = UUID(), text: String, tag: FeelingTag, date: Date = Date(), emotions: [String] = []) {
+    public init(id: UUID = UUID(), text: String, tag: FeelingTag, date: Date = Date(), emotions: [String] = []) {
         self.id = id; self.text = text; self.tag = tag; self.date = date; self.emotions = emotions
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         text = try c.decode(String.self, forKey: .text)
@@ -183,25 +226,25 @@ struct JournalEntry: Identifiable, Codable, Equatable {
     }
 }
 
-enum FeelingTag: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable {
     case bright, good, neutral, quiet, tired, hard
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String { rawValue.capitalized }
+    public var label: String { rawValue.capitalized }
 }
 
-struct SleepLog: Codable, Equatable {
-    var hours: Double?
-    var quality: SleepQuality
-    var note: String
-    var loggedAt = Date()
+public nonisolated struct SleepLog: Codable, Equatable {
+    public var hours: Double?
+    public var quality: SleepQuality
+    public var note: String
+    public var loggedAt = Date()
 
-    init(hours: Double? = nil, quality: SleepQuality, note: String, loggedAt: Date = Date()) {
+    public init(hours: Double? = nil, quality: SleepQuality, note: String, loggedAt: Date = Date()) {
         self.hours = hours; self.quality = quality; self.note = note; self.loggedAt = loggedAt
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         hours = try c.decodeIfPresent(Double.self, forKey: .hours)
         quality = try c.decode(SleepQuality.self, forKey: .quality)
@@ -210,13 +253,13 @@ struct SleepLog: Codable, Equatable {
     }
 }
 
-enum SleepQuality: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum SleepQuality: String, Codable, CaseIterable, Identifiable {
     case poor, ok, good, great
 
-    var id: String { rawValue }
-    var label: String { rawValue.capitalized }
+    public var id: String { rawValue }
+    public var label: String { rawValue.capitalized }
 
-    var description: String {
+    public var description: String {
         switch self {
         case .poor: "rough, broken, unrested"
         case .ok: "enough, not great"
@@ -226,12 +269,12 @@ enum SleepQuality: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum HygieneItem: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum HygieneItem: String, Codable, CaseIterable, Identifiable {
     case teethAM, teethPM, floss, shower, deodorant, skincareAM, skincarePM, sunscreen
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .teethAM: "Brush teeth AM"
         case .teethPM: "Brush teeth PM"
@@ -244,7 +287,7 @@ enum HygieneItem: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    public var systemImage: String {
         switch self {
         case .teethAM, .teethPM: "mouth"
         case .floss: "checkmark.seal"
@@ -256,7 +299,7 @@ enum HygieneItem: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var group: String {
+    public var group: String {
         switch self {
         case .teethAM, .skincareAM, .sunscreen: "Morning"
         case .teethPM, .floss, .skincarePM: "Evening"
@@ -265,16 +308,24 @@ enum HygieneItem: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-struct PersonalCareTask: Identifiable, Codable, Equatable {
-    var id: String
-    var label: String
-    var systemImage: String
-    var group: String
-    var defaultHygieneRawValue: String?
+public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
 
-    static let groups = ["Morning", "Anytime", "Evening"]
+    public init(id: String, label: String, systemImage: String, group: String, defaultHygieneRawValue: String? = nil) {
+        self.id = id
+        self.label = label
+        self.systemImage = systemImage
+        self.group = group
+        self.defaultHygieneRawValue = defaultHygieneRawValue
+    }
+    public var id: String
+    public var label: String
+    public var systemImage: String
+    public var group: String
+    public var defaultHygieneRawValue: String?
 
-    static var defaultTasks: [PersonalCareTask] {
+    nonisolated public static let groups = ["Morning", "Anytime", "Evening"]
+
+    nonisolated public static var defaultTasks: [PersonalCareTask] {
         HygieneItem.allCases.map { item in
             PersonalCareTask(
                 id: item.rawValue,
@@ -286,12 +337,12 @@ struct PersonalCareTask: Identifiable, Codable, Equatable {
         }
     }
 
-    var defaultHygieneItem: HygieneItem? {
+    public var defaultHygieneItem: HygieneItem? {
         guard let defaultHygieneRawValue else { return nil }
         return HygieneItem(rawValue: defaultHygieneRawValue)
     }
 
-    static func custom(label: String, group: String) -> PersonalCareTask {
+    public static func custom(label: String, group: String) -> PersonalCareTask {
         PersonalCareTask(
             id: "custom-\(UUID().uuidString)",
             label: label,
@@ -301,7 +352,7 @@ struct PersonalCareTask: Identifiable, Codable, Equatable {
         )
     }
 
-    static func normalized(_ tasks: [PersonalCareTask]) -> [PersonalCareTask] {
+    public static func normalized(_ tasks: [PersonalCareTask]) -> [PersonalCareTask] {
         var seen: Set<String> = []
         let cleaned = tasks.compactMap { task -> PersonalCareTask? in
             let trimmedLabel = task.label.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -317,17 +368,17 @@ struct PersonalCareTask: Identifiable, Codable, Equatable {
     }
 }
 
-struct MemoryNote: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var category: String
-    var text: String
-    var sourceDate = Date()
+public nonisolated struct MemoryNote: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var category: String
+    public var text: String
+    public var sourceDate = Date()
 
-    init(id: UUID = UUID(), category: String, text: String, sourceDate: Date = Date()) {
+    public init(id: UUID = UUID(), category: String, text: String, sourceDate: Date = Date()) {
         self.id = id; self.category = category; self.text = text; self.sourceDate = sourceDate
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         category = try c.decode(String.self, forKey: .category)
@@ -335,31 +386,31 @@ struct MemoryNote: Identifiable, Codable, Equatable {
         sourceDate = try c.decodeIfPresent(Date.self, forKey: .sourceDate) ?? Date()
     }
 
-    static func fromJournal(text: String, tag: FeelingTag) -> MemoryNote? {
+    public static func fromJournal(text: String, tag: FeelingTag) -> MemoryNote? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 20 else { return nil }
         let prefix = String(trimmed.prefix(120))
         // Spec §8: a diagnostic-language post-classifier runs on every proposed memory
         // before storage; any match is silently rejected so clinical language never lands.
-        guard !MemoryAgent.containsDiagnosticLanguage(prefix) else { return nil }
+        guard !DiagnosticLanguage.contains(prefix) else { return nil }
         return MemoryNote(category: tag.rawValue, text: prefix)
     }
 }
 
-struct FitnessGoal: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var type: GoalType
-    var goal: String
-    var timeframe: String
-    var metric: String
-    var milestones: [String] = []
-    var weeklyStructure: String?
+public nonisolated struct FitnessGoal: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var type: GoalType
+    public var goal: String
+    public var timeframe: String
+    public var metric: String
+    public var milestones: [String] = []
+    public var weeklyStructure: String?
 
-    init(id: UUID = UUID(), type: GoalType, goal: String, timeframe: String, metric: String, milestones: [String] = [], weeklyStructure: String? = nil) {
+    public init(id: UUID = UUID(), type: GoalType, goal: String, timeframe: String, metric: String, milestones: [String] = [], weeklyStructure: String? = nil) {
         self.id = id; self.type = type; self.goal = goal; self.timeframe = timeframe; self.metric = metric; self.milestones = milestones; self.weeklyStructure = weeklyStructure
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         type = try c.decode(GoalType.self, forKey: .type)
@@ -371,7 +422,7 @@ struct FitnessGoal: Identifiable, Codable, Equatable {
     }
 }
 
-enum GoalType: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable {
     case wellness
     case strength
     case weightManagement
@@ -380,9 +431,9 @@ enum GoalType: String, Codable, CaseIterable, Identifiable {
     case exploring
     case sportsPrep
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .wellness: "Wellness"
         case .strength: "Strength"
@@ -394,7 +445,7 @@ enum GoalType: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var tagline: String {
+    public var tagline: String {
         switch self {
         case .wellness: "Balanced daily care."
         case .strength: "Fuel, train, and recover."
@@ -408,14 +459,14 @@ enum GoalType: String, Codable, CaseIterable, Identifiable {
 
     /// Goals whose programming is built around structured training (drives stricter workout
     /// consistency / progression vs. the gentler wellness-oriented goals).
-    var isTrainingFocused: Bool {
+    public var isTrainingFocused: Bool {
         switch self {
         case .strength, .sportsPrep, .weightManagement: true
         case .wellness, .mentalHealth, .recovery, .exploring: false
         }
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
         switch value {

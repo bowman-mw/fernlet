@@ -2,6 +2,7 @@ import Foundation
 import FernletFoundation
 import CryptoKit
 import Security
+import FernletDomainModel
 
 /// Supplies the symmetric key `PrivateMediaStore` uses to encrypt cached media bytes at rest.
 ///

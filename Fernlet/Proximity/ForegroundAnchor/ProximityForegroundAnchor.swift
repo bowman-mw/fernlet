@@ -2,6 +2,7 @@ import Foundation
 
 #if canImport(ActivityKit)
 import ActivityKit
+import FernletDomainModel
 #endif
 
 @MainActor

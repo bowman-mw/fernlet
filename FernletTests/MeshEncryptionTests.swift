@@ -8,6 +8,7 @@ import Testing
 import CryptoKit
 #if canImport(UIKit)
 import UIKit
+import FernletDomainModel
 #endif
 @testable import Fernlet
 

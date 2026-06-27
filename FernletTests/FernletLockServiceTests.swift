@@ -3,6 +3,7 @@ import FernletFoundation
 import CryptoKit
 import Security
 import Testing
+import FernletDomainModel
 @testable import Fernlet
 
 // Cooldown tests use constructor-injected FernletDateProviding so restart behavior and exact deadlines

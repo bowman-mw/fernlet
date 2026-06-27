@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 struct MealPhotoStore {
     private let directory: URL

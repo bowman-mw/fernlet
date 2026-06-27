@@ -1,6 +1,7 @@
 import Foundation
 import MultipeerConnectivity
 import Combine
+import FernletDomainModel
 @testable import Fernlet
 
 @MainActor

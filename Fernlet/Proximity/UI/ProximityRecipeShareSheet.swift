@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 struct ProximityRecipeShareDraft: Identifiable, Equatable {
     let id = UUID()

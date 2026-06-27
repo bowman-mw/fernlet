@@ -1,5 +1,6 @@
 import Foundation
 import SQLite3
+import FernletDomainModel
 
 /// Build-time generator that converts the source USDA `FoodItem`s into the read-only
 /// `FoodCatalog.sqlite` resource the app ships. It is *not* invoked at runtime — the app only ever

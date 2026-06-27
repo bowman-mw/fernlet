@@ -1,5 +1,6 @@
 import Foundation
 import SQLite3
+import FernletDomainModel
 
 // MARK: - Shared C helpers
 

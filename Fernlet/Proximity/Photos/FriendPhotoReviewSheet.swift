@@ -1,6 +1,7 @@
 import SwiftUI
 import Photos
 import UIKit
+import FernletDomainModel
 
 struct FriendPhotoTile: View {
     let photo: FriendPhotoPayload

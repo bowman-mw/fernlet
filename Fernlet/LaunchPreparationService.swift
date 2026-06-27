@@ -4,6 +4,7 @@ import Observation
 
 #if canImport(FoundationModels)
 import FoundationModels
+import FernletDomainModel
 #endif
 
 // MARK: - Photowall seed

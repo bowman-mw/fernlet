@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 struct ProximityTrustedPeerRecord: Codable, Equatable, Identifiable {
     var id: UUID

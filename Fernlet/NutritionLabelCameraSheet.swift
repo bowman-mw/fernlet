@@ -3,6 +3,7 @@ import SwiftUI
 #if canImport(UIKit)
 import PhotosUI
 import UIKit
+import FernletDomainModel
 
 struct NutritionLabelCameraSheet: View {
     @Environment(\.dismiss) private var dismiss

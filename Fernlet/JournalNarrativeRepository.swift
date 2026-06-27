@@ -2,6 +2,7 @@ import CoreData
 import FernletCrypto
 import CryptoKit
 import Foundation
+import FernletDomainModel
 
 struct JournalNarrative: Identifiable, Equatable {
     var id: UUID

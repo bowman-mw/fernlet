@@ -1,4 +1,5 @@
 import XCTest
+import FernletDomainModel
 
 // MARK: - Storage & Privacy UI Test Suite
 

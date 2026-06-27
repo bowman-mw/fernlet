@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 struct MeshAdmissionPromptSheet: View {
     let requests: [MeshAdmissionRequestPayload]

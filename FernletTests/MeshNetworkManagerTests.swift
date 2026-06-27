@@ -1,5 +1,6 @@
 import Testing
 import UIKit
+import FernletDomainModel
 @testable import Fernlet
 
 // MARK: - MeshNetworkManagerTests

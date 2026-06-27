@@ -10,6 +10,7 @@ import Combine
 import CoreData
 import HealthKit
 import Testing
+import FernletDomainModel
 @testable import Fernlet
 
 struct FernletTests {

@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import FernletDomainModel
 
 final class FernletUITestsLaunchTests: XCTestCase {
 

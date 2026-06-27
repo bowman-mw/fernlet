@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import UIKit
+import FernletDomainModel
 
 private struct RecipeShareConnection: Identifiable {
     let id: UUID

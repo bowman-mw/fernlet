@@ -8,6 +8,7 @@
 import SwiftUI
 import LocalAuthentication
 import Combine
+import FernletDomainModel
 
 // MARK: - Setup view
 

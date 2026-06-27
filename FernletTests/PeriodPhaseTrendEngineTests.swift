@@ -1,4 +1,5 @@
 import Testing
+import FernletDomainModel
 @testable import Fernlet
 
 /// Pure, deterministic tests for the AI-free per-phase correlation engine.

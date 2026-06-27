@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import simd
+import FernletDomainModel
 
 enum RangingDistance: Equatable {
     case unknown

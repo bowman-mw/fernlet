@@ -3,6 +3,7 @@ import MultipeerConnectivity
 import Observation
 import UIKit
 import CryptoKit
+import FernletDomainModel
 
 // MARK: - Supporting types
 

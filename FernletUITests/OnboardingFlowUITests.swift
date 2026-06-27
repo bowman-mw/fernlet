@@ -1,4 +1,5 @@
 import XCTest
+import FernletDomainModel
 
 final class OnboardingFlowUITests: XCTestCase {
     override func setUpWithError() throws {

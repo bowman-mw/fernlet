@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 // MARK: - Payload classification
 

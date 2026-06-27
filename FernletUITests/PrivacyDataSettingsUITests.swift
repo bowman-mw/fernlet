@@ -1,4 +1,5 @@
 import XCTest
+import FernletDomainModel
 
 final class PrivacyDataSettingsUITests: XCTestCase {
     override func setUpWithError() throws {

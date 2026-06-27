@@ -1,5 +1,6 @@
 import Foundation
 import FernletFoundation
+import FernletDomainModel
 
 enum FernletVoice: CaseIterable {
     case mealAnalysisFailed
@@ -24,50 +25,14 @@ enum FernletVoice: CaseIterable {
     }
 }
 
-struct ScoringWeights: Codable, Equatable {
-    var journalWeight: Double
-    var mealWeight: Double
-    var workoutWeight: Double
-    var sleepWeight: Double
-    var hydrationWeight: Double
-    var hygieneWeight: Double
-
-    init(
-        journalWeight: Double,
-        mealWeight: Double,
-        workoutWeight: Double,
-        sleepWeight: Double,
-        hydrationWeight: Double,
-        hygieneWeight: Double
-    ) {
-        self.journalWeight = journalWeight
-        self.mealWeight = mealWeight
-        self.workoutWeight = workoutWeight
-        self.sleepWeight = sleepWeight
-        self.hydrationWeight = hydrationWeight
-        self.hygieneWeight = hygieneWeight
-        assert(abs(total - 1.0) < 0.000_001, "scoring weights must sum to 1")
-    }
-
-    var total: Double {
-        journalWeight + mealWeight + workoutWeight + sleepWeight + hydrationWeight + hygieneWeight
-    }
-
-    func adjustedForSickness(_ isSick: Bool) -> ScoringWeights {
-        guard isSick else { return self }
-        var adjusted = self
-        let workout = workoutWeight
-        adjusted.workoutWeight = 0
-        adjusted.sleepWeight += workout * 0.5
-        adjusted.hydrationWeight += workout * 0.3
-        adjusted.hygieneWeight += workout * 0.2
-        return adjusted
-    }
-
+extension ScoringWeights {
     /// Gentle period-phase leniency: on a personally-harder phase, shift a *small* slice (30%) of the
     /// workout demand toward restorative sleep/hydration, so a lower-movement day during a hard phase is
     /// not penalised as sharply. Much milder than `adjustedForSickness` (which zeroes workout entirely).
     /// `.none` is the identity, preserving byte-for-byte the period-unaware weight vector. Total stays 1.
+    ///
+    /// Lives here (app layer) rather than on the carved-down `ScoringWeights` value type because it
+    /// depends on `PeriodSignalStrength`, which sits above the domain layer (period-module egress).
     func adjustedForPeriod(_ leniency: PeriodSignalStrength) -> ScoringWeights {
         guard leniency == .suggested else { return self }
         var adjusted = self
@@ -377,9 +342,7 @@ enum FernletScoring {
     }
 
     static func micronutrientDataCoverageRatio(for meals: [Meal]) -> Double {
-        guard meals.isEmpty == false else { return 0 }
-        let mealsWithData = meals.filter { $0.micronutrientSnapshot.populatedFieldCount >= 5 }.count
-        return Double(mealsWithData) / Double(meals.count)
+        MicronutrientGapAnalyzer.micronutrientDataCoverageRatio(for: meals)
     }
 
     static func micronutrientModifier(from nutrientGaps: [NutrientGap]) -> Double {
@@ -502,26 +465,6 @@ enum WorkoutPlanner {
             FitnessGoal(type: .wellness, goal: "Keep most sessions at a sustainable effort", timeframe: "4 weeks", metric: "RPE mostly 6-8", weeklyStructure: weekly),
             FitnessGoal(type: .exploring, goal: "Build a repeatable \(focus) rhythm", timeframe: "3 months", metric: "10 consistent weeks", milestones: ["week 4 check-in", "week 8 adjust"], weeklyStructure: weekly)
         ]
-    }
-}
-
-struct WorkoutSuggestion: Identifiable, Equatable {
-    var id = UUID()
-    var name: String
-    var exercises: String
-    var notes: String
-
-    func workout(intensity: WorkoutIntensity) -> Workout {
-        Workout(
-            name: name,
-            type: .mixed,
-            mode: .strengthTraining,
-            exercises: exercises,
-            rpe: nil,
-            notes: notes,
-            duration: nil,
-            intensity: intensity
-        )
     }
 }
 

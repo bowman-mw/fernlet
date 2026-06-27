@@ -5,6 +5,7 @@
 // The dateProvider is injectable so tests can simulate clock advancement.
 
 import Foundation
+import FernletDomainModel
 
 @MainActor
 final class ReplayCache {

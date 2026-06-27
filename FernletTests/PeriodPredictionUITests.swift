@@ -3,6 +3,7 @@ import FernletFoundation
 import HealthKit
 import Testing
 import SwiftUI
+import FernletDomainModel
 @testable import Fernlet
 
 @MainActor

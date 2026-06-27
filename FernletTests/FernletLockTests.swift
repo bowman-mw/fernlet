@@ -11,6 +11,7 @@ import SwiftUI
 import Testing
 import CryptoKit
 import UIKit
+import FernletDomainModel
 @testable import Fernlet
 
 // MARK: - Helpers

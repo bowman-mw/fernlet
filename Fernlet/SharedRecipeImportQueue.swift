@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
     var id: UUID

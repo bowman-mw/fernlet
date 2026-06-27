@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 /// The narrow seam the Proximity subsystem uses to reach app-level state, so the
 /// mesh / recipe-share managers depend on this abstraction instead of the concrete

@@ -1,5 +1,6 @@
 import Foundation
 import MultipeerConnectivity
+import FernletDomainModel
 
 struct MultipeerPeer: Hashable, Identifiable {
     let id: UUID

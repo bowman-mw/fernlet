@@ -3,6 +3,7 @@ import FernletFoundation
 import HealthKit
 import Security
 import Testing
+import FernletDomainModel
 @testable import Fernlet
 
 @MainActor

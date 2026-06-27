@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 struct OnboardingLockSetupView: View {
     var stepText: String

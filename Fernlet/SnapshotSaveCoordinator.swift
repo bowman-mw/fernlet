@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import FernletDomainModel
 
 @MainActor
 protocol RemoteChangePublishingRepository: FernletRepository {

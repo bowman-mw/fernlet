@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import FernletDomainModel
 
 /// Thin wrapper around `UNUserNotificationCenter` for the optional gentle daily check-in reminder.
 /// Local notifications only — no remote push — and entirely opt-in.

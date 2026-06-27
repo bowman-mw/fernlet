@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import FernletDomainModel
 @testable import Fernlet
 
 @Suite(.serialized, .timeLimit(.minutes(2))) @MainActor

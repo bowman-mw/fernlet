@@ -9,6 +9,7 @@ import Foundation
 import FernletFoundation
 import Testing
 import CryptoKit
+import FernletDomainModel
 @testable import Fernlet
 
 @MainActor

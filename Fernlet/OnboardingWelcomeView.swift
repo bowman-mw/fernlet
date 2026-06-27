@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 struct OnboardingWelcomeView: View {
     var stepText: String

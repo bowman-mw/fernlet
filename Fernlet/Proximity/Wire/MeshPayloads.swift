@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 enum MeshMode: String, Codable, Equatable {
     case open

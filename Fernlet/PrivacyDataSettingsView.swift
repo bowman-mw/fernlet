@@ -1,6 +1,7 @@
 import LocalAuthentication
 import FernletFoundation
 import SwiftUI
+import FernletDomainModel
 
 @MainActor
 protocol PrivacyCloudDataManaging {

@@ -3,6 +3,7 @@ import FernletCrypto
 import FernletFoundation
 import CryptoKit
 import Foundation
+import FernletDomainModel
 
 struct IntimacyLog: Identifiable, Equatable {
     var id: UUID

@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 enum PrivateHubSection: String, CaseIterable, Identifiable {
     case journal = "Journal"

@@ -2,6 +2,7 @@ import Combine
 import FernletFoundation
 import CoreData
 import Foundation
+import FernletDomainModel
 
 @MainActor
 final class CoreDataFernletRepository: FernletRepository, RemoteChangePublishingRepository {

@@ -1,6 +1,7 @@
 import Foundation
 import MultipeerConnectivity
 import Combine
+import FernletDomainModel
 
 nonisolated enum MultipeerServiceType {
     static let trainer = "fernlet-coach"

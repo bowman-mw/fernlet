@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 struct FriendPhotoPayload: Codable, Equatable, Identifiable {
     let id: UUID

@@ -5,6 +5,7 @@
 // Every envelope is Ed25519-signed over a deterministic canonical JSON encoding.
 
 import Foundation
+import FernletDomainModel
 
 // MARK: - Envelope
 

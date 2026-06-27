@@ -2,6 +2,7 @@ import Foundation
 import CryptoKit
 import Security
 import Testing
+import FernletDomainModel
 @testable import Fernlet
 
 @Suite(.serialized)

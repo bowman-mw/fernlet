@@ -1,4 +1,5 @@
 import UIKit
+import FernletDomainModel
 
 extension UIImage {
     func resizedForFriendSharing(maxDimension: CGFloat = 1400) -> UIImage {

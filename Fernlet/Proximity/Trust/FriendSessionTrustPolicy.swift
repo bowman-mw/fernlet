@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 final class FriendSessionTrustPolicy: ProximityTrustPolicy {
     private let vault: ProximityTrustVault

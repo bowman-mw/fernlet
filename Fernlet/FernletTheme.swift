@@ -2,6 +2,7 @@ import SwiftUI
 
 #if canImport(UIKit)
 import UIKit
+import FernletDomainModel
 
 enum FernletThemeDefaults {
     static let lightBackgroundHex = "#F5EFDF"

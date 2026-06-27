@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 struct ActivityPickerSection: View {
     @Binding var selectedActivityType: WorkoutActivityType?

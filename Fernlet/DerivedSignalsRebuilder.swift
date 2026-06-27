@@ -1,3 +1,4 @@
+import FernletDomainModel
 struct DerivedSignalsRebuilder {
     static func rebuild(
         allDays: [String: FernletDay],

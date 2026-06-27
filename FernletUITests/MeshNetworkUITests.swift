@@ -1,4 +1,5 @@
 import XCTest
+import FernletDomainModel
 
 // MARK: - Mesh Network UI Test Suite
 //

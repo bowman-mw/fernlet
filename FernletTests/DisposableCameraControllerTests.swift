@@ -1,4 +1,5 @@
 import Testing
+import FernletDomainModel
 @testable import Fernlet
 
 /// Pure state-machine tests for CameraCaptureController — no AVFoundation device required.

@@ -6,6 +6,7 @@ import Foundation
 import HealthKit
 import LocalAuthentication
 import Testing
+import FernletDomainModel
 @testable import Fernlet
 
 @MainActor

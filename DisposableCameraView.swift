@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import UIKit
+import FernletDomainModel
 
 // MARK: - Camera preview (UIViewRepresentable)
 

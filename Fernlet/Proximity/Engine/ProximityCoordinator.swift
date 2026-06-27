@@ -3,6 +3,7 @@ import Combine
 import MultipeerConnectivity
 import Observation
 import UIKit
+import FernletDomainModel
 
 @MainActor
 protocol ProximityInspectorRecording: AnyObject {

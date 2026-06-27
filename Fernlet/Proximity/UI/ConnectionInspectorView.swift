@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 struct ConnectionInspectorView: View {
     var inspector: ConnectionInspector

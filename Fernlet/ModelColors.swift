@@ -3,6 +3,7 @@
 // Re-added as extensions so the domain models stay Foundation-only / portable.
 
 import SwiftUI
+import FernletDomainModel
 
 extension MealType {
     var color: Color {

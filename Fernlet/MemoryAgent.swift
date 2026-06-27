@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 /// Routes Tier-2 memory access for AI prompts.
 ///
@@ -7,20 +8,6 @@ import Foundation
 /// 2. Recency filter — records older than `recencyDays` are excluded.
 /// 3. Diagnostic-language post-classifier — records containing clinical or diagnostic terms are dropped.
 enum MemoryAgent {
-
-    // MARK: - Diagnostic patterns
-
-    /// Lowercase substrings that indicate clinical or diagnostic language.
-    /// Records whose `text` or `evidence` contain any of these are excluded from all AI prompts.
-    static let diagnosticPatterns: [String] = [
-        "disorder", "syndrome", "diagnos", "depression", "anxiety",
-        "bipolar", "adhd", "autism", "ocd", "ptsd", "trauma",
-        "schizophrenia", "psychosis", "medication", "prescription",
-        "therapy", "psychiatric", "clinical",
-        "period", "cycle", "pregnan", "miscarriage",
-        "intimacy", "libido",
-        "suicid", "self-harm", "self harm"
-    ]
 
     // MARK: - Destination allowlist
 
@@ -67,8 +54,7 @@ enum MemoryAgent {
     /// Used both at read-time (before AI prompt injection) and at storage-time
     /// (every proposed memory is screened before it is persisted — spec §8).
     static func containsDiagnosticLanguage(_ text: String) -> Bool {
-        let lowered = text.lowercased()
-        return diagnosticPatterns.contains { lowered.contains($0) }
+        DiagnosticLanguage.contains(text)
     }
 
     /// Returns `true` if the record's text or evidence contains clinical/diagnostic language.

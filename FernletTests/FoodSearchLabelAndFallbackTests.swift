@@ -9,6 +9,7 @@
 
 import Foundation
 import Testing
+import FernletDomainModel
 @testable import Fernlet
 
 struct FoodSearchLabelAndFallbackTests {

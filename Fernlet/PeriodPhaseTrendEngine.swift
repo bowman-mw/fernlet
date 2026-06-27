@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 /// An abstract, per-phase wellbeing trend derived from the user's own history. This is a *device-sealed*
 /// statistical output (spec §4: "Period health trends use statistical correlations … not AI"). It carries

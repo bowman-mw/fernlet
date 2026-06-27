@@ -1,6 +1,7 @@
 import CloudKit
 import FernletFoundation
 import Foundation
+import FernletDomainModel
 
 struct ExistingDataSummary: Equatable {
     var mealLogCount: Int

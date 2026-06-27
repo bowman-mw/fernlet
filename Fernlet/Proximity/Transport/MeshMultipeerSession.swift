@@ -2,6 +2,7 @@ import Foundation
 import MultipeerConnectivity
 import Combine
 import UIKit
+import FernletDomainModel
 
 // MARK: - PeerChannelTransport
 

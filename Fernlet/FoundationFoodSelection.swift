@@ -2,6 +2,7 @@ import Foundation
 
 #if canImport(FoundationModels)
 import FoundationModels
+import FernletDomainModel
 #endif
 
 enum FoodSelectionAvailability {

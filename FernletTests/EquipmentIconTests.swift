@@ -2,6 +2,7 @@ import Foundation
 import CoreGraphics
 import SwiftUI
 import Testing
+import FernletDomainModel
 @testable import Fernlet
 
 @MainActor

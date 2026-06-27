@@ -4,6 +4,7 @@ import UIKit
 import HealthKit
 import LocalAuthentication
 import SwiftUI
+import FernletDomainModel
 
 struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss

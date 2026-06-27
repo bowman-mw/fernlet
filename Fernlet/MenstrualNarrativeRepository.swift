@@ -3,6 +3,7 @@ import FernletCrypto
 import FernletFoundation
 import CryptoKit
 import Foundation
+import FernletDomainModel
 
 struct MenstrualNarrative: Identifiable, Codable, Equatable {
     var id: UUID

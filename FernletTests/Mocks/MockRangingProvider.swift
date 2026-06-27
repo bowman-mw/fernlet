@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import simd
+import FernletDomainModel
 @testable import Fernlet
 
 @MainActor

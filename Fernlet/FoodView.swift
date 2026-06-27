@@ -2403,6 +2403,7 @@ struct RecipeBookSheet: View {
 
 #if canImport(SafariServices)
 import SafariServices
+import FernletDomainModel
 
 struct SafariView: UIViewControllerRepresentable {
     let url: URL

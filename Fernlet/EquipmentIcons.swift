@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 // MARK: - Editable vector icons
 //

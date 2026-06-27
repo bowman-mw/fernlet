@@ -10,6 +10,7 @@ import FernletFoundation
 import CoreData
 import Foundation
 import Observation
+import FernletDomainModel
 
 enum PersistenceStoreLoadError: LocalizedError, Equatable {
     case primaryStoreUnavailable

@@ -4,24 +4,24 @@
 import Foundation
 import FernletFoundation
 
-struct WorkshopData: Codable, Equatable {
-    var textureEntries: [TextureEntry] = []
-    var handoffEntries: [TextureEntry] = [
+public nonisolated struct WorkshopData: Codable, Equatable {
+    public var textureEntries: [TextureEntry] = []
+    public var handoffEntries: [TextureEntry] = [
         TextureEntry(title: "Native handoff", body: "Core logging flows are now modeled as SwiftUI screens with local persistence.", tags: [.delight])
     ]
-    var claudeNotesEntries: [TextureEntry] = [
+    public var claudeNotesEntries: [TextureEntry] = [
         TextureEntry(title: "AI behavior", body: "External web AI calls are represented with deterministic local suggestions until an iOS API layer is added.", tags: [.tension])
     ]
 
-    nonisolated init() {}
+    nonisolated public init() {}
 
-    init(textureEntries: [TextureEntry], handoffEntries: [TextureEntry], claudeNotesEntries: [TextureEntry]) {
+    public init(textureEntries: [TextureEntry], handoffEntries: [TextureEntry], claudeNotesEntries: [TextureEntry]) {
         self.textureEntries = textureEntries
         self.handoffEntries = handoffEntries
         self.claudeNotesEntries = claudeNotesEntries
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         textureEntries = try c.decodeIfPresent([TextureEntry].self, forKey: .textureEntries) ?? []
         handoffEntries = try c.decodeIfPresent([TextureEntry].self, forKey: .handoffEntries) ?? [
@@ -33,18 +33,18 @@ struct WorkshopData: Codable, Equatable {
     }
 }
 
-struct TextureEntry: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var title: String = FernletDate.shortDate(for: .now) + " observation"
-    var body: String
-    var tags: Set<TextureTag>
-    var createdAt = Date()
+public nonisolated struct TextureEntry: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var title: String = FernletDate.shortDate(for: .now) + " observation"
+    public var body: String
+    public var tags: Set<TextureTag>
+    public var createdAt = Date()
 
-    init(id: UUID = UUID(), title: String = FernletDate.shortDate(for: .now) + " observation", body: String, tags: Set<TextureTag> = [], createdAt: Date = Date()) {
+    public init(id: UUID = UUID(), title: String = FernletDate.shortDate(for: .now) + " observation", body: String, tags: Set<TextureTag> = [], createdAt: Date = Date()) {
         self.id = id; self.title = title; self.body = body; self.tags = tags; self.createdAt = createdAt
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         title = try c.decodeIfPresent(String.self, forKey: .title) ?? (FernletDate.shortDate(for: .now) + " observation")
@@ -54,29 +54,31 @@ struct TextureEntry: Identifiable, Codable, Equatable {
     }
 }
 
-enum TextureTag: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum TextureTag: String, Codable, CaseIterable, Identifiable {
     case tension, delight, friction
-    var id: String { rawValue }
+    public var id: String { rawValue }
 }
 
-struct CompanionAppearance: Codable, Equatable {
-    var bodyStyle: CompanionBodyStyle = .circle
-    var palette: CompanionPalette = .state
-    var bodyColor: CompanionAssetColor = .state
-    var bodyCustomColorHex: String?
-    var accessory: CompanionAccessory = .sprout
-    var accessoryColor: CompanionAssetColor = .fern
-    var accessoryCustomColorHex: String?
-    var clothing: CompanionClothing = .none
-    var clothingColor: CompanionAssetColor = .terracotta
-    var clothingCustomColorHex: String?
-    var sideItem: CompanionSideItem = .none
-    var sideItemColor: CompanionAssetColor = .bark
-    var sideItemCustomColorHex: String?
+public nonisolated struct CompanionAppearance: Codable, Equatable {
+    public var bodyStyle: CompanionBodyStyle = .circle
+    public var palette: CompanionPalette = .state
+    public var bodyColor: CompanionAssetColor = .state
+    public var bodyCustomColorHex: String?
+    public var accessory: CompanionAccessory = .sprout
+    public var accessoryColor: CompanionAssetColor = .fern
+    public var accessoryCustomColorHex: String?
+    public var clothing: CompanionClothing = .none
+    public var clothingColor: CompanionAssetColor = .terracotta
+    public var clothingCustomColorHex: String?
+    public var sideItem: CompanionSideItem = .none
+    public var sideItemColor: CompanionAssetColor = .bark
+    public var sideItemCustomColorHex: String?
 
-    static let standard = CompanionAppearance()
+    // Immutable default appearance. `nonisolated(unsafe)` (rather than making the whole
+    // CompanionAppearance/enum tree Sendable) because the value is a constant and never mutated.
+    nonisolated(unsafe) public static let standard = CompanionAppearance()
 
-    init(
+    public init(
         bodyStyle: CompanionBodyStyle = .circle,
         palette: CompanionPalette = .state,
         bodyColor: CompanionAssetColor = .state,
@@ -106,7 +108,7 @@ struct CompanionAppearance: Codable, Equatable {
         self.sideItemCustomColorHex = sideItemCustomColorHex
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         bodyStyle = try container.decodeIfPresent(CompanionBodyStyle.self, forKey: .bodyStyle) ?? .circle
         palette = try container.decodeIfPresent(CompanionPalette.self, forKey: .palette) ?? .state
@@ -124,15 +126,15 @@ struct CompanionAppearance: Codable, Equatable {
     }
 }
 
-enum CompanionBodyStyle: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionBodyStyle: String, Codable, CaseIterable, Identifiable {
     case circle
     case softBlob
     case pear
     case puddle
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .circle: "Circle"
         case .softBlob: "Soft"
@@ -142,16 +144,16 @@ enum CompanionBodyStyle: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum CompanionPalette: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionPalette: String, Codable, CaseIterable, Identifiable {
     case state
     case fern
     case rose
     case sun
     case slate
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .state: "Mood"
         case .fern: "Fern"
@@ -162,7 +164,7 @@ enum CompanionPalette: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum CompanionAssetColor: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionAssetColor: String, Codable, CaseIterable, Identifiable {
     case state
     case moss
     case fern
@@ -173,9 +175,9 @@ enum CompanionAssetColor: String, Codable, CaseIterable, Identifiable {
     case cream
     case bark
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .state: "Mood"
         case .moss: "Moss"
@@ -189,7 +191,7 @@ enum CompanionAssetColor: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    init(palette: CompanionPalette) {
+    public init(palette: CompanionPalette) {
         switch palette {
         case .state: self = .state
         case .fern: self = .fern
@@ -200,15 +202,15 @@ enum CompanionAssetColor: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum CompanionAccessory: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionAccessory: String, Codable, CaseIterable, Identifiable {
     case none
     case sprout
     case flower
     case glasses
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .none: "None"
         case .sprout: "Sprout"
@@ -218,14 +220,14 @@ enum CompanionAccessory: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum CompanionClothing: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionClothing: String, Codable, CaseIterable, Identifiable {
     case none
     case scarf
     case sleepCap
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .none: "None"
         case .scarf: "Scarf"
@@ -234,16 +236,16 @@ enum CompanionClothing: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum CompanionSideItem: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionSideItem: String, Codable, CaseIterable, Identifiable {
     case none
     case mug
     case book
     case dumbbell
     case waterBottle
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .none: "None"
         case .mug: "Mug"
@@ -253,7 +255,7 @@ enum CompanionSideItem: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    public var systemImage: String {
         switch self {
         case .none: "circle.slash"
         case .mug: "mug"
@@ -264,7 +266,7 @@ enum CompanionSideItem: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum CompanionState: String, Codable {
+public nonisolated enum CompanionState: String, Codable {
     case thriving = "Thriving"
     case okay = "Okay"
     case tired = "Tired"

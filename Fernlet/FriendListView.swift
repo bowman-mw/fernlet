@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 private enum FriendListFilter: String, CaseIterable, Identifiable {
     case all = "All"

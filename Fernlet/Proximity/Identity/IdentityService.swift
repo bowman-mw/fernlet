@@ -11,6 +11,7 @@ import Foundation
 import FernletFoundation
 import CryptoKit
 import Security
+import FernletDomainModel
 
 // MARK: - Keychain key identifiers
 

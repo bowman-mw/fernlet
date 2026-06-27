@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 struct ProximityRecipeShareReviewSheet: View {
     var share: PendingProximityRecipeShare

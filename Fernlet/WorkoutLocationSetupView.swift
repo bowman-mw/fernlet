@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 /// Location creator + equipment selection, per the design: pick where you train (saved locations or
 /// a preset template), then check off the equipment that's there in a categorized grid. Equipment is

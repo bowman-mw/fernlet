@@ -2,6 +2,7 @@ import Foundation
 
 #if canImport(FoundationModels)
 import FoundationModels
+import FernletDomainModel
 #endif
 
 // MARK: - Candidate exercises offered to the adjuster

@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import ImageIO
 import CryptoKit
+import FernletDomainModel
 
 /// On-device, at-rest-encrypted store for friend/mesh media (the photowall cache).
 ///

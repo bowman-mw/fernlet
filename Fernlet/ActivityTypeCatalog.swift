@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import FernletDomainModel
 
 enum ActivityTypeCatalog {
     static let allTypes: [WorkoutActivityType] = WorkoutActivityType.allCases

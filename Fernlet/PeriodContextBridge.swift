@@ -2,6 +2,7 @@ import Foundation
 import FernletFoundation
 import HealthKit
 import Observation
+import FernletDomainModel
 
 // MARK: - Abstract egress vocabulary
 //

@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 final class ProximityCommitDetector {
     private var thresholdEntryTime: Date?

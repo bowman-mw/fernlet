@@ -3,14 +3,14 @@
 
 import Foundation
 
-enum ConnectionInspectorMode: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum ConnectionInspectorMode: String, Codable, CaseIterable, Identifiable {
     case disabled
     case passive
     case live
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .disabled: return "Disabled"
         case .passive: return "Passive"
@@ -19,7 +19,7 @@ enum ConnectionInspectorMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum FernletScreen: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum FernletScreen: String, Codable, CaseIterable, Identifiable {
     case food
     case move
     case journal
@@ -28,9 +28,9 @@ enum FernletScreen: String, Codable, CaseIterable, Identifiable {
     case friends
     case photos
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .food: "Food"
         case .move: "Move"
@@ -42,7 +42,7 @@ enum FernletScreen: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var subtitle: String {
+    public var subtitle: String {
         switch self {
         case .food: "Meals, macros, and recipes."
         case .move: "Training, walks, and recovery."
@@ -54,7 +54,7 @@ enum FernletScreen: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    public var systemImage: String {
         switch self {
         case .food: "fork.knife"
         case .move: "figure.walk"
@@ -67,7 +67,7 @@ enum FernletScreen: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum HomeWidget: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable, Sendable {
     case companion
     case todaySummary
     case todayIntent
@@ -84,11 +84,11 @@ enum HomeWidget: String, Codable, CaseIterable, Identifiable {
     case trends
     case ambient
 
-    static let defaultWidgets: [HomeWidget] = [.companion, .todaySummary, .todayIntent, .ambient, .quickLog, .macros, .trends]
+    nonisolated public static let defaultWidgets: [HomeWidget] = [.companion, .todaySummary, .todayIntent, .ambient, .quickLog, .macros, .trends]
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .companion: "Companion"
         case .todaySummary: "Today"
@@ -108,7 +108,7 @@ enum HomeWidget: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    public var systemImage: String {
         switch self {
         case .companion: "leaf.fill"
         case .todaySummary: "calendar"
@@ -128,7 +128,7 @@ enum HomeWidget: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var isAction: Bool {
+    public var isAction: Bool {
         switch self {
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .hygiene, .trends:
             true
@@ -137,7 +137,7 @@ enum HomeWidget: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    static func normalized(_ widgets: [HomeWidget]) -> [HomeWidget] {
+    public static func normalized(_ widgets: [HomeWidget]) -> [HomeWidget] {
         var result: [HomeWidget] = []
         for widget in widgets where !result.contains(widget) {
             result.append(widget)
@@ -147,7 +147,7 @@ enum HomeWidget: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum FernletShortcut: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifiable, Sendable {
     case meal
     case water
     case move
@@ -159,11 +159,11 @@ enum FernletShortcut: String, Codable, CaseIterable, Identifiable {
     case intimacyTracking
     case friends
 
-    static let defaultQuickLog: [FernletShortcut] = [.meal, .water, .move, .sleep, .journal, .care]
+    nonisolated public static let defaultQuickLog: [FernletShortcut] = [.meal, .water, .move, .sleep, .journal, .care]
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .meal: "Meal"
         case .water: "Water"
@@ -178,7 +178,7 @@ enum FernletShortcut: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    public var systemImage: String {
         switch self {
         case .meal: "fork.knife"
         case .water: "drop"
@@ -193,7 +193,7 @@ enum FernletShortcut: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var screen: FernletScreen? {
+    public var screen: FernletScreen? {
         switch self {
         case .move: .move
         case .journal: .journal
@@ -205,7 +205,7 @@ enum FernletShortcut: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    static func normalizedQuickLog(_ items: [FernletShortcut]) -> [FernletShortcut] {
+    public static func normalizedQuickLog(_ items: [FernletShortcut]) -> [FernletShortcut] {
         var result: [FernletShortcut] = []
         for item in items where !result.contains(item) {
             result.append(item)
@@ -220,12 +220,12 @@ enum FernletShortcut: String, Codable, CaseIterable, Identifiable {
         return Array(result.prefix(6))
     }
 
-    static func visibleQuickLog(_ items: [FernletShortcut], allowsIntimacy: Bool) -> [FernletShortcut] {
+    public static func visibleQuickLog(_ items: [FernletShortcut], allowsIntimacy: Bool) -> [FernletShortcut] {
         let availableItems = allowsIntimacy ? items : items.filter { $0 != .intimacyTracking }
         return normalizedQuickLog(availableItems)
     }
 
-    static func selectableQuickLogItems(allowsIntimacy: Bool) -> [FernletShortcut] {
+    public static func selectableQuickLogItems(allowsIntimacy: Bool) -> [FernletShortcut] {
         allCases.filter { allowsIntimacy || $0 != .intimacyTracking }
     }
 }

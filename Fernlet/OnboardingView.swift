@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 struct ProfileEditor: View {
     @Binding var profile: UserNutritionProfile

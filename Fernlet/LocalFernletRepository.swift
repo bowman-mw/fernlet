@@ -7,6 +7,7 @@
 
 import Foundation
 import FernletFoundation
+import FernletDomainModel
 
 protocol FernletRepository {
     func loadSnapshot(todayKey: String) -> FernletSnapshot
@@ -702,9 +703,11 @@ extension MacroTotals {
     init(meals: [Meal]) {
         assert(meals.count <= FernletLimits.maxMealsPerDay, "too many meals")
         let limited = meals.prefix(FernletLimits.maxMealsPerDay)
-        self.protein = limited.reduce(0) { $0 + $1.macros.protein }
-        self.carbs = limited.reduce(0) { $0 + $1.macros.carbs }
-        self.fat = limited.reduce(0) { $0 + $1.macros.fat }
+        self.init(
+            protein: limited.reduce(0) { $0 + $1.macros.protein },
+            carbs: limited.reduce(0) { $0 + $1.macros.carbs },
+            fat: limited.reduce(0) { $0 + $1.macros.fat }
+        )
     }
 }
 

@@ -2,6 +2,7 @@ import Foundation
 import CoreLocation
 #if canImport(WeatherKit)
 import WeatherKit
+import FernletDomainModel
 #endif
 
 /// Optional, opt-in weather-aware mood-recovery prompts (spec §12). Requests *coarse* location only

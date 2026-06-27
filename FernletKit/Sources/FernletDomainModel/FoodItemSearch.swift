@@ -1,0 +1,295 @@
+// FoodItemSearch.swift
+// SPM carve-up: pure relevance-search value logic over `FoodItem`, carved out of the
+// app-layer FoodDataCatalog. The catalog's SQLite/bundled-store path sits ABOVE this and
+// uses it; this layer references only domain value types (FoodItem / FoodItemSource /
+// FoodDataType), so it belongs in FernletDomainModel.
+
+import Foundation
+
+public nonisolated enum FoodBrandLexicon {
+    nonisolated private static let chains: Set<String> = [
+        "mcdonalds", "wendys", "burger king", "taco bell", "chick fil a", "subway",
+        "starbucks", "chipotle", "dominos", "pizza hut", "kfc", "popeyes", "five guys",
+        "shake shack", "in n out", "whataburger", "sonic", "jack in the box",
+        "panda express", "olive garden", "applebees", "chilis", "red lobster",
+        "outback", "panera", "dunkin", "arbys", "dairy queen", "hardees", "carls jr",
+        "del taco", "wingstop", "buffalo wild wings", "cracker barrel", "ihop",
+        "dennys", "waffle house", "friendlys", "bojangles", "checkers", "rallys",
+        "long john silvers", "captain d"
+    ]
+
+    nonisolated public static func isRestaurantChain(_ text: String) -> Bool {
+        let n = FoodItemSearch.normalized(text)
+        return chains.contains { n.contains($0) }
+    }
+
+    nonisolated public static func queryContainsBrandToken(_ query: String) -> Bool {
+        let n = FoodItemSearch.normalized(query)
+        return chains.contains { n.contains($0) }
+    }
+}
+
+public nonisolated enum FoodItemSearch {
+    nonisolated public static let minimumQueryLength = 3
+
+    /// Minimum score for a query to be allowed to *bind* to a catalog item. Below this the top
+    /// hit matched only via category/tags (no real name signal) and is treated as no match.
+    nonisolated public static let minimumBindScore = 1
+    /// At or above this score a single-item bind is considered confident (exact/prefix/substring
+    /// name hit). Between `minimumBindScore` and this, the bind is kept but flagged low-confidence.
+    nonisolated public static let confidentBindScore = 250
+
+    public struct Index {
+        private var entries: [Entry]
+
+        public init(foodItems: [FoodItem]) {
+            self.entries = foodItems.map { foodItem in
+                let name = FoodItemSearch.normalized(foodItem.name)
+                let category = FoodItemSearch.normalized(foodItem.category)
+                let tags = foodItem.tags.map { FoodItemSearch.normalized($0) }.joined(separator: " ")
+                let searchable = [name, category, tags].joined(separator: " ")
+                return Entry(
+                    foodItem: foodItem,
+                    normalizedName: name,
+                    nameTokens: Set(name.split(separator: " ").map(String.init)),
+                    searchableTokens: FoodItemSearch.tokens(in: searchable)
+                )
+            }
+        }
+
+        // Immutable empty index. `nonisolated(unsafe)` avoids cascading Sendable through
+        // Index/Entry/FoodItem; the value is a constant built from an empty array.
+        nonisolated(unsafe) public static let empty = Index(foodItems: [])
+
+        fileprivate func matches(queryTokens: [String], normalizedQuery: String, limit: Int) -> [FoodItem] {
+            scoredMatches(queryTokens: queryTokens, normalizedQuery: normalizedQuery, limit: limit).map(\.foodItem)
+        }
+
+        fileprivate func scoredMatches(queryTokens: [String], normalizedQuery: String, limit: Int) -> [(foodItem: FoodItem, score: Int)] {
+            let isBrandQuery = FoodBrandLexicon.queryContainsBrandToken(normalizedQuery)
+            return Array(
+                entries
+                    .compactMap { entry -> (foodItem: FoodItem, score: Int)? in
+                        guard let score = FoodItemSearch.score(entry, queryTokens: queryTokens, normalizedQuery: normalizedQuery) else { return nil }
+                        return (entry.foodItem, score)
+                    }
+                    .sorted { first, second in
+                        if first.foodItem.source != second.foodItem.source {
+                            return FoodItemSearch.sourcePriority(first.foodItem.source) > FoodItemSearch.sourcePriority(second.foodItem.source)
+                        }
+                        let firstType = FoodItemSearch.dataTypePriority(first.foodItem.dataType, brandQuery: isBrandQuery)
+                        let secondType = FoodItemSearch.dataTypePriority(second.foodItem.dataType, brandQuery: isBrandQuery)
+                        if firstType != secondType { return firstType > secondType }
+                        if first.score != second.score { return first.score > second.score }
+                        return first.foodItem.name.localizedStandardCompare(second.foodItem.name) == .orderedAscending
+                    }
+                    .prefix(limit)
+            )
+        }
+
+        public func exactNameMatch(for normalizedName: String) -> FoodItem? {
+            entries
+                .filter { $0.normalizedName == normalizedName }
+                .sorted {
+                    if $0.foodItem.source != $1.foodItem.source {
+                        return FoodItemSearch.sourcePriority($0.foodItem.source) > FoodItemSearch.sourcePriority($1.foodItem.source)
+                    }
+                    return $0.foodItem.name.localizedStandardCompare($1.foodItem.name) == .orderedAscending
+                }
+                .first?
+                .foodItem
+        }
+
+        fileprivate struct Entry {
+            var foodItem: FoodItem
+            var normalizedName: String
+            var nameTokens: Set<String>
+            var searchableTokens: [String]
+        }
+    }
+
+    public static func results(for query: String, in foodItems: [FoodItem], limit: Int = 6) -> [FoodItem] {
+        results(for: query, in: Index(foodItems: foodItems), limit: limit)
+    }
+
+    public static func results(for query: String, in index: Index, limit: Int = 6) -> [FoodItem] {
+        let normalizedQuery = normalized(query)
+        guard normalizedQuery.count >= minimumQueryLength else { return [] }
+        let queryTokens = tokens(in: query)
+        guard !queryTokens.isEmpty else { return [] }
+        return index.matches(queryTokens: queryTokens, normalizedQuery: normalizedQuery, limit: limit)
+    }
+
+    /// Like `results(for:in:limit:)` but returns the internal relevance score alongside each item
+    /// so callers can apply a confidence floor (e.g. drop weak binds, flag low-confidence matches).
+    public static func scoredResults(for query: String, in index: Index, limit: Int = 6) -> [(item: FoodItem, score: Int)] {
+        let normalizedQuery = normalized(query)
+        guard normalizedQuery.count >= minimumQueryLength else { return [] }
+        let queryTokens = tokens(in: query)
+        guard !queryTokens.isEmpty else { return [] }
+        return index.scoredMatches(queryTokens: queryTokens, normalizedQuery: normalizedQuery, limit: limit)
+            .map { (item: $0.foodItem, score: $0.score) }
+    }
+
+    nonisolated public static func normalized(_ text: String) -> String {
+        text
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+            .map { character in
+                character.isLetter || character.isNumber ? character : " "
+            }
+            .reduce(into: "") { result, character in
+                if character == " ", result.last == " " { return }
+                result.append(character)
+            }
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func score(_ entry: Index.Entry, queryTokens: [String], normalizedQuery: String) -> Int? {
+        guard queryTokens.allSatisfy({ queryToken in
+            entry.searchableTokens.contains { foodToken in
+                foodToken == queryToken || foodToken.hasPrefix(queryToken)
+            }
+        }) else {
+            return nil
+        }
+
+        var score = 0
+        let name = entry.normalizedName
+        if name == normalizedQuery { score += 1_000 }
+        if name.hasPrefix(normalizedQuery) { score += 500 }
+        if name.contains(normalizedQuery) { score += 250 }
+        score += queryTokens.reduce(0) { partial, queryToken in
+            partial + (entry.nameTokens.contains(queryToken) ? 60 : 0)
+        }
+        score -= max(name.count - normalizedQuery.count, 0) / 8
+        score += preparationBias(queryTokens: queryTokens, normalizedQuery: normalizedQuery, candidateName: entry.foodItem.name)
+        score += formSpecificityBias(queryTokens: queryTokens, candidateName: entry.foodItem.name)
+        return score
+    }
+
+    // Penalises candidates that are a derivative/sub-part *form* of a food the user named plainly.
+    // e.g. query "egg" should resolve to whole egg, not "egg yolk", "egg white", or "egg powder";
+    // "orange" should beat "orange juice"/"orange peel". Only fires when the candidate carries a
+    // form qualifier the query did NOT ask for, so naming the part ("egg whites") keeps it neutral.
+    private static func formSpecificityBias(queryTokens: [String], candidateName: String) -> Int {
+        let querySet = Set(queryTokens)
+        let candidateTokens = Set(normalized(candidateName).split(separator: " ").map(String.init))
+        let extraneousForms = candidateTokens.intersection(formQualifierTokens).subtracting(querySet)
+        return extraneousForms.isEmpty ? 0 : -130 * extraneousForms.count
+    }
+
+    // Tokens that mark a non-default form / derivative of a base food.
+    nonisolated private static let formQualifierTokens: Set<String> = [
+        "yolk", "yolks", "white", "whites", "powder", "powdered", "dried", "dehydrated",
+        "concentrate", "paste", "juice", "extract", "substitute", "imitation", "peel",
+        "skin", "skins", "flour", "flakes", "puree"
+    ]
+
+    // M1a: Additive preparation bias — rewards matching preparation, penalises conflicting ones.
+    // Not a hard filter: a missing fresh entry still wins over nothing.
+    private static func preparationBias(queryTokens: [String], normalizedQuery: String, candidateName: String) -> Int {
+        let querySet = Set(queryTokens)
+        let impliesRaw     = !querySet.isDisjoint(with: rawImpliedTokens)
+        let impliesGrilled = !querySet.isDisjoint(with: grilledImpliedTokens)
+        let impliesBaked   = !querySet.isDisjoint(with: bakedImpliedTokens)
+        let impliesFried   = !querySet.isDisjoint(with: friedImpliedTokens)
+        let impliesCanned  = !querySet.isDisjoint(with: cannedImpliedTokens)
+            || normalizedQuery.contains("in water") || normalizedQuery.contains("in oil")
+        let impliesSmoked  = querySet.contains("smoked")
+        let impliesDried   = !querySet.isDisjoint(with: driedImpliedTokens)
+
+        guard impliesRaw || impliesGrilled || impliesBaked || impliesFried
+                || impliesCanned || impliesSmoked || impliesDried else { return 0 }
+
+        let cand = normalized(candidateName)
+        let isRaw     = cand.contains("raw") || cand.contains("fresh")
+        let isGrilled = cand.contains("grilled")
+        let isBaked   = cand.contains("baked") || cand.contains("roasted")
+        let isFried   = cand.contains("fried") || cand.contains("breaded")
+        let isCanned  = cand.contains("canned") || cand.contains("in water") || cand.contains("in oil")
+        let isSmoked  = cand.contains("smoked")
+        let isDried   = cand.contains("dried") || cand.contains("jerky")
+
+        var bias = 0
+        if impliesRaw {
+            if isRaw                              { bias += 150 }
+            else if isCanned || isDried || isSmoked { bias -= 200 }
+        }
+        if impliesGrilled {
+            if isGrilled                    { bias += 150 }
+            else if isCanned || isFried     { bias -= 200 }
+        }
+        if impliesBaked {
+            if isBaked                      { bias += 150 }
+            else if isCanned || isFried     { bias -= 150 }
+        }
+        if impliesFried {
+            if isFried          { bias += 150 }
+            else if isRaw       { bias -= 100 }
+        }
+        if impliesCanned {
+            if isCanned                     { bias += 150 }
+            else if isRaw || isGrilled      { bias -= 150 }
+        }
+        if impliesSmoked {
+            if isSmoked                     { bias += 150 }
+            else if isRaw || isCanned       { bias -= 100 }
+        }
+        if impliesDried {
+            if isDried          { bias += 150 }
+            else if isRaw       { bias -= 100 }
+        }
+        return bias
+    }
+
+    // Dish-context tokens that imply a preparation even without an explicit word
+    nonisolated private static let rawImpliedTokens: Set<String>     = ["raw", "fresh", "sashimi", "sushi", "nigiri", "poke", "tartare", "ceviche"]
+    nonisolated private static let grilledImpliedTokens: Set<String> = ["grilled", "grill", "bbq", "charbroiled"]
+    nonisolated private static let bakedImpliedTokens: Set<String>   = ["baked", "roasted"]
+    nonisolated private static let friedImpliedTokens: Set<String>   = ["fried", "breaded", "crispy", "tempura"]
+    nonisolated private static let cannedImpliedTokens: Set<String>  = ["canned", "tinned"]
+    nonisolated private static let driedImpliedTokens: Set<String>   = ["dried", "jerky", "dehydrated"]
+
+    private static func sourcePriority(_ source: FoodItemSource) -> Int {
+        switch source {
+        case .manual: 3
+        case .usda: 2
+        case .aiResolved: 1
+        }
+    }
+
+    public static func dataTypePriority(_ dataType: FoodDataType, brandQuery: Bool) -> Int {
+        if brandQuery {
+            switch dataType {
+            case .restaurant: return 5
+            case .branded: return 4
+            case .foundation: return 3
+            case .survey: return 2
+            case .srLegacy: return 1
+            }
+        } else {
+            switch dataType {
+            case .foundation: return 5
+            case .survey: return 4
+            case .srLegacy: return 3
+            case .branded: return 2
+            case .restaurant: return 1
+            }
+        }
+    }
+
+    private static func tokens(in text: String) -> [String] {
+        normalized(text)
+            .split(separator: " ")
+            .map(String.init)
+            .filter { $0.count >= 2 }
+    }
+
+    /// The query tokens used by the scorer's hard match gate (normalized, length ≥ 2). Exposed so the
+    /// SQLite candidate source can build an FTS5 prefix-AND query that mirrors the gate exactly: a
+    /// row passes FTS iff every token matches some indexed token by equality or prefix.
+    nonisolated public static func searchTokens(in text: String) -> [String] {
+        tokens(in: text)
+    }
+}

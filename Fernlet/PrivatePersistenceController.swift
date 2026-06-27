@@ -1,5 +1,6 @@
 import CoreData
 import Foundation
+import FernletDomainModel
 
 /// A dedicated non-CloudKit persistent store for sealed (ChaChaPoly-encrypted) entities.
 /// Sensitive narrative records live here and are never mirrored to iCloud.

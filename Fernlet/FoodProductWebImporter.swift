@@ -6,6 +6,7 @@ import UIKit
 
 #if canImport(FoundationModels)
 import FoundationModels
+import FernletDomainModel
 #endif
 
 struct ProductPagePreview: Equatable {

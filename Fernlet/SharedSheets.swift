@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 struct WaterSheet: View {
     @Environment(\.dismiss) private var dismiss

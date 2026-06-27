@@ -3,29 +3,42 @@
 
 import Foundation
 
-struct UserNutritionProfile: Codable, Equatable {
-    var age: Int = 30
-    var weightPounds: Double = 170
-    var heightInches: Double = 68
-    var sex: BiologicalSex = .male
-    var activityLevel: ActivityLevel = .moderate
+public nonisolated struct UserNutritionProfile: Codable, Equatable {
 
-    var weightKilograms: Double { weightPounds / 2.20462 }
-    var heightCentimeters: Double { heightInches * 2.54 }
+    public init(age: Int = 30, weightPounds: Double = 170, heightInches: Double = 68, sex: BiologicalSex = .male, activityLevel: ActivityLevel = .moderate) {
+        self.age = age
+        self.weightPounds = weightPounds
+        self.heightInches = heightInches
+        self.sex = sex
+        self.activityLevel = activityLevel
+    }
+    public var age: Int = 30
+    public var weightPounds: Double = 170
+    public var heightInches: Double = 68
+    public var sex: BiologicalSex = .male
+    public var activityLevel: ActivityLevel = .moderate
+
+    public var weightKilograms: Double { weightPounds / 2.20462 }
+    public var heightCentimeters: Double { heightInches * 2.54 }
 }
 
-struct UserNutritionPreferences: Codable, Equatable {
-    var dietaryPattern: DietaryPattern = .balanced
-    var guidanceIntensity: GuidanceIntensity = .steady
+public nonisolated struct UserNutritionPreferences: Codable, Equatable {
+
+    public init(dietaryPattern: DietaryPattern = .balanced, guidanceIntensity: GuidanceIntensity = .steady) {
+        self.dietaryPattern = dietaryPattern
+        self.guidanceIntensity = guidanceIntensity
+    }
+    public var dietaryPattern: DietaryPattern = .balanced
+    public var guidanceIntensity: GuidanceIntensity = .steady
 }
 
-enum BiologicalSex: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum BiologicalSex: String, Codable, CaseIterable, Identifiable {
     case female
     case male
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .female: "Female"
         case .male: "Male"
@@ -33,16 +46,16 @@ enum BiologicalSex: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum ActivityLevel: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum ActivityLevel: String, Codable, CaseIterable, Identifiable {
     case sedentary
     case light
     case moderate
     case active
     case veryActive
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .sedentary: "Sedentary"
         case .light: "Light"
@@ -52,7 +65,7 @@ enum ActivityLevel: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var multiplier: Double {
+    public var multiplier: Double {
         switch self {
         case .sedentary: 1.2
         case .light: 1.375
@@ -63,15 +76,15 @@ enum ActivityLevel: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum DietaryPattern: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum DietaryPattern: String, Codable, CaseIterable, Identifiable {
     case balanced
     case higherProtein
     case plantForward
     case lowerCarb
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .balanced: "Balanced"
         case .higherProtein: "Higher protein"
@@ -81,14 +94,14 @@ enum DietaryPattern: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum GuidanceIntensity: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum GuidanceIntensity: String, Codable, CaseIterable, Identifiable {
     case gentle
     case steady
     case detailed
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .gentle: "Gentle"
         case .steady: "Steady"
@@ -97,16 +110,16 @@ enum GuidanceIntensity: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-struct MealComponentSnapshot: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var foodItemId: UUID?
-    var name: String
-    var quantity: Double
-    var unit: String
-    var macros: Macros
-    var micronutrients: Micronutrients
+public nonisolated struct MealComponentSnapshot: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var foodItemId: UUID?
+    public var name: String
+    public var quantity: Double
+    public var unit: String
+    public var macros: Macros
+    public var micronutrients: Micronutrients
 
-    init(
+    public init(
         id: UUID = UUID(),
         foodItemId: UUID? = nil,
         name: String,
@@ -125,29 +138,29 @@ struct MealComponentSnapshot: Identifiable, Codable, Equatable {
     }
 }
 
-struct Meal: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var name: String
-    var mealType: MealType
-    var macros: Macros
-    var macroSnapshot: Macros
-    var calorieSnapshot: Int
-    var micronutrientSnapshot: Micronutrients
-    var componentSnapshots: [MealComponentSnapshot]
-    var mealSource: MealSource = .manual
-    var isAIFallback: Bool = true
-    var quality: MealQuality
-    var confidence: String
-    var note: String
-    var source: String
-    var loggedAt = Date()
-    var photoID: UUID?
+public nonisolated struct Meal: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var name: String
+    public var mealType: MealType
+    public var macros: Macros
+    public var macroSnapshot: Macros
+    public var calorieSnapshot: Int
+    public var micronutrientSnapshot: Micronutrients
+    public var componentSnapshots: [MealComponentSnapshot]
+    public var mealSource: MealSource = .manual
+    public var isAIFallback: Bool = true
+    public var quality: MealQuality
+    public var confidence: String
+    public var note: String
+    public var source: String
+    public var loggedAt = Date()
+    public var photoID: UUID?
 
-    var calories: Int {
+    public var calories: Int {
         macros.protein * 4 + macros.carbs * 4 + macros.fat * 9
     }
 
-    func copyForToday() -> Meal {
+    public func copyForToday() -> Meal {
         var copy = self
         copy.id = UUID()
         copy.loggedAt = .now
@@ -155,7 +168,7 @@ struct Meal: Identifiable, Codable, Equatable {
         return copy
     }
 
-    init(
+    public init(
         id: UUID = UUID(),
         name: String,
         mealType: MealType,
@@ -191,7 +204,7 @@ struct Meal: Identifiable, Codable, Equatable {
         self.photoID = photoID
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
@@ -218,12 +231,12 @@ struct Meal: Identifiable, Codable, Equatable {
 
 /// How much to trust a resolved meal. Drives the honest label on the meal row and whether the
 /// quick-log flow pauses for a pre-log review before committing a fabricated / low-confidence result.
-enum MealResolutionConfidence: String, Codable {
+public nonisolated enum MealResolutionConfidence: String, Codable {
     case high
     case medium
     case low
 
-    var mealLabel: String {
+    public var mealLabel: String {
         switch self {
         case .high: "Food match"
         case .medium: "Estimated"
@@ -232,9 +245,9 @@ enum MealResolutionConfidence: String, Codable {
     }
 
     /// Low-confidence resolutions are routed through a pre-log review sheet instead of auto-committing.
-    var needsReview: Bool { self == .low }
+    public var needsReview: Bool { self == .low }
 
-    var rank: Int {
+    public var rank: Int {
         switch self {
         case .high: 2
         case .medium: 1
@@ -242,22 +255,22 @@ enum MealResolutionConfidence: String, Codable {
         }
     }
 
-    static func fromRank(_ rank: Int) -> MealResolutionConfidence {
+    public static func fromRank(_ rank: Int) -> MealResolutionConfidence {
         if rank >= 2 { return .high }
         if rank == 1 { return .medium }
         return .low
     }
 
     /// One step less confident (high -> medium -> low), floored at `.low`.
-    var lowered: MealResolutionConfidence { Self.fromRank(rank - 1) }
+    public var lowered: MealResolutionConfidence { Self.fromRank(rank - 1) }
 
     /// The more pessimistic of two confidences.
-    static func combine(_ lhs: MealResolutionConfidence, _ rhs: MealResolutionConfidence) -> MealResolutionConfidence {
+    public static func combine(_ lhs: MealResolutionConfidence, _ rhs: MealResolutionConfidence) -> MealResolutionConfidence {
         fromRank(min(lhs.rank, rhs.rank))
     }
 
     /// Parses the model's free-text confidence word; defaults to `.medium` when absent/unrecognised.
-    static func fromModelWord(_ word: String) -> MealResolutionConfidence {
+    public static func fromModelWord(_ word: String) -> MealResolutionConfidence {
         let normalized = word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if normalized.contains("high") { return .high }
         if normalized.contains("low") { return .low }
@@ -266,57 +279,75 @@ enum MealResolutionConfidence: String, Codable {
 }
 
 /// A meal produced by the resolver together with how much to trust it.
-struct ResolvedMeal {
-    var meal: Meal
-    var confidence: MealResolutionConfidence
+public nonisolated struct ResolvedMeal {
+
+    public init(meal: Meal, confidence: MealResolutionConfidence) {
+        self.meal = meal
+        self.confidence = confidence
+    }
+    public var meal: Meal
+    public var confidence: MealResolutionConfidence
 }
 
 /// The full outcome of resolving a quick-log description: the meals (not yet committed), any
 /// recipes that were created as a side effect, overall confidence, and whether the keyword-heuristic
 /// fallback was used. `needsReview` decides whether the UI pauses for a pre-log review.
-struct MealResolution {
-    var meals: [Meal]
-    var createdRecipes: [RecipeDefinition]
-    var confidence: MealResolutionConfidence
-    var isFallback: Bool
+public nonisolated struct MealResolution {
 
-    var needsReview: Bool { confidence.needsReview || isFallback }
+    public init(meals: [Meal], createdRecipes: [RecipeDefinition], confidence: MealResolutionConfidence, isFallback: Bool) {
+        self.meals = meals
+        self.createdRecipes = createdRecipes
+        self.confidence = confidence
+        self.isFallback = isFallback
+    }
+    public var meals: [Meal]
+    public var createdRecipes: [RecipeDefinition]
+    public var confidence: MealResolutionConfidence
+    public var isFallback: Bool
+
+    public var needsReview: Bool { confidence.needsReview || isFallback }
 }
 
-struct Macros: Codable, Equatable {
-    var protein: Int
-    var carbs: Int
-    var fat: Int
+public nonisolated struct Macros: Codable, Equatable {
+    public var protein: Int
+    public var carbs: Int
+    public var fat: Int
 
-    var calories: Int { protein * 4 + carbs * 4 + fat * 9 }
+    public init(protein: Int, carbs: Int, fat: Int) {
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+    }
+
+    public var calories: Int { protein * 4 + carbs * 4 + fat * 9 }
 }
 
-struct Micronutrients: Codable, Equatable {
-    var fiber: Double?
-    var sugar: Double?
-    var saturatedFat: Double?
-    var cholesterol: Double?
-    var vitaminA: Double?
-    var vitaminC: Double?
-    var vitaminD: Double?
-    var vitaminE: Double?
-    var vitaminK: Double?
-    var vitaminB6: Double?
-    var vitaminB12: Double?
-    var thiamin: Double?
-    var riboflavin: Double?
-    var niacin: Double?
-    var folate: Double?
-    var calcium: Double?
-    var iron: Double?
-    var magnesium: Double?
-    var phosphorus: Double?
-    var potassium: Double?
-    var sodium: Double?
-    var zinc: Double?
-    var omega3: Double?
+public nonisolated struct Micronutrients: Codable, Equatable {
+    public var fiber: Double?
+    public var sugar: Double?
+    public var saturatedFat: Double?
+    public var cholesterol: Double?
+    public var vitaminA: Double?
+    public var vitaminC: Double?
+    public var vitaminD: Double?
+    public var vitaminE: Double?
+    public var vitaminK: Double?
+    public var vitaminB6: Double?
+    public var vitaminB12: Double?
+    public var thiamin: Double?
+    public var riboflavin: Double?
+    public var niacin: Double?
+    public var folate: Double?
+    public var calcium: Double?
+    public var iron: Double?
+    public var magnesium: Double?
+    public var phosphorus: Double?
+    public var potassium: Double?
+    public var sodium: Double?
+    public var zinc: Double?
+    public var omega3: Double?
 
-    nonisolated init(
+    nonisolated public init(
         fiber: Double? = nil,
         sugar: Double? = nil,
         saturatedFat: Double? = nil,
@@ -366,7 +397,7 @@ struct Micronutrients: Codable, Equatable {
         self.omega3 = omega3
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         fiber = try container.decodeIfPresent(Double.self, forKey: .fiber)
         sugar = try container.decodeIfPresent(Double.self, forKey: .sugar)
@@ -395,15 +426,15 @@ struct Micronutrients: Codable, Equatable {
 }
 
 extension Micronutrients {
-    static var totalFieldCount: Int { 23 }
+    nonisolated public static var totalFieldCount: Int { 23 }
 
-    static func totals(for meals: [Meal]) -> Micronutrients {
+    public static func totals(for meals: [Meal]) -> Micronutrients {
         meals.reduce(into: Micronutrients()) { partial, meal in
             partial.add(meal.micronutrientSnapshot)
         }
     }
 
-    var populatedFieldCount: Int {
+    public var populatedFieldCount: Int {
         [
             fiber, sugar, saturatedFat, cholesterol,
             vitaminA, vitaminC, vitaminD, vitaminE, vitaminK, vitaminB6, vitaminB12,
@@ -412,14 +443,14 @@ extension Micronutrients {
         ].compactMap { $0 }.count
     }
 
-    var totalFieldCount: Int { Self.totalFieldCount }
+    public var totalFieldCount: Int { Self.totalFieldCount }
 
-    var completeness: Double {
+    public var completeness: Double {
         guard totalFieldCount > 0 else { return 0 }
         return Double(populatedFieldCount) / Double(totalFieldCount)
     }
 
-    var hasAnyValue: Bool {
+    public var hasAnyValue: Bool {
         fiber != nil || sugar != nil || saturatedFat != nil || cholesterol != nil ||
         vitaminA != nil || vitaminC != nil || vitaminD != nil || vitaminE != nil ||
         vitaminK != nil || vitaminB6 != nil || vitaminB12 != nil || thiamin != nil ||
@@ -428,7 +459,7 @@ extension Micronutrients {
         sodium != nil || zinc != nil || omega3 != nil
     }
 
-    func scaled(by scale: Double) -> Micronutrients {
+    public func scaled(by scale: Double) -> Micronutrients {
         let safeScale = max(scale, 0)
         return Micronutrients(
             fiber: fiber.map { $0 * safeScale },
@@ -457,7 +488,7 @@ extension Micronutrients {
         )
     }
 
-    mutating func add(_ other: Micronutrients) {
+    public mutating func add(_ other: Micronutrients) {
         fiber = Self.sum(fiber, other.fiber)
         sugar = Self.sum(sugar, other.sugar)
         saturatedFat = Self.sum(saturatedFat, other.saturatedFat)
@@ -497,35 +528,53 @@ extension Micronutrients {
     }
 }
 
-enum NutrientGapStatus: String, Codable, Equatable {
+public nonisolated enum NutrientGapStatus: String, Codable, Equatable {
     case covered
     case gap
 }
 
-struct NutrientGap: Identifiable, Codable, Equatable {
-    var nutrientKey: String
-    var nutrientName: String
-    var unit: String
-    var windowDays: Int
-    var coverageRatio: Double
-    var dataCoverageRatio: Double
-    var status: NutrientGapStatus
+public nonisolated struct NutrientGap: Identifiable, Codable, Equatable {
 
-    var id: String {
+    public init(nutrientKey: String, nutrientName: String, unit: String, windowDays: Int, coverageRatio: Double, dataCoverageRatio: Double, status: NutrientGapStatus) {
+        self.nutrientKey = nutrientKey
+        self.nutrientName = nutrientName
+        self.unit = unit
+        self.windowDays = windowDays
+        self.coverageRatio = coverageRatio
+        self.dataCoverageRatio = dataCoverageRatio
+        self.status = status
+    }
+    public var nutrientKey: String
+    public var nutrientName: String
+    public var unit: String
+    public var windowDays: Int
+    public var coverageRatio: Double
+    public var dataCoverageRatio: Double
+    public var status: NutrientGapStatus
+
+    public var id: String {
         "\(nutrientKey)-\(windowDays)-\(status.rawValue)"
     }
 }
 
-struct NutrientReference {
-    var key: String
-    var name: String
-    var unit: String
-    var recommendedDailyAmount: Double
-    var value: (Micronutrients) -> Double?
+public nonisolated struct NutrientReference {
+
+    public init(key: String, name: String, unit: String, recommendedDailyAmount: Double, value: @escaping (Micronutrients) -> Double?) {
+        self.key = key
+        self.name = name
+        self.unit = unit
+        self.recommendedDailyAmount = recommendedDailyAmount
+        self.value = value
+    }
+    public var key: String
+    public var name: String
+    public var unit: String
+    public var recommendedDailyAmount: Double
+    public var value: (Micronutrients) -> Double?
 }
 
-enum MicronutrientGapAnalyzer {
-    static let trackedNutrients: [NutrientReference] = [
+public nonisolated enum MicronutrientGapAnalyzer {
+    nonisolated(unsafe) public static let trackedNutrients: [NutrientReference] = [
         NutrientReference(key: "fiber", name: "Fiber", unit: "g", recommendedDailyAmount: 28) { $0.fiber },
         NutrientReference(key: "vitaminC", name: "Vitamin C", unit: "mg", recommendedDailyAmount: 90) { $0.vitaminC },
         NutrientReference(key: "vitaminD", name: "Vitamin D", unit: "mcg", recommendedDailyAmount: 20) { $0.vitaminD },
@@ -539,12 +588,22 @@ enum MicronutrientGapAnalyzer {
         NutrientReference(key: "omega3", name: "Omega-3", unit: "g", recommendedDailyAmount: 1.6) { $0.omega3 }
     ]
 
-    static func gaps(from days: [(String, FernletDay)], windowDays: Int) -> [NutrientGap] {
+    /// Fraction of meals that carry usable micronutrient data (>= 5 populated fields).
+    /// Pure `Meal` arithmetic; lives in the domain layer so scoring depends on the
+    /// domain (not the reverse). `FernletScoring.micronutrientDataCoverageRatio`
+    /// forwards here for existing app-layer callers.
+    public static func micronutrientDataCoverageRatio(for meals: [Meal]) -> Double {
+        guard meals.isEmpty == false else { return 0 }
+        let mealsWithData = meals.filter { $0.micronutrientSnapshot.populatedFieldCount >= 5 }.count
+        return Double(mealsWithData) / Double(meals.count)
+    }
+
+    public static func gaps(from days: [(String, FernletDay)], windowDays: Int) -> [NutrientGap] {
         assert(windowDays > 0, "window must be positive")
         let window = Array(days.suffix(windowDays))
         let meals = window.flatMap { $0.1.meals.prefix(20) }
         guard meals.isEmpty == false else { return [] }
-        guard FernletScoring.micronutrientDataCoverageRatio(for: meals) >= 0.5 else { return [] }
+        guard micronutrientDataCoverageRatio(for: meals) >= 0.5 else { return [] }
 
         return trackedNutrients.compactMap { nutrient in
             let values = meals.compactMap { nutrient.value($0.micronutrientSnapshot) }
@@ -579,7 +638,7 @@ enum MicronutrientGapAnalyzer {
     }
 }
 
-enum FoodDataType: String, Codable {
+public nonisolated enum FoodDataType: String, Codable {
     case foundation   // USDA Foundation Foods
     case survey       // USDA/FNDDS survey foods
     case srLegacy     // USDA SR Legacy reference
@@ -587,48 +646,48 @@ enum FoodDataType: String, Codable {
     case restaurant   // Restaurant chain item
 }
 
-enum FoodItemSource: String, Codable {
+public nonisolated enum FoodItemSource: String, Codable {
     case usda
     case aiResolved
     case manual
 }
 
-enum MealLogSource {
-    static let manual = "manual"
-    static let labelScan = "label-scan"
-    static let usdaRecipe = "usda-recipe"
-    static let webImport = "web-import"
-    static let foundationModel = "foundation-model"
-    static let foundationModelFoodSelection = "foundation-model-food-selection"
+public nonisolated enum MealLogSource {
+    nonisolated public static let manual = "manual"
+    nonisolated public static let labelScan = "label-scan"
+    nonisolated public static let usdaRecipe = "usda-recipe"
+    nonisolated public static let webImport = "web-import"
+    nonisolated public static let foundationModel = "foundation-model"
+    nonisolated public static let foundationModelFoodSelection = "foundation-model-food-selection"
 }
 
-struct FoodItem: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var name: String
-    var brandSource: String?
-    var servingSize: Double
-    var servingUnit: String
-    var macros: Macros
-    var micronutrients: Micronutrients
-    var category: String
-    var source: FoodItemSource
-    var dataType: FoodDataType = .srLegacy
-    var sourceURL: URL?
-    var servingDescription: String?
-    var verificationPolicyDays: Int = 180
-    var lastVerified: Date?
-    var isFlagged: Bool = false
-    var tags: [String]
-    var portions: [FoodPortion]
+public nonisolated struct FoodItem: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var name: String
+    public var brandSource: String?
+    public var servingSize: Double
+    public var servingUnit: String
+    public var macros: Macros
+    public var micronutrients: Micronutrients
+    public var category: String
+    public var source: FoodItemSource
+    public var dataType: FoodDataType = .srLegacy
+    public var sourceURL: URL?
+    public var servingDescription: String?
+    public var verificationPolicyDays: Int = 180
+    public var lastVerified: Date?
+    public var isFlagged: Bool = false
+    public var tags: [String]
+    public var portions: [FoodPortion]
 
-    var calories: Int {
+    public var calories: Int {
         macros.protein * 4 + macros.carbs * 4 + macros.fat * 9
     }
 
     /// Short, human-readable provenance shown on ingredient-search rows so the user can tell where a
     /// match came from (Item 3 ingredient-search UX). Branded/restaurant items prefer their brand
     /// name; reference USDA foods read "USDA"; user and AI-derived foods are labelled distinctly.
-    var dataSourceLabel: String {
+    public var dataSourceLabel: String {
         switch source {
         case .manual:
             return "Your foods"
@@ -646,10 +705,10 @@ struct FoodItem: Identifiable, Codable, Equatable {
         }
     }
 
-    nonisolated init(
+    nonisolated public init(
         id: UUID = UUID(),
         name: String,
-        brandSource: String?,
+        brandSource: String? = nil,
         servingSize: Double,
         servingUnit: String,
         macros: Macros,
@@ -684,7 +743,7 @@ struct FoodItem: Identifiable, Codable, Equatable {
         self.portions = portions
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
@@ -706,49 +765,81 @@ struct FoodItem: Identifiable, Codable, Equatable {
     }
 }
 
-struct FoodPortion: Codable, Equatable {
-    var amount: Double
-    var unit: String
-    var gramWeight: Double
-    var description: String?
+public nonisolated struct FoodPortion: Codable, Equatable {
+
+    public init(amount: Double, unit: String, gramWeight: Double, description: String? = nil) {
+        self.amount = amount
+        self.unit = unit
+        self.gramWeight = gramWeight
+        self.description = description
+    }
+    public var amount: Double
+    public var unit: String
+    public var gramWeight: Double
+    public var description: String?
 }
 
-struct FoodSelectionCandidate: Identifiable, Equatable {
-    var id: Int
-    var foodItem: FoodItem
+public nonisolated struct FoodSelectionCandidate: Identifiable, Equatable {
 
-    var promptLine: String {
+    public init(id: Int, foodItem: FoodItem) {
+        self.id = id
+        self.foodItem = foodItem
+    }
+    public var id: Int
+    public var foodItem: FoodItem
+
+    public var promptLine: String {
         let brand = foodItem.brandSource.map { " \($0)" } ?? ""
         return "\(id). \(foodItem.name)\(brand) - \(foodItem.category), serving \(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit), P\(foodItem.macros.protein) C\(foodItem.macros.carbs) F\(foodItem.macros.fat)"
     }
 }
 
-struct FoodSelectionIngredient: Identifiable, Equatable {
-    var id = UUID()
-    var candidateId: Int
-    var foodName: String
-    var quantity: Double
-    var unit: String
+public nonisolated struct FoodSelectionIngredient: Identifiable, Equatable {
+    public var id = UUID()
+    public var candidateId: Int
+    public var foodName: String
+    public var quantity: Double
+    public var unit: String
+
+    public init(id: UUID = UUID(), candidateId: Int, foodName: String, quantity: Double, unit: String) {
+        self.id = id
+        self.candidateId = candidateId
+        self.foodName = foodName
+        self.quantity = quantity
+        self.unit = unit
+    }
 }
 
-struct FoodSelectionMealItem: Identifiable, Equatable {
-    var id = UUID()
-    var name: String
-    var ingredients: [FoodSelectionIngredient]
+public nonisolated struct FoodSelectionMealItem: Identifiable, Equatable {
+
+    public init(id: UUID = UUID(), name: String, ingredients: [FoodSelectionIngredient]) {
+        self.id = id
+        self.name = name
+        self.ingredients = ingredients
+    }
+    public var id = UUID()
+    public var name: String
+    public var ingredients: [FoodSelectionIngredient]
 }
 
-struct FoodSelectionPlan: Equatable {
-    var mealName: String
-    var mealType: MealType
-    var items: [FoodSelectionMealItem]
+public nonisolated struct FoodSelectionPlan: Equatable {
 
-    var ingredients: [FoodSelectionIngredient] {
+    public init(mealName: String, mealType: MealType, items: [FoodSelectionMealItem]) {
+        self.mealName = mealName
+        self.mealType = mealType
+        self.items = items
+    }
+    public var mealName: String
+    public var mealType: MealType
+    public var items: [FoodSelectionMealItem]
+
+    public var ingredients: [FoodSelectionIngredient] {
         items.flatMap(\.ingredients)
     }
 }
 
-enum MealItemSplitter {
-    static func items(from description: String) -> [String] {
+public nonisolated enum MealItemSplitter {
+    public static func items(from description: String) -> [String] {
         let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return [] }
         let normalized = trimmed
@@ -765,8 +856,8 @@ enum MealItemSplitter {
     }
 }
 
-enum FoodSelectionCandidateBuilder {
-    static func candidates(for description: String, foodItems: [FoodItem], limit: Int = 18) -> [FoodSelectionCandidate] {
+public nonisolated enum FoodSelectionCandidateBuilder {
+    public static func candidates(for description: String, foodItems: [FoodItem], limit: Int = 18) -> [FoodSelectionCandidate] {
         let index = FoodItemSearch.Index(foodItems: foodItems)
         let phrases = searchPhrases(from: description)
         var selected: [FoodItem] = []
@@ -788,7 +879,7 @@ enum FoodSelectionCandidateBuilder {
     /// Splits a meal description into overlapping search phrases (3-, 2-, then 1-word), longest first.
     /// Shared with `FoodCatalog.candidates(for:)` so the SQLite-backed candidate set matches the
     /// in-memory array path.
-    static func searchPhrases(from description: String) -> [String] {
+    public static func searchPhrases(from description: String) -> [String] {
         let stopWords: Set<String> = [
             "and", "with", "plus", "then", "for", "the", "a", "an", "of", "my", "meal",
             "breakfast", "lunch", "dinner", "snack", "pre", "post", "workout"
@@ -817,14 +908,21 @@ enum FoodSelectionCandidateBuilder {
     }
 }
 
-struct RecipeIngredient: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var foodItemId: UUID
-    var quantity: Double
-    var unit: String
+public nonisolated struct RecipeIngredient: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var foodItemId: UUID
+    public var quantity: Double
+    public var unit: String
+
+    public init(id: UUID = UUID(), foodItemId: UUID, quantity: Double, unit: String) {
+        self.id = id
+        self.foodItemId = foodItemId
+        self.quantity = quantity
+        self.unit = unit
+    }
 }
 
-enum RecipeUnit: String, CaseIterable, Identifiable {
+public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable {
     case gram = "g"
     case milliliter = "ml"
     case ounce = "oz"
@@ -835,9 +933,9 @@ enum RecipeUnit: String, CaseIterable, Identifiable {
     case each = "each"
     case serving = "serving"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .gram: "Grams"
         case .milliliter: "Milliliters"
@@ -851,7 +949,7 @@ enum RecipeUnit: String, CaseIterable, Identifiable {
         }
     }
 
-    static func normalized(_ unit: String) -> RecipeUnit? {
+    public static func normalized(_ unit: String) -> RecipeUnit? {
         switch unit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "g", "gram", "grams":
             return .gram
@@ -893,11 +991,11 @@ extension RecipeIngredient {
         return quantity
     }
 
-    func scaledMacros(using foodItem: FoodItem) -> Macros {
+    public func scaledMacros(using foodItem: FoodItem) -> Macros {
         foodItem.macros.scaled(by: scale(using: foodItem))
     }
 
-    func scaledMicronutrients(using foodItem: FoodItem) -> Micronutrients {
+    public func scaledMicronutrients(using foodItem: FoodItem) -> Micronutrients {
         foodItem.micronutrients.scaled(by: scale(using: foodItem))
     }
 }
@@ -908,17 +1006,17 @@ extension RecipeIngredient {
 /// precomputed nutrition extracted at import time, because those ingredients can't be resolved to
 /// `foodItemId`s without ambiguity. Bundling them here keeps `RecipeDefinition` the single recipe
 /// model while preserving the original imported data losslessly.
-struct RecipeWebImport: Codable, Equatable {
-    var sourceURLString: String
-    var ingredientLines: [String]
-    var macros: Macros
-    var micronutrients: Micronutrients
+public nonisolated struct RecipeWebImport: Codable, Equatable {
+    public var sourceURLString: String
+    public var ingredientLines: [String]
+    public var macros: Macros
+    public var micronutrients: Micronutrients
 
-    var sourceURL: URL {
+    public var sourceURL: URL {
         URL(string: sourceURLString) ?? URL(fileURLWithPath: "/")
     }
 
-    init(
+    public init(
         sourceURLString: String,
         ingredientLines: [String],
         macros: Macros = Macros(protein: 0, carbs: 0, fat: 0),
@@ -930,7 +1028,7 @@ struct RecipeWebImport: Codable, Equatable {
         self.micronutrients = micronutrients
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         sourceURLString = try container.decodeIfPresent(String.self, forKey: .sourceURLString) ?? ""
         ingredientLines = try container.decodeIfPresent([String].self, forKey: .ingredientLines) ?? []
@@ -939,23 +1037,23 @@ struct RecipeWebImport: Codable, Equatable {
     }
 }
 
-struct RecipeDefinition: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var name: String
-    var servings: Int
-    var ingredients: [RecipeIngredient]
-    var notes: String
-    var source: String
-    var createdAt: Date
-    var updatedAt: Date
+public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var name: String
+    public var servings: Int
+    public var ingredients: [RecipeIngredient]
+    public var notes: String
+    public var source: String
+    public var createdAt: Date
+    public var updatedAt: Date
     /// Non-nil only for recipes imported from a web URL. See `RecipeWebImport`.
-    var webImport: RecipeWebImport?
+    public var webImport: RecipeWebImport?
 
     /// True when this recipe was imported from the web (and therefore stores free-text ingredient
     /// lines + precomputed nutrition rather than structured `ingredients`).
-    var isWebImport: Bool { webImport != nil }
+    public var isWebImport: Bool { webImport != nil }
 
-    init(
+    public init(
         id: UUID = UUID(),
         name: String,
         servings: Int,
@@ -977,7 +1075,7 @@ struct RecipeDefinition: Identifiable, Codable, Equatable {
         self.webImport = webImport
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
@@ -991,31 +1089,49 @@ struct RecipeDefinition: Identifiable, Codable, Equatable {
     }
 }
 
-struct SharedRecipePayload: Codable, Equatable {
-    var format = "fernlet.recipe"
-    var version = 1
-    var name: String
-    var servings: Int
-    var notes: String
-    var ingredients: [SharedRecipeIngredient]
+public nonisolated struct SharedRecipePayload: Codable, Equatable {
+    public var format = "fernlet.recipe"
+    public var version = 1
+    public var name: String
+    public var servings: Int
+    public var notes: String
+    public var ingredients: [SharedRecipeIngredient]
+
+    public init(format: String = "fernlet.recipe", version: Int = 1, name: String, servings: Int, notes: String, ingredients: [SharedRecipeIngredient]) {
+        self.format = format
+        self.version = version
+        self.name = name
+        self.servings = servings
+        self.notes = notes
+        self.ingredients = ingredients
+    }
 }
 
-struct SharedRecipeIngredient: Codable, Equatable {
-    var name: String
-    var quantity: Double
-    var unit: String
-    var protein: Int
-    var carbs: Int
-    var fat: Int
+public nonisolated struct SharedRecipeIngredient: Codable, Equatable {
+    public var name: String
+    public var quantity: Double
+    public var unit: String
+    public var protein: Int
+    public var carbs: Int
+    public var fat: Int
+
+    public init(name: String, quantity: Double, unit: String, protein: Int, carbs: Int, fat: Int) {
+        self.name = name
+        self.quantity = quantity
+        self.unit = unit
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+    }
 }
 
-enum RecipeImportError: Error, Equatable {
+public nonisolated enum RecipeImportError: Error, Equatable {
     case missingPayload
     case invalidPayload
     case unsupportedFormat
     case emptyRecipe
 
-    var message: String {
+    public var message: String {
         switch self {
         case .missingPayload:
             "I could not find Fernlet recipe data in that text."
@@ -1029,39 +1145,51 @@ enum RecipeImportError: Error, Equatable {
     }
 }
 
-struct ManualRecipeIngredientInput: Identifiable, Equatable {
-    var id = UUID()
-    var name: String = ""
-    var selectedFoodItemId: UUID?
-    var quantity: Double = 1
-    var unit: String = "serving"
-    var protein: Int = 0
-    var carbs: Int = 0
-    var fat: Int = 0
-    var scannedMicronutrients: Micronutrients?
+public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
 
-    var macros: Macros {
+    public init(id: UUID = UUID(), name: String = "", selectedFoodItemId: UUID? = nil, quantity: Double = 1, unit: String = "serving", protein: Int = 0, carbs: Int = 0, fat: Int = 0, scannedMicronutrients: Micronutrients? = nil) {
+        self.id = id
+        self.name = name
+        self.selectedFoodItemId = selectedFoodItemId
+        self.quantity = quantity
+        self.unit = unit
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+        self.scannedMicronutrients = scannedMicronutrients
+    }
+    public var id = UUID()
+    public var name: String = ""
+    public var selectedFoodItemId: UUID?
+    public var quantity: Double = 1
+    public var unit: String = "serving"
+    public var protein: Int = 0
+    public var carbs: Int = 0
+    public var fat: Int = 0
+    public var scannedMicronutrients: Micronutrients?
+
+    public var macros: Macros {
         Macros(protein: protein, carbs: carbs, fat: fat)
     }
 
-    var trimmedName: String {
+    public var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func resolvedMacros(foodItems: [FoodItem]) -> Macros {
+    public func resolvedMacros(foodItems: [FoodItem]) -> Macros {
         guard let selectedFoodItem = selectedFoodItem(in: foodItems) else { return macros }
         return RecipeIngredient(foodItemId: selectedFoodItem.id, quantity: quantity, unit: unit)
             .scaledMacros(using: selectedFoodItem)
     }
 
-    func selectedFoodItem(in foodItems: [FoodItem]) -> FoodItem? {
+    public func selectedFoodItem(in foodItems: [FoodItem]) -> FoodItem? {
         guard let selectedFoodItemId else { return nil }
         return foodItems.first { $0.id == selectedFoodItemId }
     }
 }
 
 extension Macros {
-    func scaled(by scale: Double) -> Macros {
+    public func scaled(by scale: Double) -> Macros {
         let safeScale = max(scale, 0)
         return Macros(
             protein: Int((Double(protein) * safeScale).rounded()),
@@ -1072,7 +1200,7 @@ extension Macros {
 }
 
 extension FoodItem {
-    var preferredRecipeUnit: RecipeUnit {
+    public var preferredRecipeUnit: RecipeUnit {
         let nameText = FoodItemSearch.normalized(name)
         if nameText.contains("flour") {
             return .gram
@@ -1095,7 +1223,7 @@ extension FoodItem {
         return RecipeUnit.normalized(servingUnit) ?? .serving
     }
 
-    func defaultRecipeQuantity(for unit: RecipeUnit) -> Double {
+    public func defaultRecipeQuantity(for unit: RecipeUnit) -> Double {
         switch unit {
         case .gram:
             servingUnit.caseInsensitiveCompare(RecipeUnit.gram.rawValue) == .orderedSame ? servingSize : 1
@@ -1106,7 +1234,7 @@ extension FoodItem {
         }
     }
 
-    func gramsEquivalent(quantity: Double, unit: String) -> Double? {
+    public func gramsEquivalent(quantity: Double, unit: String) -> Double? {
         let unit = RecipeUnit.normalized(unit)
         switch unit {
         case .gram:
@@ -1143,7 +1271,7 @@ extension FoodItem {
 }
 
 extension FoodPortion {
-    var recipeUnit: RecipeUnit? {
+    public var recipeUnit: RecipeUnit? {
         let normalizedUnit = FoodItemSearch.normalized(unit)
         let normalizedDescription = FoodItemSearch.normalized(description ?? "")
         switch normalizedUnit {
@@ -1169,41 +1297,57 @@ extension FoodPortion {
         }
     }
 
-    func grams(for quantity: Double) -> Double {
+    public func grams(for quantity: Double) -> Double {
         quantity * gramWeight / max(amount, 0.01)
     }
 }
 
-enum MealSource: String, Codable {
+public nonisolated enum MealSource: String, Codable {
     case mealDefinition
     case recipe
     case manual
 }
 
-struct MacroTotals: Equatable {
-    var protein = 0
-    var carbs = 0
-    var fat = 0
+public nonisolated struct MacroTotals: Equatable {
+    public var protein = 0
+    public var carbs = 0
+    public var fat = 0
 
-    var calories: Int { protein * 4 + carbs * 4 + fat * 9 }
+    public init(protein: Int = 0, carbs: Int = 0, fat: Int = 0) {
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+    }
+
+    public var calories: Int { protein * 4 + carbs * 4 + fat * 9 }
 }
 
-struct NutritionTargets: Equatable {
-    var calories: Int
-    var protein: Int
-    var carbs: Int
-    var fat: Int
-    var fiber: Int
-    var sodiumLimit: Int
-    var saturatedFatLimit: Int
+public nonisolated struct NutritionTargets: Equatable {
 
-    var macroTotals: MacroTotals {
+    public init(calories: Int, protein: Int, carbs: Int, fat: Int, fiber: Int, sodiumLimit: Int, saturatedFatLimit: Int) {
+        self.calories = calories
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+        self.fiber = fiber
+        self.sodiumLimit = sodiumLimit
+        self.saturatedFatLimit = saturatedFatLimit
+    }
+    public var calories: Int
+    public var protein: Int
+    public var carbs: Int
+    public var fat: Int
+    public var fiber: Int
+    public var sodiumLimit: Int
+    public var saturatedFatLimit: Int
+
+    public var macroTotals: MacroTotals {
         MacroTotals(protein: protein, carbs: carbs, fat: fat)
     }
 }
 
-enum NutritionTargetCalculator {
-    static func targets(for settings: FernletSettings) -> NutritionTargets {
+public nonisolated enum NutritionTargetCalculator {
+    public static func targets(for settings: FernletSettings) -> NutritionTargets {
         let profile = settings.userProfile
         let calories = adjustedCalories(for: settings)
         let protein = proteinTarget(for: settings)
@@ -1284,7 +1428,7 @@ enum NutritionTargetCalculator {
     }
 }
 
-enum MealType: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum MealType: String, Codable, CaseIterable, Identifiable {
     case breakfast = "Breakfast"
     case lunch = "Lunch"
     case dinner = "Dinner"
@@ -1292,9 +1436,9 @@ enum MealType: String, Codable, CaseIterable, Identifiable {
     case preWorkout = "Pre-workout"
     case postWorkout = "Post-workout"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 }
 
-enum MealQuality: String, Codable, CaseIterable {
+public nonisolated enum MealQuality: String, Codable, CaseIterable {
     case great, good, ok, low
 }

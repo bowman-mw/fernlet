@@ -3,34 +3,34 @@
 
 import Foundation
 
-struct Workout: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var name: String
-    var type: WorkoutType
-    var mode: WorkoutMode = .strengthTraining
-    var activityType: WorkoutActivityType?
-    var exercises: String
-    var rpe: Double?
-    var notes: String
-    var duration: Int?
-    var distanceMiles: Double?
-    var activeEnergyKcal: Double?
-    var effort: Int?
-    var muscleGroups: Set<MuscleGroup> = []
-    var healthKitUUID: UUID?
-    var plannedWorkoutID: UUID?
-    var intensity: WorkoutIntensity
-    var completedAt = Date()
-    var loggedAt = Date()
+public nonisolated struct Workout: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var name: String
+    public var type: WorkoutType
+    public var mode: WorkoutMode = .strengthTraining
+    public var activityType: WorkoutActivityType?
+    public var exercises: String
+    public var rpe: Double?
+    public var notes: String
+    public var duration: Int?
+    public var distanceMiles: Double?
+    public var activeEnergyKcal: Double?
+    public var effort: Int?
+    public var muscleGroups: Set<MuscleGroup> = []
+    public var healthKitUUID: UUID?
+    public var plannedWorkoutID: UUID?
+    public var intensity: WorkoutIntensity
+    public var completedAt = Date()
+    public var loggedAt = Date()
 
-    var exerciseLines: [String] {
+    public var exerciseLines: [String] {
         exercises
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
 
-    var inferredCategory: WorkoutType {
+    public var inferredCategory: WorkoutType {
         if mode == .activity, let activityType {
             return activityType.fernletCategory
         }
@@ -51,7 +51,7 @@ struct Workout: Identifiable, Codable, Equatable {
         return WorkoutExerciseCatalog.inferredCategory(for: self)
     }
 
-    init(
+    public init(
         id: UUID = UUID(),
         name: String,
         type: WorkoutType,
@@ -91,7 +91,7 @@ struct Workout: Identifiable, Codable, Equatable {
         self.loggedAt = loggedAt ?? completedAt
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
@@ -113,7 +113,7 @@ struct Workout: Identifiable, Codable, Equatable {
         loggedAt = try container.decodeIfPresent(Date.self, forKey: .loggedAt) ?? completedAt
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
@@ -142,25 +142,25 @@ struct Workout: Identifiable, Codable, Equatable {
     }
 }
 
-struct PlannedWorkout: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var name: String
-    var split: WorkoutSplit
-    var source: WorkoutPlanSource
-    var mode: WorkoutMode
-    var activityType: WorkoutActivityType?
-    var exercises: String
-    var muscleGroups: Set<MuscleGroup>
-    var notes: String
-    var duration: Int?
-    var targetDistanceMiles: Double?
-    var targetEnergyKcal: Double?
-    var targetEffort: Int?
-    var createdAt = Date()
+public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
+    public var id = UUID()
+    public var name: String
+    public var split: WorkoutSplit
+    public var source: WorkoutPlanSource
+    public var mode: WorkoutMode
+    public var activityType: WorkoutActivityType?
+    public var exercises: String
+    public var muscleGroups: Set<MuscleGroup>
+    public var notes: String
+    public var duration: Int?
+    public var targetDistanceMiles: Double?
+    public var targetEnergyKcal: Double?
+    public var targetEffort: Int?
+    public var createdAt = Date()
 
-    var workoutType: WorkoutType { split.workoutType }
+    public var workoutType: WorkoutType { split.workoutType }
 
-    var completedWorkout: Workout {
+    public var completedWorkout: Workout {
         Workout(
             name: name,
             type: workoutType,
@@ -179,7 +179,7 @@ struct PlannedWorkout: Identifiable, Codable, Equatable {
         )
     }
 
-    init(
+    public init(
         id: UUID = UUID(),
         name: String,
         split: WorkoutSplit,
@@ -211,7 +211,7 @@ struct PlannedWorkout: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
@@ -235,20 +235,20 @@ struct PlannedWorkout: Identifiable, Codable, Equatable {
     }
 }
 
-enum WorkoutPlanSource: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum WorkoutPlanSource: String, Codable, CaseIterable, Identifiable {
     case user
     case coach
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .user: "User"
         case .coach: "Coach"
         }
     }
 
-    var completionNote: String {
+    public var completionNote: String {
         switch self {
         case .user: "Completed from user plan."
         case .coach: "Completed from coach plan."
@@ -256,7 +256,7 @@ enum WorkoutPlanSource: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum WorkoutSplit: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum WorkoutSplit: String, Codable, CaseIterable, Identifiable {
     case workout
     case upper
     case lower
@@ -267,9 +267,9 @@ enum WorkoutSplit: String, Codable, CaseIterable, Identifiable {
     case cardio
     case recovery
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .workout: "Workout"
         case .upper: "Upper"
@@ -283,7 +283,7 @@ enum WorkoutSplit: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var workoutType: WorkoutType {
+    public var workoutType: WorkoutType {
         switch self {
         case .workout: .cardio
         case .upper, .push, .pull: .upper
@@ -294,7 +294,7 @@ enum WorkoutSplit: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum WorkoutType: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum WorkoutType: String, Codable, CaseIterable, Identifiable, Sendable {
     case upper = "Upper"
     case lower = "Lower"
     case armsBack = "Arms/Back"
@@ -304,12 +304,12 @@ enum WorkoutType: String, Codable, CaseIterable, Identifiable {
     case run = "C210K Run"
     case hike = "Hike"
 
-    static let allCases: [WorkoutType] = [.upper, .lower, .fullBody, .cardio]
+    public nonisolated static let allCases: [WorkoutType] = [.upper, .lower, .fullBody, .cardio]
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 }
 
-public enum WorkoutMode: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum WorkoutMode: String, Codable, CaseIterable, Identifiable {
     case strengthTraining
     case activity
 
@@ -344,14 +344,14 @@ public enum WorkoutMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-public enum BodyRegion: String, Codable, CaseIterable {
+public nonisolated enum BodyRegion: String, Codable, CaseIterable {
     case upper
     case lower
     case core
     case full
 }
 
-public enum MuscleGroup: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum MuscleGroup: String, Codable, CaseIterable, Identifiable {
     case chest
     case upperBack
     case lats
@@ -415,7 +415,7 @@ public enum MuscleGroup: String, Codable, CaseIterable, Identifiable {
 }
 
 extension MuscleGroup {
-    nonisolated static func fromLegacyString(_ s: String) -> MuscleGroup? {
+    nonisolated public static func fromLegacyString(_ s: String) -> MuscleGroup? {
         switch s.lowercased() {
         case "chest": .chest
         case "triceps": .triceps
@@ -436,7 +436,7 @@ extension MuscleGroup {
     }
 }
 
-public enum MovementPattern: String, Codable, CaseIterable {
+public nonisolated enum MovementPattern: String, Codable, CaseIterable {
     case push
     case pull
     case hinge
@@ -448,7 +448,7 @@ public enum MovementPattern: String, Codable, CaseIterable {
     case locomotion
 }
 
-public enum Equipment: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum Equipment: String, Codable, CaseIterable, Identifiable {
     case barbell
     case dumbbell
     case machine
@@ -478,7 +478,7 @@ public enum Equipment: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
     case running, walking, hiking, cycling, indoorCycling
     case yoga, pilates, barre, dance, socialDance
     case swimmingPool, swimmingOpenWater, rowing, elliptical, stairClimbing, stairs
@@ -489,9 +489,9 @@ enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
     case crossTraining, mixedCardio, preparationAndRecovery, cooldown
     case other
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .running: "Running"
         case .walking: "Walking"
@@ -536,7 +536,7 @@ enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    public var systemImage: String {
         switch self {
         case .running: "figure.run"
         case .walking: "figure.walk"
@@ -571,7 +571,7 @@ enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var expectsDistance: Bool {
+    public var expectsDistance: Bool {
         switch self {
         case .running, .walking, .hiking, .cycling, .swimmingPool, .swimmingOpenWater, .rowing:
             true
@@ -580,7 +580,7 @@ enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var expectsPace: Bool {
+    public var expectsPace: Bool {
         switch self {
         case .running, .walking, .hiking:
             true
@@ -589,7 +589,7 @@ enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var defaultDurationMinutes: Int {
+    public var defaultDurationMinutes: Int {
         switch self {
         case .functionalStrengthTraining, .traditionalStrengthTraining:
             30
@@ -600,7 +600,7 @@ enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var fernletCategory: WorkoutType {
+    public var fernletCategory: WorkoutType {
         switch self {
         case .running, .walking, .hiking, .cycling, .indoorCycling, .swimmingPool, .swimmingOpenWater, .rowing, .elliptical, .stairClimbing, .stairs, .jumpRope, .hiit, .crossTraining, .mixedCardio, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash:
             .cardio
@@ -610,27 +610,27 @@ enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum WorkoutIntensity: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum WorkoutIntensity: String, Codable, CaseIterable, Identifiable {
     case light, moderate, hard
-    var id: String { rawValue }
+    public var id: String { rawValue }
 }
 
-enum ExerciseInputKind: String, Codable {
+public nonisolated enum ExerciseInputKind: String, Codable {
     case strength
     case treadmill
     case none
 }
 
-struct ExerciseTarget: Identifiable, Codable, Equatable {
-    var id: String { name }
-    var name: String
-    var primaryMuscles: Set<MuscleGroup>
-    var secondaryMuscles: Set<MuscleGroup>
-    var equipment: Equipment
-    var movementPattern: MovementPattern
-    var inputKind: ExerciseInputKind
+public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable {
+    public var id: String { name }
+    public var name: String
+    public var primaryMuscles: Set<MuscleGroup>
+    public var secondaryMuscles: Set<MuscleGroup>
+    public var equipment: Equipment
+    public var movementPattern: MovementPattern
+    public var inputKind: ExerciseInputKind
 
-    var bodyRegion: BodyRegion {
+    public var bodyRegion: BodyRegion {
         let regions = Set(primaryMuscles.map { $0.region })
         if regions == [.upper] { return .upper }
         if regions == [.lower] { return .lower }
@@ -638,7 +638,7 @@ struct ExerciseTarget: Identifiable, Codable, Equatable {
         return .full
     }
 
-    var category: WorkoutType {
+    public var category: WorkoutType {
         switch bodyRegion {
         case .upper: .upper
         case .lower: .lower
@@ -647,13 +647,13 @@ struct ExerciseTarget: Identifiable, Codable, Equatable {
         }
     }
 
-    var muscles: [String] {
+    public var muscles: [String] {
         (primaryMuscles.union(secondaryMuscles))
             .sorted { $0.displayName < $1.displayName }
             .map(\.displayName)
     }
 
-    init(
+    public init(
         name: String,
         primaryMuscles: Set<MuscleGroup>,
         secondaryMuscles: Set<MuscleGroup> = [],
@@ -669,7 +669,7 @@ struct ExerciseTarget: Identifiable, Codable, Equatable {
         self.inputKind = inputKind
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
         inputKind = try container.decodeIfPresent(ExerciseInputKind.self, forKey: .inputKind) ?? .strength
@@ -686,7 +686,7 @@ struct ExerciseTarget: Identifiable, Codable, Equatable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(name, forKey: .name)
         try container.encode(primaryMuscles, forKey: .primaryMuscles)
@@ -702,14 +702,16 @@ struct ExerciseTarget: Identifiable, Codable, Equatable {
     }
 }
 
-enum WorkoutExerciseCatalog {
-    static let baseExercises: [ExerciseTarget] = loadBaseExercises()
+public nonisolated enum WorkoutExerciseCatalog {
+    // Immutable, computed-once catalog. `nonisolated(unsafe)` avoids cascading Sendable
+    // through ExerciseTarget; the array is built once and never mutated.
+    nonisolated(unsafe) public static let baseExercises: [ExerciseTarget] = loadBaseExercises()
 
-    static func inferredCategory(for workout: Workout) -> WorkoutType {
+    public static func inferredCategory(for workout: Workout) -> WorkoutType {
         inferredCategory(for: "\(workout.name)\n\(workout.exercises)")
     }
 
-    static func inferredCategory(for text: String) -> WorkoutType {
+    public static func inferredCategory(for text: String) -> WorkoutType {
         let lowercasedText = text.lowercased()
         var scores: [WorkoutType: Int] = [.upper: 0, .lower: 0, .fullBody: 0, .cardio: 0]
         for exercise in baseExercises {
@@ -734,7 +736,7 @@ enum WorkoutExerciseCatalog {
         return best.key
     }
 
-    static func targetSummary(for workout: Workout) -> String {
+    public static func targetSummary(for workout: Workout) -> String {
         let text = "\(workout.name)\n\(workout.exercises)".lowercased()
         let muscles = baseExercises
             .filter { target in
@@ -748,7 +750,7 @@ enum WorkoutExerciseCatalog {
         return unique.prefix(4).joined(separator: ", ")
     }
 
-    static func search(_ query: String) -> [ExerciseTarget] {
+    public static func search(_ query: String) -> [ExerciseTarget] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return baseExercises }
         let normalized = trimmed.lowercased()

@@ -1,8 +1,7 @@
 import Foundation
 
-@MainActor
-struct CustomIngredientUpsert {
-    static func resolve(
+public nonisolated struct CustomIngredientUpsert {
+    public static func resolve(
         ingredient: ManualRecipeIngredientInput,
         in foodItems: inout [FoodItem],
         verifiedAt: Date
@@ -37,7 +36,7 @@ struct CustomIngredientUpsert {
         return foodItem
     }
 
-    static func recipeIngredients(
+    public static func recipeIngredients(
         from inputs: [ManualRecipeIngredientInput],
         selectionCatalog: [FoodItem]? = nil,
         in foodItems: inout [FoodItem],

@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 @MainActor
 struct MealBuilder {

@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 /// The app's food lookup surface. Replaces the old in-memory `allFoodItems` array: the ~13k bundled
 /// USDA/curated foods live in a read-only SQLite store (`BundledFoodSource`) and are queried on

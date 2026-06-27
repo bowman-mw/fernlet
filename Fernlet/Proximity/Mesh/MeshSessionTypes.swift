@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 enum MeshEncryptionError: Error {
     case decryptionFailed

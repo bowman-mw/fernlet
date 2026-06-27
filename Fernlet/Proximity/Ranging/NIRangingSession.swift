@@ -1,6 +1,7 @@
 import Foundation
 import NearbyInteraction
 import Combine
+import FernletDomainModel
 
 // MARK: - NIRangingSession
 

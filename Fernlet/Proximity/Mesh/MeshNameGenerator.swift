@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 enum MeshNameGenerator {
     static func generate() -> String {

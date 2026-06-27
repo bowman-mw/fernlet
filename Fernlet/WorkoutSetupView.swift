@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 /// Captures the durable workout context the suggestion engine reads: chosen split, where the user
 /// trains and the equipment there (via the location flow), weekly frequency, experience,

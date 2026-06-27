@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 struct ProximityRecipeSharePayload: Codable, Equatable, Identifiable {
     var format = "fernlet.proximity.recipe"

@@ -15,6 +15,7 @@
 // re-locking on viewDisappeared is suppressed during and briefly after scene transitions.
 
 import SwiftUI
+import FernletDomainModel
 
 // MARK: - View modifier
 

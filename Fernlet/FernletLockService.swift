@@ -13,6 +13,7 @@ import Combine
 import OSLog
 import CryptoSwift
 import Observation
+import FernletDomainModel
 
 // MARK: - Public types
 

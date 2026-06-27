@@ -1,4 +1,5 @@
 import Foundation
+import FernletDomainModel
 
 /// Conforms `FernletStore` to the Proximity subsystem's `ProximityHost` seam
 /// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`

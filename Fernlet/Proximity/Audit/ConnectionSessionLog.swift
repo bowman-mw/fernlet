@@ -1,5 +1,6 @@
 import Foundation
 import simd
+import FernletDomainModel
 
 struct ConnectionSessionLog: Identifiable, Codable, Equatable {
     let id: UUID

@@ -3,6 +3,7 @@ import FernletFoundation
 import Observation
 import Testing
 import Foundation
+import FernletDomainModel
 @testable import Fernlet
 
 struct FernletPersistenceTests {

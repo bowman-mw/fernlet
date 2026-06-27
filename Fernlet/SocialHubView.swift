@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 struct SocialHubView: View {
     var store: FernletStore

@@ -3,6 +3,7 @@ import FernletFoundation
 import CryptoKit
 import Foundation
 import HealthKit
+import FernletDomainModel
 
 struct UserLoggedCycleEvent: Equatable {
     var date: Date = Date()

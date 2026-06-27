@@ -2,6 +2,7 @@ import Testing
 import FernletFoundation
 import Foundation
 import MultipeerConnectivity
+import FernletDomainModel
 @testable import Fernlet
 
 @Suite(.serialized) @MainActor

@@ -3,60 +3,60 @@
 
 import Foundation
 
-struct FernletSettings: Codable {
-    var bottleOz: Int = 24
-    var hydrationTarget: Int = 4
-    var showDeveloperNotes = false
-    var connectionInspectorMode: ConnectionInspectorMode = .live
-    var companionAppearance: CompanionAppearance = .standard
-    var selectedGoal: GoalType = .wellness
+public nonisolated struct FernletSettings: Codable {
+    public var bottleOz: Int = 24
+    public var hydrationTarget: Int = 4
+    public var showDeveloperNotes = false
+    public var connectionInspectorMode: ConnectionInspectorMode = .live
+    public var companionAppearance: CompanionAppearance = .standard
+    public var selectedGoal: GoalType = .wellness
     /// Per-day sickness flags keyed by `yyyy-MM-dd`. Keyed by date so past-day scoring uses the
     /// flag that was set for *that* day, and "today" naturally resets when the date rolls over.
-    var sickDays: [String: Bool] = [:]
+    public var sickDays: [String: Bool] = [:]
     /// Per-day dismissal of the "Today's intent" home prompt, keyed by `yyyy-MM-dd`.
-    var intentDismissedDays: [String: Bool] = [:]
+    public var intentDismissedDays: [String: Bool] = [:]
     /// Per-nutrient cooldown end dates for the preventive-care micronutrient nudge (2-week suppress).
-    var nutrientBubbleDismissedUntil: [String: Date] = [:]
-    var aiStatus: AIStatus = .off
-    var webNutritionLookupEnabled: Bool = false
+    public var nutrientBubbleDismissedUntil: [String: Date] = [:]
+    public var aiStatus: AIStatus = .off
+    public var webNutritionLookupEnabled: Bool = false
     /// Opt-in: weather-aware gentle recovery prompts (requests coarse location only when enabled).
-    var weatherPromptsEnabled: Bool = false
-    var showCalories: Bool = false
-    var hasCompletedOnboarding: Bool = false
-    var hidePredictions: Bool = false
-    var hideFertileWindow: Bool = false
+    public var weatherPromptsEnabled: Bool = false
+    public var showCalories: Bool = false
+    public var hasCompletedOnboarding: Bool = false
+    public var hidePredictions: Bool = false
+    public var hideFertileWindow: Bool = false
     /// Opt-in: let medium/high-confidence cycle-phase trends gently soften scoring (default off; only takes
     /// effect once 3+ cycles are logged). See `PeriodContextBridge` / `adjustedForPeriod`.
-    var periodAwareScoringEnabled: Bool = false
+    public var periodAwareScoringEnabled: Bool = false
     /// Whether the one-time period-context primer (explaining cycle awareness + the opt-in) has been shown.
-    var periodContextPrimerSeen: Bool = false
-    var userProfile: UserNutritionProfile = UserNutritionProfile()
-    var nutritionPreferences: UserNutritionPreferences = UserNutritionPreferences()
-    var quickLogItems: [FernletShortcut] = FernletShortcut.defaultQuickLog
-    var homeWidgets: [HomeWidget] = HomeWidget.defaultWidgets
-    var personalCareTasks: [PersonalCareTask] = PersonalCareTask.defaultTasks
-    var proximityDisplayName: String = ""
-    var showProximityDebugTools: Bool = false
-    var allowNearbyRecipeShares: Bool = true
-    var companionName: String = ""
-    var workoutProfile: WorkoutProfile = WorkoutProfile()
-    var workoutLocations: [WorkoutLocation] = [WorkoutLocation.fullGym]
-    var activeWorkoutLocationID: UUID? = nil
+    public var periodContextPrimerSeen: Bool = false
+    public var userProfile: UserNutritionProfile = UserNutritionProfile()
+    public var nutritionPreferences: UserNutritionPreferences = UserNutritionPreferences()
+    public var quickLogItems: [FernletShortcut] = FernletShortcut.defaultQuickLog
+    public var homeWidgets: [HomeWidget] = HomeWidget.defaultWidgets
+    public var personalCareTasks: [PersonalCareTask] = PersonalCareTask.defaultTasks
+    public var proximityDisplayName: String = ""
+    public var showProximityDebugTools: Bool = false
+    public var allowNearbyRecipeShares: Bool = true
+    public var companionName: String = ""
+    public var workoutProfile: WorkoutProfile = WorkoutProfile()
+    public var workoutLocations: [WorkoutLocation] = [WorkoutLocation.fullGym]
+    public var activeWorkoutLocationID: UUID? = nil
     /// Times each catalog exercise has been completed from a suggested session — drives week-to-week
     /// progression (reps/sets climb as the exercise is repeated).
-    var workoutProgression: [String: Int] = [:]
+    public var workoutProgression: [String: Int] = [:]
 
     /// The location whose equipment drives workout suggestions. Falls back to the first location
     /// (or a full gym) so this is always non-nil.
-    var activeWorkoutLocation: WorkoutLocation {
+    public var activeWorkoutLocation: WorkoutLocation {
         workoutLocations.first(where: { $0.id == activeWorkoutLocationID })
             ?? workoutLocations.first
             ?? .fullGym
     }
 
-    nonisolated init() {}
+    nonisolated public init() {}
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         bottleOz = try container.decodeIfPresent(Int.self, forKey: .bottleOz) ?? 24
         hydrationTarget = try container.decodeIfPresent(Int.self, forKey: .hydrationTarget) ?? 4
@@ -96,15 +96,15 @@ struct FernletSettings: Codable {
     }
 }
 
-enum AIStatus: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum AIStatus: String, Codable, CaseIterable, Identifiable {
     case ready
     case sleepy
     case resting
     case off
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var label: String {
+    public var label: String {
         switch self {
         case .ready: "Ready"
         case .sleepy: "Sleepy"

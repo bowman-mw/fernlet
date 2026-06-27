@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 
 struct OnboardingPermissionsView: View {
     var stepText: String

@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import FernletDomainModel
 
 enum SealedBackupPayloadType: String, Codable, CaseIterable {
     case sensitiveNotes
