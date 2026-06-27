@@ -4,6 +4,7 @@ import CryptoKit
 import Foundation
 import HealthKit
 import FernletDomainModel
+import PrivateStoreCore
 
 struct UserLoggedCycleEvent: Equatable {
     var date: Date = Date()

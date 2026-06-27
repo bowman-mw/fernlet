@@ -12,6 +12,7 @@ import Testing
 import CryptoKit
 import UIKit
 import FernletDomainModel
+import PrivateStoreCore
 @testable import Fernlet
 
 // MARK: - Helpers

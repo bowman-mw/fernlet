@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore"]),
     ],
     targets: [
         .target(
@@ -85,6 +85,23 @@ let package = Package(
             resources: [
                 .copy("Resources/FoodCatalog.sqlite"),
             ]
+        ),
+        // Layer 2.5 — shared sealed-storage substrate on the PROTECTED side of the
+        // S3 wall. The sealed (local-only, never-iCloud) CoreData stack
+        // (PrivatePersistenceController + the 3 narrative entities + the history
+        // pruner) plus the pending-narrative buffer. Shared by BOTH PrivateHealthStore
+        // and PrivateMemoryStore (the plan implicitly placed the controller in
+        // PrivateHealthStore, but the journal repo + the lock service need it too)
+        // and drained by FernletLock. This MUST stay off any module that
+        // AIProviders/CloudKitSync import, or AI/sync code could reach the sealed
+        // store — so it is its own protected-side target, not part of FernletFoundation.
+        // Nonisolated: the nonisolated repositories (e.g. JournalNarrativeRepository)
+        // call the pruner/controller directly, so a MainActor default would force
+        // cross-actor hops. The static singleton is nonisolated(unsafe) (non-Sendable
+        // CoreData container), matching its prior app-target behaviour.
+        .target(
+            name: "PrivateStoreCore",
+            dependencies: ["FernletFoundation", "FernletDomainModel"]
         ),
     ]
 )

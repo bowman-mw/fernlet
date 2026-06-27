@@ -14,6 +14,7 @@ import OSLog
 import CryptoSwift
 import Observation
 import FernletDomainModel
+import PrivateStoreCore
 
 // MARK: - Public types
 

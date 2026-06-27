@@ -6,6 +6,7 @@ import Testing
 import Foundation
 import FernletDomainModel
 import FernletPersistence
+import PrivateStoreCore
 @testable import Fernlet
 
 struct FernletPersistenceTests {

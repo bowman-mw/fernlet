@@ -2,6 +2,7 @@ import CoreData
 import FernletFoundation
 import Testing
 import FernletDomainModel
+import PrivateStoreCore
 @testable import Fernlet
 
 /// Proves that sealed entities (MenstrualNarrative, JournalNarrative) are isolated in the

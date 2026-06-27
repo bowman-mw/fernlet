@@ -14,17 +14,33 @@ import FernletFoundation
 
 // MARK: - Payload
 
-struct PendingNarrativePayload: Codable {
-    let hkExternalUUID: String
-    let dateKey: String             // yyyy-MM-dd
-    let noteBytes: Data?
-    let symptomFlagsBytes: Data?
-    let customSymptomScalesBytes: Data?
+public struct PendingNarrativePayload: Codable {
+    public let hkExternalUUID: String
+    public let dateKey: String             // yyyy-MM-dd
+    public let noteBytes: Data?
+    public let symptomFlagsBytes: Data?
+    public let customSymptomScalesBytes: Data?
+
+    public init(
+        hkExternalUUID: String,
+        dateKey: String,
+        noteBytes: Data?,
+        symptomFlagsBytes: Data?,
+        customSymptomScalesBytes: Data?
+    ) {
+        self.hkExternalUUID = hkExternalUUID
+        self.dateKey = dateKey
+        self.noteBytes = noteBytes
+        self.symptomFlagsBytes = symptomFlagsBytes
+        self.customSymptomScalesBytes = customSymptomScalesBytes
+    }
 }
 
 // MARK: - Buffer
 
-final class PendingNarrativeBuffer {
+public final class PendingNarrativeBuffer {
+
+    public init() {}
 
     private static let bufferKeyService = "com.fernlet.narrative-buffer"
     private static let bufferKeyAccount = "com.fernlet.buffer.key"           // legacy (no service)
@@ -41,7 +57,7 @@ final class PendingNarrativeBuffer {
 
     // MARK: - Public API
 
-    func append(_ payload: PendingNarrativePayload) throws {
+    public func append(_ payload: PendingNarrativePayload) throws {
         var entries = try loadEntries()
         entries.append(payload)
 
@@ -60,11 +76,11 @@ final class PendingNarrativeBuffer {
     /// payloads, via an explicit `purge()` call. Purging here would lose any
     /// payloads the caller fails to persist (e.g. a partial insert failure),
     /// silently dropping notes the user wrote while the app was locked.
-    func drainAll() throws -> [PendingNarrativePayload] {
+    public func drainAll() throws -> [PendingNarrativePayload] {
         try loadEntries()
     }
 
-    func purge() throws {
+    public func purge() throws {
         let url = bufferFileURL
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)

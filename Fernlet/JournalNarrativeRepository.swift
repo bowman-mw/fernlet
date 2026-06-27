@@ -4,6 +4,7 @@ import CryptoKit
 import Foundation
 import FernletDomainModel
 import FernletFoundation
+import PrivateStoreCore
 
 struct JournalNarrative: Identifiable, Equatable {
     var id: UUID

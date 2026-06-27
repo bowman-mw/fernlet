@@ -7,6 +7,7 @@ import HealthKit
 import LocalAuthentication
 import Testing
 import FernletDomainModel
+import PrivateStoreCore
 @testable import Fernlet
 
 @MainActor

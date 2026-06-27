@@ -4,16 +4,16 @@ import FernletDomainModel
 
 /// A dedicated non-CloudKit persistent store for sealed (ChaChaPoly-encrypted) entities.
 /// Sensitive narrative records live here and are never mirrored to iCloud.
-final class PrivatePersistenceController {
-    static let shared = PrivatePersistenceController()
+public final class PrivatePersistenceController {
+    nonisolated(unsafe) public static let shared = PrivatePersistenceController()
 
     @MainActor
-    static let preview = PrivatePersistenceController(inMemory: true)
+    public static let preview = PrivatePersistenceController(inMemory: true)
 
-    let container: NSPersistentContainer
-    private(set) var didFailToLoad = false
+    public let container: NSPersistentContainer
+    public private(set) var didFailToLoad = false
 
-    init(inMemory: Bool = false) {
+    public init(inMemory: Bool = false) {
         container = NSPersistentContainer(
             name: "FernletPrivate",
             managedObjectModel: Self.makeManagedObjectModel()
@@ -36,11 +36,14 @@ final class PrivatePersistenceController {
                 self.didFailToLoad = true
             }
         }
-        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        // Behaviour-identical to `NSMergeByPropertyObjectTrumpMergePolicy`; the typed
+        // initializer avoids referencing the non-concurrency-safe CoreData global in this
+        // nonisolated module.
+        container.viewContext.mergePolicy = NSMergePolicy(merge: .mergeByPropertyObjectTrumpMergePolicyType)
         container.viewContext.automaticallyMergesChangesFromParent = true
     }
 
-    func purgeEncryptedEntities() throws {
+    public func purgeEncryptedEntities() throws {
         let context = container.viewContext
         try context.performAndWait {
             for entityName in ["MenstrualNarrative", "JournalNarrative", "IntimacyLog"] {
@@ -147,8 +150,8 @@ final class PrivatePersistenceController {
     }
 }
 
-enum PrivatePersistentHistoryPruner {
-    static func prune(context: NSManagedObjectContext, before date: Date = Date()) throws {
+public enum PrivatePersistentHistoryPruner {
+    public static func prune(context: NSManagedObjectContext, before date: Date = Date()) throws {
         let request = NSPersistentHistoryChangeRequest.deleteHistory(before: date)
         try context.execute(request)
     }

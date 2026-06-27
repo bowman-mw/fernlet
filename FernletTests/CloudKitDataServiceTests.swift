@@ -6,6 +6,7 @@ import CryptoKit
 import Foundation
 import Testing
 import FernletDomainModel
+import PrivateStoreCore
 @testable import Fernlet
 
 @MainActor
