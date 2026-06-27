@@ -633,59 +633,9 @@ struct DerivedSignalRecord: Identifiable, Codable, Equatable {
     }
 }
 
-struct AIAnalysisRetryRecord: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var payloadType: String
-    var sourceId: UUID
-    /// Day the source meal was logged on (yyyy-MM-dd). Optional for backward-compatible decode of
-    /// records written before this field existed; nil is treated as "today" by the retry path.
-    var dayKey: String?
-    var createdAt = Date()
-    var lastAttemptAt: Date?
-    var attemptCount = 0
-    var note: String
-}
-
-struct TierTwoMemoryRecord: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var category: String
-    var text: String
-    var state: String = ""             // key behavioral verdict; change triggers a new record
-    var evidence: String = ""
-    var confidence: String = "medium"  // "low", "medium", "high"
-    var extractedDate = Date()
-    var active = true
-    var dataWindowDays: Int = 14
-
-    init(
-        category: String,
-        text: String,
-        state: String = "",
-        evidence: String = "",
-        confidence: String = "medium",
-        dataWindowDays: Int = 14
-    ) {
-        self.category = category
-        self.text = text
-        self.state = state
-        self.evidence = evidence
-        self.confidence = confidence
-        self.dataWindowDays = dataWindowDays
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        category = try container.decode(String.self, forKey: .category)
-        text = try container.decode(String.self, forKey: .text)
-        state = try container.decodeIfPresent(String.self, forKey: .state) ?? ""
-        evidence = try container.decodeIfPresent(String.self, forKey: .evidence) ?? ""
-        confidence = try container.decodeIfPresent(String.self, forKey: .confidence) ?? "medium"
-        extractedDate = try container.decodeIfPresent(Date.self, forKey: .extractedDate) ?? Date()
-        active = try container.decodeIfPresent(Bool.self, forKey: .active) ?? true
-        dataWindowDays = try container.decodeIfPresent(Int.self, forKey: .dataWindowDays) ?? 14
-    }
-}
+// AIAnalysisRetryRecord and TierTwoMemoryRecord were carved DOWN into the FernletDomainModel module
+// (FernletKit/Sources/FernletDomainModel/) so the persistence layer can reference them without an
+// upward edge. See AIAnalysisRetryRecord.swift / TierTwoMemoryRecord.swift there.
 
 enum FernletLimits {
     static let maxStoredDays = 370
