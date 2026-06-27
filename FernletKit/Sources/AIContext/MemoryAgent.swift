@@ -7,12 +7,12 @@ import FernletDomainModel
 /// 1. Destination allowlist — only `companion-thought` payloads receive behavioral context.
 /// 2. Recency filter — records older than `recencyDays` are excluded.
 /// 3. Diagnostic-language post-classifier — records containing clinical or diagnostic terms are dropped.
-enum MemoryAgent {
+public enum MemoryAgent {
 
     // MARK: - Destination allowlist
 
     /// Only these payload kinds may receive TierTwo behavioral context.
-    static let allowedPayloadKinds: Set<String> = ["companion-thought"]
+    public static let allowedPayloadKinds: Set<String> = ["companion-thought"]
 
     // MARK: - Public interface
 
@@ -20,7 +20,7 @@ enum MemoryAgent {
     ///
     /// Returns an empty string if `destinedFor` is not in `allowedPayloadKinds`.
     /// Otherwise applies: recency filter → confidence filter → diagnostic-language filter → char cap.
-    static func filteredContext(
+    public static func filteredContext(
         from memories: [TierTwoMemoryRecord],
         destinedFor payloadKind: String,
         recencyDays: Int = 30,
@@ -53,12 +53,12 @@ enum MemoryAgent {
     ///
     /// Used both at read-time (before AI prompt injection) and at storage-time
     /// (every proposed memory is screened before it is persisted — spec §8).
-    static func containsDiagnosticLanguage(_ text: String) -> Bool {
+    public static func containsDiagnosticLanguage(_ text: String) -> Bool {
         DiagnosticLanguage.contains(text)
     }
 
     /// Returns `true` if the record's text or evidence contains clinical/diagnostic language.
-    static func containsDiagnosticLanguage(_ record: TierTwoMemoryRecord) -> Bool {
+    public static func containsDiagnosticLanguage(_ record: TierTwoMemoryRecord) -> Bool {
         containsDiagnosticLanguage(record.text + " " + record.evidence)
     }
 }

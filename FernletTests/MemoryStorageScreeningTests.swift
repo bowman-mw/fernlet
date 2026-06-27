@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import AIContext
 @testable import Fernlet
 
 /// Spec §8: the diagnostic-language post-classifier must run on every proposed memory
