@@ -9,6 +9,7 @@ import CryptoKit
 #if canImport(UIKit)
 import UIKit
 import FernletDomainModel
+import PrivateMediaStore
 #endif
 @testable import Fernlet
 

@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore"]),
     ],
     targets: [
         .target(
@@ -128,6 +128,17 @@ let package = Package(
         .target(
             name: "PrivateMemoryStore",
             dependencies: ["PrivateStoreCore", "FernletCrypto", "FernletFoundation", "FernletDomainModel"]
+        ),
+        // Layer 3 — at-rest GCM-sealed photo index (S3). PrivateMediaStore +
+        // PrivateMediaKeyStore (keychain key provider) + UIImage helpers + MealPhotoStore,
+        // hoisted out of the otherwise-black-box Proximity/ subtree. NONisolated (plain
+        // structs/classes). No FernletCrypto dep — these seal via CryptoKit directly with
+        // their own keychain key, not ColumnCrypto. FriendPhotoPayload (their wire DTO) was
+        // hoisted to FernletDomainModel in the C1 prep. The SwiftUI FriendPhotoReviewSheet
+        // stays in the app.
+        .target(
+            name: "PrivateMediaStore",
+            dependencies: ["FernletFoundation", "FernletDomainModel"]
         ),
     ]
 )

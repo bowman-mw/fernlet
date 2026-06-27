@@ -18,7 +18,7 @@ import FernletDomainModel
 /// On-disk names (`MeshPhotoCache.json`, `MeshPhotos/`, `MeshPhotoThumbnails/`) are kept from the
 /// former `MeshPhotoCacheStore` so existing caches load without migration; legacy plaintext files
 /// are recognised on read and re-encrypted in place on first access.
-struct PrivateMediaStore {
+public struct PrivateMediaStore {
     private let indexURL: URL
     private let imageDirectoryURL: URL
     private let thumbnailDirectoryURL: URL
@@ -37,10 +37,10 @@ struct PrivateMediaStore {
     private static let maxImagePixelCount = 24_000_000  // ~24 MP
     // Spec §11: cap the on-device photo cache at 1000 (FIFO by recency), with a soft warning near 900.
     // Newest photos are kept; oldest are evicted.
-    static let maxCachedPhotos = 1000
-    static let cacheWarningThreshold = 900
+    public static let maxCachedPhotos = 1000
+    public static let cacheWarningThreshold = 900
 
-    init(indexURL: URL, keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider()) {
+    public init(indexURL: URL, keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider()) {
         self.indexURL = indexURL
         let baseURL = indexURL.deletingLastPathComponent()
         self.imageDirectoryURL = baseURL.appendingPathComponent("MeshPhotos", isDirectory: true)
@@ -52,14 +52,14 @@ struct PrivateMediaStore {
         self.decoder.dateDecodingStrategy = .iso8601
     }
 
-    func load() -> [FriendPhotoPayload] {
+    public func load() -> [FriendPhotoPayload] {
         guard let data = try? Data(contentsOf: indexURL), !data.isEmpty,
               let photos = try? decoder.decode([FriendPhotoPayload].self, from: data) else { return [] }
         save(photos)
         return photos.map { $0.withoutImageData() }
     }
 
-    func save(_ photos: [FriendPhotoPayload]) {
+    public func save(_ photos: [FriendPhotoPayload]) {
         let capped = Array(photos.sorted { $0.addedAt > $1.addedAt }.prefix(Self.maxCachedPhotos))
         createDirectories()
         for photo in capped {
@@ -87,7 +87,7 @@ struct PrivateMediaStore {
         removeOrphanedFiles(keeping: Set(capped.map(\.id)))
     }
 
-    func imageData(for photo: FriendPhotoPayload) -> Data? {
+    public func imageData(for photo: FriendPhotoPayload) -> Data? {
         if let inMemory = photo.imageData { return inMemory }
         guard let stored = try? Data(contentsOf: imageURL(for: photo.id)) else { return nil }
         switch openSealed(stored) {
@@ -102,7 +102,7 @@ struct PrivateMediaStore {
         }
     }
 
-    func thumbnailData(for photo: FriendPhotoPayload) -> Data? {
+    public func thumbnailData(for photo: FriendPhotoPayload) -> Data? {
         if let stored = try? Data(contentsOf: thumbnailURL(for: photo.id)) {
             switch openSealed(stored) {
             case .opened(let data):
@@ -120,7 +120,7 @@ struct PrivateMediaStore {
         return thumbnailData
     }
 
-    func hydrated(_ photo: FriendPhotoPayload) -> FriendPhotoPayload? {
+    public func hydrated(_ photo: FriendPhotoPayload) -> FriendPhotoPayload? {
         guard let data = imageData(for: photo) else { return nil }
         return FriendPhotoPayload(
             id: photo.id,
@@ -171,7 +171,7 @@ struct PrivateMediaStore {
     /// Reads pixel dimensions via ImageIO (without decoding the pixels) and rejects images whose
     /// dimensions or total area would decompress to an unreasonable bitmap, independent of the
     /// on-the-wire byte size. Undeterminable dimensions are treated as unsafe.
-    static func isWithinSafePixelBounds(_ imageData: Data) -> Bool {
+    public static func isWithinSafePixelBounds(_ imageData: Data) -> Bool {
         guard let source = CGImageSourceCreateWithData(imageData as CFData, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int,

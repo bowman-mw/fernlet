@@ -10,6 +10,7 @@ import FernletScoring
 import FernletPersistence
 import FoodCatalog
 import PrivateHealthStore
+import PrivateMediaStore
 
 @MainActor
 @Observable

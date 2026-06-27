@@ -3,6 +3,7 @@ import UIKit
 import CryptoKit
 import Testing
 import FernletDomainModel
+import PrivateMediaStore
 @testable import Fernlet
 
 /// Deterministic, keychain-free key provider for tests.

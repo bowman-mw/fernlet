@@ -2,7 +2,7 @@ import UIKit
 import FernletDomainModel
 
 extension UIImage {
-    func resizedForFriendSharing(maxDimension: CGFloat = 1400) -> UIImage {
+    public func resizedForFriendSharing(maxDimension: CGFloat = 1400) -> UIImage {
         let largestSide = max(size.width, size.height)
         guard largestSide > maxDimension else { return self }
         let scale = maxDimension / largestSide

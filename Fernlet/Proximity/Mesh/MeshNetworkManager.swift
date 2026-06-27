@@ -5,6 +5,7 @@ import UIKit
 import CryptoKit
 import FernletDomainModel
 import FernletFoundation
+import PrivateMediaStore
 
 // MARK: - Supporting types
 

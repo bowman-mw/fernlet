@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import FernletDomainModel
+import PrivateMediaStore
 
 // MARK: - FriendsView
 
