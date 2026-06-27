@@ -382,3 +382,64 @@ git tag **`spm-carveup-baseline`** (known-good rollback point). Commits `0fc138c
 - Live UI verify needs the **computer-use MCP**; `idb` is not installed and Accessibility (osascript)
   is denied, so `simctl` screenshots are the only no-MCP option. App launches clean to onboarding and to
   the main UI via the `-completeOnboarding` launch arg.
+
+---
+
+## 12. Phases 3–5 handoff (steps 6–8 executed 2026-06-27, session 2)
+
+**Branch:** `claude/laughing-goldstine-c8b9e9` (worktree). **Status:** steps 6, 7, 8 DONE and committed;
+each module is its own commit, build-green (and FULL `FernletTests` green at every sealed-store / wall boundary).
+Builds via the umbrella `FernletKit` product (one product, all targets) — no per-module pbxproj surgery.
+
+### Modules extracted this session (commit → module)
+- `510d8b5` step-6 prep hoist: `FernletLockError` + `FernletAuditLog` → **FernletFoundation**; `AIDestination` +
+  `FriendPhotoPayloads` (6 Wire DTOs) → **FernletDomainModel**.
+- `74d345d` **PrivateStoreCore** (NEW, layer 2.5, nonisolated): `PrivatePersistenceController` +
+  `PrivatePersistentHistoryPruner` + `PendingNarrativeBuffer` + `PendingNarrativePayload`. *Deviation from the plan,*
+  which put the controller in PrivateHealthStore — but the sealed CoreData stack is shared by BOTH sealed stores AND
+  the lock service, and must sit on the protected side of the wall, so it is its own target.
+- `2bbb096` **PrivateHealthStore** (MainActor): PeriodTrackerStore, CyclePredictionEngine, Menstrual/Intimacy repos +
+  the raw cycle value types (CyclePhase stays here, never DomainModel, so AI can't see it). Split PeriodTrackerStore.swift:
+  the `extension HealthKitService: PeriodHealthKitServicing` moved to app `HealthKitService.swift`; `PeriodHealthKitServicing`
+  rewritten as a narrow standalone seam; `HealthKitService()` default removed (inject); fat `FernletLockServicing` now
+  *refines* a narrow `PeriodLockContext` seam (zero call-site churn). `ColumnCrypto` (FernletCrypto) marked `nonisolated`.
+- `f511f8e` **PrivateMemoryStore** (nonisolated): `JournalNarrativeRepository` ONLY. `MemoryAgent` + `AIAuditLog` are pure
+  AI-facing control plane (every AI provider calls them) → they went to **AIContext** (`cdb7cde`), NOT the sealed module
+  (would have been a latent AIProviders→Private* wall violation).
+- `b5e1a8b` **PrivateMediaStore** (nonisolated): the 3 `Proximity/Photos/` non-UI files + `MealPhotoStore`.
+- `abd06fa` **PeriodContextBridge** (MainActor; pure types nonisolated) · `2ce58f9` **AIContext** (payload DTOs; +explicit
+  Sendable on 8 DomainModel value types; S3BoundaryTests made path-robust) · `cdb7cde` MemoryAgent+AIAuditLog → AIContext.
+- `12996ef` **AIProviders** (MainActor; deps AIContext+DomainModel+Scoring+FoodCatalog, no Private*) = 3 cleanly-walled
+  files. `05ee239` **CloudKitSync** (MainActor; deps FernletPersistence+LocalPersistence+FernletFoundation+DomainModel,
+  no Private*) + the wall hardening.
+
+### THE WALL — how it is actually enforced (load-bearing correction to §3/§10)
+§3 assumed a forbidden import would be a hard "no such module" compile error. It is NOT, under the single umbrella
+product: Xcode pools every local-package module into one `…/PackageFrameworks` search path, so a forbidden
+`import PrivateHealthStore` from AIProviders RESOLVES and emits only a build-system *warning*. **Separate SPM products do
+not fix this** (verified empirically — same pooling). The true hard error is obtained by building with
+**`DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`** (Xcode "Validate Dependencies = Yes (Error)"). PROVEN: the forbidden
+import → `** TEST BUILD FAILED **` (exit 65) `error: 'AIProviders' is missing a dependency on 'PrivateHealthStore'`;
+reverted → green; a clean build of the whole DAG under the flag is green (all declared deps complete). The pbxproj value
+does NOT propagate to synthesized package targets, so it must be a **build-command override** (bake into CI). It only
+re-fires on recompile, so CI clean builds are the reliable enforcement point. The honest package DAG + this flag IS the
+wall; `S3BoundaryTests` is kept as a belt-and-suspenders grep (and was made robust to the file relocations).
+
+### Deferred (not yet behind the wall) — 3 AI files still in the app target
+`FoundationDishDecomposition` (uses `MealBuilder`/`DishTemplateLexicon`), `FoodProductWebImporter` (uses
+`NutritionLabelScanner`/`NutritionLabelResult`), `LaunchPreparationService` (uses `FernletStore`, 7 methods). A package
+module cannot import the app target, so each needs a downward inversion first: carve the pure `MealBuilder.mealFromIngredients`
++ `DishTemplateLexicon.componentGramBounds` into FoodCatalog; a `NutritionLabelScanning` seam (+ `NutritionLabelResult` →
+DomainModel); a `FernletStore` launch seam. All 3 are verified to reference ZERO sealed types and (the aiFacing ones) stay
+grep-covered by S3BoundaryTests.
+
+### Remaining work (next session)
+1. Confirm the step-8 boundary FULL suite passed (launched at handoff → `scratchpad/step8-fullsuite.log`).
+2. Add the committed wall-enforcement artifact: a build/CI script that runs the build with
+   `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`, and note it in CLAUDE.md's build section.
+3. **Step 4c — StoreCore + DiaryStore** (the hardest; ~70% of FernletStore).
+4. **Step 9 — shims:** HealthKitGateway (will dep PrivateHealthStore for the period extension — OK, not a wall edge),
+   FernletLock (redeclare CryptoSwift; deps PrivateStoreCore + PrivateHealthStore), AppServices, ProximityKit (27-file
+   black box; deps PrivateMediaStore+DomainModel; ProximityHost seam already breaks app coupling).
+5. (Optional) the 3 deferred AI-file inversions above, to put all 6 AI providers behind the wall.
+- DO NOT do step 10 (delete S3BoundaryTests / per-target test targets) — post-review.
