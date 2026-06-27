@@ -74,14 +74,32 @@ final class MenstrualNarrativeRepository {
         }
     }
 
-    /// All stored narratives, decrypted. Used by the sealed-backup export, which needs every record
-    /// regardless of date — a no-predicate fetch, avoiding the per-day key enumeration that
-    /// `narratives(in:)` performs (catastrophic for an unbounded date range).
-    func allNarratives(contentKey: SymmetricKey?) throws -> [MenstrualNarrative] {
-        guard let contentKey else { return [] }
+    /// Total number of stored narratives, counted without decrypting (or even faulting in) any rows.
+    /// Lets the sealed-backup export size its chunks up front so it never materializes the whole
+    /// history at once — see `narratives(offset:limit:contentKey:)`.
+    func narrativeCount() throws -> Int {
+        try context.performAndWait {
+            try context.count(for: NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative"))
+        }
+    }
+
+    /// A single page of narratives, decrypted, in a stable total order (`dateKey` then the unique
+    /// `hkExternalUUID` tiebreaker). Backs the chunked sealed-backup export: paging by
+    /// `offset`/`limit` keeps each chunk bounded regardless of how long the cycle history is,
+    /// instead of loading every record into memory before sealing. The sort is a *total* order so
+    /// successive pages neither overlap nor skip rows. Replaces the former unbounded
+    /// `allNarratives` (and avoids the per-day key enumeration that `narratives(in:)` performs,
+    /// catastrophic for an unbounded date range).
+    func narratives(offset: Int, limit: Int, contentKey: SymmetricKey?) throws -> [MenstrualNarrative] {
+        guard let contentKey, limit > 0 else { return [] }
         return try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
-            request.sortDescriptors = [NSSortDescriptor(key: "dateKey", ascending: true)]
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "dateKey", ascending: true),
+                NSSortDescriptor(key: "hkExternalUUID", ascending: true)
+            ]
+            request.fetchOffset = max(0, offset)
+            request.fetchLimit = limit
             return try context.fetch(request).compactMap { object in
                 do {
                     return try decrypt(object, contentKey: contentKey)

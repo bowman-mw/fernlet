@@ -987,6 +987,17 @@ final class FernletStore {
         try sealedBackupCoordinator.applyRestoredPayload(plaintext, payloadType: payloadType, narrativeRepository: narrativeRepository)
     }
 
+    /// Decodes the decrypted chunks of a sealed-backup payload into the local stores, returning records
+    /// written. Delegates to `SealedBackupCoordinator`; kept as a wrapper for the restore tests.
+    @discardableResult
+    func applyRestoredChunks(
+        _ chunks: [Data],
+        payloadType: SealedBackupPayloadType,
+        narrativeRepository: MenstrualNarrativeRepository? = nil
+    ) throws -> Int {
+        try sealedBackupCoordinator.applyRestoredChunks(chunks, payloadType: payloadType, narrativeRepository: narrativeRepository)
+    }
+
     func scoreBreakdown(for targetDay: FernletDay) -> ScoreBreakdown {
         let body = targetDay.healthContext?.body
         let activity = targetDay.healthContext?.activity
