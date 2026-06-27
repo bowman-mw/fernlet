@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore"]),
     ],
     targets: [
         .target(
@@ -205,6 +205,24 @@ let package = Package(
         .target(
             name: "StoreCore",
             dependencies: ["FernletFoundation", "FernletDomainModel", "FernletScoring", "FernletPersistence", "LocalPersistence"]
+        ),
+        // Layer 8 — the portable diary slice carved out of the app's FernletStore. A pure
+        // @Observable @MainActor store owning the diary state (day/settings/meals/journals/
+        // memories/goals/workshop/foodItems/recipes/dailyScores/companionThought) + the pure
+        // diary methods (scoring, meal/recipe/workout/journal-field/settings/care/load). It
+        // depends ONLY on portable layers — NEVER any Private*/CloudKitSync/AIProviders/
+        // HealthKit/Proximity/PeriodContextBridge module. The app-only collaborators (the 5
+        // coordinators, proximity, snapshot machinery, retry/derived/saved-recipe services,
+        // the period bridge) stay in the app-side FernletStore facade, which owns a DiaryStore
+        // and forwards to it. Two injected closures decouple it from the facade:
+        // `scheduleSnapshotSave` (→ the facade's SnapshotSaveCoordinator) and `periodAdjustment`
+        // (→ the facade's PeriodContextBridge gate). MainActor: @Observable store.
+        .target(
+            name: "DiaryStore",
+            dependencies: ["StoreCore", "FernletPersistence", "LocalPersistence", "FernletScoring", "FernletDomainModel", "FernletFoundation", "FoodCatalog"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
         ),
     ]
 )

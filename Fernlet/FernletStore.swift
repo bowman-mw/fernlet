@@ -15,28 +15,66 @@ import PrivateHealthStore
 import PrivateMediaStore
 import PeriodContextBridge
 import StoreCore
+import DiaryStore
 
 @MainActor
 @Observable
 final class FernletStore {
-    var day: FernletDay
-    var settings: FernletSettings
-    var recentMeals: [Meal]
-    var previousJournals: [JournalEntry]
-    var memories: [MemoryNote]
-    var goals: [FitnessGoal]
-    var workshop: WorkshopData
+    /// The portable diary slice. Owns the pure diary state + pure diary methods; this facade owns
+    /// the app-only collaborators (coordinators, proximity, snapshot machinery, retry/derived/
+    /// saved-recipe services, the period bridge) and forwards every diary member to it. Accessing
+    /// `diary.<prop>` still participates in observation (the @Observable tracking is on DiaryStore).
+    @ObservationIgnored let diary: DiaryStore
+
+    // MARK: - Diary forwarders (state moved to DiaryStore; settable forwarders write through)
+    var day: FernletDay {
+        get { diary.day }
+        set { diary.day = newValue }
+    }
+    var settings: FernletSettings {
+        get { diary.settings }
+        set { diary.settings = newValue }
+    }
+    var recentMeals: [Meal] {
+        get { diary.recentMeals }
+        set { diary.recentMeals = newValue }
+    }
+    var previousJournals: [JournalEntry] {
+        get { diary.previousJournals }
+        set { diary.previousJournals = newValue }
+    }
+    var memories: [MemoryNote] {
+        get { diary.memories }
+        set { diary.memories = newValue }
+    }
+    var goals: [FitnessGoal] {
+        get { diary.goals }
+        set { diary.goals = newValue }
+    }
+    var workshop: WorkshopData {
+        get { diary.workshop }
+        set { diary.workshop = newValue }
+    }
     var foodItems: [FoodItem] {
-        didSet { foodCatalog.setUserItems(foodItems) }
+        get { diary.foodItems }
+        set { diary.foodItems = newValue }
     }
-    var webImportedFoodItems: [FoodItem] {
-        foodItems.filter { $0.tags.contains("web-import") }
+    var webImportedFoodItems: [FoodItem] { diary.webImportedFoodItems }
+    var allowsWebNutritionLookup: Bool { diary.allowsWebNutritionLookup }
+    var recipes: [RecipeDefinition] {
+        get { diary.recipes }
+        set { diary.recipes = newValue }
     }
-    var allowsWebNutritionLookup: Bool {
-        settings.webNutritionLookupEnabled && settings.aiStatus != .off
+    var dailyScores: [DailyHealthScore] {
+        get { diary.dailyScores }
+        set { diary.dailyScores = newValue }
     }
-    var recipes: [RecipeDefinition]
-    var dailyScores: [DailyHealthScore]
+    var companionThought: String? {
+        get { diary.companionThought }
+        set { diary.companionThought = newValue }
+    }
+
+    // MARK: - App-only state
     var connectionSessionLogs: [ConnectionSessionLog]
     var showConnectionInspector = false
     var connectionInspector = ConnectionInspector()
@@ -56,13 +94,11 @@ final class FernletStore {
     var derivedSignals: [DerivedSignalRecord] {
         derivedSignalsService.derivedSignals
     }
-    var companionThought: String?
     var photowallSeeds: [PhotowallSeed] = []
     var lockState: FernletLockState = .notConfigured
 
-    private static let goodProteinThreshold = 25
-    @ObservationIgnored let todayKey: String
-    @ObservationIgnored private let repository: FernletRepository
+    var todayKey: String { diary.todayKey }
+    private var repository: FernletRepository { diary.repository }
     @ObservationIgnored let savedRecipeService: SavedRecipeService
     @ObservationIgnored let proximityTrustVault: ProximityTrustVault
     @ObservationIgnored let aiRetryQueueService: AIRetryQueueService
@@ -75,13 +111,13 @@ final class FernletStore {
     @ObservationIgnored private lazy var mealResolutionService = MealResolutionService(host: self)
     @ObservationIgnored private lazy var sealedBackupCoordinator = SealedBackupCoordinator(host: self)
     @ObservationIgnored private lazy var snapshotSaveCoordinator = SnapshotSaveCoordinator(
-        repository: repository,
+        repository: diary.repository,
         buildSnapshot: { [unowned self] in self.currentSnapshot() },
         onAfterSave: { [weak self] in self?.rebuildDerivedSignals() }
     )
     /// Read-only SQLite-backed bundled food store + user-item snapshot. Replaces the old in-memory
-    /// `bundledFoodItems` array; see FoodCatalog.swift.
-    @ObservationIgnored let foodCatalog: FoodCatalog
+    /// `bundledFoodItems` array; see FoodCatalog.swift. Forwarded to DiaryStore (it owns it).
+    var foodCatalog: FoodCatalog { diary.foodCatalog }
     @ObservationIgnored private var isReloadingFromRepository = false
     @ObservationIgnored private let mealPhotoStore = MealPhotoStore(
         directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
@@ -115,21 +151,8 @@ final class FernletStore {
             activeRepository.loadSnapshot(todayKey: key)
         }
         savedRecipeService.loadSync()
-        self.todayKey = key
-        self.repository = activeRepository
         self.savedRecipeService = savedRecipeService
         self.healthKitService = healthKitService
-        self.day = snapshot.day
-        self.settings = snapshot.settings
-        self.recentMeals = snapshot.recentMeals
-        self.previousJournals = snapshot.previousJournals
-        self.memories = snapshot.memories
-        self.goals = snapshot.goals
-        self.workshop = snapshot.workshop
-        self.foodCatalog = foodCatalog
-        self.foodItems = snapshot.foodItems.filter { $0.source != .usda }
-        self.recipes = snapshot.recipes
-        self.dailyScores = snapshot.dailyScores
         self.connectionSessionLogs = snapshot.connectionSessionLogs
         self.proximityTrustVault = ProximityTrustVault(
             initialPeers: snapshot.trustedProximityPeers,
@@ -137,7 +160,20 @@ final class FernletStore {
         )
         self.aiRetryQueueService = AIRetryQueueService(initial: snapshot.retryQueue)
         self.providedJournalNarrativeRepository = journalNarrativeRepository
-        foodCatalog.setUserItems(foodItems)
+        self.diary = DiaryStore(
+            snapshot: snapshot,
+            todayKey: key,
+            repository: activeRepository,
+            foodCatalog: foodCatalog,
+            scheduleSnapshotSave: { },
+            periodAdjustment: { _ in .none }
+        )
+        // Wire the two diary closures to the facade now that `self` exists. (Set after the diary is
+        // built so the closures can capture `self` weakly without an initialization-order cycle.)
+        self.diary.rewireHooks(
+            scheduleSnapshotSave: { [weak self] in self?.snapshotSaveCoordinator.schedule() },
+            periodAdjustment: { [weak self] key in self?.periodAdjustment(for: key) ?? .none }
+        )
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -155,21 +191,8 @@ final class FernletStore {
         healthKitService: (any HealthKitServicing)? = nil,
         foodCatalog: FoodCatalog = .bundled()
     ) {
-        self.todayKey = todayKey
-        self.repository = repository
         self.savedRecipeService = savedRecipeService
         self.healthKitService = healthKitService
-        self.day = snapshot.day
-        self.settings = snapshot.settings
-        self.recentMeals = snapshot.recentMeals
-        self.previousJournals = snapshot.previousJournals
-        self.memories = snapshot.memories
-        self.goals = snapshot.goals
-        self.workshop = snapshot.workshop
-        self.foodCatalog = foodCatalog
-        self.foodItems = snapshot.foodItems.filter { $0.source != .usda }
-        self.recipes = snapshot.recipes
-        self.dailyScores = snapshot.dailyScores
         self.connectionSessionLogs = snapshot.connectionSessionLogs
         self.proximityTrustVault = ProximityTrustVault(
             initialPeers: snapshot.trustedProximityPeers,
@@ -177,7 +200,18 @@ final class FernletStore {
         )
         self.aiRetryQueueService = AIRetryQueueService(initial: snapshot.retryQueue)
         self.providedJournalNarrativeRepository = nil
-        foodCatalog.setUserItems(foodItems)
+        self.diary = DiaryStore(
+            snapshot: snapshot,
+            todayKey: todayKey,
+            repository: repository,
+            foodCatalog: foodCatalog,
+            scheduleSnapshotSave: { },
+            periodAdjustment: { _ in .none }
+        )
+        self.diary.rewireHooks(
+            scheduleSnapshotSave: { [weak self] in self?.snapshotSaveCoordinator.schedule() },
+            periodAdjustment: { [weak self] key in self?.periodAdjustment(for: key) ?? .none }
+        )
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -217,108 +251,58 @@ final class FernletStore {
         FernletScoring.state(for: score, isSick: isSick(on: todayKey))
     }
 
-    var macroTotals: MacroTotals {
-        day.meals.reduce(into: MacroTotals()) { partial, meal in
-            partial.protein += meal.macros.protein
-            partial.carbs += meal.macros.carbs
-            partial.fat += meal.macros.fat
-        }
-    }
+    var macroTotals: MacroTotals { diary.macroTotals }
 
-    var micronutrientTotals: Micronutrients {
-        day.meals.reduce(into: Micronutrients()) { partial, meal in
-            partial.add(meal.micronutrientSnapshot)
-        }
-    }
+    var micronutrientTotals: Micronutrients { diary.micronutrientTotals }
 
-    var nutritionTargets: NutritionTargets {
-        NutritionTargetCalculator.targets(for: settings)
-    }
+    var nutritionTargets: NutritionTargets { diary.nutritionTargets }
 
-    var tierTwoMemories: [TierTwoMemoryRecord] {
-        repository.loadTierTwoMemories()
-    }
+    var tierTwoMemories: [TierTwoMemoryRecord] { diary.tierTwoMemories }
 
-    var personalCareTasks: [PersonalCareTask] {
-        PersonalCareTask.normalized(settings.personalCareTasks)
-    }
+    var personalCareTasks: [PersonalCareTask] { diary.personalCareTasks }
 
     func personalCareProgress(for targetDay: FernletDay? = nil) -> (completed: Int, total: Int) {
-        let activeDay = targetDay ?? day
-        let tasks = personalCareTasks
-        let completed = tasks.filter { isPersonalCareTaskCompleted($0, in: activeDay) }.count
-        return (completed, tasks.count)
+        diary.personalCareProgress(for: targetDay)
     }
 
     func isPersonalCareTaskCompleted(_ task: PersonalCareTask, in targetDay: FernletDay? = nil) -> Bool {
-        let activeDay = targetDay ?? day
-        if activeDay.completedPersonalCareTaskIDs.contains(task.id) { return true }
-        if let item = task.defaultHygieneItem {
-            return activeDay.hygiene.contains(item)
-        }
-        return false
+        diary.isPersonalCareTaskCompleted(task, in: targetDay)
     }
 
     func storeDaySummary(_ text: String, for dateKey: String) {
-        assert(!dateKey.isEmpty, "date key required")
-        let trimmed = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300))
-        guard !trimmed.isEmpty else { return }
-        batchSnapshotPersistence {
-            if let index = dailyScores.firstIndex(where: { $0.dateKey == dateKey }) {
-                dailyScores[index].daySummaryText = trimmed
-            } else {
-                let targetDay = loadDay(for: dateKey)
-                var healthScore = dailyHealthScore(for: dateKey, day: targetDay)
-                healthScore.daySummaryText = trimmed
-                dailyScores.append(healthScore)
-            }
-        }
+        diary.storeDaySummary(text, for: dateKey)
     }
 
     func invalidateDaySummary(for dateKey: String) {
-        assert(!dateKey.isEmpty, "date key required")
-        guard let index = dailyScores.firstIndex(where: { $0.dateKey == dateKey }) else { return }
-        dailyScores[index].daySummaryText = nil
-        snapshotSaveCoordinator.schedule()
+        diary.invalidateDaySummary(for: dateKey)
     }
 
     func storeCompanionThought(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        companionThought = trimmed
+        diary.storeCompanionThought(text)
     }
 
-    var storageLocation: String {
-        repository.storageDescription()
-    }
+    var storageLocation: String { diary.storageLocation }
 
     var pendingRetryCount: Int {
         aiRetryQueueService.pendingCount
     }
 
-    var isIntimateLoggingAllowed: Bool {
-        settings.userProfile.age >= 18
-    }
+    var isIntimateLoggingAllowed: Bool { diary.isIntimateLoggingAllowed }
 
     func setHidePredictions(_ hidePredictions: Bool) {
-        settings.hidePredictions = hidePredictions
-        snapshotSaveCoordinator.schedule()
+        diary.setHidePredictions(hidePredictions)
     }
 
     func setHideFertileWindow(_ hideFertileWindow: Bool) {
-        settings.hideFertileWindow = hideFertileWindow
-        snapshotSaveCoordinator.schedule()
+        diary.setHideFertileWindow(hideFertileWindow)
     }
 
     func setPeriodAwareScoringEnabled(_ enabled: Bool) {
-        settings.periodAwareScoringEnabled = enabled
-        snapshotSaveCoordinator.schedule()
+        diary.setPeriodAwareScoringEnabled(enabled)
     }
 
     func markPeriodContextPrimerSeen() {
-        guard !settings.periodContextPrimerSeen else { return }
-        settings.periodContextPrimerSeen = true
-        snapshotSaveCoordinator.schedule()
+        diary.markPeriodContextPrimerSeen()
     }
 
     /// Wires the read-only period→scoring bridge. Called once from `ContentView` after the period store
@@ -330,7 +314,8 @@ final class FernletStore {
 
     /// The pre-gated period adjustment for a day, or `.none` when period-aware scoring is opted out or no
     /// bridge is attached. This is the single gate point for the opt-in; the bridge applies the 3-cycle and
-    /// confidence gates internally.
+    /// confidence gates internally. Supplied to DiaryStore as the injected `periodAdjustment` closure so
+    /// the pure scoring methods stay byte-identical without naming the (facade-only) bridge.
     func periodAdjustment(for dayKey: String) -> PeriodScoringAdjustment {
         guard settings.periodAwareScoringEnabled, let periodScoringContext else { return .none }
         return periodScoringContext.scoringAdjustment(forDayKey: dayKey)
@@ -362,23 +347,19 @@ final class FernletStore {
     }
 
     func setCompanionAppearance(_ appearance: CompanionAppearance) {
-        settings.companionAppearance = appearance
-        snapshotSaveCoordinator.schedule()
+        diary.setCompanionAppearance(appearance)
     }
 
     func setCompanionName(_ name: String) {
-        settings.companionName = name
-        snapshotSaveCoordinator.schedule()
+        diary.setCompanionName(name)
     }
 
     func setProximityDisplayName(_ name: String) {
-        settings.proximityDisplayName = name.trimmingCharacters(in: .whitespaces)
-        snapshotSaveCoordinator.schedule()
+        diary.setProximityDisplayName(name)
     }
 
     func setShowProximityDebugTools(_ value: Bool) {
-        settings.showProximityDebugTools = value
-        snapshotSaveCoordinator.schedule()
+        diary.setShowProximityDebugTools(value)
     }
 
     func setAllowNearbyRecipeShares(_ value: Bool) {
@@ -441,13 +422,11 @@ final class FernletStore {
     }
 
     func setHomeWidgets(_ widgets: [HomeWidget]) {
-        settings.homeWidgets = HomeWidget.normalized(widgets)
-        snapshotSaveCoordinator.schedule()
+        diary.setHomeWidgets(widgets)
     }
 
     func setQuickLogItems(_ items: [FernletShortcut]) {
-        settings.quickLogItems = FernletShortcut.normalizedQuickLog(items)
-        snapshotSaveCoordinator.schedule()
+        diary.setQuickLogItems(items)
     }
 
     func allowedHealthCapabilities(from capabilities: Set<HealthCapability>) -> Set<HealthCapability> {
@@ -458,6 +437,10 @@ final class FernletStore {
         return allowed
     }
 
+    // NOTE (deviation): `visibleHealthCapabilities` STAYS IN THE FACADE. `HealthCapability` is an
+    // app-target type (defined in HealthKitService.swift), not a portable DomainModel type — the
+    // classification's "HealthCapability type, not HealthKit" note was incorrect. Its body forwards
+    // to `diary.isIntimateLoggingAllowed`, preserving identical behavior.
     var visibleHealthCapabilities: [HealthCapability] {
         HealthCapability.allCases.filter { capability in
             capability != .intimateLogging || isIntimateLoggingAllowed
@@ -471,7 +454,7 @@ final class FernletStore {
     @discardableResult func addMeal(from description: String, type: MealType? = nil, date: String) -> Meal {
         assert(!date.isEmpty, "meal date required")
         let parsed = mealResolutionService.enrichingFallbackMicronutrients(MealParser.parse(description, fallbackType: type), description: description)
-        appendMeal(parsed, date: date)
+        diary.appendMeal(parsed, date: date)
         return parsed
     }
 
@@ -510,30 +493,16 @@ final class FernletStore {
     @discardableResult func commitResolution(_ resolution: MealResolution, date: String? = nil) -> [Meal] {
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "meal date required")
-        for newRecipe in resolution.createdRecipes { recipes.insert(newRecipe, at: 0) }
-        resolution.meals.forEach { appendMeal($0, date: targetDate) }
+        for newRecipe in resolution.createdRecipes { diary.recipes.insert(newRecipe, at: 0) }
+        resolution.meals.forEach { diary.appendMeal($0, date: targetDate) }
         if resolution.isFallback {
             resolution.meals.forEach { queueMealRetry($0, dayKey: targetDate) }
         }
         return resolution.meals
     }
 
-    private func appendMeal(_ meal: Meal, date: String) {
-        assert(!date.isEmpty, "meal date required")
-        batchSnapshotPersistence {
-            mutateDay(date: date) { $0.meals.append(meal) }
-            invalidateDaySummary(for: date)
-            recentMeals.insert(meal, at: 0)
-            recentMeals = Array(recentMeals.prefix(50))
-        }
-    }
-
     @discardableResult func copyMeal(_ meal: Meal) -> Meal {
-        let copiedMeal = meal.copyForToday()
-        batchSnapshotPersistence {
-            day.meals.append(copiedMeal)
-        }
-        return copiedMeal
+        diary.copyMeal(meal)
     }
 
     func deleteMeal(_ meal: Meal) {
@@ -549,6 +518,11 @@ final class FernletStore {
         }
     }
 
+    // NOTE (deviation): updateMealCorrection + its two static helpers + goodProteinThreshold STAY
+    // IN THE FACADE because they use the app-target `MealBuilder`. (Classification had MealBuilder
+    // as portable/FoodCatalog; it is not — its carve is future work.)
+    private static let goodProteinThreshold = 25
+
     func updateMealCorrection(
         mealID: UUID,
         name: String,
@@ -559,7 +533,7 @@ final class FernletStore {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let correction = Self.correctedNutrition(macros: macros, componentSnapshots: componentSnapshots)
         batchSnapshotPersistence {
-            mutateDay(date: todayKey) { targetDay in
+            diary.mutateDay(date: todayKey) { targetDay in
                 guard let index = targetDay.meals.firstIndex(where: { $0.id == mealID }) else { return }
                 Self.applyMealCorrection(
                     to: &targetDay.meals[index],
@@ -580,7 +554,7 @@ final class FernletStore {
                     componentSnapshots: correction.componentSnapshots
                 )
             }
-            invalidateDaySummary(for: todayKey)
+            diary.invalidateDaySummary(for: todayKey)
         }
     }
 
@@ -632,11 +606,7 @@ final class FernletStore {
     }
 
     func attachMealPhoto(mealID: UUID, photoID: UUID) {
-        batchSnapshotPersistence {
-            if let index = day.meals.firstIndex(where: { $0.id == mealID }) {
-                day.meals[index].photoID = photoID
-            }
-        }
+        diary.attachMealPhoto(mealID: mealID, photoID: photoID)
     }
 
     func mealPhotoData(for id: UUID) -> Data? {
@@ -650,6 +620,8 @@ final class FernletStore {
     }
     #endif
 
+    // NOTE (deviation): logRecipe STAYS IN THE FACADE — it builds the meal via app-target
+    // `MealBuilder`, then writes it through the diary's pure `appendMeal`.
     @discardableResult func logRecipe(_ recipe: RecipeDefinition, mealType: MealType? = nil, date: String? = nil) -> Meal {
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "recipe meal date required")
@@ -659,8 +631,8 @@ final class FernletStore {
             foodItems: foodCatalog.items(forRecipe: recipe)
         )
         batchSnapshotPersistence {
-            mutateDay(date: targetDate) { $0.meals.append(meal) }
-            invalidateDaySummary(for: targetDate)
+            diary.mutateDay(date: targetDate) { $0.meals.append(meal) }
+            diary.invalidateDaySummary(for: targetDate)
             recentMeals.insert(meal, at: 0)
             recentMeals = Array(recentMeals.prefix(50))
         }
@@ -668,29 +640,11 @@ final class FernletStore {
     }
 
     @discardableResult func logSavedRecipe(_ recipe: RecipeDefinition, mealType: MealType? = nil, date: String? = nil) -> Meal {
-        let targetDate = date ?? todayKey
-        assert(!targetDate.isEmpty, "saved recipe meal date required")
-        let meal = SavedRecipeService.makeMeal(from: recipe, mealType: mealType)
-        appendMeal(meal, date: targetDate)
-        return meal
+        diary.logSavedRecipe(recipe, mealType: mealType, date: date)
     }
 
     @discardableResult func logWebImportedFoodProduct(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
-        let targetDate = date ?? todayKey
-        assert(!targetDate.isEmpty, "web imported product meal date required")
-        let meal = Meal(
-            name: foodItem.name,
-            mealType: mealType ?? MealParser.classifyMealType(foodItem.name),
-            macros: foodItem.macros,
-            micronutrientSnapshot: foodItem.micronutrients,
-            mealSource: .manual,
-            quality: foodItem.macros.protein >= Self.goodProteinThreshold ? .good : .ok,
-            confidence: "Saved product",
-            note: "Logged from saved product.",
-            source: MealLogSource.webImport
-        )
-        appendMeal(meal, date: targetDate)
-        return meal
+        diary.logWebImportedFoodProduct(foodItem, mealType: mealType, date: date)
     }
 
     func savedRecipeShareText(for recipe: RecipeDefinition) -> String {
@@ -747,10 +701,7 @@ final class FernletStore {
 
     func addWorkout(_ workout: Workout, date: String) {
         assert(!date.isEmpty, "workout date required")
-        batchSnapshotPersistence {
-            mutateDay(date: date) { $0.workouts.append(workout) }
-            invalidateDaySummary(for: date)
-        }
+        diary.appendWorkout(workout, date: date)
         guard workout.healthKitUUID == nil else { return }
         Task { [weak self] in
             await self?.healthSyncCoordinator.saveWorkoutToHealthIfAuthorized(workout, date: date)
@@ -758,42 +709,19 @@ final class FernletStore {
     }
 
     func planWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
-        assert(!date.isEmpty, "planned workout date required")
-        mutateDay(date: date) { day in
-            day.plannedWorkouts.removeAll { $0.id == plannedWorkout.id }
-            day.plannedWorkouts.append(plannedWorkout)
-            day.plannedWorkouts.sort { $0.createdAt < $1.createdAt }
-        }
+        diary.planWorkout(plannedWorkout, date: date)
     }
 
     func copiedForwardWorkoutSplit(before date: String) -> WorkoutSplit? {
-        assert(!date.isEmpty, "planned workout date required")
-        let days = loadDays()
-        if let sameDaySplit = days[date]?.plannedWorkouts.last?.split {
-            return sameDaySplit
-        }
-        return days
-            .filter { $0.key < date }
-            .sorted { $0.key > $1.key }
-            .compactMap { $0.value.plannedWorkouts.last?.split }
-            .first
+        diary.copiedForwardWorkoutSplit(before: date)
     }
 
     func previousWeekPlannedWorkout(for date: String) -> PlannedWorkout? {
-        assert(!date.isEmpty, "planned workout date required")
-        guard let targetDate = FernletDate.date(fromDayKey: date),
-              let previousWeekDate = Calendar.current.date(byAdding: .day, value: -7, to: targetDate) else {
-            return nil
-        }
-        let previousWeekKey = FernletDate.dayKey(for: previousWeekDate)
-        return loadDay(for: previousWeekKey).plannedWorkouts.first
+        diary.previousWeekPlannedWorkout(for: date)
     }
 
     func deletePlannedWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
-        assert(!date.isEmpty, "planned workout date required")
-        mutateDay(date: date) { day in
-            day.plannedWorkouts.removeAll { $0.id == plannedWorkout.id }
-        }
+        diary.deletePlannedWorkout(plannedWorkout, date: date)
     }
 
     func completePlannedWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
@@ -805,9 +733,7 @@ final class FernletStore {
             workout.loggedAt = completedAt
         }
         addWorkout(workout, date: date)
-        mutateDay(date: date) { day in
-            day.plannedWorkouts.removeAll { $0.id == plannedWorkout.id }
-        }
+        diary.removePlannedWorkout(plannedWorkout, date: date)
     }
 
     func refreshWorkoutsFromHealth() async {
@@ -837,8 +763,7 @@ final class FernletStore {
     }
 
     func setSleep(hours: Double?, quality: SleepQuality, note: String) {
-        day.sleep = SleepLog(hours: hours, quality: quality, note: note.trimmingCharacters(in: .whitespacesAndNewlines))
-        snapshotSaveCoordinator.schedule()
+        diary.setSleep(hours: hours, quality: quality, note: note)
     }
 
     /// Merges a HealthKit daily context (and any HealthKit-derived sleep) into today.
@@ -848,75 +773,41 @@ final class FernletStore {
     }
 
     func addBottle() {
-        day.bottleCount = min(day.bottleCount + 1, 30)
-        snapshotSaveCoordinator.schedule()
+        diary.addBottle()
     }
 
     func removeBottle() {
-        day.bottleCount = max(day.bottleCount - 1, 0)
-        snapshotSaveCoordinator.schedule()
+        diary.removeBottle()
     }
 
     func toggleHygiene(_ item: HygieneItem) {
-        guard let task = personalCareTasks.first(where: { $0.defaultHygieneItem == item }) else { return }
-        togglePersonalCareTask(task)
+        diary.toggleHygiene(item)
     }
 
     func togglePersonalCareTask(_ task: PersonalCareTask) {
-        setPersonalCareTask(task, completed: !isPersonalCareTaskCompleted(task))
+        diary.togglePersonalCareTask(task)
     }
 
     func setPersonalCareTask(_ task: PersonalCareTask, completed: Bool) {
-        batchSnapshotPersistence {
-            if completed {
-                day.completedPersonalCareTaskIDs.insert(task.id)
-                if let item = task.defaultHygieneItem { day.hygiene.insert(item) }
-            } else {
-                day.completedPersonalCareTaskIDs.remove(task.id)
-                if let item = task.defaultHygieneItem { day.hygiene.remove(item) }
-            }
-        }
+        diary.setPersonalCareTask(task, completed: completed)
     }
 
     func addPersonalCareTask(label: String, group: String) {
-        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        batchSnapshotPersistence {
-            var tasks = personalCareTasks
-            tasks.append(PersonalCareTask.custom(label: trimmed, group: group))
-            settings.personalCareTasks = PersonalCareTask.normalized(tasks)
-        }
+        diary.addPersonalCareTask(label: label, group: group)
     }
 
     func removePersonalCareTask(_ task: PersonalCareTask) {
-        batchSnapshotPersistence {
-            settings.personalCareTasks = PersonalCareTask.normalized(personalCareTasks.filter { $0.id != task.id })
-            day.completedPersonalCareTaskIDs.remove(task.id)
-            if let item = task.defaultHygieneItem { day.hygiene.remove(item) }
-        }
-    }
-
-    @discardableResult
-    private func mutatePastDay(_ dateKey: String, _ mutate: (inout FernletDay) -> Void) -> Bool {
-        assert(!dateKey.isEmpty, "date key required")
-        var targetDay = repository.loadDay(for: dateKey, todayKey: todayKey)
-        mutate(&targetDay)
-        let saved = repository.updateDay(targetDay, for: dateKey, todayKey: todayKey)
-        assert(saved, "past-date save failed for \(dateKey)")
-        return saved
+        diary.removePersonalCareTask(task)
     }
 
     // MARK: - Past-date access
 
     func loadDays() -> [String: FernletDay] {
-        var days = repository.loadAllDays()
-        days[todayKey] = day
-        return days
+        diary.loadDays()
     }
 
     func loadDay(for dateKey: String) -> FernletDay {
-        if dateKey == todayKey { return day }
-        return repository.loadDay(for: dateKey, todayKey: todayKey)
+        diary.loadDay(for: dateKey)
     }
 
     func loadDayWithDecryptedJournals(for dateKey: String) -> FernletDay {
@@ -925,41 +816,31 @@ final class FernletStore {
 
     /// Whether the given day (by `yyyy-MM-dd` key) is flagged sick.
     func isSick(on dateKey: String) -> Bool {
-        settings.sickDays[dateKey] ?? false
+        diary.isSick(on: dateKey)
     }
 
     /// Sets or clears the sickness flag for a specific day and persists the change.
     func setSick(_ value: Bool, on dateKey: String) {
-        if value {
-            settings.sickDays[dateKey] = true
-        } else {
-            settings.sickDays.removeValue(forKey: dateKey)
-        }
-        snapshotSaveCoordinator.schedule()
+        diary.setSick(value, on: dateKey)
     }
 
     /// Whether the "Today's intent" home prompt has been dismissed for the current day.
-    var isTodayIntentDismissed: Bool {
-        settings.intentDismissedDays[todayKey] ?? false
-    }
+    var isTodayIntentDismissed: Bool { diary.isTodayIntentDismissed }
 
     /// Dismisses the "Today's intent" prompt for today and persists the change.
     func dismissTodayIntent() {
-        settings.intentDismissedDays[todayKey] = true
-        snapshotSaveCoordinator.schedule()
+        diary.dismissTodayIntent()
     }
 
     /// Whether the preventive-care micronutrient nudge for a nutrient is active (i.e. not within its
     /// 2-week post-dismissal cooldown).
     func isNutrientBubbleActive(for key: String) -> Bool {
-        guard let until = settings.nutrientBubbleDismissedUntil[key] else { return true }
-        return Date() >= until
+        diary.isNutrientBubbleActive(for: key)
     }
 
     /// Dismisses the micronutrient nudge for a nutrient, suppressing it for two weeks.
     func dismissNutrientBubble(_ key: String) {
-        settings.nutrientBubbleDismissedUntil[key] = Date().addingTimeInterval(14 * 86_400)
-        snapshotSaveCoordinator.schedule()
+        diary.dismissNutrientBubble(key)
     }
 
     // MARK: - Sealed CloudKit backup (see SealedBackupCoordinator)
@@ -1012,61 +893,22 @@ final class FernletStore {
     }
 
     func scoreBreakdown(for targetDay: FernletDay) -> ScoreBreakdown {
-        let body = targetDay.healthContext?.body
-        let activity = targetDay.healthContext?.activity
-        return FernletScoring.computeBreakdown(
-            journalTag: targetDay.journals.last?.tag,
-            mealCount: targetDay.meals.count,
-            workoutCount: targetDay.workouts.count,
-            sleepQuality: targetDay.sleep?.quality,
-            bottleCount: targetDay.bottleCount,
-            hydrationTarget: settings.hydrationTarget,
-            hygiene: targetDay.hygiene,
-            hygieneTaskCount: personalCareTasks.count,
-            completedPersonalCareTaskCount: personalCareProgress(for: targetDay).completed,
-            weights: GoalWeights.forGoal(settings.selectedGoal),
-            isSick: isSick(on: targetDay.date),
-            micronutrientDataCoverageRatio: FernletScoring.micronutrientDataCoverageRatio(for: targetDay.meals),
-            sleepHours: body?.sleepHours,
-            sleepStages: body?.sleepStages,
-            activitySteps: activity?.steps,
-            activeEnergyKilocalories: activity?.activeEnergyKilocalories,
-            exerciseMinutes: activity?.exerciseMinutes,
-            periodAdjustment: periodAdjustment(for: targetDay.date)
-        )
+        diary.scoreBreakdown(for: targetDay)
     }
 
     func score(for targetDay: FernletDay) -> Double {
-        scoreBreakdown(for: targetDay).overall
+        diary.score(for: targetDay)
     }
 
     func dailyHealthScore(for dateKey: String, day targetDay: FernletDay) -> DailyHealthScore {
-        assert(!dateKey.isEmpty, "date key required")
-        if let stored = dailyScores.first(where: { $0.dateKey == dateKey }) {
-            return stored
-        }
-        let sick = isSick(on: targetDay.date)
-        let breakdown = scoreBreakdown(for: targetDay)
-        return DailyHealthScore(
-            dateKey: dateKey,
-            score: breakdown.overall,
-            companionState: FernletScoring.state(for: breakdown.overall, isSick: sick),
-            daySummaryText: nil,
-            computedAt: Date(),
-            componentScores: breakdown.components,
-            weightVector: breakdown.appliedWeights,
-            sicknessOverride: sick,
-            periodPhase: periodAdjustment(for: targetDay.date).phase.persistedLabel,
-            healthActivityContext: targetDay.healthContext?.activity,
-            healthBodyContext: targetDay.healthContext?.body
-        )
+        diary.dailyHealthScore(for: dateKey, day: targetDay)
     }
 
     func addJournal(text: String, tag: FeelingTag, date: String) {
         assert(!date.isEmpty, "journal date required")
         let entry = JournalEntry(text: text, tag: tag)
         journalSealingCoordinator.seal(entry, dayKey: date)
-        mutateDay(date: date) { $0.journals.append(entry) }
+        diary.mutateDay(date: date) { $0.journals.append(entry) }
         if date == todayKey {
             previousJournals.insert(entry, at: 0)
             previousJournals = Array(previousJournals.prefix(30))
@@ -1088,7 +930,7 @@ final class FernletStore {
         journalSealingCoordinator.updateSealedNarrative(for: entry, text: trimmed, tag: tag, dayKey: date)
 
         batchSnapshotPersistence {
-            mutateDay(date: date) { targetDay in
+            diary.mutateDay(date: date) { targetDay in
                 guard let index = targetDay.journals.firstIndex(where: { $0.id == entry.id }) else { return }
                 targetDay.journals[index] = updatedEntry
             }
@@ -1102,88 +944,55 @@ final class FernletStore {
         assert(!date.isEmpty, "journal date required")
         journalSealingCoordinator.deleteSealed(id: entry.id)
         batchSnapshotPersistence {
-            mutateDay(date: date) { $0.journals.removeAll { $0.id == entry.id } }
+            diary.mutateDay(date: date) { $0.journals.removeAll { $0.id == entry.id } }
             previousJournals.removeAll { $0.id == entry.id }
         }
     }
 
     func setSleep(hours: Double?, quality: SleepQuality, note: String, date: String) {
-        assert(!date.isEmpty, "sleep date required")
-        mutateDay(date: date) {
-            $0.sleep = SleepLog(hours: hours, quality: quality, note: note.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
+        diary.setSleep(hours: hours, quality: quality, note: note, date: date)
     }
 
     func setBottleCount(_ count: Int, date: String) {
-        assert(!date.isEmpty, "water date required")
-        let clamped = min(max(count, 0), 30)
-        mutateDay(date: date) { $0.bottleCount = clamped }
+        diary.setBottleCount(count, date: date)
     }
 
     func setHygiene(_ hygiene: Set<HygieneItem>, date: String) {
-        let ids = Set(hygiene.map(\.rawValue))
-        setPersonalCareTaskIDs(ids, date: date)
+        diary.setHygiene(hygiene, date: date)
     }
 
     func setPersonalCareTaskIDs(_ ids: Set<String>, date: String) {
-        assert(!date.isEmpty, "personal care date required")
-        let defaultItems = Set(ids.compactMap(HygieneItem.init(rawValue:)))
-        mutateDay(date: date) {
-            $0.completedPersonalCareTaskIDs = ids
-            $0.hygiene = defaultItems
-        }
+        diary.setPersonalCareTaskIDs(ids, date: date)
     }
 
     func replaceGoals(_ newGoals: [FitnessGoal]) {
-        goals = Array(newGoals.prefix(12))
-        snapshotSaveCoordinator.schedule()
+        diary.replaceGoals(newGoals)
     }
 
     // MARK: - Workout profile, locations & suggestions
 
     func setWorkoutProfile(_ profile: WorkoutProfile) {
-        batchSnapshotPersistence { settings.workoutProfile = profile }
+        diary.setWorkoutProfile(profile)
     }
 
     func upsertWorkoutLocation(_ location: WorkoutLocation, makeActive: Bool = false) {
-        batchSnapshotPersistence {
-            if let index = settings.workoutLocations.firstIndex(where: { $0.id == location.id }) {
-                settings.workoutLocations[index] = location
-            } else {
-                settings.workoutLocations.append(location)
-            }
-            if makeActive { settings.activeWorkoutLocationID = location.id }
-        }
+        diary.upsertWorkoutLocation(location, makeActive: makeActive)
     }
 
     func deleteWorkoutLocation(_ id: UUID) {
-        batchSnapshotPersistence {
-            settings.workoutLocations.removeAll { $0.id == id }
-            if settings.workoutLocations.isEmpty { settings.workoutLocations = [.fullGym] }
-            if settings.activeWorkoutLocationID == id {
-                settings.activeWorkoutLocationID = settings.workoutLocations.first?.id
-            }
-        }
+        diary.deleteWorkoutLocation(id)
     }
 
     func setActiveWorkoutLocation(_ id: UUID) {
-        batchSnapshotPersistence { settings.activeWorkoutLocationID = id }
+        diary.setActiveWorkoutLocation(id)
     }
 
     func setWorkoutLocations(_ locations: [WorkoutLocation], activeID: UUID?) {
-        batchSnapshotPersistence {
-            let normalized = locations.isEmpty ? [WorkoutLocation.fullGym] : locations
-            settings.workoutLocations = normalized
-            if let activeID, normalized.contains(where: { $0.id == activeID }) {
-                settings.activeWorkoutLocationID = activeID
-            } else {
-                settings.activeWorkoutLocationID = normalized.first?.id
-            }
-        }
+        diary.setWorkoutLocations(locations, activeID: activeID)
     }
 
     func setSelectedSplit(_ id: String?) {
-        batchSnapshotPersistence { settings.workoutProfile.selectedSplitID = id }
+        diary.setSelectedSplit(id)
     }
 
     /// How consistently the user has trained over the last 4 weeks — a recommendation input.
@@ -1210,11 +1019,7 @@ final class FernletStore {
 
     /// Records that catalog exercises were completed, advancing their week-to-week progression.
     func recordCompletedExercises(_ names: [String]) {
-        let deduped = Array(Set(names)).filter { $0.isEmpty == false }
-        guard deduped.isEmpty == false else { return }
-        batchSnapshotPersistence {
-            for name in deduped { settings.workoutProgression[name, default: 0] += 1 }
-        }
+        diary.recordCompletedExercises(names)
     }
 
     /// Applies a natural-language adjustment to a generated day plan using on-device Foundation
@@ -1225,81 +1030,23 @@ final class FernletStore {
     }
 
     func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {
-        batchSnapshotPersistence {
-            settings.userProfile = profile
-            settings.nutritionPreferences = preferences
-            settings.selectedGoal = goal
-            settings.showCalories = true
-            settings.hasCompletedOnboarding = true
-        }
+        diary.completeOnboarding(profile: profile, preferences: preferences, goal: goal)
     }
 
     @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput]) -> RecipeDefinition {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        assert(!trimmedName.isEmpty, "recipe name required")
-        let now = Date()
-        return batchSnapshotPersistence {
-            let selectionCatalog = foodCatalog.items(ids: inputIngredients.compactMap(\.selectedFoodItemId))
-            let recipeIngredients = CustomIngredientUpsert.recipeIngredients(
-                from: inputIngredients,
-                selectionCatalog: selectionCatalog,
-                in: &foodItems,
-                verifiedAt: now
-            )
-            let recipe = RecipeDefinition(
-                name: trimmedName,
-                servings: max(servings, 1),
-                ingredients: recipeIngredients,
-                notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-                source: "manual",
-                createdAt: now,
-                updatedAt: now
-            )
-            recipes.insert(recipe, at: 0)
-            return recipe
-        }
+        diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients)
     }
 
     func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput]) {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        assert(!trimmedName.isEmpty, "recipe name required")
-        guard let index = recipes.firstIndex(where: { $0.id == recipe.id }) else { return }
-        batchSnapshotPersistence {
-            let selectionCatalog = foodCatalog.items(ids: inputIngredients.compactMap(\.selectedFoodItemId))
-            let recipeIngredients = CustomIngredientUpsert.recipeIngredients(
-                from: inputIngredients,
-                selectionCatalog: selectionCatalog,
-                in: &foodItems,
-                verifiedAt: Date()
-            )
-            assert(!recipeIngredients.isEmpty, "recipe ingredients required")
-            recipes[index].name = trimmedName
-            recipes[index].servings = max(servings, 1)
-            recipes[index].ingredients = recipeIngredients
-            recipes[index].notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-            recipes[index].updatedAt = Date()
-        }
+        diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients)
     }
 
     @discardableResult func saveCustomIngredient(_ ingredient: ManualRecipeIngredientInput) -> FoodItem? {
-        guard !ingredient.trimmedName.isEmpty else { return nil }
-        return batchSnapshotPersistence {
-            CustomIngredientUpsert.resolve(
-                ingredient: ingredient,
-                in: &foodItems,
-                verifiedAt: Date()
-            )
-        }
+        diary.saveCustomIngredient(ingredient)
     }
 
     func cachedWebImportedFoodProduct(for query: String) -> FoodItem? {
-        let normalizedQuery = FoodItemSearch.normalized(query)
-        guard !normalizedQuery.isEmpty else { return nil }
-        let queryTag = "web-query:\(normalizedQuery)"
-        return webImportedFoodItems.first { foodItem in
-            foodItem.tags.contains(queryTag)
-                || FoodItemSearch.normalized(foodItem.name) == normalizedQuery
-        }
+        diary.cachedWebImportedFoodProduct(for: query)
     }
 
     @discardableResult func saveWebImportedFoodProduct(_ product: ImportedFoodProduct) -> FoodItem {
@@ -1336,10 +1083,11 @@ final class FernletStore {
     }
 
     func deleteRecipe(_ recipe: RecipeDefinition) {
-        recipes.removeAll { $0.id == recipe.id }
-        snapshotSaveCoordinator.schedule()
+        diary.deleteRecipe(recipe)
     }
 
+    // NOTE (deviation): macroTotals/micronutrientTotals(for:) STAY IN THE FACADE — app-target
+    // `MealBuilder`.
     func macroTotals(for recipe: RecipeDefinition) -> MacroTotals {
         MealBuilder.macroTotals(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
@@ -1443,26 +1191,15 @@ final class FernletStore {
     }
 
     func addTexture(_ body: String, tags: Set<TextureTag>) {
-        batchSnapshotPersistence {
-            workshop.textureEntries.insert(TextureEntry(body: body, tags: tags), at: 0)
-        }
+        diary.addTexture(body, tags: tags)
     }
 
     func deleteMemory(_ memory: MemoryNote) {
-        batchSnapshotPersistence {
-            memories.removeAll { $0.id == memory.id }
-        }
+        diary.deleteMemory(memory)
     }
 
     func updateMemory(_ memory: MemoryNote, category: String, text: String) {
-        guard let index = memories.firstIndex(where: { $0.id == memory.id }) else { return }
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedCategory = category.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedText.isEmpty == false else { return }
-        batchSnapshotPersistence {
-            memories[index].category = trimmedCategory.isEmpty ? "note" : trimmedCategory
-            memories[index].text = String(trimmedText.prefix(240))
-        }
+        diary.updateMemory(memory, category: category, text: text)
     }
 
     func queueMealRetry(_ meal: Meal, dayKey: String? = nil) {
@@ -1495,8 +1232,8 @@ final class FernletStore {
             let description = meal.name
             aiRetryQueueService.clearForSourceID(meal.id)
             batchSnapshotPersistence {
-                _ = mutateDay(date: dayKey) { $0.meals.removeAll { $0.id == meal.id } }
-                invalidateDaySummary(for: dayKey)
+                _ = diary.mutateDay(date: dayKey) { $0.meals.removeAll { $0.id == meal.id } }
+                diary.invalidateDaySummary(for: dayKey)
             }
             await addResolvedMeals(from: description, date: dayKey)
         }
@@ -1504,16 +1241,7 @@ final class FernletStore {
 
     func resetAll() {
         batchSnapshotPersistence {
-            day = FernletDay(date: todayKey)
-            settings = FernletSettings()
-            recentMeals = []
-            previousJournals = []
-            memories = []
-            goals = []
-            workshop = WorkshopData()
-            foodItems = []
-            recipes = []
-            dailyScores = []
+            diary.resetDiary()
             connectionSessionLogs = []
         }
         savedRecipeService.reset()
@@ -1553,16 +1281,7 @@ final class FernletStore {
     }
 
     private func apply(_ snapshot: FernletSnapshot) {
-        day = snapshot.day
-        settings = snapshot.settings
-        recentMeals = snapshot.recentMeals
-        previousJournals = snapshot.previousJournals
-        memories = snapshot.memories
-        goals = snapshot.goals
-        workshop = snapshot.workshop
-        foodItems = snapshot.foodItems.filter { $0.source != .usda }
-        recipes = snapshot.recipes
-        dailyScores = snapshot.dailyScores
+        diary.applyDiarySlice(snapshot)
         connectionSessionLogs = snapshot.connectionSessionLogs
         aiRetryQueueService.apply(snapshot.retryQueue)
         proximityTrustVault.apply(peers: snapshot.trustedProximityPeers, audit: snapshot.trainerAuditEvents)
@@ -1612,14 +1331,14 @@ final class FernletStore {
     }
 
 
-    func markLaunchScreenDismissed() {}
+    func markLaunchScreenDismissed() { diary.markLaunchScreenDismissed() }
 
     /// The bundled food catalog is now a read-only SQLite store opened lazily by `FoodCatalog`, so
     /// there is no heavyweight seed to await at launch. Kept as no-ops for the existing launch/UI
     /// call sites (the 24 MB JSON parse + 13k-struct hydration they used to drive is gone).
-    func loadBundledFoodItemsForLaunch() async {}
+    func loadBundledFoodItemsForLaunch() async { await diary.loadBundledFoodItemsForLaunch() }
 
-    func ensureBundledFoodItemsSeeded() {}
+    func ensureBundledFoodItemsSeeded() { diary.ensureBundledFoodItemsSeeded() }
 }
 
 // MARK: - Sealed Journal Management (Phase S2) — see JournalSealingCoordinator
@@ -1633,71 +1352,33 @@ extension FernletStore: JournalSealingContext {
 }
 
 extension FernletStore {
-    /// Mutates the day for the given date key. Today mutates the in-memory day;
-    /// past dates round-trip through the repository.
+    /// Mutates the day for the given date key (forwards to DiaryStore, which owns the day +
+    /// repository round-trip). Kept as a facade member so existing call sites resolve.
     @discardableResult
     func mutateDay(date: String, _ change: (inout FernletDay) -> Void) -> Bool {
-        assert(!date.isEmpty, "date key required")
-        if date == todayKey {
-            change(&day)
-            snapshotSaveCoordinator.schedule()
-            return true
-        }
-        return mutatePastDay(date, change)
+        diary.mutateDay(date: date, change)
     }
 }
 
 extension FernletStore: WorkoutSyncContext {
     func workoutExists(id: UUID) -> Bool {
-        loadDays().values.contains { day in
-            day.workouts.contains { $0.id == id }
-        }
+        diary.workoutExists(id: id)
     }
 
     func workoutExists(healthKitUUID: UUID) -> Bool {
-        loadDays().values.contains { day in
-            day.workouts.contains { $0.healthKitUUID == healthKitUUID }
-        }
+        diary.workoutExists(healthKitUUID: healthKitUUID)
     }
 
     func setWorkoutHealthKitUUID(workoutID: UUID, hkUUID: UUID, date: String) {
-        batchSnapshotPersistence {
-            if date == todayKey {
-                if let index = day.workouts.firstIndex(where: { $0.id == workoutID }) {
-                    day.workouts[index].healthKitUUID = hkUUID
-                    return
-                }
-            } else {
-                let targetDay = repository.loadDay(for: date, todayKey: todayKey)
-                if targetDay.workouts.contains(where: { $0.id == workoutID }) {
-                    mutatePastDay(date) { day in
-                        if let index = day.workouts.firstIndex(where: { $0.id == workoutID }) {
-                            day.workouts[index].healthKitUUID = hkUUID
-                        }
-                    }
-                    return
-                }
-            }
-
-            if let index = day.workouts.firstIndex(where: { $0.id == workoutID }) {
-                day.workouts[index].healthKitUUID = hkUUID
-                return
-            }
-
-            for (dateKey, pastDay) in repository.loadAllDays() where dateKey != todayKey {
-                guard pastDay.workouts.contains(where: { $0.id == workoutID && $0.healthKitUUID == nil }) else { continue }
-                mutatePastDay(dateKey) { targetDay in
-                    if let index = targetDay.workouts.firstIndex(where: { $0.id == workoutID && $0.healthKitUUID == nil }) {
-                        targetDay.workouts[index].healthKitUUID = hkUUID
-                    }
-                }
-                return
-            }
-        }
+        diary.setWorkoutHealthKitUUID(workoutID: workoutID, hkUUID: hkUUID, date: date)
     }
 
+    /// NOTE J: routes to the PURE diary append, NOT facade `addWorkout`, so a workout imported FROM
+    /// HealthKit (already carrying a `healthKitUUID`) is recorded without re-triggering the HK save
+    /// loop. The former `addWorkout` path only avoided the loop via its `healthKitUUID != nil` guard;
+    /// calling the pure append directly preserves that semantics without depending on the guard.
     func upsertWorkout(_ workout: Workout, date: String) {
-        addWorkout(workout, date: date)
+        diary.appendWorkout(workout, date: date)
     }
 }
 
@@ -1765,13 +1446,15 @@ extension FernletStore: WorkoutPlanningContext {}
 extension FernletStore: MealResolutionContext {}
 
 extension FernletStore: SealedBackupContext {
-    /// Narrow read of the (private) journal content key for sealed period-data backup.
+    /// Narrow read of the (private) journal content key for sealed period-data backup. This is the
+    /// ONE SealedBackupContext member the facade does NOT forward to DiaryStore — the key lives in
+    /// the facade-owned `journalSealingCoordinator` and never enters DiaryStore.
     var sealedBackupContentKey: SymmetricKey? { journalSealingCoordinator.contentKey }
     func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) {
-        repository.replaceTierTwoMemories(records)
+        diary.replaceTierTwoMemories(records)
     }
     func loadAllDaysFromRepository() -> [String: FernletDay] {
-        repository.loadAllDays()
+        diary.loadAllDaysFromRepository()
     }
 }
 
