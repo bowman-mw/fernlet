@@ -12,6 +12,7 @@ import HealthKit
 import Testing
 import FernletDomainModel
 import FernletScoring
+import FernletPersistence
 import FoodCatalog
 @testable import Fernlet
 

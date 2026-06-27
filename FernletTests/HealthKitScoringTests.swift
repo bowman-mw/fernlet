@@ -12,6 +12,7 @@ import Foundation
 import Testing
 import FernletDomainModel
 import FernletScoring
+import FernletPersistence
 @testable import Fernlet
 
 struct HealthKitScoringTests {

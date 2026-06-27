@@ -5,6 +5,7 @@ import Observation
 import SwiftUI
 import FernletDomainModel
 import FernletScoring
+import FernletPersistence
 import FoodCatalog
 
 @MainActor
@@ -1563,24 +1564,27 @@ final class FernletStore {
     }
 
     private func currentSnapshot() -> FernletSnapshot {
-        // strippedForStorage always runs: it strips sealed journal text AND sensitive health fields.
-        let (storedDay, storedPreviousJournals) = strippedForStorage(day: day, previousJournals: previousJournals)
-        return FernletSnapshot(
+        // forStorage always strips sealed journal text AND sensitive health fields
+        // (cycle/intimacy/periodPhase) so they never reach the synced blob. The sealing
+        // state is passed in as pure data (the sealed-id set) — the strip lives in the
+        // nonisolated FernletPersistence module (privacy wall).
+        FernletSnapshot.forStorage(
             todayKey: todayKey,
-            day: storedDay,
+            day: day,
             settings: settings,
             recentMeals: recentMeals,
-            previousJournals: storedPreviousJournals,
+            previousJournals: previousJournals,
             memories: memories,
             goals: goals,
             workshop: workshop,
             foodItems: foodItems,
             recipes: recipes,
-            dailyScores: storedDailyScores,
+            dailyScores: dailyScores,
             retryQueue: aiRetryQueueService.retryQueue,
             connectionSessionLogs: connectionSessionLogs,
             trustedProximityPeers: proximityTrustVault.trustedPeers,
-            trainerAuditEvents: proximityTrustVault.auditEvents
+            trainerAuditEvents: proximityTrustVault.auditEvents,
+            sealedJournalIDs: journalSealingCoordinator.sealedJournalIDs
         )
     }
 
@@ -1590,35 +1594,7 @@ final class FernletStore {
     /// scrubbed here before every persist, so a period-data wipe leaves no synced residue.
     /// (Internal rather than private only so a regression test can assert the strip.)
     var storedDailyScores: [DailyHealthScore] {
-        dailyScores.map { score in
-            guard score.periodPhase != nil else { return score }
-            var stripped = score
-            stripped.periodPhase = nil
-            return stripped
-        }
-    }
-
-    /// Returns copies of day and previousJournals with sealed-entry text, emotions, and
-    /// sensitive health fields (cycle, intimacy) removed before writing to the cloud blob.
-    /// Cycle/intimacy data is always re-synced from HealthKit; it must not appear in CloudKit.
-    private func strippedForStorage(
-        day: FernletDay,
-        previousJournals: [JournalEntry]
-    ) -> (FernletDay, [JournalEntry]) {
-        func strip(_ entry: JournalEntry) -> JournalEntry {
-            guard journalSealingCoordinator.isSealed(entry.id) else { return entry }
-            return JournalEntry(id: entry.id, text: "", tag: entry.tag, date: entry.date, emotions: [])
-        }
-        var strippedDay = day
-        strippedDay.journals = day.journals.map(strip)
-
-        if var context = strippedDay.healthContext {
-            context.cycle = nil
-            context.intimate = nil
-            strippedDay.healthContext = context
-        }
-
-        return (strippedDay, previousJournals.map(strip))
+        FernletSnapshot.storedDailyScores(dailyScores)
     }
 
     private func batchSnapshotPersistence<T>(_ updates: () throws -> T) rethrows -> T {

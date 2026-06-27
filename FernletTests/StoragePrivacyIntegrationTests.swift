@@ -6,6 +6,7 @@ import HealthKit
 import Security
 import Testing
 import FernletDomainModel
+import FernletPersistence
 @testable import Fernlet
 
 // MARK: - Suite

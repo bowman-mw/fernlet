@@ -1,5 +1,6 @@
 import XCTest
 import FernletDomainModel
+import FernletPersistence
 import FoodCatalog
 @testable import Fernlet
 

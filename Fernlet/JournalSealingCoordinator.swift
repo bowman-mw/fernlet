@@ -36,7 +36,8 @@ final class JournalSealingCoordinator {
     private var journalActivationMode: JournalActivationMode = .inactive
     /// IDs of journal entries whose text is sealed in JournalNarrativeRepository.
     /// Used by the store's `currentSnapshot()` to strip text before persisting to the cloud blob.
-    private var sealedJournalIDs: Set<UUID> = []
+    /// Readable by the store (passed to `FernletSnapshot.forStorage`); mutation stays here.
+    private(set) var sealedJournalIDs: Set<UUID> = []
 
     init(host: any JournalSealingContext, narrativeRepository: JournalNarrativeRepository) {
         self.host = host

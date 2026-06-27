@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import Testing
 import FernletDomainModel
+import FernletPersistence
 @testable import Fernlet
 
 @MainActor

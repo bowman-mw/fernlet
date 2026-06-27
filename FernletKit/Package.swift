@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence"]),
     ],
     targets: [
         .target(
@@ -57,6 +57,13 @@ let package = Package(
         .target(
             name: "FernletScoring",
             dependencies: ["FernletFoundation", "FernletDomainModel"]
+        ),
+        // Layer 2 — persistence contract: FernletRepository protocol + the
+        // FernletSnapshot aggregate + the cycle-strip (forStorage factory). Pure
+        // value types/protocol, nonisolated (no defaultIsolation).
+        .target(
+            name: "FernletPersistence",
+            dependencies: ["FernletDomainModel"]
         ),
         // Layer 1 — USDA food search/scoring + dish lexicon. Owns the bundled
         // read-only resources (loaded via Bundle.module, NOT Bundle.main). Pure
