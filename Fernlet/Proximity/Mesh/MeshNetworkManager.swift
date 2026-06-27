@@ -56,7 +56,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     var isSearching = false
     var meshError: String?
 
-    @ObservationIgnored private unowned let store: FernletStore
+    @ObservationIgnored private unowned let store: any ProximityHost
     @ObservationIgnored private let meshSession = MeshMultipeerSession()
     @ObservationIgnored private let identity: IdentityService
     @ObservationIgnored private let replayCache = ReplayCache()
@@ -125,7 +125,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     /// Hard cap on outstanding removal proposals (backstop against spoofed proposer fingerprints).
     private static let maxPendingRemovalProposals = 16
 
-    init(store: FernletStore) {
+    init(store: any ProximityHost) {
         self.store = store
         let id = IdentityService()
         try? id.ensureProvisioned()
@@ -641,7 +641,7 @@ final class MeshNetworkManager: ProximityPayloadHandling {
     // MARK: - Private helpers
 
     private var displayName: String {
-        let name = store.settings.proximityDisplayName.trimmingCharacters(in: .whitespaces)
+        let name = store.proximityDisplayName.trimmingCharacters(in: .whitespaces)
         return name.isEmpty ? UIDevice.current.name : name
     }
 

@@ -52,7 +52,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
     private(set) var diagnosticEvents: [ProximityRecipeShareDiagnosticEvent] = []
     var pendingRecipeShares: [PendingProximityRecipeShare] = []
 
-    @ObservationIgnored private unowned let store: FernletStore
+    @ObservationIgnored private unowned let store: any ProximityHost
     @ObservationIgnored private let session = MeshMultipeerSession()
     @ObservationIgnored private let identity: IdentityService
     @ObservationIgnored private let replayCache = ReplayCache()
@@ -70,7 +70,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
     private static let perSenderRateLimitSeconds: TimeInterval = 3
     @ObservationIgnored private var lastAcceptedBySender: [String: Date] = [:]
 
-    init(store: FernletStore) {
+    init(store: any ProximityHost) {
         self.store = store
         let id = IdentityService()
         try? id.ensureProvisioned()
@@ -220,7 +220,7 @@ final class ProximityRecipeShareManager: ProximityPayloadHandling {
     }
 
     private var displayName: String {
-        let name = store.settings.proximityDisplayName.trimmingCharacters(in: .whitespaces)
+        let name = store.proximityDisplayName.trimmingCharacters(in: .whitespaces)
         return name.isEmpty ? UIDevice.current.name : name
     }
 
