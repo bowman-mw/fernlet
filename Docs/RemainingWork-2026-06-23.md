@@ -414,5 +414,29 @@ historical data import (Apple Health XML / MyFitnessPal CSV / paste).
 
 ---
 
+## §5 — Security review follow-ups (SPM carve-up review, 2026-06-26)
+
+A multi-agent security review of the SPM carve-up diff (`spm-carveup-baseline..HEAD`) found **no
+regressions and no introduced vulnerabilities** — the central sealing/snapshot privacy invariant is
+intact and the crypto primitives are byte-unchanged. Two **pre-existing** items (relocated verbatim
+by the carve-up, not introduced by it) were flagged as low-priority hardening backlog. Neither
+blocks a merge; both are non-security-impacting in practice.
+
+- [ ] **Bound the period sealed-backup narrative fetch.** `SealedBackupCoordinator.sealedBackupPlaintext`
+  ([SealedBackupCoordinator.swift:48-51](../Fernlet/SealedBackupCoordinator.swift)) calls
+  `MenstrualNarrativeRepository.allNarratives(contentKey:)`, loading every narrative into memory before
+  upload. **No confidentiality/integrity impact** — the payload is AES-GCM sealed end-to-end before
+  CloudKit egress; this is purely a memory/availability concern (a very long cycle history could
+  pressure memory or fail the upload). → Page/stream the fetch, or cap + chunk the payload.
+- [ ] **Re-assert the empty-store guard inside `applyRestoredPayload` (defense-in-depth).**
+  `SealedBackupCoordinator.applyRestoredPayload` ([SealedBackupCoordinator.swift:130](../Fernlet/SealedBackupCoordinator.swift))
+  is `internal` and does not itself re-check `isEmptyStoreForRestore`; the no-clobber guard lives only in
+  its sole production caller `restoreSealedBackup` ([:100](../Fernlet/SealedBackupCoordinator.swift)).
+  The unguarded entry point is reachable only from in-module test code today (no widening vs baseline), so
+  there is no current exploit — but a future caller could bypass the guard. → Either move/duplicate the
+  empty-store check into `applyRestoredPayload`, or document the precondition + keep it test-only.
+
+---
+
 *Full audit narrative and per-area evidence: see the workflow result that generated this doc
 (2026-06-23). Canonical intent: [FernletSpecificationV3.md](FernletSpecificationV3.md).*
