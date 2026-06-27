@@ -1,9 +1,12 @@
 import Foundation
-import FernletDomainModel
 
 // MARK: - Payload classification
 
-enum PayloadType: String, Codable, CaseIterable {
+// Carved DOWN into the FernletDomainModel module so the persistence/audit DTOs (TrainerAuditEvent,
+// ConnectionSessionLog) can reference these wire types without an upward edge. Codable identity is by
+// rawValue / case structure — moving the type's location does NOT change the persisted JSON.
+
+public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     // Handshake
     case identityIntroduction  = "fernlet.identity.intro.v1"
     case identityAcknowledge   = "fernlet.identity.ack.v1"
@@ -39,26 +42,31 @@ enum PayloadType: String, Codable, CaseIterable {
     case inspectorEcho         = "fernlet.diagnostic.echo.v1"
 }
 
-enum PayloadEncryption: Codable, Equatable {
+public nonisolated enum PayloadEncryption: Codable, Equatable, Sendable {
     case none
     case sealedTo(recipientKeyAgreementPublicKey: Data)
 }
 
 /// A contiguous date interval used in PayloadSummary.
 /// Using a plain struct rather than ClosedRange<Date> to sidestep retroactive Codable conformance.
-struct DateRange: Codable, Equatable {
-    let start: Date
-    let end: Date
+public nonisolated struct DateRange: Codable, Equatable, Sendable {
+    public let start: Date
+    public let end: Date
+
+    public init(start: Date, end: Date) {
+        self.start = start
+        self.end = end
+    }
 }
 
-struct PayloadSummary: Codable, Equatable {
-    let title: String
-    let subtitle: String?
-    let itemCount: Int
-    let dateRange: DateRange?
-    let extraDetails: [String: String]
+public nonisolated struct PayloadSummary: Codable, Equatable, Sendable {
+    public let title: String
+    public let subtitle: String?
+    public let itemCount: Int
+    public let dateRange: DateRange?
+    public let extraDetails: [String: String]
 
-    init(
+    public init(
         title: String,
         subtitle: String? = nil,
         itemCount: Int = 0,

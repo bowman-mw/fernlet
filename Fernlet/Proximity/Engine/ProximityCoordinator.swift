@@ -68,15 +68,11 @@ private struct SessionHeartbeatPayload: Codable {
 @MainActor
 @Observable
 final class ProximityCoordinator {
-    enum Role: String, Codable, Equatable {
-        case advertiser
-        case browser
-    }
-
-    enum Mode: String, Codable, Equatable {
-        case trainer
-        case friend
-    }
+    // Role/Mode/RangingMode hoisted to FernletDomainModel (ProximityRole/ProximityMode/
+    // ProximityRangingMode); typealiases keep every `ProximityCoordinator.Role` / bare `Role`
+    // reference across the proximity subtree compiling unchanged.
+    typealias Role = ProximityRole
+    typealias Mode = ProximityMode
 
     private(set) var state: State = .idle
     private(set) var lastKnownDistance: RangingDistance?
@@ -1140,11 +1136,7 @@ extension ProximityCoordinator {
         let firstSeenAt: Date
     }
 
-    enum RangingMode: String, Codable, Equatable {
-        case uwb
-        case rssi
-        case none
-    }
+    typealias RangingMode = ProximityRangingMode
 
     enum EndReason: Equatable {
         case userCancelled
