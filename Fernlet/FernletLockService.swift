@@ -5,6 +5,7 @@
 // Memory-hard KDF, no PBKDF2 fallback.
 
 import Foundation
+import FernletFoundation
 import CryptoKit
 import Security
 import LocalAuthentication

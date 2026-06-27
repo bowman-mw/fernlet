@@ -1,4 +1,5 @@
 import Foundation
+import FernletFoundation
 import CoreData
 
 // Web-imported recipes are now represented by the canonical `RecipeDefinition` model (carrying a

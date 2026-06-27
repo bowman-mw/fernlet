@@ -2,6 +2,7 @@
 // Split out of Models.swift (SPM carve-up §5c). Companion appearance, workshop, and texture models.
 
 import Foundation
+import FernletFoundation
 
 struct WorkshopData: Codable, Equatable {
     var textureEntries: [TextureEntry] = []

@@ -1,4 +1,5 @@
 import Foundation
+import FernletFoundation
 
 struct USDAFoodItemRecord: Decodable {
     var id: UUID?

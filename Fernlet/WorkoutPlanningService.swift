@@ -1,4 +1,5 @@
 import Foundation
+import FernletFoundation
 
 /// Read-side context the workout planner needs from the app store. Mirrors the
 /// `WorkoutSyncContext` host-protocol pattern so `WorkoutPlanningService` depends on

@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletFoundation
 
 struct JournalView: View {
     var store: FernletStore

@@ -10,6 +10,7 @@
 //
 
 import CoreData
+import FernletFoundation
 import CryptoKit
 import Foundation
 import Testing

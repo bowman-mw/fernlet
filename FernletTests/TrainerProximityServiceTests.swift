@@ -1,4 +1,5 @@
 import Testing
+import FernletFoundation
 import Foundation
 import MultipeerConnectivity
 @testable import Fernlet

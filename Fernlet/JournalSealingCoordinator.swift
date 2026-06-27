@@ -1,4 +1,5 @@
 import CryptoKit
+import FernletFoundation
 import Foundation
 
 /// The state the journal-sealing flow reads/mutates on the app store. Mirrors the

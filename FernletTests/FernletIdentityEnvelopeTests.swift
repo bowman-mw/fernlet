@@ -5,6 +5,7 @@
 // Each test uses UUID-scoped Keychain services cleaned up via defer.
 
 import Foundation
+import FernletFoundation
 import Testing
 @testable import Fernlet
 

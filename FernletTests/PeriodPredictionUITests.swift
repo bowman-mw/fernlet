@@ -1,4 +1,5 @@
 import Foundation
+import FernletFoundation
 import HealthKit
 import Testing
 import SwiftUI

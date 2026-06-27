@@ -1,7 +1,7 @@
 import Foundation
 import os.signpost
 
-enum StartupTiming {
+public enum StartupTiming {
     private static let appLaunchLog = OSLog(subsystem: "com.fernlet", category: "startup")
     private static let appLaunchID = OSSignpostID(log: appLaunchLog)
     private static let appLaunchLock = NSLock()
@@ -11,7 +11,7 @@ enum StartupTiming {
         OSLog(subsystem: "com.fernlet", category: "startup")
     }
 
-    static func beginAppLaunch() {
+    public static func beginAppLaunch() {
         appLaunchLock.lock()
         defer { appLaunchLock.unlock() }
         guard !appLaunchIsActive else { return }
@@ -19,7 +19,7 @@ enum StartupTiming {
         os_signpost(.begin, log: appLaunchLog, name: "App Launch", signpostID: appLaunchID)
     }
 
-    static func endAppLaunch() {
+    public static func endAppLaunch() {
         appLaunchLock.lock()
         defer { appLaunchLock.unlock() }
         guard appLaunchIsActive else { return }
@@ -27,19 +27,19 @@ enum StartupTiming {
         os_signpost(.end, log: appLaunchLog, name: "App Launch", signpostID: appLaunchID)
     }
 
-    nonisolated static func begin(_ label: StaticString) -> OSSignpostID {
+    nonisolated public static func begin(_ label: StaticString) -> OSSignpostID {
         let log = Self.log
         let id = OSSignpostID(log: log)
         os_signpost(.begin, log: log, name: label, signpostID: id)
         return id
     }
 
-    nonisolated static func end(_ label: StaticString, signpostID: OSSignpostID) {
+    nonisolated public static func end(_ label: StaticString, signpostID: OSSignpostID) {
         os_signpost(.end, log: Self.log, name: label, signpostID: signpostID)
     }
 
     @discardableResult
-    nonisolated static func timed<T>(_ label: StaticString, _ work: () throws -> T) rethrows -> T {
+    nonisolated public static func timed<T>(_ label: StaticString, _ work: () throws -> T) rethrows -> T {
         let log = Self.log
         let id = OSSignpostID(log: log)
         os_signpost(.begin, log: log, name: label, signpostID: id)
@@ -57,7 +57,7 @@ enum StartupTiming {
     }
 
     @discardableResult
-    nonisolated static func timed<T>(_ label: StaticString, _ work: () async throws -> T) async rethrows -> T {
+    nonisolated public static func timed<T>(_ label: StaticString, _ work: () async throws -> T) async rethrows -> T {
         let log = Self.log
         let id = OSSignpostID(log: log)
         os_signpost(.begin, log: log, name: label, signpostID: id)

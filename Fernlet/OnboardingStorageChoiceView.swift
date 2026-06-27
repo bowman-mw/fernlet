@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletFoundation
 
 struct OnboardingStorageChoiceView: View {
     var stepText: String

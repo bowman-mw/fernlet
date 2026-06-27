@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletFoundation
 #if canImport(UIKit)
 import UIKit
 #endif

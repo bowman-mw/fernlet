@@ -1,4 +1,5 @@
 import CoreData
+import FernletFoundation
 import Testing
 @testable import Fernlet
 

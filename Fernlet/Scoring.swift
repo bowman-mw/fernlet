@@ -1,4 +1,5 @@
 import Foundation
+import FernletFoundation
 
 enum FernletVoice: CaseIterable {
     case mealAnalysisFailed
@@ -560,43 +561,6 @@ struct WorkoutSuggestionLibrary {
             (.hard, WorkoutSuggestion(name: "Curious Challenge", exercises: "Choose one main lift - 4 x 6\nChoose one carry - 4 rounds\nCooldown - 5 min", notes: "A contained experiment for a high-energy day."))
         ]
     ]
-}
-
-enum FernletDate {
-    private static let dayKeyFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.calendar = Calendar(identifier: .gregorian)
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
-    static func dayKey(for date: Date) -> String {
-        dayKeyFormatter.string(from: date)
-    }
-
-    static func date(fromDayKey key: String) -> Date? {
-        dayKeyFormatter.date(from: key)
-    }
-
-    static func dayKeys(in interval: DateInterval, calendar: Calendar = .current) -> [String] {
-        var keys: [String] = []
-        var day = calendar.startOfDay(for: interval.start)
-        let end = calendar.startOfDay(for: interval.end)
-        while day <= end {
-            keys.append(dayKey(for: day))
-            day = calendar.date(byAdding: .day, value: 1, to: day) ?? day.addingTimeInterval(86_400)
-        }
-        return keys
-    }
-
-    static func niceDate(for date: Date = .now) -> String {
-        date.formatted(.dateTime.weekday(.wide).month(.wide).day())
-    }
-
-    static func shortDate(for date: Date) -> String {
-        date.formatted(.dateTime.month(.abbreviated).day())
-    }
 }
 
 // MARK: - Screens

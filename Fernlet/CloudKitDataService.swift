@@ -1,4 +1,5 @@
 import CloudKit
+import FernletFoundation
 import Foundation
 
 struct ExistingDataSummary: Equatable {

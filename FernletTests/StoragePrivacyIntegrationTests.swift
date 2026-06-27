@@ -1,4 +1,5 @@
 import CloudKit
+import FernletFoundation
 import CoreData
 import Foundation
 import HealthKit

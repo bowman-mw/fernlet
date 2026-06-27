@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import FernletFoundation
 
 protocol FernletRepository {
     func loadSnapshot(todayKey: String) -> FernletSnapshot

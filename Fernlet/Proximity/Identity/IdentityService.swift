@@ -8,6 +8,7 @@
 //   backupEscrowPrivateKey   — X25519, synchronizable (iCloud Keychain), used only for sealedBackupKey()
 
 import Foundation
+import FernletFoundation
 import CryptoKit
 import Security
 

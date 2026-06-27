@@ -1,4 +1,5 @@
 import Foundation
+import FernletFoundation
 import Observation
 
 #if canImport(FoundationModels)

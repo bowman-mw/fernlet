@@ -1,4 +1,5 @@
 import CryptoKit
+import FernletFoundation
 import HealthKit
 import Observation
 import SwiftUI

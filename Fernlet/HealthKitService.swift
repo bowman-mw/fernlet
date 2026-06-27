@@ -1,4 +1,5 @@
 import Observation
+import FernletFoundation
 import CoreData
 import Foundation
 import HealthKit

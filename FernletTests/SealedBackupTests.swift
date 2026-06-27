@@ -1,4 +1,5 @@
 import Foundation
+import FernletFoundation
 import Testing
 @testable import Fernlet
 

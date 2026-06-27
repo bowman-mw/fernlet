@@ -1,4 +1,5 @@
 import Combine
+import FernletFoundation
 import CoreData
 import Foundation
 

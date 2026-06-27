@@ -1,4 +1,5 @@
 import HealthKit
+import FernletFoundation
 import SwiftUI
 
 #if canImport(UIKit)

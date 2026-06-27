@@ -1,4 +1,5 @@
 import Observation
+import FernletFoundation
 import CryptoKit
 import Foundation
 import HealthKit

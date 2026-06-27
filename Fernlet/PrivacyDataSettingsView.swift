@@ -1,4 +1,5 @@
 import LocalAuthentication
+import FernletFoundation
 import SwiftUI
 
 @MainActor

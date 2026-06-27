@@ -7,20 +7,20 @@
 import Foundation
 import Security
 
-enum KeychainItem {
-    enum Account: String {
+public nonisolated enum KeychainItem {
+    public enum Account: String {
         case storagePreferences = "com.fernlet.storage-preferences.preferences"
         case deviceJournalKey = "com.fernlet.journal.deviceKey"
     }
 
-    nonisolated static let productionService = "com.fernlet.lock"
-    nonisolated static let storagePreferencesService = "com.fernlet.storage-preferences"
-    nonisolated static let journalService = "com.fernlet.journal"
+    nonisolated public static let productionService = "com.fernlet.lock"
+    nonisolated public static let storagePreferencesService = "com.fernlet.storage-preferences"
+    nonisolated public static let journalService = "com.fernlet.journal"
 
     // MARK: - Generic String-keyed operations
 
     @discardableResult
-    static func store(
+    public static func store(
         _ data: Data,
         account: String,
         service: String,
@@ -40,7 +40,7 @@ enum KeychainItem {
         return SecItemAdd(query as CFDictionary, nil)
     }
 
-    static func load(account: String, service: String) -> Data? {
+    public static func load(account: String, service: String) -> Data? {
         var result: AnyObject?
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -55,7 +55,7 @@ enum KeychainItem {
         return result as? Data
     }
 
-    static func delete(account: String, service: String) {
+    public static func delete(account: String, service: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -66,7 +66,7 @@ enum KeychainItem {
         SecItemDelete(query as CFDictionary)
     }
 
-    static func deleteAll(service: String) {
+    public static func deleteAll(service: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -79,16 +79,16 @@ enum KeychainItem {
     // MARK: - Account typed convenience (AfterFirstUnlockThisDeviceOnly)
 
     @discardableResult
-    static func store(_ data: Data, for account: Account, service: String) -> OSStatus {
+    public static func store(_ data: Data, for account: Account, service: String) -> OSStatus {
         store(data, account: account.rawValue, service: service,
               accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
 
-    static func load(for account: Account, service: String) -> Data? {
+    public static func load(for account: Account, service: String) -> Data? {
         load(account: account.rawValue, service: service)
     }
 
-    static func delete(for account: Account, service: String) {
+    public static func delete(for account: Account, service: String) {
         delete(account: account.rawValue, service: service)
     }
 }

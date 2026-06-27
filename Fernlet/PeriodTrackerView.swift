@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletFoundation
 
 struct PeriodTrackerView: View {
     var store: FernletStore

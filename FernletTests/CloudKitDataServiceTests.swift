@@ -1,4 +1,5 @@
 import CloudKit
+import FernletFoundation
 import CoreData
 import CryptoKit
 import Foundation

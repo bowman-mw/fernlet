@@ -6,6 +6,7 @@
 // each test uses a per-test lockService instance that cleans up after itself.
 
 import Foundation
+import FernletFoundation
 import SwiftUI
 import Testing
 import CryptoKit

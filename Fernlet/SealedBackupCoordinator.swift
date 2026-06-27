@@ -1,4 +1,5 @@
 import CryptoKit
+import FernletFoundation
 import Foundation
 
 /// The state the sealed-backup flow needs from the app store. Mirrors the

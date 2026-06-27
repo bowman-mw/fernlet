@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FernletFoundation
 
 struct ContentView: View {
     @Bindable var store: FernletStore

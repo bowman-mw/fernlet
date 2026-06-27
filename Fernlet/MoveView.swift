@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletFoundation
 
 struct MoveView: View {
     var store: FernletStore

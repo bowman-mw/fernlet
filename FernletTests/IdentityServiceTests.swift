@@ -6,6 +6,7 @@
 // so tests never touch each other's state and never reach the production service.
 
 import Foundation
+import FernletFoundation
 import Testing
 import CryptoKit
 @testable import Fernlet

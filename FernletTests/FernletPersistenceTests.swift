@@ -1,4 +1,5 @@
 import CoreData
+import FernletFoundation
 import Observation
 import Testing
 import Foundation
