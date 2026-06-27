@@ -1,5 +1,6 @@
 import Foundation
 import FernletDomainModel
+import AIProviders
 
 @MainActor
 struct MealBuilder {

@@ -1,5 +1,6 @@
 import Foundation
 import AIContext
+import AIProviders
 import FernletDomainModel
 import FernletScoring
 import FoodCatalog

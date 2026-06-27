@@ -1,5 +1,6 @@
 import Foundation
 import FernletDomainModel
+import AIProviders
 
 struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
     var id: UUID

@@ -1,18 +1,23 @@
 import Foundation
 import AIContext
+import FernletDomainModel
 
 #if canImport(FoundationModels)
 import FoundationModels
-import FernletDomainModel
 #endif
 
 // MARK: - Candidate exercises offered to the adjuster
 
-struct WorkoutAdjustmentCandidate: Identifiable, Equatable {
-    var id: Int
-    var exercise: ExerciseTarget
+public nonisolated struct WorkoutAdjustmentCandidate: Identifiable, Equatable {
+    public var id: Int
+    public var exercise: ExerciseTarget
 
-    var promptLine: String {
+    public init(id: Int, exercise: ExerciseTarget) {
+        self.id = id
+        self.exercise = exercise
+    }
+
+    public var promptLine: String {
         let muscles = exercise.primaryMuscles.map(\.displayName).sorted().prefix(2).joined(separator: "/")
         return "\(id). \(exercise.name) — \(exercise.equipment.displayName), \(exercise.movementPattern.rawValue)\(muscles.isEmpty ? "" : ", \(muscles)")"
     }
@@ -21,8 +26,8 @@ struct WorkoutAdjustmentCandidate: Identifiable, Equatable {
 /// Builds the equipment- and injury-filtered candidate pool the adjuster may pick from, ranked so
 /// the current session's exercises and request-relevant options come first, then capped for the
 /// model's context budget.
-enum WorkoutAdjustmentCandidateBuilder {
-    static func candidates(
+public enum WorkoutAdjustmentCandidateBuilder {
+    public static func candidates(
         currentNames: [String],
         request: String,
         location: WorkoutLocation,
@@ -69,11 +74,11 @@ enum WorkoutAdjustmentCandidateBuilder {
 
 // MARK: - Adjuster model
 
-enum FoundationWorkoutAdjustmentModel {
+public enum FoundationWorkoutAdjustmentModel {
     /// Adjusts a session's exercises to honour a natural-language request, constrained to the
     /// candidate list (equipment- and injury-filtered). Returns nil when the model is unavailable
     /// or produces nothing usable, leaving the original session intact.
-    static func adjust(
+    public static func adjust(
         _ payload: WorkoutAdjustmentPayload,
         candidates: [WorkoutAdjustmentCandidate],
         currentLines: [String]

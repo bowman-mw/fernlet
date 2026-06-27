@@ -1,15 +1,15 @@
 import Foundation
 import AIContext
 import FoodCatalog
+import FernletDomainModel
+import FernletScoring
 
 #if canImport(FoundationModels)
 import FoundationModels
-import FernletDomainModel
-import FernletScoring
 #endif
 
-enum FoodSelectionAvailability {
-    static var isFoundationModelAvailable: Bool {
+public enum FoodSelectionAvailability {
+    public static var isFoundationModelAvailable: Bool {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             if case .available = SystemLanguageModel.default.availability {
@@ -21,8 +21,8 @@ enum FoodSelectionAvailability {
     }
 }
 
-enum FoundationFoodSelectionModel {
-    static func resolve(_ payload: FoodSelectionPayload) async throws -> FoodSelectionPlan? {
+public enum FoundationFoodSelectionModel {
+    public static func resolve(_ payload: FoodSelectionPayload) async throws -> FoodSelectionPlan? {
         let description = payload.mealDescription
         let candidates = payload.candidates
         let fallbackType = payload.fallbackMealType
@@ -56,7 +56,7 @@ enum FoundationFoodSelectionModel {
         return nil
     }
 
-    static func deterministicPlan(description: String, candidates: [FoodSelectionCandidate], fallbackType: MealType?) -> FoodSelectionPlan? {
+    public static func deterministicPlan(description: String, candidates: [FoodSelectionCandidate], fallbackType: MealType?) -> FoodSelectionPlan? {
         let items = MealItemSplitter.items(from: description).compactMap { itemName -> FoodSelectionMealItem? in
             let ingredients = deterministicIngredients(for: itemName, candidates: candidates)
             guard ingredients.isEmpty == false else { return nil }

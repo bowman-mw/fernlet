@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders"]),
     ],
     targets: [
         .target(
@@ -160,6 +160,26 @@ let package = Package(
         .target(
             name: "AIContext",
             dependencies: ["FernletDomainModel"]
+        ),
+        // Layer 5 — AI providers (FoundationModels). THE WALLED CONSUMERS. The on-device
+        // Foundation-model inference files whose deps are cleanly satisfiable below the
+        // wall. Dependency list OMITS every Private* store BY CONSTRUCTION, so no sealed
+        // type (CyclePhase, JournalNarrative, MenstrualNarrativeRepository, PrivateMediaStore,
+        // …) is nameable here — `import PrivateHealthStore` is a compile error. The only
+        // path to sealed data is the typed AIContext payloads. MainActor.
+        //
+        // NOTE: three further AI files (FoundationDishDecomposition, FoodProductWebImporter,
+        // LaunchPreparationService) remain in the app for now — they reference app-target
+        // helpers (MealBuilder/DishTemplateLexicon, NutritionLabelScanner, FernletStore) that
+        // a package module cannot import. They are verified sealed-free and (the aiFacing ones)
+        // grep-covered by S3BoundaryTests; their move awaits helper extraction (MealBuilder
+        // carve to FoodCatalog; a NutritionLabelScanning seam; a FernletStore launch seam).
+        .target(
+            name: "AIProviders",
+            dependencies: ["AIContext", "FernletDomainModel", "FernletScoring", "FoodCatalog"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
         ),
     ]
 )

@@ -2,6 +2,7 @@ import SwiftUI
 import LocalPersistence
 import FernletFoundation
 import FernletDomainModel
+import AIProviders
 
 struct MoveView: View {
     var store: FernletStore

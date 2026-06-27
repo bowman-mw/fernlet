@@ -1,5 +1,6 @@
 import CryptoKit
 import LocalPersistence
+import AIProviders
 import FernletFoundation
 import HealthKit
 import Observation

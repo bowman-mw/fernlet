@@ -1,25 +1,47 @@
 import Foundation
 import AIContext
 import FoodCatalog
+import FernletDomainModel
 
 #if canImport(FoundationModels)
 import FoundationModels
-import FernletDomainModel
 #endif
 
-struct ImportedRecipe: Equatable {
-    var sourceURL: URL
-    var name: String
-    var ingredients: [String]
-    var summary: String
-    var servings: Int
-    var protein: Int
-    var carbs: Int
-    var fat: Int
-    var micronutrients: Micronutrients = Micronutrients()
+public nonisolated struct ImportedRecipe: Equatable {
+    public var sourceURL: URL
+    public var name: String
+    public var ingredients: [String]
+    public var summary: String
+    public var servings: Int
+    public var protein: Int
+    public var carbs: Int
+    public var fat: Int
+    public var micronutrients: Micronutrients
+
+    public init(
+        sourceURL: URL,
+        name: String,
+        ingredients: [String],
+        summary: String,
+        servings: Int,
+        protein: Int,
+        carbs: Int,
+        fat: Int,
+        micronutrients: Micronutrients = Micronutrients()
+    ) {
+        self.sourceURL = sourceURL
+        self.name = name
+        self.ingredients = ingredients
+        self.summary = summary
+        self.servings = servings
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+        self.micronutrients = micronutrients
+    }
 }
 
-enum RecipeWebImportError: LocalizedError {
+public enum RecipeWebImportError: LocalizedError {
     case invalidURL
     case fetchFailed
     case emptyHTML
@@ -27,7 +49,7 @@ enum RecipeWebImportError: LocalizedError {
     case modelUnavailable
     case incompleteRecipe
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidURL:
             "Pasteboard does not contain a valid URL."
@@ -45,12 +67,12 @@ enum RecipeWebImportError: LocalizedError {
     }
 }
 
-enum RecipeWebImporter {
+public enum RecipeWebImporter {
     private static let maxFetchBytes = 3 * 1024 * 1024  // 3 MB
 
     /// - Parameter aiEnabled: When false, the FoundationModels fallback is skipped so that
     ///   users who have disabled AI are not silently opted in via recipe import.
-    static func importRecipe(from url: URL, catalog: FoodCatalog, aiEnabled: Bool) async throws -> ImportedRecipe {
+    public static func importRecipe(from url: URL, catalog: FoodCatalog, aiEnabled: Bool) async throws -> ImportedRecipe {
         guard isSafePublicHTTPSURL(url) else {
             throw RecipeWebImportError.invalidURL
         }
@@ -113,7 +135,7 @@ enum RecipeWebImporter {
 
     /// A URL is safe to fetch only if it is https with a host that is not a loopback, private, or
     /// link-local address literal. Applied to the initial URL and re-checked on every redirect.
-    static func isSafePublicHTTPSURL(_ url: URL) -> Bool {
+    public nonisolated static func isSafePublicHTTPSURL(_ url: URL) -> Bool {
         guard url.scheme?.lowercased() == "https",
               let host = url.host?.lowercased(), !host.isEmpty else {
             return false
@@ -122,7 +144,7 @@ enum RecipeWebImporter {
         return !isPrivateOrLoopbackIPLiteral(host)
     }
 
-    static func isPrivateOrLoopbackIPLiteral(_ host: String) -> Bool {
+    nonisolated static func isPrivateOrLoopbackIPLiteral(_ host: String) -> Bool {
         // IPv6 literals (URL.host strips the surrounding brackets).
         if host == "::1" { return true }                                  // loopback
         if host.hasPrefix("fe80:") { return true }                        // link-local
@@ -378,7 +400,7 @@ enum RecipeWebImporter {
 
     // MARK: - USDA ingredient macro estimation
 
-    static func estimateMacrosFromIngredients(_ ingredients: [String], servings: Int, catalog: FoodCatalog) -> (Int, Int, Int) {
+    nonisolated static func estimateMacrosFromIngredients(_ ingredients: [String], servings: Int, catalog: FoodCatalog) -> (Int, Int, Int) {
         var totalProtein = 0.0, totalCarbs = 0.0, totalFat = 0.0
 
         for text in ingredients {
@@ -402,7 +424,7 @@ enum RecipeWebImporter {
     // MARK: - Ingredient parsing
 
     // Parses "2 cups all-purpose flour" → (quantity: 2.0, unit: "cup", name: "flour")
-    private static func parseIngredient(_ text: String) -> (quantity: Double, unit: String, name: String)? {
+    nonisolated private static func parseIngredient(_ text: String) -> (quantity: Double, unit: String, name: String)? {
         let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Leading quantity: mixed fraction "1 1/2", pure fraction "3/4", or decimal/integer "2"
         // Followed by optional unit, then food name
@@ -429,7 +451,7 @@ enum RecipeWebImporter {
         return (quantity: resolvedQty, unit: resolvedUnit, name: name)
     }
 
-    private static func parseQuantity(_ text: String) -> Double? {
+    nonisolated private static func parseQuantity(_ text: String) -> Double? {
         let s = text.trimmingCharacters(in: .whitespaces)
         // Mixed number: "1 1/2"
         let parts = s.components(separatedBy: " ")
@@ -442,7 +464,7 @@ enum RecipeWebImporter {
         return Double(s)
     }
 
-    private static func parseFraction(_ text: String) -> Double? {
+    nonisolated private static func parseFraction(_ text: String) -> Double? {
         let parts = text.split(separator: "/")
         guard parts.count == 2,
               let num = Double(parts[0].trimmingCharacters(in: .whitespaces)),
@@ -451,7 +473,7 @@ enum RecipeWebImporter {
         return num / den
     }
 
-    private static func resolveUnit(quantity: Double, unitString: String) -> (Double, String) {
+    nonisolated private static func resolveUnit(quantity: Double, unitString: String) -> (Double, String) {
         switch unitString.lowercased().trimmingCharacters(in: .whitespaces) {
         case "cup", "cups":
             return (quantity, RecipeUnit.cup.rawValue)
@@ -474,7 +496,7 @@ enum RecipeWebImporter {
         }
     }
 
-    private static func cleanFoodName(_ text: String) -> String {
+    nonisolated private static func cleanFoodName(_ text: String) -> String {
         var s = text
         // Strip parenthetical notes: "(optional)", "(about 2 cups)"
         s = s.replacingOccurrences(of: #"\s*\([^)]*\)"#, with: "", options: .regularExpression)

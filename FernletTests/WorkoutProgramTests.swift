@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import AIProviders
 @testable import Fernlet
 
 @MainActor
