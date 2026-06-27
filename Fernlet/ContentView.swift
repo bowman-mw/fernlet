@@ -9,6 +9,7 @@ import SwiftUI
 import FernletFoundation
 import FernletDomainModel
 import PrivateHealthStore
+import PeriodContextBridge
 
 struct ContentView: View {
     @Bindable var store: FernletStore

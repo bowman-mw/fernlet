@@ -11,6 +11,7 @@ import FernletPersistence
 import FoodCatalog
 import PrivateHealthStore
 import PrivateMediaStore
+import PeriodContextBridge
 
 @MainActor
 @Observable

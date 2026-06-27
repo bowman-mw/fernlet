@@ -4,6 +4,7 @@ import FernletFoundation
 import SwiftUI
 import FernletScoring
 import PrivateHealthStore
+import PeriodContextBridge
 
 #if canImport(UIKit)
 import UIKit

@@ -4,6 +4,7 @@ import Foundation
 import FernletDomainModel
 import FernletScoring
 import PrivateHealthStore
+import PeriodContextBridge
 @testable import Fernlet
 
 @MainActor

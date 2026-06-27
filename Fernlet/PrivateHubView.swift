@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletDomainModel
 import PrivateHealthStore
+import PeriodContextBridge
 
 enum PrivateHubSection: String, CaseIterable, Identifiable {
     case journal = "Journal"

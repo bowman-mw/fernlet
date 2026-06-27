@@ -6,32 +6,39 @@ import PrivateHealthStore
 /// statistical output (spec §4: "Period health trends use statistical correlations … not AI"). It carries
 /// only a coarse direction + confidence **band** — never the underlying means, counts, dates, or raw
 /// confidence doubles, so it can be reasoned about by scoring without re-exposing private cycle data.
-struct PeriodHealthTrend: Equatable {
-    enum Metric: String, CaseIterable, Equatable {
+public nonisolated struct PeriodHealthTrend: Equatable {
+    public enum Metric: String, CaseIterable, Equatable {
         case sleep, mood, exercise, nutrition, symptomLoad
     }
 
     /// Whether the user historically fares *worse*, *better*, or about the same in this phase versus
     /// their own all-phase baseline. For `symptomLoad`, "worse" means *more* symptoms.
-    enum Direction: String, Equatable {
+    public enum Direction: String, Equatable {
         case worse, neutral, better
     }
 
     /// Abstract confidence band. Raw statistics (sample size, effect size) stay inside the engine; only
     /// this band crosses out, so no inference-model confidence value is ever exported.
-    enum Confidence: String, Equatable, Comparable {
+    public enum Confidence: String, Equatable, Comparable {
         case low, medium, high
 
         private var rank: Int {
             switch self { case .low: 0; case .medium: 1; case .high: 2 }
         }
-        static func < (lhs: Confidence, rhs: Confidence) -> Bool { lhs.rank < rhs.rank }
+        public static func < (lhs: Confidence, rhs: Confidence) -> Bool { lhs.rank < rhs.rank }
     }
 
-    var phase: CyclePhase
-    var metric: Metric
-    var direction: Direction
-    var confidence: Confidence
+    public var phase: CyclePhase
+    public var metric: Metric
+    public var direction: Direction
+    public var confidence: Confidence
+
+    public init(phase: CyclePhase, metric: Metric, direction: Direction, confidence: Confidence) {
+        self.phase = phase
+        self.metric = metric
+        self.direction = direction
+        self.confidence = confidence
+    }
 }
 
 /// Deterministic, AI-free per-phase correlation engine. Given one observation per logged day (cycle phase
@@ -42,16 +49,32 @@ struct PeriodHealthTrend: Equatable {
 /// nothing. Requires at least `minimumCompletedCycles` *completed* cycles before emitting anything, matching
 /// the spec's "minimum 3 completed cycles" floor. (A completed cycle is the interval between two period
 /// starts, so this is one fewer than the count of detected starts.)
-enum PeriodPhaseTrendEngine {
+public nonisolated enum PeriodPhaseTrendEngine {
     /// One day of joined signals. Every wellbeing metric is optional (a day may be missing sleep, etc.).
     /// All wellbeing values are 0–1 component scores; `symptomLoad` is 0–1 (fraction of symptoms flagged).
-    struct DayObservation: Equatable {
-        var phase: CyclePhase
-        var sleep: Double? = nil
-        var mood: Double? = nil
-        var exercise: Double? = nil
-        var nutrition: Double? = nil
-        var symptomLoad: Double? = nil
+    public struct DayObservation: Equatable {
+        public var phase: CyclePhase
+        public var sleep: Double? = nil
+        public var mood: Double? = nil
+        public var exercise: Double? = nil
+        public var nutrition: Double? = nil
+        public var symptomLoad: Double? = nil
+
+        public init(
+            phase: CyclePhase,
+            sleep: Double? = nil,
+            mood: Double? = nil,
+            exercise: Double? = nil,
+            nutrition: Double? = nil,
+            symptomLoad: Double? = nil
+        ) {
+            self.phase = phase
+            self.sleep = sleep
+            self.mood = mood
+            self.exercise = exercise
+            self.nutrition = nutrition
+            self.symptomLoad = symptomLoad
+        }
 
         func value(for metric: PeriodHealthTrend.Metric) -> Double? {
             switch metric {
@@ -64,7 +87,7 @@ enum PeriodPhaseTrendEngine {
         }
     }
 
-    static let minimumCompletedCycles = 3
+    public static let minimumCompletedCycles = 3
 
     /// Minimum within-phase observations for a metric before any trend is emitted for it.
     private static let minimumPhaseSamples = 4
@@ -79,7 +102,7 @@ enum PeriodPhaseTrendEngine {
         metric == .symptomLoad
     }
 
-    static func trends(from observations: [DayObservation], completedCycles: Int) -> [PeriodHealthTrend] {
+    public static func trends(from observations: [DayObservation], completedCycles: Int) -> [PeriodHealthTrend] {
         guard completedCycles >= minimumCompletedCycles else { return [] }
 
         var results: [PeriodHealthTrend] = []

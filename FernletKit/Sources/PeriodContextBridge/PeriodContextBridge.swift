@@ -17,8 +17,8 @@ import PrivateHealthStore
 // `PeriodSignalStrength`, `PeriodPhaseSignal`, and `PeriodScoringAdjustment` now live in `FernletScoring`
 // (the scoring layer consumes them). Only the raw→abstract conversion stays here, where `CyclePhase` (a
 // raw cycle type that must not cross down into scoring) is visible.
-extension PeriodPhaseSignal {
-    init(_ phase: CyclePhase) {
+nonisolated extension PeriodPhaseSignal {
+    public init(_ phase: CyclePhase) {
         switch phase {
         case .menstrual: self = .menstrual
         case .follicular: self = .follicular
@@ -30,13 +30,13 @@ extension PeriodPhaseSignal {
 }
 
 /// Coarse position within the current cycle. No "days until" / "started N days ago" — just a band.
-enum PeriodPhaseBand: String, Equatable {
+public nonisolated enum PeriodPhaseBand: String, Equatable {
     case menstruating, early, mid, late, unknown
 }
 
 /// Abstract nutrition hint — a kind plus a coarse strength, never a value. `.noData` when the cycle is
 /// unknown or the sealed narratives that gauge symptom severity are unreadable (locked).
-enum PeriodNutritionSignal: Equatable {
+public nonisolated enum PeriodNutritionSignal: Equatable {
     case iron(PeriodSignalStrength)
     case complexCarbs(PeriodSignalStrength)
     case omega3(PeriodSignalStrength)
@@ -44,7 +44,7 @@ enum PeriodNutritionSignal: Equatable {
 }
 
 /// Abstract exercise hint. `.noData` under the same conditions as `PeriodNutritionSignal`.
-enum PeriodExerciseSignal: Equatable {
+public nonisolated enum PeriodExerciseSignal: Equatable {
     case gentleness(PeriodSignalStrength)
     case strengthFriendly(PeriodSignalStrength)
     case noData
@@ -53,17 +53,24 @@ enum PeriodExerciseSignal: Equatable {
 /// Non-sensitive per-day wellbeing component scores supplied *into* the period module by `FernletStore` so
 /// the trend engine can correlate them against cycle phase. This flows inward only — the corresponding
 /// outward flow is the abstract `PeriodHealthTrend`, never these raw values.
-struct PeriodWellbeingSample: Equatable {
-    var sleep: Double?
-    var mood: Double?
-    var exercise: Double?
-    var nutrition: Double?
+public nonisolated struct PeriodWellbeingSample: Equatable {
+    public var sleep: Double?
+    public var mood: Double?
+    public var exercise: Double?
+    public var nutrition: Double?
+
+    public init(sleep: Double? = nil, mood: Double? = nil, exercise: Double? = nil, nutrition: Double? = nil) {
+        self.sleep = sleep
+        self.mood = mood
+        self.exercise = exercise
+        self.nutrition = nutrition
+    }
 }
 
 /// The read-only seam the scoring engine consults. `FernletStore` holds one of these (defaulting to nil →
 /// no period awareness) and never sees the concrete bridge or any raw cycle type.
 @MainActor
-protocol PeriodScoringContextProviding: AnyObject {
+public protocol PeriodScoringContextProviding: AnyObject {
     func scoringAdjustment(forDayKey dayKey: String) -> PeriodScoringAdjustment
 }
 
@@ -71,7 +78,7 @@ protocol PeriodScoringContextProviding: AnyObject {
 /// the bridge from `PeriodTrackerStore`'s Core Data / HealthKit dependencies (and lets tests drive it with
 /// a trivial fake, with no Core Data).
 @MainActor
-protocol PeriodContextSource: AnyObject {
+public protocol PeriodContextSource: AnyObject {
     var entries: [CycleDayEntry] { get }
     var prediction: CyclePrediction? { get }
 }
@@ -84,7 +91,7 @@ extension PeriodTrackerStore: PeriodContextSource {}
 /// only ever observes `.menstrual`/`.unknown`; this fills in follicular/ovulatory/luteal using the standard
 /// "luteal phase ≈ 14 days, ovulation ≈ cycleLength − 14" model anchored on detected period starts. Pure
 /// and deterministic — no persistence, no AI.
-enum CyclePhaseResolver {
+public nonisolated enum CyclePhaseResolver {
     private static let menstrualWindow = 5
     private static let lutealLength = 14
 
@@ -93,7 +100,7 @@ enum CyclePhaseResolver {
     ///   optimization and never changes the result (they must equal `detectedPeriodStarts(from: entries)`).
     ///   The observed-flow check (step 1) always reads `entries` live, so a memoized `periodStarts` can only
     ///   ever affect the calendar-math phases, never the "is today a bleeding day" decision.
-    static func phase(
+    public static func phase(
         on date: Date,
         entries: [CycleDayEntry],
         prediction: CyclePrediction?,
@@ -126,7 +133,7 @@ enum CyclePhaseResolver {
         return .luteal
     }
 
-    static func band(for phase: CyclePhase) -> PeriodPhaseBand {
+    public static func band(for phase: CyclePhase) -> PeriodPhaseBand {
         switch phase {
         case .menstrual: .menstruating
         case .follicular: .early
@@ -167,7 +174,7 @@ enum CyclePhaseResolver {
 ///   softening on phases the per-phase trends mark as historically harder (medium/high confidence only).
 @MainActor
 @Observable
-final class PeriodContextBridge: PeriodScoringContextProviding {
+public final class PeriodContextBridge: PeriodScoringContextProviding {
     /// Phase-aware behaviour (non-bleeding phases, signals, softening) only turns on after this many
     /// *completed* cycles, per spec §4 / plan §3.5. `CyclePrediction.cyclesObserved` counts period starts,
     /// so a completed cycle is `cyclesObserved - 1`.
@@ -183,7 +190,7 @@ final class PeriodContextBridge: PeriodScoringContextProviding {
     /// during a read must not churn the view graph.
     @ObservationIgnored private var cachedPeriodStarts: [Date]?
 
-    init(source: any PeriodContextSource, calendar: Calendar = .current) {
+    public init(source: any PeriodContextSource, calendar: Calendar = .current) {
         self.source = source
         self.calendar = calendar
     }
@@ -198,7 +205,7 @@ final class PeriodContextBridge: PeriodScoringContextProviding {
 
     /// Recompute per-phase trends from current entries + the wellbeing scores supplied by `FernletStore`.
     /// Cheap and idempotent; call after period data, lock state, or daily scores change. Not persisted.
-    func refresh(unlocked: Bool, wellbeingByDay: [String: PeriodWellbeingSample]) {
+    public func refresh(unlocked: Bool, wellbeingByDay: [String: PeriodWellbeingSample]) {
         self.unlocked = unlocked
         // Authoritative invalidation point: entries / lock / prediction just changed, so the memoized starts
         // must be rebuilt from the now-current entries before any phase or trend is recomputed.
@@ -217,11 +224,11 @@ final class PeriodContextBridge: PeriodScoringContextProviding {
 
     // MARK: Abstract egress
 
-    func currentPhaseSignal() -> PeriodPhaseSignal { PeriodPhaseSignal(resolvedPhase(on: Date())) }
+    public func currentPhaseSignal() -> PeriodPhaseSignal { PeriodPhaseSignal(resolvedPhase(on: Date())) }
 
-    func currentPhaseBand() -> PeriodPhaseBand { CyclePhaseResolver.band(for: resolvedPhase(on: Date())) }
+    public func currentPhaseBand() -> PeriodPhaseBand { CyclePhaseResolver.band(for: resolvedPhase(on: Date())) }
 
-    func nutritionSignal() -> PeriodNutritionSignal {
+    public func nutritionSignal() -> PeriodNutritionSignal {
         // Nutrition strength depends on user-marked symptom severity, which is sealed — `.noData` if locked.
         guard unlocked else { return .noData }
         switch resolvedPhase(on: Date()) {
@@ -232,7 +239,7 @@ final class PeriodContextBridge: PeriodScoringContextProviding {
         }
     }
 
-    func exerciseSignal() -> PeriodExerciseSignal {
+    public func exerciseSignal() -> PeriodExerciseSignal {
         guard unlocked else { return .noData }
         switch resolvedPhase(on: Date()) {
         case .menstrual, .luteal: return .gentleness(.suggested)
@@ -242,11 +249,11 @@ final class PeriodContextBridge: PeriodScoringContextProviding {
     }
 
     /// The current per-phase trends, exposed for an in-app (already-unlocked) trends surface. Abstract only.
-    var currentTrends: [PeriodHealthTrend] { trends }
+    public var currentTrends: [PeriodHealthTrend] { trends }
 
     // MARK: Scoring egress
 
-    func scoringAdjustment(forDayKey dayKey: String) -> PeriodScoringAdjustment {
+    public func scoringAdjustment(forDayKey dayKey: String) -> PeriodScoringAdjustment {
         guard let source, let prediction = activePrediction,
               let date = FernletDate.date(fromDayKey: dayKey) else { return .none }
         let phase = CyclePhaseResolver.phase(

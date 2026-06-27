@@ -18,7 +18,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge"]),
     ],
     targets: [
         .target(
@@ -139,6 +139,19 @@ let package = Package(
         .target(
             name: "PrivateMediaStore",
             dependencies: ["FernletFoundation", "FernletDomainModel"]
+        ),
+        // Layer 4 — sanctioned egress. Converts RAW cycle data (CyclePhase, from
+        // PrivateHealthStore) into the ABSTRACT period signals the scoring layer
+        // consumes (PeriodPhaseSignal in FernletScoring); raw cycle types stay behind
+        // this boundary. The app supplies non-sensitive wellbeing scores INTO the
+        // bridge via its seam protocols (no upward edge). MainActor (@Observable bridge
+        // + @MainActor seams); pure engines/value types marked nonisolated within.
+        .target(
+            name: "PeriodContextBridge",
+            dependencies: ["PrivateHealthStore", "FernletScoring", "FernletFoundation", "FernletDomainModel"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
         ),
     ]
 )
