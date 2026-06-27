@@ -409,20 +409,34 @@ private final class MockCloudKitDatabase: CloudKitRecordDatabase {
 // MARK: - Audit capture
 
 private final class AuditCapture {
-    private(set) var events: [(event: String, context: [String: String])] = []
+    private let lock = NSLock()
+    private var storedEvents: [(event: String, context: [String: String])] = []
+    private var token: UUID?
+
+    var events: [(event: String, context: [String: String])] {
+        lock.lock(); defer { lock.unlock() }
+        return storedEvents
+    }
 
     func install() {
-        FernletAuditLog.captureHandler = { [weak self] event, context in
-            self?.events.append((event, context))
+        token = FernletAuditLog.addCaptureHandler { [weak self] event, context in
+            guard let self else { return }
+            self.lock.lock()
+            self.storedEvents.append((event, context))
+            self.lock.unlock()
         }
     }
 
     func uninstall() {
-        FernletAuditLog.captureHandler = nil
+        if let token {
+            FernletAuditLog.removeCaptureHandler(token)
+            self.token = nil
+        }
     }
 
     func contains(_ event: String) -> Bool {
-        events.contains { $0.event == event }
+        lock.lock(); defer { lock.unlock() }
+        return storedEvents.contains { $0.event == event }
     }
 }
 
