@@ -75,6 +75,24 @@ each want a regression test; WI-6 and WI-9 are larger/architectural — scope th
 
 ---
 
+## 1a. Implementation status (updated 2026-06-27, branch `claude/adoring-hoover-3c0a22`)
+
+| ID | Status | Notes |
+| --- | --- | --- |
+| **WI-1** | ✅ Done | Core past-day strip (`strippedIfSealed` + `mutatePastDay` hook) + one-time run-once scrub migration for already-leaked history (`scrubbedLeakedPastDayJournals` + `scrubLeakedPastDayJournalsIfNeeded`). Tests: `PastDayJournalSealingTests` (4) + `PastDayJournalScrubMigrationTests` (2). |
+| **WI-2** | ✅ Done | `disableIntegration()` fails closed (`cacheClearerUnavailable` + audit) when no clearer installed; `defaultCacheClearer`/`cacheCleaner` now optional. Test: `HealthKitDisableTests.disableFailsClosedWhenNoCacheClearerInstalled`. |
+| **WI-3** | ✅ Done | `.github/workflows/s3-wall.yml` + `Scripts/git-hooks/pre-push` + `Scripts/install-git-hooks.sh` + `Scripts/spm-wall-selftest.sh` (automated negative test) + CLAUDE.md ritual. |
+| **WI-4** | ✅ Done | `S3BoundaryTests` now discovers AI-facing files dynamically + hard floor (incl. `FoundationDishDecomposition`/`FoodProductWebImporter`); forbidden tokens expanded incl. the four `import Private*` + sealed value types; `Package.swift` comment corrected; planted-token fixture added. |
+| **WI-5** | ✅ Done | Period-restore `.periodData` guard now gates on `MenstrualNarrativeRepository.narrativeCount()`. Tests: `SealedBackupRestoreTests` (2). |
+| **WI-6** | ⏸ Deferred | Roadmap. Cross-platform canonical signing encoder — changes signed bytes (needs a `schemaVersion`-gated transition) and has **no live cross-platform peers** today. Must precede the Android port; not done casually here. |
+| **WI-7** | ◑ Partial | **7a done:** `FernletLockCrypto` narrowed `public`→internal (`@testable` for its two test files). **7b deferred:** `TierTwoMemoryRecord.text` is legitimately consumed by the AIContext de-id path (MemoryAgent/AIContextPayload), so neither a grep-wall token nor a visibility narrow is safe without the filtered-projection redesign. |
+| **WI-8** | ✅ Done | `FriendSessionTrustPolicy` revoked/blocked-rejection test added. |
+| **WI-9** | ⏸ Deferred | Deliberate concurrency cleanup. Marking ProximityKit wire `Codable`/`sign`/`verify` `nonisolated` toward dropping the `.v5` escape hatch is a strict-concurrency migration on the security-sensitive mesh decode path — not a live hole; scoped out of this security pass to avoid a risky half-migration. |
+| **WI-10** | ✅ Done | DiaryStore `hooksRewired` assert + `commitResolution` persists created recipes even with no meals. Test: `CommitResolutionPersistenceTests`. |
+| **WI-Q** | ◑ Partial | Done: `goodProteinThreshold` single-sourced on `Macros`; `removePlannedWorkout` delegates to `deletePlannedWorkout`. Deferred (optional): scoring-input marshalling, `batchSnapshotPersistence`/`mutateDay` dup, `setSleep` overloads, `CoreDataHealthKitCacheCleaner` codec fold, `upsertWorkout`. |
+
+---
+
 ## 2. Work items
 
 ### WI-1 — [P0/HIGH] Past-day journal text leaks plaintext into the iCloud blob
