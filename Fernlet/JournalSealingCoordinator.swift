@@ -263,4 +263,49 @@ final class JournalSealingCoordinator {
             host.scheduleSnapshotSave()
         }
     }
+
+    // MARK: - One-time historical scrub (WI-1)
+
+    /// One-time scrub of historical past-day journals that leaked plaintext into the days blob before
+    /// the past-day strip (`DiaryStore.mutatePastDay`) existed. `migrateExistingJournalsToSealedStore`
+    /// only scans today + `previousJournals`, and `FernletSnapshot.forStorage` only sanitises today, so a
+    /// journal written to a now-old day before the fix is never re-stripped and its plaintext lingers in
+    /// the (iCloud-synced) blob.
+    ///
+    /// For each day's journal entries that still carry text, this seals the text into the narrative store
+    /// (keyed by the day's key — matching the `seal`/`hydratingDecryptedJournals` convention so reads
+    /// re-hydrate) and returns the day with those entries blanked via the shared `strippedIfSealed` helper.
+    /// Returns **only** the days whose blob actually changed, so the caller re-persists just those.
+    ///
+    /// No-op (`[:]`) when no key is active (locked/inactive). `host.todayKey` is skipped — the snapshot
+    /// path already owns today. An entry whose seal fails keeps its text (no data loss), exactly like
+    /// `seal()`'s catch and `migrateExistingJournalsToSealedStore`.
+    func scrubbedLeakedPastDayJournals(in allDays: [String: FernletDay]) -> [String: FernletDay] {
+        guard let key = activeJournalRefreshKey() else { return [:] }
+        var changed: [String: FernletDay] = [:]
+        for (dayKey, day) in allDays where dayKey != host.todayKey {
+            var journals = day.journals
+            var mutated = false
+            for index in journals.indices where !journals[index].text.isEmpty {
+                let entry = journals[index]
+                if !sealedJournalIDs.contains(entry.id) {
+                    let narrative = JournalNarrative(
+                        id: entry.id, dayKey: dayKey, tag: entry.tag, entryDate: entry.date,
+                        text: entry.text, emotions: entry.emotions,
+                        createdAt: entry.date, updatedAt: entry.date
+                    )
+                    guard (try? narrativeRepository.insert(narrative, contentKey: key)) != nil else { continue }
+                    sealedJournalIDs.insert(entry.id)
+                }
+                journals[index] = entry.strippedIfSealed(in: sealedJournalIDs)
+                mutated = true
+            }
+            if mutated {
+                var scrubbed = day
+                scrubbed.journals = journals
+                changed[dayKey] = scrubbed
+            }
+        }
+        return changed
+    }
 }

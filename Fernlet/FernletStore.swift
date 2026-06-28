@@ -139,6 +139,14 @@ final class FernletStore {
     /// `PeriodContextBridge`; when nil (or the opt-in is off) scoring is byte-identical to period-unaware.
     @ObservationIgnored private(set) var periodScoringContext: (any PeriodScoringContextProviding)?
 
+    /// Preference key + current version for the one-time historical past-day journal scrub (WI-1).
+    /// Bump `pastDayJournalScrubVersion` to force the full-repository scan to re-run on next activation.
+    static let pastDayJournalScrubFlagKey = "pastDayJournalScrubVersion"
+    static let pastDayJournalScrubVersion = 1
+    /// Backing store for the run-once scrub flag. Injectable so tests can isolate the gate from the
+    /// shared `.standard` suite (the scrub fires from journal activation, which many tests trigger).
+    @ObservationIgnored var pastDayJournalScrubDefaults: UserDefaults = .standard
+
     init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: JournalNarrativeRepository? = nil, foodCatalog: FoodCatalog = .bundled()) {
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
@@ -1350,11 +1358,32 @@ final class FernletStore {
 // MARK: - Sealed Journal Management (Phase S2) — see JournalSealingCoordinator
 
 extension FernletStore: JournalSealingContext {
-    func activateNoLockJournals() { journalSealingCoordinator.activateNoLockJournals() }
+    func activateNoLockJournals() {
+        journalSealingCoordinator.activateNoLockJournals()
+        scrubLeakedPastDayJournalsIfNeeded()
+    }
     func activateSealedJournals(contentKey: SymmetricKey) {
         journalSealingCoordinator.activateSealedJournals(contentKey: contentKey)
+        scrubLeakedPastDayJournalsIfNeeded()
     }
     func deactivateSealedJournals() { journalSealingCoordinator.deactivateSealedJournals() }
+
+    /// WI-1 one-time scrub: seal + blank historical past-day journal plaintext that leaked into the days
+    /// blob before the past-day strip (`DiaryStore.mutatePastDay`) existed. The snapshot sanitizer and
+    /// `migrateExistingJournalsToSealedStore` only cover today + `previousJournals`, so days that aged out
+    /// of that window keep their plaintext forever. Runs the full-repository scan at most once per device
+    /// (gated by a run-once preference); called right after journal activation, when a content/device key
+    /// is live. Re-persists only the days the coordinator actually changed.
+    func scrubLeakedPastDayJournalsIfNeeded() {
+        let defaults = pastDayJournalScrubDefaults
+        guard defaults.integer(forKey: Self.pastDayJournalScrubFlagKey) < Self.pastDayJournalScrubVersion
+        else { return }
+        let scrubbed = journalSealingCoordinator.scrubbedLeakedPastDayJournals(in: repository.loadAllDays())
+        for (dayKey, day) in scrubbed {
+            _ = repository.updateDay(day, for: dayKey, todayKey: todayKey)
+        }
+        defaults.set(Self.pastDayJournalScrubVersion, forKey: Self.pastDayJournalScrubFlagKey)
+    }
 }
 
 extension FernletStore {
