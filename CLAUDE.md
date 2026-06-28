@@ -35,6 +35,18 @@ with `Scripts/spm-wall-check.sh`. The flag must be on the build command (it does
 synthesized SwiftPM targets from the pbxproj). `FernletTests/S3BoundaryTests` is the complementary
 grep-wall.
 
+**Pre-merge ritual (enforce the wall):**
+- Once per clone, install the git hooks: `Scripts/install-git-hooks.sh` (points `core.hooksPath` at
+  `Scripts/git-hooks`). The committed `pre-push` hook then runs `Scripts/spm-wall-check.sh` whenever a
+  push touches wall-relevant files; bypass a single push with `SKIP_S3_WALL_CHECK=1 git push`.
+- CI runs `.github/workflows/s3-wall.yml` on push/PR to `main` — the enforcement self-test plus the
+  grep-wall. Make it a **required status check** in branch protection. The workflow needs a macOS
+  runner with Xcode 26.5 + an iOS 26 simulator (use a self-hosted runner if hosted ones lack them).
+- `Scripts/spm-wall-selftest.sh` is the automated negative test: it plants a forbidden
+  `import PrivateHealthStore` in the walled `AIProviders` target, asserts the build fails with
+  `is missing a dependency on`, reverts, and re-confirms the clean tree passes. Run it after any change
+  to the wall (the `Package.swift` dependency DAG, the enforcement flag, or the walled modules).
+
 ## Index & reference files
 
 Consult these before adding code so existing behavior is reused, not duplicated:

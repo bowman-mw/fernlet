@@ -1,0 +1,59 @@
+# S3 privacy-wall enforcement (Docs/Security-Hardening-Plan-2026-06-27.md, WI-3).
+#
+# The carve-up's security feature — AIProviders/CloudKitSync being *structurally incapable* of
+# reaching the sealed Private* stores — is only load-bearing when the build runs under
+# DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR (the flag must be on the build command; it does
+# not reach the synthesized SwiftPM targets from the pbxproj). This workflow runs that check on
+# every push/PR so a forbidden cross-wall `import` can never land green.
+#
+# RUNNER REQUIREMENT: needs macOS + Xcode 26.5 + an iOS 26 simulator. If GitHub-hosted runners do
+# not yet provide Xcode 26.5 / iOS 26, change `runs-on` below to a self-hosted runner label that
+# does (e.g. `[self-hosted, macos, xcode-26.5]`). The pre-push hook (Scripts/install-git-hooks.sh)
+# is the always-available, no-CI complement.
+#
+# Make this a REQUIRED status check in branch protection so the wall cannot be merged around.
+
+name: S3 Wall
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+# One in-flight run per ref; newer pushes cancel older ones.
+concurrency:
+  group: s3-wall-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  s3-wall:
+    name: Compiler wall + grep-wall
+    # Swap for a self-hosted label if hosted runners lack Xcode 26.5 / iOS 26 (see header).
+    runs-on: macos-15
+    env:
+      FERNLET_DESTINATION: "platform=iOS Simulator,name=iPhone 17"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26.5
+        run: |
+          set -euo pipefail
+          if [ -d /Applications/Xcode_26.5.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.5.app
+          else
+            echo "::warning::Xcode_26.5.app not found; using the runner default. Available Xcodes:"
+            ls -d /Applications/Xcode*.app || true
+          fi
+          xcodebuild -version
+
+      - name: Enforcement self-test (prove the wall is load-bearing) + clean-tree check
+        run: Scripts/spm-wall-selftest.sh
+
+      - name: Grep-wall (S3BoundaryTests)
+        run: |
+          set -euo pipefail
+          xcodebuild test-without-building \
+            -scheme Fernlet \
+            -destination "$FERNLET_DESTINATION" \
+            -only-testing:FernletTests/S3BoundaryTests
