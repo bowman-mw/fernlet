@@ -306,6 +306,20 @@ let package = Package(
                 // hands them. That is the source's original, behavior-identical concurrency contract
                 // — under Swift 6 mode the package would (newly) reject those task-isolated captures
                 // as data races, so v5 preserves the app target's exact compilation, not a relaxation.
+                //
+                // WI-9 (2026-06-27): the wire `Codable` types, the canonical signing serializer, and
+                // the pure `IdentityService` crypto statics are now explicitly `nonisolated` (+ `Sendable`),
+                // so they no longer rely on `.v5`'s leniency and are decode/verify-safe off the main
+                // actor. With those annotations in place, a build of this target WITHOUT `.v5` reduces
+                // to EXACTLY TWO Swift-6 errors, both in Ranging/NIRangingSession.swift:
+                //   • :87 `sending 'nearbyObjects'` — the `[NINearbyObject]` delegate arg is captured
+                //     into the `Task { @MainActor }` hop in `session(_:didUpdate:)`.
+                //   • :98 `sending 'session'` — the `NISession` is captured (for the `=== niSession`
+                //     identity check) into the hop in `session(_:didInvalidateWith:)`.
+                // Dropping `.v5` therefore needs ONLY those two delegate bodies reworked to extract the
+                // Sendable values (distance/direction; `ObjectIdentifier(session)`) BEFORE the hop. That
+                // touches the UWB hardware-callback path, which the simulator cannot exercise, so it is
+                // deliberately left for a focused follow-up rather than bundled into this security pass.
                 .swiftLanguageMode(.v5),
             ]
         ),

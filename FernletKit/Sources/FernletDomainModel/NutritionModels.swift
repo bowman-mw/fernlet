@@ -1094,7 +1094,7 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
     }
 }
 
-public nonisolated struct SharedRecipePayload: Codable, Equatable {
+public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
     public var format = "fernlet.recipe"
     public var version = 1
     public var name: String
@@ -1112,7 +1112,7 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable {
     }
 }
 
-public nonisolated struct SharedRecipeIngredient: Codable, Equatable {
+public nonisolated struct SharedRecipeIngredient: Codable, Equatable, Sendable {
     public var name: String
     public var quantity: Double
     public var unit: String

@@ -1,6 +1,10 @@
 import Foundation
 
-public struct FriendPhotoPayload: Codable, Equatable, Identifiable {
+// WI-9: the friend-photo wire payloads are `Sendable` — they are encoded into `envelope.payload` and
+// decoded from untrusted peer plaintext exactly like the recipe/mesh wire types, so the whole peer-wire
+// surface is uniformly off-main-decode-safe. (FernletDomainModel has no `.defaultIsolation(MainActor.self)`,
+// so these need no `nonisolated` keyword — only the `Sendable` conformance.)
+public struct FriendPhotoPayload: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let imageData: Data?               // non-nil for epoch-0 unencrypted or locally-decrypted photos
     public let encryptedImageData: Data?      // AES-256-GCM ciphertext + 16-byte tag; non-nil when transmitted encrypted
@@ -113,7 +117,7 @@ public struct FriendPhotoPayload: Codable, Equatable, Identifiable {
     }
 }
 
-public struct FriendPhotoSessionParticipant: Codable, Equatable, Identifiable {
+public struct FriendPhotoSessionParticipant: Codable, Equatable, Identifiable, Sendable {
     public var id: String { fingerprint }
 
     public let fingerprint: String
@@ -125,7 +129,7 @@ public struct FriendPhotoSessionParticipant: Codable, Equatable, Identifiable {
     }
 }
 
-public struct FriendPhotoSessionMetadata: Codable, Equatable, Identifiable {
+public struct FriendPhotoSessionMetadata: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let meshID: UUID?
     public let meshName: String?
@@ -141,7 +145,7 @@ public struct FriendPhotoSessionMetadata: Codable, Equatable, Identifiable {
     }
 }
 
-public struct FriendPhotoManifestEntry: Codable, Equatable {
+public struct FriendPhotoManifestEntry: Codable, Equatable, Sendable {
     public let id: UUID
     public let senderFingerprint: String
     public let keyEpoch: Int   // receiver skips requesting photos from epochs it cannot decrypt
@@ -153,7 +157,7 @@ public struct FriendPhotoManifestEntry: Codable, Equatable {
     }
 }
 
-public struct FriendPhotoManifestPayload: Codable, Equatable {
+public struct FriendPhotoManifestPayload: Codable, Equatable, Sendable {
     public let entries: [FriendPhotoManifestEntry]
 
     public init(entries: [FriendPhotoManifestEntry]) {
@@ -161,7 +165,7 @@ public struct FriendPhotoManifestPayload: Codable, Equatable {
     }
 }
 
-public struct FriendPhotoRequestPayload: Codable, Equatable {
+public struct FriendPhotoRequestPayload: Codable, Equatable, Sendable {
     public let missingPhotoIDs: [UUID]
 
     public init(missingPhotoIDs: [UUID]) {

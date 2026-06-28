@@ -87,7 +87,7 @@ each want a regression test; WI-6 and WI-9 are larger/architectural — scope th
 | **WI-6** | ✅ Done | Replaced the `JSONEncoder(.sortedKeys)` signing encoder with `CanonicalSignatureSerializer` — a positional, length-prefixed binary format (fixed big-endian ints, whole-second dates, byte-lexicographic map order) reproducible byte-for-byte off-Apple. Compatibility-safe: envelopes bump to `currentSchemaVersion = 2` (signed v2; `verify` accepts BOTH v1-legacy + v2); admission tokens (no version field) dual-verify new-or-legacy bytes. Legacy `.sortedKeys`/`.iso8601` encoder retained for in-field-peer verify only. Tests: `FernletIdentityEnvelopeTests` (8 new — golden vectors envelope+token, map-order independence, sign/verify-new round-trip, dual-verify legacy+new ×2, tamper-reject ×2). Verified: 33 envelope + 94 proximity/mesh + S3BoundaryTests pass; wall-check exit 0; wall-selftest passes. |
 | **WI-7** | ◑ Partial | **7a done:** `FernletLockCrypto` narrowed `public`→internal (`@testable` for its two test files). **7b deferred:** `TierTwoMemoryRecord.text` is legitimately consumed by the AIContext de-id path (MemoryAgent/AIContextPayload), so neither a grep-wall token nor a visibility narrow is safe without the filtered-projection redesign. |
 | **WI-8** | ✅ Done | `FriendSessionTrustPolicy` revoked/blocked-rejection test added. |
-| **WI-9** | ⏸ Deferred | Deliberate concurrency cleanup. Marking ProximityKit wire `Codable`/`sign`/`verify` `nonisolated` toward dropping the `.v5` escape hatch is a strict-concurrency migration on the security-sensitive mesh decode path — not a live hole; scoped out of this security pass to avoid a risky half-migration. |
+| **WI-9** | ✅ Done | Marked the ProximityKit wire `Codable` value types, the WI-6 canonical signing serializer, and the pure `IdentityService` crypto statics (`verify`/`fingerprint`/`fingerprintsMatch`) `nonisolated` (+ `Sendable` on the wire types) — so untrusted MCSession bytes decode + signature-verify off the main actor without relying on `.v5` leniency. `verify`/`signed` that touch the `@MainActor` IdentityService/ReplayCache pinned `@MainActor`; `MeshAdmissionToken.verify` (pure) is `nonisolated`. **`.v5` deliberately KEPT:** with the annotations in place a Swift-6 build of ProximityKit reduces to EXACTLY two remaining errors, both in `Ranging/NIRangingSession.swift` (`:87` sending `[NINearbyObject]`, `:98` sending `NISession` across the delegate→`Task{@MainActor}` hop) — the sole `.v5` blocker, documented in `Package.swift` with the clean-fix sketch. Dropping `.v5` needs only those two UWB-delegate bodies reworked; left as a focused follow-up (the UWB hardware-callback path can't be exercised in the simulator). Tests: `ProximityWireOffMainDecodeTests` (5 — compile-time `Sendable` guard + off-main decode/verify of envelope & token, positive + tamper). Verified: Swift-6 re-probe shows only the 2 NIRangingSession errors; `.v5` clean build green; WI-9 + WI-6 + 12 proximity/mesh suites + `S3BoundaryTests` pass; wall-check exit 0; wall-selftest passes. |
 | **WI-10** | ✅ Done | DiaryStore `hooksRewired` assert + `commitResolution` persists created recipes even with no meals. Test: `CommitResolutionPersistenceTests`. |
 | **WI-Q** | ◑ Partial | Done: `goodProteinThreshold` single-sourced on `Macros`; `removePlannedWorkout` delegates to `deletePlannedWorkout`. Deferred (optional): scoring-input marshalling, `batchSnapshotPersistence`/`mutateDay` dup, `setSleep` overloads, `CoreDataHealthKitCacheCleaner` codec fold, `upsertWorkout`. |
 
@@ -372,6 +372,44 @@ bytes) compiles with a warning today; a Swift 6 / strict-concurrency migration w
 `sign`/`verify`/`makeCanonicalSignatureEncoder` free functions `nonisolated`, working toward dropping the
 `.v5` escape hatch for this target. Scope deliberately — it's a concurrency-correctness cleanup, not a live
 hole.
+
+**Implemented (2026-06-27).** Annotations landed; `.v5` deliberately retained (the plan's "leave a note on
+what still blocks it" outcome). Empirical scoping drove the decisions — recorded here so they are conscious
+choices:
+- **The wire layer is now `nonisolated, Sendable`.** Every ProximityKit wire `Codable` value type
+  (`FernletIdentityEnvelope`; all `MeshPayloads.swift` types incl. `MeshAdmissionToken`;
+  `RecipeSharePayloads.swift` types; the two private mesh-plaintext payloads `IdentityRangingPayload`/
+  `SessionHeartbeatPayload`) is `nonisolated, Sendable`, matching the existing FernletDomainModel wire
+  precedent (`PayloadType`/`PayloadSummary`). The `FernletDomainModel` wire types decoded from peer bytes
+  gained `Sendable` so the whole peer-wire surface is uniform: `SharedRecipePayload`/`SharedRecipeIngredient`
+  (so the recipe payloads can be `Sendable`) and the friend-photo family (`FriendPhotoPayload`,
+  `FriendPhotoManifestPayload`, `FriendPhotoRequestPayload`, `FriendPhotoSessionMetadata`,
+  `FriendPhotoSessionParticipant`, `FriendPhotoManifestEntry`). All are pure value types — sound and free.
+  (FernletDomainModel has no `.defaultIsolation(MainActor.self)`, so these need only `Sendable`, not
+  `nonisolated`.)
+- **The signing path is `nonisolated`.** `CanonicalSignatureSerializer.swift` in full (the WI-6
+  `canonicalBytes`/`legacyCanonicalBytes`, `CanonicalByteWriter`, `canonicalUTF8Ordered`, the domain-tag
+  constants, `makeLegacyCanonicalSignatureEncoder`) plus the pure `IdentityService` statics
+  `verify`/`fingerprint`/`fingerprintsMatch`. This is what lets a signature be verified off the main actor.
+- **Isolation split on the verify/sign methods.** `FernletIdentityEnvelope.verify`/`.signed` and
+  `MeshAdmissionToken.signed` are pinned `@MainActor` (they read `@MainActor` `IdentityService` private-key
+  state / `@MainActor` `ReplayCache`) — behavior-identical to before. `MeshAdmissionToken.verify` is
+  `nonisolated` because it is pure signature math (static crypto + `canonicalBytes`), so a token verifies
+  off-main.
+- **`.v5` kept — sole remaining blocker isolated (accepted).** With these annotations, building ProximityKit
+  WITHOUT `.v5` (i.e. Swift-6 language mode; tools-version is 6.2) reduces to EXACTLY two errors, both in
+  `Ranging/NIRangingSession.swift`: `:87` `sending 'nearbyObjects'` (the `[NINearbyObject]` delegate arg)
+  and `:98` `sending 'session'` (the `NISession`, for the `=== niSession` identity check) — both captured
+  into the `nonisolated`-delegate→`Task { @MainActor }` hop. The wire/serializer/crypto surface itself is
+  Swift-6 clean. Dropping `.v5` therefore needs ONLY those two UWB-delegate bodies reworked to extract the
+  Sendable values (`distance`/`direction`; `ObjectIdentifier(session)`) BEFORE the hop. Left as a focused
+  follow-up rather than bundled here: it touches the NearbyInteraction hardware-callback path, which the
+  simulator cannot exercise, and `HealthKitGateway` independently uses the same `.v5` stance. The blocker +
+  fix sketch is documented inline in `Package.swift`.
+- **Tests.** `ProximityWireOffMainDecodeTests` (5): a compile-time `T: Sendable` guard over the wire types
+  (hard-fails in any language mode on regression) + four runtime tests that decode and signature-verify a
+  `FernletIdentityEnvelope` and a `MeshAdmissionToken` inside `Task.detached` (genuinely off-main),
+  positive + tamper-reject. Under Swift-6/CI these would also fail to compile if the annotations regressed.
 
 ---
 
