@@ -84,7 +84,7 @@ each want a regression test; WI-6 and WI-9 are larger/architectural — scope th
 | **WI-3** | ✅ Done | `.github/workflows/s3-wall.yml` + `Scripts/git-hooks/pre-push` + `Scripts/install-git-hooks.sh` + `Scripts/spm-wall-selftest.sh` (automated negative test) + CLAUDE.md ritual. |
 | **WI-4** | ✅ Done | `S3BoundaryTests` now discovers AI-facing files dynamically + hard floor (incl. `FoundationDishDecomposition`/`FoodProductWebImporter`); forbidden tokens expanded incl. the four `import Private*` + sealed value types; `Package.swift` comment corrected; planted-token fixture added. |
 | **WI-5** | ✅ Done | Period-restore `.periodData` guard now gates on `MenstrualNarrativeRepository.narrativeCount()`. Tests: `SealedBackupRestoreTests` (2). |
-| **WI-6** | ⏸ Deferred | Roadmap. Cross-platform canonical signing encoder — changes signed bytes (needs a `schemaVersion`-gated transition) and has **no live cross-platform peers** today. Must precede the Android port; not done casually here. |
+| **WI-6** | ✅ Done | Replaced the `JSONEncoder(.sortedKeys)` signing encoder with `CanonicalSignatureSerializer` — a positional, length-prefixed binary format (fixed big-endian ints, whole-second dates, byte-lexicographic map order) reproducible byte-for-byte off-Apple. Compatibility-safe: envelopes bump to `currentSchemaVersion = 2` (signed v2; `verify` accepts BOTH v1-legacy + v2); admission tokens (no version field) dual-verify new-or-legacy bytes. Legacy `.sortedKeys`/`.iso8601` encoder retained for in-field-peer verify only. Tests: `FernletIdentityEnvelopeTests` (8 new — golden vectors envelope+token, map-order independence, sign/verify-new round-trip, dual-verify legacy+new ×2, tamper-reject ×2). Verified: 33 envelope + 94 proximity/mesh + S3BoundaryTests pass; wall-check exit 0; wall-selftest passes. |
 | **WI-7** | ◑ Partial | **7a done:** `FernletLockCrypto` narrowed `public`→internal (`@testable` for its two test files). **7b deferred:** `TierTwoMemoryRecord.text` is legitimately consumed by the AIContext de-id path (MemoryAgent/AIContextPayload), so neither a grep-wall token nor a visibility narrow is safe without the filtered-projection redesign. |
 | **WI-8** | ✅ Done | `FriendSessionTrustPolicy` revoked/blocked-rejection test added. |
 | **WI-9** | ⏸ Deferred | Deliberate concurrency cleanup. Marking ProximityKit wire `Codable`/`sign`/`verify` `nonisolated` toward dropping the `.v5` escape hatch is a strict-concurrency migration on the security-sensitive mesh decode path — not a live hole; scoped out of this security pass to avoid a risky half-migration. |
@@ -304,6 +304,27 @@ bytes, so it must be gated behind a `schemaVersion` bump (envelopes already carr
 both old and new during a transition) to avoid breaking existing Apple-to-Apple signatures. No live
 cross-platform peers exist today, so this is not urgent — but it must precede the Android port. Used by both
 `FernletIdentityEnvelope` (`:74`) and `MeshAdmissionToken` (`MeshPayloads.swift:299`).
+
+**Implemented (2026-06-27).** New file `FernletKit/Sources/ProximityKit/Wire/CanonicalSignatureSerializer.swift`
+holds `CanonicalByteWriter` + `canonicalBytes(for:)` (v2) + `legacyCanonicalBytes(for:)` + the retained
+legacy Foundation encoder. The v2 format is documented in that file's header (the byte layout an Android
+implementer reproduces). Deliberate decisions, recorded here so they are conscious choices:
+- **Binary, not canonical-JSON.** A positional length-prefixed binary stream eliminates the JSON
+  string-escaping / number-formatting / key-ordering edge cases that are the root of the drift. Ed25519
+  signs arbitrary bytes, so JSON-ness was never required.
+- **Whole-second dates.** Matches the legacy `.iso8601` precision AND the wire — envelopes transit as JSON
+  and `verify` re-derives canonical bytes from the *decoded* date, so the canonical granularity must be no
+  finer than what survives transport. The seconds→Int64 conversion saturates (never traps) because `verify`
+  runs over untrusted bytes.
+- **Map order** is byte-lexicographic on the key's raw UTF-8 (not Foundation's UTF-16 `.sortedKeys`).
+- **Rollout tradeoff (accepted):** signing flips to v2 immediately (`currentSchemaVersion`, a one-line flip
+  point). Updated devices keep verifying v1 (no in-field peer is cut off — the WI-6 priority). The reverse —
+  a not-yet-updated v1-only device verifying a v2 envelope — fails `schemaVersionUnsupported` until it
+  updates. Acceptable: proximity sessions are ephemeral and co-present, peers are typically on the same app
+  era, this is pre-release, and there are no cross-platform peers yet. If a phased rollout is ever wanted,
+  set `currentSchemaVersion = 1` for a release (verify already accepts both) then flip to 2 later.
+- **Golden vectors** in `FernletIdentityEnvelopeTests` (`goldenEnvelopeHex`/`goldenTokenHex`) are the
+  cross-stack contract the Android port must reproduce byte-for-byte.
 
 ---
 
