@@ -28,7 +28,19 @@ public struct JournalNarrative: Identifiable, Equatable {
     }
 }
 
-public final class JournalNarrativeRepository {
+/// The journal-narrative store surface the app's `JournalSealingCoordinator` depends on. Extracted as a
+/// protocol so the coordinator can be driven by a test double (e.g. a decorator that simulates a transient
+/// seal failure for the WI-1 historical scrub) without reaching the on-device Core Data store.
+/// `JournalNarrativeRepository` is the production conformer.
+public protocol JournalNarrativeStoring: AnyObject {
+    func insert(_ narrative: JournalNarrative, contentKey: SymmetricKey?) throws
+    func update(_ narrative: JournalNarrative, contentKey: SymmetricKey?) throws
+    func delete(id: UUID) throws
+    func narratives(forDayKey dayKey: String, contentKey: SymmetricKey?) throws -> [JournalNarrative]
+    func narratives(forDayKeys dayKeys: [String], contentKey: SymmetricKey?) throws -> [JournalNarrative]
+}
+
+public final class JournalNarrativeRepository: JournalNarrativeStoring {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "journal-narrative")
 
