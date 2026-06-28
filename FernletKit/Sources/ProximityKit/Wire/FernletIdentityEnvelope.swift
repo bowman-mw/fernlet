@@ -9,7 +9,15 @@ import FernletDomainModel
 
 // MARK: - Envelope
 
-public struct FernletIdentityEnvelope: Codable, Equatable {
+// `nonisolated` + `Sendable` (WI-9): ProximityKit sets `.defaultIsolation(MainActor.self)`, which
+// would otherwise make this wire value type — and its synthesized `Codable` conformance —
+// MainActor-isolated. A MainActor-isolated `init(from:)`/`encode(to:)` can only satisfy the
+// `nonisolated` Decodable/Encodable requirements under the `.v5` language-mode escape hatch; under
+// Swift 6 it would forbid decoding these untrusted MCSession bytes off the main actor. Marking the
+// type `nonisolated, Sendable` (matching the FernletDomainModel wire types — PayloadType/PayloadSummary)
+// makes decode + signature verification safe from any isolation domain. The two members that touch
+// the `@MainActor` IdentityService/ReplayCache (`verify`, `signed`) stay `@MainActor` explicitly.
+public nonisolated struct FernletIdentityEnvelope: Codable, Equatable, Sendable {
     public let schemaVersion: Int                 // 1
     public let envelopeID: UUID                   // for replay protection + Inspector log correlation
     public let senderSigningPublicKey: Data       // Ed25519 raw, 32 B
@@ -55,23 +63,22 @@ public struct FernletIdentityEnvelope: Codable, Equatable {
     }
 }
 
-// MARK: - Canonical encoding
+// MARK: - Schema versions
+//
+// The canonical signing bytes are produced by `canonicalBytes(for:)` in CanonicalSignatureSerializer.swift.
+// WI-6 replaced the cross-platform-fragile `JSONEncoder(.sortedKeys)` encoder with a deterministic
+// binary serializer and bumped the schema version. The transition is version-gated:
+//   * `signed` always mints `currentSchemaVersion` (v2) using the new serializer.
+//   * `verify` accepts BOTH v1 (legacy `.iso8601`/`.sortedKeys` bytes) and v2 (new serializer),
+//     so a not-yet-updated in-field Apple peer is never cut off.
 
-/// Shared deterministic encoder for all canonical-bytes signing operations.
-/// Both FernletIdentityEnvelope and MeshAdmissionToken use this configuration — keep them in sync.
-public func makeCanonicalSignatureEncoder() -> JSONEncoder {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-    encoder.dateEncodingStrategy = .iso8601
-    return encoder
-}
-
-/// Returns the deterministic byte sequence that is signed and verified.
-/// The `signature` field is zeroed so signing and verification produce identical input.
-public func canonicalBytes(for envelope: FernletIdentityEnvelope) -> Data {
-    var copy = envelope
-    copy.signature = Data()
-    return try! makeCanonicalSignatureEncoder().encode(copy)
+extension FernletIdentityEnvelope {
+    /// Schema version stamped onto newly-signed envelopes (new cross-platform canonical serializer).
+    public static let currentSchemaVersion = 2
+    /// The pre-WI-6 schema version, still accepted on verify for in-field peers.
+    public static let legacySchemaVersion = 1
+    /// Versions `verify` will accept. Anything else throws `schemaVersionUnsupported`.
+    static let supportedSchemaVersions: Set<Int> = [legacySchemaVersion, currentSchemaVersion]
 }
 
 // MARK: - Verification
@@ -93,11 +100,21 @@ extension FernletIdentityEnvelope {
     private static let sealingRequiredTypes: Set<PayloadType> = [.friendPhoto, .recipeShare]
 
     /// Verifies the envelope signature, recipient, expiry, and replay status; returns the plaintext payload.
+    /// `@MainActor`: reads the `@MainActor` IdentityService key state (`open`, `localFingerprint`) and the
+    /// `@MainActor` ReplayCache. The signature math itself (`IdentityService.verify` + `canonicalBytes`) is
+    /// `nonisolated` and could run off-main, but recipient/replay/decrypt need the actor's state.
+    @MainActor
     public func verify(identityService: IdentityService, replayCache: ReplayCache) throws -> Data {
-        guard schemaVersion == 1 else { throw VerifyError.schemaVersionUnsupported }
+        guard Self.supportedSchemaVersions.contains(schemaVersion) else {
+            throw VerifyError.schemaVersionUnsupported
+        }
         if let expiresAt, expiresAt < Date() { throw VerifyError.expired }
 
-        let canon = canonicalBytes(for: self)
+        // Version-gated canonical bytes: v1 used the legacy `.sortedKeys`/`.iso8601` JSON encoder;
+        // v2+ uses the cross-platform binary serializer.
+        let canon = schemaVersion == Self.legacySchemaVersion
+            ? legacyCanonicalBytes(for: self)
+            : canonicalBytes(for: self)
         guard IdentityService.verify(signature, of: canon, by: senderSigningPublicKey) else {
             throw VerifyError.signatureInvalid
         }
@@ -129,7 +146,9 @@ extension FernletIdentityEnvelope {
 // MARK: - Signed factory
 
 extension FernletIdentityEnvelope {
-    /// Creates a signed envelope. `signature` is computed over the canonical JSON of all other fields.
+    /// Creates a signed envelope. `signature` is computed over the canonical bytes of all other fields.
+    /// `@MainActor`: signs with the `@MainActor` IdentityService private key state.
+    @MainActor
     public static func signed(
         identityService: IdentityService,
         envelopeID: UUID = UUID(),
@@ -143,7 +162,7 @@ extension FernletIdentityEnvelope {
         expiresAt: Date? = nil
     ) throws -> FernletIdentityEnvelope {
         var envelope = FernletIdentityEnvelope(
-            schemaVersion: 1,
+            schemaVersion: currentSchemaVersion,
             envelopeID: envelopeID,
             senderSigningPublicKey: identityService.localSigningPublicKey,
             senderKeyAgreementPublicKey: identityService.localKeyAgreementPublicKey,

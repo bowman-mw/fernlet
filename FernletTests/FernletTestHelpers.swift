@@ -15,6 +15,17 @@ import CloudKitSync
 /// tests), so tests stay deterministic — pass the specific USDA items a test needs.
 @MainActor
 func makeTestStore(date: Date = .now, bundledFoodItems: [FoodItem] = []) -> FernletStore {
+    makeTestStoreWithRepositories(date: date, bundledFoodItems: bundledFoodItems).store
+}
+
+/// Like `makeTestStore`, but also returns the backing days repository and the in-memory journal
+/// narrative repository so a test can seed/inspect the persisted blob and the sealed store directly
+/// (e.g. the WI-1 historical-scrub migration test, which must seed a pre-fix leaked past-day blob).
+@MainActor
+func makeTestStoreWithRepositories(
+    date: Date = .now,
+    bundledFoodItems: [FoodItem] = []
+) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     let controller = PersistenceController(inMemory: true)
     // Use a non-existent temp path so the legacy migration returns an empty database.
     let legacyURL = FileManager.default.temporaryDirectory
@@ -35,13 +46,14 @@ func makeTestStore(date: Date = .now, bundledFoodItems: [FoodItem] = []) -> Fern
     let journalNarrativeRepository = JournalNarrativeRepository(
         controller: PrivatePersistenceController(inMemory: true)
     )
-    return FernletStore(
+    let store = FernletStore(
         date: date,
         repository: repository,
         savedRecipeRepository: savedRecipeRepository,
         journalNarrativeRepository: journalNarrativeRepository,
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems))
     )
+    return (store, repository, journalNarrativeRepository)
 }
 
 /// Creates a FernletStore pre-populated with N meals, a journal entry,

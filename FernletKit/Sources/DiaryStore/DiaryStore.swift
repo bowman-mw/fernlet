@@ -40,16 +40,28 @@ public final class DiaryStore {
     public var dailyScores: [DailyHealthScore]
     public var companionThought: String?
 
-    static let goodProteinThreshold = 25
     @ObservationIgnored public let todayKey: String
     @ObservationIgnored public let repository: FernletRepository
     @ObservationIgnored public let foodCatalog: FoodCatalog
     @ObservationIgnored private var scheduleSnapshotSaveHook: () -> Void
     @ObservationIgnored private var periodAdjustmentHook: (String) -> PeriodScoringAdjustment
+    /// Facade-supplied set of journal-entry ids whose plaintext is sealed in the encrypted narrative
+    /// store. Read by `mutatePastDay` to strip sealed text before a past-day write reaches the
+    /// (potentially iCloud-synced) repository — the past-day analogue of `FernletSnapshot.forStorage`.
+    /// Defaults to empty for the brief init→rewireHooks window (no past-day writes happen there).
+    @ObservationIgnored private var sealedJournalIDsHook: () -> Set<UUID> = { [] }
+    /// Set true by `rewireHooks` once the facade wires the real persistence/period/sealed closures over
+    /// the `{ }`/`.none` init placeholders. `scheduleSnapshotSave()` asserts on it so a future
+    /// constructor that copies the build-then-rewire pattern but forgets to rewire trips loudly in
+    /// debug/test instead of silently dropping every save.
+    @ObservationIgnored private var hooksRewired = false
 
     /// Invokes the facade-supplied snapshot-save hook. Replaces every former
     /// `snapshotSaveCoordinator.schedule()` call in the carved methods.
-    func scheduleSnapshotSave() { scheduleSnapshotSaveHook() }
+    func scheduleSnapshotSave() {
+        assert(hooksRewired, "DiaryStore mutated before rewireHooks() — the persistence hook is still the init placeholder, so this save would be silently dropped. Call rewireHooks() right after construction.")
+        scheduleSnapshotSaveHook()
+    }
 
     /// Invokes the facade-supplied period-adjustment gate. Replaces the former inline
     /// `periodAdjustment(for:)` body that read the facade-only `PeriodContextBridge`.
@@ -60,10 +72,13 @@ public final class DiaryStore {
     /// them after the DiaryStore (which it stores in a `let`) exists — avoiding an init-order cycle.
     public func rewireHooks(
         scheduleSnapshotSave: @escaping () -> Void,
-        periodAdjustment: @escaping (String) -> PeriodScoringAdjustment
+        periodAdjustment: @escaping (String) -> PeriodScoringAdjustment,
+        sealedJournalIDs: @escaping () -> Set<UUID>
     ) {
         self.scheduleSnapshotSaveHook = scheduleSnapshotSave
         self.periodAdjustmentHook = periodAdjustment
+        self.sealedJournalIDsHook = sealedJournalIDs
+        self.hooksRewired = true
     }
 
     public init(
@@ -341,7 +356,7 @@ public final class DiaryStore {
             macros: foodItem.macros,
             micronutrientSnapshot: foodItem.micronutrients,
             mealSource: .manual,
-            quality: foodItem.macros.protein >= Self.goodProteinThreshold ? .good : .ok,
+            quality: foodItem.macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
             confidence: "Saved product",
             note: "Logged from saved product.",
             source: MealLogSource.webImport
@@ -405,11 +420,9 @@ public final class DiaryStore {
 
     /// Removes a planned workout after it has been completed. The facade's
     /// `completePlannedWorkout` runs the HK-side `addWorkout` then calls this to clear the plan.
+    /// Identical to `deletePlannedWorkout` (the distinction is intent, not behaviour) — delegate.
     public func removePlannedWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
-        assert(!date.isEmpty, "planned workout date required")
-        mutateDay(date: date) { day in
-            day.plannedWorkouts.removeAll { $0.id == plannedWorkout.id }
-        }
+        deletePlannedWorkout(plannedWorkout, date: date)
     }
 
     public func setWorkoutProfile(_ profile: WorkoutProfile) {
@@ -468,8 +481,11 @@ public final class DiaryStore {
     // MARK: - Sleep / hydration / hygiene / care
 
     public func setSleep(hours: Double?, quality: SleepQuality, note: String) {
-        day.sleep = SleepLog(hours: hours, quality: quality, note: note.trimmingCharacters(in: .whitespacesAndNewlines))
-        scheduleSnapshotSave()
+        // Delegate to the explicit-date overload (the single owner of SleepLog construction/trim).
+        // mutateDay(date: todayKey) takes the today-key branch — `day.sleep = …; scheduleSnapshotSave()`
+        // — which is operation-for-operation identical to the old inline body. (A `date: String = todayKey`
+        // default is impossible: Swift default-arg expressions can't reference `self`.)
+        setSleep(hours: hours, quality: quality, note: note, date: todayKey)
     }
 
     public func addBottle() {
@@ -799,6 +815,17 @@ public final class DiaryStore {
         assert(!dateKey.isEmpty, "date key required")
         var targetDay = repository.loadDay(for: dateKey, todayKey: todayKey)
         mutate(&targetDay)
+        // S3 privacy wall: a past-day write goes straight to the repository with NO forStorage pass,
+        // so strip sealed journal text here (mirrors FernletSnapshot.forStorage). The plaintext already
+        // lives in the encrypted narrative store; it must never reach the (iCloud-synced) blob. This
+        // covers EVERY past-day mutation — journal add/edit and any unrelated edit to a day that holds a
+        // sealed journal — and self-heals legacy plaintext as past days are touched. Past-day reads
+        // re-hydrate via loadDayWithDecryptedJournals; unsealed entries (ids absent from the set) keep
+        // their text, matching forStorage's behaviour and the no-data-loss path for failed seals.
+        let sealedIDs = sealedJournalIDsHook()
+        if !sealedIDs.isEmpty {
+            targetDay.journals = targetDay.journals.map { $0.strippedIfSealed(in: sealedIDs) }
+        }
         let saved = repository.updateDay(targetDay, for: dateKey, todayKey: todayKey)
         assert(saved, "past-date save failed for \(dateKey)")
         return saved

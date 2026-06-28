@@ -4,7 +4,7 @@ import Security
 import Testing
 import FernletDomainModel
 import FernletFoundation
-import FernletLock
+@testable import FernletLock
 @testable import Fernlet
 
 @Suite(.serialized)

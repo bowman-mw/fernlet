@@ -4,8 +4,6 @@ import AIProviders
 
 @MainActor
 struct MealBuilder {
-    static let goodProteinThreshold = 25
-
     struct PlanResult {
         let meals: [Meal]
         let createdRecipes: [RecipeDefinition]
@@ -73,7 +71,7 @@ struct MealBuilder {
             componentSnapshots: components,
             mealSource: .recipe,
             isAIFallback: false,
-            quality: perServing.protein >= goodProteinThreshold ? .good : .ok,
+            quality: perServing.protein >= Macros.goodProteinThreshold ? .good : .ok,
             confidence: "Recipe",
             note: "Logged from saved recipe.",
             source: mealLogSource(for: recipe, foodItems: foodItems)
@@ -102,7 +100,7 @@ struct MealBuilder {
             componentSnapshots: components,
             mealSource: .manual,
             isAIFallback: false,
-            quality: totals.macros.protein >= goodProteinThreshold ? .good : .ok,
+            quality: totals.macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
             confidence: confidenceLabel,
             note: "Matched locally from food selection: \(ingredientText).",
             source: MealLogSource.foundationModelFoodSelection

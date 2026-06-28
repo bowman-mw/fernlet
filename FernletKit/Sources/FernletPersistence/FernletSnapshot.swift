@@ -100,12 +100,8 @@ public extension FernletSnapshot {
         connectionSessionLogs: [ConnectionSessionLog], trustedProximityPeers: [ProximityTrustedPeerRecord],
         trainerAuditEvents: [TrainerAuditEvent], sealedJournalIDs: Set<UUID>
     ) -> FernletSnapshot {
-        func stripJournal(_ entry: JournalEntry) -> JournalEntry {
-            guard sealedJournalIDs.contains(entry.id) else { return entry }
-            return JournalEntry(id: entry.id, text: "", tag: entry.tag, date: entry.date, emotions: [])
-        }
         var strippedDay = day
-        strippedDay.journals = day.journals.map(stripJournal)
+        strippedDay.journals = day.journals.map { $0.strippedIfSealed(in: sealedJournalIDs) }
         if var context = strippedDay.healthContext {
             context.cycle = nil
             context.intimate = nil
@@ -113,7 +109,7 @@ public extension FernletSnapshot {
         }
         return FernletSnapshot(
             todayKey: todayKey, day: strippedDay, settings: settings, recentMeals: recentMeals,
-            previousJournals: previousJournals.map(stripJournal), memories: memories, goals: goals,
+            previousJournals: previousJournals.map { $0.strippedIfSealed(in: sealedJournalIDs) }, memories: memories, goals: goals,
             workshop: workshop, foodItems: foodItems, recipes: recipes,
             dailyScores: storedDailyScores(dailyScores), retryQueue: retryQueue,
             connectionSessionLogs: connectionSessionLogs, trustedProximityPeers: trustedProximityPeers,

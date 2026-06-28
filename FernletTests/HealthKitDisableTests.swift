@@ -137,6 +137,54 @@ struct HealthKitDisableTests {
         #expect(cleaner.clearCallCount == 1)
     }
 
+    /// WI-2 (Docs/Security-Hardening-Plan-2026-06-27.md): a `HealthKitService` built before the app
+    /// installs a concrete cache clearer (a `#Preview`, the share extension, a future early-launch path)
+    /// must FAIL CLOSED on `disableIntegration()` — throw + audit-log — instead of silently no-op'ing the
+    /// purge (the old `NoopHealthKitCacheClearer` default) and flipping the master switch off while
+    /// leaving opted-out clinical data behind. Nothing must be torn down when the clearer is absent.
+    @Test func disableFailsClosedWhenNoCacheClearerInstalled() async throws {
+        let previousDefault = HealthKitService.defaultCacheClearer
+        HealthKitService.defaultCacheClearer = nil
+        defer { HealthKitService.defaultCacheClearer = previousDefault }
+
+        let audit = AuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+
+        let controller = MockHealthKitStoreController()
+        let serviceID = "com.fernlet.healthkit-failclosed.tests.\(UUID().uuidString)"
+        defer { KeychainItem.delete(for: .storagePreferences, service: serviceID) }
+        let preferences = StoragePreferencesStore(keychainService: serviceID)
+        preferences.update { $0.healthKitMasterEnabled = true }
+
+        let service = HealthKitService(
+            storeController: controller,
+            cacheCleaner: nil,           // no clearer installed (and the static default is nil too)
+            preferencesStore: preferences
+        )
+        let type = try HealthKitService.quantityType(.stepCount)
+        try await service.startObserving(type) { _, _, _ in }
+
+        do {
+            try await service.disableIntegration()
+            Issue.record("disableIntegration must throw when no cache clearer is installed")
+        } catch HealthKitServiceError.cacheClearerUnavailable {
+            // expected — fail closed
+        } catch {
+            Issue.record("unexpected error from disableIntegration: \(error)")
+        }
+
+        // Fail-closed: the opt-out did NOT half-apply — no teardown, master switch still ON.
+        #expect(controller.stoppedQueries.isEmpty)
+        #expect(controller.disabledBackgroundDeliveryIdentifiers.isEmpty)
+        #expect(preferences.preferences.healthKitMasterEnabled == true)
+        #expect(audit.contains("healthkit.disable.attempt"))
+        #expect(audit.contains("healthkit.disable.failed"))
+
+        // Cleanup any anchor the observation may have stored.
+        HealthKitAnchorKeychain.delete(identifier: type.identifier)
+    }
+
     private func keychainData(account: String) -> Data? {
         var result: AnyObject?
         let query: [String: Any] = [

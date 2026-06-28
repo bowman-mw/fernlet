@@ -1,0 +1,65 @@
+#!/bin/bash
+#
+# pre-push — run the S3 privacy-wall check before code leaves the machine (WI-3,
+# Docs/Security-Hardening-Plan-2026-06-27.md). The always-available complement to the CI workflow.
+#
+# Install once per clone:  Scripts/install-git-hooks.sh   (points core.hooksPath at Scripts/git-hooks)
+# Bypass once (sparingly; CI still enforces):  SKIP_S3_WALL_CHECK=1 git push
+#
+# To keep everyday pushes fast, the (full Xcode build) wall check runs ONLY when the push touches
+# wall-relevant code: the package manifest, any package source, the AI-facing app files the grep-wall
+# covers, or the wall script itself. githooks(5) passes the ref updates on stdin.
+set -u
+
+if [ "${SKIP_S3_WALL_CHECK:-0}" = "1" ]; then
+  echo "[pre-push] SKIP_S3_WALL_CHECK=1 — skipping S3 wall check (CI still enforces it)."
+  exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+wall_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/|Fernlet/.*\.swift|Scripts/spm-wall-check\.sh|Scripts/spm-wall-selftest\.sh)'
+zero="0000000000000000000000000000000000000000"
+
+changed_files=""
+undetermined=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "${local_sha:-}" ] && continue
+  # Branch deletion (local sha all zeros): nothing to build.
+  [ "$local_sha" = "$zero" ] && continue
+  if [ "$remote_sha" = "$zero" ]; then
+    # New branch on the remote: diff from its merge-base with origin/HEAD; if unknown, force the check.
+    base="$(git merge-base "$local_sha" origin/HEAD 2>/dev/null || true)"
+    if [ -z "$base" ]; then
+      undetermined=1
+      continue
+    fi
+    range="$base..$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  if files="$(git diff --name-only "$range" 2>/dev/null)"; then
+    changed_files="$changed_files
+$files"
+  else
+    undetermined=1
+  fi
+done
+
+if [ "$undetermined" -eq 0 ]; then
+  if ! printf '%s\n' "$changed_files" | grep -Eq "$wall_relevant_regex"; then
+    echo "[pre-push] No S3-wall-relevant changes in this push — skipping wall check."
+    exit 0
+  fi
+fi
+
+echo "[pre-push] Running S3 privacy-wall check (Scripts/spm-wall-check.sh)…"
+"$REPO_ROOT/Scripts/spm-wall-check.sh"
+code=$?
+if [ "$code" -ne 0 ]; then
+  echo "[pre-push] S3 wall check FAILED (exit $code) — push aborted."
+  echo "           Fix the cross-wall import (look for 'is missing a dependency on'),"
+  echo "           or bypass once with: SKIP_S3_WALL_CHECK=1 git push   (CI still enforces it)."
+  exit "$code"
+fi
+echo "[pre-push] S3 wall check passed."
+exit 0

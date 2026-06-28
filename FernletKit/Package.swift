@@ -129,8 +129,8 @@ let package = Package(
         // (JournalNarrativeRepository). NONisolated (plain final class; its CoreData
         // performAndWait closures run nonisolated under strict concurrency). Note: the
         // memory "gatekeeper" MemoryAgent + the AIAuditLog sink are NOT here — they are
-        // pure, AI-facing control plane (every AI provider calls them) and live in
-        // FernletDomainModel, so placing them in this sealed module would have been an
+        // pure, AI-facing control plane (every AI provider calls them) and live in the
+        // AIContext module, so placing them in this sealed module would have been an
         // AIProviders -> Private* wall violation.
         .target(
             name: "PrivateMemoryStore",
@@ -178,9 +178,10 @@ let package = Package(
         // NOTE: three further AI files (FoundationDishDecomposition, FoodProductWebImporter,
         // LaunchPreparationService) remain in the app for now — they reference app-target
         // helpers (MealBuilder/DishTemplateLexicon, NutritionLabelScanner, FernletStore) that
-        // a package module cannot import. They are verified sealed-free and (the aiFacing ones)
-        // grep-covered by S3BoundaryTests; their move awaits helper extraction (MealBuilder
-        // carve to FoodCatalog; a NutritionLabelScanning seam; a FernletStore launch seam).
+        // a package module cannot import. They are verified sealed-free and grep-covered by
+        // FernletTests/S3BoundaryTests, which discovers every FoundationModels-using app file
+        // dynamically and pins these three as a hard floor. Their move awaits helper extraction
+        // (MealBuilder carve to FoodCatalog; a NutritionLabelScanning seam; a FernletStore launch seam).
         .target(
             name: "AIProviders",
             dependencies: ["AIContext", "FernletDomainModel", "FernletScoring", "FoodCatalog"],
@@ -297,15 +298,30 @@ let package = Package(
             dependencies: ["PrivateMediaStore", "FernletDomainModel", "FernletFoundation"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
-                // Swift 5 language mode (matching the app target's SWIFT_VERSION = 5.0 +
-                // SWIFT_APPROACHABLE_CONCURRENCY), exactly as HealthKitGateway needs. The
-                // NISessionDelegate / MCSessionDelegate callbacks are `nonisolated` and hop to
-                // `@MainActor` via `Task { @MainActor in … }` before touching any state, capturing
-                // the non-Sendable framework objects (NISession, [NINearbyObject]) the delegate
-                // hands them. That is the source's original, behavior-identical concurrency contract
-                // — under Swift 6 mode the package would (newly) reject those task-isolated captures
-                // as data races, so v5 preserves the app target's exact compilation, not a relaxation.
-                .swiftLanguageMode(.v5),
+                // Swift 6 language mode (the package default — no `.swiftLanguageMode(.v5)`).
+                //
+                // WI-9 (2026-06-27) marked the wire `Codable` types, the canonical signing
+                // serializer, and the pure `IdentityService` crypto statics `nonisolated`
+                // (+ `Sendable`) so they are decode/verify-safe off the main actor. This
+                // follow-up then dropped `.v5` by reworking the `nonisolated` delegate callbacks
+                // that captured non-Sendable framework objects into their `Task { @MainActor … }`
+                // hops — those captures are the Swift-6 `sending` data races `.v5` had hidden:
+                //   • Ranging/NIRangingSession.swift — `session(_:didUpdate:)` and
+                //     `session(_:didInvalidateWith:)` now extract the Sendable values
+                //     (distance/direction; `ObjectIdentifier(session)`) BEFORE the hop.
+                //   • Transport/MeshMultipeerSession.swift — the MCSession / advertiser / browser
+                //     callbacks transfer the non-Sendable `MCPeerID` (and the single-shot
+                //     `invitationHandler`) across the hop via a `nonisolated(unsafe)` local.
+                //   • ForegroundAnchor/ProximityForegroundAnchor.swift — the non-Sendable
+                //     ActivityKit `Activity` (a class) is passed to its `nonisolated async`
+                //     `update`/`end` via a `nonisolated(unsafe)` local.
+                // All rewrites are behavior-preserving — the UWB/MC/ActivityKit objects keep their
+                // exact runtime semantics — so the target builds clean in Swift 6 mode. (An earlier
+                // estimate of "exactly two errors, both in NIRangingSession" was incomplete: the
+                // Mesh and ForegroundAnchor captures were equally blocking.)
+                //
+                // HealthKitGateway still uses `.v5` independently for its HealthKit `@Sendable`
+                // query-completion handler captures; that is a separate target.
             ]
         ),
     ]

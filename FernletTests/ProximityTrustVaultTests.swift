@@ -76,6 +76,32 @@ struct ProximityTrustVaultTests {
         #expect(!vault.isTrustedProximityPeer(signingPublicKey: Data([9, 9, 9])))
     }
 
+    /// WI-8 (Docs/Security-Hardening-Plan-2026-06-27.md): `FriendSessionTrustPolicy.isTrustedProximityPeer`
+    /// returns `true` BY DESIGN — friend sessions authorize through the proximity gate, not remembered
+    /// trust. This pins the safety boundary so a future refactor can't silently turn that into unbounded
+    /// trust: even with blanket trust, a REVOKED key and a BLOCKED key are still rejected because the
+    /// policy forwards those checks to the vault.
+    @Test func friendSessionTrustPolicyStillRejectsRevokedAndBlockedKeys() {
+        let revokedKey = Data([10, 20, 30])
+        let blockedKey = Data([40, 50, 60])
+        let vault = ProximityTrustVault()
+        vault.trust(makePeer(name: "Rev", fingerprint: "fp-rev", signingPublicKey: revokedKey), mode: .friend)
+        vault.revoke(signingPublicKey: revokedKey)
+        vault.block(signingPublicKey: blockedKey)
+
+        let policy = FriendSessionTrustPolicy(vault: vault)
+
+        // Blanket trust by design — even an unknown key is "trusted" for a friend session...
+        #expect(policy.isTrustedProximityPeer(signingPublicKey: Data([99])))
+        #expect(policy.isTrustedProximityPeer(signingPublicKey: revokedKey))
+        // ...but the revoked key and the blocked key are still rejected (forwarded to the vault).
+        #expect(policy.isRevokedProximitySigningKey(revokedKey))
+        #expect(policy.isBlockedProximitySigningKey(blockedKey))
+        // block() sets both blocked + revoked; the revoked-only key is not also blocked.
+        #expect(policy.isRevokedProximitySigningKey(blockedKey))
+        #expect(!policy.isBlockedProximitySigningKey(revokedKey))
+    }
+
     @Test func auditEventRingBufferCappedAt500() {
         let vault = ProximityTrustVault()
         for i in 0..<502 {

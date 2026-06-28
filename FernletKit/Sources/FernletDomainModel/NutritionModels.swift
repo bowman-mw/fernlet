@@ -313,6 +313,11 @@ public nonisolated struct Macros: Codable, Equatable, Sendable {
     public var carbs: Int
     public var fat: Int
 
+    /// Per-serving protein (grams) at or above which a meal is rated `.good` rather than `.ok`. The
+    /// single source of truth for this threshold — referenced by MealBuilder, the facade's meal
+    /// correction/review paths, DiaryStore, and FoodView (WI-Q, Docs/Security-Hardening-Plan-2026-06-27.md).
+    public static let goodProteinThreshold = 25
+
     public init(protein: Int, carbs: Int, fat: Int) {
         self.protein = protein
         self.carbs = carbs
@@ -1089,7 +1094,7 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
     }
 }
 
-public nonisolated struct SharedRecipePayload: Codable, Equatable {
+public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
     public var format = "fernlet.recipe"
     public var version = 1
     public var name: String
@@ -1107,7 +1112,7 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable {
     }
 }
 
-public nonisolated struct SharedRecipeIngredient: Codable, Equatable {
+public nonisolated struct SharedRecipeIngredient: Codable, Equatable, Sendable {
     public var name: String
     public var quantity: Double
     public var unit: String
