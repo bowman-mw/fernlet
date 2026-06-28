@@ -1,0 +1,382 @@
+# Security Hardening Plan — S3 Wall Review Follow-ups (2026-06-27)
+
+> **Handoff doc.** This plan is self-contained. A fresh session should be able to execute it
+> with only this file + the repo. It captures the actionable follow-ups from the security review
+> of the SPM "S3 privacy wall" carve-up.
+
+---
+
+## 0. Context for a fresh session
+
+**What was reviewed.** The ~250-file "SPM module carve-up" (commits `0fc138c`..`HEAD`, i.e. diff range
+`9b176de..HEAD`) carved the app into the local `FernletKit` Swift package. Its security purpose is the
+**S3 wall**: the two "walled consumer" modules — `AIProviders` (on-device Foundation-model inference)
+and `CloudKitSync` (iCloud sync) — must be *structurally incapable* of reaching the sealed `Private*`
+stores (journal text, cycle/intimacy, sealed photos). Sealed data may only egress as the de-identified
+typed payloads in `AIContext`.
+
+**Verdict of the review (already done — do NOT re-litigate):**
+- The wall itself is **correctly implemented and proven load-bearing**. A positive build under
+  `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` succeeds; injecting a forbidden
+  `import PrivateHealthStore` into an `AIProviders` file produces `error: 'AIProviders' is missing a
+  dependency on 'PrivateHealthStore'` (exit 65, build fails). The dependency DAG, at-rest sealing crypto,
+  iCloud container exclusion, AI egress de-identification, and the Proximity signing/replay surface all
+  moved without regression.
+- The items below are the **gaps the wall does not cover** plus a pre-existing leak in the same privacy
+  invariant. **None of these block the conclusion that the carve-up's security feature works** — they
+  harden it and close one real leak.
+
+**Key files (orientation):**
+| Area | File |
+| --- | --- |
+| The wall (DAG) | `FernletKit/Package.swift` |
+| Compiler-wall runner | `Scripts/spm-wall-check.sh` |
+| Grep-wall backstop | `FernletTests/S3BoundaryTests.swift` |
+| Sanctioned AI egress | `FernletKit/Sources/AIContext/{AIContextPayload,MemoryAgent,AIAuditLog}.swift` |
+| Cloud-snapshot sanitizer | `FernletKit/Sources/FernletPersistence/FernletSnapshot.swift` (`forStorage`) |
+| Journal sealing | `Fernlet/JournalSealingCoordinator.swift` + `Fernlet/FernletStore.swift` (`addJournal`/`updateJournal`/`currentSnapshot`) |
+
+**Build / test / verify commands:**
+```bash
+# Build
+xcodebuild build-for-testing -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17'
+# Targeted tests (run in batches — full FernletTests is ~7min; lock suite is slow)
+xcodebuild test-without-building -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests/<Suite>
+# S3 compiler-wall check (this is the empirical wall verification)
+FERNLET_DESTINATION='platform=iOS Simulator,name=iPhone 17' Scripts/spm-wall-check.sh   # expect exit 0
+```
+Simulator present: `iPhone 17` (and `iPhone 17 Pro`/`Pro Max`/`17e`). Xcode 26.5.
+
+**Wall negative-test technique (use to validate WI-3):** temporarily add `import PrivateHealthStore` to
+any `FernletKit/Sources/AIProviders/*.swift`, run the wall check, confirm it fails with exit 65 and
+`is missing a dependency on`, then revert.
+
+---
+
+## 1. Priority & sequencing
+
+| ID | Pri | Sev | Title | Carve-up origin |
+| --- | --- | --- | --- | --- |
+| **WI-1** | P0 | HIGH | Past-day journal add/edit writes plaintext into the iCloud-synced blob | pre-existing, preserved |
+| **WI-2** | P1 | MED | HealthKit cache-clearer silently no-ops → opt-out clinical data may persist in sync | this change (new seam) |
+| **WI-3** | P1 | MED | Wall enforcement flag runs in no CI / no everyday build | this change |
+| **WI-4** | P1 | MED | Grep-wall omits 2 app-resident AI files + cycle/photo/import tokens | this change |
+| **WI-5** | P1 | MED | Period-restore no-clobber guard duplicates sealed history | this change |
+| **WI-6** | P2 | MED (roadmap) | Mesh canonical signing encoder not cross-platform byte-stable | pre-existing; blocks Android port |
+| **WI-7** | P2 | LOW | Over-broad public API surface (`TierTwoMemoryRecord.text`, lock crypto) | this change |
+| **WI-8** | P2 | LOW | `FriendSessionTrustPolicy` blanket-trust — pin with a test | this change |
+| **WI-9** | P2 | LOW | ProximityKit `MainActor` isolation forces off-main decode under `.v5` | this change |
+| **WI-10** | P2 | LOW | Robustness: DiaryStore rewire-hook no-op risk + `commitResolution` recipe loss | mixed |
+| **WI-Q** | P3 | — | Quality/duplication cluster (non-security) | this change |
+
+**Recommended order:** WI-1 first (only item that moves real user data today), then WI-2/WI-3/WI-4/WI-5
+(enforcement + backstop hardening), then the P2/P3 batch as capacity allows. WI-1, WI-2, WI-5, WI-8, WI-10
+each want a regression test; WI-6 and WI-9 are larger/architectural — scope them deliberately.
+
+---
+
+## 2. Work items
+
+### WI-1 — [P0/HIGH] Past-day journal text leaks plaintext into the iCloud blob
+
+**Problem (verified end-to-end).** Adding or editing a journal on a **past** calendar day writes the raw
+journal `text` into the iCloud-synced CoreData blob in cleartext. Reachable through normal UI (calendar →
+`DayDetailView`/`DayEditSheet` → `JournalView.swift:1357` / `:385` / `:61`).
+
+**The exact path:**
+- `Fernlet/FernletStore.swift:911 addJournal(text:tag:date:)` builds `JournalEntry(text:tag:)`, calls
+  `journalSealingCoordinator.seal(entry, dayKey: date)` (seals text into the encrypted narrative store and
+  adds the id to `sealedJournalIDs`, but **does not blank the in-memory entry**), then
+  `diary.mutateDay(date: date) { $0.journals.append(entry) }`.
+- `updateJournal` (`:926`) is the same shape (`targetDay.journals[index] = updatedEntry` with plaintext).
+- For `date == todayKey`: the in-memory `day` keeps plaintext for display; the strip happens later in
+  `currentSnapshot()` → `FernletSnapshot.forStorage(..., sealedJournalIDs:)` (`FernletStore.swift:1297`,
+  `FernletSnapshot.swift:95`), which blanks sealed-journal text before persistence. **Safe.**
+- For `date != todayKey`: `DiaryStore.mutateDay` (`DiaryStore.swift:787`) routes to `mutatePastDay`
+  (`:797`) → `repository.updateDay(targetDay,…)`. **Both** `CoreDataFernletRepository.updateDay`
+  (`CloudKitSync/CoreDataFernletRepository.swift:115`) and `LocalFernletRepository.updateDay`
+  (`LocalPersistence/LocalFernletRepository.swift:115`) just do `database.days[dateKey] = day;
+  saveDatabase(database)` with **no strip**. `saveDatabase` JSON-encodes the full day into
+  `FernletDatabaseRecord.payloadData`, which is the `NSPersistentCloudKitContainer`-mirrored blob
+  (`CloudKitSync/Persistence.swift:150,182,342`) and is **not otherwise encrypted**. → plaintext to iCloud.
+
+**Why `forStorage` doesn't catch it:** `forStorage` is only invoked on the *snapshot* path
+(`currentSnapshot` → `scheduleSnapshotSave`), which only ever re-strips `days[todayKey]` + `previousJournals`.
+The `days[pastKey]` entry written by `updateDay` is never run back through it.
+
+**Note:** this is **not a carve-up regression** — pre-carve-up `updateDay`/`mutatePastDay` behaved identically
+(`git show 9b176de:Fernlet/CoreDataFernletRepository.swift`). The move faithfully preserved both the strip
+logic and this hole. Fix it anyway: it defeats the core "sealed text never reaches iCloud" promise.
+
+**Recommended fix (surgical, mirrors existing logic — lowest risk):**
+Strip at the facade write sites, because that is the only layer that holds both the entry and the sealing
+state (`journalSealingCoordinator.sealedJournalIDs`). `DiaryStore`/the repositories are portable layers
+below the wall and do **not** know which entries are sealed.
+
+1. Add a helper in `Fernlet/FernletStore.swift`:
+   ```swift
+   /// A journal entry safe to persist into the days blob. Mirrors FernletSnapshot.forStorage:
+   /// a sealed entry's text lives in the encrypted narrative store and must never enter the blob.
+   /// Today's in-memory copy keeps plaintext for display (forStorage strips it at snapshot time);
+   /// past days persist straight through updateDay with NO forStorage pass, so strip here. Past-day
+   /// display re-hydrates via loadDayWithDecryptedJournals → hydratingDecryptedJournals.
+   private func journalEntryForPersistedDay(_ entry: JournalEntry, date: String) -> JournalEntry {
+       guard date != todayKey, journalSealingCoordinator.isSealed(entry.id) else { return entry }
+       return JournalEntry(id: entry.id, text: "", tag: entry.tag, date: entry.date, emotions: [])
+   }
+   ```
+2. In `addJournal`, append `journalEntryForPersistedDay(entry, date: date)` instead of `entry`.
+3. In `updateJournal`, assign `targetDay.journals[index] = journalEntryForPersistedDay(updatedEntry, date: date)`.
+   (`seal`/`updateSealedNarrative` already ran, so the text is in the sealed store before it's blanked.)
+
+   - Keep the `previousJournals` in-memory updates as-is — they are stripped by `forStorage` on the next
+     snapshot save. Only the `days[pastKey]` write needed the fix.
+   - **Decision point — edit-while-locked:** `updateSealedNarrative` is a no-op when the lock is locked
+     (no active key). Confirm whether the edit UI is reachable while locked (it likely isn't — locked
+     journal text is scrubbed/undisplayed). If it *is* reachable, gate the strip so you never blank an
+     entry whose new text failed to re-seal (mirror the "no data loss" priority in `seal()`'s catch at
+     `JournalSealingCoordinator.swift:109-119`).
+
+**One-time migration for already-leaked history (required).** Past-day plaintext already written before this
+fix persists in `database.days[pastKey]` and is never re-stripped (the existing
+`migrateExistingJournalsToSealedStore` only scans `previousJournals` + today). Add a one-time scrub, gated by
+a preference flag (e.g. `pastDayJournalScrubVersion`), run from `activateNoLockJournals` /
+`activateSealedJournals` where a key is available:
+- `repository.loadAllDays()`; for each day, for each journal with non-empty text: ensure it's sealed (insert
+  into `JournalNarrativeRepository` + add to `sealedJournalIDs`, reusing the existing seal logic), blank the
+  text, then `repository.updateDay(strippedDay,…)`.
+- Be mindful of volume — it's a single pass, gated to run once.
+
+**Alternative (defense-in-depth, more invasive — optional):** thread a `sealedJournalIDs` provider closure
+into `DiaryStore` (it already uses the injected-closure pattern for `scheduleSnapshotSave`/`periodAdjustment`)
+and strip inside `mutatePastDay` before `updateDay`. This guarantees *every* past-day write path is covered,
+not just the two journal sites. Heavier; the surgical fix already closes the only known sensitive-text vectors.
+
+**Tests (`FernletTests`):**
+- Add a journal on a past date with sync semantics; assert the persisted `payloadData` (decode the
+  `FernletDatabaseRecord`/`LocalFernletDatabase`) has empty journal `text` for that day, and that the sealed
+  `JournalNarrativeRepository` holds the ciphertext.
+- Edit a past-date journal; same assertion.
+- Migration test: seed a DB with a plaintext past-day journal, run the scrub, assert blanked-in-blob +
+  sealed-in-store + hydratable via `loadDayWithDecryptedJournals`.
+
+---
+
+### WI-2 — [P1/MED] HealthKit cache-clearer silently no-ops
+
+**Problem.** `FernletKit/Sources/HealthKitGateway/HealthKitService.swift:301`:
+```swift
+public static var defaultCacheClearer: HealthKitCacheClearing = NoopHealthKitCacheClearer()
+```
+The concrete `CoreDataHealthKitCacheCleaner` lives in the app (it needs `CloudKitSync` + `LocalPersistence`,
+which the gateway module must not depend on), so the app installs the real clearer at
+`Fernlet/FernletApp.swift:26`. `init` (`:319`) captures `cacheCleaner ?? Self.defaultCacheClearer` **at
+construction time**. Any `HealthKitService()` built before `FernletApp.init` (a `#Preview`, a unit test, the
+share extension, or a future early-launch path) captures the no-op; `disableIntegration()` (`:716`) then
+calls `try cacheCleaner.clearHealthKitCachedValues()` (`:728`) which is `{}` (`:242`) — so the purge of
+cached HealthKit-derived clinical values silently doesn't run, leaving opted-out clinical data in the
+local/synced store. The current shipping launch path is correctly ordered, but the invariant rests on global
+mutable state + construction order. **This seam is carve-up-introduced.**
+
+**Recommended fix (fail-closed):** make the absence of a real clearer a hard, audited failure instead of a
+silent skip.
+- Change the default to express "not installed": `public static var defaultCacheClearer: HealthKitCacheClearing? = nil`
+  and store `cacheCleaner: HealthKitCacheClearing?`.
+- In `disableIntegration()`, `guard let cacheCleaner else { FernletAuditLog.log("healthkit.disable.failed",
+  context: ["error": "cache clearer not installed"]); throw HealthKitError.cacheClearerUnavailable }` before
+  the rest of the teardown (so disable cannot "succeed" without clearing).
+- Keep `NoopHealthKitCacheClearer` for explicit injection in tests where clearing genuinely isn't needed.
+- (Optional belt-and-suspenders: `assertionFailure` in a debug-only no-op path so a real invocation is caught
+  in dev/test.)
+
+**Decision point:** confirm `FernletApp.swift:26` runs before *every* production `HealthKitService`
+construction (it does for the main app). The fail-closed throw makes any future violation loud instead of silent.
+
+**Test:** construct a `HealthKitService` with no clearer installed, call `disableIntegration()`, assert it
+throws and audit-logs; with a mock clearer, assert `clearHealthKitCachedValues()` is invoked exactly once.
+
+---
+
+### WI-3 — [P1/MED] Enforce the wall flag in CI / a pre-push hook
+
+**Problem.** `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` (what turns a forbidden cross-wall import into
+a hard error) is applied **only** by the manually-run `Scripts/spm-wall-check.sh`. There is no `.github` CI,
+no git hook, and no build phase running it; the documented everyday commands omit it. The flag also does
+**not** propagate from the pbxproj to the synthesized SwiftPM targets (so baking it into xcconfig is *not*
+reliable — per `Scripts/spm-wall-check.sh:21-27`, it must be on the build *command*). The wall is intact at
+HEAD but operationally advisory: a future `import PrivateHealthStore` in a walled module would compile green.
+
+**Recommended fix:**
+- Add `.github/workflows/s3-wall.yml` running `Scripts/spm-wall-check.sh` on push/PR, and make it a required
+  status check. **Caveat:** this needs a macOS runner with Xcode 26.5 + iOS 26 simulator — verify
+  GitHub-hosted runner availability; if not yet available, use a self-hosted runner.
+- As an always-available complement (no CI dependency), add a git **pre-push hook** that runs the script, and
+  document the wall check in `CLAUDE.md` as part of the pre-merge ritual.
+- Validate the enforcement itself with the negative-test technique in §0 (inject a forbidden import → expect
+  exit 65 → revert). Consider committing a tiny "enforcement self-test" script that does this automatically.
+
+---
+
+### WI-4 — [P1/MED] Make the grep-wall complete
+
+**Problem.** `FernletTests/S3BoundaryTests.swift` is the *only* possible backstop for the AI prompt-builders
+that live in the app target (outside the package, so the compiler wall can't reach them). It is incomplete:
+- `aiFacingFiles` (`:6-12`) lists 5 files but omits `Fernlet/FoundationDishDecomposition.swift` and
+  `Fernlet/FoodProductWebImporter.swift` — both build real `LanguageModelSession` prompts and are
+  app-resident. `Package.swift:181-183` even *claims* these are grep-covered (they aren't).
+- `forbiddenPrivateStoreTokens` (`:14-22`) lists 7 plumbing names but omits the sensitive value types
+  (`CyclePhase`, `CycleDayEntry`, `UserLoggedCycleEvent`, `PeriodTrackerStore`, `PrivateMediaStore`,
+  `MealPhotoStore`, `PendingNarrativeBuffer`/`PendingNarrativePayload`) and any bare `import Private*`.
+- `locate()` fail-soft: a renamed/moved listed file yields `Issue.record` + `continue` rather than scanning
+  its successor.
+
+**Recommended fix:**
+- Replace the hardcoded `aiFacingFiles` with **dynamic discovery**: enumerate `./Fernlet/**/*.swift` plus
+  `FernletKit/Sources/{AIProviders,AIContext}/**/*.swift`, and include any file referencing
+  `LanguageModelSession` / `SystemLanguageModel` / `@Generable` / `import FoundationModels`. New AI call
+  sites are then auto-covered. Keep the two named files as an explicit floor.
+- Expand `forbiddenPrivateStoreTokens` with the types above. **Highest-value single addition:** the four
+  `import PrivateHealthStore` / `import PrivateMemoryStore` / `import PrivateMediaStore` /
+  `import PrivateStoreCore` statements — that fails any direct reach into a sealed module regardless of which
+  type is named.
+- Make a missing expected file a hard test failure (not fail-soft).
+- Correct the misleading comment at `Package.swift:181-183`.
+
+**Test:** the suite itself is the test; add a fixture asserting a planted forbidden token in a temp AI-facing
+file would be caught (or at least assert the discovery set is non-empty and includes the two named files).
+
+---
+
+### WI-5 — [P1/MED] Period-restore no-clobber guard ignores the narrative store
+
+**Problem.** `Fernlet/SealedBackupCoordinator.swift`: `isEmptyStoreForRestore(.periodData)` (`:224-230`)
+returns true whenever `isFreshInstallForRestore()` (`:234-241`) is true, but the latter inspects only
+day/journal/meal/memory content — never `narrativeRepository.narrativeCount()`. Period narratives live in the
+separate `PrivateHealthStore` and are written independently (`PeriodTrackerStore.logEvent`), so a device can
+hold N sealed narratives while still looking "fresh". `applyRestoredChunks(.periodData)` (`:203-217`) then
+`insert`s with no upsert, and restore runs every launch → duplicated (re-duplicated) sealed cycle/intimacy
+history. (The `.sensitiveNotes` branch is correctly guarded; `.periodData` is not.) This is a
+**data-integrity** defect, not a confidentiality leak (the data stays sealed).
+
+**Recommended fix:** gate `.periodData` on the narrative store itself, e.g.
+`case .periodData: return (try? MenstrualNarrativeRepository().narrativeCount()) == 0` (a cheap count, no
+decryption) — **or** make `narrativeRepository.insert` an idempotent upsert keyed on `hkExternalUUID`/`dateKey`
+so re-restore is a no-op.
+
+**Test:** seed sealed narratives, run `restoreSealedBackupsIfNeeded` twice, assert `narrativeCount` does not
+grow.
+
+---
+
+### WI-6 — [P2/MED, roadmap] Replace the cross-platform canonical signing encoder
+
+**Problem.** `FernletKit/Sources/ProximityKit/Wire/FernletIdentityEnvelope.swift:62`
+`makeCanonicalSignatureEncoder()` returns a Foundation `JSONEncoder` with `.sortedKeys,
+.withoutEscapingSlashes` (and `.iso8601` dates). `.sortedKeys` is stable *within* one Foundation version, but
+Apple sorts by UTF-16 code units and does not guarantee byte-identical number/string encoding across
+Foundation implementations. A peer on a different Foundation version — or the **planned Android port** —
+could produce different canonical bytes → `signatureInvalid` for legitimately-signed envelopes/admission
+tokens. **Not a carve-up regression** (preserved as-is), but a known load-bearing fix before any cross-stack
+signatures (see memory `cross-platform-direction-2026-06`).
+
+**Recommended fix (do deliberately, not casually):** replace with a deterministic canonical serializer you
+control on both stacks — explicit field ordering, fixed numeric formatting (no locale/precision drift),
+explicit string escaping, explicit date format. **Compatibility:** changing the encoder changes the signed
+bytes, so it must be gated behind a `schemaVersion` bump (envelopes already carry `schemaVersion`; verify
+both old and new during a transition) to avoid breaking existing Apple-to-Apple signatures. No live
+cross-platform peers exist today, so this is not urgent — but it must precede the Android port. Used by both
+`FernletIdentityEnvelope` (`:74`) and `MeshAdmissionToken` (`MeshPayloads.swift:299`).
+
+---
+
+### WI-7 — [P2/LOW] Narrow over-broad public API surface
+
+**Problem (defense-in-depth, no live leak).** The carve-up widened visibility past least-privilege in two
+spots reachable from the shared layer:
+- `FernletKit/Sources/FernletDomainModel/TierTwoMemoryRecord.swift:13` exposes `public var text/state/
+  evidence`. `FernletDomainModel` is a direct dep of both walled consumers, so the `MemoryAgent.filteredContext`
+  de-identification gate is enforced by convention, not the type system. (No leak today: the only memory→AI
+  path, `LaunchPreparationService.swift:295`, routes through `MemoryAgent`.)
+- `FernletKit/Sources/FernletLock/FernletLockService.swift:123` widened `FernletLockCrypto`
+  key-wrapping/derivation primitives `internal`→`public` with no app-target callers.
+
+**Recommended fix:** for the lock crypto, narrow back to `package`/`internal` (use `@testable` for tests);
+**keep `contentKey()` public** (it has a real caller). For `TierTwoMemoryRecord`, prefer a filtered boundary
+projection exposed to AI rather than raw `.text`; at minimum add `TierTwoMemoryRecord`/`.text` to the
+grep-wall tokens (WI-4), scoped so legitimate non-AI uses don't false-positive. Verify "no callers" with a
+build under enforcement after narrowing.
+
+---
+
+### WI-8 — [P2/LOW] Pin `FriendSessionTrustPolicy` blanket-trust with a test
+
+**Problem.** `FernletKit/Sources/ProximityKit/Trust/FriendSessionTrustPolicy.swift:20`
+`isTrustedProximityPeer(...) -> Bool { true }`. This is **by design** (friend sessions authorize via the
+proximity gate; remembered trust isn't required) and is safely bounded — `isRevoked`/`isBlocked` are still
+forwarded to the vault (`:11-17`), so revoked/blocked keys are rejected. The risk is a future refactor
+silently dropping the gate and leaving blanket trust.
+
+**Recommended fix:** add a unit test asserting a revoked key and a blocked key are rejected by
+`FriendSessionTrustPolicy` even though `isTrustedProximityPeer` returns true. Optionally collapse the
+3-method pass-through into a vault flag/closure to shrink the maintained surface.
+
+---
+
+### WI-9 — [P2/LOW] ProximityKit `MainActor` isolation forces off-main decode under `.v5`
+
+**Problem.** `FernletKit/Package.swift:299` sets `.defaultIsolation(MainActor.self)` for `ProximityKit`,
+making the moved mesh `Codable` conformances and `sign`/`verify` free functions `MainActor`-isolated; this
+only compiles because of `.swiftLanguageMode(.v5)`. Off-main decode of incoming `MCSession` data (untrusted
+bytes) compiles with a warning today; a Swift 6 / strict-concurrency migration would fail.
+
+**Recommended fix (incremental):** mark the wire `Codable` conformances and the
+`sign`/`verify`/`makeCanonicalSignatureEncoder` free functions `nonisolated`, working toward dropping the
+`.v5` escape hatch for this target. Scope deliberately — it's a concurrency-correctness cleanup, not a live
+hole.
+
+---
+
+### WI-10 — [P2/LOW] Robustness / data-integrity
+
+- **DiaryStore rewire-hook can silently no-op saves** — `FernletKit/Sources/DiaryStore/DiaryStore.swift:69`.
+  `DiaryStore` is built with a `{ }` `scheduleSnapshotSave` then `rewireHooks` re-points the mutable hook
+  after construction. A future constructor copying the pattern but omitting the rewire drops every save
+  silently. **Fix:** make the persistence hook a required init parameter, or assert it's been rewired before
+  the first mutation.
+- **`commitResolution` can lose a created recipe** — `Fernlet/FernletStore.swift:500`. Inserts
+  `createdRecipes` via raw `diary.recipes.insert` with no `scheduleSnapshotSave`, relying on a subsequent
+  `appendMeal` to persist; a resolution with recipes but no meals loses the recipe on next reload
+  (pre-existing/latent). **Fix:** `scheduleSnapshotSave()` after the insert (or route through a persisting
+  method).
+
+---
+
+### WI-Q — [P3] Quality / duplication cluster (non-security; optional)
+
+Real maintenance hazards, no wall/security impact. De-dup as noted:
+- `goodProteinThreshold = 25` copied 4× (`DiaryStore.swift:43` + MealBuilder + facade + a FoodView literal) —
+  single source of truth.
+- Scoring-input marshalling built in two modules (`DiaryStore.swift:123` vs the facade live-score path) —
+  extract one builder.
+- `batchSnapshotPersistence`/`mutateDay` duplicated in facade + `DiaryStore` (`:810`).
+- `removePlannedWorkout` byte-identical to `deletePlannedWorkout` (`DiaryStore.swift:399-413`) — have one call
+  the other.
+- Two `setSleep` overloads duplicate construction/trimming (`DiaryStore.swift:470`) — implicit-today delegates
+  to explicit-date.
+- `CoreDataHealthKitCacheCleaner.swift:253` hand-rolls a JSON codec + record load/mutate/save loop the
+  repository layer already encapsulates — fold onto the repo (also de-risks WI-2's clearing correctness).
+- `upsertWorkout` redundant facade entry point (`FernletStore.swift:1384`) — `addWorkout`'s
+  `healthKitUUID != nil` guard already suppresses the HK re-save.
+
+---
+
+## 3. Final verification checklist (run before declaring done)
+
+1. `Scripts/spm-wall-check.sh` → exit 0 (wall still honest after changes).
+2. Wall negative test (inject forbidden import → exit 65 → revert) — especially after WI-3/WI-4/WI-7.
+3. New regression tests pass: WI-1 (past-day journal strip + migration), WI-2 (disable fail-closed), WI-5
+   (no duplicate narratives), WI-8 (revoked/blocked rejected).
+4. `S3BoundaryTests` passes and now discovers `FoundationDishDecomposition` + `FoodProductWebImporter`.
+5. Targeted `FernletTests` suites green (batch the runs; lock suite is slow).
+6. Confirm WI-1 didn't break journal display: today entries still show immediately; past-day entries still
+   hydrate via `loadDayWithDecryptedJournals`.
