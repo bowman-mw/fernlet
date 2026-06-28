@@ -178,9 +178,10 @@ let package = Package(
         // NOTE: three further AI files (FoundationDishDecomposition, FoodProductWebImporter,
         // LaunchPreparationService) remain in the app for now — they reference app-target
         // helpers (MealBuilder/DishTemplateLexicon, NutritionLabelScanner, FernletStore) that
-        // a package module cannot import. They are verified sealed-free and (the aiFacing ones)
-        // grep-covered by S3BoundaryTests; their move awaits helper extraction (MealBuilder
-        // carve to FoodCatalog; a NutritionLabelScanning seam; a FernletStore launch seam).
+        // a package module cannot import. They are verified sealed-free and grep-covered by
+        // FernletTests/S3BoundaryTests, which discovers every FoundationModels-using app file
+        // dynamically and pins these three as a hard floor. Their move awaits helper extraction
+        // (MealBuilder carve to FoodCatalog; a NutritionLabelScanning seam; a FernletStore launch seam).
         .target(
             name: "AIProviders",
             dependencies: ["AIContext", "FernletDomainModel", "FernletScoring", "FoodCatalog"],
