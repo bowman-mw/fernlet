@@ -298,29 +298,30 @@ let package = Package(
             dependencies: ["PrivateMediaStore", "FernletDomainModel", "FernletFoundation"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
-                // Swift 5 language mode (matching the app target's SWIFT_VERSION = 5.0 +
-                // SWIFT_APPROACHABLE_CONCURRENCY), exactly as HealthKitGateway needs. The
-                // NISessionDelegate / MCSessionDelegate callbacks are `nonisolated` and hop to
-                // `@MainActor` via `Task { @MainActor in … }` before touching any state, capturing
-                // the non-Sendable framework objects (NISession, [NINearbyObject]) the delegate
-                // hands them. That is the source's original, behavior-identical concurrency contract
-                // — under Swift 6 mode the package would (newly) reject those task-isolated captures
-                // as data races, so v5 preserves the app target's exact compilation, not a relaxation.
+                // Swift 6 language mode (the package default — no `.swiftLanguageMode(.v5)`).
                 //
-                // WI-9 (2026-06-27): the wire `Codable` types, the canonical signing serializer, and
-                // the pure `IdentityService` crypto statics are now explicitly `nonisolated` (+ `Sendable`),
-                // so they no longer rely on `.v5`'s leniency and are decode/verify-safe off the main
-                // actor. With those annotations in place, a build of this target WITHOUT `.v5` reduces
-                // to EXACTLY TWO Swift-6 errors, both in Ranging/NIRangingSession.swift:
-                //   • :87 `sending 'nearbyObjects'` — the `[NINearbyObject]` delegate arg is captured
-                //     into the `Task { @MainActor }` hop in `session(_:didUpdate:)`.
-                //   • :98 `sending 'session'` — the `NISession` is captured (for the `=== niSession`
-                //     identity check) into the hop in `session(_:didInvalidateWith:)`.
-                // Dropping `.v5` therefore needs ONLY those two delegate bodies reworked to extract the
-                // Sendable values (distance/direction; `ObjectIdentifier(session)`) BEFORE the hop. That
-                // touches the UWB hardware-callback path, which the simulator cannot exercise, so it is
-                // deliberately left for a focused follow-up rather than bundled into this security pass.
-                .swiftLanguageMode(.v5),
+                // WI-9 (2026-06-27) marked the wire `Codable` types, the canonical signing
+                // serializer, and the pure `IdentityService` crypto statics `nonisolated`
+                // (+ `Sendable`) so they are decode/verify-safe off the main actor. This
+                // follow-up then dropped `.v5` by reworking the `nonisolated` delegate callbacks
+                // that captured non-Sendable framework objects into their `Task { @MainActor … }`
+                // hops — those captures are the Swift-6 `sending` data races `.v5` had hidden:
+                //   • Ranging/NIRangingSession.swift — `session(_:didUpdate:)` and
+                //     `session(_:didInvalidateWith:)` now extract the Sendable values
+                //     (distance/direction; `ObjectIdentifier(session)`) BEFORE the hop.
+                //   • Transport/MeshMultipeerSession.swift — the MCSession / advertiser / browser
+                //     callbacks transfer the non-Sendable `MCPeerID` (and the single-shot
+                //     `invitationHandler`) across the hop via a `nonisolated(unsafe)` local.
+                //   • ForegroundAnchor/ProximityForegroundAnchor.swift — the non-Sendable
+                //     ActivityKit `Activity` (a class) is passed to its `nonisolated async`
+                //     `update`/`end` via a `nonisolated(unsafe)` local.
+                // All rewrites are behavior-preserving — the UWB/MC/ActivityKit objects keep their
+                // exact runtime semantics — so the target builds clean in Swift 6 mode. (An earlier
+                // estimate of "exactly two errors, both in NIRangingSession" was incomplete: the
+                // Mesh and ForegroundAnchor captures were equally blocking.)
+                //
+                // HealthKitGateway still uses `.v5` independently for its HealthKit `@Sendable`
+                // query-completion handler captures; that is a separate target.
             ]
         ),
     ]
