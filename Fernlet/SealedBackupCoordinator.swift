@@ -204,19 +204,21 @@ final class SealedBackupCoordinator {
             return records.count
         case .periodData:
             guard let key = host.sealedBackupContentKey else { throw SealedBackupWiringError.locked }
-            var restored = 0
+            // Decode every chunk, then write them in ONE all-or-nothing transaction. The former
+            // per-record loop swallowed individual insert failures and returned the success count, so a
+            // partial restore left the narrative store non-empty — which the no-clobber gate
+            // (isEmptyStoreForRestore) then reads as "already restored", permanently skipping retry and
+            // silently dropping the un-inserted sealed records. insertAtomically rolls back on any
+            // failure, so a failed restore leaves the store empty and is re-pulled next launch. (Restore
+            // collects the full history in memory rather than streaming per chunk: the chunking exists to
+            // bound the EXPORT seal, and a personal cycle history is small enough that one transaction is
+            // the right trade for restore atomicity.)
+            var narratives: [MenstrualNarrative] = []
             for chunk in chunks {
-                let narratives = try JSONDecoder().decode([MenstrualNarrative].self, from: chunk)
-                for narrative in narratives {
-                    do {
-                        try narrativeRepository.insert(narrative, contentKey: key)
-                        restored += 1
-                    } catch {
-                        FernletAuditLog.log("sealedBackup.restoreNarrativeFailed", context: ["dateKey": narrative.dateKey])
-                    }
-                }
+                narratives.append(contentsOf: try JSONDecoder().decode([MenstrualNarrative].self, from: chunk))
             }
-            return restored
+            try narrativeRepository.insertAtomically(narratives, contentKey: key)
+            return narratives.count
         }
     }
 
@@ -233,12 +235,14 @@ final class SealedBackupCoordinator {
         case .sensitiveNotes:
             return host.tierTwoMemories.isEmpty
         case .periodData:
-            // Period narratives live in the separate PrivateHealthStore and are written independently of
-            // the days blob (PeriodTrackerStore.logEvent), so a device can hold sealed cycle/intimacy
-            // history while still looking "fresh" by the day/memory checks above. Restore inserts with no
-            // upsert and runs every launch, so gate on the narrative store itself (a cheap count, no
+            // Menstrual narratives live in the separate PrivateHealthStore and are written independently
+            // of the days blob (PeriodTrackerStore.logEvent), so a device can hold sealed cycle history
+            // while still looking "fresh" by the day/memory checks above. Restore inserts with no upsert
+            // and runs every launch, so gate on the narrative store itself (a cheap count, no
             // decryption) — otherwise a re-restore duplicates that history. A count error fails closed
-            // (treated as non-empty → skip), which is safe to retry next launch.
+            // (treated as non-empty → skip), which is safe to retry next launch. NOTE: only the menstrual
+            // narrative store is gated/backed up here; intimacy logs (IntimacyLogRepository) are NOT part
+            // of the `.periodData` payload, so do not assume this gate covers them.
             return (try? narrativeRepository.narrativeCount()) == 0
         }
     }

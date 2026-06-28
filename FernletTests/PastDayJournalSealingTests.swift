@@ -53,6 +53,37 @@ struct PastDayJournalSealingTests {
         #expect(hydrated.first?.text == "edited secret")
     }
 
+    /// Regression for F1 (Docs/Security-Hardening-Plan-2026-06-27.md): editing a journal that was
+    /// sealed in a PRIOR session — and has since aged out of the in-memory `sealedJournalIDs` set (it
+    /// is older than the 30-entry `previousJournals` window, so activation never re-seals it) — must
+    /// still strip the new plaintext from the blob. The fix records the id as sealed when the past-day
+    /// read path (`hydratingDecryptedJournals`) decrypts it for display.
+    @Test func editingSealedJournalAfterItAgedOut_stripsPlaintextFromBlob() throws {
+        let today = Date()
+        let (store1, repository, narratives) = makeTestStoreWithRepositories(date: today)
+        store1.activateNoLockJournals()
+        let pastKey = FernletDate.dayKey(for: today.addingTimeInterval(-40 * 86_400))
+        store1.addJournal(text: "original secret", tag: .good, date: pastKey)
+        #expect(store1.loadDay(for: pastKey).journals.first?.text == "")   // sealed + stripped in session 1
+
+        // A brand-new session: fresh store + coordinator over the SAME blob and sealed store. Its
+        // in-memory sealedJournalIDs starts empty, and the aged-out past day is outside the
+        // previousJournals window, so activation does NOT re-seal it (reproducing the pre-fix state).
+        let store2 = makeStoreSharingStores(date: today, repository: repository, narratives: narratives)
+        store2.activateNoLockJournals()
+
+        // The user opens the old day; the read decrypts the text for display (and now marks it sealed).
+        let entry = try #require(store2.loadDayWithDecryptedJournals(for: pastKey).journals.first)
+        #expect(entry.text == "original secret")
+
+        store2.updateJournal(entry, text: "edited secret", tag: .hard, date: pastKey)
+
+        // The blob (mirrors to iCloud) must carry NO plaintext after the edit.
+        #expect(store2.loadDay(for: pastKey).journals.first?.text == "")
+        // No data loss: the edit round-trips through the sealed store.
+        #expect(store2.loadDayWithDecryptedJournals(for: pastKey).journals.first?.text == "edited secret")
+    }
+
     /// A non-journal edit to a past day that already holds a sealed journal must not resurrect the
     /// journal's plaintext into the blob (defense-in-depth: the strip covers EVERY past-day write).
     @Test func unrelatedPastDayEdit_doesNotResurrectSealedJournalText() {

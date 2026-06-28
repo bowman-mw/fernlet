@@ -1414,9 +1414,13 @@ extension FernletStore: JournalSealingContext {
         if attempts >= Self.pastDayJournalScrubMaxAttempts {
             defaults.set(Self.pastDayJournalScrubVersion, forKey: Self.pastDayJournalScrubFlagKey)
             defaults.removeObject(forKey: Self.pastDayJournalScrubAttemptsKey)
-            print("[Fernlet] WI-1 past-day journal scrub: giving up after \(attempts) attempt(s) with " +
-                  "\(outcome.unsealedFailureCount) entr\(outcome.unsealedFailureCount == 1 ? "y" : "ies") " +
-                  "still unsealed; run-once flag set to stop retrying.")
+            // Security-relevant: plaintext is being deliberately left unsealed (after the bounded retry
+            // cap), so record it on the audit trail the rest of the privacy subsystem is grep-able
+            // through — not just stdout.
+            FernletAuditLog.log("journal.pastDayScrub.gaveUp", context: [
+                "attempts": String(attempts),
+                "unsealed": String(outcome.unsealedFailureCount)
+            ])
         } else {
             defaults.set(attempts, forKey: Self.pastDayJournalScrubAttemptsKey)
         }

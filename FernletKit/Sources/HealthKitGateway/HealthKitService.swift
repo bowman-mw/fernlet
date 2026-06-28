@@ -730,12 +730,14 @@ public final class HealthKitService: HealthKitServicing {
     public func disableIntegration() async throws {
         FernletAuditLog.log("healthkit.disable.attempt")
         // Fail-closed: disabling HealthKit MUST purge the cached HealthKit-derived clinical values.
-        // If no concrete clearer was installed (a HealthKitService built before FernletApp wired
-        // CoreDataHealthKitCacheCleaner — a #Preview, a test, the share extension, a future early-launch
-        // path), do NOT proceed: silently "succeeding" here would flip the master switch off while
-        // leaving opted-out clinical data in the local/synced store. Throw before any teardown so the
-        // opt-out does not half-apply and the failure is audited and retryable.
-        guard let cacheCleaner else {
+        // Resolve the clearer at CALL time — the instance value captured at init, else the current
+        // static. This closes the construction-order window: a HealthKitService built before FernletApp
+        // wired `defaultCacheClearer` (a #Preview, a test, a future early-launch path) still disables
+        // correctly as long as the static is set by the time the user opts out. If NO clearer is
+        // available even now, do NOT proceed — silently "succeeding" would flip the master switch off
+        // while leaving opted-out clinical data in the local/synced store. Throw before any teardown so
+        // the opt-out does not half-apply and the failure is audited and retryable.
+        guard let cacheCleaner = cacheCleaner ?? Self.defaultCacheClearer else {
             FernletAuditLog.log("healthkit.disable.failed", context: ["error": "cache clearer not installed"])
             throw HealthKitServiceError.cacheClearerUnavailable
         }
