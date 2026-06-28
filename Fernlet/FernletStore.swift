@@ -129,7 +129,7 @@ final class FernletStore {
     )
     /// Injected (or nil → default) journal narrative repository, captured so the lazily-built
     /// `journalSealingCoordinator` can own it.
-    @ObservationIgnored private let providedJournalNarrativeRepository: JournalNarrativeRepository?
+    @ObservationIgnored private let providedJournalNarrativeRepository: (any JournalNarrativeStoring)?
     @ObservationIgnored private lazy var journalSealingCoordinator = JournalSealingCoordinator(
         host: self,
         narrativeRepository: providedJournalNarrativeRepository ?? JournalNarrativeRepository()
@@ -143,11 +143,18 @@ final class FernletStore {
     /// Bump `pastDayJournalScrubVersion` to force the full-repository scan to re-run on next activation.
     static let pastDayJournalScrubFlagKey = "pastDayJournalScrubVersion"
     static let pastDayJournalScrubVersion = 1
+    /// Counts launches on which the scrub ran but at least one day's seal failed (WI1-1). The run-once
+    /// version flag is only advanced on a clean (zero-failure) pass, so a *transiently* failed day is
+    /// retried on a later launch; this counter caps that retry loop at `pastDayJournalScrubMaxAttempts`
+    /// so a *permanently* failing entry (e.g. malformed content) can't make the bulk scan run on every
+    /// launch forever. Cleared whenever the scrub reaches a terminal state (clean pass or give-up).
+    static let pastDayJournalScrubAttemptsKey = "pastDayJournalScrubAttempts"
+    static let pastDayJournalScrubMaxAttempts = 3
     /// Backing store for the run-once scrub flag. Injectable so tests can isolate the gate from the
     /// shared `.standard` suite (the scrub fires from journal activation, which many tests trigger).
     @ObservationIgnored var pastDayJournalScrubDefaults: UserDefaults = .standard
 
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: JournalNarrativeRepository? = nil, foodCatalog: FoodCatalog = .bundled()) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled()) {
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
 
@@ -1377,15 +1384,42 @@ extension FernletStore: JournalSealingContext {
     /// of that window keep their plaintext forever. Runs the full-repository scan at most once per device
     /// (gated by a run-once preference); called right after journal activation, when a content/device key
     /// is live. Re-persists only the days the coordinator actually changed.
+    ///
+    /// WI1-1 robustness: the run-once version flag is advanced **only** on a clean pass (every leaked day
+    /// sealed). If a day's seal fails, its plaintext is preserved (no data loss, matching `seal()`), the
+    /// flag is left unset so a later launch retries exactly that day — and a bounded attempts counter caps
+    /// the retries so a *permanently* failing entry can't make the scan run on every launch forever. Once
+    /// the cap is hit the flag is set anyway (give up); going-forward edits to such a day are still covered
+    /// by the per-write strip (`mutatePastDay`).
     func scrubLeakedPastDayJournalsIfNeeded() {
         let defaults = pastDayJournalScrubDefaults
         guard defaults.integer(forKey: Self.pastDayJournalScrubFlagKey) < Self.pastDayJournalScrubVersion
         else { return }
-        let scrubbed = journalSealingCoordinator.scrubbedLeakedPastDayJournals(in: repository.loadAllDays())
-        for (dayKey, day) in scrubbed {
+        let outcome = journalSealingCoordinator.scrubbedLeakedPastDayJournals(in: repository.loadAllDays())
+        for (dayKey, day) in outcome.changedDays {
             _ = repository.updateDay(day, for: dayKey, todayKey: todayKey)
         }
-        defaults.set(Self.pastDayJournalScrubVersion, forKey: Self.pastDayJournalScrubFlagKey)
+
+        guard outcome.unsealedFailureCount > 0 else {
+            // Clean pass: every leaked past-day journal is sealed. Mark complete; the bulk scan never re-runs.
+            defaults.set(Self.pastDayJournalScrubVersion, forKey: Self.pastDayJournalScrubFlagKey)
+            defaults.removeObject(forKey: Self.pastDayJournalScrubAttemptsKey)
+            return
+        }
+
+        // At least one day's seal failed. Don't advance the run-once flag — a later launch re-runs the scan
+        // and retries exactly those still-plaintext days (already-sealed days are skipped, their blob text
+        // is now empty). Cap the retries so a permanently failing entry can't loop forever.
+        let attempts = defaults.integer(forKey: Self.pastDayJournalScrubAttemptsKey) + 1
+        if attempts >= Self.pastDayJournalScrubMaxAttempts {
+            defaults.set(Self.pastDayJournalScrubVersion, forKey: Self.pastDayJournalScrubFlagKey)
+            defaults.removeObject(forKey: Self.pastDayJournalScrubAttemptsKey)
+            print("[Fernlet] WI-1 past-day journal scrub: giving up after \(attempts) attempt(s) with " +
+                  "\(outcome.unsealedFailureCount) entr\(outcome.unsealedFailureCount == 1 ? "y" : "ies") " +
+                  "still unsealed; run-once flag set to stop retrying.")
+        } else {
+            defaults.set(attempts, forKey: Self.pastDayJournalScrubAttemptsKey)
+        }
     }
 }
 

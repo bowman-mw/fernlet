@@ -31,7 +31,7 @@ final class JournalSealingCoordinator {
     }
 
     private unowned let host: any JournalSealingContext
-    private let narrativeRepository: JournalNarrativeRepository
+    private let narrativeRepository: any JournalNarrativeStoring
 
     /// Content key available while the lock is open; nil when locked.
     private var journalContentKey: SymmetricKey?
@@ -41,7 +41,7 @@ final class JournalSealingCoordinator {
     /// Readable by the store (passed to `FernletSnapshot.forStorage`); mutation stays here.
     private(set) var sealedJournalIDs: Set<UUID> = []
 
-    init(host: any JournalSealingContext, narrativeRepository: JournalNarrativeRepository) {
+    init(host: any JournalSealingContext, narrativeRepository: any JournalNarrativeStoring) {
         self.host = host
         self.narrativeRepository = narrativeRepository
     }
@@ -266,6 +266,16 @@ final class JournalSealingCoordinator {
 
     // MARK: - One-time historical scrub (WI-1)
 
+    /// Outcome of one `scrubbedLeakedPastDayJournals` pass.
+    /// - `changedDays`: the days whose blob actually changed, so the caller re-persists *only* those.
+    /// - `unsealedFailureCount`: how many leaked entries could NOT be sealed this pass (their plaintext was
+    ///   deliberately preserved — no data loss). A non-zero count tells the orchestrator NOT to mark the
+    ///   one-time scrub complete, so a later launch retries exactly those still-plaintext days (WI1-1).
+    struct PastDayScrubOutcome {
+        var changedDays: [String: FernletDay]
+        var unsealedFailureCount: Int
+    }
+
     /// One-time scrub of historical past-day journals that leaked plaintext into the days blob before
     /// the past-day strip (`DiaryStore.mutatePastDay`) existed. `migrateExistingJournalsToSealedStore`
     /// only scans today + `previousJournals`, and `FernletSnapshot.forStorage` only sanitises today, so a
@@ -274,15 +284,18 @@ final class JournalSealingCoordinator {
     ///
     /// For each day's journal entries that still carry text, this seals the text into the narrative store
     /// (keyed by the day's key — matching the `seal`/`hydratingDecryptedJournals` convention so reads
-    /// re-hydrate) and returns the day with those entries blanked via the shared `strippedIfSealed` helper.
-    /// Returns **only** the days whose blob actually changed, so the caller re-persists just those.
+    /// re-hydrate) and reports the day with those entries blanked via the shared `strippedIfSealed` helper.
+    /// Only days whose blob actually changed are returned in `changedDays`.
     ///
-    /// No-op (`[:]`) when no key is active (locked/inactive). `host.todayKey` is skipped — the snapshot
-    /// path already owns today. An entry whose seal fails keeps its text (no data loss), exactly like
-    /// `seal()`'s catch and `migrateExistingJournalsToSealedStore`.
-    func scrubbedLeakedPastDayJournals(in allDays: [String: FernletDay]) -> [String: FernletDay] {
-        guard let key = activeJournalRefreshKey() else { return [:] }
+    /// No-op (empty outcome) when no key is active (locked/inactive). `host.todayKey` is skipped — the
+    /// snapshot path already owns today. An entry whose seal fails keeps its text (no data loss), exactly
+    /// like `seal()`'s catch and `migrateExistingJournalsToSealedStore`; it is also tallied into
+    /// `unsealedFailureCount` so the orchestrator can retry it on a later launch instead of giving up after
+    /// the first pass (re-running is cheap: already-sealed days now have empty text and are skipped).
+    func scrubbedLeakedPastDayJournals(in allDays: [String: FernletDay]) -> PastDayScrubOutcome {
+        guard let key = activeJournalRefreshKey() else { return PastDayScrubOutcome(changedDays: [:], unsealedFailureCount: 0) }
         var changed: [String: FernletDay] = [:]
+        var unsealedFailureCount = 0
         for (dayKey, day) in allDays where dayKey != host.todayKey {
             var journals = day.journals
             var mutated = false
@@ -294,7 +307,12 @@ final class JournalSealingCoordinator {
                         text: entry.text, emotions: entry.emotions,
                         createdAt: entry.date, updatedAt: entry.date
                     )
-                    guard (try? narrativeRepository.insert(narrative, contentKey: key)) != nil else { continue }
+                    guard (try? narrativeRepository.insert(narrative, contentKey: key)) != nil else {
+                        // Seal failed: preserve the plaintext (no data loss) but record the failure so the
+                        // orchestrator leaves the run-once flag unset and retries this day on a later launch.
+                        unsealedFailureCount += 1
+                        continue
+                    }
                     sealedJournalIDs.insert(entry.id)
                 }
                 journals[index] = entry.strippedIfSealed(in: sealedJournalIDs)
@@ -306,6 +324,6 @@ final class JournalSealingCoordinator {
                 changed[dayKey] = scrubbed
             }
         }
-        return changed
+        return PastDayScrubOutcome(changedDays: changed, unsealedFailureCount: unsealedFailureCount)
     }
 }

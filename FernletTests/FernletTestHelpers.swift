@@ -21,10 +21,15 @@ func makeTestStore(date: Date = .now, bundledFoodItems: [FoodItem] = []) -> Fern
 /// Like `makeTestStore`, but also returns the backing days repository and the in-memory journal
 /// narrative repository so a test can seed/inspect the persisted blob and the sealed store directly
 /// (e.g. the WI-1 historical-scrub migration test, which must seed a pre-fix leaked past-day blob).
+///
+/// `wrapNarrativeStore` lets a test interpose a decorator (e.g. one that simulates a transient seal
+/// failure) between the store and the real in-memory narrative repository. The returned `narratives` is
+/// always the *underlying* real repository, so reads through it reflect what the wrapped store wrote.
 @MainActor
 func makeTestStoreWithRepositories(
     date: Date = .now,
-    bundledFoodItems: [FoodItem] = []
+    bundledFoodItems: [FoodItem] = [],
+    wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     let controller = PersistenceController(inMemory: true)
     // Use a non-existent temp path so the legacy migration returns an empty database.
@@ -50,7 +55,7 @@ func makeTestStoreWithRepositories(
         date: date,
         repository: repository,
         savedRecipeRepository: savedRecipeRepository,
-        journalNarrativeRepository: journalNarrativeRepository,
+        journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems))
     )
     return (store, repository, journalNarrativeRepository)
