@@ -85,11 +85,11 @@ each want a regression test; WI-6 and WI-9 are larger/architectural — scope th
 | **WI-4** | ✅ Done | `S3BoundaryTests` now discovers AI-facing files dynamically + hard floor (incl. `FoundationDishDecomposition`/`FoodProductWebImporter`); forbidden tokens expanded incl. the four `import Private*` + sealed value types; `Package.swift` comment corrected; planted-token fixture added. |
 | **WI-5** | ✅ Done | Period-restore `.periodData` guard now gates on `MenstrualNarrativeRepository.narrativeCount()`. Tests: `SealedBackupRestoreTests` (2). |
 | **WI-6** | ✅ Done | Replaced the `JSONEncoder(.sortedKeys)` signing encoder with `CanonicalSignatureSerializer` — a positional, length-prefixed binary format (fixed big-endian ints, whole-second dates, byte-lexicographic map order) reproducible byte-for-byte off-Apple. Compatibility-safe: envelopes bump to `currentSchemaVersion = 2` (signed v2; `verify` accepts BOTH v1-legacy + v2); admission tokens (no version field) dual-verify new-or-legacy bytes. Legacy `.sortedKeys`/`.iso8601` encoder retained for in-field-peer verify only. Tests: `FernletIdentityEnvelopeTests` (8 new — golden vectors envelope+token, map-order independence, sign/verify-new round-trip, dual-verify legacy+new ×2, tamper-reject ×2). Verified: 33 envelope + 94 proximity/mesh + S3BoundaryTests pass; wall-check exit 0; wall-selftest passes. |
-| **WI-7** | ◑ Partial | **7a done:** `FernletLockCrypto` narrowed `public`→internal (`@testable` for its two test files). **7b deferred:** `TierTwoMemoryRecord.text` is legitimately consumed by the AIContext de-id path (MemoryAgent/AIContextPayload), so neither a grep-wall token nor a visibility narrow is safe without the filtered-projection redesign. |
+| **WI-7** | ✅ Done | **7a:** `FernletLockCrypto` narrowed `public`→internal (`@testable` for its two test files). **7b:** added `TierTwoMemoryRecord` to the `S3BoundaryTests` grep-wall forbidden tokens with a per-file *sanctioned-gate exemption* (`sanctionedGateExemptions["MemoryAgent.swift"] = ["TierTwoMemoryRecord"]`). Verified the only grep-wall-covered file naming the raw type is the `MemoryAgent` de-id gate itself (`AIContextPayload`/`LaunchPreparationService` and the other floor/AI-facing files do **not** name it — `LaunchPreparationService` passes `store.tierTwoMemories` + the de-identified String), so the exemption keeps the gate green while any NEW AI-facing builder reaching a raw `[TierTwoMemoryRecord]` is flagged. The token-scoped exemption can't be used to smuggle a different sealed-store token (e.g. `import PrivateHealthStore` still trips on `MemoryAgent`). No `public→package` narrowing: the walled consumers are *inside* the `FernletKit` package, so `package` gives zero wall benefit and `internal` breaks the legit in-package readers (MemoryAgent, TierTwoMemoryEngine, repositories) + the app. Test: `S3BoundaryTests.tierTwoMemoryRecordTokenIsGatedToMemoryAgentOnly`. |
 | **WI-8** | ✅ Done | `FriendSessionTrustPolicy` revoked/blocked-rejection test added. |
 | **WI-9** | ✅ Done | Marked the ProximityKit wire `Codable` value types, the WI-6 canonical signing serializer, and the pure `IdentityService` crypto statics (`verify`/`fingerprint`/`fingerprintsMatch`) `nonisolated` (+ `Sendable` on the wire types) — so untrusted MCSession bytes decode + signature-verify off the main actor without relying on `.v5` leniency. `verify`/`signed` that touch the `@MainActor` IdentityService/ReplayCache pinned `@MainActor`; `MeshAdmissionToken.verify` (pure) is `nonisolated`. **`.v5` deliberately KEPT:** with the annotations in place a Swift-6 build of ProximityKit reduces to EXACTLY two remaining errors, both in `Ranging/NIRangingSession.swift` (`:87` sending `[NINearbyObject]`, `:98` sending `NISession` across the delegate→`Task{@MainActor}` hop) — the sole `.v5` blocker, documented in `Package.swift` with the clean-fix sketch. Dropping `.v5` needs only those two UWB-delegate bodies reworked; left as a focused follow-up (the UWB hardware-callback path can't be exercised in the simulator). Tests: `ProximityWireOffMainDecodeTests` (5 — compile-time `Sendable` guard + off-main decode/verify of envelope & token, positive + tamper). Verified: Swift-6 re-probe shows only the 2 NIRangingSession errors; `.v5` clean build green; WI-9 + WI-6 + 12 proximity/mesh suites + `S3BoundaryTests` pass; wall-check exit 0; wall-selftest passes. |
 | **WI-10** | ✅ Done | DiaryStore `hooksRewired` assert + `commitResolution` persists created recipes even with no meals. Test: `CommitResolutionPersistenceTests`. |
-| **WI-Q** | ◑ Partial | Done: `goodProteinThreshold` single-sourced on `Macros`; `removePlannedWorkout` delegates to `deletePlannedWorkout`. Deferred (optional): scoring-input marshalling, `batchSnapshotPersistence`/`mutateDay` dup, `setSleep` overloads, `CoreDataHealthKitCacheCleaner` codec fold, `upsertWorkout`. |
+| **WI-Q** | ✅ Resolved | Done: `goodProteinThreshold` single-sourced on `Macros`; `removePlannedWorkout` delegates to `deletePlannedWorkout`; `setSleep` implicit-today now delegates to the explicit-date overload (operation-for-equivalent via `mutateDay(date: todayKey)`). Remaining four examined and **left as-is by design** (each would change behavior or is already deduped — see WI-Q detail): scoring-input marshalling is *intentionally divergent* (facade injects derived-signal `nutrientGaps`, per-day path omits them → unifying alters live + persisted scores); `mutateDay` is already a thin facade delegator and collapsing `batchSnapshotPersistence` only adds a weak-closure hop + wider assert on a hot save path; the `CoreDataHealthKitCacheCleaner` fold would *regress* WI-2 (repo scopes to the "primary" record, has save-latches, per-day rebuilds → biases toward clearing too little on the opt-out path); `upsertWorkout` is a `WorkoutSyncContext` protocol seam called cross-module by `reconcileWorkouts`, not a removable facade duplicate. |
 
 ---
 
@@ -345,6 +345,32 @@ projection exposed to AI rather than raw `.text`; at minimum add `TierTwoMemoryR
 grep-wall tokens (WI-4), scoped so legitimate non-AI uses don't false-positive. Verify "no callers" with a
 build under enforcement after narrowing.
 
+**Resolution (done).** *7a* — `FernletLockCrypto` narrowed `public`→`internal` (`@testable` for its two test
+files); `contentKey()` kept public.
+
+*7b* — implemented as the **grep-wall token + scoped exemption**, not a visibility narrow. The filtered
+boundary projection the plan prefers **already exists and is already the only path used**:
+`MemoryAgent.filteredContext(from:destinedFor:…)` returns a recency/confidence/diagnostic-filtered,
+char-capped **String**, and the sole memory→AI site (`LaunchPreparationService.swift:295`) consumes only that
+String. The remaining gap was purely structural — nothing *stopped* a future AI-facing builder from reaching a
+raw `[TierTwoMemoryRecord]` and reading `.text` itself. A type-system narrow can't close it: both walled
+consumers (`AIProviders`, `CloudKitSync`) are **inside** the `FernletKit` package, so `package` access is
+visible to them (zero wall benefit) and `internal`-to-`FernletDomainModel` would break every legitimate
+in-package reader (`MemoryAgent` in AIContext, `TierTwoMemoryEngine` in LocalPersistence, the repositories) plus
+the app target. So the grep-wall is the correct mechanism. Changes (test-only, no app/library code):
+- Added `"TierTwoMemoryRecord"` to `S3BoundaryTests.forbiddenPrivateStoreTokens`.
+- Added `sanctionedGateExemptions: [String: Set<String>] = ["MemoryAgent.swift": ["TierTwoMemoryRecord"]]` and
+  applied it in the scan loop — the gate may name the raw type it gates on; **every other** forbidden token
+  still applies to it (it still can't `import PrivateHealthStore`).
+- Empirically verified the *only* grep-wall-covered file naming the raw type is `MemoryAgent.swift`
+  (`AIContextPayload`/`AIAuditLog`/`FoundationFoodSelection`/`LaunchPreparationService`/`FoundationDishDecomposition`/`FoodProductWebImporter`
+  and the AIProviders module do **not** name it). `tierTwoMemories` (the accessor) was deliberately **not**
+  tokenized — it would false-positive on the sanctioned `LaunchPreparationService` caller. `.text` was not
+  tokenized either (far too noisy — SwiftUI `.text`, etc.).
+- New test `S3BoundaryTests.tierTwoMemoryRecordTokenIsGatedToMemoryAgentOnly` pins all four properties: the
+  matcher flags the raw type, the gate exemption clears it for `MemoryAgent` only, any other file is still
+  flagged, and the exemption can't smuggle a different sealed-store token.
+
 ---
 
 ### WI-8 — [P2/LOW] Pin `FriendSessionTrustPolicy` blanket-trust with a test
@@ -430,20 +456,44 @@ choices:
 
 ### WI-Q — [P3] Quality / duplication cluster (non-security; optional)
 
-Real maintenance hazards, no wall/security impact. De-dup as noted:
-- `goodProteinThreshold = 25` copied 4× (`DiaryStore.swift:43` + MealBuilder + facade + a FoodView literal) —
-  single source of truth.
-- Scoring-input marshalling built in two modules (`DiaryStore.swift:123` vs the facade live-score path) —
-  extract one builder.
-- `batchSnapshotPersistence`/`mutateDay` duplicated in facade + `DiaryStore` (`:810`).
-- `removePlannedWorkout` byte-identical to `deletePlannedWorkout` (`DiaryStore.swift:399-413`) — have one call
-  the other.
-- Two `setSleep` overloads duplicate construction/trimming (`DiaryStore.swift:470`) — implicit-today delegates
-  to explicit-date.
-- `CoreDataHealthKitCacheCleaner.swift:253` hand-rolls a JSON codec + record load/mutate/save loop the
-  repository layer already encapsulates — fold onto the repo (also de-risks WI-2's clearing correctness).
-- `upsertWorkout` redundant facade entry point (`FernletStore.swift:1384`) — `addWorkout`'s
-  `healthKitUUID != nil` guard already suppresses the HK re-save.
+Real maintenance hazards, no wall/security impact. **Disposition after item-by-item equivalence analysis**
+(line numbers below are the original plan's; the cluster was re-located against current HEAD):
+- ✅ **Done** — `goodProteinThreshold = 25` copied 4× (`DiaryStore.swift:43` + MealBuilder + facade + a FoodView
+  literal) → single source of truth on `Macros.goodProteinThreshold`.
+- ✅ **Done** — Two `setSleep` overloads duplicated construction/trimming (`DiaryStore.swift:470`). The
+  implicit-today overload now delegates to the explicit-date one: `setSleep(…, date: todayKey)`. Equivalent
+  because `mutateDay(date: todayKey)` takes the today-key branch (`day.sleep = …; scheduleSnapshotSave()`) —
+  operation-for-operation identical to the old inline body, same trim, same single save. (A `date = todayKey`
+  default param is impossible: Swift default-arg expressions can't reference `self`.)
+- ✅ **Done** — `removePlannedWorkout` byte-identical to `deletePlannedWorkout` → delegates.
+- ⛔ **Left as-is (would change behavior)** — Scoring-input marshalling in two modules
+  (`DiaryStore.scoreBreakdown(for:)` vs the facade live-`score` path). **Not** true duplication: the facade path
+  passes `nutrientGaps: dedupedNutrientGaps(from: derivedSignals…)`; the per-day path deliberately omits them
+  (defaults `[]`). `computeBreakdown` applies a `micronutrientModifier` from those gaps (up to ±~0.05 on the meal
+  sub-score). Any single builder forces one side to gain/lose the modifier → changes the **live home-screen
+  score** or the **persisted `DailyHealthScore`** history. Divergence is intentional and documented at
+  `DiaryStore.swift` (the live `score`/`companionState` stay facade-side because they read `derivedSignals`,
+  owned by the facade's snapshot-wired `DerivedSignalsService`). No security value; do not unify.
+- ⛔ **Left as-is (already deduped / net-negative)** — `batchSnapshotPersistence`/`mutateDay`. `mutateDay` is
+  *already* a one-line facade delegator to the single body in `DiaryStore` — nothing to collapse. The
+  `batchSnapshotPersistence` pair is a deliberate 4-line facade seam (direct `snapshotSaveCoordinator.schedule()`
+  vs the DiaryStore copy's `scheduleSnapshotSaveHook` weak-closure hop + `hooksRewired` assert); collapsing it
+  saves ~3 lines while adding a weak hop + wider assert surface on a hot save path, for zero gain.
+- ⛔ **Left as-is (would regress WI-2)** — `CoreDataHealthKitCacheCleaner` load/mutate/save loop. Folding onto
+  `CoreDataFernletRepository.loadAllDays`/`updateDay` is **not** equivalence-safe on the fail-closed clearing
+  path: the repo routes through `fetchRecordResult` (scopes to `recordID == "primary"`, **deletes** rather than
+  scrubs duplicates), enforces read-only save-latches that would silently refuse the purge (and the cleaner
+  ignores the `Bool`), runs per-day `rebuildDerivedTables` (re-runs inference N× + bumps `updatedAt`), and is
+  store-selection-dependent. Each biases toward clearing **too little** of opted-out clinical data — the exact
+  property WI-2 depends on. (The codec premise is moot: the cleaner's `JSONEncoder([.sortedKeys], .iso8601)` is
+  already byte-identical to the repo's; only the codec *factory* is safely shareable and it's low-value.) The
+  cleaner's all-records, latch-free, single-store, single-rebuild scrub is the correctness behavior — leave it.
+- ⛔ **Left as-is (premise stale)** — `upsertWorkout` is **not** a redundant facade entry point: it's a
+  `WorkoutSyncContext` protocol requirement (`HealthKitGateway/WorkoutHealthKitSync.swift:12`), implemented at
+  `FernletStore.swift` and called only by `reconcileWorkouts` across the module wall — which **cannot** reach
+  the app-target `addWorkout`. It also routes to the pure `diary.appendWorkout` *without depending on*
+  `addWorkout`'s nil-UUID guard (NOTE J), a stronger guarantee than the guard. Removing/repointing it is a
+  compile break + a behavior change. Leave as-is.
 
 ---
 

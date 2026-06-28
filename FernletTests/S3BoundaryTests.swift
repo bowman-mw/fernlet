@@ -58,10 +58,29 @@ struct S3BoundaryTests {
         "CyclePhase", "CycleDayEntry", "UserLoggedCycleEvent", "PeriodTrackerStore",
         // Sealed media stores + the pending-narrative buffer/payload.
         "PrivateMediaStore", "MealPhotoStore", "PendingNarrativeBuffer", "PendingNarrativePayload",
+        // Raw tier-two behavioral memory record (WI-7b). `TierTwoMemoryRecord` lives in
+        // `FernletDomainModel`, a direct dependency of BOTH walled consumers — so the compiler wall
+        // cannot keep it out of an AI prompt builder. AI may only receive `MemoryAgent`'s de-identified
+        // String projection (recency/confidence/diagnostic-filtered + char-capped), never the raw
+        // record. Naming the type in any AI-facing file OTHER than the sanctioned `MemoryAgent` gate
+        // (see `sanctionedGateExemptions`) means a builder reached past that boundary.
+        "TierTwoMemoryRecord",
         // Any direct import of a sealed module — the highest-value check: it fails a reach into a
         // sealed store regardless of which type is named.
         "import PrivateHealthStore", "import PrivateMemoryStore",
         "import PrivateMediaStore", "import PrivateStoreCore"
+    ]
+
+    /// Per-file token exemptions for the *sanctioned* de-identification gate(s). A gate is allowed to
+    /// name the raw type it gates on — that is its entire job — while every OTHER forbidden token stays
+    /// enforced for that file (so the gate still cannot, e.g., `import PrivateHealthStore`).
+    ///
+    /// `MemoryAgent` is the sole sanctioned reader of raw `TierTwoMemoryRecord`s: `filteredContext`
+    /// projects them down to a recency/confidence/diagnostic-filtered, char-capped String before any
+    /// prompt sees them. Exempting only the `TierTwoMemoryRecord` token here keeps the gate green while
+    /// still flagging any NEW AI-facing file that reaches the raw record directly.
+    private static let sanctionedGateExemptions: [String: Set<String>] = [
+        "MemoryAgent.swift": ["TierTwoMemoryRecord"]
     ]
 
     @Test func aiFacingSourcesCannotReachRawPrivateStoreTypes() throws {
@@ -94,11 +113,14 @@ struct S3BoundaryTests {
         // Discovery must never collapse to empty (a broken root would otherwise pass vacuously).
         #expect(!covered.isEmpty, "S3 grep-wall discovered zero AI-facing files — discovery is broken.")
 
-        // 3) Scan every covered file for forbidden sealed-store tokens.
+        // 3) Scan every covered file for forbidden sealed-store tokens, minus any token the file is the
+        //    sanctioned gate for (e.g. MemoryAgent may name TierTwoMemoryRecord — every OTHER token still
+        //    applies to it).
         for url in covered.values.sorted(by: { $0.path < $1.path }) {
             let source = try String(contentsOf: url, encoding: .utf8)
             let name = url.lastPathComponent
-            let hits = Self.forbiddenTokens(in: source)
+            let exempt = Self.sanctionedGateExemptions[name] ?? []
+            let hits = Self.forbiddenTokens(in: source).filter { !exempt.contains($0) }
             #expect(
                 hits.isEmpty,
                 "\(name) must consume typed, de-identified AIContext payloads, not sealed-store token(s) \(hits)"
@@ -132,6 +154,31 @@ struct S3BoundaryTests {
         }
         """
         #expect(S3BoundaryTests.forbiddenTokens(in: clean).isEmpty)
+    }
+
+    /// WI-7b: the raw `TierTwoMemoryRecord` is a forbidden token, and the sanctioned-gate exemption is
+    /// scoped to exactly `MemoryAgent.swift` + exactly that token — so the de-identification gate stays
+    /// green while any OTHER AI-facing file reaching the raw record is flagged, and the gate cannot use
+    /// the exemption to smuggle a different sealed-store token.
+    @Test func tierTwoMemoryRecordTokenIsGatedToMemoryAgentOnly() {
+        let names = "func filteredContext(from m: [TierTwoMemoryRecord]) -> String { \"\" }"
+
+        // The pure matcher flags the raw record type.
+        #expect(S3BoundaryTests.forbiddenTokens(in: names).contains("TierTwoMemoryRecord"))
+
+        // The sanctioned gate (MemoryAgent) is exempted for that one token -> clean.
+        func hits(_ source: String, file: String) -> [String] {
+            let exempt = S3BoundaryTests.sanctionedGateExemptions[file] ?? []
+            return S3BoundaryTests.forbiddenTokens(in: source).filter { !exempt.contains($0) }
+        }
+        #expect(hits(names, file: "MemoryAgent.swift").isEmpty)
+
+        // Any OTHER AI-facing file naming the raw record is still a wall breach.
+        #expect(hits(names, file: "SomeFuturePromptBuilder.swift").contains("TierTwoMemoryRecord"))
+
+        // The exemption is token-scoped: it does NOT let the gate reach a different sealed store.
+        let leakyGate = "import PrivateHealthStore\nfunc f(_ m: [TierTwoMemoryRecord]) {}"
+        #expect(hits(leakyGate, file: "MemoryAgent.swift").contains("import PrivateHealthStore"))
     }
 
     /// The forbidden sealed-store tokens present in `source`. Pure + testable.

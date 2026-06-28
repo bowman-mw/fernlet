@@ -481,8 +481,11 @@ public final class DiaryStore {
     // MARK: - Sleep / hydration / hygiene / care
 
     public func setSleep(hours: Double?, quality: SleepQuality, note: String) {
-        day.sleep = SleepLog(hours: hours, quality: quality, note: note.trimmingCharacters(in: .whitespacesAndNewlines))
-        scheduleSnapshotSave()
+        // Delegate to the explicit-date overload (the single owner of SleepLog construction/trim).
+        // mutateDay(date: todayKey) takes the today-key branch — `day.sleep = …; scheduleSnapshotSave()`
+        // — which is operation-for-operation identical to the old inline body. (A `date: String = todayKey`
+        // default is impossible: Swift default-arg expressions can't reference `self`.)
+        setSleep(hours: hours, quality: quality, note: note, date: todayKey)
     }
 
     public func addBottle() {
