@@ -40,7 +40,6 @@ public final class DiaryStore {
     public var dailyScores: [DailyHealthScore]
     public var companionThought: String?
 
-    static let goodProteinThreshold = 25
     @ObservationIgnored public let todayKey: String
     @ObservationIgnored public let repository: FernletRepository
     @ObservationIgnored public let foodCatalog: FoodCatalog
@@ -357,7 +356,7 @@ public final class DiaryStore {
             macros: foodItem.macros,
             micronutrientSnapshot: foodItem.micronutrients,
             mealSource: .manual,
-            quality: foodItem.macros.protein >= Self.goodProteinThreshold ? .good : .ok,
+            quality: foodItem.macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
             confidence: "Saved product",
             note: "Logged from saved product.",
             source: MealLogSource.webImport
@@ -421,11 +420,9 @@ public final class DiaryStore {
 
     /// Removes a planned workout after it has been completed. The facade's
     /// `completePlannedWorkout` runs the HK-side `addWorkout` then calls this to clear the plan.
+    /// Identical to `deletePlannedWorkout` (the distinction is intent, not behaviour) — delegate.
     public func removePlannedWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
-        assert(!date.isEmpty, "planned workout date required")
-        mutateDay(date: date) { day in
-            day.plannedWorkouts.removeAll { $0.id == plannedWorkout.id }
-        }
+        deletePlannedWorkout(plannedWorkout, date: date)
     }
 
     public func setWorkoutProfile(_ profile: WorkoutProfile) {

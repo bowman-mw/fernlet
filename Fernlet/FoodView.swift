@@ -1871,7 +1871,7 @@ private struct EditableReviewMeal: Identifiable {
         }
         meal.isAIFallback = false
         meal.confidence = "Reviewed"
-        meal.quality = meal.macros.protein >= 25 ? .good : .ok // mirrors MealBuilder.goodProteinThreshold
+        meal.quality = meal.macros.protein >= Macros.goodProteinThreshold ? .good : .ok
         return meal
     }
 }

@@ -536,10 +536,9 @@ final class FernletStore {
         }
     }
 
-    // NOTE (deviation): updateMealCorrection + its two static helpers + goodProteinThreshold STAY
-    // IN THE FACADE because they use the app-target `MealBuilder`. (Classification had MealBuilder
-    // as portable/FoodCatalog; it is not — its carve is future work.)
-    private static let goodProteinThreshold = 25
+    // NOTE (deviation): updateMealCorrection + its two static helpers STAY IN THE FACADE because they
+    // use the app-target `MealBuilder`. (Classification had MealBuilder as portable/FoodCatalog; it is
+    // not — its carve is future work.) The protein threshold itself is `Macros.goodProteinThreshold`.
 
     func updateMealCorrection(
         mealID: UUID,
@@ -620,7 +619,7 @@ final class FernletStore {
         }
         meal.confidence = "Corrected"
         meal.isAIFallback = false
-        meal.quality = macros.protein >= Self.goodProteinThreshold ? .good : .ok
+        meal.quality = macros.protein >= Macros.goodProteinThreshold ? .good : .ok
     }
 
     func attachMealPhoto(mealID: UUID, photoID: UUID) {
