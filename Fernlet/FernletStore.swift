@@ -176,7 +176,8 @@ final class FernletStore {
         // built so the closures can capture `self` weakly without an initialization-order cycle.)
         self.diary.rewireHooks(
             scheduleSnapshotSave: { [weak self] in self?.snapshotSaveCoordinator.schedule() },
-            periodAdjustment: { [weak self] key in self?.periodAdjustment(for: key) ?? .none }
+            periodAdjustment: { [weak self] key in self?.periodAdjustment(for: key) ?? .none },
+            sealedJournalIDs: { [weak self] in self?.journalSealingCoordinator.sealedJournalIDs ?? [] }
         )
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -214,7 +215,8 @@ final class FernletStore {
         )
         self.diary.rewireHooks(
             scheduleSnapshotSave: { [weak self] in self?.snapshotSaveCoordinator.schedule() },
-            periodAdjustment: { [weak self] key in self?.periodAdjustment(for: key) ?? .none }
+            periodAdjustment: { [weak self] key in self?.periodAdjustment(for: key) ?? .none },
+            sealedJournalIDs: { [weak self] in self?.journalSealingCoordinator.sealedJournalIDs ?? [] }
         )
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }

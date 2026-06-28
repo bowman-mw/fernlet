@@ -46,6 +46,11 @@ public final class DiaryStore {
     @ObservationIgnored public let foodCatalog: FoodCatalog
     @ObservationIgnored private var scheduleSnapshotSaveHook: () -> Void
     @ObservationIgnored private var periodAdjustmentHook: (String) -> PeriodScoringAdjustment
+    /// Facade-supplied set of journal-entry ids whose plaintext is sealed in the encrypted narrative
+    /// store. Read by `mutatePastDay` to strip sealed text before a past-day write reaches the
+    /// (potentially iCloud-synced) repository — the past-day analogue of `FernletSnapshot.forStorage`.
+    /// Defaults to empty for the brief init→rewireHooks window (no past-day writes happen there).
+    @ObservationIgnored private var sealedJournalIDsHook: () -> Set<UUID> = { [] }
 
     /// Invokes the facade-supplied snapshot-save hook. Replaces every former
     /// `snapshotSaveCoordinator.schedule()` call in the carved methods.
@@ -60,10 +65,12 @@ public final class DiaryStore {
     /// them after the DiaryStore (which it stores in a `let`) exists — avoiding an init-order cycle.
     public func rewireHooks(
         scheduleSnapshotSave: @escaping () -> Void,
-        periodAdjustment: @escaping (String) -> PeriodScoringAdjustment
+        periodAdjustment: @escaping (String) -> PeriodScoringAdjustment,
+        sealedJournalIDs: @escaping () -> Set<UUID>
     ) {
         self.scheduleSnapshotSaveHook = scheduleSnapshotSave
         self.periodAdjustmentHook = periodAdjustment
+        self.sealedJournalIDsHook = sealedJournalIDs
     }
 
     public init(
@@ -799,6 +806,17 @@ public final class DiaryStore {
         assert(!dateKey.isEmpty, "date key required")
         var targetDay = repository.loadDay(for: dateKey, todayKey: todayKey)
         mutate(&targetDay)
+        // S3 privacy wall: a past-day write goes straight to the repository with NO forStorage pass,
+        // so strip sealed journal text here (mirrors FernletSnapshot.forStorage). The plaintext already
+        // lives in the encrypted narrative store; it must never reach the (iCloud-synced) blob. This
+        // covers EVERY past-day mutation — journal add/edit and any unrelated edit to a day that holds a
+        // sealed journal — and self-heals legacy plaintext as past days are touched. Past-day reads
+        // re-hydrate via loadDayWithDecryptedJournals; unsealed entries (ids absent from the set) keep
+        // their text, matching forStorage's behaviour and the no-data-loss path for failed seals.
+        let sealedIDs = sealedJournalIDsHook()
+        if !sealedIDs.isEmpty {
+            targetDay.journals = targetDay.journals.map { $0.strippedIfSealed(in: sealedIDs) }
+        }
         let saved = repository.updateDay(targetDay, for: dateKey, todayKey: todayKey)
         assert(saved, "past-date save failed for \(dateKey)")
         return saved

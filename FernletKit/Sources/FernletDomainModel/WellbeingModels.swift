@@ -224,6 +224,18 @@ public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
         date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
         emotions = try c.decodeIfPresent([String].self, forKey: .emotions) ?? []
     }
+
+    /// Returns a copy with `text` + `emotions` cleared when this entry's `id` is in `sealedIDs`
+    /// (its plaintext lives in the encrypted narrative store); otherwise returns `self` unchanged.
+    ///
+    /// The single definition of "strip a sealed journal entry before it is persisted to the
+    /// (potentially iCloud-synced) blob" — shared by `FernletSnapshot.forStorage` (the today/snapshot
+    /// path) and `DiaryStore.mutatePastDay` (the past-day write path) so sealed journal text can never
+    /// reach the synced store regardless of which save path runs (the S3 privacy wall).
+    public func strippedIfSealed(in sealedIDs: Set<UUID>) -> JournalEntry {
+        guard sealedIDs.contains(id) else { return self }
+        return JournalEntry(id: id, text: "", tag: tag, date: date, emotions: [])
+    }
 }
 
 public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable {
