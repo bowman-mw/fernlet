@@ -158,4 +158,65 @@ struct SealedBackupRestoreTests {
             try store.applyRestoredPayload(data, payloadType: .periodData)
         }
     }
+
+    // MARK: - Period no-clobber guard consults the narrative store (WI-5)
+
+    /// WI-5 (Docs/Security-Hardening-Plan-2026-06-27.md): the period-data no-clobber guard previously
+    /// only checked the days/memory caches (`isFreshInstallForRestore`), never the separate sealed
+    /// narrative store. Period narratives live in PrivateHealthStore and are written independently, so a
+    /// device could hold N sealed narratives while still looking "fresh", and restore (insert-only, run
+    /// every launch) duplicated that history. The guard now also gates on the narrative count.
+    @MainActor
+    @Test func applyRestoredPeriodDoesNotDuplicateOnSecondRestore() throws {
+        let store = makeTestStore()                         // fresh by the day/memory checks
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)       // unlock so the period insert path has a key
+
+        // One in-memory narrative store shared across both restores (mirrors production's shared store).
+        let narrativeRepository = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext
+        )
+        let data = try JSONEncoder().encode([
+            MenstrualNarrative(hkExternalUUID: "uuid-1", dateKey: "2026-06-01", note: "Cramps.", symptomFlags: []),
+            MenstrualNarrative(hkExternalUUID: "uuid-2", dateKey: "2026-06-02", note: "Better.", symptomFlags: [])
+        ])
+
+        // First restore into an empty narrative store succeeds.
+        let first = try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
+        #expect(first == 2)
+        #expect(try narrativeRepository.narrativeCount() == 2)
+
+        // Second restore is refused — the narrative store already holds sealed history. No duplication.
+        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
+            try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
+        }
+        #expect(try narrativeRepository.narrativeCount() == 2)
+    }
+
+    /// The exact bug scenario: the device looks "fresh" (no logged days/memories) but the separate
+    /// narrative store was already seeded locally (as PeriodTrackerStore.logEvent would). A restore must
+    /// be refused rather than duplicating/clobbering that sealed history.
+    @MainActor
+    @Test func applyRestoredPeriodRefusedWhenNarrativeStorePreSeeded() throws {
+        let store = makeTestStore()
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        let narrativeRepository = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext
+        )
+        try narrativeRepository.insert(
+            MenstrualNarrative(hkExternalUUID: "local-1", dateKey: "2026-05-20", note: "Logged locally.", symptomFlags: []),
+            contentKey: key
+        )
+        #expect(try narrativeRepository.narrativeCount() == 1)
+
+        let data = try JSONEncoder().encode([
+            MenstrualNarrative(hkExternalUUID: "backup-1", dateKey: "2026-06-01", note: "From backup.", symptomFlags: [])
+        ])
+        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
+            try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
+        }
+        #expect(try narrativeRepository.narrativeCount() == 1)   // unchanged
+    }
 }

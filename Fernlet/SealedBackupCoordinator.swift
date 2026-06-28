@@ -126,7 +126,7 @@ final class SealedBackupCoordinator {
     /// occurs — all of which are safe to retry on a later launch.
     @discardableResult
     func restoreSealedBackup(payloadType: SealedBackupPayloadType) async -> Bool {
-        guard isEmptyStoreForRestore(payloadType: payloadType) else {
+        guard isEmptyStoreForRestore(payloadType: payloadType, narrativeRepository: MenstrualNarrativeRepository()) else {
             FernletAuditLog.log("sealedBackup.restoreSkippedNonEmpty", context: ["payload": payloadType.rawValue])
             return false
         }
@@ -182,15 +182,17 @@ final class SealedBackupCoordinator {
         payloadType: SealedBackupPayloadType,
         narrativeRepository: MenstrualNarrativeRepository? = nil
     ) throws -> Int {
+        // Constructed here rather than as a default argument: `MenstrualNarrativeRepository` is
+        // MainActor-isolated, and default-argument expressions evaluate in a nonisolated context.
+        // Resolved BEFORE the guard so the no-clobber check and the inserts consult the SAME store
+        // (the period-data guard now reads this repository's narrative count).
+        let narrativeRepository = narrativeRepository ?? MenstrualNarrativeRepository()
         // No-clobber guard: refuse to overwrite/insert into a store that already holds user data,
         // regardless of how this method was reached.
-        guard isEmptyStoreForRestore(payloadType: payloadType) else {
+        guard isEmptyStoreForRestore(payloadType: payloadType, narrativeRepository: narrativeRepository) else {
             FernletAuditLog.log("sealedBackup.applySkippedNonEmpty", context: ["payload": payloadType.rawValue])
             throw SealedBackupWiringError.storeNotEmpty
         }
-        // Constructed here rather than as a default argument: `MenstrualNarrativeRepository` is
-        // MainActor-isolated, and default-argument expressions evaluate in a nonisolated context.
-        let narrativeRepository = narrativeRepository ?? MenstrualNarrativeRepository()
         switch payloadType {
         case .sensitiveNotes:
             var records: [TierTwoMemoryRecord] = []
@@ -220,12 +222,24 @@ final class SealedBackupCoordinator {
 
     /// Whether the local store is empty enough that restoring `payloadType` cannot clobber or
     /// duplicate existing user data. Requires a fresh install for all payloads; sensitive-notes
-    /// additionally requires the (overwrite-style) Tier-2 store to be empty.
-    private func isEmptyStoreForRestore(payloadType: SealedBackupPayloadType) -> Bool {
+    /// additionally requires the (overwrite-style) Tier-2 store to be empty, and period-data the
+    /// sealed narrative store to be empty.
+    private func isEmptyStoreForRestore(
+        payloadType: SealedBackupPayloadType,
+        narrativeRepository: MenstrualNarrativeRepository
+    ) -> Bool {
         guard isFreshInstallForRestore() else { return false }
         switch payloadType {
-        case .sensitiveNotes: return host.tierTwoMemories.isEmpty
-        case .periodData: return true
+        case .sensitiveNotes:
+            return host.tierTwoMemories.isEmpty
+        case .periodData:
+            // Period narratives live in the separate PrivateHealthStore and are written independently of
+            // the days blob (PeriodTrackerStore.logEvent), so a device can hold sealed cycle/intimacy
+            // history while still looking "fresh" by the day/memory checks above. Restore inserts with no
+            // upsert and runs every launch, so gate on the narrative store itself (a cheap count, no
+            // decryption) — otherwise a re-restore duplicates that history. A count error fails closed
+            // (treated as non-empty → skip), which is safe to retry next launch.
+            return (try? narrativeRepository.narrativeCount()) == 0
         }
     }
 
