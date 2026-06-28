@@ -86,7 +86,7 @@ public final class SavedRecipeService {
             micronutrientSnapshot: recipe.webImport?.micronutrients ?? Micronutrients(),
             mealSource: .recipe,
             isAIFallback: false,
-            quality: macros.protein >= 25 ? .good : .ok,
+            quality: macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
             confidence: hasMacros ? "Recipe" : "Recipe (no macros)",
             note: hasMacros ? "Logged from URL recipe." : "Logged from URL recipe. Macros not available.",
             source: MealLogSource.webImport

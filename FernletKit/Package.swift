@@ -129,8 +129,8 @@ let package = Package(
         // (JournalNarrativeRepository). NONisolated (plain final class; its CoreData
         // performAndWait closures run nonisolated under strict concurrency). Note: the
         // memory "gatekeeper" MemoryAgent + the AIAuditLog sink are NOT here — they are
-        // pure, AI-facing control plane (every AI provider calls them) and live in
-        // FernletDomainModel, so placing them in this sealed module would have been an
+        // pure, AI-facing control plane (every AI provider calls them) and live in the
+        // AIContext module, so placing them in this sealed module would have been an
         // AIProviders -> Private* wall violation.
         .target(
             name: "PrivateMemoryStore",
