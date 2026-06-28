@@ -508,6 +508,10 @@ final class FernletStore {
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "meal date required")
         for newRecipe in resolution.createdRecipes { diary.recipes.insert(newRecipe, at: 0) }
+        // `diary.recipes.insert` is a raw array mutation with NO save; `appendMeal` below schedules one,
+        // so created recipes ride along whenever there are meals. A resolution with created recipes but
+        // NO meals would otherwise lose them on the next reload — persist explicitly when recipes were added.
+        if !resolution.createdRecipes.isEmpty { scheduleSnapshotSave() }
         resolution.meals.forEach { diary.appendMeal($0, date: targetDate) }
         if resolution.isFallback {
             resolution.meals.forEach { queueMealRetry($0, dayKey: targetDate) }

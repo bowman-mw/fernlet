@@ -51,10 +51,18 @@ public final class DiaryStore {
     /// (potentially iCloud-synced) repository — the past-day analogue of `FernletSnapshot.forStorage`.
     /// Defaults to empty for the brief init→rewireHooks window (no past-day writes happen there).
     @ObservationIgnored private var sealedJournalIDsHook: () -> Set<UUID> = { [] }
+    /// Set true by `rewireHooks` once the facade wires the real persistence/period/sealed closures over
+    /// the `{ }`/`.none` init placeholders. `scheduleSnapshotSave()` asserts on it so a future
+    /// constructor that copies the build-then-rewire pattern but forgets to rewire trips loudly in
+    /// debug/test instead of silently dropping every save.
+    @ObservationIgnored private var hooksRewired = false
 
     /// Invokes the facade-supplied snapshot-save hook. Replaces every former
     /// `snapshotSaveCoordinator.schedule()` call in the carved methods.
-    func scheduleSnapshotSave() { scheduleSnapshotSaveHook() }
+    func scheduleSnapshotSave() {
+        assert(hooksRewired, "DiaryStore mutated before rewireHooks() — the persistence hook is still the init placeholder, so this save would be silently dropped. Call rewireHooks() right after construction.")
+        scheduleSnapshotSaveHook()
+    }
 
     /// Invokes the facade-supplied period-adjustment gate. Replaces the former inline
     /// `periodAdjustment(for:)` body that read the facade-only `PeriodContextBridge`.
@@ -71,6 +79,7 @@ public final class DiaryStore {
         self.scheduleSnapshotSaveHook = scheduleSnapshotSave
         self.periodAdjustmentHook = periodAdjustment
         self.sealedJournalIDsHook = sealedJournalIDs
+        self.hooksRewired = true
     }
 
     public init(
