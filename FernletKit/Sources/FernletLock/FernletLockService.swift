@@ -120,16 +120,20 @@ public struct UnlockResult {
 
 // MARK: - Cryptographic primitives
 
-public enum FernletLockCrypto {
-    nonisolated public static let scryptN: Int = 65536
-    nonisolated public static let scryptR: Int = 8
-    nonisolated public static let scryptP: Int = 1
-    nonisolated public static let keyLength: Int = 32
-    nonisolated public static let saltLength: Int = 16
-    nonisolated public static let aeadNonceLength: Int = 12
-    nonisolated public static let aeadTagLength: Int = 16
+/// Narrowed from `public` to module-internal (WI-7, Docs/Security-Hardening-Plan-2026-06-27.md): these
+/// key-wrapping/derivation primitives have no callers outside the FernletLock module (only its own
+/// provider/service and the crypto unit tests, which `@testable import FernletLock`). Least privilege
+/// keeps the lock's raw crypto off the package's public API surface.
+enum FernletLockCrypto {
+    nonisolated static let scryptN: Int = 65536
+    nonisolated static let scryptR: Int = 8
+    nonisolated static let scryptP: Int = 1
+    nonisolated static let keyLength: Int = 32
+    nonisolated static let saltLength: Int = 16
+    nonisolated static let aeadNonceLength: Int = 12
+    nonisolated static let aeadTagLength: Int = 16
 
-    nonisolated public static func deriveVerifier(passcode: String, salt: Data, n: Int = scryptN) async throws -> Data {
+    nonisolated static func deriveVerifier(passcode: String, salt: Data, n: Int = scryptN) async throws -> Data {
         let password = Array(passcode.utf8)
         let saltBytes = Array(salt)
         let dkLen = keyLength
@@ -149,7 +153,7 @@ public enum FernletLockCrypto {
         }.value
     }
 
-    nonisolated public static func generateSalt() throws -> Data {
+    nonisolated static func generateSalt() throws -> Data {
         var bytes = [UInt8](repeating: 0, count: saltLength)
         guard SecRandomCopyBytes(kSecRandomDefault, saltLength, &bytes) == errSecSuccess else {
             throw FernletLockError.internalError("salt generation failed")
@@ -157,23 +161,23 @@ public enum FernletLockCrypto {
         return Data(bytes)
     }
 
-    nonisolated public static func generateContentKey() -> Data {
+    nonisolated static func generateContentKey() -> Data {
         let key = SymmetricKey(size: .bits256)
         return key.withUnsafeBytes { Data($0) }
     }
 
-    nonisolated public static func wrapContentKey(_ contentKey: Data, using wrappingKeyData: Data) throws -> Data {
+    nonisolated static func wrapContentKey(_ contentKey: Data, using wrappingKeyData: Data) throws -> Data {
         let wrappingKey = SymmetricKey(data: wrappingKeyData)
         return try ChaChaPoly.seal(contentKey, using: wrappingKey).combined
     }
 
-    nonisolated public static func unwrapContentKey(_ wrappedContentKey: Data, using wrappingKeyData: Data) throws -> Data {
+    nonisolated static func unwrapContentKey(_ wrappedContentKey: Data, using wrappingKeyData: Data) throws -> Data {
         let wrappingKey = SymmetricKey(data: wrappingKeyData)
         let sealedBox = try ChaChaPoly.SealedBox(combined: wrappedContentKey)
         return try ChaChaPoly.open(sealedBox, using: wrappingKey)
     }
 
-    nonisolated public static func deriveColumnKey(contentKey: Data, info: String, outputByteCount: Int) -> Data {
+    nonisolated static func deriveColumnKey(contentKey: Data, info: String, outputByteCount: Int) -> Data {
         let inputKey = SymmetricKey(data: contentKey)
         let derivedKey = HKDF<SHA256>.deriveKey(
             inputKeyMaterial: inputKey,

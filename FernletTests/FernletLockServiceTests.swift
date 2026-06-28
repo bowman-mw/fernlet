@@ -5,7 +5,7 @@ import Security
 import Testing
 import FernletDomainModel
 import PrivateStoreCore
-import FernletLock
+@testable import FernletLock
 @testable import Fernlet
 
 // Cooldown tests use constructor-injected FernletDateProviding so restart behavior and exact deadlines
