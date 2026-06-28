@@ -61,6 +61,33 @@ func makeTestStoreWithRepositories(
     return (store, repository, journalNarrativeRepository)
 }
 
+/// Builds a fresh FernletStore (new in-memory coordinator → empty `sealedJournalIDs`) over an
+/// EXISTING days repository + sealed narrative store, simulating a brand-new app session that
+/// reads/writes the same persisted blob and sealed store. Used to reproduce the "entry sealed in a
+/// prior session, then edited after it aged out of the in-memory sealed-id set" path (F1 regression).
+@MainActor
+func makeStoreSharingStores(
+    date: Date = .now,
+    repository: CoreDataFernletRepository,
+    narratives: JournalNarrativeRepository
+) -> FernletStore {
+    let legacyURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension("json")
+    // A throwaway saved-recipe store (recipes are irrelevant to the journal-sealing path).
+    let savedRecipeRepository = SavedRecipeRepository(
+        controller: PersistenceController(inMemory: true),
+        legacyRepository: LegacySavedRecipeJSONRepository(fileURL: legacyURL)
+    )
+    return FernletStore(
+        date: date,
+        repository: repository,
+        savedRecipeRepository: savedRecipeRepository,
+        journalNarrativeRepository: narratives,
+        foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([]))
+    )
+}
+
 /// Creates a FernletStore pre-populated with N meals, a journal entry,
 /// sleep data, and 3 water bottles.
 @MainActor

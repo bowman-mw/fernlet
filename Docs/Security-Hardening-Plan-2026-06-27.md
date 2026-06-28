@@ -87,7 +87,7 @@ each want a regression test; WI-6 and WI-9 are larger/architectural — scope th
 | **WI-6** | ✅ Done | Replaced the `JSONEncoder(.sortedKeys)` signing encoder with `CanonicalSignatureSerializer` — a positional, length-prefixed binary format (fixed big-endian ints, whole-second dates, byte-lexicographic map order) reproducible byte-for-byte off-Apple. Compatibility-safe: envelopes bump to `currentSchemaVersion = 2` (signed v2; `verify` accepts BOTH v1-legacy + v2); admission tokens (no version field) dual-verify new-or-legacy bytes. Legacy `.sortedKeys`/`.iso8601` encoder retained for in-field-peer verify only. Tests: `FernletIdentityEnvelopeTests` (8 new — golden vectors envelope+token, map-order independence, sign/verify-new round-trip, dual-verify legacy+new ×2, tamper-reject ×2). Verified: 33 envelope + 94 proximity/mesh + S3BoundaryTests pass; wall-check exit 0; wall-selftest passes. |
 | **WI-7** | ✅ Done | **7a:** `FernletLockCrypto` narrowed `public`→internal (`@testable` for its two test files). **7b:** added `TierTwoMemoryRecord` to the `S3BoundaryTests` grep-wall forbidden tokens with a per-file *sanctioned-gate exemption* (`sanctionedGateExemptions["MemoryAgent.swift"] = ["TierTwoMemoryRecord"]`). Verified the only grep-wall-covered file naming the raw type is the `MemoryAgent` de-id gate itself (`AIContextPayload`/`LaunchPreparationService` and the other floor/AI-facing files do **not** name it — `LaunchPreparationService` passes `store.tierTwoMemories` + the de-identified String), so the exemption keeps the gate green while any NEW AI-facing builder reaching a raw `[TierTwoMemoryRecord]` is flagged. The token-scoped exemption can't be used to smuggle a different sealed-store token (e.g. `import PrivateHealthStore` still trips on `MemoryAgent`). No `public→package` narrowing: the walled consumers are *inside* the `FernletKit` package, so `package` gives zero wall benefit and `internal` breaks the legit in-package readers (MemoryAgent, TierTwoMemoryEngine, repositories) + the app. Test: `S3BoundaryTests.tierTwoMemoryRecordTokenIsGatedToMemoryAgentOnly`. |
 | **WI-8** | ✅ Done | `FriendSessionTrustPolicy` revoked/blocked-rejection test added. |
-| **WI-9** | ✅ Done | Marked the ProximityKit wire `Codable` value types, the WI-6 canonical signing serializer, and the pure `IdentityService` crypto statics (`verify`/`fingerprint`/`fingerprintsMatch`) `nonisolated` (+ `Sendable` on the wire types) — so untrusted MCSession bytes decode + signature-verify off the main actor without relying on `.v5` leniency. `verify`/`signed` that touch the `@MainActor` IdentityService/ReplayCache pinned `@MainActor`; `MeshAdmissionToken.verify` (pure) is `nonisolated`. **`.v5` deliberately KEPT:** with the annotations in place a Swift-6 build of ProximityKit reduces to EXACTLY two remaining errors, both in `Ranging/NIRangingSession.swift` (`:87` sending `[NINearbyObject]`, `:98` sending `NISession` across the delegate→`Task{@MainActor}` hop) — the sole `.v5` blocker, documented in `Package.swift` with the clean-fix sketch. Dropping `.v5` needs only those two UWB-delegate bodies reworked; left as a focused follow-up (the UWB hardware-callback path can't be exercised in the simulator). Tests: `ProximityWireOffMainDecodeTests` (5 — compile-time `Sendable` guard + off-main decode/verify of envelope & token, positive + tamper). Verified: Swift-6 re-probe shows only the 2 NIRangingSession errors; `.v5` clean build green; WI-9 + WI-6 + 12 proximity/mesh suites + `S3BoundaryTests` pass; wall-check exit 0; wall-selftest passes. |
+| **WI-9** | ✅ Done | Marked the ProximityKit wire `Codable` value types, the WI-6 canonical signing serializer, and the pure `IdentityService` crypto statics (`verify`/`fingerprint`/`fingerprintsMatch`) `nonisolated` (+ `Sendable` on the wire types) — so untrusted MCSession bytes decode + signature-verify off the main actor without relying on `.v5` leniency. `verify`/`signed` that touch the `@MainActor` IdentityService/ReplayCache pinned `@MainActor`; `MeshAdmissionToken.verify` (pure) is `nonisolated`. **`.v5` since DROPPED (commit `fca6609`):** ProximityKit now builds in Swift-6 language mode (no `.swiftLanguageMode(.v5)`). The earlier "EXACTLY two errors in NIRangingSession" estimate was incomplete — a full `build-for-testing` surfaced 10 `sending` errors across three files: `NIRangingSession` (extract Sendable `distance`/`direction`/`ObjectIdentifier(session)` before the hop), `MeshMultipeerSession` (transfer the non-Sendable `MCPeerID` + single-shot `invitationHandler` via `nonisolated(unsafe)`), and `ProximityForegroundAnchor` (the ActivityKit `Activity` via `nonisolated(unsafe)`). `HealthKitGateway` keeps `.v5` independently. The follow-up is CLOSED; `Package.swift` (ProximityKit target) carries the authoritative note. Tests: `ProximityWireOffMainDecodeTests` (5 — compile-time `Sendable` guard + off-main decode/verify of envelope & token, positive + tamper). Verified: Swift-6 re-probe shows only the 2 NIRangingSession errors; `.v5` clean build green; WI-9 + WI-6 + 12 proximity/mesh suites + `S3BoundaryTests` pass; wall-check exit 0; wall-selftest passes. |
 | **WI-10** | ✅ Done | DiaryStore `hooksRewired` assert + `commitResolution` persists created recipes even with no meals. Test: `CommitResolutionPersistenceTests`. |
 | **WI-Q** | ✅ Resolved | Done: `goodProteinThreshold` single-sourced on `Macros`; `removePlannedWorkout` delegates to `deletePlannedWorkout`; `setSleep` implicit-today now delegates to the explicit-date overload (operation-for-equivalent via `mutateDay(date: todayKey)`). Remaining four examined and **left as-is by design** (each would change behavior or is already deduped — see WI-Q detail): scoring-input marshalling is *intentionally divergent* (facade injects derived-signal `nutrientGaps`, per-day path omits them → unifying alters live + persisted scores); `mutateDay` is already a thin facade delegator and collapsing `batchSnapshotPersistence` only adds a weak-closure hop + wider assert on a hot save path; the `CoreDataHealthKitCacheCleaner` fold would *regress* WI-2 (repo scopes to the "primary" record, has save-latches, per-day rebuilds → biases toward clearing too little on the opt-out path); `upsertWorkout` is a `WorkoutSyncContext` protocol seam called cross-module by `reconcileWorkouts`, not a removable facade duplicate. |
 
@@ -399,9 +399,9 @@ bytes) compiles with a warning today; a Swift 6 / strict-concurrency migration w
 `.v5` escape hatch for this target. Scope deliberately — it's a concurrency-correctness cleanup, not a live
 hole.
 
-**Implemented (2026-06-27).** Annotations landed; `.v5` deliberately retained (the plan's "leave a note on
-what still blocks it" outcome). Empirical scoping drove the decisions — recorded here so they are conscious
-choices:
+**Implemented (2026-06-27; `.v5` dropped 2026-06-28, commit `fca6609`).** The `nonisolated`/`Sendable`
+annotations landed first; a follow-up then dropped `.v5` so ProximityKit builds clean in Swift-6 language
+mode. Empirical scoping drove the decisions — recorded here so they are conscious choices:
 - **The wire layer is now `nonisolated, Sendable`.** Every ProximityKit wire `Codable` value type
   (`FernletIdentityEnvelope`; all `MeshPayloads.swift` types incl. `MeshAdmissionToken`;
   `RecipeSharePayloads.swift` types; the two private mesh-plaintext payloads `IdentityRangingPayload`/
@@ -422,16 +422,22 @@ choices:
   state / `@MainActor` `ReplayCache`) — behavior-identical to before. `MeshAdmissionToken.verify` is
   `nonisolated` because it is pure signature math (static crypto + `canonicalBytes`), so a token verifies
   off-main.
-- **`.v5` kept — sole remaining blocker isolated (accepted).** With these annotations, building ProximityKit
-  WITHOUT `.v5` (i.e. Swift-6 language mode; tools-version is 6.2) reduces to EXACTLY two errors, both in
-  `Ranging/NIRangingSession.swift`: `:87` `sending 'nearbyObjects'` (the `[NINearbyObject]` delegate arg)
-  and `:98` `sending 'session'` (the `NISession`, for the `=== niSession` identity check) — both captured
-  into the `nonisolated`-delegate→`Task { @MainActor }` hop. The wire/serializer/crypto surface itself is
-  Swift-6 clean. Dropping `.v5` therefore needs ONLY those two UWB-delegate bodies reworked to extract the
-  Sendable values (`distance`/`direction`; `ObjectIdentifier(session)`) BEFORE the hop. Left as a focused
-  follow-up rather than bundled here: it touches the NearbyInteraction hardware-callback path, which the
-  simulator cannot exercise, and `HealthKitGateway` independently uses the same `.v5` stance. The blocker +
-  fix sketch is documented inline in `Package.swift`.
+- **`.v5` DROPPED (commit `fca6609`) — ProximityKit builds in Swift-6 language mode.** The initial
+  "EXACTLY two errors in `NIRangingSession`" estimate was incomplete: a full `build-for-testing` without
+  `.v5` surfaced 10 `sending` errors across THREE files, all reworked behavior-preservingly:
+  - `Ranging/NIRangingSession.swift` (2): extract the Sendable `distance`/`direction` and
+    `ObjectIdentifier(session)` BEFORE the `nonisolated`-delegate→`Task { @MainActor }` hop.
+  - `Transport/MeshMultipeerSession.swift` (6): transfer the non-Sendable `MCPeerID` and the single-shot
+    `invitationHandler` across the MC delegate hops via `nonisolated(unsafe)` locals.
+  - `ForegroundAnchor/ProximityForegroundAnchor.swift` (2): pass the non-Sendable ActivityKit `Activity`
+    to its `nonisolated async` `update`/`end` via `nonisolated(unsafe)`.
+  Under Swift-6, `defaultIsolation(MainActor.self)` also became a hard cross-module constraint, so two
+  non-`@MainActor` proximity test suites' pure value/data types were marked `nonisolated`
+  (`FileMCPeerIDStore`/`MCPeerIDStoring`, `ProximityRecipeShareDiagnosticEvent`/`...Diagnostics`).
+  `HealthKitGateway` independently keeps `.v5` for its HealthKit `@Sendable` query-completion captures.
+  The authoritative note now lives inline in `Package.swift` (ProximityKit target); this section is the
+  historical record. Two LOW-severity ordering residuals from the rework are tracked as review
+  follow-ups (the ActivityKit `update`/`stop` interleave; the `NISession` `ObjectIdentifier` reuse window).
 - **Tests.** `ProximityWireOffMainDecodeTests` (5): a compile-time `T: Sendable` guard over the wire types
   (hard-fails in any language mode on regression) + four runtime tests that decode and signature-verify a
   `FernletIdentityEnvelope` and a `MeshAdmissionToken` inside `Task.detached` (genuinely off-main),

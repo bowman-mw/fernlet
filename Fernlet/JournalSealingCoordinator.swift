@@ -107,15 +107,17 @@ final class JournalSealingCoordinator {
             try narrativeRepository.insert(narrative, contentKey: key)
             sealedJournalIDs.insert(entry.id)
         } catch {
-            print("[Fernlet] Journal sealing failed for \(entry.id): \(error)")
-            // Do NOT add the entry to sealedJournalIDs on failure. Leaving it unsealed keeps
-            // its plaintext in the local snapshot (so the user's text is never lost) and lets
-            // migrateExistingJournalsToSealedStore (run from activateNoLockJournals /
-            // activateSealedJournals on the next launch or unlock) retry sealing it, since it
-            // targets exactly `!text.isEmpty && !sealedJournalIDs.contains(id)` entries.
-            // We prioritise no-data-loss over the rare transient case where the text briefly
-            // remains in the user's own (already-encrypted) private store instead of the
-            // app-sealed narrative store.
+            FernletAuditLog.log("journal.seal.failed", context: ["id": entry.id.uuidString])
+            // Do NOT add the entry to sealedJournalIDs on failure. Because the id is then absent from
+            // the sealed set, FernletSnapshot.forStorage / mutatePastDay do NOT strip the entry, so its
+            // plaintext stays in the days blob — which is plain JSON and, when iCloud sync is on, mirrors
+            // to iCloud. We accept that bounded transient exposure to avoid data loss: the text is never
+            // dropped, and migrateExistingJournalsToSealedStore (run from activateNoLockJournals /
+            // activateSealedJournals on the next launch or unlock) retries sealing it — it targets exactly
+            // `!text.isEmpty && !sealedJournalIDs.contains(id)` entries — after which the strip removes the
+            // plaintext from the blob. (An earlier note here claimed the text "remains in the user's own
+            // already-encrypted private store"; that was wrong — on failure it is neither in the narrative
+            // store nor encrypted.)
         }
     }
 
@@ -127,7 +129,17 @@ final class JournalSealingCoordinator {
             text: trimmed, emotions: entry.emotions,
             createdAt: entry.date, updatedAt: Date()
         )
-        try? narrativeRepository.update(updated, contentKey: key)
+        do {
+            try narrativeRepository.update(updated, contentKey: key)
+        } catch {
+            // Re-seal failed. If the id stayed in sealedJournalIDs, the snapshot / past-day strip would
+            // blank this entry against the now-STALE narrative copy — silently destroying the user's edit.
+            // Instead drop the id (mirroring seal()'s no-data-loss policy): the new plaintext survives in
+            // the blob, and migrateExistingJournalsToSealedStore re-seals (and re-strips) it on the next
+            // activation/unlock. Bounded transient exposure, but the edit is never lost (F4).
+            FernletAuditLog.log("journal.reseal.failed", context: ["id": entry.id.uuidString])
+            sealedJournalIDs.remove(entry.id)
+        }
     }
 
     /// Deletes a sealed narrative and forgets its sealed-ID.
@@ -147,6 +159,14 @@ final class JournalSealingCoordinator {
         let byID = Dictionary(narratives.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         loaded.journals = loaded.journals.map { entry in
             guard entry.text.isEmpty, let n = byID[entry.id] else { return entry }
+            // Record the id as sealed (S3): this past-day read decrypts text that lives ONLY in the
+            // narrative store, so the entry is genuinely sealed. `refreshSealedJournals` does the same
+            // for today + previousJournals; doing it here too keeps the two read paths symmetric.
+            // Without it, an entry on a day older than the previousJournals window is absent from
+            // `sealedJournalIDs`, and a later edit would (a) skip the `mutatePastDay` strip and leak the
+            // new plaintext into the (iCloud-synced) blob, and (b) skip the `updateSealedNarrative`
+            // re-seal, leaving the sealed store stale (F1, Docs/Security-Hardening-Plan-2026-06-27.md).
+            sealedJournalIDs.insert(entry.id)
             return JournalEntry(id: entry.id, text: n.text, tag: entry.tag, date: entry.date, emotions: n.emotions)
         }
         return loaded

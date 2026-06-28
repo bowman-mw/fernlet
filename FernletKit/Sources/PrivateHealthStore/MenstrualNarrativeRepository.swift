@@ -58,6 +58,29 @@ public nonisolated final class MenstrualNarrativeRepository {
         }
     }
 
+    /// Inserts many narratives in a SINGLE transaction: either all commit or none do. Used by the
+    /// sealed-backup RESTORE so a mid-batch failure cannot leave a partially-populated store. A partial
+    /// store would otherwise trip the restore no-clobber gate (`narrativeCount() != 0`) on the next
+    /// launch and never retry, silently dropping the un-inserted sealed records. On any per-record
+    /// failure the whole batch is rolled back and the error rethrown, leaving the store empty so the
+    /// next launch re-pulls the full backup.
+    public func insertAtomically(_ narratives: [MenstrualNarrative], contentKey: SymmetricKey?) throws {
+        guard let contentKey else { throw FernletLockError.locked }
+        guard !narratives.isEmpty else { return }
+        try context.performAndWait {
+            do {
+                for narrative in narratives {
+                    let object = NSEntityDescription.insertNewObject(forEntityName: "MenstrualNarrative", into: context)
+                    try apply(narrative, to: object, contentKey: contentKey, createdAt: narrative.createdAt)
+                }
+                try context.save()
+            } catch {
+                context.rollback()
+                throw error
+            }
+        }
+    }
+
     public func update(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {

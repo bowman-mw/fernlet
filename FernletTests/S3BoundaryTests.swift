@@ -181,9 +181,48 @@ struct S3BoundaryTests {
         #expect(hits(leakyGate, file: "MemoryAgent.swift").contains("import PrivateHealthStore"))
     }
 
-    /// The forbidden sealed-store tokens present in `source`. Pure + testable.
+    /// F12: identifier-boundary matching must NOT fire on a sealed token embedded in a longer,
+    /// unrelated identifier (the source of false-positive CI hard-fails), but MUST still catch the
+    /// sealed symbol used as a whole identifier or qualified member access.
+    @Test func forbiddenTokenMatcherIgnoresSubstringsOfLongerIdentifiers() {
+        // Benign longer identifiers that merely CONTAIN a forbidden token as a substring → no hit.
+        #expect(S3BoundaryTests.forbiddenTokens(in: "let x = CyclePhaseResolver()").isEmpty)
+        #expect(S3BoundaryTests.forbiddenTokens(in: "protocol JournalNarrativeStoring {}").isEmpty)
+        #expect(S3BoundaryTests.forbiddenTokens(in: "struct IntimacyLogFormatter {}").isEmpty)
+
+        // Real whole-identifier uses → still flagged.
+        #expect(S3BoundaryTests.forbiddenTokens(in: "let p: CyclePhase = .follicular").contains("CyclePhase"))
+        #expect(S3BoundaryTests.forbiddenTokens(in: "PrivateHealthStore.MenstrualNarrative.self")
+            .contains("MenstrualNarrative"))
+        #expect(S3BoundaryTests.forbiddenTokens(in: "import PrivateMemoryStore").contains("import PrivateMemoryStore"))
+    }
+
+    /// The forbidden sealed-store tokens present in `source`, matched at IDENTIFIER BOUNDARIES so a
+    /// token never fires as a substring of a longer, unrelated identifier (e.g. `CyclePhase` must not
+    /// match `CyclePhaseResolver`; `JournalNarrative` must not match `JournalNarrativeStoring`). This
+    /// removes false-positive CI hard-fails while still catching every real use of the sealed symbol
+    /// (real uses appear as whole identifiers or `import X` lines). Pure + testable.
     static func forbiddenTokens(in source: String) -> [String] {
-        forbiddenPrivateStoreTokens.filter { source.contains($0) }
+        forbiddenPrivateStoreTokens.filter { containsAtIdentifierBoundary(source, $0) }
+    }
+
+    /// True iff `token` occurs in `source` NOT flanked by identifier characters ([A-Za-z0-9_]) on its
+    /// alphanumeric ends — i.e. as a whole symbol, not embedded in a longer identifier. Boundary hits
+    /// are a strict subset of plain-substring hits, so this can only ever REMOVE false positives; it
+    /// never lets a real whole-identifier breach slip through.
+    static func containsAtIdentifierBoundary(_ source: String, _ token: String) -> Bool {
+        guard !token.isEmpty else { return false }
+        let chars = Array(source)
+        let tok = Array(token)
+        guard chars.count >= tok.count else { return false }
+        func isIdentifierChar(_ c: Character) -> Bool { c == "_" || c.isLetter || c.isNumber }
+        for start in 0...(chars.count - tok.count) where Array(chars[start..<(start + tok.count)]) == tok {
+            let leftIsIdentifier = start > 0 && isIdentifierChar(chars[start - 1])
+            let rightIndex = start + tok.count
+            let rightIsIdentifier = rightIndex < chars.count && isIdentifierChar(chars[rightIndex])
+            if !leftIsIdentifier && !rightIsIdentifier { return true }
+        }
+        return false
     }
 
     /// Finds the first file named `filename` under any of `roots`. Returns nil if absent (caller
