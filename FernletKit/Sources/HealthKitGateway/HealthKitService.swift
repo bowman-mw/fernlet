@@ -172,6 +172,9 @@ public struct HealthAuthorizationPresentation {
 public enum HealthKitServiceError: LocalizedError {
     case healthDataUnavailable
     case missingHealthType(String)
+    /// `disableIntegration()` was invoked on a `HealthKitService` with no concrete cache clearer
+    /// installed. Disable fails closed rather than silently leaving opted-out clinical data behind.
+    case cacheClearerUnavailable
 
     public var errorDescription: String? {
         switch self {
@@ -179,6 +182,8 @@ public enum HealthKitServiceError: LocalizedError {
             "Health data is not available on this device."
         case .missingHealthType(let identifier):
             "Fernlet could not create the HealthKit type for \(identifier)."
+        case .cacheClearerUnavailable:
+            "Fernlet could not clear cached HealthKit values, so it did not disable HealthKit. Please try again."
         }
     }
 }
@@ -234,10 +239,14 @@ public protocol HealthKitCacheClearing {
     func clearHealthKitCachedValues() throws
 }
 
-/// Default no-op cleaner used when the app has not installed a concrete provider.
-/// The real `CoreDataHealthKitCacheCleaner` lives app-side (it needs CloudKitSync's
-/// PersistenceController + LocalPersistence's LocalFernletDatabase) and is installed
-/// via `HealthKitService.defaultCacheClearer` at app launch.
+/// Explicit "clearing is genuinely not needed" cleaner, for the rare injection where a caller
+/// wants `disableIntegration()` to succeed without purging a cache (e.g. a test exercising the
+/// non-cache teardown). It is **no longer** the implicit default: a `HealthKitService` with no
+/// clearer installed now fails closed (`HealthKitServiceError.cacheClearerUnavailable`) so an
+/// opt-out can never silently leave cached clinical data behind. The real
+/// `CoreDataHealthKitCacheCleaner` lives app-side (it needs CloudKitSync's PersistenceController +
+/// LocalPersistence's LocalFernletDatabase) and is installed via
+/// `HealthKitService.defaultCacheClearer` at app launch.
 struct NoopHealthKitCacheClearer: HealthKitCacheClearing {
     func clearHealthKitCachedValues() throws {}
 }
@@ -296,13 +305,18 @@ public struct HealthKitAnchorKeychain {
 public final class HealthKitService: HealthKitServicing {
     /// App-installed default cache cleaner. The concrete `CoreDataHealthKitCacheCleaner`
     /// lives in the app target (it needs CloudKitSync + LocalPersistence), so the app
-    /// sets this provider at launch before any HealthKitService is constructed. Until
-    /// then it is a no-op, keeping this gateway off the CloudKitSync/LocalPersistence edge.
-    public static var defaultCacheClearer: HealthKitCacheClearing = NoopHealthKitCacheClearer()
+    /// sets this provider at launch before any HealthKitService is constructed, keeping this
+    /// gateway off the CloudKitSync/LocalPersistence edge. It is `nil` until then: a service
+    /// constructed before the app wires it (a `#Preview`, a test, the share extension, a future
+    /// early-launch path) has **no** clearer, and `disableIntegration()` fails closed rather than
+    /// silently skipping the purge of cached HealthKit-derived clinical values.
+    public static var defaultCacheClearer: HealthKitCacheClearing?
 
     public let healthStore: HKHealthStore
     private let storeController: HealthKitStoreControlling
-    private let cacheCleaner: HealthKitCacheClearing
+    /// Optional: `nil` means "no clearer installed" → `disableIntegration()` throws rather than
+    /// flipping the master switch off while leaving cached clinical data behind (fail-closed).
+    private let cacheCleaner: HealthKitCacheClearing?
     private let preferencesStore: StoragePreferencesStore
     private var workoutObservationQuery: HKAnchoredObjectQuery?
     private var activeQueries: [HKQuery] = []
@@ -715,6 +729,16 @@ public final class HealthKitService: HealthKitServicing {
 
     public func disableIntegration() async throws {
         FernletAuditLog.log("healthkit.disable.attempt")
+        // Fail-closed: disabling HealthKit MUST purge the cached HealthKit-derived clinical values.
+        // If no concrete clearer was installed (a HealthKitService built before FernletApp wired
+        // CoreDataHealthKitCacheCleaner — a #Preview, a test, the share extension, a future early-launch
+        // path), do NOT proceed: silently "succeeding" here would flip the master switch off while
+        // leaving opted-out clinical data in the local/synced store. Throw before any teardown so the
+        // opt-out does not half-apply and the failure is audited and retryable.
+        guard let cacheCleaner else {
+            FernletAuditLog.log("healthkit.disable.failed", context: ["error": "cache clearer not installed"])
+            throw HealthKitServiceError.cacheClearerUnavailable
+        }
         do {
             for query in activeQueries {
                 storeController.stop(query)
