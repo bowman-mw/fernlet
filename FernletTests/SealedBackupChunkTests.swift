@@ -81,6 +81,7 @@ struct SealedBackupChunkTests {
         defer { KeychainItem.deleteAll(service: serviceID) }
         let identity = IdentityService(keychainService: serviceID)
         try identity.ensureProvisioned()
+        identity.provisionBackupEscrowKeyForSealing()   // WS-1: seal path provisions the escrow key lazily.
 
         let plaintext = Data("page-zero".utf8)
         let record = try SealedBackupCrypto.seal(

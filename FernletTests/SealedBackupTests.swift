@@ -10,11 +10,20 @@ import CloudKitSync
 @MainActor
 @Suite(.serialized)
 struct SealedBackupTests {
+    /// The SEAL path now provisions the backup-escrow key lazily (WS-1): `ensureProvisioned` no longer
+    /// mints it, so a test that wants to seal must mint/adopt it first, exactly as the production
+    /// enable path does via `SealedBackupCoordinator`.
+    private func makeSealingIdentity(_ serviceID: String) throws -> IdentityService {
+        let identity = IdentityService(keychainService: serviceID)
+        try identity.ensureProvisioned()
+        identity.provisionBackupEscrowKeyForSealing()
+        return identity
+    }
+
     @Test func cryptoRoundTripRestoresPlaintext() throws {
         let serviceID = "com.fernlet.sealed-backup.test.\(UUID().uuidString)"
         defer { KeychainItem.deleteAll(service: serviceID) }
-        let identity = IdentityService(keychainService: serviceID)
-        try identity.ensureProvisioned()
+        let identity = try makeSealingIdentity(serviceID)
         let plaintext = Data("private archive".utf8)
 
         let record = try SealedBackupCrypto.seal(
@@ -30,8 +39,7 @@ struct SealedBackupTests {
     @Test func tamperedCiphertextIsRejected() throws {
         let serviceID = "com.fernlet.sealed-backup.test.\(UUID().uuidString)"
         defer { KeychainItem.deleteAll(service: serviceID) }
-        let identity = IdentityService(keychainService: serviceID)
-        try identity.ensureProvisioned()
+        let identity = try makeSealingIdentity(serviceID)
         var record = try SealedBackupCrypto.seal(
             Data("private archive".utf8),
             payloadType: .periodData,
@@ -51,10 +59,10 @@ struct SealedBackupTests {
             KeychainItem.deleteAll(service: firstID)
             KeychainItem.deleteAll(service: secondID)
         }
-        let first = IdentityService(keychainService: firstID)
-        let second = IdentityService(keychainService: secondID)
-        try first.ensureProvisioned()
-        try second.ensureProvisioned()
+        // Two independent devices each mint their OWN local escrow key (no synced key shared), so a
+        // record sealed by `first` must not open under `second`.
+        let first = try makeSealingIdentity(firstID)
+        let second = try makeSealingIdentity(secondID)
         let record = try SealedBackupCrypto.seal(
             Data("private archive".utf8),
             payloadType: .periodData,
@@ -78,11 +86,12 @@ struct SealedBackupTests {
             KeychainItem.deleteAll(service: secondID)
         }
 
-        let first = IdentityService(keychainService: firstID)
-        try first.ensureProvisioned()
+        // First device enables a sealed backup → provisions (mints) the escrow key (WS-1 lazy path).
+        let first = try makeSealingIdentity(firstID)
 
-        // Copy ONLY the escrow key into the second keychain (as iCloud Keychain sync would), then
-        // provision the second identity — it adopts the synced escrow but mints a fresh signing + KA pair.
+        // Copy ONLY the escrow key into the second keychain as a SYNCHRONIZABLE item (as iCloud Keychain
+        // sync would), then provision the second identity — `ensureProvisioned` Case 2 adopts the synced
+        // escrow while minting a fresh signing + KA pair.
         let escrowData = try #require(KeychainItem.load(account: "backupEscrowPrivateKey", service: firstID))
         KeychainItem.store(
             escrowData, account: "backupEscrowPrivateKey", service: secondID,
@@ -107,8 +116,7 @@ struct SealedBackupTests {
     @Test func recordWithStaleTagButOurEscrowKeyStillOpens() throws {
         let serviceID = "com.fernlet.sealed-backup.test.\(UUID().uuidString)"
         defer { KeychainItem.deleteAll(service: serviceID) }
-        let identity = IdentityService(keychainService: serviceID)
-        try identity.ensureProvisioned()
+        let identity = try makeSealingIdentity(serviceID)
         let plaintext = Data("private archive".utf8)
         var record = try SealedBackupCrypto.seal(plaintext, payloadType: .sensitiveNotes, identityService: identity)
         // Simulate a pre-escrow-binding tag (unrelated bytes, not our escrow public key).

@@ -52,7 +52,8 @@ This index maps the main project files to their responsibilities. It is intended
 | `Fernlet/Fernlet/FernletLockView.swift` | Lock setup, unlock UI, numeric pad, passcode entry, and related lock interaction views. |
 | `Fernlet/Fernlet/FernletLockService.swift` | Lock service protocols, lock state, credential types, crypto provider, keychain item handling, audit logging, and lock/unlock orchestration. |
 | `Fernlet/Fernlet/KeychainHelpers.swift` | Low-level Keychain read/write/delete helpers shared by lock and identity services. |
-| `Fernlet/Fernlet/PrivacyDataSettingsView.swift` | Privacy and data settings screen for managing storage preferences, HealthKit toggles, and sealed backup options. |
+| `Fernlet/Fernlet/PrivacyDataSettingsView.swift` | Privacy and data settings screen for managing storage preferences, HealthKit toggles, and sealed backup options. Routes every destructive/OFF toggle through a pre-commit warning; surfaces the sealed-backup restore status + escrow-conflict banner (retry / re-link). |
+| `Fernlet/Fernlet/DestructiveConfirmation.swift` | Reusable destructive-action confirmation (`DestructiveConfirmation` + `.destructiveConfirmation` modifier): the mutation runs only on an explicit destructive-role confirm, so no destructive settings toggle can ship without a warning. |
 
 ## Data, Persistence, And State
 

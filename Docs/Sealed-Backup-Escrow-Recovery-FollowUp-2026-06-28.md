@@ -176,3 +176,108 @@ one.
   `IdentityService.sealedBackupKey()`). Optional future: per-generation HKDF salt.
 - `SealedBackupCrypto.open()` propagating `IdentityError.notProvisioned` instead of
   `malformedRecord` (kept — the precise error is more correct; caught generically).
+
+---
+
+## Implementation status — 2026-06-28 (branch `s3-hardening-followups`)
+
+**All five workstreams landed.** Resolutions to the open questions and what shipped:
+
+### Open questions — resolved
+- **Enable flow / lazy escrow hook.** `PrivacyDataSettingsView.handleSealedBackupToggle(true)`
+  → confirm → `applySealedBackup` → `FernletStore.setSealedBackupEnabled(true)` →
+  `SealedBackupCoordinator.setSealedBackupEnabled` → `makeIdentity(escrowMode: .forSealing)`
+  → `IdentityService.provisionBackupEscrowKeyForSealing()` (mints **ThisDeviceOnly** if
+  absent, after re-querying for a synced key) → `seal`. The open/restore path uses
+  `escrowMode: .forOpening` → `loadBackupEscrowKeyForOpen()` which **never mints**.
+- **iCloud Keychain duplicate-`synchronizable` semantics.** *Now confirmed from Apple's
+  open-source `SecItemDataSource.c` conflict resolver + patents US9077759B2 / US9479583B2:*
+  `kSecAttrSynchronizable` (and the access group) are part of the keychain primary key, so two
+  `synchronizable` rows sharing service+account are ONE logical slot account-wide; divergence
+  resolves by **newest `kSecAttrModificationDate` wins** (SHA-1-digest tiebreak only on an exact
+  date tie), with no value coexistence and no app-visible merge callback. **Refinement to WS-2:**
+  because the genuine key is the *older* write, withhold-and-promote *reduces* the chance a
+  divergent key ever reaches the synced slot (common path: the genuine key syncs in by the next
+  launch and `reconcileBackupEscrowKey` adopts it instead of promoting) but does **not guarantee**
+  the genuine key survives if it is still in flight when a divergent local key is promoted — the
+  newer divergent key would win. The real safety net is the **non-silent `.conflict` surface +
+  WS-4 visible/retryable restore**, not promotion timing. This is a self-inflicted single-user
+  race, mostly recoverable from the origin device (an attacker who can write this slot already
+  holds the user's iCloud Keychain). *Empirically confirmed on the test host* that a
+  `synchronizable` row and a `ThisDeviceOnly` row coexist as distinct items separable via
+  `KeychainItem.SynchronizableScope.{synced,local}` — the conflict/promotion unit tests exercise
+  this. Cross-*device* convergence is still the two-device-manual part (below).
+  **Tracked follow-up (optional hardening):** eliminate the residual with a content-derived/
+  versioned keychain slot (divergent writes land on a different slot, never overwrite the genuine
+  one) and/or a signed escrow envelope verified on read (a clobbered value fails verification and
+  is discarded). Both add cost/complexity to the zero-config cross-device recovery this key exists
+  to provide, so they are deferred, not shipped.
+- **Does disabling iCloud sync / a HealthKit capability remove a recovery path?**
+  - *iCloud sync OFF*: "Stop syncing, keep iCloud data" is local-retaining (reassuring copy
+    kept). "Delete iCloud data" **does** delete sealed backups (`SealedBackupRecord` is in
+    `recordTypesForDeletion`) — the confirmation copy now names encrypted backups explicitly.
+  - *HealthKit master OFF*: fail-closed cache purge of cached clinical values; the data stays
+    in Apple Health → warning says exactly that. *A single capability toggle does NOT purge*
+    (it only updates prefs), so it is non-destructive and intentionally carries no warning.
+- **Did the OFF paths have any confirmation?** No — turn-OFF sealed backup, exclude-from-iOS-
+  backup, and HealthKit-master-disable all committed silently. Now each routes through the
+  shared `DestructiveConfirmation` helper. (Passcode *change* re-wraps the same content key —
+  non-destructive, no warning; `reset()` already had its alert.)
+
+### What shipped (by file)
+- `FernletKit/.../FernletFoundation/KeychainHelpers.swift` — `SynchronizableScope` on
+  `load`/`delete`; `store(replacing:)` so promotion removes only the local row.
+- `FernletKit/.../ProximityKit/Identity/IdentityService.swift` — **WS-1** deferral
+  (Case 1/4 never mint escrow); **WS-2** `provisionBackupEscrowKeyForSealing()` mints
+  ThisDeviceOnly; `loadBackupEscrowKeyForOpen()` (never mints); **WS-3**
+  `reconcileBackupEscrowKey()` (adopt / promote-on-later-launch / conflict) +
+  `adoptSyncedBackupEscrowKey()`.
+- `Fernlet/SealedBackupCoordinator.swift` — **WS-4** `SealedBackupRestoreOutcome`
+  (restored / nothingToRestore / skippedStoreNotEmpty / deferredKeyNotSynced /
+  deferredLocked / deferredTransient / notRecognized); split classification; escrow
+  reconcile at launch; conflict re-link (`adoptSyncedEscrowAndReupload`).
+- `Fernlet/FernletStore.swift` — observable `sealedBackupRestoreStatus` /
+  `sealedBackupEscrowConflict`; `SealedBackupContext` recording callbacks.
+- `Fernlet/DestructiveConfirmation.swift` (new) — reusable helper + `.destructiveConfirmation`
+  modifier (mutation only runs on confirm).
+- `Fernlet/PrivacyDataSettingsView.swift` — **WS-5** warnings on turn-OFF sealed backup,
+  exclude-from-iOS-backup, HealthKit-master disable; enriched iCloud-delete copy; **WS-3/WS-4**
+  status banner with Retry + "Use my other device's key".
+
+### Audit events added
+`identity.escrow.{mintedLocal,promotedLocal,conflictDetected,adoptedSynced}`,
+`sealedBackup.{restoreAttempt,restoreDeferredKeyNotSynced,restoreDeferredLocked,
+restoreNothingToRestore,restoreNotRecognized,escrowConflict,escrowAdopted,…}`,
+`privacy.{sealedBackup.*DisableConfirmed,localBackup.excludeConfirmed,
+healthKit.masterDisableConfirmed,sealedBackup.retryRestore,resolveEscrowConflict}`.
+
+### Tests
+- `IdentityServiceEscrowTests` — deferred gen, open-never-mints, ThisDeviceOnly mint,
+  adopt-synced-over-mint, reconcile promote/adopt/conflict (no overwrite), adopt resolves.
+- `SealedBackupRestoreOutcomeTests` — outcome semantics + host status recording.
+- `DestructiveConfirmationTests` — mutation deferred until confirm.
+- `SealedBackupTests` / `SealedBackupChunkTests` / `CloudKitDataServiceTests` updated to the
+  new seal contract (`provisionBackupEscrowKeyForSealing` before sealing).
+- `PrivacyDataSettingsUITests` — HealthKit-disable warns + confirm/cancel; exclude-backup
+  warns + cancel-keeps-included (all green).
+- `Scripts/spm-wall-check.sh` re-run → **WALL CHECK PASSED**.
+
+> **Pre-existing, out of scope:** `PrivacyDataSettingsUITests.testICloudDisableShows…`
+> (two cases) assert a `"Delete iCloud data?"` string that does not exist on this branch (the
+> disable sheet header is `"Turn off iCloud sync?"`). They fail independently of this work — not
+> touched here to avoid bundling unrelated changes.
+
+### Two-device manual race test (cannot run in CI — requires two real devices + one Apple ID)
+1. Device A: enable a sealed backup (e.g. period). Confirm in the keychain/audit that the
+   escrow key is minted **ThisDeviceOnly** (`identity.escrow.mintedLocal`), not synced yet.
+2. Relaunch A once → `identity.escrow.promotedLocal` (it publishes the key only on a later
+   launch). Wait for iCloud Keychain to propagate.
+3. Device B (fresh install), **opened immediately before the escrow key syncs**: confirm
+   provisioning does NOT mint a divergent `synchronizable` escrow (WS-1) — Privacy & Data
+   shows the "iCloud Keychain may still be syncing… Retry" status (WS-4), not a silent
+   success, and no second escrow row appears under the account.
+4. Once the key syncs to B, tap **Retry** → restore completes.
+5. Force the conflict: enable a sealed backup on B *before* A's key syncs (B mints its own
+   local key), then let A's key sync in. On B's next launch, confirm the **non-silent escrow
+   conflict** banner appears and neither key is overwritten until the user taps
+   "Use my other device's key" (`identity.escrow.{conflictDetected,adoptedSynced}`).

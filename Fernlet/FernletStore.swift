@@ -878,6 +878,15 @@ final class FernletStore {
     /// Aliased here so existing `FernletStore.SealedBackupWiringError` references resolve.
     typealias SealedBackupWiringError = SealedBackupCoordinator.SealedBackupWiringError
 
+    /// Per-payload status of the most recent sealed-backup restore attempt, surfaced (observably) in
+    /// Privacy & Data so a deferred/failed restore is VISIBLE and retryable (WS-4) instead of silently
+    /// swallowed. Written by `SealedBackupCoordinator` via the `SealedBackupContext` callback.
+    private(set) var sealedBackupRestoreStatus: [SealedBackupPayloadType: SealedBackupRestoreOutcome] = [:]
+
+    /// Whether a cross-device escrow-key conflict was detected and awaits the user's explicit choice
+    /// (WS-3). Surfaced (observably) in Privacy & Data; never auto-resolved.
+    private(set) var sealedBackupEscrowConflict = false
+
     /// Seals + uploads (or deletes) the encrypted CloudKit backup for a payload; returns whether it
     /// succeeded. Delegates to `SealedBackupCoordinator`.
     @discardableResult
@@ -885,10 +894,17 @@ final class FernletStore {
         await sealedBackupCoordinator.setSealedBackupEnabled(enabled, payloadType: payloadType)
     }
 
-    /// Pulls any sealed iCloud backups into the local stores at launch. Delegates to
-    /// `SealedBackupCoordinator`.
+    /// Pulls any sealed iCloud backups into the local stores at launch (and on the user's Retry).
+    /// Delegates to `SealedBackupCoordinator`.
     func restoreSealedBackupsIfNeeded() async {
         await sealedBackupCoordinator.restoreSealedBackupsIfNeeded()
+    }
+
+    /// WS-3 user-confirmed conflict resolution: adopt the synced (other-device) escrow key and re-upload
+    /// enabled backups. Delegates to `SealedBackupCoordinator`.
+    @discardableResult
+    func resolveSealedBackupEscrowConflict() async -> Bool {
+        await sealedBackupCoordinator.adoptSyncedEscrowAndReupload()
     }
 
     /// Fetches/decrypts/writes a single sealed-backup payload into the local stores; returns whether
@@ -897,6 +913,14 @@ final class FernletStore {
     @discardableResult
     func restoreSealedBackup(payloadType: SealedBackupPayloadType) async -> Bool {
         await sealedBackupCoordinator.restoreSealedBackup(payloadType: payloadType)
+    }
+
+    /// Fetches/decrypts/writes a single sealed-backup payload AND records the rich outcome on the
+    /// observable status so the UI can surface a non-silent, retryable result (WS-4). Delegates to
+    /// `SealedBackupCoordinator`.
+    @discardableResult
+    func restoreSealedBackupOutcome(payloadType: SealedBackupPayloadType) async -> SealedBackupRestoreOutcome {
+        await sealedBackupCoordinator.restoreSealedBackupOutcome(payloadType: payloadType)
     }
 
     /// Decodes a decrypted sealed-backup payload into the local stores, returning records written.
@@ -1575,6 +1599,12 @@ extension FernletStore: SealedBackupContext {
     }
     func loadAllDaysFromRepository() -> [String: FernletDay] {
         diary.loadAllDaysFromRepository()
+    }
+    func recordSealedBackupRestoreOutcome(_ outcome: SealedBackupRestoreOutcome, payloadType: SealedBackupPayloadType) {
+        sealedBackupRestoreStatus[payloadType] = outcome
+    }
+    func recordSealedBackupEscrowConflict(_ inConflict: Bool) {
+        sealedBackupEscrowConflict = inConflict
     }
 }
 
