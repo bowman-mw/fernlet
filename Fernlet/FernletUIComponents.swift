@@ -61,6 +61,16 @@ extension Color {
     }
 }
 
+extension View {
+    /// Tags a screen or sheet root with a stable, queryable accessibility identifier for
+    /// UX appearance tests, while keeping every descendant element individually
+    /// accessible (`.contain`). Shipping accessibility identifiers is harmless for users.
+    func uxScreenAnchor(_ identifier: String) -> some View {
+        accessibilityElement(children: .contain)
+            .accessibilityIdentifier(identifier)
+    }
+}
+
 enum FernletTab: String, CaseIterable, Hashable, Identifiable {
     case home
     case food
@@ -153,6 +163,9 @@ struct ScreenHeader: View {
     var title: String
     var subtitle: String
     var subtitleFirst = false
+    /// Optional stable accessibility identifier so UX appearance tests can anchor a
+    /// screen's header (e.g. "screen.home"). Empty when unset — a no-op for users.
+    var identifier: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -166,6 +179,7 @@ struct ScreenHeader: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(identifier ?? "")
     }
 
     private var subtitleView: some View {

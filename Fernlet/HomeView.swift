@@ -93,7 +93,7 @@ struct HomeView: View {
 
     private var homeHeader: some View {
         HStack(alignment: .top) {
-            ScreenHeader(title: "Fernlet", subtitle: FernletDate.niceDate().uppercased(), subtitleFirst: true)
+            ScreenHeader(title: "Fernlet", subtitle: FernletDate.niceDate().uppercased(), subtitleFirst: true, identifier: "screen.home")
             Spacer()
             Button { activeSheet = .settings } label: {
                 Image(systemName: "gearshape")

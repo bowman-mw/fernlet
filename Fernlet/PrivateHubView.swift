@@ -44,7 +44,9 @@ struct PrivateHubView: View {
             ) { $0.rawValue }
         }
         .background(Color.parchment)
-        .fernletLockGate()
+        // UX appearance tests can bypass the gate overlay to review the Journal/Period/
+        // Intimacy screens without configuring a passcode. Release builds: always gated.
+        .fernletLockGate(active: !UITestSupport.bypassPrivateLockGate)
         .onAppear { resetUnavailableSectionIfNeeded() }
         .onChange(of: store.isIntimateLoggingAllowed) { _, _ in
             resetUnavailableSectionIfNeeded()

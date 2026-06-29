@@ -18,7 +18,7 @@ struct JournalView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top) {
-                        ScreenHeader(title: "Journal", subtitle: "A small record of being.")
+                        ScreenHeader(title: "Journal", subtitle: "A small record of being.", identifier: "screen.journal")
                         Spacer()
                         HeaderActionButton(systemImage: "plus") { activeSheet = .journal }
                     }

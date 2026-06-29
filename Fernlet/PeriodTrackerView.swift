@@ -167,7 +167,7 @@ struct PeriodTrackerView: View {
 
     private var header: some View {
         HStack(alignment: .top) {
-            ScreenHeader(title: "Period", subtitle: phaseSubtitle)
+            ScreenHeader(title: "Period", subtitle: phaseSubtitle, identifier: "screen.period")
             Spacer()
             HeaderActionButton(systemImage: "plus") { activeSheet = .logPeriod(targetDate: nil, editingEntry: nil) }
         }

@@ -107,14 +107,20 @@ struct ContentView: View {
                 } else {
                     store.activateNoLockJournals()
                 }
+                #if DEBUG
+                // UX appearance tests: populate the diary so every tab renders real cards.
+                if UITestSupport.shouldSeedDemoContent { store.seedDemoContent() }
+                #endif
                 try? await Task.sleep(for: .milliseconds(120))
                 async let _ = autoImportHealthProfileIfAvailable()
                 async let _ = autoImportHealthContextIfAvailable()
                 await launcher.prepare(store: store)
                 store.markLaunchScreenDismissed()
-                if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_OPEN_SETTINGS"] == "1" {
-                    activeSheet = .settings
-                }
+                #if DEBUG
+                // UX appearance tests: jump straight to a sheet by its FernletSheet.id
+                // (generalizes the older FERNLET_UI_TEST_OPEN_SETTINGS hook).
+                if let initialSheet = UITestSupport.initialSheet { activeSheet = initialSheet }
+                #endif
                 store.meshNetworkManager.injectUITestStateIfNeeded()
                 updateRecipeShareListener()
                 store.deferredPostLaunchTasks()
@@ -310,56 +316,67 @@ struct ContentView: View {
         switch sheet {
         case .meal:
             MealSheet(store: store, onLogged: showMealLogNotification)
+                .uxScreenAnchor("sheet.meal")
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .recipe:
             RecipeSheet(store: store)
+                .uxScreenAnchor("sheet.recipe")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .water:
             WaterSheet(store: store)
+                .uxScreenAnchor("sheet.water")
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .sleep:
             SleepSheet(store: store)
+                .uxScreenAnchor("sheet.sleep")
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .journal:
             JournalSheet(store: store)
+                .uxScreenAnchor("sheet.journal")
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .quickExercise:
             QuickExerciseSheet(store: store)
+                .uxScreenAnchor("sheet.quickExercise")
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .workout:
             WorkoutSheet(store: store)
+                .uxScreenAnchor("sheet.workout")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .workoutSuggestion:
             WorkoutSuggestionSheet(store: store)
+                .uxScreenAnchor("sheet.workoutSuggestion")
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .goals:
             GoalsSheet(store: store)
+                .uxScreenAnchor("sheet.goals")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .hygiene:
             HygieneSheet(store: store)
+                .uxScreenAnchor("sheet.hygiene")
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .settings:
             SettingsSheet(store: store)
+                .uxScreenAnchor("sheet.settings")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
@@ -367,22 +384,26 @@ struct ContentView: View {
                 .environment(storagePreferencesStore)
         case .recipeBook:
             RecipeBookSheet(store: store, editingRecipe: $editingRecipeFromHome, editingSavedRecipe: $editingSavedRecipeFromHome)
+                .uxScreenAnchor("sheet.recipeBook")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .trends:
             TrendsModal(signals: store.derivedSignals)
+                .uxScreenAnchor("sheet.trends")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .logPeriod(let targetDate, let editingEntry):
             LogPeriodSheet(periodStore: periodStore, targetDate: targetDate, editingEntry: editingEntry)
+                .uxScreenAnchor("sheet.logPeriod")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
                 .environment(lockService)
         case .logIntimacy:
             LogIntimacySheet()
+                .uxScreenAnchor("sheet.logIntimacy")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
@@ -390,11 +411,13 @@ struct ContentView: View {
                 .environment(storagePreferencesStore)
         case .editRecipe(let recipe):
             RecipeSheet(store: store, recipe: recipe)
+                .uxScreenAnchor("sheet.editRecipe")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .editSavedRecipe(let recipe):
             SavedRecipeNotesSheet(store: store, recipe: recipe)
+                .uxScreenAnchor("sheet.editSavedRecipe")
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
@@ -562,7 +585,11 @@ struct PersonalScreenView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top) {
-                        ScreenHeader(title: screen.title, subtitle: screen.subtitle)
+                        ScreenHeader(
+                            title: screen.title,
+                            subtitle: screen.subtitle,
+                            identifier: screen == .intimacyTracking ? "screen.intimacy" : nil
+                        )
                         Spacer()
                         HeaderActionButton(systemImage: primaryActionIcon) {
                             handlePrimaryAction()

@@ -27,7 +27,7 @@ struct FoodView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top) {
-                        ScreenHeader(title: "Food", subtitle: "Eating enough, eating well.")
+                        ScreenHeader(title: "Food", subtitle: "Eating enough, eating well.", identifier: "screen.food")
                         Spacer()
                         HeaderActionButton(title: "meal", systemImage: "plus") { activeSheet = .meal }
                     }

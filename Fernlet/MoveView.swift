@@ -26,7 +26,7 @@ struct MoveView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top) {
-                        ScreenHeader(title: "Move", subtitle: "Enough to feel it, not enough to drain.")
+                        ScreenHeader(title: "Move", subtitle: "Enough to feel it, not enough to drain.", identifier: "screen.move")
                         Spacer()
                         HStack(spacing: 10) {
                             HeaderActionButton(title: "Log") { activeSheet = .workout }

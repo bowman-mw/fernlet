@@ -129,7 +129,7 @@ struct FriendsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top) {
-                        ScreenHeader(title: "Friends", subtitle: "")
+                        ScreenHeader(title: "Friends", subtitle: "", identifier: "screen.friends")
                         Spacer()
                         HStack(spacing: 10) {
                             NavigationLink {
