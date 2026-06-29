@@ -3,6 +3,7 @@ import CloudKitSync
 import FernletFoundation
 import FernletLock
 import HealthKitGateway
+import PrivateStoreCore
 #if canImport(UIKit)
 import UIKit
 import FernletDomainModel
@@ -162,6 +163,11 @@ struct FernletApp: App {
 
     @MainActor
     private func reloadPersistenceForPreferenceChange(_ preferences: StoragePreferences) async {
+        // The sealed store is local-only and never reloads, so re-apply its backup exclusion here so a
+        // runtime toggle covers it immediately instead of lagging until the next launch.
+        PrivatePersistenceController.shared.applyBackupExclusion(
+            excluded: preferences.localBackupExcludedFromiOSBackup
+        )
         guard !PersistenceController.shared.isReloading else {
             pendingPreferenceReload = preferences
             return

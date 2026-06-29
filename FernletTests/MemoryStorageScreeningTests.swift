@@ -21,6 +21,29 @@ import AIContext
         #expect(!MemoryAgent.containsDiagnosticLanguage("cooked a nice dinner with friends"))
     }
 
+    // MARK: - Normalization defeats trivial separator-injection evasions
+
+    @Test func classifierCatchesSpacingAndPunctuationEvasions() {
+        // Intra-word spacing / punctuation that the old plain-substring match let through.
+        #expect(DiagnosticLanguage.contains("d e p r e s s i o n"))
+        #expect(DiagnosticLanguage.contains("anxie.ty"))
+        #expect(DiagnosticLanguage.contains("bi-polar"))
+        #expect(DiagnosticLanguage.contains("p.t.s.d"))
+        // The self-harm pair is the leakiest term — every separator variant must still match.
+        #expect(DiagnosticLanguage.contains("self harm"))
+        #expect(DiagnosticLanguage.contains("self-harm"))
+        #expect(DiagnosticLanguage.contains("self_harm"))
+        #expect(DiagnosticLanguage.contains("self  harm"))
+        #expect(DiagnosticLanguage.contains("selfharm"))
+    }
+
+    @Test func classifierStillPassesCleanTextUnderNormalization() {
+        // Stripping separators must not manufacture a banned token from these clean phrases.
+        #expect(!DiagnosticLanguage.contains("Works out 3x per week on average"))
+        #expect(!DiagnosticLanguage.contains("Tends to walk daily"))
+        #expect(!DiagnosticLanguage.contains("Felt really proud finishing the long walk by the river today"))
+    }
+
     // MARK: - Tier-1 (journal-derived) memory rejection at creation
 
     @Test func fromJournalRejectsDiagnosticLanguage() {

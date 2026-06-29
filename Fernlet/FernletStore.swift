@@ -153,6 +153,11 @@ final class FernletStore {
     /// Backing store for the run-once scrub flag. Injectable so tests can isolate the gate from the
     /// shared `.standard` suite (the scrub fires from journal activation, which many tests trigger).
     @ObservationIgnored var pastDayJournalScrubDefaults: UserDefaults = .standard
+    /// In-memory, per-app-session guard so the scrub's retry budget counts LAUNCHES, not lock/unlock
+    /// activations: `scrubLeakedPastDayJournalsIfNeeded` runs on every activation, so without this a few
+    /// lock/unlock cycles in one session would exhaust the budget and give up prematurely (WI1-1 #2). Only
+    /// a fresh process launch resets it.
+    @ObservationIgnored private var pastDayScrubBudgetConsumedThisSession = false
 
     init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled()) {
         let initSignpostID = StartupTiming.begin("FernletStore.init")
@@ -1314,11 +1319,11 @@ final class FernletStore {
         rebuildDerivedSignals()
     }
 
-    private func currentSnapshot() -> FernletSnapshot {
+    private func currentSnapshot() -> SanitizedSnapshot {
         // forStorage always strips sealed journal text AND sensitive health fields
-        // (cycle/intimacy/periodPhase) so they never reach the synced blob. The sealing
-        // state is passed in as pure data (the sealed-id set) — the strip lives in the
-        // nonisolated FernletPersistence module (privacy wall).
+        // (cycle/intimacy/periodPhase) so they never reach the synced blob, and returns a
+        // SanitizedSnapshot — the only type saveSnapshot accepts. The sealing state is passed in as
+        // pure data (the sealed-id set); the strip lives in the nonisolated FernletPersistence module.
         FernletSnapshot.forStorage(
             todayKey: todayKey,
             day: day,
@@ -1397,8 +1402,15 @@ extension FernletStore: JournalSealingContext {
         else { return }
         let outcome = journalSealingCoordinator.scrubbedLeakedPastDayJournals(in: repository.loadAllDays())
         for (dayKey, day) in outcome.changedDays {
-            _ = repository.updateDay(day, for: dayKey, todayKey: todayKey)
+            _ = repository.updateDay(
+                SanitizedDay.sanitizing(day, sealedJournalIDs: journalSealingCoordinator.sealedJournalIDs),
+                for: dayKey, todayKey: todayKey
+            )
         }
+
+        // No journal key was active, so the scan could not actually run. Do NOT advance the run-once flag —
+        // a no-op pass must not be mistaken for a genuine clean pass and permanently disable the scrub (#3).
+        guard outcome.keyActive else { return }
 
         guard outcome.unsealedFailureCount > 0 else {
             // Clean pass: every leaked past-day journal is sealed. Mark complete; the bulk scan never re-runs.
@@ -1407,9 +1419,14 @@ extension FernletStore: JournalSealingContext {
             return
         }
 
-        // At least one day's seal failed. Don't advance the run-once flag — a later launch re-runs the scan
+        // At least one day's seal failed. Don't advance the run-once flag — a later LAUNCH re-runs the scan
         // and retries exactly those still-plaintext days (already-sealed days are skipped, their blob text
-        // is now empty). Cap the retries so a permanently failing entry can't loop forever.
+        // is now empty). The retry budget counts LAUNCHES, not activations: this method also fires on every
+        // lock/unlock transition, so a per-session guard prevents a few activations in one session from
+        // exhausting the budget and giving up prematurely (#2).
+        guard !pastDayScrubBudgetConsumedThisSession else { return }
+        pastDayScrubBudgetConsumedThisSession = true
+
         let attempts = defaults.integer(forKey: Self.pastDayJournalScrubAttemptsKey) + 1
         if attempts >= Self.pastDayJournalScrubMaxAttempts {
             defaults.set(Self.pastDayJournalScrubVersion, forKey: Self.pastDayJournalScrubFlagKey)
@@ -1424,6 +1441,33 @@ extension FernletStore: JournalSealingContext {
         } else {
             defaults.set(attempts, forKey: Self.pastDayJournalScrubAttemptsKey)
         }
+    }
+
+    /// Re-arms the one-time past-day scrub after a per-entry seal/re-seal failure (`JournalSealingContext`):
+    /// clears the run-once flag and the persisted retry budget so the next activation/launch re-scans ALL
+    /// days — including aged-out ones outside the in-memory `previousJournals` window that the per-activation
+    /// migrate never visits — and re-seals + strips the leaked plaintext instead of leaving it in the synced
+    /// blob forever (F1). The per-session in-memory guard is left as-is: the budget the re-armed scan
+    /// consumes is still counted per launch.
+    func requestPastDayJournalRescrub() {
+        let defaults = pastDayJournalScrubDefaults
+        defaults.removeObject(forKey: Self.pastDayJournalScrubFlagKey)
+        // Clearing the persisted attempts counter grants a FRESH bounded-retry budget on each newly-detected
+        // leak — deliberately prioritizing closing a plaintext leak over bounding rescans. Consequence: on a
+        // chronically-failing narrative store (every seal throws), each live seal failure re-arms and resets
+        // the budget, so the WI1-1 give-up cap may not be reached. Note the session guard
+        // (`pastDayScrubBudgetConsumedThisSession`) only caps the give-up COUNTER at one increment per session;
+        // the scan itself (loadAllDays + per-day seal/strip + updateDay) still re-runs on every activation
+        // while the run-once flag is unset — cheap in practice (loadAllDays is served from the warm cache and
+        // already-sealed days carry empty text). Accepted trade: a persistent plaintext leak should keep being
+        // retried rather than be permanently abandoned (#2).
+        defaults.removeObject(forKey: Self.pastDayJournalScrubAttemptsKey)
+    }
+
+    /// Test seam: clears the in-memory per-session scrub-budget guard so a test can simulate a FRESH app
+    /// launch (the per-launch retry budget only advances once per session). Production never calls this.
+    func resetPastDayScrubSessionBudgetForTesting() {
+        pastDayScrubBudgetConsumedThisSession = false
     }
 }
 

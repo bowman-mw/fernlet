@@ -21,6 +21,11 @@ public enum SealedBackupPayloadType: String, Codable, CaseIterable {
 public struct SealedBackupRecord: Equatable {
     public var payloadType: SealedBackupPayloadType
     public var signingPublicKey: Data
+    /// The owner's backup-ESCROW public key (X25519), used purely as a device-stable identity tag so a
+    /// restore can confirm "this backup is mine" before attempting decryption. It is NOT the proximity
+    /// key-agreement key (which is per-device); the escrow key syncs via iCloud Keychain, so this value
+    /// matches across a user's devices and permits cross-device restore. (Field name kept for the
+    /// existing CloudKit schema mapping.)
     public var keyAgreementPublicKey: Data
     public var nonce: Data
     public var ciphertext: Data

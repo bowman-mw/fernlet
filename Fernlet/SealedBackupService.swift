@@ -31,7 +31,11 @@ enum SealedBackupCrypto {
         return SealedBackupRecord(
             payloadType: payloadType,
             signingPublicKey: signingPublicKey,
-            keyAgreementPublicKey: identityService.localKeyAgreementPublicKey,
+            // Bind the record to the backup-ESCROW public key, not the proximity KA key. The escrow key
+            // syncs via iCloud Keychain (stable across devices), so a backup sealed on one device is
+            // recognized as "mine" and restorable on another; the proximity KA key is regenerated per
+            // device and would otherwise make the open() guard reject a legitimate cross-device restore.
+            keyAgreementPublicKey: identityService.localBackupEscrowPublicKey,
             nonce: nonce.data,
             ciphertext: sealedBox.ciphertext,
             tag: sealedBox.tag,
@@ -43,15 +47,20 @@ enum SealedBackupCrypto {
 
     @MainActor
     static func open(_ record: SealedBackupRecord, identityService: IdentityService) throws -> Data {
-        guard record.keyAgreementPublicKey == identityService.localKeyAgreementPublicKey else {
-            throw SealedBackupError.keyAgreementIdentityMismatch
-        }
+        // The AES-GCM authentication under our escrow-derived key is the REAL ownership boundary: only a
+        // record sealed with our backup-escrow key (which syncs via iCloud Keychain) can open. We attempt
+        // decryption FIRST so a record still opens even if its `keyAgreementPublicKey` identity tag
+        // predates the escrow-binding fix (e.g. an early record still tagged with the per-device proximity
+        // KA key) or was written on another device — no stranding. The tag is consulted ONLY to choose a
+        // clearer error when decryption fails: a record not tagged with our escrow identity is someone
+        // else's (or unrelated); otherwise it is a tampered/corrupt record of ours.
+        let key = try identityService.sealedBackupKey()
         do {
             let nonce = try AES.GCM.Nonce(data: record.nonce)
             let sealedBox = try AES.GCM.SealedBox(nonce: nonce, ciphertext: record.ciphertext, tag: record.tag)
             return try AES.GCM.open(
                 sealedBox,
-                using: identityService.sealedBackupKey(),
+                using: key,
                 authenticating: authenticatedData(
                     payloadType: record.payloadType,
                     signingPublicKey: record.signingPublicKey,
@@ -59,9 +68,10 @@ enum SealedBackupCrypto {
                     chunkCount: record.chunkCount
                 )
             )
-        } catch let error as SealedBackupError {
-            throw error
         } catch {
+            if record.keyAgreementPublicKey != identityService.localBackupEscrowPublicKey {
+                throw SealedBackupError.keyAgreementIdentityMismatch
+            }
             throw SealedBackupError.malformedRecord
         }
     }

@@ -74,7 +74,8 @@ public nonisolated final class IntimacyLogRepository {
             object.setValue(log.healthKitExternalUUID, forKey: "healthKitExternalUUID")
             object.setValue(log.createdAt, forKey: "createdAt")
             object.setValue(log.updatedAt, forKey: "updatedAt")
-            try context.save()
+            // Save, then prune history so no prior ciphertext transaction lingers for this sealed row (best-effort).
+            try PrivatePersistentHistoryPruner.saveAndPrune(context)
         }
     }
 
@@ -112,7 +113,8 @@ public nonisolated final class IntimacyLogRepository {
             guard let object = try context.fetch(request).first else { return }
             object.setValue(externalUUID.uuidString, forKey: "healthKitExternalUUID")
             object.setValue(Date(), forKey: "updatedAt")
-            try context.save()
+            // Save, then prune history so the prior transaction for this sealed row is not retained (best-effort).
+            try PrivatePersistentHistoryPruner.saveAndPrune(context)
         }
     }
 

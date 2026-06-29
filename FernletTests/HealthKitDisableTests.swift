@@ -143,6 +143,14 @@ struct HealthKitDisableTests {
     /// purge (the old `NoopHealthKitCacheClearer` default) and flipping the master switch off while
     /// leaving opted-out clinical data behind. Nothing must be torn down when the clearer is absent.
     @Test func disableFailsClosedWhenNoCacheClearerInstalled() async throws {
+        // NOTE: this mutates the process-wide `HealthKitService.defaultCacheClearer` for the test (restored
+        // via defer). `disableIntegration()` re-reads that static, so the nil window spans the awaits below.
+        // `.serialized` only orders THIS suite's own tests, so the safety invariant is process-wide: no
+        // OTHER suite may construct a *bare* real HealthKitService (one with no injected `cacheCleaner:`,
+        // which would fall back to this static) and call disableIntegration() while this runs. Audited at
+        // the time of writing — every other disableIntegration call site uses a mock/fake service or injects
+        // an explicit cacheCleaner, so none reads this static. A future bare-service disable test MUST be
+        // serialized against this one (or inject its own clearer) to avoid a cross-suite flake.
         let previousDefault = HealthKitService.defaultCacheClearer
         HealthKitService.defaultCacheClearer = nil
         defer { HealthKitService.defaultCacheClearer = previousDefault }

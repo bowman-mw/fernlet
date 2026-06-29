@@ -284,17 +284,16 @@ nonisolated public final class PersistenceController {
         inMemory: Bool
     ) {
         guard inMemory == false, let storeURL = storeDescription.url else { return }
-        let excluded = preferences.localBackupExcludedFromiOSBackup
-        let sidecarURLs = [storeURL,
-                           URL(fileURLWithPath: storeURL.path + "-wal"),
-                           URL(fileURLWithPath: storeURL.path + "-shm")]
-        for url in sidecarURLs {
-            do {
-                try (url as NSURL).setResourceValue(excluded, forKey: URLResourceKey.isExcludedFromBackupKey)
-            } catch {
-                print("[Fernlet] Failed to set backup exclusion (\(excluded)) for \(url.lastPathComponent): \(error)")
-            }
-        }
+        // includeSupportDir: true — none of the synced model's attributes opt into
+        // `allowsExternalBinaryDataStorage` today, but `NSPersistentCloudKitContainer` provisions a
+        // sibling `.<StoreName>_SUPPORT/` directory for mirroring metadata and may externalize asset
+        // payloads there, so we exclude it to match the sealed store and close the latent omission.
+        // Excluding a directory that does not exist yet just logs harmlessly.
+        BackupExclusion.apply(
+            storeURL: storeURL,
+            excluded: preferences.localBackupExcludedFromiOSBackup,
+            includeSupportDir: true
+        )
     }
 
     private func configureViewContext(for container: NSPersistentContainer) {

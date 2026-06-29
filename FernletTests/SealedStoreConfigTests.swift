@@ -86,4 +86,42 @@ struct SealedStoreConfigTests {
         let controller = PrivatePersistenceController(inMemory: true)
         #expect(!(controller.container is NSPersistentCloudKitContainer))
     }
+
+    // MARK: - Backup exclusion (shared BackupExclusion helper + corrected default)
+
+    /// When excluded, the shared helper flags the store file AND the `_SUPPORT` external-binary dir
+    /// (sealed columns use `allowsExternalBinaryDataStorage`, so large blobs spill there).
+    @Test func backupExclusionAppliesToStoreAndSupportDir() throws {
+        let tempDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let storeURL = tempDir.appendingPathComponent("FernletPrivate.sqlite")
+        try Data("stub".utf8).write(to: storeURL)
+        let supportDir = tempDir.appendingPathComponent(".FernletPrivate_SUPPORT", isDirectory: true)
+        try FileManager.default.createDirectory(at: supportDir, withIntermediateDirectories: true)
+
+        BackupExclusion.apply(storeURL: storeURL, excluded: true, includeSupportDir: true)
+
+        #expect(try storeURL.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+        #expect(try supportDir.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+    }
+
+    /// When NOT excluded (the default), the helper clears the flag so local data stays recoverable.
+    @Test func backupExclusionClearsFlagWhenNotExcluded() throws {
+        let tempDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let storeURL = tempDir.appendingPathComponent("FernletPrivate.sqlite")
+        try Data("stub".utf8).write(to: storeURL)
+
+        BackupExclusion.apply(storeURL: storeURL, excluded: false, includeSupportDir: true)
+
+        #expect(try storeURL.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup != true)
+    }
+
+    /// Regression guard for finding #1: the DEFAULT must be NOT-excluded, so the sealed store (which has
+    /// no cloud recovery) is recoverable via same-device backup unless the user opts into exclusion.
+    @Test func defaultStoragePreferencesDoesNotExcludeLocalBackup() {
+        #expect(StoragePreferences().localBackupExcludedFromiOSBackup == false)
+    }
 }

@@ -104,7 +104,8 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         return database.days[dateKey] ?? FernletDay(date: dateKey)
     }
 
-    @discardableResult public func saveSnapshot(_ snapshot: FernletSnapshot) -> Bool {
+    @discardableResult public func saveSnapshot(_ sanitized: SanitizedSnapshot) -> Bool {
+        let snapshot = sanitized.snapshot
         assert(!snapshot.todayKey.isEmpty, "snapshot key required")
         var database = loadDatabase(todayKey: snapshot.todayKey)
         database.apply(snapshot)
@@ -112,7 +113,8 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         return saveDatabase(database)
     }
 
-    @discardableResult public func updateDay(_ day: FernletDay, for dateKey: String, todayKey: String) -> Bool {
+    @discardableResult public func updateDay(_ sanitized: SanitizedDay, for dateKey: String, todayKey: String) -> Bool {
+        let day = sanitized.day
         assert(!dateKey.isEmpty, "date key required")
         assert(!todayKey.isEmpty, "today key required")
         assert(day.date == dateKey, "day date mismatch")

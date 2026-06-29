@@ -410,12 +410,12 @@ private final class SpyFernletRepository: FernletRepository, @unchecked Sendable
         )
     }
 
-    @discardableResult func saveSnapshot(_ snapshot: FernletSnapshot) -> Bool {
+    @discardableResult func saveSnapshot(_ snapshot: SanitizedSnapshot) -> Bool {
         saveCount += 1
         return true
     }
 
-    @discardableResult func updateDay(_ day: FernletDay, for dateKey: String, todayKey: String) -> Bool { true }
+    @discardableResult func updateDay(_ day: SanitizedDay, for dateKey: String, todayKey: String) -> Bool { true }
     func storageDescription() -> String { "spy" }
     func loadAllDays() -> [String: FernletDay] { [:] }
     func loadTierTwoMemories() -> [TierTwoMemoryRecord] { [] }

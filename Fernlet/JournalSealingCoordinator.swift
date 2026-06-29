@@ -14,6 +14,11 @@ protocol JournalSealingContext: AnyObject {
     var previousJournals: [JournalEntry] { get set }
     var todayKey: String { get }
     func scheduleSnapshotSave()
+    /// Re-arm the one-time past-day journal scrub (clear its run-once flag + retry budget) so the next
+    /// activation/launch re-scans ALL days. Called when a per-entry seal/re-seal fails so an aged-out day's
+    /// leaked plaintext — outside the in-memory `previousJournals` window that the per-activation migrate
+    /// visits — is eventually re-sealed and stripped instead of lingering in the synced blob forever (F1).
+    func requestPastDayJournalRescrub()
 }
 
 /// Sealed journal management (Phase S2), extracted from `FernletStore` (plan §5d).
@@ -112,12 +117,11 @@ final class JournalSealingCoordinator {
             // the sealed set, FernletSnapshot.forStorage / mutatePastDay do NOT strip the entry, so its
             // plaintext stays in the days blob — which is plain JSON and, when iCloud sync is on, mirrors
             // to iCloud. We accept that bounded transient exposure to avoid data loss: the text is never
-            // dropped, and migrateExistingJournalsToSealedStore (run from activateNoLockJournals /
-            // activateSealedJournals on the next launch or unlock) retries sealing it — it targets exactly
-            // `!text.isEmpty && !sealedJournalIDs.contains(id)` entries — after which the strip removes the
-            // plaintext from the blob. (An earlier note here claimed the text "remains in the user's own
-            // already-encrypted private store"; that was wrong — on failure it is neither in the narrative
-            // store nor encrypted.)
+            // dropped. Recovery: migrateExistingJournalsToSealedStore re-seals today + previousJournals on
+            // the next activation; AND we re-arm the full-repository past-day scrub so a leak on a day
+            // OUTSIDE that in-memory window (which migrate never visits) is also re-sealed and re-stripped
+            // on a later launch — rather than lingering forever (F1).
+            host.requestPastDayJournalRescrub()
         }
     }
 
@@ -135,10 +139,13 @@ final class JournalSealingCoordinator {
             // Re-seal failed. If the id stayed in sealedJournalIDs, the snapshot / past-day strip would
             // blank this entry against the now-STALE narrative copy — silently destroying the user's edit.
             // Instead drop the id (mirroring seal()'s no-data-loss policy): the new plaintext survives in
-            // the blob, and migrateExistingJournalsToSealedStore re-seals (and re-strips) it on the next
-            // activation/unlock. Bounded transient exposure, but the edit is never lost (F4).
+            // the blob. Recovery for an aged-out day (outside the in-memory previousJournals window that
+            // migrateExistingJournalsToSealedStore visits) is the re-armed full-repository scrub, whose
+            // insert-upsert overwrites the stale narrative with the blob's current text and re-strips it on
+            // a later launch. Bounded transient exposure, but the edit is never lost (F1/F4).
             FernletAuditLog.log("journal.reseal.failed", context: ["id": entry.id.uuidString])
             sealedJournalIDs.remove(entry.id)
+            host.requestPastDayJournalRescrub()
         }
     }
 
@@ -294,6 +301,10 @@ final class JournalSealingCoordinator {
     struct PastDayScrubOutcome {
         var changedDays: [String: FernletDay]
         var unsealedFailureCount: Int
+        /// False when no journal key was active (locked/inactive), so the scan could not actually run. Lets
+        /// the orchestrator distinguish a genuine clean pass from a no-key no-op and NOT advance the
+        /// run-once flag on the latter (which would permanently disable the scrub).
+        var keyActive: Bool
     }
 
     /// One-time scrub of historical past-day journals that leaked plaintext into the days blob before
@@ -313,7 +324,9 @@ final class JournalSealingCoordinator {
     /// `unsealedFailureCount` so the orchestrator can retry it on a later launch instead of giving up after
     /// the first pass (re-running is cheap: already-sealed days now have empty text and are skipped).
     func scrubbedLeakedPastDayJournals(in allDays: [String: FernletDay]) -> PastDayScrubOutcome {
-        guard let key = activeJournalRefreshKey() else { return PastDayScrubOutcome(changedDays: [:], unsealedFailureCount: 0) }
+        guard let key = activeJournalRefreshKey() else {
+            return PastDayScrubOutcome(changedDays: [:], unsealedFailureCount: 0, keyActive: false)
+        }
         var changed: [String: FernletDay] = [:]
         var unsealedFailureCount = 0
         for (dayKey, day) in allDays where dayKey != host.todayKey {
@@ -344,6 +357,6 @@ final class JournalSealingCoordinator {
                 changed[dayKey] = scrubbed
             }
         }
-        return PastDayScrubOutcome(changedDays: changed, unsealedFailureCount: unsealedFailureCount)
+        return PastDayScrubOutcome(changedDays: changed, unsealedFailureCount: unsealedFailureCount, keyActive: true)
     }
 }

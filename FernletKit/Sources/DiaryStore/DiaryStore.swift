@@ -815,18 +815,18 @@ public final class DiaryStore {
         assert(!dateKey.isEmpty, "date key required")
         var targetDay = repository.loadDay(for: dateKey, todayKey: todayKey)
         mutate(&targetDay)
-        // S3 privacy wall: a past-day write goes straight to the repository with NO forStorage pass,
-        // so strip sealed journal text here (mirrors FernletSnapshot.forStorage). The plaintext already
-        // lives in the encrypted narrative store; it must never reach the (iCloud-synced) blob. This
-        // covers EVERY past-day mutation — journal add/edit and any unrelated edit to a day that holds a
-        // sealed journal — and self-heals legacy plaintext as past days are touched. Past-day reads
-        // re-hydrate via loadDayWithDecryptedJournals; unsealed entries (ids absent from the set) keep
-        // their text, matching forStorage's behaviour and the no-data-loss path for failed seals.
-        let sealedIDs = sealedJournalIDsHook()
-        if !sealedIDs.isEmpty {
-            targetDay.journals = targetDay.journals.map { $0.strippedIfSealed(in: sealedIDs) }
-        }
-        let saved = repository.updateDay(targetDay, for: dateKey, todayKey: todayKey)
+        // S3 privacy wall: a past-day write goes straight to the repository with NO forStorage pass.
+        // SanitizedDay applies the same strip as the snapshot path — sealed journal text PLUS sensitive
+        // health fields (cycle/intimate) — so a past-day mutation can never leak them into the
+        // (iCloud-synced) blob, and updateDay structurally requires the sanitized type. This covers EVERY
+        // past-day mutation (journal add/edit and any unrelated edit to a day that holds a sealed journal)
+        // and self-heals legacy plaintext as past days are touched. Past-day reads re-hydrate via
+        // loadDayWithDecryptedJournals; unsealed entries (ids absent from the set) keep their text,
+        // matching forStorage's behaviour and the no-data-loss path for failed seals.
+        let saved = repository.updateDay(
+            SanitizedDay.sanitizing(targetDay, sealedJournalIDs: sealedJournalIDsHook()),
+            for: dateKey, todayKey: todayKey
+        )
         assert(saved, "past-date save failed for \(dateKey)")
         return saved
     }

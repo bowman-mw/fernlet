@@ -15,7 +15,7 @@ struct SnapshotSaveCoordinatorTests {
         let coordinator = SnapshotSaveCoordinator(
             repository: repository,
             debounce: .seconds(10),
-            buildSnapshot: { snapshot },
+            buildSnapshot: { snapshot.forTestingSanitized },
             onAfterSave: { afterSaveCount += 1 }
         )
 
@@ -35,7 +35,7 @@ struct SnapshotSaveCoordinatorTests {
         let coordinator = SnapshotSaveCoordinator(
             repository: repository,
             debounce: .milliseconds(20),
-            buildSnapshot: { snapshot },
+            buildSnapshot: { snapshot.forTestingSanitized },
             onAfterSave: { afterSaveCount += 1 }
         )
 
@@ -55,7 +55,7 @@ struct SnapshotSaveCoordinatorTests {
         let coordinator = SnapshotSaveCoordinator(
             repository: repository,
             debounce: .milliseconds(20),
-            buildSnapshot: { makeSnapshot(dateKey: "2026-05-26") },
+            buildSnapshot: { makeSnapshot(dateKey: "2026-05-26").forTestingSanitized },
             onAfterSave: {}
         )
 
@@ -117,12 +117,12 @@ private final class SnapshotSaveTestRepository: RemoteChangePublishingRepository
         )
     }
 
-    @discardableResult func saveSnapshot(_ snapshot: FernletSnapshot) -> Bool {
-        savedSnapshots.append(snapshot)
+    @discardableResult func saveSnapshot(_ snapshot: SanitizedSnapshot) -> Bool {
+        savedSnapshots.append(snapshot.snapshot)
         return true
     }
 
-    @discardableResult func updateDay(_ day: FernletDay, for dateKey: String, todayKey: String) -> Bool {
+    @discardableResult func updateDay(_ day: SanitizedDay, for dateKey: String, todayKey: String) -> Bool {
         true
     }
 

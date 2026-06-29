@@ -569,6 +569,9 @@ struct PrivacyDataSettingsView: View {
     }
 
     private var localBackupIncludedBinding: Binding<Bool> {
+        // "Include local data in iOS backup". With the default `localBackupExcludedFromiOSBackup = false`,
+        // this derives to true → the toggle defaults ON (data included/recoverable), and the user must
+        // opt OUT to exclude. The label stays accurate; only the default position flipped.
         Binding(
             get: { !storagePreferencesStore.preferences.localBackupExcludedFromiOSBackup },
             set: { newValue in

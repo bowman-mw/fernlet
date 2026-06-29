@@ -186,6 +186,16 @@ enum FernletLockCrypto {
         )
         return derivedKey.withUnsafeBytes { Data($0) }
     }
+
+    /// The at-rest passcode verifier is the SHA-256 digest of the scrypt-derived key — NOT the derived
+    /// key itself. Persisting only the digest keeps the content-key *wrapping* key out of the keychain:
+    /// a keychain compromise then yields only `salt + SHA256(derivedKey) + wrappedContentKey`, so an
+    /// attacker must still brute-force the passcode through scrypt to re-derive the wrapping key and
+    /// unwrap the content key. The raw derived key remains the wrapping key, used in memory only and
+    /// never written to disk. (Security hardening — see the verifier/wrapping-key split.)
+    nonisolated static func verifierDigest(of derivedKey: Data) -> Data {
+        Data(SHA256.hash(data: derivedKey))
+    }
 }
 
 @MainActor
@@ -474,7 +484,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         let wrappedContentKey = try cryptoProvider.wrapContentKey(contentKeyData, using: derivedKey)
 
         try storeVerified(saltData, for: .salt)
-        try storeVerified(derivedKey, for: .verifier)
+        // Store the DIGEST of the derived key, not the derived key itself — the derived key is the
+        // content-key wrapping key (used just above) and must never be persisted. See verifierDigest.
+        try storeVerified(FernletLockCrypto.verifierDigest(of: derivedKey), for: .verifier)
         try storeVerified(Data(credential.kind.rawValue.utf8), for: .kind)
         try storeVerified(wrappedContentKey, for: .wrappedContentKey)
         var configuredN = Int32(FernletLockCrypto.scryptN)
@@ -503,7 +515,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         }
 
         let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: current, salt: saltData, n: storedScryptN())
-        guard constantTimeEqual(computedVerifier, storedVerifier) else {
+        // Accept either the current digest verifier or a legacy raw-key verifier; re-keying below
+        // rewrites it in the new digest format regardless, so no separate migration step is needed.
+        if case .none = verifierMatch(computedVerifier: computedVerifier, storedVerifier: storedVerifier) {
             throw FernletLockError.invalidPasscode
         }
 
@@ -513,7 +527,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         let newWrappedContentKey = try cryptoProvider.wrapContentKey(contentKeyData, using: newDerivedKey)
 
         try storeVerified(newSalt, for: .salt)
-        try storeVerified(newDerivedKey, for: .verifier)
+        try storeVerified(FernletLockCrypto.verifierDigest(of: newDerivedKey), for: .verifier)
         try storeVerified(Data(new.kind.rawValue.utf8), for: .kind)
         try storeVerified(newWrappedContentKey, for: .wrappedContentKey)
         var newN = Int32(FernletLockCrypto.scryptN)
@@ -543,13 +557,17 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         }
 
         let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData, n: storedScryptN())
-        guard constantTimeEqual(computedVerifier, storedVerifier) else {
+        let match = verifierMatch(computedVerifier: computedVerifier, storedVerifier: storedVerifier)
+        if case .none = match {
             try recordFailedAttempt()
             FernletAuditLog.log("lock.failedAttempt", context: ["cooldownLevel": "\(loadCooldownLevel())"])
             throw FernletLockError.invalidPasscode
         }
 
         let contentKeyData = try cryptoProvider.unwrapContentKey(wrappedData, using: computedVerifier)
+        // First successful unlock under a build that splits the verifier from the wrapping key:
+        // rewrite the raw-key verifier to its digest in place (best-effort, legacy match only).
+        migrateLegacyVerifierIfNeeded(match, computedVerifier: computedVerifier)
         clearAttemptState()
         _contentKey = SymmetricKey(data: contentKeyData)
         state = .unlocked
@@ -586,6 +604,16 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             }
         }
 
+        // Accepted residual (document & accept, not a regression): a biometric-only legacy install
+        // (upgraded from a pre-split build, enrolled biometrics, never enters a passcode) keeps
+        // .verifier = the RAW scrypt derived key (= the content-key wrapping key). This path recovers
+        // the content key directly from the biometric-bypass blob and never derives a scrypt key, so it
+        // cannot compute SHA256(derivedKey) to migrate the verifier to its digest the way unlock()/
+        // changeCredential() do. We accept this because: the attack presupposes device compromise +
+        // keychain extraction; the bypass blob already holds the content key under a stricter
+        // (.biometryCurrentSet) ACL, so the un-migrated raw verifier is only a second, less-gated path
+        // to the same key; and everything here is ThisDeviceOnly (no off-device/iCloud exposure). The
+        // first subsequent passcode unlock (unlock/changeCredential) migrates the verifier to its digest.
         _contentKey = SymmetricKey(data: contentKeyData)
         state = .unlocked
         hasAutoPromptedBiometricForCurrentLockSession = false
@@ -620,11 +648,14 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             }
 
             let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData, n: storedScryptN())
-            guard constantTimeEqual(computedVerifier, storedVerifier) else {
+            let match = verifierMatch(computedVerifier: computedVerifier, storedVerifier: storedVerifier)
+            if case .none = match {
                 throw FernletLockError.invalidPasscode
             }
 
             let contentKeyData = try cryptoProvider.unwrapContentKey(wrappedData, using: computedVerifier)
+            // Opportunistically migrate a legacy raw-key verifier to its digest (see unlock()).
+            migrateLegacyVerifierIfNeeded(match, computedVerifier: computedVerifier)
             try KeychainItem.storeBiometricBypass(contentKeyData, service: keychainService)
             try storeVerified(Data([1]), for: .biometricEnabledFlag)
         } else {
@@ -651,6 +682,30 @@ public final class FernletLockService: @MainActor FernletLockServicing {
 
     private func scrubContentKey() {
         _contentKey = nil
+    }
+
+    private enum VerifierMatch { case current, legacy, none }
+
+    /// Compares a freshly re-derived scrypt key against the stored verifier, accepting BOTH formats:
+    /// `.current` — the stored value is `SHA256(derivedKey)` (the verifier/wrapping-key split); and
+    /// `.legacy` — the stored value is the raw derived key itself (written by builds before the split),
+    /// which signals the caller to migrate the verifier to the digest form in place. Both comparisons
+    /// are constant-time, and the legacy check is a strict fallback so a correct passcode is never
+    /// rejected during the one-time migration window.
+    private func verifierMatch(computedVerifier: Data, storedVerifier: Data) -> VerifierMatch {
+        if constantTimeEqual(FernletLockCrypto.verifierDigest(of: computedVerifier), storedVerifier) { return .current }
+        if constantTimeEqual(computedVerifier, storedVerifier) { return .legacy }
+        return .none
+    }
+
+    /// When `match == .legacy`, opportunistically migrate a legacy raw-key verifier to its digest form
+    /// in place. Best-effort — a failure here leaves the legacy verifier intact (still valid via the
+    /// legacy compare) and retries on the next successful passcode unlock. Called from unlock() and
+    /// setBiometricEnabled() after the content key has been recovered. No-op for `.current`/`.none`.
+    private func migrateLegacyVerifierIfNeeded(_ match: VerifierMatch, computedVerifier: Data) {
+        guard case .legacy = match else { return }
+        try? storeVerified(FernletLockCrypto.verifierDigest(of: computedVerifier), for: .verifier)
+        FernletAuditLog.log("lock.verifierMigratedToDigest")
     }
 
     private func storeVerified(_ data: Data, for key: LockKeychainKey) throws {

@@ -126,6 +126,10 @@ final class SealedBackupCoordinator {
     /// occurs — all of which are safe to retry on a later launch.
     @discardableResult
     func restoreSealedBackup(payloadType: SealedBackupPayloadType) async -> Bool {
+        // Outer no-clobber check: this duplicates the AUTHORITATIVE gate inside applyRestoredChunks (which
+        // re-checks under the same store before writing), but is kept deliberately as a pre-NETWORK
+        // short-circuit — it skips the CloudKit fetch + decrypt entirely when the local store already holds
+        // data. The inner check remains the source of truth against any TOCTOU between here and the write.
         guard isEmptyStoreForRestore(payloadType: payloadType, narrativeRepository: MenstrualNarrativeRepository()) else {
             FernletAuditLog.log("sealedBackup.restoreSkippedNonEmpty", context: ["payload": payloadType.rawValue])
             return false
