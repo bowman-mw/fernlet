@@ -48,7 +48,7 @@ final class OnboardingFlowUITests: XCTestCase {
         tapButton("onboarding.lock.biometrics", app: app)
 
         chooseStorage("Sync to iCloud", app: app)
-        XCTAssertTrue(app.staticTexts["Choose your focus"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Plan your goals"].waitForExistence(timeout: 2))
     }
 
     @MainActor
@@ -59,7 +59,7 @@ final class OnboardingFlowUITests: XCTestCase {
         tapButton("onboarding.lock.biometrics", app: app)
 
         chooseStorage("Just on this device", app: app)
-        XCTAssertTrue(app.staticTexts["Choose your focus"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Plan your goals"].waitForExistence(timeout: 2))
     }
 
     @MainActor
@@ -107,7 +107,7 @@ final class OnboardingFlowUITests: XCTestCase {
 
     @MainActor
     private func continueFromGoal(_ app: XCUIApplication) {
-        XCTAssertTrue(app.staticTexts["Choose your focus"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Plan your goals"].waitForExistence(timeout: 2))
         app.buttons["Continue"].tap()
     }
 
