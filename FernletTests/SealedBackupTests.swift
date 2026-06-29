@@ -1,6 +1,7 @@
 import ProximityKit
 import Foundation
 import Security
+import CryptoKit
 import FernletFoundation
 import Testing
 import FernletDomainModel
@@ -90,11 +91,12 @@ struct SealedBackupTests {
         let first = try makeSealingIdentity(firstID)
 
         // Copy ONLY the escrow key into the second keychain as a SYNCHRONIZABLE item (as iCloud Keychain
-        // sync would), then provision the second identity — `ensureProvisioned` Case 2 adopts the synced
-        // escrow while minting a fresh signing + KA pair.
-        let escrowData = try #require(KeychainItem.load(account: "backupEscrowPrivateKey", service: firstID))
+        // sync would), at the SAME content-addressed account, then provision the second identity —
+        // `ensureProvisioned` Case 2 adopts the synced escrow while minting a fresh signing + KA pair.
+        let escrowAccount = IdentityService.escrowKeychainAccount(forPublicKey: first.localBackupEscrowPublicKey)
+        let escrowData = try #require(KeychainItem.load(account: escrowAccount, service: firstID))
         KeychainItem.store(
-            escrowData, account: "backupEscrowPrivateKey", service: secondID,
+            escrowData, account: escrowAccount, service: secondID,
             accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true
         )
         let second = IdentityService(keychainService: secondID)
@@ -122,6 +124,59 @@ struct SealedBackupTests {
         // Simulate a pre-escrow-binding tag (unrelated bytes, not our escrow public key).
         record.keyAgreementPublicKey = Data(repeating: 0xAB, count: 32)
 
+        #expect(try SealedBackupCrypto.open(record, identityService: identity) == plaintext)
+    }
+
+    /// Content-addressed coexistence + try-all-keys restore: a record sealed under a key that is still
+    /// present but NOT the adopted/canonical one (e.g. during an unresolved cross-device escrow conflict)
+    /// must still open. The old fixed-slot design could SILENTLY OVERWRITE that key, stranding the backup;
+    /// content-addressing keeps it alive and `open` tries every surviving key (decrypt-first).
+    @Test func recordSealedUnderSurvivingNonAdoptedEscrowKeyStillOpens() throws {
+        let serviceID = "com.fernlet.sealed-backup.test.\(UUID().uuidString)"
+        let otherID = "com.fernlet.sealed-backup.test.\(UUID().uuidString)"
+        defer {
+            KeychainItem.deleteAll(service: serviceID)
+            KeychainItem.deleteAll(service: otherID)
+        }
+        // This device mints its OWN escrow key (local) and seals a record under it.
+        let identity = try makeSealingIdentity(serviceID)
+        let ownPub = identity.localBackupEscrowPublicKey
+        let plaintext = Data("private archive".utf8)
+        let record = try SealedBackupCrypto.seal(plaintext, payloadType: .periodData, identityService: identity)
+
+        // A DIFFERENT device's escrow key syncs in at its own content-addressed slot → coexists with ours.
+        let other = try makeSealingIdentity(otherID)
+        let otherPub = other.localBackupEscrowPublicKey
+        let otherAccount = IdentityService.escrowKeychainAccount(forPublicKey: otherPub)
+        let otherData = try #require(KeychainItem.load(account: otherAccount, service: otherID))
+        KeychainItem.store(otherData, account: otherAccount, service: serviceID,
+                           accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true)
+
+        // Reconcile sees two keys → conflict; the SYNCED other-device key is adopted as canonical, but our
+        // record's key still survives in the keychain.
+        #expect(ownPub != otherPub)
+        #expect(identity.reconcileBackupEscrowKey() == .conflict)
+        #expect(identity.localBackupEscrowPublicKey == otherPub)
+
+        // Restore still works with no manual resolution: open tries every surviving key.
+        #expect(try SealedBackupCrypto.open(record, identityService: identity) == plaintext)
+    }
+
+    /// Back-compat: a pre-content-addressing device stored its escrow key at the legacy FIXED account. Both
+    /// the seal and open paths must still find it (the legacy account is read, never written, by this build).
+    @Test func legacyFixedAccountEscrowKeyStillSealsAndOpens() throws {
+        let serviceID = "com.fernlet.sealed-backup.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let legacyKey = Curve25519.KeyAgreement.PrivateKey()
+        KeychainItem.store(legacyKey.rawRepresentation, account: "backupEscrowPrivateKey", service: serviceID,
+                           accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true)
+
+        let identity = IdentityService(keychainService: serviceID)
+        try identity.ensureProvisioned()   // Case 2: signing/KA absent, escrow present (legacy read) → adopt.
+        #expect(identity.localBackupEscrowPublicKey == legacyKey.publicKey.rawRepresentation)
+
+        let plaintext = Data("legacy archive".utf8)
+        let record = try SealedBackupCrypto.seal(plaintext, payloadType: .sensitiveNotes, identityService: identity)
         #expect(try SealedBackupCrypto.open(record, identityService: identity) == plaintext)
     }
 }

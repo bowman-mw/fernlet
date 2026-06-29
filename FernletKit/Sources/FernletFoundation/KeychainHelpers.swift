@@ -81,6 +81,32 @@ public nonisolated enum KeychainItem {
         return result as? Data
     }
 
+    /// Enumerates EVERY generic-password item under `service` (optionally restricted to a synchronizable
+    /// scope), returning each item's account + data. Used by the content-addressed backup-escrow store:
+    /// because each escrow key lives at an account derived from its own public key, divergent keys land on
+    /// DIFFERENT accounts and coexist rather than overwrite one another — so the reconcile path must
+    /// enumerate to discover the full set (a fresh device does not know the account name a priori). Query
+    /// `.synced` and `.local` separately to learn each row's sync status. Returns `[]` on no match/error.
+    public static func loadAll(service: String, synchronizable: SynchronizableScope = .any) -> [(account: String, data: Data)] {
+        var result: AnyObject?
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrSynchronizable as String: synchronizable.queryValue,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true,
+            kSecReturnData as String: true,
+            kSecUseDataProtectionKeychain as String: true
+        ]
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let items = result as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            guard let account = item[kSecAttrAccount as String] as? String,
+                  let data = item[kSecValueData as String] as? Data else { return nil }
+            return (account, data)
+        }
+    }
+
     public static func delete(account: String, service: String, synchronizable: SynchronizableScope = .any) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

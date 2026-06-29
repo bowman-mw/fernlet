@@ -48,32 +48,35 @@ enum SealedBackupCrypto {
     @MainActor
     static func open(_ record: SealedBackupRecord, identityService: IdentityService) throws -> Data {
         // The AES-GCM authentication under our escrow-derived key is the REAL ownership boundary: only a
-        // record sealed with our backup-escrow key (which syncs via iCloud Keychain) can open. We attempt
-        // decryption FIRST so a record still opens even if its `keyAgreementPublicKey` identity tag
-        // predates the escrow-binding fix (e.g. an early record still tagged with the per-device proximity
-        // KA key) or was written on another device — no stranding. The tag is consulted ONLY to choose a
-        // clearer error when decryption fails: a record not tagged with our escrow identity is someone
-        // else's (or unrelated); otherwise it is a tampered/corrupt record of ours.
-        let key = try identityService.sealedBackupKey()
-        do {
-            let nonce = try AES.GCM.Nonce(data: record.nonce)
-            let sealedBox = try AES.GCM.SealedBox(nonce: nonce, ciphertext: record.ciphertext, tag: record.tag)
-            return try AES.GCM.open(
-                sealedBox,
-                using: key,
-                authenticating: authenticatedData(
-                    payloadType: record.payloadType,
-                    signingPublicKey: record.signingPublicKey,
-                    chunkIndex: record.chunkIndex,
-                    chunkCount: record.chunkCount
-                )
+        // record sealed with one of OUR backup-escrow keys (all of which sync via iCloud Keychain) can open.
+        // We attempt decryption FIRST — and against EVERY escrow key this device holds (the adopted key plus
+        // any coexisting content-addressed / legacy keys, `sealedBackupKeyCandidates`) — so a record still
+        // opens even if (a) its `keyAgreementPublicKey` identity tag predates the escrow-binding fix or is
+        // foreign, or (b) it was sealed under a SURVIVING-but-not-adopted key during an unresolved
+        // cross-device escrow conflict (content-addressing keeps that genuine key alive). The tag is
+        // consulted ONLY to classify the failure: a record not tagged with ANY of our escrow identities is
+        // someone else's (or unrelated) → mismatch; otherwise it is a tampered/corrupt record of ours.
+        let candidates = identityService.sealedBackupKeyCandidates()
+        guard !candidates.isEmpty else { throw IdentityError.notProvisioned }
+
+        if let nonce = try? AES.GCM.Nonce(data: record.nonce),
+           let sealedBox = try? AES.GCM.SealedBox(nonce: nonce, ciphertext: record.ciphertext, tag: record.tag) {
+            let aad = authenticatedData(
+                payloadType: record.payloadType,
+                signingPublicKey: record.signingPublicKey,
+                chunkIndex: record.chunkIndex,
+                chunkCount: record.chunkCount
             )
-        } catch {
-            if record.keyAgreementPublicKey != identityService.localBackupEscrowPublicKey {
-                throw SealedBackupError.keyAgreementIdentityMismatch
+            for candidate in candidates {
+                if let plaintext = try? AES.GCM.open(sealedBox, using: candidate.key, authenticating: aad) {
+                    return plaintext
+                }
             }
-            throw SealedBackupError.malformedRecord
         }
+        if !candidates.contains(where: { $0.publicKey == record.keyAgreementPublicKey }) {
+            throw SealedBackupError.keyAgreementIdentityMismatch
+        }
+        throw SealedBackupError.malformedRecord
     }
 
     /// Binds the payload type, signing identity, and the record's position within its chunk set into

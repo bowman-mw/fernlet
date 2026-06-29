@@ -207,11 +207,24 @@ one.
   `synchronizable` row and a `ThisDeviceOnly` row coexist as distinct items separable via
   `KeychainItem.SynchronizableScope.{synced,local}` — the conflict/promotion unit tests exercise
   this. Cross-*device* convergence is still the two-device-manual part (below).
-  **Tracked follow-up (optional hardening):** eliminate the residual with a content-derived/
-  versioned keychain slot (divergent writes land on a different slot, never overwrite the genuine
-  one) and/or a signed escrow envelope verified on read (a clobbered value fails verification and
-  is discarded). Both add cost/complexity to the zero-config cross-device recovery this key exists
-  to provide, so they are deferred, not shipped.
+  **Tracked follow-up — NOW SHIPPED (content-addressed slot, 2026-06-28).** The residual above is
+  eliminated by Option 1 (content-derived slot). Each escrow key is now stored at a keychain account
+  derived from a hash of its OWN public key (`IdentityService.escrowKeychainAccount(forPublicKey:)`),
+  so two *different* keys occupy *different* accounts → distinct iCloud-Keychain slots that **coexist
+  instead of resolving by newest-wins**. A promote/publish therefore always targets the publishing
+  key's own slot and can only ever overwrite an identical copy of the same key — never a different
+  (genuine) one. Divergence becomes an additive, detectable `.conflict` (≥2 coexisting keys), surfaced
+  non-silently exactly as before, and because all keys survive the origin's backups are always
+  recoverable — `SealedBackupCrypto.open` now tries *every* surviving key (decrypt-first,
+  `sealedBackupKeyCandidates`), so restore even works through an unresolved conflict with no manual
+  step. Zero-config recovery is preserved: the common path is exactly one key, adopted automatically;
+  the legacy fixed account is still *read* for back-compat but never *written*. See the §"Implementation
+  status" addendum below.
+  *Option 2 (signed escrow envelope) was evaluated and rejected:* whatever key signs the envelope, a
+  divergent escrow key is itself a legitimately-generated Fernlet key that signs its own envelope and
+  verifies fine, so signing only catches corruption/foreign garbage (which AES-GCM auth already
+  rejects) — and once newest-wins clobbers the genuine bytes on a shared slot, no envelope can recover
+  them. It is strictly weaker than content-addressing and does not eliminate the residual.
 - **Does disabling iCloud sync / a HealthKit capability remove a recovery path?**
   - *iCloud sync OFF*: "Stop syncing, keep iCloud data" is local-retaining (reassuring copy
     kept). "Delete iCloud data" **does** delete sealed backups (`SealedBackupRecord` is in
@@ -281,3 +294,74 @@ healthKit.masterDisableConfirmed,sealedBackup.retryRestore,resolveEscrowConflict
    local key), then let A's key sync in. On B's next launch, confirm the **non-silent escrow
    conflict** banner appears and neither key is overwritten until the user taps
    "Use my other device's key" (`identity.escrow.{conflictDetected,adoptedSynced}`).
+
+---
+
+## Implementation status addendum — content-addressed escrow slot (2026-06-28, branch `s3-hardening-followups`)
+
+**Optional hardening from the "Tracked follow-up" above is now SHIPPED.** Option 1 (content-derived
+keychain slot) is implemented; Option 2 (signed envelope) was evaluated and rejected as strictly
+weaker (it cannot distinguish a divergent-but-legitimate key, and cannot recover bytes already lost to
+newest-wins). The residual where a divergent (newer) escrow key could silently overwrite the genuine
+(older) one cross-device — permanently stranding the origin's backups — is **eliminated**: divergent
+keys now land on different content-addressed accounts and **coexist** rather than overwriting.
+
+### What shipped (by file)
+- `FernletKit/.../FernletFoundation/KeychainHelpers.swift` — `KeychainItem.loadAll(service:synchronizable:)`
+  to enumerate all rows under a service (a fresh device does not know a content-addressed account a priori).
+- `FernletKit/.../ProximityKit/Identity/IdentityService.swift` —
+  - `escrowKeychainAccount(forPublicKey:)` (public, nonisolated, pure): the per-key account = `"backupEscrowPrivateKey.k." + sha256hex(pub)`.
+  - `gatherEscrowCandidates()`: enumerates content-addressed slots (synced + local) **and** the legacy
+    fixed account, coalesces each key's rows, integrity-checks each CA row (`account == hash(pub)`),
+    and orders deterministically (synced first, then by pubkey-hash) so every device picks the same
+    canonical key with no coordination.
+  - mint (`provisionBackupEscrowKeyForSealing`), promote/adopt (`reconcileBackupEscrowKey`,
+    `adoptSyncedBackupEscrowKey`), and `ensureProvisioned` Case 3 all write **content-addressed**, never
+    the legacy fixed account. `reconcile` returns `.conflict` for ≥2 coexisting keys (no overwrite).
+  - **Legacy-key migration:** when reconcile adopts a genuine key that still lives ONLY at the legacy
+    fixed account, it ADDITIVELY copies it to its content-addressed slot
+    (`identity.escrow.migratedLegacyToContentAddressed`) so upgraded users' legacy-origin keys gain the
+    same overwrite-immunity — the legacy row is left intact (old builds keep reading it) and the identical
+    bytes coalesce to one candidate (no false conflict, zero-config recovery preserved). The legacy
+    account itself is still never *written*.
+  - `sealedBackupKeyCandidates()`: every escrow AES key the device holds (adopted first), for try-all-keys open.
+- `Fernlet/SealedBackupService.swift` — `SealedBackupCrypto.open` now tries every candidate key
+  (decrypt-first; the tag remains only an error-classification hint), so a record sealed under a
+  *surviving-but-not-adopted* key (an unresolved conflict) still restores with no manual step.
+
+### Behavioral guarantees preserved
+- Zero-config cross-device recovery: common path = exactly one key, adopted automatically.
+- The legacy fixed account `"backupEscrowPrivateKey"` is still **read** (back-compat for pre-content-
+  addressing devices) but never **written** — in a pure new-build fleet it is never overwritten again.
+- WS-1 (deferred gen / open-never-mints), WS-2 (mint ThisDeviceOnly, promote on a later launch), WS-3
+  (`.conflict` outcome + non-silent UX), WS-4 (retryable restore) all unchanged at the API/UX level.
+
+### Tests
+- `IdentityServiceEscrowTests` — rewritten for content-addressed accounts; new tests:
+  content-addressed-account determinism/uniqueness, conflict leaves BOTH coexisting keys intact
+  (the core residual eliminator), `sealedBackupKeyCandidates` exposes the full set, legacy fixed-account adoption.
+- `SealedBackupTests` — cross-device test updated to the CA account; new tests: record sealed under a
+  surviving non-adopted key still opens (try-all-keys), legacy fixed-account seal+open round-trip.
+- All escrow / sealed-backup / CloudKit-data suites green; `Scripts/spm-wall-check.sh` → **WALL CHECK PASSED**.
+
+### Residual now (honest)
+- A genuine ≥2-key conflict between two **synced** keys (both devices published before convergence)
+  still surfaces repeatedly until the user/devices converge; `adoptSyncedBackupEscrowKey` only drops
+  this device's *local* divergent key (never a synced one), so nothing is destroyed cross-device. Data
+  is never lost — restore tries all surviving keys. This is the irreducible "two devices each made a
+  key" case, and it is non-silent by design.
+- Two-device manual race test (above) still applies, with the added confirmation that **no key is ever
+  overwritten** on the shared account (there is no shared account anymore) — both rows persist under
+  their distinct content-addressed accounts.
+
+### Pre-merge multi-agent review (2026-06-28)
+A 6-dimension adversarial review (crypto, keychain, state-machine, back-compat, tests, API-contract),
+each finding refute-verified, returned **SAFE TO MERGE — 0 blockers**. Two non-blocking findings were
+folded in before merge: legacy-key migration (above, finding A) and a negative test for the CA-row
+integrity guard (finding B). One **deferred perf follow-up (finding C, non-blocking):** chunked restore
+calls `sealedBackupKeyCandidates()` per chunk → O(4·chunkCount) `SecItem` queries. No correctness impact
+(the candidate set is identical across chunks — synchronous `@MainActor`, no interleaved awaits; all-or-
+nothing is enforced by GCM AAD chunk binding, not candidate-set stability) and it is a cold one-time
+new-device path with realistically 1–2 keys. Optional optimization: resolve candidates once in
+`restoreChunks` and pass them into a candidates-taking `open` overload (keep the per-call API for
+single-record callers).
