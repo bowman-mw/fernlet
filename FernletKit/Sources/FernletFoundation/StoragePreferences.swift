@@ -12,7 +12,10 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
 
     public init(
         iCloudSyncEnabled: Bool = false,
-        localBackupExcludedFromiOSBackup: Bool = true,
+        // Default NOT excluded: local data — especially the sealed store, which has NO cloud recovery —
+        // stays recoverable via same-device encrypted backups. A privacy-conscious user can still opt
+        // into exclusion via the storage settings toggle.
+        localBackupExcludedFromiOSBackup: Bool = false,
         healthKitMasterEnabled: Bool = false,
         healthKitCapabilityEnabled: [String: Bool] = StoragePreferences.defaultHealthKitCapabilityEnabled,
         sealedBackupSensitiveNotesEnabled: Bool = false,

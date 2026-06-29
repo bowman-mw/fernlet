@@ -54,7 +54,9 @@ public nonisolated final class MenstrualNarrativeRepository {
         try context.performAndWait {
             let object = NSEntityDescription.insertNewObject(forEntityName: "MenstrualNarrative", into: context)
             try apply(narrative, to: object, contentKey: contentKey, createdAt: narrative.createdAt)
-            try context.save()
+            // Save, then prune history so a re-sealed (updated) row leaves no prior ciphertext in the
+            // persistent-history transaction log (best-effort).
+            try PrivatePersistentHistoryPruner.saveAndPrune(context)
         }
     }
 
@@ -78,6 +80,9 @@ public nonisolated final class MenstrualNarrativeRepository {
                 context.rollback()
                 throw error
             }
+            // Prune history after the atomic restore so no per-record transaction lingers in the
+            // persistent-history transaction log (best-effort).
+            try? PrivatePersistentHistoryPruner.prune(context: context)
         }
     }
 
@@ -88,7 +93,9 @@ public nonisolated final class MenstrualNarrativeRepository {
             guard let object = try context.fetch(request).first else { return }
             let createdAt = object.value(forKey: "createdAt") as? Date ?? narrative.createdAt
             try apply(narrative, to: object, contentKey: contentKey, createdAt: createdAt)
-            try context.save()
+            // Save, then prune history so the prior ciphertext for this row is not retained in the
+            // persistent-history transaction log (best-effort).
+            try PrivatePersistentHistoryPruner.saveAndPrune(context)
         }
     }
 

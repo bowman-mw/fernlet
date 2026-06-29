@@ -37,7 +37,9 @@ struct StoragePreferencesTests {
         let preferences = StoragePreferences()
 
         #expect(preferences.iCloudSyncEnabled == false)
-        #expect(preferences.localBackupExcludedFromiOSBackup == true)
+        // Default NOT excluded: local data (esp. the no-cloud-recovery sealed store) stays recoverable
+        // via same-device backups unless the user opts into exclusion.
+        #expect(preferences.localBackupExcludedFromiOSBackup == false)
         #expect(preferences.healthKitMasterEnabled == false)
         #expect(preferences.healthKitCapabilityEnabled == StoragePreferences.defaultHealthKitCapabilityEnabled)
         #expect(preferences.sealedBackupSensitiveNotesEnabled == false)
@@ -96,7 +98,7 @@ struct StoragePreferencesTests {
         let reloadedStore = StoragePreferencesStore(keychainService: service)
 
         #expect(reloadedStore.preferences.iCloudSyncEnabled == false)
-        #expect(reloadedStore.preferences.localBackupExcludedFromiOSBackup == true)
+        #expect(reloadedStore.preferences.localBackupExcludedFromiOSBackup == false)
         #expect(reloadedStore.preferences.healthKitCapabilityEnabled == StoragePreferences.defaultHealthKitCapabilityEnabled)
     }
 

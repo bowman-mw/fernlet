@@ -483,6 +483,60 @@ struct FernletLockServiceTests {
         _ = try await service.unlock(passcode: "newpass123")
         #expect(service.currentAttemptCount == 0)
     }
+
+    // MARK: - Verifier / wrapping-key split + legacy migration
+
+    @Test func legacyRawKeyVerifierUnlocksAndMigratesToDigest() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"))
+        let expectedContentKey = try #require(service.contentKey()).withUnsafeBytes { Data($0) }
+        service.lock(reason: .manual)
+
+        // Simulate a pre-split install: overwrite the digest verifier with the RAW derived key (the old
+        // format, where the verifier and the content-key wrapping key were the same bytes).
+        let salt = try #require(keychainData(account: LockKeychainKey.salt.rawValue, service: harness.serviceID))
+        let rawDerived = try await harness.crypto.deriveVerifier(passcode: "123456", salt: salt, n: FernletLockCrypto.scryptN)
+        KeychainItem.store(rawDerived, for: .verifier, service: harness.serviceID)
+        #expect(keychainData(account: LockKeychainKey.verifier.rawValue, service: harness.serviceID) == rawDerived)
+
+        // Unlock still succeeds via the legacy compare, and yields the same content key.
+        let result = try await service.unlock(passcode: "123456")
+        #expect(result.method == .passcode)
+        #expect(try #require(service.contentKey()).withUnsafeBytes { Data($0) } == expectedContentKey)
+
+        // The verifier is migrated in place to the digest form (no longer the raw wrapping key).
+        let migrated = try #require(keychainData(account: LockKeychainKey.verifier.rawValue, service: harness.serviceID))
+        #expect(migrated == FernletLockCrypto.verifierDigest(of: rawDerived))
+        #expect(migrated != rawDerived)
+
+        // A subsequent unlock now matches via the current (digest) path.
+        service.lock(reason: .manual)
+        _ = try await service.unlock(passcode: "123456")
+        #expect(service.contentKey() != nil)
+    }
+
+    @Test func wrongPasscodeRejectedAgainstLegacyVerifier() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"))
+        service.lock(reason: .manual)
+
+        let salt = try #require(keychainData(account: LockKeychainKey.salt.rawValue, service: harness.serviceID))
+        let rawDerived = try await harness.crypto.deriveVerifier(passcode: "123456", salt: salt, n: FernletLockCrypto.scryptN)
+        KeychainItem.store(rawDerived, for: .verifier, service: harness.serviceID)
+
+        do {
+            _ = try await service.unlock(passcode: "000000")
+            Issue.record("Wrong passcode unexpectedly unlocked against a legacy verifier")
+        } catch FernletLockError.invalidPasscode {
+        }
+        // The legacy verifier is untouched by a failed attempt.
+        #expect(keychainData(account: LockKeychainKey.verifier.rawValue, service: harness.serviceID) == rawDerived)
+        #expect(service.contentKey() == nil)
+    }
 }
 
 @MainActor

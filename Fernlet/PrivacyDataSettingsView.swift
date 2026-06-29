@@ -30,6 +30,13 @@ protocol PrivacyHealthKitServicing {
 
 extension HealthKitService: PrivacyHealthKitServicing {}
 
+/// One sealed-backup payload whose most recent restore attempt needs the user's attention (WS-4).
+private struct SealedBackupAttention: Identifiable {
+    let payload: SealedBackupPayloadType
+    let outcome: SealedBackupRestoreOutcome
+    var id: SealedBackupPayloadType { payload }
+}
+
 struct PrivacyDataSettingsView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
@@ -49,6 +56,10 @@ struct PrivacyDataSettingsView: View {
     @State private var operationError: String?
     @State private var didSeedUITestPreferences = false
     @State private var pendingSealedBackupEnable: SealedBackupPayloadType?
+    /// Drives the shared destructive-confirmation alert. Any OFF/destructive toggle assigns to this
+    /// instead of mutating directly, so the warning (and only-on-confirm mutation) is guaranteed (WS-5).
+    @State private var pendingDestructiveAction: DestructiveConfirmation?
+    @State private var isResolvingEscrowConflict = false
 
     private let cloudDataService: any PrivacyCloudDataManaging
     private let persistenceController: any PrivacyPersistenceReloading
@@ -104,6 +115,7 @@ struct PrivacyDataSettingsView: View {
         } message: {
             Text(sealedBackupDisclosure(for: pendingSealedBackupEnable))
         }
+        .destructiveConfirmation($pendingDestructiveAction)
         .task {
             #if DEBUG
             seedUITestPreferencesIfNeeded()
@@ -189,6 +201,7 @@ struct PrivacyDataSettingsView: View {
     private var privacyControls: some View {
         VStack(alignment: .leading, spacing: 16) {
             iCloudCard
+            sealedBackupStatusBanner
             healthKitCard
             localBackupCard
             lockDataCard
@@ -241,6 +254,99 @@ struct PrivacyDataSettingsView: View {
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Non-silent surface for sealed-backup restore problems (WS-4) and cross-device escrow-key
+    /// conflicts (WS-3). Hidden entirely when there is nothing to report. Reads the store's observable
+    /// status so a deferred/failed restore is visible and retryable instead of silently swallowed.
+    @ViewBuilder
+    private var sealedBackupStatusBanner: some View {
+        if let store {
+            let attentionItems: [SealedBackupAttention] =
+                SealedBackupPayloadType.allCases.compactMap { payload in
+                    guard let outcome = store.sealedBackupRestoreStatus[payload], outcome.needsAttention else { return nil }
+                    return SealedBackupAttention(payload: payload, outcome: outcome)
+                }
+            if store.sealedBackupEscrowConflict || !attentionItems.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionLabel("Encrypted backup status")
+
+                    if store.sealedBackupEscrowConflict {
+                        Text("We found the backup key from your other device. To keep your encrypted backups in sync across devices, this device can switch to it. Backups made only on this device may need to be re-uploaded.")
+                            .font(.callout)
+                            .foregroundStyle(Color.bark)
+                            .fernletWrappingText()
+                        Button { resolveEscrowConflict() } label: {
+                            Label(isResolvingEscrowConflict ? "Switching…" : "Use my other device's key",
+                                  systemImage: "key.horizontal")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.vertical, 11)
+                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+                        .disabled(isResolvingEscrowConflict)
+                        .accessibilityIdentifier("privacy.sealedBackup.resolveConflict")
+                    }
+
+                    ForEach(attentionItems) { item in
+                        Text(restoreStatusMessage(item.outcome, payload: item.payload))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
+
+                    if attentionItems.contains(where: { $0.outcome.isRetryable }) {
+                        Button { retrySealedRestore() } label: {
+                            Label("Retry restore", systemImage: "arrow.clockwise")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.vertical, 11)
+                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+                        .accessibilityIdentifier("privacy.sealedBackup.retryRestore")
+                    }
+                }
+                .padding(14)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+                .accessibilityIdentifier("privacy.sealedBackup.statusBanner")
+            }
+        }
+    }
+
+    private func restoreStatusMessage(_ outcome: SealedBackupRestoreOutcome, payload: SealedBackupPayloadType) -> String {
+        let noun = payload == .periodData ? "period" : "private notes"
+        switch outcome {
+        case .deferredKeyNotSynced:
+            return "Couldn't restore your \(noun) backup on this device yet — iCloud Keychain may still be syncing. We'll keep trying, or tap Retry."
+        case .deferredLocked:
+            return "Your \(noun) backup is ready to restore, but Fernlet is locked. Unlock, then tap Retry."
+        case .deferredTransient:
+            return "Couldn't reach your \(noun) backup just now. We'll keep trying, or tap Retry."
+        case .notRecognized:
+            return "A \(noun) backup was found in iCloud, but it isn't encrypted with this account's key, so it can't be restored on this device."
+        case .restored, .nothingToRestore, .skippedStoreNotEmpty:
+            return ""
+        }
+    }
+
+    private func retrySealedRestore() {
+        guard let store else { return }
+        FernletAuditLog.log("privacy.sealedBackup.retryRestore")
+        Task { await store.restoreSealedBackupsIfNeeded() }
+    }
+
+    private func resolveEscrowConflict() {
+        guard let store else { return }
+        FernletAuditLog.log("privacy.sealedBackup.resolveEscrowConflict")
+        isResolvingEscrowConflict = true
+        Task {
+            _ = await store.resolveSealedBackupEscrowConflict()
+            await MainActor.run { isResolvingEscrowConflict = false }
+        }
     }
 
     private var healthKitCard: some View {
@@ -381,7 +487,7 @@ struct PrivacyDataSettingsView: View {
 
                             cloudCountsCard
 
-                            Text("This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. This device keeps a local copy.")
+                            Text("This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else.")
                                 .font(.callout.weight(.medium))
                                 .foregroundStyle(Color.bark)
                                 .fernletWrappingText()
@@ -524,7 +630,20 @@ struct PrivacyDataSettingsView: View {
             // Require explicit, informed confirmation before any data leaves the device.
             pendingSealedBackupEnable = payload
         } else {
-            applySealedBackup(payload, enabled: false)
+            // Turning a sealed backup OFF permanently deletes that encrypted backup from iCloud — a
+            // destructive, irreversible action that must be confirmed first (WS-5).
+            let noun = payload == .periodData ? "period" : "sensitive-notes"
+            pendingDestructiveAction = DestructiveConfirmation(
+                title: "Turn off encrypted \(noun) backup?",
+                message: "This permanently deletes your encrypted \(noun) backup from iCloud. "
+                    + "If you lose or replace this device, that data can't be recovered. Turn off anyway?",
+                confirmLabel: "Turn off",
+                auditEvent: payload == .periodData
+                    ? "privacy.sealedBackup.periodDisableConfirmed"
+                    : "privacy.sealedBackup.sensitiveNotesDisableConfirmed"
+            ) {
+                applySealedBackup(payload, enabled: false)
+            }
         }
     }
 
@@ -569,10 +688,33 @@ struct PrivacyDataSettingsView: View {
     }
 
     private var localBackupIncludedBinding: Binding<Bool> {
+        // "Include local data in iOS backup". With the default `localBackupExcludedFromiOSBackup = false`,
+        // this derives to true → the toggle defaults ON (data included/recoverable), and the user must
+        // opt OUT to exclude. The label stays accurate; only the default position flipped.
         Binding(
             get: { !storagePreferencesStore.preferences.localBackupExcludedFromiOSBackup },
             set: { newValue in
-                storagePreferencesStore.update { $0.localBackupExcludedFromiOSBackup = !newValue }
+                if newValue {
+                    // Re-including local data in device backups is non-destructive (it restores a
+                    // recovery path) — commit directly.
+                    FernletAuditLog.log("privacy.localBackup.included")
+                    storagePreferencesStore.update { $0.localBackupExcludedFromiOSBackup = false }
+                } else {
+                    // EXCLUDING drops the sealed store (journals, intimate logs, cycle notes — encrypted
+                    // with a ThisDeviceOnly key, so NO cloud recovery) from every device backup. Warn
+                    // before committing (WS-5).
+                    pendingDestructiveAction = DestructiveConfirmation(
+                        title: "Exclude Fernlet data from device backups?",
+                        message: "Excluding from device backup means your journals, intimate logs, and "
+                            + "cycle notes won't be in any iPhone backup. Because they're encrypted with a "
+                            + "key that never leaves this device, erasing or losing this device would lose "
+                            + "them permanently. Exclude anyway?",
+                        confirmLabel: "Exclude",
+                        auditEvent: "privacy.localBackup.excludeConfirmed"
+                    ) {
+                        storagePreferencesStore.update { $0.localBackupExcludedFromiOSBackup = true }
+                    }
+                }
             }
         )
     }
@@ -581,7 +723,22 @@ struct PrivacyDataSettingsView: View {
         Binding(
             get: { storagePreferencesStore.preferences.healthKitMasterEnabled },
             set: { newValue in
-                Task { await setHealthKitMasterEnabled(newValue) }
+                if newValue {
+                    // Enabling is constructive — proceed directly.
+                    Task { await setHealthKitMasterEnabled(true) }
+                } else {
+                    // Disabling fail-closed PURGES the cached HealthKit-derived clinical values from this
+                    // device (the data itself stays in Apple Health). Warn before committing (WS-5).
+                    pendingDestructiveAction = DestructiveConfirmation(
+                        title: "Turn off Health integration?",
+                        message: "Turning this off removes the activity, cycle, and other Health data "
+                            + "Fernlet has cached on this device. Your data stays in Apple Health. Turn off?",
+                        confirmLabel: "Turn off",
+                        auditEvent: "privacy.healthKit.masterDisableConfirmed"
+                    ) {
+                        Task { await setHealthKitMasterEnabled(false) }
+                    }
+                }
             }
         )
     }

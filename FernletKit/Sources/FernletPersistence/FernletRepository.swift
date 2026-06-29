@@ -13,8 +13,12 @@ import FernletDomainModel
 
 public protocol FernletRepository {
     func loadSnapshot(todayKey: String) -> FernletSnapshot
-    @discardableResult func saveSnapshot(_ snapshot: FernletSnapshot) -> Bool
-    @discardableResult func updateDay(_ day: FernletDay, for dateKey: String, todayKey: String) -> Bool
+    /// Persists a snapshot to the (potentially iCloud-synced) blob. Takes a `SanitizedSnapshot` — a
+    /// snapshot that can ONLY be produced by the storage privacy strip — so an un-stripped snapshot can
+    /// never reach the synced blob by accident (the data-side analogue of the compiler import-wall).
+    @discardableResult func saveSnapshot(_ snapshot: SanitizedSnapshot) -> Bool
+    /// Persists a single (past) day. Takes a `SanitizedDay` for the same reason as `saveSnapshot`.
+    @discardableResult func updateDay(_ day: SanitizedDay, for dateKey: String, todayKey: String) -> Bool
     func storageDescription() -> String
     func loadAllDays() -> [String: FernletDay]
     func loadTierTwoMemories() -> [TierTwoMemoryRecord]

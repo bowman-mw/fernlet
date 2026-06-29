@@ -65,6 +65,11 @@ final class PrivacyDataSettingsUITests: XCTestCase {
         XCTAssertTrue(master.waitForExistence(timeout: 3))
         master.tap()
 
+        // WS-5: disabling now warns (it purges cached clinical data) before committing. Confirm it.
+        let warning = app.staticTexts["Turn off Health integration?"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 3))
+        app.buttons["Turn off"].tap()
+
         for title in [
             "Body profile",
             "Cycle tracking",
@@ -75,6 +80,44 @@ final class PrivacyDataSettingsUITests: XCTestCase {
         ] {
             XCTAssertEqual(labeledElement(containing: title, app: app).value as? String, "0")
         }
+    }
+
+    /// WS-5: cancelling the HealthKit-disable warning must leave the integration ON (only mutates on
+    /// confirm). The capabilities seeded enabled stay enabled.
+    @MainActor
+    func testHealthKitMasterDisableWarningCancelKeepsItOn() throws {
+        let app = launchPrivacyApp(lockConfigured: true, freshAuth: true, healthEnabled: true)
+        openVerifiedPrivacyData(app)
+
+        let master = labeledElement(containing: "Health integration", app: app)
+        XCTAssertTrue(master.waitForExistence(timeout: 3))
+        master.tap()
+
+        XCTAssertTrue(app.staticTexts["Turn off Health integration?"].waitForExistence(timeout: 3))
+        app.buttons["Cancel"].tap()
+
+        // Still on: a seeded capability remains enabled (value "1").
+        XCTAssertEqual(labeledElement(containing: "Body profile", app: app).value as? String, "1")
+    }
+
+    /// WS-5: excluding local data from device backups drops the sealed store with no cloud recovery, so
+    /// it must warn before committing. Cancelling keeps the data included.
+    @MainActor
+    func testExcludeLocalBackupShowsWarningAndCancelKeepsIncluded() throws {
+        let app = launchPrivacyApp(lockConfigured: true, freshAuth: true)
+        openVerifiedPrivacyData(app)
+
+        // Defaults to ON (data included). Tapping it tries to EXCLUDE → must warn first.
+        let toggle = labeledElement(containing: "Include local data in iOS backup", app: app)
+        XCTAssertTrue(toggle.waitForExistence(timeout: 3))
+        XCTAssertEqual(toggle.value as? String, "1")
+        toggle.tap()
+
+        XCTAssertTrue(app.staticTexts["Exclude Fernlet data from device backups?"].waitForExistence(timeout: 3))
+        app.buttons["Cancel"].tap()
+
+        // Cancelled → still included (value "1"), nothing excluded.
+        XCTAssertEqual(labeledElement(containing: "Include local data in iOS backup", app: app).value as? String, "1")
     }
 
     @MainActor

@@ -211,6 +211,7 @@ struct CloudKitDataServiceTests {
         defer { KeychainItem.deleteAll(service: serviceID) }
         let identity = IdentityService(keychainService: serviceID)
         try identity.ensureProvisioned()
+        identity.provisionBackupEscrowKeyForSealing()   // WS-1: seal path provisions the escrow key lazily.
 
         let database = MockCloudKitRecordDatabase()
         let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)

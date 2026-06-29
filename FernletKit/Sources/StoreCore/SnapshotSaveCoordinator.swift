@@ -8,7 +8,7 @@ import FernletPersistence
 public final class SnapshotSaveCoordinator {
     private let repository: FernletRepository
     private let debounce: Duration
-    private let buildSnapshot: @MainActor () -> FernletSnapshot
+    private let buildSnapshot: @MainActor () -> SanitizedSnapshot
     private let onAfterSave: @MainActor () -> Void
 
     private var snapshotSaveTask: Task<Void, Never>?
@@ -18,7 +18,7 @@ public final class SnapshotSaveCoordinator {
     public init(
         repository: FernletRepository,
         debounce: Duration = .seconds(1),
-        buildSnapshot: @escaping @MainActor () -> FernletSnapshot,
+        buildSnapshot: @escaping @MainActor () -> SanitizedSnapshot,
         onAfterSave: @escaping @MainActor () -> Void
     ) {
         self.repository = repository

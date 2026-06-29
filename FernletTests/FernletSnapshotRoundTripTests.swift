@@ -30,6 +30,46 @@ struct FernletSnapshotRoundTripTests {
         #expect(reloadedStore.savedRecipes.sorted(by: sortSavedRecipes) == savedRecipes.sorted(by: sortSavedRecipes))
     }
 
+    /// The `SanitizedSnapshot.sanitizing` strip (the type-enforced storage boundary) must remove
+    /// cycle/intimate health context and cycle-derived `periodPhase` before they can reach the blob,
+    /// while non-sensitive health fields survive.
+    @Test func sanitizingSnapshotStripsCycleIntimateAndPeriodPhase() throws {
+        let todayKey = "2026-05-19"
+        let repository = LocalFernletRepository(fileURL: temporaryDatabaseURL("sanitize-strip"))
+        var snapshot = try baselineSnapshot(todayKey: todayKey)
+        snapshot.dailyScores[0].periodPhase = "luteal"
+        // Precondition: the baseline fixture carries the sensitive fields we expect to be stripped.
+        #expect(snapshot.day.healthContext?.cycle != nil)
+        #expect(snapshot.day.healthContext?.intimate != nil)
+
+        #expect(repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot, sealedJournalIDs: [])))
+        let reloaded = repository.loadSnapshot(todayKey: todayKey)
+
+        #expect(reloaded.day.healthContext?.cycle == nil)
+        #expect(reloaded.day.healthContext?.intimate == nil)
+        #expect(reloaded.dailyScores.allSatisfy { $0.periodPhase == nil })
+        // Non-sensitive health context still round-trips.
+        #expect(reloaded.day.healthContext?.activity != nil)
+    }
+
+    /// The strip blanks sealed-journal text (today + previousJournals) while leaving unsealed entries
+    /// intact — the data-side journal protection at the storage boundary.
+    @Test func sanitizingSnapshotBlanksSealedJournalText() throws {
+        let todayKey = "2026-05-19"
+        let repository = LocalFernletRepository(fileURL: temporaryDatabaseURL("sanitize-journal"))
+        let snapshot = try baselineSnapshot(todayKey: todayKey)
+        let sealedID = try uuid("00000000-0000-0000-0000-000000000301")  // journals[0], present in day + previous
+        let keptID = try uuid("00000000-0000-0000-0000-000000000302")    // journals[1]
+
+        #expect(repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot, sealedJournalIDs: [sealedID])))
+        let reloaded = repository.loadSnapshot(todayKey: todayKey)
+
+        #expect(reloaded.day.journals.first { $0.id == sealedID }?.text == "")
+        #expect(reloaded.day.journals.first { $0.id == keptID }?.text.isEmpty == false)
+        #expect(reloaded.previousJournals.first { $0.id == sealedID }?.text == "")
+        #expect(reloaded.previousJournals.first { $0.id == keptID }?.text.isEmpty == false)
+    }
+
     private func baselineSnapshot(todayKey: String) throws -> FernletSnapshot {
         let date0 = Date(timeIntervalSince1970: 1_779_580_800)
         let date1 = Date(timeIntervalSince1970: 1_779_584_400)

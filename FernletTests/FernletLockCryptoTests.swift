@@ -236,15 +236,28 @@ struct FernletLockCryptoTests {
         try? service.reset()
     }
 
-    // MARK: Proves the stored verifier equals the primitive output for configured credentials.
+    // MARK: Proves the stored verifier is the DIGEST of the derived key, not the derived (wrapping) key
+    // itself — so a keychain reader cannot use it to unwrap the content key (verifier/wrapping-key split).
     @MainActor
-    @Test func configuredVerifierMatchesPrimitiveOutput() async throws {
+    @Test func configuredVerifierIsDigestNotWrappingKey() async throws {
         let service = freshService()
         try await service.configure(credential: .pin6("123456"))
         let salt = try #require(loadKeychainData(account: "com.fernlet.lock.salt", service: service.keychainService))
         let storedVerifier = try #require(loadKeychainData(account: "com.fernlet.lock.verifier", service: service.keychainService))
-        let computedVerifier = try await verifier(passcode: "123456", salt: salt)
-        #expect(storedVerifier == computedVerifier)
+        let derivedKey = try await verifier(passcode: "123456", salt: salt)
+        // Stored verifier == SHA256(derivedKey), and crucially != the raw derived key (the wrapping key).
+        #expect(storedVerifier == FernletLockCrypto.verifierDigest(of: derivedKey))
+        #expect(storedVerifier == Data(SHA256.hash(data: derivedKey)))
+        #expect(storedVerifier != derivedKey)
+
+        // The stored verifier must NOT unwrap the content key — that requires the raw derived key.
+        let wrapped = try #require(loadKeychainData(account: "com.fernlet.lock.wrappedContentKey", service: service.keychainService))
+        #expect(throws: (any Error).self) {
+            _ = try FernletLockCrypto.unwrapContentKey(wrapped, using: storedVerifier)
+        }
+        // ...whereas the raw derived key DOES unwrap it (proving the digest is the only thing persisted).
+        let unwrapped = try FernletLockCrypto.unwrapContentKey(wrapped, using: derivedKey)
+        #expect(unwrapped.count == FernletLockCrypto.keyLength)
         try? service.reset()
     }
 

@@ -87,11 +87,76 @@ public struct FernletSnapshot: Codable {
 
 // MARK: - Storage sanitization (privacy wall)
 
+private extension FernletDay {
+    /// The shared per-day storage strip: blanks sealed-journal text and nils sensitive health fields
+    /// (cycle/intimate). Factored out so `SanitizedSnapshot` (today's day) and `SanitizedDay` (a past
+    /// day) apply byte-identical privacy-wall behavior and cannot drift.
+    func stripped(sealedJournalIDs: Set<UUID>) -> FernletDay {
+        var stripped = self
+        stripped.journals = journals.map { $0.strippedIfSealed(in: sealedJournalIDs) }
+        if var context = stripped.healthContext {
+            context.cycle = nil
+            context.intimate = nil
+            stripped.healthContext = context
+        }
+        return stripped
+    }
+}
+
+/// A `FernletSnapshot` that has passed the storage privacy strip. The repository write boundary
+/// (`FernletRepository.saveSnapshot`) requires THIS type rather than a raw `FernletSnapshot`, so an
+/// un-stripped snapshot can never reach the (potentially iCloud-synced) blob by accident. The only way
+/// to mint one is `sanitizing(_:sealedJournalIDs:)` (or `FernletSnapshot.forStorage`), both of which
+/// apply the strip — the data-side analogue of the compiler import-wall.
+public struct SanitizedSnapshot {
+    public let snapshot: FernletSnapshot
+    private init(_ snapshot: FernletSnapshot) { self.snapshot = snapshot }
+
+    /// Applies the storage strip and wraps the result: blanks sealed-journal text (today + previous
+    /// journals), nils sensitive health fields (cycle/intimate), and strips cycle-derived `periodPhase`
+    /// from daily scores. `sealedJournalIDs` is the set of sealed journal entry ids (sealing state lives
+    /// in the app, passed in as pure data).
+    public static func sanitizing(_ snapshot: FernletSnapshot, sealedJournalIDs: Set<UUID>) -> SanitizedSnapshot {
+        var stripped = snapshot
+        stripped.day = snapshot.day.stripped(sealedJournalIDs: sealedJournalIDs)
+        stripped.previousJournals = snapshot.previousJournals.map { $0.strippedIfSealed(in: sealedJournalIDs) }
+        stripped.dailyScores = FernletSnapshot.storedDailyScores(snapshot.dailyScores)
+        return SanitizedSnapshot(stripped)
+    }
+
+    /// TEST-ONLY: wraps a snapshot WITHOUT stripping, for tests that verify raw repository serialization
+    /// fidelity. Deliberately `internal` so it is reachable only via `@testable import FernletPersistence`
+    /// and is invisible to production code in other modules (which see only the public `sanitizing` mint).
+    static func uncheckedSanitizedForTesting(_ snapshot: FernletSnapshot) -> SanitizedSnapshot {
+        SanitizedSnapshot(snapshot)
+    }
+}
+
+/// A `FernletDay` that has passed the past-day storage strip — required by `FernletRepository.updateDay`
+/// so a raw past-day write cannot leak sealed-journal text or sensitive health fields into the synced
+/// blob. The only way to mint one is `sanitizing(_:sealedJournalIDs:)`.
+public struct SanitizedDay {
+    public let day: FernletDay
+    private init(_ day: FernletDay) { self.day = day }
+
+    /// Blanks sealed-journal text and nils sensitive health fields (cycle/intimate) on a single day.
+    /// Hardens the former journal-text-only past-day strip to also drop cycle/intimate, matching
+    /// `SanitizedSnapshot`.
+    public static func sanitizing(_ day: FernletDay, sealedJournalIDs: Set<UUID>) -> SanitizedDay {
+        SanitizedDay(day.stripped(sealedJournalIDs: sealedJournalIDs))
+    }
+
+    /// TEST-ONLY: wraps a day WITHOUT stripping (see `SanitizedSnapshot.uncheckedSanitizedForTesting`).
+    /// `internal` — reachable only via `@testable import FernletPersistence`, never from production.
+    static func uncheckedSanitizedForTesting(_ day: FernletDay) -> SanitizedDay {
+        SanitizedDay(day)
+    }
+}
+
 public extension FernletSnapshot {
-    /// The ONLY sanctioned way to build a snapshot destined for cloud storage/sync.
-    /// Strips sealed-journal text + sensitive health fields (cycle/intimacy/periodPhase)
-    /// so they never reach the synced blob. `sealedJournalIDs` is the set of sealed
-    /// journal entry ids (the sealing state lives in the app, passed in as pure data).
+    /// Builds a snapshot from its components and returns it already sanitized for cloud storage/sync —
+    /// the convenience used by the app's snapshot producer. Equivalent to constructing a `FernletSnapshot`
+    /// and calling `SanitizedSnapshot.sanitizing(_:sealedJournalIDs:)`.
     static func forStorage(
         todayKey: String, day: FernletDay, settings: FernletSettings, recentMeals: [Meal],
         previousJournals: [JournalEntry], memories: [MemoryNote], goals: [FitnessGoal],
@@ -99,22 +164,16 @@ public extension FernletSnapshot {
         dailyScores: [DailyHealthScore], retryQueue: [AIAnalysisRetryRecord],
         connectionSessionLogs: [ConnectionSessionLog], trustedProximityPeers: [ProximityTrustedPeerRecord],
         trainerAuditEvents: [TrainerAuditEvent], sealedJournalIDs: Set<UUID>
-    ) -> FernletSnapshot {
-        var strippedDay = day
-        strippedDay.journals = day.journals.map { $0.strippedIfSealed(in: sealedJournalIDs) }
-        if var context = strippedDay.healthContext {
-            context.cycle = nil
-            context.intimate = nil
-            strippedDay.healthContext = context
-        }
-        return FernletSnapshot(
-            todayKey: todayKey, day: strippedDay, settings: settings, recentMeals: recentMeals,
-            previousJournals: previousJournals.map { $0.strippedIfSealed(in: sealedJournalIDs) }, memories: memories, goals: goals,
+    ) -> SanitizedSnapshot {
+        let raw = FernletSnapshot(
+            todayKey: todayKey, day: day, settings: settings, recentMeals: recentMeals,
+            previousJournals: previousJournals, memories: memories, goals: goals,
             workshop: workshop, foodItems: foodItems, recipes: recipes,
-            dailyScores: storedDailyScores(dailyScores), retryQueue: retryQueue,
+            dailyScores: dailyScores, retryQueue: retryQueue,
             connectionSessionLogs: connectionSessionLogs, trustedProximityPeers: trustedProximityPeers,
             trainerAuditEvents: trainerAuditEvents
         )
+        return SanitizedSnapshot.sanitizing(raw, sealedJournalIDs: sealedJournalIDs)
     }
 
     /// Strips `DailyHealthScore.periodPhase` (cycle-derived) from every score. Pure.

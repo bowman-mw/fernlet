@@ -2,11 +2,37 @@ import XCTest
 import LocalPersistence
 import FernletDomainModel
 import PrivateMemoryStore
-import FernletPersistence
+@testable import FernletPersistence
 import FoodCatalog
 import PrivateStoreCore
 import CloudKitSync
 @testable import Fernlet
+
+// Test-only sanitized wrappers. `forTestingSanitized` wraps WITHOUT stripping (for repository
+// serialization-fidelity tests and setup of pre-strip fixtures); use `SanitizedSnapshot.sanitizing(...)`
+// / `SanitizedDay.sanitizing(...)` directly when a test wants to exercise the real privacy strip.
+extension FernletSnapshot {
+    var forTestingSanitized: SanitizedSnapshot { SanitizedSnapshot.uncheckedSanitizedForTesting(self) }
+}
+
+extension FernletDay {
+    var forTestingSanitized: SanitizedDay { SanitizedDay.uncheckedSanitizedForTesting(self) }
+}
+
+// Test-only convenience overloads so the many existing tests that persist a raw snapshot/day keep
+// compiling unchanged. They wrap WITHOUT stripping (`forTestingSanitized`), preserving prior test
+// semantics. These live in the test target ONLY — production code in other modules still sees just the
+// `SanitizedSnapshot`/`SanitizedDay` boundary, so the privacy guard is unaffected. A test that wants to
+// exercise the real strip calls `SanitizedSnapshot.sanitizing(...)` explicitly.
+extension FernletRepository {
+    @discardableResult func saveSnapshot(_ snapshot: FernletSnapshot) -> Bool {
+        saveSnapshot(snapshot.forTestingSanitized)
+    }
+
+    @discardableResult func updateDay(_ day: FernletDay, for dateKey: String, todayKey: String) -> Bool {
+        updateDay(day.forTestingSanitized, for: dateKey, todayKey: todayKey)
+    }
+}
 
 /// Creates a FernletStore backed by an in-memory Core Data stack.
 /// All data is discarded when the store is deallocated.

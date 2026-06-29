@@ -74,6 +74,9 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring {
                 if isNew { context.delete(object) } else { context.rollback() }
                 throw error
             }
+            // Prune history after an upsert so a re-sealed (edited) row leaves no prior ciphertext in
+            // the transaction log. Best-effort — a prune failure must not undo the write that succeeded.
+            try? PrivatePersistentHistoryPruner.prune(context: context)
         }
     }
 
@@ -90,6 +93,8 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring {
                 context.rollback()
                 throw error
             }
+            // Prune history so the prior ciphertext for this row is not retained (best-effort).
+            try? PrivatePersistentHistoryPruner.prune(context: context)
         }
     }
 

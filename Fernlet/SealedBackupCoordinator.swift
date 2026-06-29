@@ -21,6 +21,56 @@ protocol SealedBackupContext: AnyObject {
     var recentMeals: [Meal] { get }
     func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord])
     func loadAllDaysFromRepository() -> [String: FernletDay]
+    /// Records the outcome of a sealed-backup restore attempt so the UI can show an honest, retryable
+    /// status (WS-4) instead of a silently-swallowed failure.
+    func recordSealedBackupRestoreOutcome(_ outcome: SealedBackupRestoreOutcome, payloadType: SealedBackupPayloadType)
+    /// Records whether a cross-device escrow-key conflict was detected (WS-3) so the UI can surface a
+    /// non-silent choice before anything is overwritten or re-uploaded.
+    func recordSealedBackupEscrowConflict(_ inConflict: Bool)
+}
+
+/// The result of a single sealed-backup restore attempt, rich enough that the UI can show an honest,
+/// retryable status instead of a silent boolean (WS-4). `didRestore` preserves the historical Bool
+/// contract for callers/tests that only care whether records actually landed.
+enum SealedBackupRestoreOutcome: Equatable {
+    /// Records were decrypted and written into the local stores.
+    case restored(Int)
+    /// No sealed backup exists in iCloud for this payload — nothing to do (not a failure).
+    case nothingToRestore
+    /// The local store already holds user data — never clobbered (not a failure).
+    case skippedStoreNotEmpty
+    /// The backup-escrow key isn't present yet (iCloud Keychain still syncing) — retryable. NEVER minted
+    /// on this path, so this is the honest "not synced yet" state rather than a fabricated identity.
+    case deferredKeyNotSynced
+    /// The content key is locked (period data) — retryable after the user unlocks.
+    case deferredLocked
+    /// A transport/decode error, or an incomplete/mixed-generation chunk set — retryable next launch.
+    case deferredTransient
+    /// The record isn't ours (escrow-identity mismatch) or is corrupt — a distinct, honest message.
+    case notRecognized
+
+    var didRestore: Bool {
+        if case .restored = self { return true }
+        return false
+    }
+
+    /// Whether this outcome left something the user should see (WS-4 "visible"). The benign outcomes
+    /// (restored / nothing-to-restore / skipped-non-empty) do not.
+    var needsAttention: Bool {
+        switch self {
+        case .deferredKeyNotSynced, .deferredLocked, .deferredTransient, .notRecognized: return true
+        case .restored, .nothingToRestore, .skippedStoreNotEmpty: return false
+        }
+    }
+
+    /// Whether re-running restore could plausibly succeed later (WS-4 "retryable"). `notRecognized` is
+    /// terminal for the current backup (a different key won't appear by retrying).
+    var isRetryable: Bool {
+        switch self {
+        case .deferredKeyNotSynced, .deferredLocked, .deferredTransient: return true
+        case .restored, .nothingToRestore, .skippedStoreNotEmpty, .notRecognized: return false
+        }
+    }
 }
 
 /// Sealed CloudKit backup: reconcile (enable/disable upload) + restore (new-device /
@@ -47,10 +97,37 @@ final class SealedBackupCoordinator {
         self.host = host
     }
 
-    private func makeSealedBackupService() -> SealedBackupService? {
+    /// How the backup-escrow key should be prepared on the identity before a sealed-backup operation.
+    /// Splitting these is the heart of the escrow-race fix (WS-1): the open/restore path must NEVER mint
+    /// a key, while the seal/enable path may mint one lazily (and stores it `ThisDeviceOnly` first, WS-2).
+    private enum EscrowMode {
+        /// Disable/delete — no escrow key needed (delete is by record name).
+        case none
+        /// Seal/enable — adopt a synced/local key, else mint one ThisDeviceOnly (lazy generation).
+        case forSealing
+        /// Open/restore — adopt an existing key only; absence is surfaced as "not synced yet", never minted.
+        case forOpening
+    }
+
+    /// Builds an `IdentityService` with the escrow key prepared per `escrowMode`, or nil if provisioning
+    /// failed. For `.forOpening`, `escrowReady` reports whether a usable escrow key is present so the
+    /// caller can short-circuit to a retryable "not synced yet" state without any network work.
+    private func makeIdentity(escrowMode: EscrowMode) -> (identity: IdentityService, escrowReady: Bool)? {
         let identity = IdentityService()
         do { try identity.ensureProvisioned() } catch { return nil }
-        return SealedBackupService(cloudDataService: CloudKitDataService(), identityService: identity)
+        switch escrowMode {
+        case .none:
+            return (identity, true)
+        case .forSealing:
+            identity.provisionBackupEscrowKeyForSealing()
+            return (identity, true)
+        case .forOpening:
+            return (identity, identity.loadBackupEscrowKeyForOpen())
+        }
+    }
+
+    private func makeSealedBackupService(identity: IdentityService) -> SealedBackupService {
+        SealedBackupService(cloudDataService: CloudKitDataService(), identityService: identity)
     }
 
     /// Serializes the sensitive-notes payload (the Tier-2 behavioral memories). Period data is sealed
@@ -63,10 +140,13 @@ final class SealedBackupCoordinator {
     /// succeeded; callers should only persist the "on" preference when this returns `true`.
     @discardableResult
     func setSealedBackupEnabled(_ enabled: Bool, payloadType: SealedBackupPayloadType) async -> Bool {
-        guard let service = makeSealedBackupService() else {
+        // Enabling SEALS (needs an escrow key — minted lazily here if absent, WS-1); disabling only
+        // DELETES the chunk set (no escrow key needed).
+        guard let prepared = makeIdentity(escrowMode: enabled ? .forSealing : .none) else {
             FernletAuditLog.log("sealedBackup.notProvisioned", context: ["payload": payloadType.rawValue])
             return false
         }
+        let service = makeSealedBackupService(identity: prepared.identity)
         do {
             switch (payloadType, enabled) {
             case (.sensitiveNotes, _):
@@ -103,50 +183,152 @@ final class SealedBackupCoordinator {
         }
     }
 
-    /// Called once at launch (after the store is ready) to pull any sealed iCloud backups into the
-    /// local stores. No-ops unless iCloud sync is on, the payload's backup is enabled, and the local
-    /// store is a fresh install. Best-effort and non-fatal: failures are logged and retried next
-    /// launch. Gated by `FERNLET_SKIP_SEALED_RESTORE` so UI tests can opt out.
+    /// Called once at launch (after the store is ready), and again from the user's "Retry" action, to
+    /// reconcile the escrow key and pull any sealed iCloud backups into the local stores. No-ops unless
+    /// iCloud sync is on. Best-effort and non-fatal: failures are surfaced as a retryable status (WS-4),
+    /// audited, and retried next launch. Gated by `FERNLET_SKIP_SEALED_RESTORE` so UI tests can opt out.
     func restoreSealedBackupsIfNeeded() async {
         guard ProcessInfo.processInfo.environment["FERNLET_SKIP_SEALED_RESTORE"] != "1" else { return }
         let prefs = StoragePreferencesStore.currentPreferences()
         guard prefs.iCloudSyncEnabled else { return }
+        // Reconcile the escrow key BEFORE restoring so any open() runs under the authoritative key and a
+        // cross-device key conflict is surfaced non-silently (WS-3).
+        reconcileEscrowKey()
         if prefs.sealedBackupSensitiveNotesEnabled {
-            _ = await restoreSealedBackup(payloadType: .sensitiveNotes)
+            _ = await restoreSealedBackupOutcome(payloadType: .sensitiveNotes)
         }
         if prefs.sealedBackupPeriodEnabled {
-            _ = await restoreSealedBackup(payloadType: .periodData)
+            _ = await restoreSealedBackupOutcome(payloadType: .periodData)
         }
     }
 
-    /// Fetches, decrypts, and writes a single sealed-backup payload into the local stores. Returns
-    /// `true` only when records were actually restored. Returns `false` (without mutating anything)
-    /// when the store already holds data (never clobbers), no backup exists, the device identity
-    /// can't open the record, the content key is locked (period data), or any decode/transport error
-    /// occurs — all of which are safe to retry on a later launch.
+    /// Reconciles the backup-escrow key across iCloud Keychain (WS-3) and records any conflict so the UI
+    /// can surface a non-silent choice. Adoption of a synced key and promotion of a local key are
+    /// non-destructive and proceed; only a divergent synced-vs-local key is held back for user resolution.
+    private func reconcileEscrowKey() {
+        let identity = IdentityService()
+        do { try identity.ensureProvisioned() } catch {
+            FernletAuditLog.log("sealedBackup.escrowReconcileNotProvisioned")
+            return
+        }
+        switch identity.reconcileBackupEscrowKey() {
+        case .conflict:
+            FernletAuditLog.log("sealedBackup.escrowConflict")
+            host.recordSealedBackupEscrowConflict(true)
+        case .noEscrow, .usingSynced, .promotedLocal:
+            host.recordSealedBackupEscrowConflict(false)
+        }
+    }
+
+    /// WS-3 user-confirmed conflict resolution: adopt the synced (other-device) escrow key as
+    /// authoritative, then re-upload this device's enabled backups under it. The caller (UI) MUST warn
+    /// the user first that device-only backups may need re-uploading. Returns whether a synced key was
+    /// adopted; the conflict status is cleared on success.
+    @discardableResult
+    func adoptSyncedEscrowAndReupload() async -> Bool {
+        let identity = IdentityService()
+        do { try identity.ensureProvisioned() } catch {
+            FernletAuditLog.log("sealedBackup.escrowAdoptNotProvisioned")
+            return false
+        }
+        guard identity.adoptSyncedBackupEscrowKey() != nil else {
+            FernletAuditLog.log("sealedBackup.escrowAdoptNoSyncedKey")
+            return false
+        }
+        FernletAuditLog.log("sealedBackup.escrowAdopted")
+        host.recordSealedBackupEscrowConflict(false)
+        // Re-seal + re-upload whatever the user has enabled so the cloud copy matches the adopted key.
+        let prefs = StoragePreferencesStore.currentPreferences()
+        if prefs.sealedBackupSensitiveNotesEnabled {
+            _ = await setSealedBackupEnabled(true, payloadType: .sensitiveNotes)
+        }
+        if prefs.sealedBackupPeriodEnabled {
+            _ = await setSealedBackupEnabled(true, payloadType: .periodData)
+        }
+        return true
+    }
+
+    /// Fetches/decrypts/writes a single sealed-backup payload into the local stores, returning a rich
+    /// outcome AND recording it on the host so the UI can show a non-silent, retryable status (WS-4).
+    @discardableResult
+    func restoreSealedBackupOutcome(payloadType: SealedBackupPayloadType) async -> SealedBackupRestoreOutcome {
+        let outcome = await performRestore(payloadType: payloadType)
+        host.recordSealedBackupRestoreOutcome(outcome, payloadType: payloadType)
+        return outcome
+    }
+
+    /// Bool-returning restore kept for the restore tests and the `FernletStore` wrapper. Does NOT record
+    /// a UI status (the launch/retry path uses `restoreSealedBackupOutcome` for that); returns whether
+    /// records were actually written.
     @discardableResult
     func restoreSealedBackup(payloadType: SealedBackupPayloadType) async -> Bool {
+        await performRestore(payloadType: payloadType).didRestore
+    }
+
+    /// The actual restore. Splits every termination into a distinct outcome (WS-4): never marks restore
+    /// "done" on a recoverable failure. The escrow key is loaded WITHOUT minting (WS-1) — its absence is
+    /// reported as `.deferredKeyNotSynced` (retry), never a fabricated identity.
+    private func performRestore(payloadType: SealedBackupPayloadType) async -> SealedBackupRestoreOutcome {
+        FernletAuditLog.log("sealedBackup.restoreAttempt", context: ["payload": payloadType.rawValue])
+        // Outer no-clobber check: this duplicates the AUTHORITATIVE gate inside applyRestoredChunks (which
+        // re-checks under the same store before writing), but is kept deliberately as a pre-NETWORK
+        // short-circuit — it skips the CloudKit fetch + decrypt entirely when the local store already holds
+        // data. The inner check remains the source of truth against any TOCTOU between here and the write.
         guard isEmptyStoreForRestore(payloadType: payloadType, narrativeRepository: MenstrualNarrativeRepository()) else {
             FernletAuditLog.log("sealedBackup.restoreSkippedNonEmpty", context: ["payload": payloadType.rawValue])
-            return false
+            return .skippedStoreNotEmpty
         }
-        guard let service = makeSealedBackupService() else {
+        guard let prepared = makeIdentity(escrowMode: .forOpening) else {
             FernletAuditLog.log("sealedBackup.restoreNotProvisioned", context: ["payload": payloadType.rawValue])
-            return false
+            return .deferredTransient
         }
+        // No escrow key present yet → "not synced yet". Short-circuit before any network work; the open
+        // path must NEVER mint a key (WS-1), so this is the honest retryable state.
+        guard prepared.escrowReady else {
+            FernletAuditLog.log("sealedBackup.restoreDeferredKeyNotSynced", context: ["payload": payloadType.rawValue])
+            return .deferredKeyNotSynced
+        }
+        let service = makeSealedBackupService(identity: prepared.identity)
         do {
             guard let chunks = try await service.restoreChunks(payloadType: payloadType) else {
-                return false
+                FernletAuditLog.log("sealedBackup.restoreNothingToRestore", context: ["payload": payloadType.rawValue])
+                return .nothingToRestore
             }
             let restored = try applyRestoredChunks(chunks, payloadType: payloadType)
-            guard restored > 0 else { return false }
+            guard restored > 0 else {
+                FernletAuditLog.log("sealedBackup.restoreNothingToRestore", context: ["payload": payloadType.rawValue])
+                return .nothingToRestore
+            }
             FernletAuditLog.log("sealedBackup.restored", context: [
                 "payload": payloadType.rawValue, "count": String(restored)
             ])
-            return true
+            return .restored(restored)
         } catch {
+            return classifyRestoreFailure(error, payloadType: payloadType)
+        }
+    }
+
+    /// Maps a restore error to a distinct outcome (WS-4): "not yours/corrupt" (mismatch) vs "not synced
+    /// yet" (no key) vs locked vs transient. The default catch is deliberately RETRYABLE — an incomplete
+    /// or mixed-generation chunk set (`malformedRecord`) and transport/decode errors are all re-pulled
+    /// next launch rather than declared terminal.
+    private func classifyRestoreFailure(_ error: Error, payloadType: SealedBackupPayloadType) -> SealedBackupRestoreOutcome {
+        switch error {
+        case SealedBackupError.keyAgreementIdentityMismatch:
+            FernletAuditLog.log("sealedBackup.restoreNotRecognized", context: ["payload": payloadType.rawValue])
+            return .notRecognized
+        case IdentityError.notProvisioned:
+            FernletAuditLog.log("sealedBackup.restoreDeferredKeyNotSynced", context: ["payload": payloadType.rawValue])
+            return .deferredKeyNotSynced
+        case SealedBackupWiringError.locked:
+            FernletAuditLog.log("sealedBackup.restoreDeferredLocked", context: ["payload": payloadType.rawValue])
+            return .deferredLocked
+        case SealedBackupWiringError.storeNotEmpty:
+            FernletAuditLog.log("sealedBackup.restoreSkippedNonEmpty", context: ["payload": payloadType.rawValue])
+            return .skippedStoreNotEmpty
+        default:
             FernletAuditLog.log("sealedBackup.restoreFailed", context: ["payload": payloadType.rawValue])
-            return false
+            return .deferredTransient
         }
     }
 
