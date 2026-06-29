@@ -104,6 +104,7 @@ final class FernletStore {
     var todayKey: String { diary.todayKey }
     private var repository: FernletRepository { diary.repository }
     @ObservationIgnored let savedRecipeService: SavedRecipeService
+    @ObservationIgnored let customItemService: CustomItemService
     @ObservationIgnored let proximityTrustVault: ProximityTrustVault
     @ObservationIgnored let aiRetryQueueService: AIRetryQueueService
     @ObservationIgnored private(set) lazy var meshNetworkManager: MeshNetworkManager = MeshNetworkManager(store: self)
@@ -159,7 +160,7 @@ final class FernletStore {
     /// a fresh process launch resets it.
     @ObservationIgnored private var pastDayScrubBudgetConsumedThisSession = false
 
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled()) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled()) {
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
 
@@ -176,6 +177,11 @@ final class FernletStore {
         }
         savedRecipeService.loadSync()
         self.savedRecipeService = savedRecipeService
+        let customItemService = StartupTiming.timed("CustomItemService.init") {
+            CustomItemService(repository: customItemRepository ?? CustomItemRepository())
+        }
+        customItemService.loadSync()
+        self.customItemService = customItemService
         self.healthKitService = healthKitService
         self.connectionSessionLogs = snapshot.connectionSessionLogs
         self.proximityTrustVault = ProximityTrustVault(
@@ -199,6 +205,9 @@ final class FernletStore {
             periodAdjustment: { [weak self] key in self?.periodAdjustment(for: key) ?? .none },
             sealedJournalIDs: { [weak self] in self?.journalSealingCoordinator.sealedJournalIDs ?? [] }
         )
+        // Mint the anonymous designer id now (not lazily from a view body) so the first Wardrobe/Studio
+        // render is a pure read and never mutates @Observable state mid-update.
+        self.diary.ensureLocalDesignerID()
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -213,10 +222,12 @@ final class FernletStore {
         todayKey: String,
         repository: FernletRepository,
         savedRecipeService: SavedRecipeService,
+        customItemService: CustomItemService,
         healthKitService: (any HealthKitServicing)? = nil,
         foodCatalog: FoodCatalog = .bundled()
     ) {
         self.savedRecipeService = savedRecipeService
+        self.customItemService = customItemService
         self.healthKitService = healthKitService
         self.connectionSessionLogs = snapshot.connectionSessionLogs
         self.proximityTrustVault = ProximityTrustVault(
@@ -238,6 +249,7 @@ final class FernletStore {
             periodAdjustment: { [weak self] key in self?.periodAdjustment(for: key) ?? .none },
             sealedJournalIDs: { [weak self] in self?.journalSealingCoordinator.sealedJournalIDs ?? [] }
         )
+        self.diary.ensureLocalDesignerID()
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -378,6 +390,45 @@ final class FernletStore {
 
     func setCompanionName(_ name: String) {
         diary.setCompanionName(name)
+    }
+
+    // MARK: - Custom items (Creation Studio / Wardrobe)
+    // Items live in `customItemService` (own per-row store); the equip map + designer id live in settings.
+
+    var customItems: [CustomizationItem] { customItemService.items }
+
+    /// The items currently equipped, one per occupied slot, in slot order. Stale equip references
+    /// (deleted item, slot mismatch) resolve to nothing.
+    var equippedCustomItems: [CustomizationItem] {
+        let map = settings.equippedItemIDsBySlot
+        return ItemSlot.allCases.compactMap { slot in
+            guard let id = map[slot.rawValue] else { return nil }
+            return customItemService.items.first { $0.id == id && $0.slot == slot }
+        }
+    }
+
+    func saveCustomItem(_ item: CustomizationItem) { customItemService.upsert(item) }
+
+    func deleteCustomItem(id: UUID) {
+        customItemService.delete(id: id)
+        diary.clearEquipReferences(forItemID: id)
+    }
+
+    func equipCustomItem(id: UUID, slot: ItemSlot) { diary.equipCustomItem(id: id, slot: slot) }
+    func unequipCustomSlot(_ slot: ItemSlot) { diary.unequipSlot(slot) }
+    func setCustomItemShareable(id: UUID, _ shareable: Bool) { customItemService.setShareable(id: id, shareable) }
+
+    /// This device's anonymous designer id, stamped onto items the user designs.
+    var localDesignerID: UUID { diary.localDesignerID }
+
+    /// Whether `item` was designed on this device.
+    func isSelfDesigned(_ item: CustomizationItem) -> Bool { item.designer.id == localDesignerID }
+
+    /// Resolves an item's provenance to a display name: "You" for own designs, the locally-learned name
+    /// for a known friend-designer, or a generic fallback for a designer this device hasn't met yet.
+    func designerDisplayName(for item: CustomizationItem) -> String {
+        if isSelfDesigned(item) { return "You" }
+        return settings.knownDesignerNames[item.designer.id.uuidString] ?? "a friend"
     }
 
     func setProximityDisplayName(_ name: String) {
@@ -1298,6 +1349,7 @@ final class FernletStore {
             connectionSessionLogs = []
         }
         savedRecipeService.reset()
+        customItemService.reset()
         aiRetryQueueService.reset()
         proximityTrustVault.apply(peers: [], audit: [])
     }
@@ -1315,6 +1367,10 @@ final class FernletStore {
 
     func flushPendingSnapshotSave() {
         snapshotSaveCoordinator.flushPending()
+        // Custom items persist on a separate debounce (their own per-row store). Flush it in lockstep so
+        // a newly-designed item can't be lost when its equip reference (in the snapshot) is force-saved
+        // on background but the item row's yield-debounced write hasn't run yet.
+        customItemService.flushPendingSave()
     }
 
     private func reloadFromRepository() async {
@@ -1559,6 +1615,9 @@ extension FernletStore {
         let savedRecipeService = StartupTiming.timed("SavedRecipeService.init") {
             SavedRecipeService(repository: SavedRecipeRepository())
         }
+        let customItemService = StartupTiming.timed("CustomItemService.init") {
+            CustomItemService(repository: CustomItemRepository())
+        }
 
         statusUpdate("Reading recent days...")
         let snapshot: FernletSnapshot
@@ -1572,12 +1631,14 @@ extension FernletStore {
 
         statusUpdate("Loading saved recipes...")
         await savedRecipeService.loadAsync()
+        await customItemService.loadAsync()
 
         return FernletStore(
             snapshot: snapshot,
             todayKey: key,
             repository: activeRepository,
             savedRecipeService: savedRecipeService,
+            customItemService: customItemService,
             healthKitService: nil
         )
     }

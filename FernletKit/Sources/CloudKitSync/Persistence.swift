@@ -331,7 +331,8 @@ nonisolated public final class PersistenceController {
         // Sealed entities (MenstrualNarrative, JournalNarrative) live in PrivatePersistenceController.
         model.entities = [
             makeFernletDatabaseRecordEntity(),
-            makeSavedRecipeRecordEntity()
+            makeSavedRecipeRecordEntity(),
+            makeCustomItemRecordEntity()
         ]
         return model
     }
@@ -364,6 +365,22 @@ nonisolated public final class PersistenceController {
             makeAttribute("fat", type: .integer64AttributeType, defaultValue: 0),
             makeAttribute("micronutrientsJSON", type: .stringAttributeType),
             makeAttribute("savedAt", type: .dateAttributeType)
+        ]
+        return entity
+    }
+
+    private static func makeCustomItemRecordEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "CustomItemRecord"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            makeAttribute("idString", type: .stringAttributeType),
+            // The whole CustomizationItem (incl. palette-indexed pixel grid) as JSON. Plain binary, NOT
+            // external storage: NSPersistentCloudKitContainer rejects `allowsExternalBinaryDataStorage`
+            // at store load (see the makeContainer note above), and a palette-indexed texture is ~1 KB —
+            // far under CloudKit's per-field budget — so inline binary is both required and sufficient.
+            makeAttribute("payloadData", type: .binaryDataAttributeType),
+            makeAttribute("createdAt", type: .dateAttributeType)
         ]
         return entity
     }

@@ -9,6 +9,16 @@ public nonisolated struct FernletSettings: Codable {
     public var showDeveloperNotes = false
     public var connectionInspectorMode: ConnectionInspectorMode = .live
     public var companionAppearance: CompanionAppearance = .standard
+    /// Which owned item is equipped in each slot, keyed by `ItemSlot.rawValue`. A slot absent from the
+    /// map (or pointing at a deleted item) renders nothing. The items themselves live in their own
+    /// per-row store (`CustomItemService`), not here — only this tiny render-state map stays in settings.
+    public var equippedItemIDsBySlot: [String: UUID] = [:]
+    /// This device's anonymous, stable designer id, stamped onto every item the user designs. Generated
+    /// lazily on first use (see `DiaryStore.localDesignerID`). Not derived from any identity material.
+    public var localDesignerID: UUID? = nil
+    /// Locally-learned `designerID → display name` map, populated when connecting with friends in person
+    /// (Increment 3). Lets the closet resolve "designed by <friend>" without the item ever carrying a name.
+    public var knownDesignerNames: [String: String] = [:]
     public var selectedGoal: GoalType = .wellness
     /// Per-day sickness flags keyed by `yyyy-MM-dd`. Keyed by date so past-day scoring uses the
     /// flag that was set for *that* day, and "today" naturally resets when the date rolls over.
@@ -63,6 +73,9 @@ public nonisolated struct FernletSettings: Codable {
         showDeveloperNotes = try container.decodeIfPresent(Bool.self, forKey: .showDeveloperNotes) ?? false
         connectionInspectorMode = try container.decodeIfPresent(ConnectionInspectorMode.self, forKey: .connectionInspectorMode) ?? .live
         companionAppearance = try container.decodeIfPresent(CompanionAppearance.self, forKey: .companionAppearance) ?? .standard
+        equippedItemIDsBySlot = try container.decodeIfPresent([String: UUID].self, forKey: .equippedItemIDsBySlot) ?? [:]
+        localDesignerID = try container.decodeIfPresent(UUID.self, forKey: .localDesignerID)
+        knownDesignerNames = try container.decodeIfPresent([String: String].self, forKey: .knownDesignerNames) ?? [:]
         selectedGoal = try container.decodeIfPresent(GoalType.self, forKey: .selectedGoal) ?? .wellness
         sickDays = try container.decodeIfPresent([String: Bool].self, forKey: .sickDays) ?? [:]
         intentDismissedDays = try container.decodeIfPresent([String: Bool].self, forKey: .intentDismissedDays) ?? [:]

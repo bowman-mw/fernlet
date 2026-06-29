@@ -174,7 +174,8 @@ struct HomeView: View {
                 state: store.companionState,
                 appearance: store.settings.companionAppearance,
                 size: 132,
-                interactionLevel: companionPetCount
+                interactionLevel: companionPetCount,
+                equippedItems: store.equippedCustomItems
             )
             .contentShape(Rectangle())
             .onTapGesture {
@@ -595,6 +596,7 @@ private struct CompanionCustomizationSheet: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
+                        wardrobeLink
                         switch section {
                         case .style:
                             styleControls
@@ -623,7 +625,8 @@ private struct CompanionCustomizationSheet: View {
                 state: store.companionState,
                 appearance: store.settings.companionAppearance,
                 size: 150,
-                interactionLevel: petCount
+                interactionLevel: petCount,
+                equippedItems: store.equippedCustomItems
             )
             .frame(maxWidth: .infinity)
 
@@ -643,6 +646,37 @@ private struct CompanionCustomizationSheet: View {
                 .fill(Color.bark.opacity(0.08))
                 .frame(height: 1)
         }
+    }
+
+    private var wardrobeLink: some View {
+        NavigationLink {
+            WardrobeView(store: store)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "tshirt.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color.moss)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Custom items & wardrobe")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.bark)
+                    Text("Design your own clothes in the grid editor")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.bark.opacity(0.4))
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.cream)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var styleControls: some View {

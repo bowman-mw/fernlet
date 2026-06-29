@@ -280,6 +280,60 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    // MARK: - Custom items: equip state + designer identity
+    // The items themselves live in `CustomItemService` (their own per-row store). Only the equipped-slot
+    // map and the device's anonymous designer id are settings-sized render/identity state kept here.
+
+    /// Equips `id` in `slot` (replacing whatever was there).
+    public func equipCustomItem(id: UUID, slot: ItemSlot) {
+        settings.equippedItemIDsBySlot[slot.rawValue] = id
+        scheduleSnapshotSave()
+    }
+
+    /// Removes whatever is equipped in `slot`.
+    public func unequipSlot(_ slot: ItemSlot) {
+        settings.equippedItemIDsBySlot.removeValue(forKey: slot.rawValue)
+        scheduleSnapshotSave()
+    }
+
+    /// Clears `itemID` from every slot it was equipped in (called after the item is deleted from its store).
+    public func clearEquipReferences(forItemID itemID: UUID) {
+        let before = settings.equippedItemIDsBySlot
+        settings.equippedItemIDsBySlot = before.filter { $0.value != itemID }
+        if settings.equippedItemIDsBySlot.count != before.count {
+            scheduleSnapshotSave()
+        }
+    }
+
+    /// This device's anonymous, stable designer id. Pure read — safe to call during SwiftUI rendering.
+    /// `ensureLocalDesignerID()` is invoked once at store construction so the stored value is non-nil by
+    /// the time any view reads it; the `??` is only a defensive fallback and never mutates state.
+    public var localDesignerID: UUID {
+        settings.localDesignerID ?? ensureLocalDesignerID()
+    }
+
+    /// Generates and persists the device's designer id if it doesn't exist yet. Call once at store
+    /// startup — NOT from a view body — so the lazy mint never runs mid-render.
+    @discardableResult
+    public func ensureLocalDesignerID() -> UUID {
+        if let existing = settings.localDesignerID { return existing }
+        let generated = UUID()
+        settings.localDesignerID = generated
+        scheduleSnapshotSave()
+        return generated
+    }
+
+    /// Records the display name learned for a designer id (from an in-person connection). Empty names clear.
+    public func setKnownDesignerName(id: UUID, name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            settings.knownDesignerNames.removeValue(forKey: id.uuidString)
+        } else {
+            settings.knownDesignerNames[id.uuidString] = trimmed
+        }
+        scheduleSnapshotSave()
+    }
+
     public func setProximityDisplayName(_ name: String) {
         settings.proximityDisplayName = name.trimmingCharacters(in: .whitespaces)
         scheduleSnapshotSave()
