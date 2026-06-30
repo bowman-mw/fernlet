@@ -45,7 +45,7 @@ struct OnboardingStorageChoiceView: View {
                     storageCard(
                         choice: .localOnly,
                         title: "Just on this device",
-                        copy: "Nothing leaves this phone. You can turn on iCloud later in Settings.",
+                        copy: localOnlyCopy,
                         systemImage: "iphone"
                     )
                     .accessibilityIdentifier("onboarding.storage.local")
@@ -62,6 +62,13 @@ struct OnboardingStorageChoiceView: View {
             return "Your daily logs are saved to iCloud and appear on your other Fernlet devices."
         }
         return "Restore from iCloud — we found \(existingDataSummary.mealLogCount) meal logs, \(existingDataSummary.journalEntryCount) journal entries, \(existingDataSummary.workoutCount) workouts from a previous device."
+    }
+
+    private var localOnlyCopy: String {
+        if existingDataSummary?.hasData == true {
+            return "Nothing leaves this phone. The data we found on another iCloud device won't be merged in, and logs here won't sync to your other devices. You can turn on iCloud later in Settings."
+        }
+        return "Nothing leaves this phone — logs here won't sync to your other devices. You can turn on iCloud later in Settings."
     }
 
     private func storageCard(choice: OnboardingStorageChoice, title: String, copy: String, systemImage: String) -> some View {
