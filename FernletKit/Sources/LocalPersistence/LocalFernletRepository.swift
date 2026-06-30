@@ -20,6 +20,10 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
     /// build still lazily backfills rows from the blob until this is true — which is what makes retiring
     /// the blob's `days` safe.
     public var daysMigratedToRows = false
+    /// Precomputed counts of day content, kept so iCloud "existing data" detection stays a single-record
+    /// read once the Core Data path clears the blob's `days` cache (Stage B). Empty until populated; the
+    /// local/no-iCloud path leaves it empty (it has no cloud detection).
+    public var dayContentSummary = DayContentSummary()
     public var settings = FernletSettings()
     public var recentMeals: [Meal] = []
     public var previousJournals: [JournalEntry] = []
@@ -47,6 +51,7 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         days = try container.decodeIfPresent([String: FernletDay].self, forKey: .days) ?? [:]
         daysMigratedToRows = try container.decodeIfPresent(Bool.self, forKey: .daysMigratedToRows) ?? false
+        dayContentSummary = try container.decodeIfPresent(DayContentSummary.self, forKey: .dayContentSummary) ?? DayContentSummary()
         settings = try container.decodeIfPresent(FernletSettings.self, forKey: .settings) ?? FernletSettings()
         recentMeals = try container.decodeIfPresent([Meal].self, forKey: .recentMeals) ?? []
         previousJournals = try container.decodeIfPresent([JournalEntry].self, forKey: .previousJournals) ?? []

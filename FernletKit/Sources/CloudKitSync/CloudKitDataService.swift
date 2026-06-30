@@ -451,11 +451,24 @@ public final class CloudKitDataService {
             return .empty
         }
 
-        // Meals/journals/workouts/sleep fall back to the derived log tables, which are rebuilt from the
-        // per-row DayRecord store and so cover the full derived window even though the blob's `days` is now
-        // only a bounded recent cache. Hygiene/hydration have no derived table, so they reflect the recent
-        // window only — a count-from-cloud approximation that's acceptable for the onboarding "also found"
-        // line (the load-bearing hasData signal is carried by the robust counts above).
+        // After the per-row split's Stage B the blob's `days` are cleared and a precomputed
+        // dayContentSummary carries the counts, so detection stays a single blob read instead of scanning
+        // thousands of per-row DayRecord CKRecords. An older or un-migrated blob still has populated `days`
+        // (handled below for backward compat); a genuinely empty blob yields zero counts either way.
+        if localDatabase.days.isEmpty {
+            let summary = localDatabase.dayContentSummary
+            return ExistingDataSummary(
+                mealLogCount: summary.mealCount,
+                journalEntryCount: summary.journalCount,
+                workoutCount: summary.workoutCount,
+                hygieneLogCount: summary.hygieneCount,
+                hydrationLogCount: summary.hydrationCount,
+                sleepRecordCount: summary.sleepCount
+            )
+        }
+
+        // Backward compat: meals/journals/workouts/sleep fall back to the derived log tables (rebuilt from
+        // rows). Hygiene/hydration have no derived table, so they reflect the blob's recent window only.
         let dayValues = Array(localDatabase.days.values)
         return ExistingDataSummary(
             mealLogCount: localDatabase.mealLogs.isEmpty ? dayValues.reduce(0) { $0 + $1.meals.count } : localDatabase.mealLogs.count,

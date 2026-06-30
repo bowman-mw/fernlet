@@ -124,15 +124,26 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         if !isPersistenceBlocked {
             dayRecordRepository.upsert([DayRecordUpsert(day: snapshot.day, updatedAt: Date())])
         }
-        // The blob's `days` is now just a bounded recent cache (rows are the uncapped source of truth), so
-        // keep it small to stay well under CloudKit's ~1 MB/record limit even for verbose users — BUT only
-        // once migration has completed. While the backfill is still pending (e.g. a failed batch left the
-        // flag false), the blob may hold the only copy of un-migrated days, so pruning then would drop the
-        // oldest before a retry can fan them into rows. Skip the bound until daysMigratedToRows is true.
+        // While migration is still pending (e.g. a failed batch left the flag false), the blob may hold the
+        // only copy of un-migrated days, so don't bound/prune it then. Once migrated, refreshRowDerivedState
+        // clears the blob's days entirely, so the bound here is moot — apply still writes the aggregate.
         let blobDayBound = database.daysMigratedToRows ? FernletLimits.derivedLogWindowDays : nil
         database.apply(snapshot, maxStoredDays: blobDayBound)
-        database.rebuildDerivedTables(todayKey: snapshot.todayKey, recentDays: recentDayPairs())
+        refreshRowDerivedState(&database, todayKey: snapshot.todayKey)
         return saveDatabase(database)
+    }
+
+    /// After day rows are written, refresh the blob's row-derived state from the bounded recent window:
+    /// rebuild the derived log tables, recompute the day-content summary (so iCloud detection stays a
+    /// single blob read), and — once migration is complete — clear the blob's `days` cache entirely (the
+    /// per-row `DayRecord` store is the authoritative, uncapped source of truth).
+    private func refreshRowDerivedState(_ database: inout LocalFernletDatabase, todayKey: String) {
+        let recent = recentDayPairs()
+        database.rebuildDerivedTables(todayKey: todayKey, recentDays: recent)
+        database.dayContentSummary = DayContentSummary(days: recent.map(\.1))
+        if database.daysMigratedToRows {
+            database.days = [:]
+        }
     }
 
     @discardableResult public func updateDay(_ sanitized: SanitizedDay, for dateKey: String, todayKey: String) -> Bool {
@@ -144,10 +155,9 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         if !isPersistenceBlocked {
             dayRecordRepository.upsert([DayRecordUpsert(day: day, updatedAt: Date())])
         }
-        // The edited day lives in its row; don't add it to the blob's bounded cache (that would let an old
-        // past-day edit grow the blob unbounded). Rows are the source of truth; the derived rebuild reads
-        // them.
-        database.rebuildDerivedTables(todayKey: todayKey, recentDays: recentDayPairs())
+        // The edited day lives in its row; refresh the derived tables + detection summary from rows (and,
+        // once migrated, keep the blob's days cleared). Never write the edited day into the blob.
+        refreshRowDerivedState(&database, todayKey: todayKey)
         return saveDatabase(database)
     }
 
@@ -200,6 +210,11 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         }
         var migrated = database
         migrated.daysMigratedToRows = true
+        // Seed the detection summary from the blob's days, then retire the blob's day cache (the rows just
+        // written are authoritative). The `days` field stays decodable so an older build can still lazily
+        // backfill from a blob that predates this clearing.
+        migrated.dayContentSummary = DayContentSummary(days: Array(database.days.values))
+        migrated.days = [:]
         _ = saveDatabase(migrated)
         return migrated
     }

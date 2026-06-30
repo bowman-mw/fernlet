@@ -91,7 +91,36 @@ struct DayRowMigrationTests {
         #expect(days.count == 600)
     }
 
+    @Test func migrationClearsBlobDaysAndSeedsSummary() {
+        let controller = PersistenceController(inMemory: true)
+        var blob = LocalFernletDatabase()
+        blob.days = [
+            "2026-05-01": FernletDay(date: "2026-05-01", bottleCount: 2),
+            "2026-05-02": FernletDay(date: "2026-05-02", sleep: SleepLog(hours: 7, quality: .good, note: "x"))
+        ]
+        seedAggregateBlob(blob, in: controller)
+
+        let repo = CoreDataFernletRepository(controller: controller)
+        #expect(repo.loadAllDays().count == 2)  // both days landed as rows
+
+        // Stage B: the blob's days are retired and a precomputed summary carries the counts.
+        let reloaded = readBlob(controller)
+        #expect(reloaded?.days.isEmpty == true)
+        #expect(reloaded?.daysMigratedToRows == true)
+        #expect(reloaded?.dayContentSummary.hydrationCount == 1)  // 2026-05-01 has bottleCount > 0
+        #expect(reloaded?.dayContentSummary.sleepCount == 1)      // 2026-05-02 has a sleep log
+    }
+
     // MARK: - Helpers
+
+    private func readBlob(_ controller: PersistenceController) -> LocalFernletDatabase? {
+        let request = NSFetchRequest<NSManagedObject>(entityName: "FernletDatabaseRecord")
+        guard let record = try? controller.container.viewContext.fetch(request).first,
+              let payload = record.value(forKey: "payloadData") as? Data else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(LocalFernletDatabase.self, from: payload)
+    }
 
     private func seedAggregateBlob(_ database: LocalFernletDatabase, in controller: PersistenceController) {
         let context = controller.container.viewContext

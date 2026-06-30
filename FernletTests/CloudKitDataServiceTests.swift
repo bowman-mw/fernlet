@@ -50,6 +50,24 @@ struct CloudKitDataServiceTests {
         #expect(summary == nil)
     }
 
+    /// Stage B: once the per-row split clears the blob's `days`, detection reads the precomputed
+    /// dayContentSummary instead of counting days — staying a single blob read rather than scanning
+    /// every per-row DayRecord.
+    @Test func detectionReadsDayContentSummaryWhenBlobDaysCleared() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        database.recordsByType["CD_FernletDatabaseRecord"] = [stageBSummaryRecord(zoneID: zoneID)]
+        let service = makeService(database: database, zoneID: zoneID)
+
+        let summary = try #require(try await service.detectExistingData())
+
+        #expect(summary.mealLogCount == 4)
+        #expect(summary.journalEntryCount == 3)
+        #expect(summary.workoutCount == 2)
+        #expect(summary.hydrationLogCount == 2)
+        #expect(summary.sleepRecordCount == 1)
+    }
+
     /// Regression for prior finding #4: a full health database exceeds CloudKit's ~1 MB
     /// inline field limit, so NSPersistentCloudKitContainer stores the mirrored
     /// `CD_payloadData` as a CKAsset rather than inline Data. Detection must read the asset,
@@ -339,6 +357,21 @@ struct CloudKitDataServiceTests {
         } else {
             cloudRecord["CD_payloadData"] = data as CKRecordValue
         }
+        return cloudRecord
+    }
+
+    private func stageBSummaryRecord(zoneID: CKRecordZone.ID) -> CKRecord {
+        var localDatabase = LocalFernletDatabase()
+        localDatabase.days = [:]  // Stage B: blob days cleared
+        localDatabase.daysMigratedToRows = true
+        localDatabase.dayContentSummary = DayContentSummary(
+            mealCount: 4, journalCount: 3, workoutCount: 2, hygieneCount: 5, hydrationCount: 2, sleepCount: 1
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try! encoder.encode(localDatabase)
+        let cloudRecord = record(type: "CD_FernletDatabaseRecord", name: "primary", zoneID: zoneID)
+        cloudRecord["CD_payloadData"] = data as CKRecordValue
         return cloudRecord
     }
 
