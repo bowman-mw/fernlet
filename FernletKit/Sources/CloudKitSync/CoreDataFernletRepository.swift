@@ -12,6 +12,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
 
     private let controller: PersistenceController
     private let legacyRepository: LocalFernletRepository
+    private let dayRecordRepository: any DayRecordRepositoring
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
@@ -31,9 +32,15 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         remoteChangeSubject.eraseToAnyPublisher()
     }
 
-    public init(controller: PersistenceController? = nil, legacyRepository: LocalFernletRepository? = nil) {
-        self.controller = controller ?? .shared
+    public init(
+        controller: PersistenceController? = nil,
+        legacyRepository: LocalFernletRepository? = nil,
+        dayRecordRepository: (any DayRecordRepositoring)? = nil
+    ) {
+        let resolvedController = controller ?? .shared
+        self.controller = resolvedController
         self.legacyRepository = legacyRepository ?? LocalFernletRepository(fileURL: LocalFernletRepository.defaultFileURL())
+        self.dayRecordRepository = dayRecordRepository ?? DayRecordRepository(controller: resolvedController)
         self.encoder = Self.makeEncoder()
         self.decoder = Self.makeDecoder()
         self.cancellable = self.controller.remoteChangePublisher
@@ -110,7 +117,13 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         var database = loadDatabase(todayKey: snapshot.todayKey)
         database.apply(snapshot)
         database.rebuildDerivedTables(todayKey: snapshot.todayKey)
-        return saveDatabase(database)
+        let saved = saveDatabase(database)
+        if saved {
+            // Dual-write today's day to its per-row store. The blob stays the source of truth this
+            // increment; once reads move to rows the blob's `days` is retired.
+            dayRecordRepository.upsert([DayRecordUpsert(day: snapshot.day, updatedAt: Date())])
+        }
+        return saved
     }
 
     @discardableResult public func updateDay(_ sanitized: SanitizedDay, for dateKey: String, todayKey: String) -> Bool {
@@ -121,7 +134,11 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         var database = loadDatabase(todayKey: todayKey)
         database.days[dateKey] = day
         database.rebuildDerivedTables(todayKey: todayKey)
-        return saveDatabase(database)
+        let saved = saveDatabase(database)
+        if saved {
+            dayRecordRepository.upsert([DayRecordUpsert(day: day, updatedAt: Date())])
+        }
+        return saved
     }
 
     public func storageDescription() -> String {

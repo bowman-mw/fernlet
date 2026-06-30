@@ -121,6 +121,8 @@ public final class CloudKitDataService {
         "CustomItemRecord",
         "CD_CoinLedgerRecord",
         "CoinLedgerRecord",
+        "CD_DayRecord",
+        "DayRecord",
         "CD_MenstrualNarrative",
         "MenstrualNarrative"
     ]

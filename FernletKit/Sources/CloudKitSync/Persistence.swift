@@ -333,7 +333,8 @@ nonisolated public final class PersistenceController {
             makeFernletDatabaseRecordEntity(),
             makeSavedRecipeRecordEntity(),
             makeCustomItemRecordEntity(),
-            makeCoinLedgerRecordEntity()
+            makeCoinLedgerRecordEntity(),
+            makeDayRecordEntity()
         ]
         return model
     }
@@ -401,6 +402,28 @@ nonisolated public final class PersistenceController {
             // The CoinLedgerEntry as JSON (plain binary, tens of bytes — far under CloudKit's budget).
             makeAttribute("payloadData", type: .binaryDataAttributeType),
             makeAttribute("createdAt", type: .dateAttributeType)
+        ]
+        return entity
+    }
+
+    private static func makeDayRecordEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "DayRecord"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            // `dateKey` ("YYYY-MM-DD") is the day's stable logical id — the repository upserts by it so a
+            // re-save of the same day on one device is a no-op. Like CustomItem/CoinLedger, CloudKit does
+            // NOT collapse rows by this attribute (it mirrors by record identity), so two devices can
+            // produce two rows for one dateKey; `DayRecordRepository` collapses those on load by max
+            // `updatedAt` (a dict read can't hold two rows for one key) and self-heals the duplicate.
+            makeAttribute("dateKey", type: .stringAttributeType),
+            // One FernletDay (already privacy-sanitized at the write boundary) as JSON. Plain binary, not
+            // external storage (CloudKit rejects external storage at store load) — a single day is far
+            // under CloudKit's per-field budget, which is exactly why per-day rows remove the 370 cap.
+            makeAttribute("payloadData", type: .binaryDataAttributeType),
+            // Per-day last-writer-wins stamp: lets a same-day cross-device conflict resolve by recency and
+            // gives a future mesh-sync a max(updatedAt) union key.
+            makeAttribute("updatedAt", type: .dateAttributeType)
         ]
         return entity
     }
