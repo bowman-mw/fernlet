@@ -1,8 +1,10 @@
 # Multi-Device Without iCloud — Design Review
 
-**Status:** design review / options, 2026-06-29. No code yet. Captures the problem, the grounded options,
-and a recommended phased path so multi-device usage degrades gracefully when iCloud sync is off — with an
-offline **mesh sync** as the eventual goal.
+**Status:** design review / options, 2026-06-29 (revised same day, after Increment 3). Captures the problem,
+the grounded options, and a recommended phased path so multi-device usage degrades gracefully when iCloud
+sync is off — with an offline **mesh sync** as the eventual goal. **Update:** the items/recipes append-only
+fix from Phase 1 has since shipped (commit `3250d33`); remaining work is the warning, owned-device pairing,
+and the per-row day split.
 
 ## Problem
 
@@ -23,9 +25,12 @@ account exists, even with sync disabled) or (b) is **physically near** (mesh). A
 on any device is undetectable until the devices meet. So "warn that another device exists" has two regimes.
 
 `CloudKitDataService.detectExistingData()` ([CloudKitSync/CloudKitDataService.swift:167](../FernletKit/Sources/CloudKitSync/CloudKitDataService.swift))
-already queries CloudKit for data written by another device — but it is wired **only into onboarding**
-([Fernlet/Onboarding/OnboardingStorageChoiceView.swift](../Fernlet/Onboarding/OnboardingStorageChoiceView.swift)),
-not re-checked when a user later turns sync off. `iCloudAvailable = ubiquityIdentityToken != nil`;
+already queries CloudKit for data written by another device. It runs in onboarding
+([OnboardingStorageChoiceView.swift:108](../Fernlet/OnboardingStorageChoiceView.swift)) and is also already
+surfaced in Privacy settings as a **"Cloud records" count card** ([PrivacyDataSettingsView.swift:884](../Fernlet/PrivacyDataSettingsView.swift)) —
+but that card is deletion-oriented (how much is in iCloud), **not** re-run on the sync-disable action and not
+framed as a divergence warning. So the detection machinery exists; what's missing is wiring it to a
+second-device warning. `iCloudAvailable = ubiquityIdentityToken != nil`;
 `StoragePreferences.iCloudSyncEnabled` lives in the keychain (default off).
 
 ## Grounded inventory
@@ -45,7 +50,7 @@ relationship type, so a paired own-device is treated like a friend. Add `relatio
 | Data | Merge semantics today | Mesh-ready? |
 |---|---|---|
 | **Coin ledger** | append-only, union-merge by id (`CoinEconomy.deduplicatedByID`) | ✅ already done — the template |
-| **Custom items / recipes** | per-row but **full-replace (delete-unlisted)** in `save()` | ⚠️ latent clobber (see below) → convert to append-only |
+| **Custom items / recipes** | per-row **append-only upsert** (`upsert` touches only listed ids; dedup-by-id on load) | ✅ done (Increment 3) — was a full-replace clobber, now mirrors the coin ledger |
 | **Day history** | one blob; `mergingRemoteDays` unions by `dateKey` only, same-day edits drop the remote | ❌ needs per-row day split or item-level merge |
 | **Settings** | last-writer-wins blob, no field merge | ❌ needs per-key store or field-level policy |
 | **Journal / cycle / intimacy narratives** | sealed, encrypted, **local-only** | 🔒 exclude from live sync; move via backup-transfer |
@@ -55,13 +60,18 @@ relationship type, so a paired own-device is treated like a friend. Add `relatio
 restore needs the escrow key, which today syncs via **iCloud Keychain** — so a backup-transfer is *not yet
 truly offline*. Making it offline means exchanging the escrow public key over the mesh handshake.
 
-## Latent bug surfaced (fix regardless of mesh)
+## Latent bug surfaced — now fixed (Increment 3, commit `3250d33`)
 
-`CustomItemRepository.save()` and `SavedRecipeRepository.save()` **delete every row not in the in-memory
-set**, and those services are not reloaded after a remote CloudKit merge — so **two devices both adding
-items can already clobber each other's additions over iCloud today**, not just over mesh. The coin ledger
-was deliberately made append-only to avoid exactly this. Converting items/recipes to the same append-only
-pattern is small, fixes a live iCloud bug, and is a free step toward mesh-readiness.
+As originally written this section flagged a *live* bug: the CloudKit `CustomItemRepository` and recipe store
+used a **full-replace `save()`** that deleted every row not in the in-memory set, and those services are not
+reloaded after a remote CloudKit merge — so two devices both adding items could clobber each other's
+additions over iCloud, not just over mesh. **This is resolved.** Both stores are now **append/upsert-only**
+([CustomItemRepository.swift:51](../FernletKit/Sources/CloudKitSync/CustomItemRepository.swift),
+[SavedRecipe.swift:162](../FernletKit/Sources/CloudKitSync/SavedRecipe.swift)): `upsert` fetches only the ids
+it is handed (predicate `IN`) and never deletes unlisted rows, `delete(ids:)` removes only the listed ids,
+and dedup-by-id happens in the service on load — mirroring the coin ledger. (The remaining full-write
+`save()` on the **local** file-based recipe repo is single-device with no merge, so it is fine.) This was the
+items/recipes half of Phase 1 below; only the warning remains.
 
 ## Options
 
@@ -73,14 +83,14 @@ pattern is small, fixes a live iCloud bug, and is a free step toward mesh-readin
 - **C — Mesh *transfer* of the encrypted backup** (your idea, conservative). Point-in-time clone for
   new-device setup; reuses backup+chunking. Caveats: narratives-only today + escrow needs iCloud Keychain.
   ~2–3 days iCloud-assisted; ~1 week truly offline (escrow over mesh).
-- **D — Mesh *live merge* sync** (your idea, the prize). Coins already merge; items/recipes need the
-  append-only fix; days need the per-row split; settings need a merge policy; narratives stay local.
-  High effort, phased — but every piece rides the per-row/union-merge direction already chosen.
+- **D — Mesh *live merge* sync** (your idea, the prize). Coins already merge and items/recipes now do too
+  (append-only, done); days still need the per-row split; settings need a merge policy; narratives stay
+  local. High effort, phased — but every piece rides the per-row/union-merge direction already chosen.
 
 ## Recommended phased path
 
-1. **Now (small):** warning A1+A2; convert custom-items & recipes to **append-only** (fixes a live iCloud
-   clobber bug *and* unblocks mesh).
+1. **Now (small):** ~~convert custom-items & recipes to **append-only**~~ — **done** (Increment 3, commit
+   `3250d33`): fixed a live iCloud clobber bug *and* unblocked mesh. Still to do: warning A1+A2.
 2. **Phase 2:** owned-device pairing (`relationshipType: .ownedDevice` on the trust vault) + mesh
    backup-**transfer** (Option C) for new-device setup; enables warning A3. Decide whether to extend the
    backup to whole-account.
@@ -89,5 +99,6 @@ pattern is small, fixes a live iCloud bug, and is a free step toward mesh-readin
    policy. Narratives travel only via the backup-transfer path.
 
 **Cross-cutting:** the per-row, union-mergeable architecture (coin ledger is the template) is what makes all
-of this tractable. The two already-planned items — the **per-row day split** and **append-only stores** —
-are the load-bearing prerequisites, so "we want offline mesh sync" is itself an argument to prioritize them.
+of this tractable. Of the two load-bearing prerequisites, **append-only stores** are now **done** (coins,
+items, recipes); the **per-row day split** remains — so "we want offline mesh sync" is itself an argument to
+prioritize it.
