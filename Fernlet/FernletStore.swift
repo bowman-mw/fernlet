@@ -1530,6 +1530,7 @@ extension FernletStore {
     static func load(
         date: Date = .now,
         repository: FernletRepository? = nil,
+        savedRecipeRepository: SavedRecipeRepository? = nil,
         persistenceController: PersistenceController? = nil,
         statusUpdate: @MainActor @escaping (String) -> Void = { _ in }
     ) async throws -> FernletStore {
@@ -1557,7 +1558,7 @@ extension FernletStore {
             repository ?? CoreDataFernletRepository(controller: sharedPersistenceController)
         }
         let savedRecipeService = StartupTiming.timed("SavedRecipeService.init") {
-            SavedRecipeService(repository: SavedRecipeRepository())
+            SavedRecipeService(repository: savedRecipeRepository ?? SavedRecipeRepository())
         }
 
         statusUpdate("Reading recent days...")

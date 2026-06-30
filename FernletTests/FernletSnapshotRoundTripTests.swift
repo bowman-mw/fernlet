@@ -14,10 +14,16 @@ struct FernletSnapshotRoundTripTests {
         let todayKey = FernletDate.dayKey(for: date)
         let repository = LocalFernletRepository(fileURL: temporaryDatabaseURL("baseline-round-trip"))
         let snapshot = try baselineSnapshot(todayKey: todayKey)
-        let savedRecipeRepository = SavedRecipeRepository()
-        let previousSavedRecipes = savedRecipeRepository.load()
+        // Hermetic saved-recipe store: an in-memory Core Data controller private to this test. The
+        // no-controller `SavedRecipeRepository()` hits the shared `PersistenceController.shared`, whose
+        // `SavedRecipeRecord` rows are concurrently mutated by other tests that call `FernletStore.load`
+        // in the parallel suite — that shared coupling was the flake. Both the setup save below and the
+        // `FernletStore.load` reload go through this same isolated repository.
+        let savedRecipeRepository = SavedRecipeRepository(
+            controller: PersistenceController(inMemory: true),
+            legacyRepository: LegacySavedRecipeJSONRepository(fileURL: temporaryDatabaseURL("baseline-round-trip-legacy"))
+        )
         let savedRecipes = try baselineSavedRecipes()
-        defer { _ = savedRecipeRepository.save(previousSavedRecipes) }
 
         #expect(savedRecipeRepository.save(savedRecipes))
         #expect(repository.saveSnapshot(snapshot))
@@ -25,7 +31,7 @@ struct FernletSnapshotRoundTripTests {
         let reloadedSnapshot = repository.loadSnapshot(todayKey: todayKey)
         assertSnapshot(reloadedSnapshot, equals: snapshot)
 
-        let reloadedStore = try await FernletStore.load(date: date, repository: repository)
+        let reloadedStore = try await FernletStore.load(date: date, repository: repository, savedRecipeRepository: savedRecipeRepository)
         assertStore(reloadedStore, equals: snapshot)
         #expect(reloadedStore.savedRecipes.sorted(by: sortSavedRecipes) == savedRecipes.sorted(by: sortSavedRecipes))
     }
