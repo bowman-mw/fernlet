@@ -15,6 +15,11 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
     public var schemaVersion = 1
     public var updatedAt = Date()
     public var days: [String: FernletDay] = [:]
+    /// Per-store guard for the blob→per-row `DayRecord` migration (Core Data path). Lives in the store
+    /// (not the keychain) so it shares the store's lifecycle: a data reset re-arms it, and any later
+    /// build still lazily backfills rows from the blob until this is true — which is what makes retiring
+    /// the blob's `days` safe.
+    public var daysMigratedToRows = false
     public var settings = FernletSettings()
     public var recentMeals: [Meal] = []
     public var previousJournals: [JournalEntry] = []
@@ -41,6 +46,7 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         days = try container.decodeIfPresent([String: FernletDay].self, forKey: .days) ?? [:]
+        daysMigratedToRows = try container.decodeIfPresent(Bool.self, forKey: .daysMigratedToRows) ?? false
         settings = try container.decodeIfPresent(FernletSettings.self, forKey: .settings) ?? FernletSettings()
         recentMeals = try container.decodeIfPresent([Meal].self, forKey: .recentMeals) ?? []
         previousJournals = try container.decodeIfPresent([JournalEntry].self, forKey: .previousJournals) ?? []
@@ -324,9 +330,12 @@ extension LocalFernletDatabase {
         updatedAt = Date()
     }
 
-    public mutating func rebuildDerivedTables(todayKey: String) {
+    /// Rebuilds the derived log tables + Tier-2 memories. `recentDays` (oldest-first) lets a per-row store
+    /// inject a bounded window of days instead of paying a whole-history scan of `self.days`; when omitted
+    /// it falls back to the blob's own `days` (the local/no-iCloud path).
+    public mutating func rebuildDerivedTables(todayKey: String, recentDays: [(String, FernletDay)]? = nil) {
         assert(!todayKey.isEmpty, "today key required")
-        let orderedDays = Self.sortedDayPairs(days)
+        let orderedDays = recentDays ?? Self.sortedDayPairs(days)
         dailyLogs = Self.makeDailyLogs(from: orderedDays)
         mealLogs = Self.makeMealLogs(from: orderedDays)
         workoutLogs = Self.makeWorkoutLogs(from: orderedDays)
@@ -376,6 +385,10 @@ extension LocalFernletDatabase {
 
 public enum FernletLimits {
     public static let maxStoredDays = 370
+    /// How much day history the derived log tables (daily/meal/workout/journal) retain. Decoupled from
+    /// day *storage* (which is per-row and uncapped) — it bounds only the recomputable log tables and the
+    /// "year-ago" lookbacks, so derived rebuilds read a fixed recent window instead of the whole history.
+    public static let derivedLogWindowDays = 370
     public static let maxMealsPerDay = 20
     public static let maxWorkoutsPerDay = 12
     public static let maxJournalsPerDay = 12
