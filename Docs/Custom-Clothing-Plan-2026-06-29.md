@@ -301,7 +301,50 @@ Increment 3 (the shop) in this session.
 
 ### Increment 3 — In-person friend shop
 
-Same as above, but point at **§6 (Increment 3)**, add **Docs/ProximityFunctionIndex.md** to the reading
-list, and the implement/review steps additionally call for the **S3 wall check**
-(`Scripts/spm-wall-check.sh`) and a two-device/simulator-pair manual check. It depends on Increment 2
-(coins) being done.
+```
+I want to implement Increment 3 (the in-person friend shop) of the custom-clothing feature.
+
+Work on the branch wonderful-bardeen. First read, in this order:
+- Docs/Custom-Clothing-Plan-2026-06-29.md — §1 (vision), §2 (locked decisions), §3 (what already
+  exists), §4 (reuse seams), and §6 (Increment 3 — the shop, your spec).
+- Docs/Coin-Ledger-Design-2026-06-29.md — Increment 2 shipped coins as an append-only LEDGER (this
+  SUPERSEDES §5's derived-balance design). The buy flow spends via store.spendCoins(price, ref:)
+  where `ref` is the purchased item's id (idempotent — a retried buy with the same ref can't debit
+  twice). Read how earned/spend rows + CoinEconomy aggregation work.
+- Docs/ProximityFunctionIndex.md — the mesh/identity/recipe-share/friend-photo subsystem you'll clone.
+- Docs/Multi-Device-Without-iCloud-Design-2026-06-29.md — multi-device context. NOTE two things from
+  it that touch this increment: (1) CustomItemRepository/SavedRecipeRepository use full-replace
+  (delete-unlisted) save and are NOT mesh/multi-device safe — when you add the *bought* item to the
+  closet, make sure that path can't clobber rows that synced in from another device (mirror the coin
+  ledger's append-only upsert, or fix the item store to append-only as part of this work). (2) Cross-
+  device spend reconciliation: the ledger reloads on remote sync via FernletStore.apply(); a buy
+  should reload the ledger before guarding the spend so it sees other devices' rows.
+Also skim the project CLAUDE.md. Read the actual source files the plans cite before trusting line
+numbers — they drift.
+
+Then, in this order:
+1. Plan how Increment 3 should be implemented, grounded in the current code (the coin ledger now
+   exists; mirror the recipe-share pipeline for the catalog/item exchange). Confirm §6's sub-steps
+   (3a wire payloads → 3b codec → 3c exchange manager → 3d designer-name directory → 3e shop UI/buy →
+   3f shop management: listing cap 6, once-per-day re-publish throttle, text moderation at list time)
+   still fit, and adjust if the code has moved.
+2. Ask me any clarifying questions before writing code (e.g. the moderation wordlist/approach since
+   DiagnosticLanguage targets clinical language not profanity; exact buy UX; price bounds; whether to
+   fix the items/recipes append-only clobber now or defer).
+3. After I answer, implement it — build incrementally with
+   `xcodebuild build-for-testing -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17'`
+   and add Swift Testing coverage (ClothingShareCodecTests + FriendShopTests: buy debits coins via
+   spendCoins, adds item with correct anonymized provenance, de-dups if already owned, refuses when
+   short; listing cap/throttle; catalog ephemerality on disconnect; moderation gate). Keep clothing/
+   coin/shop wire types OUT of Private* modules (S3 wall) — they belong in ProximityKit/
+   FernletDomainModel.
+4. When it builds and tests pass: run the S3 wall check (`Scripts/spm-wall-check.sh`), run /code-review
+   on the diff and fix the findings, and do a two-device (or simulator-pair) manual check: connect →
+   browse friend's shop → buy → item lands in closet as "designed by <friend>" → disconnect → catalog
+   gone, purchased item remains. Then summarize.
+
+Increment 1 (grid editor, wardrobe, anonymized provenance) and Increment 2 (coin ledger) are built,
+reviewed, and committed — build on them. Don't reintroduce their fixed bugs (§3 + the coin-ledger
+review: earn idempotency is structural via deterministic ids; dedup happens in CoinEconomy aggregation,
+NOT the storage layer). This is the biggest increment — build it in the compiling sub-steps of §6.
+```
