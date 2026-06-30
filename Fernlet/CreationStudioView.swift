@@ -16,6 +16,8 @@ struct CreationStudioView: View {
     @State private var name: String
     @State private var selectedColor: Int
     @State private var isShareable: Bool
+    @State private var price: Int
+    @State private var shopAlert: ShopAlert?
     @State private var draftID = UUID()
 
     private let palette = ItemDesignPalette.hexes
@@ -28,14 +30,22 @@ struct CreationStudioView: View {
             _pixels = State(initialValue: Self.editorPixels(for: item, palette: ItemDesignPalette.hexes))
             _name = State(initialValue: item.name)
             _isShareable = State(initialValue: item.isShareable)
+            _price = State(initialValue: ClothingShopLimits.clampedPrice(item.price))
         } else {
             let initialSlot = ItemSlot.body
             _slot = State(initialValue: initialSlot)
             _pixels = State(initialValue: Self.blankPixels(for: initialSlot))
             _name = State(initialValue: "")
             _isShareable = State(initialValue: false)
+            _price = State(initialValue: ClothingShopLimits.minPrice)
         }
         _selectedColor = State(initialValue: 0)
+    }
+
+    private enum ShopAlert: Identifiable {
+        case nameFlagged
+        case capReached
+        var id: Int { self == .nameFlagged ? 0 : 1 }
     }
 
     var body: some View {
@@ -60,6 +70,22 @@ struct CreationStudioView: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(canSave ? Color.moss : Color.bark.opacity(0.35))
                     .disabled(!canSave)
+            }
+        }
+        .alert(item: $shopAlert) { alert in
+            switch alert {
+            case .nameFlagged:
+                return Alert(
+                    title: Text("Pick a friendlier name"),
+                    message: Text("This name can't be used in your shop. Your item is saved — rename it and try listing again. (Private items can be named anything.)"),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .capReached:
+                return Alert(
+                    title: Text("Your shop is full"),
+                    message: Text("You can list up to \(ClothingShopLimits.maxListedItems) items at once. Unlist one to make room. Your item is saved and ready whenever you are."),
+                    dismissButton: .default(Text("OK"))
+                )
             }
         }
     }
@@ -186,15 +212,30 @@ struct CreationStudioView: View {
             TextField("Name your item", text: $name)
                 .textFieldStyle(.roundedBorder)
 
-            Toggle(isOn: $isShareable) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Available in my shop")
-                    Text("Friends can browse and buy this when you connect in person.")
+            if canSell {
+                Toggle(isOn: $isShareable) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Available in my shop")
+                        Text("Friends can browse and buy this when you connect in person.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .tint(Color.moss)
+
+                if isShareable {
+                    Stepper(value: $price, in: ClothingShopLimits.minPrice...ClothingShopLimits.maxPrice) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "circlebadge.2.fill").foregroundStyle(Color.sun)
+                            Text("Price: \(price) coins")
+                                .font(.subheadline.weight(.medium))
+                        }
+                    }
+                    Text(shopHint)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            .tint(Color.moss)
 
             Button(role: .destructive) {
                 pixels = Self.blankPixels(for: slot)
@@ -215,6 +256,19 @@ struct CreationStudioView: View {
 
     private var canSave: Bool {
         !ItemGridTexture(cols: slot.gridCols, rows: slot.gridRows, palette: palette, pixels: pixels).isBlank
+    }
+
+    /// Only your own designs can be sold. New items are always yours; a friend-received item never is.
+    private var canSell: Bool {
+        editingItem.map { store.isSelfDesigned($0) } ?? true
+    }
+
+    private var shopHint: String {
+        let listed = store.listedShopItems.count
+        if store.shopUpdatedToday {
+            return "\(listed) of \(ClothingShopLimits.maxListedItems) listed · you've already refreshed your shop today — that's plenty."
+        }
+        return "\(listed) of \(ClothingShopLimits.maxListedItems) listed."
     }
 
     private var previewEquipped: [CustomizationItem] {
@@ -246,25 +300,49 @@ struct CreationStudioView: View {
         let texture = ItemGridTexture(cols: slot.gridCols, rows: slot.gridRows, palette: palette, pixels: pixels)
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = trimmed.isEmpty ? slot.label : trimmed
+        let itemID: UUID
 
+        // Save the item UNLISTED first; the shop gate (cap + name moderation) decides whether it becomes
+        // listed, so a flagged/over-cap item is still saved (just private).
         if let existing = editingItem {
             var updated = existing
             updated.name = finalName
             updated.texture = texture
-            updated.isShareable = isShareable
+            updated.isShareable = false
+            updated.price = ClothingShopLimits.clampedPrice(price)
             store.saveCustomItem(updated)
+            itemID = updated.id
         } else {
             let item = CustomizationItem(
                 name: finalName,
                 slot: slot,
                 texture: texture,
                 designer: ItemDesigner(id: store.localDesignerID),
-                isShareable: isShareable
+                isShareable: false,
+                price: ClothingShopLimits.clampedPrice(price)
             )
             store.saveCustomItem(item)
             store.equipCustomItem(id: item.id, slot: slot)
+            itemID = item.id
         }
-        dismiss()
+
+        guard canSell, isShareable else {
+            // Toggled off (or not sellable): make sure it isn't listed, then leave.
+            if canSell { store.unlistCustomItem(id: itemID) }
+            dismiss()
+            return
+        }
+
+        switch store.listCustomItemForSale(id: itemID, price: price) {
+        case .listed:
+            dismiss()
+        case .nameFlagged:
+            shopAlert = .nameFlagged   // stay so the user can rename and re-save
+        case .capReached:
+            shopAlert = .capReached
+        case .notAllowed:
+            dismiss()                  // not your design (unreachable — `canSell` guards); item saved, just unlisted
+        }
     }
 
     // MARK: - Helpers

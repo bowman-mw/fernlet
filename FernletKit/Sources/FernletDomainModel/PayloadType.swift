@@ -23,6 +23,10 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     case friendPhotoManifest   = "fernlet.friend.photo.manifest.v1"
     case friendPhotoRequest    = "fernlet.friend.photo.request.v1"
     case recipeShare           = "fernlet.recipe.share.v1"
+    /// A peer's current clothing shop — their broadcast, shareable item catalog (Increment 3). Ephemeral:
+    /// held in memory only while connected. Buying is local (spend coins + copy the already-received item),
+    /// so there is no separate item-transfer payload type.
+    case clothingCatalog       = "fernlet.clothing.catalog.v1"
     // Mesh
     case meshDescriptor        = "fernlet.mesh.descriptor.v1"
     case meshAdmissionGrant    = "fernlet.mesh.admission.grant.v1"

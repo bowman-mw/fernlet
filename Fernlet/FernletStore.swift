@@ -110,6 +110,12 @@ final class FernletStore {
     @ObservationIgnored let aiRetryQueueService: AIRetryQueueService
     @ObservationIgnored private(set) lazy var meshNetworkManager: MeshNetworkManager = MeshNetworkManager(store: self)
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
+    @ObservationIgnored private(set) lazy var clothingShareManager: ProximityClothingShareManager = {
+        let manager = ProximityClothingShareManager(store: self)
+        // Auto-broadcast this device's current shop to each peer on connect.
+        manager.localCatalogProvider = { [weak self] in self?.buildShopCatalog() }
+        return manager
+    }()
     @ObservationIgnored let derivedSignalsService = DerivedSignalsService()
     @ObservationIgnored private let healthKitService: (any HealthKitServicing)?
     @ObservationIgnored private lazy var healthSyncCoordinator = HealthSyncCoordinator(host: self, healthKitService: healthKitService)
@@ -429,6 +435,7 @@ final class FernletStore {
     func equipCustomItem(id: UUID, slot: ItemSlot) { diary.equipCustomItem(id: id, slot: slot) }
     func unequipCustomSlot(_ slot: ItemSlot) { diary.unequipSlot(slot) }
     func setCustomItemShareable(id: UUID, _ shareable: Bool) { customItemService.setShareable(id: id, shareable) }
+    func setCustomItemPrice(id: UUID, _ price: Int) { customItemService.setPrice(id: id, price) }
 
     /// This device's anonymous designer id, stamped onto items the user designs.
     var localDesignerID: UUID { diary.localDesignerID }
@@ -467,6 +474,111 @@ final class FernletStore {
     /// foreground so days logged on this or another device accrue exactly once.
     func reconcileCoinLedger() {
         coinLedgerService.reconcile(activeDayKeys: diary.activeDayKeys())
+    }
+
+    // MARK: - Clothing shop (in-person friend shop, Increment 3)
+    // The catalog exchange runs over `clothingShareManager` (its own per-row mesh session). Buying is
+    // local: spend coins + copy the already-received item into the closet, preserving its provenance.
+
+    /// This device's broadcast shop catalog, built from the user's own shareable designs (capped,
+    /// deterministically ordered). Supplied to `clothingShareManager` and sent to each peer on connect.
+    func buildShopCatalog() -> ClothingCatalogPayload {
+        ClothingShareCodec.catalog(
+            forShareable: customItems,
+            designerID: localDesignerID,
+            displayName: shopDisplayName
+        )
+    }
+
+    /// The seller name a buyer learns in person — the proximity display name, falling back to the
+    /// companion name (may be empty, in which case the buyer just sees "a friend").
+    private var shopDisplayName: String {
+        let proximity = settings.proximityDisplayName.trimmingCharacters(in: .whitespaces)
+        if !proximity.isEmpty { return proximity }
+        return settings.companionName.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Records a designer id → display name learned by meeting a friend in person, so bought items resolve
+    /// "designed by <friend>".
+    func learnDesignerName(id: UUID, name: String) {
+        diary.setKnownDesignerName(id: id, name: name)
+    }
+
+    enum ClothingPurchaseResult: Equatable {
+        case bought
+        case alreadyOwned
+        case insufficientCoins
+    }
+
+    /// Buy an item from a friend's shop. Reloads the per-row stores first so another device's spends and
+    /// purchases are seen before guarding, sanitizes the (untrusted, peer-sent) item, debits coins
+    /// idempotently keyed by the item id, and lands the item in the closet with the SELLER's designer id
+    /// preserved (provenance — it shows "designed by <friend>", never "You"). The bought copy is unlisted
+    /// and not auto-equipped.
+    @discardableResult
+    func buyClothingItem(_ rawItem: CustomizationItem, fromDesignerID designerID: UUID, sellerName: String) -> ClothingPurchaseResult {
+        // See another device's spends / synced-in purchases before guarding (multi-device reconciliation).
+        coinLedgerService.reloadFromStore()
+        customItemService.reloadFromStore()
+        reconcileCoinLedger()
+
+        let item = ClothingShopLimits.sanitizedForShop(rawItem)
+        learnDesignerName(id: designerID, name: sellerName)
+
+        if customItems.contains(where: { $0.id == item.id }) {
+            return .alreadyOwned
+        }
+        let price = item.price
+        guard coinBalance >= price else { return .insufficientCoins }
+
+        // Idempotent spend keyed by the item id: a retried/duplicate buy can't debit twice. If the ref was
+        // already spent on a prior buy, re-grant the item for free rather than charging again.
+        let debited = spendCoins(price, ref: item.id.uuidString)
+        var bought = item
+        bought.isShareable = false
+        saveCustomItem(bought)
+        return debited ? .bought : .alreadyOwned
+    }
+
+    // MARK: - Shop listing management (Wardrobe)
+
+    enum ShopListingResult: Equatable {
+        case listed
+        case nameFlagged
+        case capReached
+        /// The item isn't listable — not found, or not one of your own designs. Distinct from `capReached`
+        /// so the UI never shows a misleading "shop is full" message for the wrong reason.
+        case notAllowed
+    }
+
+    /// The user's own designs currently listed for sale.
+    var listedShopItems: [CustomizationItem] {
+        customItems.filter { $0.isShareable && isSelfDesigned($0) }
+    }
+
+    /// Whether another item can be listed (under the cap of `ClothingShopLimits.maxListedItems`).
+    var canListMoreShopItems: Bool { listedShopItems.count < ClothingShopLimits.maxListedItems }
+
+    /// Whether the shop's listed set was already changed today (drives the gentle once-per-day note).
+    var shopUpdatedToday: Bool { settings.shopLastPublishedDayKey == todayKey }
+
+    /// List one of the user's OWN items for sale at `price`. Enforces the cap (a flagged name keeps the
+    /// item unlisted with a notice; an over-cap attempt is refused). Records today for the gentle throttle.
+    @discardableResult
+    func listCustomItemForSale(id: UUID, price: Int) -> ShopListingResult {
+        guard let item = customItems.first(where: { $0.id == id }), isSelfDesigned(item) else { return .notAllowed }
+        if !item.isShareable && !canListMoreShopItems { return .capReached }
+        let name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard ItemNameModeration.isAllowedForListing(name) else { return .nameFlagged }
+        customItemService.setPrice(id: id, ClothingShopLimits.clampedPrice(price))
+        customItemService.setShareable(id: id, true)
+        diary.setShopLastPublishedDay(todayKey)
+        return .listed
+    }
+
+    /// Remove an item from the shop. Always allowed — taking something down is never throttled.
+    func unlistCustomItem(id: UUID) {
+        customItemService.setShareable(id: id, false)
     }
 
     func setProximityDisplayName(_ name: String) {
@@ -1418,6 +1530,9 @@ final class FernletStore {
         // a newly-designed item can't be lost when its equip reference (in the snapshot) is force-saved
         // on background but the item row's yield-debounced write hasn't run yet.
         customItemService.flushPendingSave()
+        // Saved recipes share the same per-row, yield-debounced write — flush them too so a just-saved
+        // recipe survives backgrounding.
+        savedRecipeService.flushPendingSave()
         // The coin ledger is likewise a separate per-row store with a yield-debounced write; flush any
         // pending earn/spend rows so a just-credited day or a buy can't be lost on background.
         coinLedgerService.flushPendingSave()
@@ -1447,11 +1562,14 @@ final class FernletStore {
         connectionInspector.attachStore(self)
         journalSealingCoordinator.refreshAfterSnapshotApply()
         rebuildDerivedSignals()
-        // A remote CloudKit change may have brought in earn/spend rows from another device (the coin
-        // ledger is its own per-row store, not part of the snapshot blob) plus newly-synced day records.
-        // Refresh the in-memory ledger so the balance tracks the other device, then credit any newly
-        // active synced day. Idempotent — re-running never double-grants.
+        // A remote CloudKit change may have brought in rows from another device for any of the per-row
+        // stores (coin ledger, custom items, saved recipes) — none are part of the snapshot blob. Refresh
+        // each in-memory collection so this device tracks the other's additions; because the stores are
+        // append/upsert-only, the next local mutation can't then clobber what just synced in.
         coinLedgerService.reloadFromStore()
+        customItemService.reloadFromStore()
+        savedRecipeService.reloadFromStore()
+        // Credit any newly active synced day. Idempotent — re-running never double-grants.
         reconcileCoinLedger()
     }
 

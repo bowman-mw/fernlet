@@ -763,7 +763,7 @@ struct FernletTests {
             )
         )
 
-        #expect(repository.save([soup, oats]))
+        #expect(repository.upsert([soup, oats]))
 
         let loaded = repository.load()
         #expect(loaded.map(\.name) == ["Overnight Oats", "Lentil Soup"])

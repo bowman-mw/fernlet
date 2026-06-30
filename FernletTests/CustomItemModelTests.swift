@@ -139,11 +139,20 @@ struct CustomItemModelTests {
 }
 
 private final class StubCustomItemRepository: CustomItemRepositoring {
-    var saved: [CustomizationItem] = []
+    private(set) var store: [UUID: CustomizationItem] = [:]
+    var saved: [CustomizationItem] { Array(store.values) }
     func load() -> [CustomizationItem] { saved }
     func loadAsync() async -> [CustomizationItem] { saved }
-    @discardableResult func save(_ items: [CustomizationItem]) -> Bool {
-        saved = items
+    @discardableResult func upsert(_ items: [CustomizationItem]) -> Bool {
+        for item in items { store[item.id] = item }
+        return true
+    }
+    @discardableResult func delete(ids: [UUID]) -> Bool {
+        for id in ids { store[id] = nil }
+        return true
+    }
+    @discardableResult func deleteAll() -> Bool {
+        store.removeAll()
         return true
     }
 }

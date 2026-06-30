@@ -334,6 +334,14 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    /// Records the calendar day the user last changed their shop's listed set (drives the gentle
+    /// once-per-day re-publish note). Stored in the synced settings blob, so it's shared across the user's
+    /// own devices.
+    public func setShopLastPublishedDay(_ dayKey: String) {
+        settings.shopLastPublishedDayKey = dayKey
+        scheduleSnapshotSave()
+    }
+
     /// Day keys that carry any logged content — the active days that the coin ledger credits. Computed
     /// over the full day history (`loadDays()`), so it is the reconcile input, not a per-render read.
     public func activeDayKeys() -> Set<String> {

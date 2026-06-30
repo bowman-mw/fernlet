@@ -17,9 +17,15 @@ struct FernletSnapshotRoundTripTests {
         let savedRecipeRepository = SavedRecipeRepository()
         let previousSavedRecipes = savedRecipeRepository.load()
         let savedRecipes = try baselineSavedRecipes()
-        defer { _ = savedRecipeRepository.save(previousSavedRecipes) }
+        // The store is now append/upsert-only; emulate the old full-replace by clearing then upserting so
+        // this test sets (and restores) an exact row set.
+        defer {
+            savedRecipeRepository.deleteAll()
+            _ = savedRecipeRepository.upsert(previousSavedRecipes)
+        }
 
-        #expect(savedRecipeRepository.save(savedRecipes))
+        savedRecipeRepository.deleteAll()
+        #expect(savedRecipeRepository.upsert(savedRecipes))
         #expect(repository.saveSnapshot(snapshot))
 
         let reloadedSnapshot = repository.loadSnapshot(todayKey: todayKey)

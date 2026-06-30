@@ -121,7 +121,7 @@ public struct SavedRecipeRepository {
             if recipes.isEmpty && !defaults.bool(forKey: Self.migrationCompletedKey) {
                 let migrated = legacyRepository.load()
                 if !migrated.isEmpty {
-                    _ = save(migrated)
+                    _ = upsert(migrated)
                 }
                 defaults.set(true, forKey: Self.migrationCompletedKey)
                 return migrated
@@ -139,7 +139,7 @@ public struct SavedRecipeRepository {
             let migrated = legacyRepository.load()
             StartupTiming.end("SavedRecipeRepository.legacyLoad.async", signpostID: signpostID)
             if !migrated.isEmpty {
-                _ = save(migrated)
+                _ = upsert(migrated)
             }
             defaults.set(true, forKey: Self.migrationCompletedKey)
             return migrated
@@ -159,21 +159,21 @@ public struct SavedRecipeRepository {
         return records.compactMap(Self.recipe(from:))
     }
 
-    @discardableResult public func save(_ recipes: [RecipeDefinition]) -> Bool {
+    @discardableResult public func upsert(_ recipes: [RecipeDefinition]) -> Bool {
+        guard !recipes.isEmpty else { return true }
         let context = controller.container.viewContext
+        // Fetch ONLY the rows we're about to touch (predicate IN), then upsert by idString. We never delete
+        // rows we weren't handed (unlike the old full-replace `save`), so flushing a stale set can't wipe
+        // rows synced in from another device.
         let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
+        request.predicate = NSPredicate(format: "idString IN %@", recipes.map { $0.id.uuidString })
 
         do {
-            let existing = try context.fetch(request)
             var existingByID: [String: NSManagedObject] = [:]
-            for record in existing {
+            for record in try context.fetch(request) {
                 if let idString = record.value(forKey: "idString") as? String {
                     existingByID[idString] = record
                 }
-            }
-            let incomingIDs = Set(recipes.map { $0.id.uuidString })
-            for (idString, record) in existingByID where !incomingIDs.contains(idString) {
-                context.delete(record)
             }
             for recipe in recipes {
                 let record = existingByID[recipe.id.uuidString]
@@ -185,7 +185,45 @@ public struct SavedRecipeRepository {
             }
             return true
         } catch {
-            assertionFailure("saved recipe Core Data save failed")
+            assertionFailure("saved recipe Core Data upsert failed")
+            context.rollback()
+            return false
+        }
+    }
+
+    @discardableResult public func delete(ids: [UUID]) -> Bool {
+        guard !ids.isEmpty else { return true }
+        let context = controller.container.viewContext
+        let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
+        request.predicate = NSPredicate(format: "idString IN %@", ids.map { $0.uuidString })
+        do {
+            for record in try context.fetch(request) {
+                context.delete(record)
+            }
+            if context.hasChanges {
+                try context.save()
+            }
+            return true
+        } catch {
+            assertionFailure("saved recipe delete failed")
+            context.rollback()
+            return false
+        }
+    }
+
+    @discardableResult public func deleteAll() -> Bool {
+        let context = controller.container.viewContext
+        let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
+        do {
+            for record in try context.fetch(request) {
+                context.delete(record)
+            }
+            if context.hasChanges {
+                try context.save()
+            }
+            return true
+        } catch {
+            assertionFailure("saved recipe delete-all failed")
             context.rollback()
             return false
         }

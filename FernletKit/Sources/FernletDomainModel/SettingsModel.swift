@@ -48,6 +48,11 @@ public nonisolated struct FernletSettings: Codable {
     public var proximityDisplayName: String = ""
     public var showProximityDebugTools: Bool = false
     public var allowNearbyRecipeShares: Bool = true
+    /// Opt-in: broadcast/browse clothing shops with nearby friends in person (Increment 3). Default on.
+    public var allowNearbyClothingShares: Bool = true
+    /// `yyyy-MM-dd` of the last day the user changed their shop's listed set. Drives the gentle
+    /// once-per-day "you've already updated your shop today" note. Nil until the first listing change.
+    public var shopLastPublishedDayKey: String? = nil
     public var companionName: String = ""
     public var workoutProfile: WorkoutProfile = WorkoutProfile()
     public var workoutLocations: [WorkoutLocation] = [WorkoutLocation.fullGym]
@@ -100,6 +105,8 @@ public nonisolated struct FernletSettings: Codable {
         proximityDisplayName = try container.decodeIfPresent(String.self, forKey: .proximityDisplayName) ?? ""
         showProximityDebugTools = try container.decodeIfPresent(Bool.self, forKey: .showProximityDebugTools) ?? false
         allowNearbyRecipeShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyRecipeShares) ?? true
+        allowNearbyClothingShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyClothingShares) ?? true
+        shopLastPublishedDayKey = try container.decodeIfPresent(String.self, forKey: .shopLastPublishedDayKey)
         companionName = try container.decodeIfPresent(String.self, forKey: .companionName) ?? ""
         workoutProfile = try container.decodeIfPresent(WorkoutProfile.self, forKey: .workoutProfile) ?? WorkoutProfile()
         let decodedLocations = try container.decodeIfPresent([WorkoutLocation].self, forKey: .workoutLocations) ?? [WorkoutLocation.fullGym]
