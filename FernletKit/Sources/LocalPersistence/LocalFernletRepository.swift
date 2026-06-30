@@ -306,12 +306,16 @@ public struct LocalFernletRepository: FernletRepository {
 }
 
 extension LocalFernletDatabase {
-    public mutating func apply(_ snapshot: FernletSnapshot) {
+    /// Applies today's day + the aggregate slices. `maxStoredDays` bounds the blob's own `days` window:
+    /// the Core Data path passes a small bound (its `days` is just a recent cache — the per-row `DayRecord`
+    /// store is the uncapped source of truth), while the local/no-iCloud path passes nil so its single
+    /// file holds the full, now-uncapped history.
+    public mutating func apply(_ snapshot: FernletSnapshot, maxStoredDays: Int? = nil) {
         assert(!snapshot.todayKey.isEmpty, "snapshot key required")
         assert(snapshot.day.date == snapshot.todayKey, "snapshot day mismatch")
         days[snapshot.todayKey] = snapshot.day
-        if days.count > FernletLimits.maxStoredDays {
-            let oldest = days.keys.sorted().prefix(days.count - FernletLimits.maxStoredDays)
+        if let maxStoredDays, days.count > maxStoredDays {
+            let oldest = days.keys.sorted().prefix(days.count - maxStoredDays)
             oldest.forEach { days.removeValue(forKey: $0) }
         }
         settings = snapshot.settings
@@ -344,18 +348,20 @@ extension LocalFernletDatabase {
     }
 
     private static func sortedDayPairs(_ days: [String: FernletDay]) -> [(String, FernletDay)] {
-        assert(days.count <= FernletLimits.maxStoredDays, "too many stored days")
-        return days.sorted { first, second in first.key < second.key }
+        // No upper-bound assertion: day storage is uncapped now (per-row rows for iCloud, a single
+        // uncapped file for local-only). The log builders below still bound their output by
+        // `derivedLogWindowDays`, so the derived tables stay sized regardless of history depth.
+        days.sorted { first, second in first.key < second.key }
     }
 
     private static func makeDailyLogs(from days: [(String, FernletDay)]) -> [DailyLogRecord] {
-        return days.suffix(FernletLimits.maxStoredDays).map { key, day in
+        return days.suffix(FernletLimits.derivedLogWindowDays).map { key, day in
             DailyLogRecord(dateKey: key, day: day)
         }
     }
 
     private static func makeMealLogs(from days: [(String, FernletDay)]) -> [MealLogRecord] {
-        let nested = days.suffix(FernletLimits.maxStoredDays).map { key, day in
+        let nested = days.suffix(FernletLimits.derivedLogWindowDays).map { key, day in
             day.meals.prefix(FernletLimits.maxMealsPerDay).map { meal in
                 MealLogRecord(dateKey: key, meal: meal, totals: MacroTotals(meals: day.meals))
             }
@@ -364,7 +370,7 @@ extension LocalFernletDatabase {
     }
 
     private static func makeWorkoutLogs(from days: [(String, FernletDay)]) -> [WorkoutLogRecord] {
-        let nested = days.suffix(FernletLimits.maxStoredDays).map { key, day in
+        let nested = days.suffix(FernletLimits.derivedLogWindowDays).map { key, day in
             day.workouts.prefix(FernletLimits.maxWorkoutsPerDay).map { workout in
                 WorkoutLogRecord(dateKey: key, workout: workout)
             }
@@ -373,7 +379,7 @@ extension LocalFernletDatabase {
     }
 
     private static func makeJournalLogs(from days: [(String, FernletDay)]) -> [JournalLogRecord] {
-        let nested = days.suffix(FernletLimits.maxStoredDays).map { key, day in
+        let nested = days.suffix(FernletLimits.derivedLogWindowDays).map { key, day in
             day.journals.prefix(FernletLimits.maxJournalsPerDay).map { journal in
                 JournalLogRecord(dateKey: key, journal: journal)
             }
