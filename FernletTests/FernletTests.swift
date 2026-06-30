@@ -573,6 +573,10 @@ struct FernletTests {
 
         #expect(saved == false)
         #expect(persistedRecord.value(forKey: "payloadData") as? Data == corruptData)
+        // The day row must also be untouched: the row write is skipped under read-only recovery, so a
+        // refused save can't corrupt the row (regression guard for the isPersistenceBlocked check).
+        let dayRow = DayRecordRepository(controller: controller).load(dateKeys: ["2026-05-16"])["2026-05-16"]
+        #expect(dayRow?.bottleCount == 2)
     }
 
     @MainActor

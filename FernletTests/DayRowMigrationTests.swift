@@ -50,13 +50,45 @@ struct DayRowMigrationTests {
         blob.daysMigratedToRows = false
         seedAggregateBlob(blob, in: controller)
 
-        let flaky = FlakyDayRepo(failNextUpsert: true)
+        let flaky = FlakyDayRepo(failOnUpsertCall: 1)
         let repo = CoreDataFernletRepository(controller: controller, dayRecordRepository: flaky)
         _ = repo.loadAllDays()            // first attempt: the upsert fails, flag stays false
         #expect(flaky.store.isEmpty)
 
         let days = repo.loadAllDays()     // retried on the next load because the flag never flipped
         #expect(Set(days.keys) == ["2026-05-01"])
+    }
+
+    @Test func migratesHistorySpanningMultipleBatches() {
+        let controller = PersistenceController(inMemory: true)
+        var blob = LocalFernletDatabase()
+        for i in 0..<600 {  // > 2 full 250-day batches
+            let key = String(format: "2020-%05d", i)
+            blob.days[key] = FernletDay(date: key)
+        }
+        seedAggregateBlob(blob, in: controller)
+
+        let repo = CoreDataFernletRepository(controller: controller)
+        #expect(repo.loadAllDays().count >= 600)  // every batch landed
+    }
+
+    @Test func resumesWhenASecondBatchFailsThenCompletes() {
+        let controller = PersistenceController(inMemory: true)
+        var blob = LocalFernletDatabase()
+        for i in 0..<600 {
+            let key = String(format: "2020-%05d", i)
+            blob.days[key] = FernletDay(date: key)
+        }
+        blob.daysMigratedToRows = false
+        seedAggregateBlob(blob, in: controller)
+
+        let flaky = FlakyDayRepo(failOnUpsertCall: 2)  // batch 1 lands, batch 2 fails → flag stays false
+        let repo = CoreDataFernletRepository(controller: controller, dayRecordRepository: flaky)
+        _ = repo.loadAllDays()
+        #expect(flaky.store.count == 250)        // only the first batch persisted
+
+        let days = repo.loadAllDays()            // retry re-runs all batches; upsert is idempotent per key
+        #expect(days.count == 600)
     }
 
     // MARK: - Helpers
@@ -79,12 +111,14 @@ struct DayRowMigrationTests {
     }
 }
 
-/// An in-memory day repo whose first upsert fails, to exercise the resume-after-failure migration path.
+/// An in-memory day repo that fails a chosen upsert call, to exercise the resume-after-failure migration
+/// path (including a mid-run failure across multiple 250-day batches).
 @MainActor
 private final class FlakyDayRepo: DayRecordRepositoring {
     var store: [String: FernletDay] = [:]
-    private var failNextUpsert: Bool
-    init(failNextUpsert: Bool) { self.failNextUpsert = failNextUpsert }
+    private(set) var upsertCalls = 0
+    private let failOnCall: Int?  // 1-indexed upsert call to fail; nil = never fail
+    init(failOnUpsertCall: Int? = nil) { self.failOnCall = failOnUpsertCall }
 
     func loadAll() -> [String: FernletDay] { store }
     func load(dateKeys: [String]) -> [String: FernletDay] { store.filter { dateKeys.contains($0.key) } }
@@ -92,7 +126,8 @@ private final class FlakyDayRepo: DayRecordRepositoring {
         Array(store.values.sorted { $0.date > $1.date }.prefix(limit))
     }
     @discardableResult func upsert(_ days: [DayRecordUpsert]) -> Bool {
-        if failNextUpsert { failNextUpsert = false; return false }
+        upsertCalls += 1
+        if upsertCalls == failOnCall { return false }
         for entry in days { store[entry.dateKey] = entry.day }
         return true
     }

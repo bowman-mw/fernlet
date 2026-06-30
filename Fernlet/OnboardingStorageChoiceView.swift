@@ -66,7 +66,7 @@ struct OnboardingStorageChoiceView: View {
 
     private var localOnlyCopy: String {
         if existingDataSummary?.hasData == true {
-            return "Nothing leaves this phone. The data we found on another iCloud device won't be merged in, and logs here won't sync to your other devices. You can turn on iCloud later in Settings."
+            return "Nothing leaves this phone. The data already in this iCloud account won't be merged in, and logs here won't sync to your other devices. You can turn on iCloud later in Settings."
         }
         return "Nothing leaves this phone — logs here won't sync to your other devices. You can turn on iCloud later in Settings."
     }

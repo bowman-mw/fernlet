@@ -43,8 +43,11 @@ public nonisolated enum MultiDeviceSyncWarning: Equatable, Sendable {
     public var message: String {
         switch self {
         case .anotherDeviceHasData:
-            return "Another device on this iCloud account already has Fernlet data. With sync off, "
-                + "changes here won't merge with it — the two devices will drift apart."
+            // Phrased "this iCloud account" rather than "another device": the detected data may be this
+            // device's own earlier upload (e.g. after "stop syncing, keep iCloud data"), and we don't track
+            // a writer identity to tell them apart.
+            return "This iCloud account already has Fernlet data. With sync off, changes here won't merge "
+                + "with it, so this device and any others will drift apart."
         case .syncOffWithAccount:
             return "With iCloud sync off, changes on this device won't sync to your other Fernlet "
                 + "devices, and they won't merge later."

@@ -451,6 +451,11 @@ public final class CloudKitDataService {
             return .empty
         }
 
+        // Meals/journals/workouts/sleep fall back to the derived log tables, which are rebuilt from the
+        // per-row DayRecord store and so cover the full derived window even though the blob's `days` is now
+        // only a bounded recent cache. Hygiene/hydration have no derived table, so they reflect the recent
+        // window only — a count-from-cloud approximation that's acceptable for the onboarding "also found"
+        // line (the load-bearing hasData signal is carried by the robust counts above).
         let dayValues = Array(localDatabase.days.values)
         return ExistingDataSummary(
             mealLogCount: localDatabase.mealLogs.isEmpty ? dayValues.reduce(0) { $0 + $1.meals.count } : localDatabase.mealLogs.count,
@@ -458,7 +463,7 @@ public final class CloudKitDataService {
             workoutCount: localDatabase.workoutLogs.isEmpty ? dayValues.reduce(0) { $0 + $1.workouts.count } : localDatabase.workoutLogs.count,
             hygieneLogCount: dayValues.reduce(0) { $0 + $1.hygiene.count },
             hydrationLogCount: dayValues.reduce(0) { $0 + ($1.bottleCount > 0 ? 1 : 0) },
-            sleepRecordCount: dayValues.reduce(0) { $0 + ($1.sleep == nil ? 0 : 1) }
+            sleepRecordCount: localDatabase.dailyLogs.isEmpty ? dayValues.reduce(0) { $0 + ($1.sleep == nil ? 0 : 1) } : localDatabase.dailyLogs.reduce(0) { $0 + ($1.sleepHours == nil ? 0 : 1) }
         )
     }
 

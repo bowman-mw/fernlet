@@ -290,7 +290,7 @@ struct PrivacyDataSettingsView: View {
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
                 if warning == .anotherDeviceHasData, let summary = existingDataSummary {
-                    Text("Found \(summary.mealLogCount) meal logs, \(summary.journalEntryCount) journal entries, \(summary.workoutCount) workouts on another device.")
+                    Text("Found \(summary.mealLogCount) meal logs, \(summary.journalEntryCount) journal entries, \(summary.workoutCount) workouts in this iCloud account.")
                         .font(.caption)
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()

@@ -125,8 +125,12 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             dayRecordRepository.upsert([DayRecordUpsert(day: snapshot.day, updatedAt: Date())])
         }
         // The blob's `days` is now just a bounded recent cache (rows are the uncapped source of truth), so
-        // keep it small to stay well under CloudKit's ~1 MB/record limit even for verbose users.
-        database.apply(snapshot, maxStoredDays: FernletLimits.derivedLogWindowDays)
+        // keep it small to stay well under CloudKit's ~1 MB/record limit even for verbose users — BUT only
+        // once migration has completed. While the backfill is still pending (e.g. a failed batch left the
+        // flag false), the blob may hold the only copy of un-migrated days, so pruning then would drop the
+        // oldest before a retry can fan them into rows. Skip the bound until daysMigratedToRows is true.
+        let blobDayBound = database.daysMigratedToRows ? FernletLimits.derivedLogWindowDays : nil
+        database.apply(snapshot, maxStoredDays: blobDayBound)
         database.rebuildDerivedTables(todayKey: snapshot.todayKey, recentDays: recentDayPairs())
         return saveDatabase(database)
     }
