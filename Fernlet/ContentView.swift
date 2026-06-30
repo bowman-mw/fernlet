@@ -144,6 +144,9 @@ struct ContentView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     Task { await store.processSharedRecipeImportQueue() }
+                    // Credit any day that became active while backgrounded (or synced in from another
+                    // device). Idempotent, so a no-op when nothing new is logged.
+                    store.reconcileCoinLedger()
                     if selectedTab == .social { startFriendsDiscovery() }
                 } else if selectedTab == .social {
                     stopFriendsDiscovery()

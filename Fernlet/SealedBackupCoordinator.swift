@@ -432,11 +432,7 @@ final class SealedBackupCoordinator {
     /// True only when no day carries any logged content and the rolling in-memory caches are empty —
     /// i.e. the user has not yet recorded anything on this device.
     private func isFreshInstallForRestore() -> Bool {
-        let anyLoggedDay = host.loadAllDaysFromRepository().values.contains { d in
-            !(d.meals.isEmpty && d.workouts.isEmpty && d.plannedWorkouts.isEmpty && d.journals.isEmpty
-              && d.sleep == nil && d.hygiene.isEmpty && d.completedPersonalCareTaskIDs.isEmpty
-              && d.bottleCount == 0 && d.healthContext == nil)
-        }
+        let anyLoggedDay = host.loadAllDaysFromRepository().values.contains { $0.hasLoggedContent }
         return !anyLoggedDay && host.previousJournals.isEmpty && host.memories.isEmpty && host.recentMeals.isEmpty
     }
 }

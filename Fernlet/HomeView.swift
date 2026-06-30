@@ -596,6 +596,7 @@ private struct CompanionCustomizationSheet: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
+                        walletBadge
                         wardrobeLink
                         switch section {
                         case .style:
@@ -646,6 +647,36 @@ private struct CompanionCustomizationSheet: View {
                 .fill(Color.bark.opacity(0.08))
                 .frame(height: 1)
         }
+    }
+
+    private var walletBadge: some View {
+        // Read `store.coinBalance` directly (not a snapshot): it is a cheap derived read over the
+        // warm-cached day history, so it stays correct from the first frame and refreshes with the
+        // observable store instead of going stale or flashing 0 → N on appear.
+        let balance = store.coinBalance
+        return HStack(spacing: 12) {
+            Image(systemName: "circlebadge.2.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(Color.sun)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(balance) coins")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.bark)
+                    .contentTransition(.numericText())
+                Text("earned from days you showed up")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.cream)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(balance) coins, earned from days you showed up")
     }
 
     private var wardrobeLink: some View {

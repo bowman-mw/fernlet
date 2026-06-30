@@ -332,7 +332,8 @@ nonisolated public final class PersistenceController {
         model.entities = [
             makeFernletDatabaseRecordEntity(),
             makeSavedRecipeRecordEntity(),
-            makeCustomItemRecordEntity()
+            makeCustomItemRecordEntity(),
+            makeCoinLedgerRecordEntity()
         ]
         return model
     }
@@ -379,6 +380,25 @@ nonisolated public final class PersistenceController {
             // external storage: NSPersistentCloudKitContainer rejects `allowsExternalBinaryDataStorage`
             // at store load (see the makeContainer note above), and a palette-indexed texture is ~1 KB —
             // far under CloudKit's per-field budget — so inline binary is both required and sufficient.
+            makeAttribute("payloadData", type: .binaryDataAttributeType),
+            makeAttribute("createdAt", type: .dateAttributeType)
+        ]
+        return entity
+    }
+
+    private static func makeCoinLedgerRecordEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "CoinLedgerRecord"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            // `idString` is the ledger entry's stable id (e.g. "earn:2026-06-29"). On ONE device the
+            // repository upserts by it, so a re-mint is a no-op. CloudKit does NOT collapse rows by this
+            // attribute (it mirrors by record identity, and NSPersistentCloudKitContainer can't enforce
+            // uniqueness), so two devices can produce two rows with the same idString — `CoinEconomy`
+            // collapses those by id when aggregating. That application-level dedup is what makes coins
+            // idempotent and double-grant-free across devices.
+            makeAttribute("idString", type: .stringAttributeType),
+            // The CoinLedgerEntry as JSON (plain binary, tens of bytes — far under CloudKit's budget).
             makeAttribute("payloadData", type: .binaryDataAttributeType),
             makeAttribute("createdAt", type: .dateAttributeType)
         ]

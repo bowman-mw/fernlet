@@ -81,6 +81,9 @@ func makeTestStoreWithRepositories(
         date: date,
         repository: repository,
         savedRecipeRepository: savedRecipeRepository,
+        // Back the coin ledger with the same in-memory controller so coin tests never touch the shared
+        // on-device store (and stay isolated from each other).
+        coinLedgerRepository: CoinLedgerRepository(controller: controller),
         journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems))
     )
@@ -100,15 +103,18 @@ func makeStoreSharingStores(
     let legacyURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
         .appendingPathExtension("json")
-    // A throwaway saved-recipe store (recipes are irrelevant to the journal-sealing path).
+    // Throwaway saved-recipe + coin-ledger stores (both irrelevant to the journal-sealing path) backed
+    // by an in-memory controller so these tests never touch the shared on-device stores.
+    let throwawayController = PersistenceController(inMemory: true)
     let savedRecipeRepository = SavedRecipeRepository(
-        controller: PersistenceController(inMemory: true),
+        controller: throwawayController,
         legacyRepository: LegacySavedRecipeJSONRepository(fileURL: legacyURL)
     )
     return FernletStore(
         date: date,
         repository: repository,
         savedRecipeRepository: savedRecipeRepository,
+        coinLedgerRepository: CoinLedgerRepository(controller: throwawayController),
         journalNarrativeRepository: narratives,
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([]))
     )

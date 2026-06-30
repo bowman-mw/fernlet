@@ -105,6 +105,7 @@ final class FernletStore {
     private var repository: FernletRepository { diary.repository }
     @ObservationIgnored let savedRecipeService: SavedRecipeService
     @ObservationIgnored let customItemService: CustomItemService
+    @ObservationIgnored let coinLedgerService: CoinLedgerService
     @ObservationIgnored let proximityTrustVault: ProximityTrustVault
     @ObservationIgnored let aiRetryQueueService: AIRetryQueueService
     @ObservationIgnored private(set) lazy var meshNetworkManager: MeshNetworkManager = MeshNetworkManager(store: self)
@@ -160,7 +161,7 @@ final class FernletStore {
     /// a fresh process launch resets it.
     @ObservationIgnored private var pastDayScrubBudgetConsumedThisSession = false
 
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled()) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled()) {
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
 
@@ -182,6 +183,11 @@ final class FernletStore {
         }
         customItemService.loadSync()
         self.customItemService = customItemService
+        let coinLedgerService = StartupTiming.timed("CoinLedgerService.init") {
+            CoinLedgerService(repository: coinLedgerRepository ?? CoinLedgerRepository())
+        }
+        coinLedgerService.loadSync()
+        self.coinLedgerService = coinLedgerService
         self.healthKitService = healthKitService
         self.connectionSessionLogs = snapshot.connectionSessionLogs
         self.proximityTrustVault = ProximityTrustVault(
@@ -212,6 +218,9 @@ final class FernletStore {
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         rebuildDerivedSignals()
+        // Credit any active day not yet in the coin ledger (reuses the warm `loadDays()` cache from the
+        // derived-signals rebuild just above). Idempotent — re-running never double-grants.
+        reconcileCoinLedger()
         snapshotSaveCoordinator.subscribeRemote { [weak self] in
             await self?.reloadFromRepository()
         }
@@ -223,11 +232,13 @@ final class FernletStore {
         repository: FernletRepository,
         savedRecipeService: SavedRecipeService,
         customItemService: CustomItemService,
+        coinLedgerService: CoinLedgerService,
         healthKitService: (any HealthKitServicing)? = nil,
         foodCatalog: FoodCatalog = .bundled()
     ) {
         self.savedRecipeService = savedRecipeService
         self.customItemService = customItemService
+        self.coinLedgerService = coinLedgerService
         self.healthKitService = healthKitService
         self.connectionSessionLogs = snapshot.connectionSessionLogs
         self.proximityTrustVault = ProximityTrustVault(
@@ -253,6 +264,7 @@ final class FernletStore {
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
+        reconcileCoinLedger()
         snapshotSaveCoordinator.subscribeRemote { [weak self] in
             await self?.reloadFromRepository()
         }
@@ -429,6 +441,32 @@ final class FernletStore {
     func designerDisplayName(for item: CustomizationItem) -> String {
         if isSelfDesigned(item) { return "You" }
         return settings.knownDesignerNames[item.designer.id.uuidString] ?? "a friend"
+    }
+
+    // MARK: - Coins (custom-clothing economy)
+    // The ledger lives in `coinLedgerService` (its own per-row, union-merged store). Earning is
+    // reconciled from the active-day history; spending appends a row. See `CoinEconomy`.
+
+    /// Total coins ever earned (one credit per active day). Monotonic — unaffected by day-history
+    /// pruning or HealthKit being disabled, because earned days are recorded as ledger rows, not
+    /// re-derived from the (shrinkable) day history.
+    var earnedCoins: Int { coinLedgerService.earnedCoins }
+
+    /// Spendable coin balance (earned − spent, floored at zero).
+    var coinBalance: Int { coinLedgerService.balance }
+
+    /// Spends `amount` coins if affordable, appending a ledger row keyed by `ref` (idempotent per ref so
+    /// a retried buy can't debit twice). Returns `false` when too few coins or the ref was already spent.
+    /// Increment 3 calls this on a buy with the purchased item's id as `ref`.
+    @discardableResult
+    func spendCoins(_ amount: Int, ref: String = UUID().uuidString) -> Bool {
+        coinLedgerService.spend(amount: amount, ref: ref)
+    }
+
+    /// Credits any active day not yet in the ledger. Idempotent; called at store launch and on app
+    /// foreground so days logged on this or another device accrue exactly once.
+    func reconcileCoinLedger() {
+        coinLedgerService.reconcile(activeDayKeys: diary.activeDayKeys())
     }
 
     func setProximityDisplayName(_ name: String) {
@@ -1350,6 +1388,12 @@ final class FernletStore {
         }
         savedRecipeService.reset()
         customItemService.reset()
+        // Clears all earn/spend rows. Note `resetDiary()` is a SOFT reset — it wipes in-memory state but
+        // preserves the persisted day history — so the next `reconcileCoinLedger()` legitimately re-mints
+        // `earn` rows for any day still on record. That is intentional: coins are a pure function of the
+        // logged days that exist, so a soft reset keeps the spend history cleared while earned coins track
+        // whatever history survives. (A hard wipe of coins would require also wiping the day records.)
+        coinLedgerService.reset()
         aiRetryQueueService.reset()
         proximityTrustVault.apply(peers: [], audit: [])
     }
@@ -1363,6 +1407,9 @@ final class FernletStore {
             allDaysProvider: { [weak self] in self?.loadDays() ?? [:] },
             todayKey: todayKey
         )
+        // Catches the async-load path (whose private init reconciled against a possibly-cold cache) and
+        // any day that became active since launch. Idempotent, so a second pass is cheap and safe.
+        reconcileCoinLedger()
     }
 
     func flushPendingSnapshotSave() {
@@ -1371,6 +1418,9 @@ final class FernletStore {
         // a newly-designed item can't be lost when its equip reference (in the snapshot) is force-saved
         // on background but the item row's yield-debounced write hasn't run yet.
         customItemService.flushPendingSave()
+        // The coin ledger is likewise a separate per-row store with a yield-debounced write; flush any
+        // pending earn/spend rows so a just-credited day or a buy can't be lost on background.
+        coinLedgerService.flushPendingSave()
     }
 
     private func reloadFromRepository() async {
@@ -1397,6 +1447,12 @@ final class FernletStore {
         connectionInspector.attachStore(self)
         journalSealingCoordinator.refreshAfterSnapshotApply()
         rebuildDerivedSignals()
+        // A remote CloudKit change may have brought in earn/spend rows from another device (the coin
+        // ledger is its own per-row store, not part of the snapshot blob) plus newly-synced day records.
+        // Refresh the in-memory ledger so the balance tracks the other device, then credit any newly
+        // active synced day. Idempotent — re-running never double-grants.
+        coinLedgerService.reloadFromStore()
+        reconcileCoinLedger()
     }
 
     private func currentSnapshot() -> SanitizedSnapshot {
@@ -1618,6 +1674,9 @@ extension FernletStore {
         let customItemService = StartupTiming.timed("CustomItemService.init") {
             CustomItemService(repository: CustomItemRepository())
         }
+        let coinLedgerService = StartupTiming.timed("CoinLedgerService.init") {
+            CoinLedgerService(repository: CoinLedgerRepository())
+        }
 
         statusUpdate("Reading recent days...")
         let snapshot: FernletSnapshot
@@ -1632,6 +1691,7 @@ extension FernletStore {
         statusUpdate("Loading saved recipes...")
         await savedRecipeService.loadAsync()
         await customItemService.loadAsync()
+        await coinLedgerService.loadAsync()
 
         return FernletStore(
             snapshot: snapshot,
@@ -1639,6 +1699,7 @@ extension FernletStore {
             repository: activeRepository,
             savedRecipeService: savedRecipeService,
             customItemService: customItemService,
+            coinLedgerService: coinLedgerService,
             healthKitService: nil
         )
     }

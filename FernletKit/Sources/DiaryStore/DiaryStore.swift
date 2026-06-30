@@ -334,6 +334,12 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    /// Day keys that carry any logged content — the active days that the coin ledger credits. Computed
+    /// over the full day history (`loadDays()`), so it is the reconcile input, not a per-render read.
+    public func activeDayKeys() -> Set<String> {
+        Set(loadDays().compactMap { $0.value.hasLoggedContent ? $0.key : nil })
+    }
+
     public func setProximityDisplayName(_ name: String) {
         settings.proximityDisplayName = name.trimmingCharacters(in: .whitespaces)
         scheduleSnapshotSave()
