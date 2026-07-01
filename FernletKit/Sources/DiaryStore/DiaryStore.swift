@@ -325,11 +325,15 @@ public final class DiaryStore {
 
     /// Records the display name learned for a designer id (from an in-person connection). Empty names clear.
     public func setKnownDesignerName(id: UUID, name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
+        // Sanitize the (untrusted, peer-supplied) name before it enters the synced settings blob: drop
+        // control / zero-width / bidi-override scalars, collapse whitespace, and cap length — the same wire
+        // boundary the item name goes through. Without this a hostile peer could poison the id→name map with
+        // a multi-kilobyte or control-character string that then syncs across the user's own devices.
+        let sanitized = ItemNameModeration.sanitizedName(name)
+        if sanitized.isEmpty {
             settings.knownDesignerNames.removeValue(forKey: id.uuidString)
         } else {
-            settings.knownDesignerNames[id.uuidString] = trimmed
+            settings.knownDesignerNames[id.uuidString] = sanitized
         }
         scheduleSnapshotSave()
     }

@@ -536,6 +536,11 @@ final class FernletStore {
         let debited = spendCoins(price, ref: item.id.uuidString)
         var bought = item
         bought.isShareable = false
+        // Provenance is the SELLER's declared designer id — NOT the raw per-item `designer` field, which a
+        // hostile peer could set to the buyer's own id to forge "self-designed" and re-list someone else's
+        // work. If the declared id still collides with this device's own designer id, treat it as unknown
+        // provenance so a bought copy can never masquerade as self-made or be re-listed for sale.
+        bought.designer = ItemDesigner(id: designerID == localDesignerID ? UUID() : designerID)
         saveCustomItem(bought)
         return debited ? .bought : .alreadyOwned
     }

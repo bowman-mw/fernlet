@@ -30,7 +30,12 @@ struct FriendShopView: View {
         .navigationTitle("Friend shops")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            manager.start()
+            // Respect the nearby-sharing opt-out: ContentView owns the manager's full lifecycle (setting +
+            // scene phase + lock + tab), so starting it unconditionally here would begin Multipeer discovery
+            // and broadcast this device's shop catalog even when `allowNearbyClothingShares` is off.
+            if store.settings.allowNearbyClothingShares {
+                manager.start()
+            }
             learnDesignerNames()
         }
         .onChange(of: manager.peerCatalogs.count) { _, _ in learnDesignerNames() }

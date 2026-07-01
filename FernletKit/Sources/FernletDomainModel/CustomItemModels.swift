@@ -109,13 +109,23 @@ public nonisolated struct ItemGridTexture: Codable, Equatable, Sendable {
         return palette[idx]
     }
 
+    /// Most palette entries a sanitized texture may keep, and the longest a single hex string may be. A
+    /// real clothing grid uses a handful of short "RRGGBB" colors; these bounds are generous for any
+    /// legitimate item but stop a hostile peer from smuggling a multi-megabyte `palette` (e.g. 500k long
+    /// strings) past the tiny grid-size clamps — the palette was previously copied through unbounded.
+    public static let maxPaletteEntries = 4096
+    public static let maxPaletteHexLength = 16
+
     /// Drops malformed data into a safe, render-able shape (used at the wire boundary in Increment 3):
-    /// clamps dimensions, resizes the pixel buffer, and coerces out-of-range indices to transparent.
-    /// Cells are copied by `(x, y)` over the overlapping region so a width change keeps rows aligned
-    /// (a flat index copy would bleed cells from one row into the next when `cols` shrinks).
+    /// clamps dimensions, bounds the palette, resizes the pixel buffer, and coerces out-of-range indices to
+    /// transparent. Cells are copied by `(x, y)` over the overlapping region so a width change keeps rows
+    /// aligned (a flat index copy would bleed cells from one row into the next when `cols` shrinks).
     public func sanitized(maxCols: Int = 64, maxRows: Int = 64) -> ItemGridTexture {
         let c = max(0, min(cols, maxCols))
         let r = max(0, min(rows, maxRows))
+        // Bound the untrusted palette first; indices into any dropped entry then coerce to transparent below.
+        let boundedPalette = palette.prefix(ItemGridTexture.maxPaletteEntries)
+            .map { String($0.prefix(ItemGridTexture.maxPaletteHexLength)) }
         var buffer = Array(repeating: ItemGridTexture.transparent, count: c * r)
         let copyCols = min(c, cols)
         let copyRows = min(r, rows)
@@ -124,10 +134,10 @@ public nonisolated struct ItemGridTexture: Codable, Equatable, Sendable {
                 let source = y * cols + x
                 guard source < pixels.count else { continue }
                 let idx = pixels[source]
-                buffer[y * c + x] = (idx >= 0 && idx < palette.count) ? idx : ItemGridTexture.transparent
+                buffer[y * c + x] = (idx >= 0 && idx < boundedPalette.count) ? idx : ItemGridTexture.transparent
             }
         }
-        return ItemGridTexture(cols: c, rows: r, palette: palette, pixels: buffer)
+        return ItemGridTexture(cols: c, rows: r, palette: boundedPalette, pixels: buffer)
     }
 }
 

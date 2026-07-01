@@ -74,10 +74,14 @@ public nonisolated enum ItemNameModeration {
         "@": "a", "$": "s", "!": "i"
     ]
 
-    /// Lowercase + diacritic-fold (ü→u), apply leetspeak folding, then drop every non-alphanumeric scalar
-    /// (so separator-injection — "b a d", "b.a.d" — is defeated). Normalization can only widen coverage.
+    /// NFKC-compatibility-fold, lowercase + diacritic-fold (ü→u), apply leetspeak folding, then drop every
+    /// non-alphanumeric scalar (so separator-injection — "b a d", "b.a.d" — is defeated). The compatibility
+    /// mapping folds fullwidth (ｂａｄ), circled (ⓑⓐⓓ) and mathematical/styled (𝐛𝐚𝐝) homoglyphs of blocked
+    /// words down to their plain ASCII letters before matching, which `.diacriticInsensitive` alone does not.
+    /// Normalization can only widen coverage.
     nonisolated static func normalize(_ value: String) -> String {
-        let folded = value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        let compatible = value.precomposedStringWithCompatibilityMapping
+        let folded = compatible.folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: nil)
         let deLeet = String(folded.map { leetMap[$0] ?? $0 })
         return String(deLeet.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
     }

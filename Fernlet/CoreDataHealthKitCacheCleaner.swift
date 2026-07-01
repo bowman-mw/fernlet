@@ -27,29 +27,51 @@ struct CoreDataHealthKitCacheCleaner: HealthKitCacheClearing {
         encoder.dateEncodingStrategy = .iso8601
 
         // 1) Per-row DayRecords — the authoritative day store after the per-row split.
+        var strippedAnyRow = false
         for record in try context.fetch(NSFetchRequest<NSManagedObject>(entityName: "DayRecord")) {
             guard let payload = record.value(forKey: "payloadData") as? Data,
                   let day = try? decoder.decode(FernletDay.self, from: payload),
                   let stripped = Self.strippedOfHealthCache(day) else { continue }
             record.setValue(try encoder.encode(stripped), forKey: "payloadData")
             record.setValue(Date(), forKey: "updatedAt")
+            strippedAnyRow = true
         }
 
-        // 2) The aggregate FernletDatabaseRecord blob still carries a bounded `days` cache that syncs to
-        //    iCloud, so it must be stripped too — otherwise opting out of HealthKit would leave clinical
-        //    context (sleep/steps/HRV) syncing in the blob even though reads come from the rows above.
+        // 2) The aggregate FernletDatabaseRecord blob carries a bounded derived cache — `dailyLogs` and the
+        //    other log tables, plus the `dayContentSummary` roll-up, plus (on un-migrated stores) its own
+        //    `days` map — all of which sync to iCloud. That derived cache is rebuilt here from the
+        //    authoritative, now-stripped DayRecord rows loaded above. On a *migrated* store the blob's `days`
+        //    is already empty, so the previous "only rebuild if a blob `day` changed" guard skipped the
+        //    rebuild entirely and left stale HealthKit-derived sleep hours in `dailyLogs`/`dayContentSummary`
+        //    syncing to iCloud after opt-out. `loadRecent` runs on the same view context, so it observes the
+        //    pending row edits from step 1.
+        let recentDays = DayRecordRepository(controller: controller)
+            .loadRecent(limit: FernletLimits.derivedLogWindowDays)
+            .map { ($0.date, $0) }
+            .sorted { $0.0 < $1.0 }   // oldest-first, as rebuildDerivedTables(recentDays:) expects
         for record in try context.fetch(NSFetchRequest<NSManagedObject>(entityName: "FernletDatabaseRecord")) {
             guard let payload = record.value(forKey: "payloadData") as? Data,
                   var database = try? decoder.decode(LocalFernletDatabase.self, from: payload) else { continue }
-            var changed = false
+            // Strip any residual health cache still held in an un-migrated blob's own `days` map.
+            var blobDaysChanged = false
             for key in database.days.keys {
                 guard let day = database.days[key], let stripped = Self.strippedOfHealthCache(day) else { continue }
                 database.days[key] = stripped
-                changed = true
+                blobDaysChanged = true
             }
-            guard changed else { continue }
-            let todayKey = database.days.keys.sorted().last ?? FernletDate.dayKey(for: .now)
-            database.rebuildDerivedTables(todayKey: todayKey)
+            // A migrated store must always rebuild from rows — its blob derived tables can be stale even when
+            // this pass stripped nothing new. A clean un-migrated blob (no rows and no blob-day change) is
+            // left untouched to avoid a needless synced write.
+            guard database.daysMigratedToRows || strippedAnyRow || blobDaysChanged else { continue }
+            if database.daysMigratedToRows {
+                let todayKey = recentDays.last?.0 ?? FernletDate.dayKey(for: .now)
+                database.rebuildDerivedTables(todayKey: todayKey, recentDays: recentDays)
+                database.dayContentSummary = DayContentSummary(days: recentDays.map(\.1))
+            } else {
+                let todayKey = database.days.keys.sorted().last ?? FernletDate.dayKey(for: .now)
+                database.rebuildDerivedTables(todayKey: todayKey)
+                database.dayContentSummary = DayContentSummary(days: Array(database.days.values))
+            }
             record.setValue(try encoder.encode(database), forKey: "payloadData")
             record.setValue(Date(), forKey: "updatedAt")
         }
