@@ -100,6 +100,16 @@ struct CustomItemModelTests {
         #expect(decoded.equippedItemIDsBySlot.isEmpty)
         #expect(decoded.localDesignerID == nil)
         #expect(decoded.knownDesignerNames.isEmpty)
+        #expect(decoded.ownedDesignerIDs.isEmpty)
+    }
+
+    @Test func settingsRoundTripPreservesOwnedDesignerIDs() throws {
+        var settings = FernletSettings()
+        let idA = UUID(); let idB = UUID()
+        settings.ownedDesignerIDs = [idA, idB]
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(FernletSettings.self, from: data)
+        #expect(decoded.ownedDesignerIDs == [idA, idB])
     }
 
     // MARK: - CustomItemService CRUD over a stub repository

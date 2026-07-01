@@ -441,7 +441,7 @@ final class FernletStore {
     var localDesignerID: UUID { diary.localDesignerID }
 
     /// Whether `item` was designed on this device.
-    func isSelfDesigned(_ item: CustomizationItem) -> Bool { item.designer.id == localDesignerID }
+    func isSelfDesigned(_ item: CustomizationItem) -> Bool { settings.ownedDesignerIDs.contains(item.designer.id) }
 
     /// Resolves an item's provenance to a display name: "You" for own designs, the locally-learned name
     /// for a known friend-designer, or a generic fallback for a designer this device hasn't met yet.
@@ -537,10 +537,10 @@ final class FernletStore {
         var bought = item
         bought.isShareable = false
         // Provenance is the SELLER's declared designer id — NOT the raw per-item `designer` field, which a
-        // hostile peer could set to the buyer's own id to forge "self-designed" and re-list someone else's
-        // work. If the declared id still collides with this device's own designer id, treat it as unknown
+        // hostile peer could set to one of the buyer's own ids to forge "self-designed" and re-list someone
+        // else's work. If the declared id collides with ANY of this user's designer ids, treat it as unknown
         // provenance so a bought copy can never masquerade as self-made or be re-listed for sale.
-        bought.designer = ItemDesigner(id: designerID == localDesignerID ? UUID() : designerID)
+        bought.designer = ItemDesigner(id: settings.ownedDesignerIDs.contains(designerID) ? UUID() : designerID)
         saveCustomItem(bought)
         return debited ? .bought : .alreadyOwned
     }

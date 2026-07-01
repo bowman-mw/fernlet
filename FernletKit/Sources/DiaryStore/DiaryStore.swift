@@ -312,15 +312,22 @@ public final class DiaryStore {
         settings.localDesignerID ?? ensureLocalDesignerID()
     }
 
-    /// Generates and persists the device's designer id if it doesn't exist yet. Call once at store
-    /// startup — NOT from a view body — so the lazy mint never runs mid-render.
+    /// Generates and persists the device's designer id if it doesn't exist yet, and records it in the
+    /// `ownedDesignerIDs` set that `isSelfDesigned` consults. Call once at store startup — NOT from a view
+    /// body — so the lazy mint never runs mid-render.
     @discardableResult
     public func ensureLocalDesignerID() -> UUID {
-        if let existing = settings.localDesignerID { return existing }
-        let generated = UUID()
-        settings.localDesignerID = generated
-        scheduleSnapshotSave()
-        return generated
+        let id = settings.localDesignerID ?? UUID()
+        var changed = false
+        if settings.localDesignerID == nil {
+            settings.localDesignerID = id
+            changed = true
+        }
+        if settings.ownedDesignerIDs.insert(id).inserted {
+            changed = true
+        }
+        if changed { scheduleSnapshotSave() }
+        return id
     }
 
     /// Records the display name learned for a designer id (from an in-person connection). Empty names clear.
@@ -934,8 +941,13 @@ public final class DiaryStore {
     /// Applies the diary slice of a snapshot. The facade's `apply(_:)` calls this then applies its
     /// app-only collaborators (retry queue, trust vault, journal sealing, derived signals).
     public func applyDiarySlice(_ snapshot: FernletSnapshot) {
+        let existingOwnedDesignerIDs = settings.ownedDesignerIDs
         day = snapshot.day
         settings = snapshot.settings
+        // UNION the owned-designer-id set rather than letting the last-writer-wins synced blob overwrite it:
+        // the set is monotonic, so union-on-apply gives every device the full history of the user's ids
+        // without clobbering — the fix for own-device items reading as "a friend's" after a sync.
+        settings.ownedDesignerIDs.formUnion(existingOwnedDesignerIDs)
         recentMeals = snapshot.recentMeals
         previousJournals = snapshot.previousJournals
         memories = snapshot.memories
@@ -944,9 +956,8 @@ public final class DiaryStore {
         foodItems = snapshot.foodItems.filter { $0.source != .usda }
         recipes = snapshot.recipes
         dailyScores = snapshot.dailyScores
-        // Guarantee the device designer id is non-nil after applying (the incoming synced settings may carry
-        // a nil id from a device that predates the field), so the `localDesignerID` getter never lazily mints
-        // — and thus mutates observed state — mid-render.
+        // Also add this device's id + guarantee localDesignerID is non-nil, so the getter never lazily mints
+        // (mutating observed state) mid-render.
         ensureLocalDesignerID()
     }
 

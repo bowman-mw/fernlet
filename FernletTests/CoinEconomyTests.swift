@@ -48,6 +48,34 @@ struct CoinEconomyTests {
         #expect(CoinEconomy.canSpend(amount: -5, in: entries) == false)
     }
 
+    // MARK: - Reset boundary (append-only "zero the balance")
+
+    @Test func resetMarkerVoidsPreResetEarnsAndSpends() {
+        let resetDate = Date(timeIntervalSince1970: 1_780_500_000)
+        let before = Date(timeIntervalSince1970: 1_780_000_000)  // < resetDate
+        let after = Date(timeIntervalSince1970: 1_781_000_000)   // > resetDate
+        let entries = [
+            CoinLedgerEntry.earn(dayKey: "2026-05-01", amount: 5, at: before),
+            CoinLedgerEntry.earn(dayKey: "2026-05-05", amount: 5, at: before),
+            CoinLedgerEntry.spend(ref: "hat", amount: 3, at: before),
+            CoinLedgerEntry.reset(dayKey: "2026-05-10", at: resetDate),
+            CoinLedgerEntry.earn(dayKey: "2026-05-11", amount: 5, at: after),  // post-reset day survives
+        ]
+        // Earns for days <= the reset boundary and the pre-reset spend are voided; only the post-reset earn counts.
+        #expect(CoinEconomy.earned(in: entries) == 5)
+        #expect(CoinEconomy.spent(in: entries) == 0)
+        #expect(CoinEconomy.balance(in: entries) == 5)
+    }
+
+    @Test func reconcileDoesNotReMintEarnsAtOrBeforeReset() {
+        // Another device re-running reconcile after a reset (its days not yet deleted) must NOT re-mint earns
+        // for days at/ before the reset boundary — that is exactly how a reset would otherwise be undone.
+        let entries = [CoinLedgerEntry.reset(dayKey: "2026-05-10", at: day)]
+        let active: Set<String> = ["2026-05-08", "2026-05-10", "2026-05-12"]
+        let missing = CoinEconomy.missingEarnEntries(activeDayKeys: active, existing: entries, at: day)
+        #expect(missing.map { $0.dayKey } == ["2026-05-12"])
+    }
+
     // MARK: - Structural idempotency (the heart of sync-safety)
 
     @Test func earnIdIsDeterministicFromDayKey() {

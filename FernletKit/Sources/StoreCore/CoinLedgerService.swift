@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import FernletPersistence
 import FernletDomainModel
+import FernletFoundation
 
 /// Owns the coin ledger in memory and persists it to its own per-row store (separate from the snapshot
 /// blob). Earning is recorded by `reconcile` — one idempotent `earn` row per active day, so the earned
@@ -84,10 +85,22 @@ public final class CoinLedgerService {
     // MARK: - Reset / flush
 
     public func reset() {
-        entries = []
-        pendingAppends = []
-        saveScheduled = false
+        // Delete every row (honoring the user's "delete all data" intent — the deletes propagate to their
+        // other devices via CloudKit), THEN append a reset-boundary marker. The marker makes reconcile refuse
+        // to re-mint earns for pre-reset days and makes the balance void any pre-reset row that lingers or
+        // re-syncs from an offline device, so a reset can't be undone by another device deterministically
+        // re-minting earns for pre-reset days. This is the append-only economy's "zero the balance".
         repository.deleteAll()
+        let at = now()
+        let marker = CoinLedgerEntry.reset(dayKey: FernletDate.dayKey(for: at), at: at)
+        entries = [marker]
+        saveScheduled = false
+        if repository.append([marker]) {
+            pendingAppends = []
+        } else {
+            pendingAppends = [marker]
+            scheduleSave()
+        }
     }
 
     public func flushPendingSave() {

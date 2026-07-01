@@ -24,6 +24,10 @@ public nonisolated enum CoinLedgerKind: String, Codable, Sendable, CaseIterable 
     case earn
     /// Coins debited for a purchase (Increment 3). Amount is the item price.
     case spend
+    /// A "reset all data" boundary. Carries no coins (amount 0); its `dayKey`/`createdAt` void every earn
+    /// and spend at or before it, so a full reset zeroes the balance in an append-only, sync-safe way —
+    /// another device can't undo the reset by deterministically re-minting earns for pre-reset days.
+    case reset
 }
 
 /// One immutable line in the coin ledger. Rows are append-only and union-merge across devices by `id`.
@@ -59,6 +63,15 @@ public nonisolated struct CoinLedgerEntry: Codable, Identifiable, Equatable, Sen
     public static func spend(ref: String, amount: Int, at date: Date) -> CoinLedgerEntry {
         CoinLedgerEntry(id: spendID(ref: ref), kind: .spend, amount: amount, spendRef: ref, createdAt: date)
     }
+
+    /// A reset boundary marker. `dayKey` is the reset day (`yyyy-MM-dd`); every earn for a day at/ before it
+    /// and every spend created at/ before `createdAt` is voided. The id embeds the reset instant so distinct
+    /// resets stay distinct rows under the union-merge.
+    public static func resetID(at date: Date) -> String { "reset:\(date.timeIntervalSince1970)" }
+
+    public static func reset(dayKey: String, at date: Date) -> CoinLedgerEntry {
+        CoinLedgerEntry(id: resetID(at: date), kind: .reset, amount: 0, dayKey: dayKey, createdAt: date)
+    }
 }
 
 /// Pure aggregation + minting over a set of ledger entries. No state of its own — every value is a
@@ -83,12 +96,28 @@ public nonisolated enum CoinEconomy {
         return unique
     }
 
-    /// Earned/spent totals over the id-collapsed rows. The single place the dedup-then-sum happens.
+    /// The most recent reset boundary among the rows, or nil if the ledger was never reset.
+    public static func latestReset(in entries: [CoinLedgerEntry]) -> CoinLedgerEntry? {
+        entries.filter { $0.kind == .reset }.max { $0.createdAt < $1.createdAt }
+    }
+
+    /// Earned/spent totals over the id-collapsed rows. The single place the dedup-then-sum happens. Any earn
+    /// for a day at/ before the latest reset boundary, and any spend created at/ before it, is voided — so a
+    /// reset zeroes the balance even if a pre-reset row lingers or re-syncs from an offline device, and even
+    /// if another device deterministically re-mints a pre-reset earn (same `dayKey <= boundary` → still void).
     public static func totals(in entries: [CoinLedgerEntry]) -> (earned: Int, spent: Int) {
-        deduplicatedByID(entries).reduce(into: (earned: 0, spent: 0)) { totals, entry in
+        let deduped = deduplicatedByID(entries)
+        let reset = latestReset(in: deduped)
+        return deduped.reduce(into: (earned: 0, spent: 0)) { totals, entry in
             switch entry.kind {
-            case .earn: totals.earned += max(0, entry.amount)
-            case .spend: totals.spent += max(0, entry.amount)
+            case .earn:
+                if let boundary = reset?.dayKey, let day = entry.dayKey, day <= boundary { return }
+                totals.earned += max(0, entry.amount)
+            case .spend:
+                if let resetAt = reset?.createdAt, entry.createdAt <= resetAt { return }
+                totals.spent += max(0, entry.amount)
+            case .reset:
+                break
             }
         }
     }
@@ -120,8 +149,13 @@ public nonisolated enum CoinEconomy {
     /// The earn entries that SHOULD exist for `activeDayKeys` but don't yet — i.e. the idempotent delta a
     /// reconcile appends. Sorted for determinism. Re-running with the same inputs returns nothing new.
     public static func missingEarnEntries(activeDayKeys: Set<String>, existing: [CoinLedgerEntry], at date: Date) -> [CoinLedgerEntry] {
-        activeDayKeys
+        // Don't re-mint earns for days at/ before the latest reset boundary: those days were wiped by a
+        // reset, and minting them (with a fresh, post-reset timestamp) is exactly how another device's
+        // reconcile would otherwise undo the reset and inflate the balance.
+        let resetBoundary = latestReset(in: existing)?.dayKey
+        return activeDayKeys
             .subtracting(earnedDayKeys(in: existing))
+            .filter { resetBoundary == nil || $0 > resetBoundary! }
             .sorted()
             .map { CoinLedgerEntry.earn(dayKey: $0, amount: coinsPerActiveDay, at: date) }
     }

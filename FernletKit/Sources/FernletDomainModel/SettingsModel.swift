@@ -16,6 +16,12 @@ public nonisolated struct FernletSettings: Codable {
     /// This device's anonymous, stable designer id, stamped onto every item the user designs. Generated
     /// lazily on first use (see `DiaryStore.localDesignerID`). Not derived from any identity material.
     public var localDesignerID: UUID? = nil
+    /// Every designer id this user has used across their OWN devices — this device's `localDesignerID` plus
+    /// any seen in a synced settings blob. `isSelfDesigned` checks membership here rather than equality to
+    /// the single, last-writer-wins-synced `localDesignerID`, so an item designed on any of the user's
+    /// devices stays "self-made". Union-merged on apply (`DiaryStore.applyDiarySlice`) so it only ever grows
+    /// and a remote sync can't clobber an id, which is what fixes the cross-device provenance corruption.
+    public var ownedDesignerIDs: Set<UUID> = []
     /// Locally-learned `designerID → display name` map, populated when connecting with friends in person
     /// (Increment 3). Lets the closet resolve "designed by <friend>" without the item ever carrying a name.
     public var knownDesignerNames: [String: String] = [:]
@@ -80,6 +86,7 @@ public nonisolated struct FernletSettings: Codable {
         companionAppearance = try container.decodeIfPresent(CompanionAppearance.self, forKey: .companionAppearance) ?? .standard
         equippedItemIDsBySlot = try container.decodeIfPresent([String: UUID].self, forKey: .equippedItemIDsBySlot) ?? [:]
         localDesignerID = try container.decodeIfPresent(UUID.self, forKey: .localDesignerID)
+        ownedDesignerIDs = try container.decodeIfPresent(Set<UUID>.self, forKey: .ownedDesignerIDs) ?? []
         knownDesignerNames = try container.decodeIfPresent([String: String].self, forKey: .knownDesignerNames) ?? [:]
         selectedGoal = try container.decodeIfPresent(GoalType.self, forKey: .selectedGoal) ?? .wellness
         sickDays = try container.decodeIfPresent([String: Bool].self, forKey: .sickDays) ?? [:]
