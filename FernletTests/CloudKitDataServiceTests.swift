@@ -68,6 +68,31 @@ struct CloudKitDataServiceTests {
         #expect(summary.sleepRecordCount == 1)
     }
 
+    /// M8 regression: a second device that holds only per-row data the blob summary can't see — custom
+    /// clothing items, coin-ledger rows, or day rows older than the summary window — must still be detected,
+    /// otherwise the multi-device warning never fires. The pre-fix detector counted only the aggregate
+    /// summary plus the retired standalone log types, so a design-only device read as "no cloud data".
+    @Test func detectionCountsPerRowStoresTheBlobSummaryMisses() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        // No aggregate blob, no logged-day content — only the per-row stores, as a design-only device.
+        database.recordsByType["CD_CustomItemRecord"] = [
+            record(type: "CD_CustomItemRecord", name: "item-1", zoneID: zoneID),
+            record(type: "CD_CustomItemRecord", name: "item-2", zoneID: zoneID)
+        ]
+        database.recordsByType["CD_CoinLedgerRecord"] = [record(type: "CD_CoinLedgerRecord", name: "coin-1", zoneID: zoneID)]
+        database.recordsByType["CD_DayRecord"] = [record(type: "CD_DayRecord", name: "2024-01-01", zoneID: zoneID)]
+        let service = makeService(database: database, zoneID: zoneID)
+
+        let summary = try #require(try await service.detectExistingData())
+
+        #expect(summary.customItemCount == 2)
+        #expect(summary.coinLedgerCount == 1)
+        #expect(summary.dayRecordCount == 1)
+        #expect(summary.hasData)
+        #expect(summary.mealLogCount == 0)  // no logged day CONTENT, only per-row stores
+    }
+
     /// Regression for prior finding #4: a full health database exceeds CloudKit's ~1 MB
     /// inline field limit, so NSPersistentCloudKitContainer stores the mirrored
     /// `CD_payloadData` as a CKAsset rather than inline Data. Detection must read the asset,

@@ -76,7 +76,10 @@ public final class CustomItemService {
     }
 
     public func flushPendingSave() {
-        guard saveScheduled else { return }
+        // Flush whenever mutations are pending, NOT only when a debounced save is scheduled: a prior
+        // scheduled flush that failed its write leaves `saveScheduled` false while the pending queues still
+        // hold the only un-persisted copy, so gating on `saveScheduled` made the background retry a no-op and
+        // silently lost a just-designed/bought item. The pending queues are the real "nothing to do" check.
         saveScheduled = false
         guard !pendingUpserts.isEmpty || !pendingDeletes.isEmpty else { return }
         let upserts = Array(pendingUpserts.values)

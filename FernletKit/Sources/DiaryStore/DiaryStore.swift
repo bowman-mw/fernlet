@@ -925,6 +925,10 @@ public final class DiaryStore {
         foodItems = []
         recipes = []
         dailyScores = []
+        // Re-mint the device designer id: `resetDiary()` nulled it via the fresh `FernletSettings()`, and the
+        // `localDesignerID` getter would otherwise lazily mint it (mutating observed state) the next time a
+        // view body reads it — a "modifying state during view update" hazard.
+        ensureLocalDesignerID()
     }
 
     /// Applies the diary slice of a snapshot. The facade's `apply(_:)` calls this then applies its
@@ -940,6 +944,10 @@ public final class DiaryStore {
         foodItems = snapshot.foodItems.filter { $0.source != .usda }
         recipes = snapshot.recipes
         dailyScores = snapshot.dailyScores
+        // Guarantee the device designer id is non-nil after applying (the incoming synced settings may carry
+        // a nil id from a device that predates the field), so the `localDesignerID` getter never lazily mints
+        // — and thus mutates observed state — mid-render.
+        ensureLocalDesignerID()
     }
 
     // MARK: - Launch no-ops

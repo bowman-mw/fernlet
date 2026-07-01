@@ -893,6 +893,10 @@ struct PrivacyDataSettingsView: View {
                 _ = try await cloudDataService.deleteAllCloudKitData(
                     confirmation: DeletionConfirmation(userTypedConfirmation: deleteConfirmationText.uppercased())
                 )
+                // The cloud records were just deleted, so the previously-detected summary is stale. Clear it
+                // so the "Cloud records" card and the always-on multi-device warning banner immediately
+                // reflect the now-empty cloud instead of continuing to report data that no longer exists.
+                existingDataSummary = nil
                 isShowingDisableConfirmation = false
             } catch {
                 operationError = error.localizedDescription

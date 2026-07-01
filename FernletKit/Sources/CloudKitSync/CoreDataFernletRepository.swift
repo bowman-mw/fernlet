@@ -198,11 +198,19 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         guard !database.daysMigratedToRows else { return database }
         let pairs = database.days.sorted { $0.key < $1.key }
         if !pairs.isEmpty {
+            // Backfill ONLY days that don't already have a row. A row can already exist because another
+            // device wrote a fresher edit for that day (synced in), or a prior migration batch / updateDay
+            // already wrote it. Overwriting such a row with the blob's stale copy — stamped with the blob's
+            // single global `updatedAt` — would let the stale day win the max-updatedAt dedup and clobber the
+            // newer edit both locally and back out over CloudKit. Skipping keeps migration a pure backfill,
+            // fixes the re-fan-clobbers-a-row-edit case, and leaves the rows themselves as the resume cursor.
             let stamp = database.updatedAt
+            let existingKeys = Set(dayRecordRepository.load(dateKeys: pairs.map(\.key)).keys)
+            let backfill = pairs.filter { !existingKeys.contains($0.key) }
             let batchSize = 250
             var index = 0
-            while index < pairs.count {
-                let slice = pairs[index..<min(index + batchSize, pairs.count)]
+            while index < backfill.count {
+                let slice = backfill[index..<min(index + batchSize, backfill.count)]
                 let ok = dayRecordRepository.upsert(slice.map { DayRecordUpsert(day: $0.value, updatedAt: stamp) })
                 guard ok else { return database }  // leave the flag false → resume next launch
                 index += batchSize
@@ -418,8 +426,14 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     }
 
     private func snapshot(from database: LocalFernletDatabase, todayKey: String) -> FernletSnapshot {
-        // Today's day comes from its row (the authoritative day store), independent of the blob.
-        let day = dayRecordRepository.load(dateKeys: [todayKey])[todayKey] ?? FernletDay(date: todayKey)
+        // Today's day comes from its row (the authoritative day store). While migration is incomplete (a
+        // failed/lagging backfill leaves `daysMigratedToRows` false) the row may not be written yet, so fall
+        // back to the blob's copy — which still holds the day until migration clears `days` — before
+        // returning an empty day. Otherwise an empty today would surface and the next save would clobber the
+        // real entries. Post-migration `database.days` is empty, so this fallback is a no-op there.
+        let day = dayRecordRepository.load(dateKeys: [todayKey])[todayKey]
+            ?? database.days[todayKey]
+            ?? FernletDay(date: todayKey)
         return FernletSnapshot(
             todayKey: todayKey,
             day: day,

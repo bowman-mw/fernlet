@@ -81,8 +81,10 @@ func makeTestStoreWithRepositories(
         date: date,
         repository: repository,
         savedRecipeRepository: savedRecipeRepository,
-        // Back the coin ledger with the same in-memory controller so coin tests never touch the shared
-        // on-device store (and stay isolated from each other).
+        // Back custom items + the coin ledger with the same in-memory controller so these tests never fall
+        // back to CustomItemRepository()/CoinLedgerRepository() on PersistenceController.shared (a real
+        // SQLite store) — that shared coupling makes tests non-hermetic and flaky under parallel runs.
+        customItemRepository: CustomItemRepository(controller: controller),
         coinLedgerRepository: CoinLedgerRepository(controller: controller),
         journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems))
@@ -114,6 +116,7 @@ func makeStoreSharingStores(
         date: date,
         repository: repository,
         savedRecipeRepository: savedRecipeRepository,
+        customItemRepository: CustomItemRepository(controller: throwawayController),
         coinLedgerRepository: CoinLedgerRepository(controller: throwawayController),
         journalNarrativeRepository: narratives,
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([]))

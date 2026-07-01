@@ -91,7 +91,11 @@ public final class CoinLedgerService {
     }
 
     public func flushPendingSave() {
-        guard saveScheduled else { return }
+        // Flush whenever rows are pending, NOT only when a debounced save is scheduled: a prior scheduled
+        // flush that failed its append leaves `saveScheduled` false while `pendingAppends` still holds the
+        // only un-persisted copy, so gating on `saveScheduled` here made the background retry
+        // (flushPendingSnapshotSave) a no-op and silently dropped an earned day or a spend on the next
+        // launch. `pendingAppends.isEmpty` is the real "nothing to do" condition.
         saveScheduled = false
         guard !pendingAppends.isEmpty else { return }
         // Clear the pending queue only AFTER a confirmed save — `pendingAppends` is the sole un-persisted
