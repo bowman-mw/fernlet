@@ -52,6 +52,22 @@ public nonisolated struct FernletDay: Codable {
         completedPersonalCareTaskIDs = try container.decodeIfPresent(Set<String>.self, forKey: .completedPersonalCareTaskIDs) ?? Set(hygiene.map(\.rawValue))
         healthContext = try container.decodeIfPresent(HealthDailyContext.self, forKey: .healthContext)
     }
+
+    /// True when the day carries *any* recorded content — a logged meal/workout/planned-workout/journal,
+    /// sleep, water, hygiene/personal-care, or a HealthKit context that actually holds data. The single
+    /// definition of "a day the user has something on", shared by fresh-install detection
+    /// (`SealedBackupCoordinator`) and the coin economy's active-day accrual (`DiaryStore.activeDayKeys`,
+    /// which feeds the coin ledger) so the two can't drift.
+    ///
+    /// NOTE: a *content-free* `healthContext` does NOT count. HealthKit sync stamps a non-nil context
+    /// (just a `syncedAt`, every metric nil) onto a day merely because integration is enabled and the
+    /// app was opened — so a bare `healthContext != nil` would award "active day" coins for nothing.
+    /// Requiring `healthContext.hasContent` keeps "active day" meaning a day with real data on it.
+    public var hasLoggedContent: Bool {
+        !(meals.isEmpty && workouts.isEmpty && plannedWorkouts.isEmpty && journals.isEmpty
+          && sleep == nil && hygiene.isEmpty && completedPersonalCareTaskIDs.isEmpty
+          && bottleCount == 0 && !(healthContext?.hasContent ?? false))
+    }
 }
 
 public nonisolated struct HealthDailyContext: Codable, Equatable {
@@ -78,6 +94,18 @@ public nonisolated struct HealthDailyContext: Codable, Equatable {
         cycle = other.cycle ?? cycle
         mindfulness = other.mindfulness ?? mindfulness
         intimate = other.intimate ?? intimate
+    }
+
+    /// True when the context holds at least one real metric — i.e. it is more than the bare `syncedAt`
+    /// stamp that HealthKit sync writes whenever integration is enabled. Each sub-struct is all-optional
+    /// with an all-nil parameterless init, so "has a value" is "differs from the empty instance".
+    /// `syncedAt` is deliberately ignored: a sync timestamp alone is not user/health content.
+    public var hasContent: Bool {
+        (activity.map { $0 != HealthActivitySummary() } ?? false)
+            || (body.map { $0 != HealthBodyContext() } ?? false)
+            || (cycle.map { $0 != HealthCycleContext() } ?? false)
+            || (mindfulness.map { $0 != HealthMindfulnessContext() } ?? false)
+            || (intimate.map { $0 != HealthIntimateContext() } ?? false)
     }
 }
 

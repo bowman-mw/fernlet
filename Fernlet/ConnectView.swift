@@ -133,6 +133,13 @@ struct FriendsView: View {
                         Spacer()
                         HStack(spacing: 10) {
                             NavigationLink {
+                                FriendShopView(store: store, manager: store.clothingShareManager)
+                            } label: {
+                                headerButtonLabel("bag")
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("friends.friendShops")
+                            NavigationLink {
                                 FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                             } label: {
                                 headerButtonLabel("person.2")

@@ -9,6 +9,22 @@ public nonisolated struct FernletSettings: Codable {
     public var showDeveloperNotes = false
     public var connectionInspectorMode: ConnectionInspectorMode = .live
     public var companionAppearance: CompanionAppearance = .standard
+    /// Which owned item is equipped in each slot, keyed by `ItemSlot.rawValue`. A slot absent from the
+    /// map (or pointing at a deleted item) renders nothing. The items themselves live in their own
+    /// per-row store (`CustomItemService`), not here — only this tiny render-state map stays in settings.
+    public var equippedItemIDsBySlot: [String: UUID] = [:]
+    /// This device's anonymous, stable designer id, stamped onto every item the user designs. Generated
+    /// lazily on first use (see `DiaryStore.localDesignerID`). Not derived from any identity material.
+    public var localDesignerID: UUID? = nil
+    /// Every designer id this user has used across their OWN devices — this device's `localDesignerID` plus
+    /// any seen in a synced settings blob. `isSelfDesigned` checks membership here rather than equality to
+    /// the single, last-writer-wins-synced `localDesignerID`, so an item designed on any of the user's
+    /// devices stays "self-made". Union-merged on apply (`DiaryStore.applyDiarySlice`) so it only ever grows
+    /// and a remote sync can't clobber an id, which is what fixes the cross-device provenance corruption.
+    public var ownedDesignerIDs: Set<UUID> = []
+    /// Locally-learned `designerID → display name` map, populated when connecting with friends in person
+    /// (Increment 3). Lets the closet resolve "designed by <friend>" without the item ever carrying a name.
+    public var knownDesignerNames: [String: String] = [:]
     public var selectedGoal: GoalType = .wellness
     /// Per-day sickness flags keyed by `yyyy-MM-dd`. Keyed by date so past-day scoring uses the
     /// flag that was set for *that* day, and "today" naturally resets when the date rolls over.
@@ -38,6 +54,11 @@ public nonisolated struct FernletSettings: Codable {
     public var proximityDisplayName: String = ""
     public var showProximityDebugTools: Bool = false
     public var allowNearbyRecipeShares: Bool = true
+    /// Opt-in: broadcast/browse clothing shops with nearby friends in person (Increment 3). Default on.
+    public var allowNearbyClothingShares: Bool = true
+    /// `yyyy-MM-dd` of the last day the user changed their shop's listed set. Drives the gentle
+    /// once-per-day "you've already updated your shop today" note. Nil until the first listing change.
+    public var shopLastPublishedDayKey: String? = nil
     public var companionName: String = ""
     public var workoutProfile: WorkoutProfile = WorkoutProfile()
     public var workoutLocations: [WorkoutLocation] = [WorkoutLocation.fullGym]
@@ -63,6 +84,10 @@ public nonisolated struct FernletSettings: Codable {
         showDeveloperNotes = try container.decodeIfPresent(Bool.self, forKey: .showDeveloperNotes) ?? false
         connectionInspectorMode = try container.decodeIfPresent(ConnectionInspectorMode.self, forKey: .connectionInspectorMode) ?? .live
         companionAppearance = try container.decodeIfPresent(CompanionAppearance.self, forKey: .companionAppearance) ?? .standard
+        equippedItemIDsBySlot = try container.decodeIfPresent([String: UUID].self, forKey: .equippedItemIDsBySlot) ?? [:]
+        localDesignerID = try container.decodeIfPresent(UUID.self, forKey: .localDesignerID)
+        ownedDesignerIDs = try container.decodeIfPresent(Set<UUID>.self, forKey: .ownedDesignerIDs) ?? []
+        knownDesignerNames = try container.decodeIfPresent([String: String].self, forKey: .knownDesignerNames) ?? [:]
         selectedGoal = try container.decodeIfPresent(GoalType.self, forKey: .selectedGoal) ?? .wellness
         sickDays = try container.decodeIfPresent([String: Bool].self, forKey: .sickDays) ?? [:]
         intentDismissedDays = try container.decodeIfPresent([String: Bool].self, forKey: .intentDismissedDays) ?? [:]
@@ -87,6 +112,8 @@ public nonisolated struct FernletSettings: Codable {
         proximityDisplayName = try container.decodeIfPresent(String.self, forKey: .proximityDisplayName) ?? ""
         showProximityDebugTools = try container.decodeIfPresent(Bool.self, forKey: .showProximityDebugTools) ?? false
         allowNearbyRecipeShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyRecipeShares) ?? true
+        allowNearbyClothingShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyClothingShares) ?? true
+        shopLastPublishedDayKey = try container.decodeIfPresent(String.self, forKey: .shopLastPublishedDayKey)
         companionName = try container.decodeIfPresent(String.self, forKey: .companionName) ?? ""
         workoutProfile = try container.decodeIfPresent(WorkoutProfile.self, forKey: .workoutProfile) ?? WorkoutProfile()
         let decodedLocations = try container.decodeIfPresent([WorkoutLocation].self, forKey: .workoutLocations) ?? [WorkoutLocation.fullGym]

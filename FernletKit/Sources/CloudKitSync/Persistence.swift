@@ -331,7 +331,10 @@ nonisolated public final class PersistenceController {
         // Sealed entities (MenstrualNarrative, JournalNarrative) live in PrivatePersistenceController.
         model.entities = [
             makeFernletDatabaseRecordEntity(),
-            makeSavedRecipeRecordEntity()
+            makeSavedRecipeRecordEntity(),
+            makeCustomItemRecordEntity(),
+            makeCoinLedgerRecordEntity(),
+            makeDayRecordEntity()
         ]
         return model
     }
@@ -364,6 +367,63 @@ nonisolated public final class PersistenceController {
             makeAttribute("fat", type: .integer64AttributeType, defaultValue: 0),
             makeAttribute("micronutrientsJSON", type: .stringAttributeType),
             makeAttribute("savedAt", type: .dateAttributeType)
+        ]
+        return entity
+    }
+
+    private static func makeCustomItemRecordEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "CustomItemRecord"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            makeAttribute("idString", type: .stringAttributeType),
+            // The whole CustomizationItem (incl. palette-indexed pixel grid) as JSON. Plain binary, NOT
+            // external storage: NSPersistentCloudKitContainer rejects `allowsExternalBinaryDataStorage`
+            // at store load (see the makeContainer note above), and a palette-indexed texture is ~1 KB —
+            // far under CloudKit's per-field budget — so inline binary is both required and sufficient.
+            makeAttribute("payloadData", type: .binaryDataAttributeType),
+            makeAttribute("createdAt", type: .dateAttributeType)
+        ]
+        return entity
+    }
+
+    private static func makeCoinLedgerRecordEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "CoinLedgerRecord"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            // `idString` is the ledger entry's stable id (e.g. "earn:2026-06-29"). On ONE device the
+            // repository upserts by it, so a re-mint is a no-op. CloudKit does NOT collapse rows by this
+            // attribute (it mirrors by record identity, and NSPersistentCloudKitContainer can't enforce
+            // uniqueness), so two devices can produce two rows with the same idString — `CoinEconomy`
+            // collapses those by id when aggregating. That application-level dedup is what makes coins
+            // idempotent and double-grant-free across devices.
+            makeAttribute("idString", type: .stringAttributeType),
+            // The CoinLedgerEntry as JSON (plain binary, tens of bytes — far under CloudKit's budget).
+            makeAttribute("payloadData", type: .binaryDataAttributeType),
+            makeAttribute("createdAt", type: .dateAttributeType)
+        ]
+        return entity
+    }
+
+    private static func makeDayRecordEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "DayRecord"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            // `dateKey` ("YYYY-MM-DD") is the day's stable logical id — the repository upserts by it so a
+            // re-save of the same day on one device is a no-op. Like CustomItem/CoinLedger, CloudKit does
+            // NOT collapse rows by this attribute (it mirrors by record identity), so two devices can
+            // produce two rows for one dateKey; `DayRecordRepository` collapses those on load by max
+            // `updatedAt` (a dict read can't hold two rows for one key) and self-heals the duplicate.
+            makeAttribute("dateKey", type: .stringAttributeType),
+            // One FernletDay (already privacy-sanitized at the write boundary) as JSON. Plain binary, not
+            // external storage (CloudKit rejects external storage at store load) — a single day is far
+            // under CloudKit's per-field budget, which is exactly why per-day rows remove the 370 cap.
+            makeAttribute("payloadData", type: .binaryDataAttributeType),
+            // Per-day last-writer-wins stamp: lets a same-day cross-device conflict resolve by recency and
+            // gives a future mesh-sync a max(updatedAt) union key.
+            makeAttribute("updatedAt", type: .dateAttributeType)
         ]
         return entity
     }

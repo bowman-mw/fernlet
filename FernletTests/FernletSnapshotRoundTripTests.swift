@@ -25,7 +25,8 @@ struct FernletSnapshotRoundTripTests {
         )
         let savedRecipes = try baselineSavedRecipes()
 
-        #expect(savedRecipeRepository.save(savedRecipes))
+        savedRecipeRepository.deleteAll()
+        #expect(savedRecipeRepository.upsert(savedRecipes))
         #expect(repository.saveSnapshot(snapshot))
 
         let reloadedSnapshot = repository.loadSnapshot(todayKey: todayKey)

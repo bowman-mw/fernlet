@@ -280,6 +280,85 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    // MARK: - Custom items: equip state + designer identity
+    // The items themselves live in `CustomItemService` (their own per-row store). Only the equipped-slot
+    // map and the device's anonymous designer id are settings-sized render/identity state kept here.
+
+    /// Equips `id` in `slot` (replacing whatever was there).
+    public func equipCustomItem(id: UUID, slot: ItemSlot) {
+        settings.equippedItemIDsBySlot[slot.rawValue] = id
+        scheduleSnapshotSave()
+    }
+
+    /// Removes whatever is equipped in `slot`.
+    public func unequipSlot(_ slot: ItemSlot) {
+        settings.equippedItemIDsBySlot.removeValue(forKey: slot.rawValue)
+        scheduleSnapshotSave()
+    }
+
+    /// Clears `itemID` from every slot it was equipped in (called after the item is deleted from its store).
+    public func clearEquipReferences(forItemID itemID: UUID) {
+        let before = settings.equippedItemIDsBySlot
+        settings.equippedItemIDsBySlot = before.filter { $0.value != itemID }
+        if settings.equippedItemIDsBySlot.count != before.count {
+            scheduleSnapshotSave()
+        }
+    }
+
+    /// This device's anonymous, stable designer id. Pure read — safe to call during SwiftUI rendering.
+    /// `ensureLocalDesignerID()` is invoked once at store construction so the stored value is non-nil by
+    /// the time any view reads it; the `??` is only a defensive fallback and never mutates state.
+    public var localDesignerID: UUID {
+        settings.localDesignerID ?? ensureLocalDesignerID()
+    }
+
+    /// Generates and persists the device's designer id if it doesn't exist yet, and records it in the
+    /// `ownedDesignerIDs` set that `isSelfDesigned` consults. Call once at store startup — NOT from a view
+    /// body — so the lazy mint never runs mid-render.
+    @discardableResult
+    public func ensureLocalDesignerID() -> UUID {
+        let id = settings.localDesignerID ?? UUID()
+        var changed = false
+        if settings.localDesignerID == nil {
+            settings.localDesignerID = id
+            changed = true
+        }
+        if settings.ownedDesignerIDs.insert(id).inserted {
+            changed = true
+        }
+        if changed { scheduleSnapshotSave() }
+        return id
+    }
+
+    /// Records the display name learned for a designer id (from an in-person connection). Empty names clear.
+    public func setKnownDesignerName(id: UUID, name: String) {
+        // Sanitize the (untrusted, peer-supplied) name before it enters the synced settings blob: drop
+        // control / zero-width / bidi-override scalars, collapse whitespace, and cap length — the same wire
+        // boundary the item name goes through. Without this a hostile peer could poison the id→name map with
+        // a multi-kilobyte or control-character string that then syncs across the user's own devices.
+        let sanitized = ItemNameModeration.sanitizedName(name)
+        if sanitized.isEmpty {
+            settings.knownDesignerNames.removeValue(forKey: id.uuidString)
+        } else {
+            settings.knownDesignerNames[id.uuidString] = sanitized
+        }
+        scheduleSnapshotSave()
+    }
+
+    /// Records the calendar day the user last changed their shop's listed set (drives the gentle
+    /// once-per-day re-publish note). Stored in the synced settings blob, so it's shared across the user's
+    /// own devices.
+    public func setShopLastPublishedDay(_ dayKey: String) {
+        settings.shopLastPublishedDayKey = dayKey
+        scheduleSnapshotSave()
+    }
+
+    /// Day keys that carry any logged content — the active days that the coin ledger credits. Computed
+    /// over the full day history (`loadDays()`), so it is the reconcile input, not a per-render read.
+    public func activeDayKeys() -> Set<String> {
+        Set(loadDays().compactMap { $0.value.hasLoggedContent ? $0.key : nil })
+    }
+
     public func setProximityDisplayName(_ name: String) {
         settings.proximityDisplayName = name.trimmingCharacters(in: .whitespaces)
         scheduleSnapshotSave()
@@ -853,13 +932,22 @@ public final class DiaryStore {
         foodItems = []
         recipes = []
         dailyScores = []
+        // Re-mint the device designer id: `resetDiary()` nulled it via the fresh `FernletSettings()`, and the
+        // `localDesignerID` getter would otherwise lazily mint it (mutating observed state) the next time a
+        // view body reads it — a "modifying state during view update" hazard.
+        ensureLocalDesignerID()
     }
 
     /// Applies the diary slice of a snapshot. The facade's `apply(_:)` calls this then applies its
     /// app-only collaborators (retry queue, trust vault, journal sealing, derived signals).
     public func applyDiarySlice(_ snapshot: FernletSnapshot) {
+        let existingOwnedDesignerIDs = settings.ownedDesignerIDs
         day = snapshot.day
         settings = snapshot.settings
+        // UNION the owned-designer-id set rather than letting the last-writer-wins synced blob overwrite it:
+        // the set is monotonic, so union-on-apply gives every device the full history of the user's ids
+        // without clobbering — the fix for own-device items reading as "a friend's" after a sync.
+        settings.ownedDesignerIDs.formUnion(existingOwnedDesignerIDs)
         recentMeals = snapshot.recentMeals
         previousJournals = snapshot.previousJournals
         memories = snapshot.memories
@@ -868,6 +956,9 @@ public final class DiaryStore {
         foodItems = snapshot.foodItems.filter { $0.source != .usda }
         recipes = snapshot.recipes
         dailyScores = snapshot.dailyScores
+        // Also add this device's id + guarantee localDesignerID is non-nil, so the getter never lazily mints
+        // (mutating observed state) mid-render.
+        ensureLocalDesignerID()
     }
 
     // MARK: - Launch no-ops

@@ -11,6 +11,14 @@ public struct ExistingDataSummary: Equatable {
     public var hygieneLogCount: Int
     public var hydrationLogCount: Int
     public var sleepRecordCount: Int
+    /// Per-row store record counts. These live in their own CKRecord types (custom clothing items, coin
+    /// ledger rows, day rows) and are NOT reflected in the aggregate blob's bounded `dayContentSummary`, so
+    /// detection must count them directly — otherwise a second device holding only custom items or coins, or
+    /// day data older than the summary's recent window, reads as "no cloud data" and the multi-device
+    /// warning never fires.
+    public var customItemCount: Int
+    public var coinLedgerCount: Int
+    public var dayRecordCount: Int
 
     public init(
         mealLogCount: Int,
@@ -18,7 +26,10 @@ public struct ExistingDataSummary: Equatable {
         workoutCount: Int,
         hygieneLogCount: Int,
         hydrationLogCount: Int,
-        sleepRecordCount: Int
+        sleepRecordCount: Int,
+        customItemCount: Int = 0,
+        coinLedgerCount: Int = 0,
+        dayRecordCount: Int = 0
     ) {
         self.mealLogCount = mealLogCount
         self.journalEntryCount = journalEntryCount
@@ -26,11 +37,15 @@ public struct ExistingDataSummary: Equatable {
         self.hygieneLogCount = hygieneLogCount
         self.hydrationLogCount = hydrationLogCount
         self.sleepRecordCount = sleepRecordCount
+        self.customItemCount = customItemCount
+        self.coinLedgerCount = coinLedgerCount
+        self.dayRecordCount = dayRecordCount
     }
 
     public var hasData: Bool {
         mealLogCount > 0 || journalEntryCount > 0 || workoutCount > 0 ||
-        hygieneLogCount > 0 || hydrationLogCount > 0 || sleepRecordCount > 0
+        hygieneLogCount > 0 || hydrationLogCount > 0 || sleepRecordCount > 0 ||
+        customItemCount > 0 || coinLedgerCount > 0 || dayRecordCount > 0
     }
 
     public mutating func merge(_ other: ExistingDataSummary) {
@@ -40,6 +55,9 @@ public struct ExistingDataSummary: Equatable {
         hygieneLogCount += other.hygieneLogCount
         hydrationLogCount += other.hydrationLogCount
         sleepRecordCount += other.sleepRecordCount
+        customItemCount += other.customItemCount
+        coinLedgerCount += other.coinLedgerCount
+        dayRecordCount += other.dayRecordCount
     }
 
     public static let empty = ExistingDataSummary(
@@ -117,6 +135,12 @@ public final class CloudKitDataService {
         "SealedBackupRecord",
         "CD_SavedRecipeRecord",
         "SavedRecipeRecord",
+        "CD_CustomItemRecord",
+        "CustomItemRecord",
+        "CD_CoinLedgerRecord",
+        "CoinLedgerRecord",
+        "CD_DayRecord",
+        "DayRecord",
         "CD_MenstrualNarrative",
         "MenstrualNarrative"
     ]
@@ -182,6 +206,20 @@ public final class CloudKitDataService {
             summary.hydrationLogCount += try await countRecords(type: "HydrationLogRecord", in: zoneIDs)
             summary.sleepRecordCount += try await countRecords(type: "SleepRecord", in: zoneIDs)
 
+            // Per-row stores the blob summary can't see: custom items and coins can exist with no logged
+            // days, and day rows can be older than the summary's bounded window. Count each directly (both
+            // the NSPersistentCloudKitContainer `CD_`-mirrored type and the bare spelling) so the warning
+            // fires. Runs only on the rare detection path (onboarding / settings), never a hot path.
+            for type in ["CD_CustomItemRecord", "CustomItemRecord"] {
+                summary.customItemCount += try await countRecords(type: type, in: zoneIDs)
+            }
+            for type in ["CD_CoinLedgerRecord", "CoinLedgerRecord"] {
+                summary.coinLedgerCount += try await countRecords(type: type, in: zoneIDs)
+            }
+            for type in ["CD_DayRecord", "DayRecord"] {
+                summary.dayRecordCount += try await countRecords(type: type, in: zoneIDs)
+            }
+
             FernletAuditLog.log("cloudkit.detect.completed", context: [
                 "hasData": summary.hasData ? "true" : "false",
                 "mealLogs": "\(summary.mealLogCount)",
@@ -189,7 +227,10 @@ public final class CloudKitDataService {
                 "workouts": "\(summary.workoutCount)",
                 "hygieneLogs": "\(summary.hygieneLogCount)",
                 "hydrationLogs": "\(summary.hydrationLogCount)",
-                "sleepRecords": "\(summary.sleepRecordCount)"
+                "sleepRecords": "\(summary.sleepRecordCount)",
+                "customItems": "\(summary.customItemCount)",
+                "coinLedger": "\(summary.coinLedgerCount)",
+                "dayRecords": "\(summary.dayRecordCount)"
             ])
             return summary.hasData ? summary : nil
         } catch let error as CloudKitDataServiceError {
@@ -445,6 +486,24 @@ public final class CloudKitDataService {
             return .empty
         }
 
+        // After the per-row split's Stage B the blob's `days` are cleared and a precomputed
+        // dayContentSummary carries the counts, so detection stays a single blob read instead of scanning
+        // thousands of per-row DayRecord CKRecords. An older or un-migrated blob still has populated `days`
+        // (handled below for backward compat); a genuinely empty blob yields zero counts either way.
+        if localDatabase.days.isEmpty {
+            let summary = localDatabase.dayContentSummary
+            return ExistingDataSummary(
+                mealLogCount: summary.mealCount,
+                journalEntryCount: summary.journalCount,
+                workoutCount: summary.workoutCount,
+                hygieneLogCount: summary.hygieneCount,
+                hydrationLogCount: summary.hydrationCount,
+                sleepRecordCount: summary.sleepCount
+            )
+        }
+
+        // Backward compat: meals/journals/workouts/sleep fall back to the derived log tables (rebuilt from
+        // rows). Hygiene/hydration have no derived table, so they reflect the blob's recent window only.
         let dayValues = Array(localDatabase.days.values)
         return ExistingDataSummary(
             mealLogCount: localDatabase.mealLogs.isEmpty ? dayValues.reduce(0) { $0 + $1.meals.count } : localDatabase.mealLogs.count,
@@ -452,7 +511,7 @@ public final class CloudKitDataService {
             workoutCount: localDatabase.workoutLogs.isEmpty ? dayValues.reduce(0) { $0 + $1.workouts.count } : localDatabase.workoutLogs.count,
             hygieneLogCount: dayValues.reduce(0) { $0 + $1.hygiene.count },
             hydrationLogCount: dayValues.reduce(0) { $0 + ($1.bottleCount > 0 ? 1 : 0) },
-            sleepRecordCount: dayValues.reduce(0) { $0 + ($1.sleep == nil ? 0 : 1) }
+            sleepRecordCount: localDatabase.dailyLogs.isEmpty ? dayValues.reduce(0) { $0 + ($1.sleep == nil ? 0 : 1) } : localDatabase.dailyLogs.reduce(0) { $0 + ($1.sleepHours == nil ? 0 : 1) }
         )
     }
 

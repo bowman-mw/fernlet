@@ -81,6 +81,11 @@ func makeTestStoreWithRepositories(
         date: date,
         repository: repository,
         savedRecipeRepository: savedRecipeRepository,
+        // Back custom items + the coin ledger with the same in-memory controller so these tests never fall
+        // back to CustomItemRepository()/CoinLedgerRepository() on PersistenceController.shared (a real
+        // SQLite store) — that shared coupling makes tests non-hermetic and flaky under parallel runs.
+        customItemRepository: CustomItemRepository(controller: controller),
+        coinLedgerRepository: CoinLedgerRepository(controller: controller),
         journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems))
     )
@@ -100,15 +105,19 @@ func makeStoreSharingStores(
     let legacyURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
         .appendingPathExtension("json")
-    // A throwaway saved-recipe store (recipes are irrelevant to the journal-sealing path).
+    // Throwaway saved-recipe + coin-ledger stores (both irrelevant to the journal-sealing path) backed
+    // by an in-memory controller so these tests never touch the shared on-device stores.
+    let throwawayController = PersistenceController(inMemory: true)
     let savedRecipeRepository = SavedRecipeRepository(
-        controller: PersistenceController(inMemory: true),
+        controller: throwawayController,
         legacyRepository: LegacySavedRecipeJSONRepository(fileURL: legacyURL)
     )
     return FernletStore(
         date: date,
         repository: repository,
         savedRecipeRepository: savedRecipeRepository,
+        customItemRepository: CustomItemRepository(controller: throwawayController),
+        coinLedgerRepository: CoinLedgerRepository(controller: throwawayController),
         journalNarrativeRepository: narratives,
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([]))
     )

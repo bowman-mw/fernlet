@@ -144,6 +144,9 @@ struct ContentView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     Task { await store.processSharedRecipeImportQueue() }
+                    // Credit any day that became active while backgrounded (or synced in from another
+                    // device). Idempotent, so a no-op when nothing new is logged.
+                    store.reconcileCoinLedger()
                     if selectedTab == .social { startFriendsDiscovery() }
                 } else if selectedTab == .social {
                     stopFriendsDiscovery()
@@ -532,12 +535,35 @@ struct ContentView: View {
         } else {
             store.recipeShareManager.stop()
         }
+        updateClothingShareListener()
     }
 
     private var shouldListenForRecipeShares: Bool {
         guard store.settings.allowNearbyRecipeShares else { return false }
         guard scenePhase == .active else { return false }
         guard selectedTab == .home || selectedTab == .food || selectedTab == .move else { return false }
+        switch lockService.state {
+        case .notConfigured, .unlocked:
+            return true
+        case .locked:
+            return false
+        }
+    }
+
+    private func updateClothingShareListener() {
+        if shouldListenForClothingShares {
+            store.clothingShareManager.start()
+        } else {
+            store.clothingShareManager.stop()
+        }
+    }
+
+    /// The clothing shop is in-person + social-only: discover/broadcast while on the Friends tab so the
+    /// FriendShopView can browse nearby shops. Cleared (and the ephemeral peer catalogs dropped) otherwise.
+    private var shouldListenForClothingShares: Bool {
+        guard store.settings.allowNearbyClothingShares else { return false }
+        guard scenePhase == .active else { return false }
+        guard selectedTab == .social else { return false }
         switch lockService.state {
         case .notConfigured, .unlocked:
             return true

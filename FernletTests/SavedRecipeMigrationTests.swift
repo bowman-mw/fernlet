@@ -115,7 +115,7 @@ struct SavedRecipeMigrationTests {
             )
         )
 
-        #expect(repository.save([recipe]))
+        #expect(repository.upsert([recipe]))
         let reloaded = repository.load()
 
         #expect(reloaded == [recipe])

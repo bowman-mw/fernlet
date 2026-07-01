@@ -30,6 +30,10 @@ This index maps the main project files to their responsibilities. It is intended
 | `Fernlet/Fernlet/SocialHubView.swift` | Social hub entry point for the Friends photo wall and active disposable-camera session flow. |
 | `Fernlet/Fernlet/ConnectView.swift` | Friends tab photo wall, nearby-discovery status, connection-success transition, session photo review, and full-screen saved-photo feed. Presents `DisposableCameraView` while a Friends session is active. |
 | `Fernlet/Fernlet/WorkshopView.swift` | Workshop screen for texture-related tracking and tabbed workshop UI. |
+| `Fernlet/Fernlet/CreationStudioView.swift` | Animal-Crossing-style grid fabric editor for designing custom clothing/accessories (per-slot pixel canvas, palette, live companion preview). Pushed from the customization sheet. |
+| `Fernlet/Fernlet/WardrobeView.swift` | The closet: owned custom items grouped by slot; equip/unequip, edit, delete, mark shop-shareable. Entry point into the Creation Studio. |
+| `Fernlet/Fernlet/CustomItemRendering.swift` | Renders a palette-indexed `ItemGridTexture` to a cached `CGImage` (`ItemTextureRenderer`) and the `CustomItemThumbnail` preview tile. |
+| `Fernlet/Fernlet/CompanionVectorAssets.swift` | Vector companion renderer (`CompanionView` + body/accessory/clothing/side-item layers). Hosts `CompanionCustomItemLayer`, which draws equipped user-designed grid items in per-slot regions. |
 | `Fernlet/Fernlet/OnboardingView.swift` | First-run profile setup, nutrition profile editing, and nutrition preview UI. |
 | `Fernlet/Fernlet/SettingsSheet.swift` | Settings sheet and user preferences UI. |
 | `Fernlet/Fernlet/SharedSheets.swift` | Reusable logging sheets for water, sleep, goals, hygiene, and texture entries. |
@@ -221,6 +225,7 @@ This index maps the main project files to their responsibilities. It is intended
 | `Docs/ImplementationPlan.md` | Implementation planning notes. |
 | `Docs/MeshNetworkImplementationPlan.md` | Mesh network and MultipeerConnectivity implementation plan. |
 | `Docs/FernletStore-Refactor-Plan-v2.md` | Refactor plan for the FernletStore architecture (v2). |
+| `Docs/Custom-Clothing-Plan-2026-06-29.md` | Phased plan for the custom-clothing feature: Increment 1 (grid editor / wardrobe — shipped), Increment 2 (coins), Increment 3 (in-person friend shop). Self-contained per-increment sections for one-increment-per-session work. |
 | `Docs/Fernlet-Review-and-Plan-Updates.md` | 2026-05-28 architecture review: security/privacy findings (SEC-1 through SEC-8), progress-vs-spec audit, French-fries meal bug root-cause, new phases S1/S2/M1/S3 and Mesh Phase 4, settings consolidation IA, and friction-reduction features. |
 | `Docs/FileIndex.md` | This file index. |
 | `Docs/ProximityFunctionIndex.md` | Function-level map for proximity, mesh, transport, identity, trust, audit, friend-photo, recipe-share, and related UI code. Use this before adding proximity or mesh behavior to avoid duplicating existing helpers and flows. |

@@ -6,6 +6,9 @@ struct CompanionView: View {
     var appearance: CompanionAppearance = .standard
     var size: CGFloat
     var interactionLevel: Int = 0
+    /// User-designed items currently equipped (one per occupied slot). Drawn as the topmost layer so
+    /// they always read clearly over the base avatar.
+    var equippedItems: [CustomizationItem] = []
 
     var body: some View {
         TimelineView(.animation) { timeline in
@@ -60,10 +63,28 @@ struct CompanionView: View {
                     .fill(.white.opacity(0.72))
                     .frame(width: size * 0.18, height: state.mouthHeight(for: size))
                     .offset(y: size * 0.14 + petBounce)
+
+                ForEach(equippedItems) { item in
+                    CompanionCustomItemLayer(item: item, size: size)
+                        .offset(y: petBounce)
+                        .zIndex(Self.itemPaintOrder(item.slot))
+                }
             }
             .animation(.easeInOut(duration: 0.44), value: interactionLevel)
         }
         .accessibilityLabel("Fernlet companion, \(state.rawValue)")
+    }
+
+    /// Back-to-front paint order for equipped custom items so layers stack naturally (the outfit sits
+    /// behind a held item, the face piece, and the hat — never on top of them). All values are >= 1 so
+    /// every custom item draws above the base avatar (eyes/mouth at the default zIndex 0).
+    static func itemPaintOrder(_ slot: ItemSlot) -> Double {
+        switch slot {
+        case .body: 1
+        case .heldItem: 2
+        case .face: 3
+        case .hat: 4
+        }
     }
 }
 
@@ -239,6 +260,57 @@ struct CompanionClothingView: View {
                 .rotationEffect(.degrees(-10))
                 .offset(x: -size * 0.08, y: -size * 0.43)
         }
+    }
+}
+
+/// Draws one equipped user-designed item onto the companion. The pixel grid is rendered once to a
+/// `CGImage` (cached in `@State`, regenerated only when the texture changes — never inside the
+/// per-frame breath loop) and placed in a slot-specific region, preserving the grid's aspect ratio.
+struct CompanionCustomItemLayer: View {
+    var item: CustomizationItem
+    var size: CGFloat
+    @State private var image: CGImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                let placement = Self.placement(for: item.slot, size: size, texture: item.texture)
+                Image(decorative: image, scale: 1)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: placement.width, height: placement.height)
+                    .offset(x: placement.x, y: placement.y)
+            }
+        }
+        .onChange(of: item.texture, initial: true) { _, texture in
+            image = ItemTextureRenderer.image(for: texture)
+        }
+    }
+
+    /// Slot placement on the `size`-square companion frame. `width` is a fraction of `size`; height
+    /// preserves the texture aspect ratio; `(x, y)` is the offset of the region center from the frame
+    /// center. Cosmetic — tune freely.
+    static func placement(for slot: ItemSlot, size: CGFloat, texture: ItemGridTexture) -> (width: CGFloat, height: CGFloat, x: CGFloat, y: CGFloat) {
+        let widthFraction: CGFloat
+        let center: CGPoint
+        switch slot {
+        case .hat:
+            widthFraction = 0.52
+            center = CGPoint(x: 0, y: -0.40)
+        case .face:
+            widthFraction = 0.56
+            center = CGPoint(x: 0, y: -0.06)
+        case .body:
+            widthFraction = 0.60
+            center = CGPoint(x: 0, y: 0.22)
+        case .heldItem:
+            widthFraction = 0.30
+            center = CGPoint(x: 0.54, y: 0.30)
+        }
+        let width = size * widthFraction
+        let aspect = texture.rows > 0 ? CGFloat(texture.cols) / CGFloat(texture.rows) : 1
+        let height = aspect > 0 ? width / aspect : width
+        return (width, height, size * center.x, size * center.y)
     }
 }
 

@@ -201,6 +201,7 @@ struct PrivacyDataSettingsView: View {
     private var privacyControls: some View {
         VStack(alignment: .leading, spacing: 16) {
             iCloudCard
+            multiDeviceWarningBanner
             sealedBackupStatusBanner
             healthKitCard
             localBackupCard
@@ -254,6 +255,52 @@ struct PrivacyDataSettingsView: View {
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// True when an iCloud account is signed in on this device. A DEBUG launch override lets UI tests
+    /// exercise the "another device has data" path without a real iCloud account (mirrors the
+    /// `iCloudAvailabilityOverride` seam in `Persistence`).
+    private var iCloudAccountPresent: Bool {
+        #if DEBUG
+        if let forced = ProcessInfo.processInfo.environment["FERNLET_UI_TEST_ICLOUD_ACCOUNT"] {
+            return forced == "1"
+        }
+        #endif
+        return FileManager.default.ubiquityIdentityToken != nil
+    }
+
+    private var multiDeviceWarning: MultiDeviceSyncWarning? {
+        MultiDeviceSyncWarning.classify(
+            iCloudAccountPresent: iCloudAccountPresent,
+            syncEnabled: storagePreferencesStore.preferences.iCloudSyncEnabled,
+            otherDeviceHasData: existingDataSummary?.hasData ?? false
+        )
+    }
+
+    /// Non-silent multi-device divergence warning (Phase 1): when sync is off, the user's devices can't
+    /// merge. Hidden entirely while sync is on. Reuses the loaded `existingDataSummary` to name the
+    /// other device's data when present.
+    @ViewBuilder
+    private var multiDeviceWarningBanner: some View {
+        if let warning = multiDeviceWarning {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("Multiple devices")
+                Text(warning.message)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                if warning == .anotherDeviceHasData, let summary = existingDataSummary {
+                    Text("Found \(summary.mealLogCount) meal logs, \(summary.journalEntryCount) journal entries, \(summary.workoutCount) workouts in this iCloud account.")
+                        .font(.caption)
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            .accessibilityIdentifier("privacy.multiDevice.warning")
+        }
     }
 
     /// Non-silent surface for sealed-backup restore problems (WS-4) and cross-device escrow-key
@@ -486,6 +533,14 @@ struct PrivacyDataSettingsView: View {
                             )
 
                             cloudCountsCard
+
+                            Text("Stopping sync keeps your data on this device but disconnects it from iCloud: changes you make here will no longer reach your other Fernlet devices, and theirs won't reach you. The two will drift apart until you turn sync back on.")
+                                .font(.callout.weight(.medium))
+                                .foregroundStyle(Color.bark)
+                                .fernletWrappingText()
+                                .padding(14)
+                                .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                                .accessibilityIdentifier("privacy.icloud.divergenceWarning")
 
                             Text("This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else.")
                                 .font(.callout.weight(.medium))
@@ -838,6 +893,10 @@ struct PrivacyDataSettingsView: View {
                 _ = try await cloudDataService.deleteAllCloudKitData(
                     confirmation: DeletionConfirmation(userTypedConfirmation: deleteConfirmationText.uppercased())
                 )
+                // The cloud records were just deleted, so the previously-detected summary is stale. Clear it
+                // so the "Cloud records" card and the always-on multi-device warning banner immediately
+                // reflect the now-empty cloud instead of continuing to report data that no longer exists.
+                existingDataSummary = nil
                 isShowingDisableConfirmation = false
             } catch {
                 operationError = error.localizedDescription
