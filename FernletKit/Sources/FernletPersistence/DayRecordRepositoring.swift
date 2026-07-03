@@ -12,12 +12,28 @@ import Foundation
 import FernletDomainModel
 
 /// One day to persist, with its per-day last-writer-wins stamp. `dateKey` is the day's own `date`.
+///
+/// A `DayRecord` row is CloudKit-synced and uncapped, so — exactly like the aggregate-blob write boundary
+/// (`SanitizedSnapshot`/`SanitizedDay`) — no *unstripped* day may reach it: a raw `FernletDay` can still
+/// carry sealed-journal plaintext or cycle/intimate `healthContext`. The preferred production mint is
+/// `init(sanitized:updatedAt:)`, which takes a `SanitizedDay` that has already passed the same privacy
+/// strip the blob path enforces. The raw `init(day:updatedAt:)` is retained for two callers only:
+/// (1) `saveSnapshot`/`updateDay`, which pass a day sourced from an already-minted
+/// `SanitizedSnapshot`/`SanitizedDay`, and (2) tests. It MUST NOT be used to serialize a raw,
+/// app-sourced day into a synced row — go through `SanitizedDay.sanitizing(...)` first.
 public nonisolated struct DayRecordUpsert {
     public var day: FernletDay
     public var updatedAt: Date
 
     public init(day: FernletDay, updatedAt: Date) {
         self.day = day
+        self.updatedAt = updatedAt
+    }
+
+    /// The sanitize-barrier mint: the only way a synced day row should be built from app-sourced data. The
+    /// wrapped `SanitizedDay.day` has already had sealed-journal text blanked and cycle/intimate nil'd.
+    public init(sanitized: SanitizedDay, updatedAt: Date) {
+        self.day = sanitized.day
         self.updatedAt = updatedAt
     }
 

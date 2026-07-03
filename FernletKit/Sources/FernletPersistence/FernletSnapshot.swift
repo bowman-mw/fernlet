@@ -124,6 +124,12 @@ public struct SanitizedSnapshot {
         return SanitizedSnapshot(stripped)
     }
 
+    /// The already-stripped today `day`, re-wrapped as a `SanitizedDay` so a per-row day write can reuse
+    /// the same sanitize barrier as the blob write WITHOUT re-stripping (the snapshot's `day` was stripped
+    /// when this `SanitizedSnapshot` was minted). Lets `saveSnapshot` mint a `DayRecordUpsert` through the
+    /// `SanitizedDay` boundary instead of handing a raw `FernletDay` to the synced row store.
+    public var sanitizedDay: SanitizedDay { SanitizedDay.presanitized(snapshot.day) }
+
     /// TEST-ONLY: wraps a snapshot WITHOUT stripping, for tests that verify raw repository serialization
     /// fidelity. Deliberately `internal` so it is reachable only via `@testable import FernletPersistence`
     /// and is invisible to production code in other modules (which see only the public `sanitizing` mint).
@@ -144,6 +150,14 @@ public struct SanitizedDay {
     /// `SanitizedSnapshot`.
     public static func sanitizing(_ day: FernletDay, sealedJournalIDs: Set<UUID>) -> SanitizedDay {
         SanitizedDay(day.stripped(sealedJournalIDs: sealedJournalIDs))
+    }
+
+    /// Wraps a day that has ALREADY been stripped upstream (e.g. `SanitizedSnapshot.snapshot.day`, which
+    /// was stripped when its snapshot was minted). Applies no further strip — use ONLY when the day
+    /// provably came out of an existing sanitize mint, so a per-row write can reuse the barrier without
+    /// re-stripping. Never call this on a raw, app-sourced day.
+    static func presanitized(_ day: FernletDay) -> SanitizedDay {
+        SanitizedDay(day)
     }
 
     /// TEST-ONLY: wraps a day WITHOUT stripping (see `SanitizedSnapshot.uncheckedSanitizedForTesting`).

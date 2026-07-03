@@ -395,7 +395,6 @@ extension LocalFernletDatabase {
 }
 
 public enum FernletLimits {
-    public static let maxStoredDays = 370
     /// How much day history the derived log tables (daily/meal/workout/journal) retain. Decoupled from
     /// day *storage* (which is per-row and uncapped) — it bounds only the recomputable log tables and the
     /// "year-ago" lookbacks, so derived rebuilds read a fixed recent window instead of the whole history.

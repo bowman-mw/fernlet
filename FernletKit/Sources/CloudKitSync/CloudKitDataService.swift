@@ -210,6 +210,12 @@ public final class CloudKitDataService {
             // days, and day rows can be older than the summary's bounded window. Count each directly (both
             // the NSPersistentCloudKitContainer `CD_`-mirrored type and the bare spelling) so the warning
             // fires. Runs only on the rare detection path (onboarding / settings), never a hot path.
+            //
+            // A raw `DayRecord` COUNT is a valid "existing data" signal because the write side no longer
+            // creates a row for a content-free day (CoreDataFernletRepository.writeDayRow guards on
+            // `hasLoggedContent` and deletes a row whose day becomes empty). So a device that merely launched
+            // the app no longer stamps an empty day row that would make every other device read "existing
+            // cloud data" — every `DayRecord` here reflects a day the user actually logged something on.
             for type in ["CD_CustomItemRecord", "CustomItemRecord"] {
                 summary.customItemCount += try await countRecords(type: type, in: zoneIDs)
             }

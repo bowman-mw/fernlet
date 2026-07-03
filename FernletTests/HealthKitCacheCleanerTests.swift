@@ -85,6 +85,62 @@ struct HealthKitCacheCleanerTests {
         #expect(blob?.dayContentSummary.sleepCount == 0)                       // summary no longer counts it
     }
 
+    /// Fail-closed regression guard: if any single DayRecord row cannot be decoded (a corrupt row, or a
+    /// forward-schema payload written by a newer build on another device and synced in), the scrub MUST throw
+    /// rather than silently skip the row. A skipped row keeps its HealthKit-derived `healthContext` in the
+    /// CloudKit-synced record while `disableIntegration` would otherwise report a successful opt-out. Because
+    /// the throw propagates, `disableIntegration` leaves `healthKitMasterEnabled` ON and the failure is
+    /// auditable/retryable.
+    @Test func undecodableDayRowFailsClosed() throws {
+        let controller = PersistenceController(inMemory: true)
+
+        // A legitimate HealthKit-derived row that WOULD be scrubbed on the happy path.
+        let healthSleepDay = FernletDay(
+            date: "2026-05-01",
+            healthContext: HealthDailyContext(body: HealthBodyContext(sleepHours: 7.5))
+        )
+        let dayRepo = DayRecordRepository(controller: controller)
+        dayRepo.upsert([DayRecordUpsert(day: healthSleepDay, updatedAt: Date())])
+
+        // A corrupt / forward-schema DayRecord row: `payloadData` is not a decodable FernletDay.
+        seedCorruptDayRow(controller: controller)
+
+        #expect(throws: CoreDataHealthKitCacheCleaner.CacheClearError.self) {
+            try CoreDataHealthKitCacheCleaner(controller: controller).clearHealthKitCachedValues()
+        }
+    }
+
+    /// Fail-closed regression guard for the aggregate blob: an undecodable `FernletDatabaseRecord` payload may
+    /// still carry HealthKit-derived cache (`dailyLogs`/`dayContentSummary`/an un-migrated `days` map) that
+    /// keeps syncing to iCloud, so a decode failure MUST throw rather than leave the blob untouched and report
+    /// a successful opt-out.
+    @Test func undecodableDatabaseBlobFailsClosed() throws {
+        let controller = PersistenceController(inMemory: true)
+        seedCorruptBlob(controller: controller)
+
+        #expect(throws: CoreDataHealthKitCacheCleaner.CacheClearError.self) {
+            try CoreDataHealthKitCacheCleaner(controller: controller).clearHealthKitCachedValues()
+        }
+    }
+
+    private func seedCorruptDayRow(controller: PersistenceController) {
+        let context = controller.container.viewContext
+        let record = NSEntityDescription.insertNewObject(forEntityName: "DayRecord", into: context)
+        record.setValue("2026-05-09", forKey: "dateKey")
+        record.setValue(Data("not-a-fernlet-day".utf8), forKey: "payloadData")
+        record.setValue(Date(), forKey: "updatedAt")
+        try? context.save()
+    }
+
+    private func seedCorruptBlob(controller: PersistenceController) {
+        let context = controller.container.viewContext
+        let record = NSEntityDescription.insertNewObject(forEntityName: "FernletDatabaseRecord", into: context)
+        record.setValue("primary", forKey: "recordID")
+        record.setValue(Data("not-a-database".utf8), forKey: "payloadData")
+        record.setValue(Date(), forKey: "updatedAt")
+        try? context.save()
+    }
+
     private func seedBlob(_ database: LocalFernletDatabase, in controller: PersistenceController) {
         let context = controller.container.viewContext
         let encoder = JSONEncoder()

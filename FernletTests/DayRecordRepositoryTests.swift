@@ -63,6 +63,42 @@ struct DayRecordRepositoryTests {
         #expect(rawRowCount(in: context) == 1)
     }
 
+    @Test func loadKeepsBothRowsOnEqualUpdatedAtTieAndCollapsesDeterministically() {
+        // Item A (mutual-delete data loss): two devices that both ran migration stamp their backfilled rows
+        // with the SAME blob `updatedAt`. If the read-side dedup deleted the "loser" on an equal-updatedAt
+        // tie, each device would delete the OTHER device's row and both deletes would sync → both rows lost.
+        // So on an equal `updatedAt` NOTHING may be deleted; the dict value is only made deterministic.
+        let controller = PersistenceController(inMemory: true)
+        let context = controller.container.viewContext
+        insertRawDayRow(in: context, dateKey: "2026-05-01", bottleCount: 3, updatedAt: stamp)
+        insertRawDayRow(in: context, dateKey: "2026-05-01", bottleCount: 8, updatedAt: stamp)  // same stamp
+        try? context.save()
+
+        let repo = DayRecordRepository(controller: controller)
+        let days = repo.loadAll()
+        #expect(days.count == 1)                        // collapsed to one in the returned dict
+        // Deterministic: repeated reads return the SAME winner (no flip-flop).
+        #expect(repo.loadAll()["2026-05-01"]?.bottleCount == days["2026-05-01"]?.bottleCount)
+
+        // The critical invariant: NEITHER row was deleted — both survive on disk, so two devices can never
+        // mutually wipe each other's rows.
+        #expect(rawRowCount(in: context) == 2)
+    }
+
+    @Test func loadStillDeletesStaleLoserWhenUpdatedAtIsStrictlyNewer() {
+        // The strict-winner self-heal must still fire: a genuinely older duplicate (strictly smaller
+        // updatedAt) is deleted so a real conflict collapses to one row.
+        let controller = PersistenceController(inMemory: true)
+        let context = controller.container.viewContext
+        insertRawDayRow(in: context, dateKey: "2026-05-01", bottleCount: 1, updatedAt: stamp)
+        insertRawDayRow(in: context, dateKey: "2026-05-01", bottleCount: 7, updatedAt: stamp.addingTimeInterval(60))
+        try? context.save()
+
+        let repo = DayRecordRepository(controller: controller)
+        #expect(repo.loadAll()["2026-05-01"]?.bottleCount == 7)  // strictly newer wins
+        #expect(rawRowCount(in: context) == 1)                   // the older loser was deleted
+    }
+
     @Test func loadByDateKeysReturnsOnlyRequested() {
         let controller = PersistenceController(inMemory: true)
         let repo = DayRecordRepository(controller: controller)

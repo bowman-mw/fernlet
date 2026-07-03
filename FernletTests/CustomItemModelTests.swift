@@ -61,6 +61,64 @@ struct CustomItemModelTests {
         #expect(clean.pixels[3] == ItemGridTexture.transparent)
     }
 
+    @Test func sanitizedNeverTrapsOnHostileDimensions() {
+        // A nearby P2P peer can broadcast a clothing texture with arbitrary Ints. The sanitizer is the
+        // wire-boundary guard, so it must return a valid (never-trapping) grid for ALL Int inputs —
+        // negative, zero, and huge — even when `pixels` doesn't match the claimed dimensions.
+        // Regression: `copyRows = min(r, rows)` used to re-introduce a hostile negative (min(0, -1) == -1),
+        // building `0..<(-1)` and hitting "Fatal error: Range requires lowerBound <= upperBound".
+
+        func expectSafe(_ texture: ItemGridTexture) {
+            let clean = texture.sanitized(maxCols: 64, maxRows: 64)
+            #expect(clean.cols >= 0)
+            #expect(clean.rows >= 0)
+            #expect(clean.cols <= 64)
+            #expect(clean.rows <= 64)
+            #expect(clean.pixels.count == clean.cols * clean.rows)
+        }
+
+        // rows = -1
+        expectSafe(ItemGridTexture(cols: 4, rows: -1, palette: ["FF0000"], pixels: [0, 0, 0, 0]))
+        // cols = -1
+        expectSafe(ItemGridTexture(cols: -1, rows: 4, palette: ["FF0000"], pixels: [0, 0, 0, 0]))
+        // both negative
+        expectSafe(ItemGridTexture(cols: -3, rows: -7, palette: ["FF0000"], pixels: [0, 0]))
+        // zero dims
+        expectSafe(ItemGridTexture(cols: 0, rows: 0, palette: ["FF0000"], pixels: []))
+        expectSafe(ItemGridTexture(cols: 0, rows: 5, palette: ["FF0000"], pixels: [0]))
+        expectSafe(ItemGridTexture(cols: 5, rows: 0, palette: ["FF0000"], pixels: [0]))
+        // extreme positive (clamped down to maxCols/maxRows — must not allocate Int.max entries)
+        expectSafe(ItemGridTexture(cols: Int.max, rows: 4, palette: ["FF0000"], pixels: [0]))
+        expectSafe(ItemGridTexture(cols: 4, rows: Int.max, palette: ["FF0000"], pixels: [0]))
+        expectSafe(ItemGridTexture(cols: Int.max, rows: Int.max, palette: ["FF0000"], pixels: [0]))
+        // short pixel buffer for the claimed dims (over-read guard)
+        expectSafe(ItemGridTexture(cols: 8, rows: 8, palette: ["FF0000"], pixels: [0]))
+    }
+
+    @Test func sanitizedYieldsBlankGridForNegativeDimensions() {
+        // Negative dims clamp to a 0-sized grid with no pixels — the only render-safe interpretation.
+        let clean = ItemGridTexture(cols: -1, rows: -1, palette: ["FF0000"], pixels: [0, 0, 0])
+            .sanitized(maxCols: 64, maxRows: 64)
+        #expect(clean.cols == 0)
+        #expect(clean.rows == 0)
+        #expect(clean.pixels.isEmpty)
+    }
+
+    @Test func sanitizedLeavesAValidTextureUnchanged() {
+        // A well-formed, in-range texture must pass through untouched (no behavior change for valid input).
+        let raw = ItemGridTexture(
+            cols: 3,
+            rows: 2,
+            palette: ["FF0000", "00FF00"],
+            pixels: [0, 1, -1, 1, 0, -1]
+        )
+        let clean = raw.sanitized(maxCols: 64, maxRows: 64)
+        #expect(clean.cols == 3)
+        #expect(clean.rows == 2)
+        #expect(clean.palette == ["FF0000", "00FF00"])
+        #expect(clean.pixels == [0, 1, -1, 1, 0, -1])
+    }
+
     // MARK: - Provenance (anonymized)
 
     @Test func designerCarriesOnlyAnAnonymousID() throws {

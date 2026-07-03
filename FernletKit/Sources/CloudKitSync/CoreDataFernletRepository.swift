@@ -119,8 +119,15 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     public func loadDay(for dateKey: String, todayKey: String) -> FernletDay {
         assert(!dateKey.isEmpty, "date key required")
         if let cached = cachedAllDays?[dateKey] { return cached }   // served from the shared day cache (no query)
-        _ = loadDatabase(todayKey: todayKey)  // ensure decoded + rows backfilled
-        return dayRecordRepository.load(dateKeys: [dateKey])[dateKey] ?? FernletDay(date: dateKey)
+        let database = loadDatabase(todayKey: todayKey)  // ensure decoded + rows backfilled
+        // Blob fallback (safety net for the not-fully-migrated state): while `daysMigratedToRows` is still
+        // false (e.g. a failed migration batch), a day may live ONLY in the blob and have no row yet.
+        // Reading rows-only would return an empty day; a subsequent edit would then write a near-empty row
+        // that migration's content-merge could keep, replacing the original. Fall back to the blob's copy —
+        // mirroring `snapshot(from:)`. Post-migration `database.days` is empty, so this is a no-op there.
+        return dayRecordRepository.load(dateKeys: [dateKey])[dateKey]
+            ?? database.days[dateKey]
+            ?? FernletDay(date: dateKey)
     }
 
     @discardableResult public func saveSnapshot(_ sanitized: SanitizedSnapshot) -> Bool {
@@ -130,24 +137,40 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         // Write today's day to its per-row store FIRST so the derived rebuild (sourced from rows) sees it —
         // but not while persistence is blocked (a failed reload returns the empty fallback, and writing the
         // row then would corrupt it just as saveDatabase refuses the blob). Skip → the whole save is a no-op.
+        // The day comes from an already-minted SanitizedSnapshot, so re-wrap its stripped day through the
+        // SanitizedDay barrier (no re-strip) rather than handing a raw FernletDay to the synced row store.
         if !isPersistenceBlocked {
-            dayRecordRepository.upsert([DayRecordUpsert(day: snapshot.day, updatedAt: Date())])
+            guard writeDayRow(sanitized.sanitizedDay, for: snapshot.todayKey) else {
+                // The row write failed/rolled back. Do NOT clear the blob's copy of the day and report a
+                // durable save — return false so SnapshotSaveCoordinator retries. The blob still holds
+                // today's day (apply below is skipped), so nothing is lost.
+                return false
+            }
         }
         // While migration is still pending (e.g. a failed batch left the flag false), the blob may hold the
         // only copy of un-migrated days, so don't bound/prune it then. Once migrated, refreshRowDerivedState
         // clears the blob's days entirely, so the bound here is moot — apply still writes the aggregate.
         let blobDayBound = database.daysMigratedToRows ? FernletLimits.derivedLogWindowDays : nil
         database.apply(snapshot, maxStoredDays: blobDayBound)
-        refreshRowDerivedState(&database, todayKey: snapshot.todayKey)
-        return saveDatabase(database)
+        refreshRowDerivedState(&database, todayKey: snapshot.todayKey, justWrote: (snapshot.todayKey, snapshot.day))
+        return saveDatabase(database, invalidatesDayCache: false)
     }
 
     /// After day rows are written, refresh the blob's row-derived state from the bounded recent window:
     /// rebuild the derived log tables, recompute the day-content summary (so iCloud detection stays a
     /// single blob read), and — once migration is complete — clear the blob's `days` cache entirely (the
     /// per-row `DayRecord` store is the authoritative, uncapped source of truth).
-    private func refreshRowDerivedState(_ database: inout LocalFernletDatabase, todayKey: String) {
-        let recent = recentDayPairs()
+    ///
+    /// `justWrote` is the (dateKey, day) the caller just persisted; when the day-history memo is warm it is
+    /// patched in place with that day and the derived window is built from the warm cache — so a normal
+    /// save no longer re-fetches and re-decodes the whole (uncapped) row history on the hot path. When the
+    /// memo is cold, it falls back to a bounded `loadRecent` fetch.
+    private func refreshRowDerivedState(
+        _ database: inout LocalFernletDatabase,
+        todayKey: String,
+        justWrote: (dateKey: String, day: FernletDay)
+    ) {
+        let recent = recentDayPairs(patching: justWrote)
         database.rebuildDerivedTables(todayKey: todayKey, recentDays: recent)
         database.dayContentSummary = DayContentSummary(days: recent.map(\.1))
         if database.daysMigratedToRows {
@@ -162,12 +185,51 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         assert(day.date == dateKey, "day date mismatch")
         var database = loadDatabase(todayKey: todayKey)
         if !isPersistenceBlocked {
-            dayRecordRepository.upsert([DayRecordUpsert(day: day, updatedAt: Date())])
+            guard writeDayRow(sanitized, for: dateKey) else {
+                // Row write failed — surface it so the caller retries instead of treating a lost edit as
+                // durable. Nothing was written to the blob for this day (updateDay never does), so the
+                // day's prior row/blob copy is untouched.
+                return false
+            }
+        }
+        // Pre-migration, the blob still holds un-migrated days and is loadDay's fallback (item B), and
+        // migrateDaysToRowsIfNeeded later fans its days into rows. An edit-to-empty of a blob-only day writes
+        // NO row (item G deletes instead), so without this the stale non-empty blob copy would survive and
+        // resurrect the pre-edit content on the next read/migration. Keep any blob copy of THIS day consistent
+        // with the edit — only for keys the blob already holds, so an old past-day edit still can't GROW the
+        // blob. Once migrated (blob days cleared), this is a no-op.
+        if !database.daysMigratedToRows, database.days[dateKey] != nil {
+            if day.hasLoggedContent {
+                database.days[dateKey] = day
+            } else {
+                database.days[dateKey] = nil
+            }
         }
         // The edited day lives in its row; refresh the derived tables + detection summary from rows (and,
-        // once migrated, keep the blob's days cleared). Never write the edited day into the blob.
-        refreshRowDerivedState(&database, todayKey: todayKey)
-        return saveDatabase(database)
+        // once migrated, keep the blob's days cleared).
+        refreshRowDerivedState(&database, todayKey: todayKey, justWrote: (dateKey, day))
+        return saveDatabase(database, invalidatesDayCache: false)
+    }
+
+    /// Persists one sanitized day to its per-row store, guarding on logged content (item G): a day with no
+    /// logged content writes NO row (so a device that merely launched the app doesn't stamp an empty
+    /// `DayRecord` that makes every other device read "existing cloud data"). A day that BECOMES empty
+    /// (its last entry deleted) deletes any existing row rather than leaving a stale non-empty one. Returns
+    /// whether the underlying write succeeded (false → the caller must not treat the save as durable). Also
+    /// patches the warm day-history memo in place so the derived rebuild reuses it without a re-fetch.
+    private func writeDayRow(_ sanitized: SanitizedDay, for dateKey: String) -> Bool {
+        let day = sanitized.day
+        if day.hasLoggedContent {
+            let ok = dayRecordRepository.upsert([DayRecordUpsert(sanitized: sanitized, updatedAt: Date())])
+            if ok { cachedAllDays?[dateKey] = day }
+            return ok
+        } else {
+            // No logged content: remove any prior row so an emptied day doesn't linger. `delete` is a no-op
+            // (returns true) when no row exists — the common "empty launch" case writes nothing.
+            let ok = dayRecordRepository.delete(dateKeys: [dateKey])
+            if ok { cachedAllDays?[dateKey] = nil }
+            return ok
+        }
     }
 
     public func storageDescription() -> String {
@@ -209,20 +271,47 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         guard !database.daysMigratedToRows else { return database }
         let pairs = database.days.sorted { $0.key < $1.key }
         if !pairs.isEmpty {
-            // Backfill ONLY days that don't already have a row. A row can already exist because another
-            // device wrote a fresher edit for that day (synced in), or a prior migration batch / updateDay
-            // already wrote it. Overwriting such a row with the blob's stale copy — stamped with the blob's
-            // single global `updatedAt` — would let the stale day win the max-updatedAt dedup and clobber the
-            // newer edit both locally and back out over CloudKit. Skipping keeps migration a pure backfill,
-            // fixes the re-fan-clobbers-a-row-edit case, and leaves the rows themselves as the resume cursor.
+            // Backfill+MERGE, not backfill+skip. For a dateKey WITHOUT a row: write it. For a key that
+            // ALREADY has a row: normally the row is authoritative (another device wrote a fresher edit
+            // that synced in, or a prior batch / updateDay wrote it) so we skip — overwriting with the
+            // blob's copy, stamped with the blob's single global `updatedAt`, could clobber a newer edit
+            // both locally and back over CloudKit. BUT a mixed-version fleet can leave a fresher edit only
+            // in the shared blob: an old build re-writes a same-day edit into `days` (its encoder drops the
+            // `daysMigratedToRows` key, so this build re-runs migration) — skipping it as "existing" and
+            // then clearing the blob would lose that edit. So when the blob day carries STRICTLY MORE logged
+            // content than the existing row, prefer it (overwrite the row). This is best-effort: the legacy
+            // blob has only one global `updatedAt`, so true per-day freshness is NOT recoverable — logged-
+            // content count is the tiebreak for the transient mixed-version window, chosen to preserve
+            // rather than drop user data.
+            //
+            // PRIVACY (S3): legacy blob days from pre-hardening builds may carry cycle/intimate
+            // `healthContext` (and, in principle, sealed-journal plaintext) that the normal saveSnapshot/
+            // updateDay path strips before a synced row is written. Route EVERY migration write through the
+            // same SanitizedDay strip so no unstripped sensitive content lands in the uncapped, CloudKit-
+            // synced DayRecord rows. cycle/intimate are always nil'd. Sealed-journal *text* cannot be
+            // stripped here: which journal ids are sealed is app-layer state (DiaryStore's sealed-id hook),
+            // not reachable in the repository — so we pass an empty sealed set (unsealed text is legitimate
+            // blob content and must be preserved). Any residual sealed-journal plaintext in a legacy blob is
+            // self-healed by `DiaryStore.mutatePastDay`, which DOES have the sealed set, the next time that
+            // day is touched (matching the existing WI-1 historical-scrub behaviour).
             let stamp = database.updatedAt
-            let existingKeys = Set(dayRecordRepository.load(dateKeys: pairs.map(\.key)).keys)
-            let backfill = pairs.filter { !existingKeys.contains($0.key) }
+            let existingRows = dayRecordRepository.load(dateKeys: pairs.map(\.key))
+            // Pre-strip each blob day ONCE (privacy barrier), then decide backfill/overwrite by comparing
+            // the STRIPPED copy's content — so soon-to-be-stripped sensitive content can't tip the "richer"
+            // heuristic. Each survivor is written through the same SanitizedDay it was compared on.
+            let toWrite: [DayRecordUpsert] = pairs.compactMap { key, blobDay in
+                let sanitized = SanitizedDay.sanitizing(blobDay, sealedJournalIDs: [])
+                if let existing = existingRows[key],
+                   Self.loggedContentCount(sanitized.day) <= Self.loggedContentCount(existing) {
+                    return nil  // existing row is authoritative (not strictly poorer) → skip
+                }
+                return DayRecordUpsert(sanitized: sanitized, updatedAt: stamp)
+            }
             let batchSize = 250
             var index = 0
-            while index < backfill.count {
-                let slice = backfill[index..<min(index + batchSize, backfill.count)]
-                let ok = dayRecordRepository.upsert(slice.map { DayRecordUpsert(day: $0.value, updatedAt: stamp) })
+            while index < toWrite.count {
+                let slice = Array(toWrite[index..<min(index + batchSize, toWrite.count)])
+                let ok = dayRecordRepository.upsert(slice)
                 guard ok else { return database }  // leave the flag false → resume next launch
                 index += batchSize
             }
@@ -232,24 +321,68 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         // Seed the detection summary from the blob's days, then retire the blob's day cache (the rows just
         // written are authoritative). The `days` field stays decodable so an older build can still lazily
         // backfill from a blob that predates this clearing.
+        //
+        // TRADEOFF (item J — intentional, do NOT "fix" by re-seeding blob days): clearing `days` closes the
+        // Stage-B privacy leak structurally (days-with-healthContext no longer sit in the synced blob). The
+        // cost is a transient UX degradation: an OLD-build second device that adopts this cleared blob shows
+        // empty recent history UNTIL it upgrades — after which CloudKit re-imports the per-row DayRecords and
+        // history returns. This is NOT data loss: the rows are intact and authoritative. Re-populating
+        // `days` here to spare the old build would regress the privacy win, so we accept the degradation.
         migrated.dayContentSummary = DayContentSummary(days: Array(database.days.values))
         migrated.days = [:]
         _ = saveDatabase(migrated)
         return migrated
     }
 
-    /// The bounded recent-day window from the row store, oldest-first, for derived-table rebuilds — so a
-    /// rebuild never scans the whole (now uncapped) history.
-    private func recentDayPairs() -> [(String, FernletDay)] {
-        dayRecordRepository.loadRecent(limit: FernletLimits.derivedLogWindowDays)
-            .map { ($0.date, $0) }
+    /// The bounded recent-day window, oldest-first, for derived-table rebuilds — so a rebuild never scans
+    /// the whole (now uncapped) history.
+    ///
+    /// When the day-history memo (`cachedAllDays`) is warm and migration is complete, the window is built
+    /// from that in-memory cache (patched with the just-written `patching` day) — avoiding the per-save
+    /// `loadRecent(370)` fetch + decode that defeated the memo on the hottest path. When the cache is cold
+    /// or migration is still pending (rows aren't yet authoritative), it falls back to the row fetch,
+    /// overlaying the just-written day so a not-yet-persisted-here edit still shows in the derived tables.
+    private func recentDayPairs(patching: (dateKey: String, day: FernletDay)? = nil) -> [(String, FernletDay)] {
+        if let cache = cachedAllDays, cachedDatabase?.daysMigratedToRows == true {
+            var byKey = cache
+            if let patching {
+                byKey[patching.dateKey] = patching.day
+            }
+            return boundedRecentPairs(from: byKey)
+        }
+        var byKey = Dictionary(
+            dayRecordRepository.loadRecent(limit: FernletLimits.derivedLogWindowDays).map { ($0.date, $0) },
+            uniquingKeysWith: { _, new in new }
+        )
+        if let patching {
+            byKey[patching.dateKey] = patching.day
+        }
+        return boundedRecentPairs(from: byKey)
+    }
+
+    /// The newest `derivedLogWindowDays` days from a day set, oldest-first — the derived tables and
+    /// detection summary read this bounded window regardless of history depth.
+    private func boundedRecentPairs(from byKey: [String: FernletDay]) -> [(String, FernletDay)] {
+        byKey.keys.sorted(by: >)
+            .prefix(FernletLimits.derivedLogWindowDays)
+            .map { ($0, byKey[$0]!) }
             .sorted { $0.0 < $1.0 }
     }
 
     public func loadAllDays() -> [String: FernletDay] {
         if let cached = cachedAllDays { return cached }
-        _ = loadDatabase(todayKey: FernletDate.dayKey(for: .now))  // ensure decoded + migration attempted
-        let all = dayRecordRepository.loadAll()
+        let database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))  // ensure decoded + migration attempted
+        var all = dayRecordRepository.loadAll()
+        // Blob fallback (safety net for the not-fully-migrated state): if migration hasn't completed (a
+        // failed batch leaves `daysMigratedToRows` false), a day may live ONLY in the blob with no row yet.
+        // Overlay those blob-only days so history doesn't read short — mirroring loadDay/snapshot(from:).
+        // Rows are authoritative where both exist, so only fill keys the row store is missing.
+        // Post-migration `database.days` is empty, so this is a no-op there.
+        if !database.daysMigratedToRows {
+            for (key, day) in database.days where all[key] == nil {
+                all[key] = day
+            }
+        }
         // Only memoize once migration has completed and the store is readable. Caching a partially-migrated
         // set (a failed batch leaves `daysMigratedToRows` false) would short-circuit the resume-on-next-load
         // and strand the un-backfilled days.
@@ -350,11 +483,15 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         persistenceBlockedByFetchFailure = false
     }
 
-    @discardableResult private func saveDatabase(_ database: LocalFernletDatabase) -> Bool {
+    @discardableResult private func saveDatabase(_ database: LocalFernletDatabase, invalidatesDayCache: Bool = true) -> Bool {
         assert(database.schemaVersion >= 1, "schema version invalid")
-        // Every save follows a day-row write (saveSnapshot/updateDay/migrate), so drop the memoized day
-        // history — the next read re-decodes the fresh rows.
-        cachedAllDays = nil
+        // Most saves (migration, tier-2 memories) may have changed the day history underneath the memo, so
+        // drop it — the next read re-decodes the fresh rows. saveSnapshot/updateDay instead patch the memo
+        // in place for the single day they wrote (item H) and pass `invalidatesDayCache: false`, so a normal
+        // save no longer re-fetches and re-decodes the whole (uncapped) history on the hot path.
+        if invalidatesDayCache {
+            cachedAllDays = nil
+        }
         guard !persistenceBlockedByDecodeFailure else {
             print("[Fernlet] Refusing to save after Core Data database decode failed.")
             return false
@@ -397,6 +534,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             assertionFailure("Core Data database save failed")
             context.rollback()
             cachedDatabase = nil  // Invalidate on failure
+            cachedAllDays = nil   // …and the day memo, so a caller that patched it in place re-reads fresh
             return false
         }
     }
@@ -475,6 +613,18 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             trustedProximityPeers: database.trustedProximityPeers,
             trainerAuditEvents: database.trainerAuditEvents
         )
+    }
+
+    /// A coarse count of logged items on a day, used ONLY as the migration content-merge tiebreak (item D)
+    /// when two same-day copies compete and the legacy blob has no per-day freshness stamp. Counts discrete
+    /// entries plus one point each for sleep, water, and real HealthKit content — enough to tell "richer"
+    /// from "sparser" without needing FernletDay to be Equatable. Not a durability metric; a heuristic.
+    nonisolated private static func loggedContentCount(_ day: FernletDay) -> Int {
+        day.meals.count + day.workouts.count + day.plannedWorkouts.count + day.journals.count
+            + day.hygiene.count + day.completedPersonalCareTaskIDs.count
+            + (day.sleep == nil ? 0 : 1)
+            + (day.bottleCount > 0 ? 1 : 0)
+            + ((day.healthContext?.hasContent ?? false) ? 1 : 0)
     }
 
     nonisolated private static func decodeDatabaseAsync(from data: Data) async throws -> LocalFernletDatabase {

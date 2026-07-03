@@ -10,8 +10,11 @@
 // Unlike the coin ledger, days MUST collapse duplicate rows here: CloudKit mirrors by record identity, not
 // the `dateKey` attribute, so two devices that first-write the same day before import settles can produce
 // two rows for one `dateKey`. The read path returns `[String: FernletDay]` (a dict can't hold two rows for
-// one key), so `loadAll`/`load` keep the most-recently-updated row per `dateKey` and actively delete the
-// losers to self-heal — the same duplicate cleanup the aggregate record does in `fetchRecordResult`.
+// one key), so `loadAll`/`load` keep the most-recently-updated row per `dateKey`. Self-heal deletion of the
+// loser is CONSERVATIVE — it only fires on a STRICT `updatedAt` winner. On an equal-`updatedAt` tie nothing
+// is deleted (see `dedupedDays`): two devices' migration-backfilled rows share the blob's single global
+// `updatedAt`, so an on-tie delete would let each device delete the OTHER's row and lose both. The dict
+// value is still made deterministic by a stable per-row tiebreak.
 
 import Foundation
 import CoreData
@@ -133,16 +136,28 @@ public struct DayRecordRepository: DayRecordRepositoring {
         }
     }
 
-    /// Fetches the given request and collapses duplicate `dateKey` rows, keeping the most-recently-updated
-    /// one and deleting the losers in-context so the store self-heals.
+    /// Fetches the given request and collapses duplicate `dateKey` rows down to one per key in the returned
+    /// dict. Self-heal deletion of losers is CONSERVATIVE:
+    ///  - When exactly ONE row for a key has the maximum `updatedAt` (a STRICT winner), that row wins and
+    ///    every strictly-older row is deleted (they are genuinely superseded).
+    ///  - When SEVERAL rows share the maximum `updatedAt` (a tie at the top), NONE of the tied rows is
+    ///    deleted — only rows strictly below the max are. The dict value is chosen deterministically among
+    ///    the tied rows by a stable per-row tiebreak.
+    ///
+    /// The tie rule is load-bearing: two devices that both ran migration stamp their backfilled rows with
+    /// the SAME blob `updatedAt`. An "on-tie delete the other" rule would have each device delete the OTHER
+    /// device's row; both deletes then sync and both rows are lost with no backfill (the blob's days are
+    /// cleared post-migration). Keeping every top-stamped row on disk makes a mutual wipe impossible;
+    /// CloudKit's later merge and any subsequent real (strictly newer) edit collapse them safely.
     private func dedupedDays(fetching request: NSFetchRequest<NSManagedObject>) -> [String: FernletDay] {
         let context = controller.container.viewContext
         guard let records = try? context.fetch(request) else {
             assertionFailure("day record fetch failed")
             return [:]
         }
-        var bestByKey: [String: (record: NSManagedObject, day: FernletDay, updatedAt: Date)] = [:]
-        var duplicatesToDelete: [NSManagedObject] = []
+        // Group every decodable row by `dateKey` (a stable per-row tiebreak accompanies each).
+        struct Row { let record: NSManagedObject; let day: FernletDay; let updatedAt: Date; let tiebreak: String }
+        var rowsByKey: [String: [Row]] = [:]
         let decoder = Self.makeDecoder()
         for record in records {
             guard let key = record.value(forKey: "dateKey") as? String,
@@ -151,23 +166,29 @@ public struct DayRecordRepository: DayRecordRepositoring {
                 continue
             }
             let updatedAt = record.value(forKey: "updatedAt") as? Date ?? .distantPast
-            if let existing = bestByKey[key] {
-                // Keep the newer row; mark the older one for deletion.
-                if updatedAt > existing.updatedAt {
-                    duplicatesToDelete.append(existing.record)
-                    bestByKey[key] = (record, day, updatedAt)
-                } else {
-                    duplicatesToDelete.append(record)
-                }
-            } else {
-                bestByKey[key] = (record, day, updatedAt)
+            let tiebreak = record.objectID.uriRepresentation().absoluteString
+            rowsByKey[key, default: []].append(Row(record: record, day: day, updatedAt: updatedAt, tiebreak: tiebreak))
+        }
+
+        var result: [String: FernletDay] = [:]
+        var duplicatesToDelete: [NSManagedObject] = []
+        for (key, rows) in rowsByKey {
+            guard let maxUpdatedAt = rows.map(\.updatedAt).max() else { continue }
+            let topRows = rows.filter { $0.updatedAt == maxUpdatedAt }
+            // Deterministic dict winner among the top-stamped rows (stable across reads).
+            let winner = topRows.min { $0.tiebreak < $1.tiebreak }!
+            result[key] = winner.day
+            // Delete ONLY rows strictly older than the top stamp. Rows tied at the top are all kept on disk
+            // (the mutual-delete guard) — including the ones that lost the in-dict tiebreak.
+            for row in rows where row.updatedAt < maxUpdatedAt {
+                duplicatesToDelete.append(row.record)
             }
         }
         if !duplicatesToDelete.isEmpty {
             duplicatesToDelete.forEach { context.delete($0) }
             if context.hasChanges { try? context.save() }
         }
-        return bestByKey.mapValues(\.day)
+        return result
     }
 
     nonisolated private static func makeEncoder() -> JSONEncoder {

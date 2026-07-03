@@ -127,14 +127,28 @@ public nonisolated struct ItemGridTexture: Codable, Equatable, Sendable {
         let boundedPalette = palette.prefix(ItemGridTexture.maxPaletteEntries)
             .map { String($0.prefix(ItemGridTexture.maxPaletteHexLength)) }
         var buffer = Array(repeating: ItemGridTexture.transparent, count: c * r)
-        let copyCols = min(c, cols)
-        let copyRows = min(r, rows)
-        for y in 0..<copyRows {
-            for x in 0..<copyCols {
-                let source = y * cols + x
-                guard source < pixels.count else { continue }
-                let idx = pixels[source]
-                buffer[y * c + x] = (idx >= 0 && idx < boundedPalette.count) ? idx : ItemGridTexture.transparent
+        // Copy bounds must never exceed the *clamped* non-negative dims (c, r) — clamping against the raw
+        // `cols`/`rows` would re-introduce a hostile negative value (e.g. rows == -1 → copyRows == -1 →
+        // `0..<(-1)` traps). `cols` still strides the *source* buffer, so a hostile-huge source width
+        // (e.g. Int.max) would overflow `y * cols`; we therefore advance the source row offset by *addition*
+        // with overflow reporting and `break` the moment it lands past the real `pixels` buffer — every cell
+        // beyond the actual data is transparent anyway. A non-positive source width leaves no valid overlap:
+        // skip the copy entirely, returning the blank (clamped) grid.
+        let copyCols = max(0, min(c, cols))
+        let copyRows = max(0, min(r, rows))
+        if cols > 0 && copyCols > 0 {
+            var rowStart = 0
+            for y in 0..<copyRows {
+                guard rowStart < pixels.count else { break }
+                let remaining = pixels.count - rowStart
+                let xLimit = min(copyCols, remaining)
+                for x in 0..<xLimit {
+                    let idx = pixels[rowStart + x]
+                    buffer[y * c + x] = (idx >= 0 && idx < boundedPalette.count) ? idx : ItemGridTexture.transparent
+                }
+                let (next, overflow) = rowStart.addingReportingOverflow(cols)
+                if overflow { break }
+                rowStart = next
             }
         }
         return ItemGridTexture(cols: c, rows: r, palette: boundedPalette, pixels: buffer)

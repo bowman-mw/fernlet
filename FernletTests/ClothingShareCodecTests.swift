@@ -88,4 +88,28 @@ struct ClothingShareCodecTests {
         #expect(only.price >= ClothingShopLimits.minPrice && only.price <= ClothingShopLimits.maxPrice)
         #expect(!only.name.unicodeScalars.contains("\u{200B}"))
     }
+
+    @Test func sanitizedItemsSurviveHostileNegativeTextureDimensions() throws {
+        // Remotely-triggerable crash: a peer broadcasts a catalog whose item texture carries `rows: -1`
+        // (or `cols: -1`). Synthesized Codable happily decodes negative Ints, and the sanitizer used to
+        // trap building an inverted Range. Decode-then-sanitize must never crash and must yield a safely
+        // bounded texture. Encoding a payload with negative dims and decoding it exercises the real wire path.
+        var neg = item(shareable: true, price: 10, designer: designerID)
+        neg.texture = ItemGridTexture(cols: -1, rows: -1, palette: ["FF0000"], pixels: [0, 0, 0])
+        let payload = ClothingCatalogPayload(designerID: designerID, displayName: "Robin", items: [neg])
+
+        // Round-trip through JSON to prove the negative dims genuinely survive decoding (the untrusted path).
+        let data = try JSONEncoder().encode(payload)
+        let decoded = try JSONDecoder().decode(ClothingCatalogPayload.self, from: data)
+        #expect(decoded.items.first?.texture.rows == -1)
+
+        let cleaned = ClothingShareCodec.sanitizedItems(from: decoded)   // must not trap
+
+        let only = try #require(cleaned.first)
+        #expect(only.texture.cols >= 0)
+        #expect(only.texture.rows >= 0)
+        #expect(only.texture.cols <= ItemSlot.hat.gridCols)
+        #expect(only.texture.rows <= ItemSlot.hat.gridRows)
+        #expect(only.texture.pixels.count == only.texture.cols * only.texture.rows)
+    }
 }

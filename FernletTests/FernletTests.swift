@@ -597,7 +597,7 @@ struct FernletTests {
         let pastSnapshot = repository.loadSnapshot(todayKey: past)
         #expect(allDays.keys.sorted() == [past, today])
         #expect(pastSnapshot.day.meals.count == 1)
-        #expect(repository.loadTierTwoMemories().count <= FernletLimits.maxStoredDays)
+        #expect(repository.loadTierTwoMemories().count <= FernletLimits.derivedLogWindowDays)
     }
 
     @MainActor

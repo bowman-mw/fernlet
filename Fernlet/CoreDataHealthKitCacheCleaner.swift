@@ -12,6 +12,19 @@ import HealthKitGateway
 // into `HealthKitService.defaultCacheClearer` at app launch (see FernletApp.init) and surfaced
 // to the gateway only through the `HealthKitCacheClearing` seam.
 struct CoreDataHealthKitCacheCleaner: HealthKitCacheClearing {
+    /// A row or the aggregate blob could not be decoded, so the scrub cannot prove the HealthKit cache is
+    /// gone. Thrown to keep the opt-out FAIL-CLOSED: `HealthKitService.disableIntegration` catches it, logs
+    /// `healthkit.disable.failed`, leaves `healthKitMasterEnabled` ON, and lets the user retry — rather than
+    /// silently "succeeding" while clinical data (sleep/steps/HRV, cycle/intimate-derived values) stays in the
+    /// CloudKit-synced record. Undecodable here means a corrupt payload or a forward-schema payload written by
+    /// a newer build on another device and synced in; both are exactly the cases we must not skip. Every row of
+    /// the `DayRecord` entity — and of `FernletDatabaseRecord` — is a serialized value of a single type, so
+    /// there is no benign "unrelated record" a decode failure could represent that we could safely tolerate.
+    enum CacheClearError: Error {
+        case undecodableDayRow
+        case undecodableDatabaseBlob
+    }
+
     private let controller: PersistenceController
 
     init(controller: PersistenceController = .shared) {
@@ -29,9 +42,17 @@ struct CoreDataHealthKitCacheCleaner: HealthKitCacheClearing {
         // 1) Per-row DayRecords — the authoritative day store after the per-row split.
         var strippedAnyRow = false
         for record in try context.fetch(NSFetchRequest<NSManagedObject>(entityName: "DayRecord")) {
-            guard let payload = record.value(forKey: "payloadData") as? Data,
-                  let day = try? decoder.decode(FernletDay.self, from: payload),
-                  let stripped = Self.strippedOfHealthCache(day) else { continue }
+            guard let payload = record.value(forKey: "payloadData") as? Data else { continue }
+            // Fail CLOSED on a decode failure: we cannot prove this row is free of HealthKit cache, so we must
+            // not let the opt-out report success. `strippedOfHealthCache == nil` is the *benign* case (the day
+            // decoded but has no healthContext to strip) and legitimately skips.
+            let day: FernletDay
+            do {
+                day = try decoder.decode(FernletDay.self, from: payload)
+            } catch {
+                throw CacheClearError.undecodableDayRow
+            }
+            guard let stripped = Self.strippedOfHealthCache(day) else { continue }
             record.setValue(try encoder.encode(stripped), forKey: "payloadData")
             record.setValue(Date(), forKey: "updatedAt")
             strippedAnyRow = true
@@ -50,8 +71,16 @@ struct CoreDataHealthKitCacheCleaner: HealthKitCacheClearing {
             .map { ($0.date, $0) }
             .sorted { $0.0 < $1.0 }   // oldest-first, as rebuildDerivedTables(recentDays:) expects
         for record in try context.fetch(NSFetchRequest<NSManagedObject>(entityName: "FernletDatabaseRecord")) {
-            guard let payload = record.value(forKey: "payloadData") as? Data,
-                  var database = try? decoder.decode(LocalFernletDatabase.self, from: payload) else { continue }
+            guard let payload = record.value(forKey: "payloadData") as? Data else { continue }
+            // Fail CLOSED: an undecodable blob may still carry HealthKit-derived cache (`dailyLogs`,
+            // `dayContentSummary`, or an un-migrated `days` map) that would keep syncing to iCloud, so a decode
+            // failure must throw rather than silently leave the blob untouched and report a successful opt-out.
+            var database: LocalFernletDatabase
+            do {
+                database = try decoder.decode(LocalFernletDatabase.self, from: payload)
+            } catch {
+                throw CacheClearError.undecodableDatabaseBlob
+            }
             // Strip any residual health cache still held in an un-migrated blob's own `days` map.
             var blobDaysChanged = false
             for key in database.days.keys {
