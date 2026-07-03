@@ -61,19 +61,52 @@ struct CoinEconomyTests {
             CoinLedgerEntry.reset(dayKey: "2026-05-10", at: resetDate),
             CoinLedgerEntry.earn(dayKey: "2026-05-11", amount: 5, at: after),  // post-reset day survives
         ]
-        // Earns for days <= the reset boundary and the pre-reset spend are voided; only the post-reset earn counts.
+        // Earns for days STRICTLY BEFORE the reset boundary and the pre-reset spend are voided; only the
+        // post-reset earn counts.
         #expect(CoinEconomy.earned(in: entries) == 5)
         #expect(CoinEconomy.spent(in: entries) == 0)
         #expect(CoinEconomy.balance(in: entries) == 5)
     }
 
-    @Test func reconcileDoesNotReMintEarnsAtOrBeforeReset() {
+    @Test func sameDayAsResetEarnCountsAndPriorDaysStayVoided() {
+        // Finding A: a day logged on/after a same-day reset (marker dayKey == that day) must be able to earn.
+        // Previously `earn:<resetDay>` was both voided (day <= boundary) AND excluded from re-mint (day not >
+        // boundary) — so same-day activity could NEVER earn. A soft reset wipes the reset day's content, so
+        // its re-appearance in the ledger represents genuine post-reset activity and legitimately earns.
+        let resetDate = Date(timeIntervalSince1970: 1_780_500_000)
+        let after = Date(timeIntervalSince1970: 1_781_000_000)
+        let entries = [
+            CoinLedgerEntry.earn(dayKey: "2026-05-09", amount: 5, at: after),   // strictly before → voided
+            CoinLedgerEntry.reset(dayKey: "2026-05-10", at: resetDate),
+            CoinLedgerEntry.earn(dayKey: "2026-05-10", amount: 5, at: after),   // the reset day itself → counts
+        ]
+        #expect(CoinEconomy.earned(in: entries) == 5)   // only the reset-day earn, NOT the strictly-prior one
+        #expect(CoinEconomy.balance(in: entries) == 5)
+    }
+
+    @Test func reconcileDoesNotReMintEarnsStrictlyBeforeResetButDoesReMintResetDayAndLater() {
         // Another device re-running reconcile after a reset (its days not yet deleted) must NOT re-mint earns
-        // for days at/ before the reset boundary — that is exactly how a reset would otherwise be undone.
+        // for days STRICTLY BEFORE the reset boundary — that is exactly how a reset would otherwise be undone.
+        // The reset day itself AND later days DO re-mint (same-day/post-reset activity earns normally).
         let entries = [CoinLedgerEntry.reset(dayKey: "2026-05-10", at: day)]
         let active: Set<String> = ["2026-05-08", "2026-05-10", "2026-05-12"]
         let missing = CoinEconomy.missingEarnEntries(activeDayKeys: active, existing: entries, at: day)
-        #expect(missing.map { $0.dayKey } == ["2026-05-12"])
+        #expect(missing.map { $0.dayKey } == ["2026-05-10", "2026-05-12"])  // 05-08 (strictly before) stays voided
+    }
+
+    @Test func secondDeviceCannotResurrectStrictlyPreResetEarnToUndoReset() {
+        // Anti-undo guarantee (Finding A must not regress it): even if a second device re-mints `earn:<preDay>`
+        // for a day strictly before the reset (its day history not yet deleted), the reset marker still voids
+        // it in the aggregate AND `missingEarnEntries` refuses to hand it back — so the reset holds.
+        let resetBoundary = "2026-05-10"
+        let existing = [CoinLedgerEntry.reset(dayKey: resetBoundary, at: day)]
+        // The second device tries to reconcile a strictly-pre-reset active day.
+        let reMinted = CoinEconomy.missingEarnEntries(activeDayKeys: ["2026-05-01"], existing: existing, at: day)
+        #expect(reMinted.isEmpty)   // never re-minted
+        // And even if such a row somehow lands in the store, the aggregate voids it.
+        let withResurrected = existing + [CoinLedgerEntry.earn(dayKey: "2026-05-01", amount: 5, at: day)]
+        #expect(CoinEconomy.earned(in: withResurrected) == 0)
+        #expect(CoinEconomy.balance(in: withResurrected) == 0)
     }
 
     // MARK: - Structural idempotency (the heart of sync-safety)
@@ -126,6 +159,41 @@ struct CoinEconomyTests {
         #expect(service.earnedCoins == 5)   // collapsed, not 10
         #expect(service.spentCoins == 2)
         #expect(service.balance == 3)
+    }
+
+    @MainActor @Test func reloadFromStoreKeepsPendingRowsWhenFlushFails() async {
+        // Finding B: `reloadFromStore()` = flush + loadSync. If the flush's append FAILS, the rows survive
+        // only in `pendingAppends` (the append rolled back), and a naive `loadSync()` would REPLACE `entries`
+        // with store contents that LACK them — dropping an un-persisted spend/earn from the in-memory ledger
+        // and inflating the balance (the user could re-spend the same coins). The fix re-merges pending rows.
+        let repo = StubCoinLedgerRepository(rows: [
+            CoinLedgerEntry.earn(dayKey: "2026-05-01", amount: 5, at: day),  // 5 already persisted
+        ])
+        let service = CoinLedgerService(repository: repo)
+        service.loadSync()
+        #expect(service.balance == 5)
+
+        // Every append fails from here — a locally recorded spend can only live in `pendingAppends`.
+        repo.failAppends = true
+        #expect(service.spend(amount: 5, ref: "hat") == true)   // guarded by in-memory balance (5 >= 5)
+        #expect(service.balance == 0)                            // reflected in memory immediately
+
+        // A remote sync triggers reloadFromStore while the append is still failing. The pending spend must
+        // NOT vanish (which would wrongly show balance 5 again and let the user re-spend those coins).
+        service.reloadFromStore()
+        #expect(service.balance == 0)                            // pending spend re-merged, not dropped
+        #expect(service.entries.contains { $0.id == CoinLedgerEntry.spendID(ref: "hat") })
+
+        // The store recovers; the next flush persists the pending spend exactly once (no double-count).
+        repo.failAppends = false
+        service.reloadFromStore()
+        #expect(service.balance == 0)                            // still 0 — spent once, not twice
+        #expect(service.spentCoins == 5)
+        #expect(repo.rows.filter { $0.id == CoinLedgerEntry.spendID(ref: "hat") }.count == 1)
+
+        // Let any lingering scheduled save drain; the balance stays stable (idempotent).
+        await Task.yield()
+        #expect(service.balance == 0)
     }
 
     // MARK: - FernletDay.hasLoggedContent (the active-day predicate)
@@ -218,11 +286,17 @@ struct CoinEconomyTests {
 
 /// A non-persisting ledger repo that appends without deduping (like the real append-only store, which
 /// can hold duplicate-id rows synced from multiple devices) so tests can hand the service raw rows.
+/// `failAppends` simulates a Core Data append error (the context rolls back → nothing persisted).
 private final class StubCoinLedgerRepository: CoinLedgerRepositoring {
     var rows: [CoinLedgerEntry]
+    var failAppends = false
     init(rows: [CoinLedgerEntry] = []) { self.rows = rows }
     func load() -> [CoinLedgerEntry] { rows }
     func loadAsync() async -> [CoinLedgerEntry] { rows }
-    @discardableResult func append(_ entries: [CoinLedgerEntry]) -> Bool { rows += entries; return true }
+    @discardableResult func append(_ entries: [CoinLedgerEntry]) -> Bool {
+        if failAppends { return false }   // rolled back — nothing persisted
+        rows += entries
+        return true
+    }
     @discardableResult func deleteAll() -> Bool { rows = []; return true }
 }

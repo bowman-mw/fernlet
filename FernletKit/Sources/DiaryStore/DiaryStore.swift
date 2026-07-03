@@ -337,13 +337,34 @@ public final class DiaryStore {
         // boundary the item name goes through. Without this a hostile peer could poison the id→name map with
         // a multi-kilobyte or control-character string that then syncs across the user's own devices.
         let sanitized = ItemNameModeration.sanitizedName(name)
+        let key = id.uuidString
         if sanitized.isEmpty {
-            settings.knownDesignerNames.removeValue(forKey: id.uuidString)
+            settings.knownDesignerNames.removeValue(forKey: key)
         } else {
-            settings.knownDesignerNames[id.uuidString] = sanitized
+            // Bound the map's CARDINALITY, not just each name's length. This map is fed by browsing (no
+            // purchase required), so a hostile peer cycling disconnect/reconnect with a fresh random
+            // designerID each time would otherwise add one permanent entry per cycle, growing the synced
+            // settings blob without bound toward CloudKit's ~1 MB per-record limit (after which snapshot
+            // saves start failing). Cap at 256 — far more than any realistic number of real friends — and
+            // when a NEW id would exceed it, evict one existing entry so the map stays bounded. Updating an
+            // EXISTING id's name never grows the map, so it never evicts. `SettingsModel` carries no recency
+            // for these entries (plain [String: String]), so eviction is deterministic-but-arbitrary: drop
+            // the lexicographically-smallest key. That is stable (never process-order-dependent), never
+            // throws, and stays Codable/merge-safe (still a plain dictionary).
+            let isNew = settings.knownDesignerNames[key] == nil
+            if isNew, settings.knownDesignerNames.count >= Self.maxKnownDesignerNames,
+               let evictKey = settings.knownDesignerNames.keys.min() {
+                settings.knownDesignerNames.removeValue(forKey: evictKey)
+            }
+            settings.knownDesignerNames[key] = sanitized
         }
         scheduleSnapshotSave()
     }
+
+    /// Upper bound on learned peer designer names kept in the synced settings blob. 256 is far above any
+    /// realistic friend count while keeping the id→name map a tiny fraction of CloudKit's ~1 MB record
+    /// budget, so a hostile peer cannot grow the synced aggregate without bound. See `setKnownDesignerName`.
+    public static let maxKnownDesignerNames = 256
 
     /// Records the calendar day the user last changed their shop's listed set (drives the gentle
     /// once-per-day re-publish note). Stored in the synced settings blob, so it's shared across the user's

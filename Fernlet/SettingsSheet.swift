@@ -116,6 +116,13 @@ struct SettingsSheet: View {
                             set: { store.setAllowNearbyRecipeShares($0) }
                         )
                     )
+                    Toggle(
+                        "Allow nearby clothing shops",
+                        isOn: Binding(
+                            get: { store.settings.allowNearbyClothingShares },
+                            set: { store.setAllowNearbyClothingShares($0) }
+                        )
+                    )
                 }
                 .listRowBackground(Color.cream)
 

@@ -50,6 +50,14 @@ public final class CoinLedgerService {
     public func reloadFromStore() {
         flushPendingSave()
         loadSync()
+        // If the flush FAILED, its rows survive only in `pendingAppends` (append rolled the Core Data context
+        // back), and `loadSync()` just replaced `entries` with store contents that LACK them — dropping an
+        // un-persisted earn/spend from the in-memory ledger and inflating the balance (the user could re-spend
+        // the same coins). Re-merge the still-pending rows on top of the freshly loaded set (union by id, via
+        // the same dedup used everywhere), keeping the pending queue intact so the next scheduled save retries.
+        // On a SUCCESSFUL flush `pendingAppends` is empty, so this is a no-op and `loadSync()` stays authoritative.
+        guard !pendingAppends.isEmpty else { return }
+        entries = CoinEconomy.deduplicatedByID(pendingAppends + entries)
     }
 
     // MARK: - Earning (idempotent)
@@ -114,9 +122,11 @@ public final class CoinLedgerService {
         // Clear the pending queue only AFTER a confirmed save — `pendingAppends` is the sole un-persisted
         // copy of these rows (the per-row store has no other retry queue), so dropping them on a failed
         // append would silently lose an earned day or a spend. On failure, keep them; the next mutation
-        // (or the background flush in `flushPendingSnapshotSave`) retries.
+        // (or the background flush in `flushPendingSnapshotSave`) retries, and `reloadFromStore` re-merges
+        // them so the in-memory balance still reflects the pending rows. A failed append is an expected,
+        // handled runtime condition (Core Data / CloudKit hiccup), NOT a precondition violation — so it must
+        // not trap; the retry path above is exactly what makes it recoverable.
         let saved = repository.append(pendingAppends)
-        assert(saved, "coin ledger should save")
         if saved { pendingAppends = [] }
     }
 

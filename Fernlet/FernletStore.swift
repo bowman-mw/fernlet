@@ -465,8 +465,11 @@ final class FernletStore {
     /// Spends `amount` coins if affordable, appending a ledger row keyed by `ref` (idempotent per ref so
     /// a retried buy can't debit twice). Returns `false` when too few coins or the ref was already spent.
     /// Increment 3 calls this on a buy with the purchased item's id as `ref`.
+    ///
+    /// `ref` is REQUIRED (no default): the idempotency guarantee is entirely on the caller-supplied ref, so
+    /// a fresh-UUID default would silently make every call non-idempotent and let a retried buy debit twice.
     @discardableResult
-    func spendCoins(_ amount: Int, ref: String = UUID().uuidString) -> Bool {
+    func spendCoins(_ amount: Int, ref: String) -> Bool {
         coinLedgerService.spend(amount: amount, ref: ref)
     }
 
@@ -486,7 +489,11 @@ final class FernletStore {
         ClothingShareCodec.catalog(
             forShareable: customItems,
             designerID: localDesignerID,
-            displayName: shopDisplayName
+            displayName: shopDisplayName,
+            // Filter by the whole owned designer-id set (matches `isSelfDesigned` / the listing predicate),
+            // so an item designed under a superseded-but-owned id — one that shows "In your shop" and
+            // consumes the cap — is actually broadcast rather than silently excluded from every peer.
+            ownedDesignerIDs: settings.ownedDesignerIDs
         )
     }
 
@@ -526,14 +533,27 @@ final class FernletStore {
         learnDesignerName(id: designerID, name: sellerName)
 
         if customItems.contains(where: { $0.id == item.id }) {
-            return .alreadyOwned
+            return .alreadyOwned                                  // still in the closet — nothing to add
         }
         let price = item.price
-        guard coinBalance >= price else { return .insufficientCoins }
 
-        // Idempotent spend keyed by the item id: a retried/duplicate buy can't debit twice. If the ref was
-        // already spent on a prior buy, re-grant the item for free rather than charging again.
-        let debited = spendCoins(price, ref: item.id.uuidString)
+        // Was this item ALREADY PAID on a prior buy? The spend is idempotent per ref (`spend:<item id>`),
+        // so a user who paid once, deleted the item, and re-buys must get it back for FREE — even if their
+        // current balance is now below the price ("buy once, own forever, never charged twice"). The
+        // balance guard must therefore run only for a genuinely NEW purchase; applying it before the
+        // idempotency check would permanently lock a paid-for item behind a balance the user already spent.
+        let alreadyPaid = coinLedgerService.entries.contains {
+            $0.id == CoinLedgerEntry.spendID(ref: item.id.uuidString)
+        }
+        if !alreadyPaid {
+            guard coinBalance >= price else { return .insufficientCoins }
+        }
+
+        // Idempotent spend keyed by the item id: a retried/duplicate buy can't debit twice. When already
+        // paid, `spendCoins` is a no-op (returns false) and we re-grant for free. Either way the item lands
+        // in the closet, so the outcome is `.bought` — `.alreadyOwned` is reserved for the early return
+        // above (item still present), never for a fresh re-grant.
+        spendCoins(price, ref: item.id.uuidString)
         var bought = item
         bought.isShareable = false
         // Provenance is the SELLER's declared designer id — NOT the raw per-item `designer` field, which a
@@ -542,7 +562,7 @@ final class FernletStore {
         // provenance so a bought copy can never masquerade as self-made or be re-listed for sale.
         bought.designer = ItemDesigner(id: settings.ownedDesignerIDs.contains(designerID) ? UUID() : designerID)
         saveCustomItem(bought)
-        return debited ? .bought : .alreadyOwned
+        return .bought
     }
 
     // MARK: - Shop listing management (Wardrobe)
@@ -598,6 +618,17 @@ final class FernletStore {
         settings.allowNearbyRecipeShares = value
         if !value {
             recipeShareManager.stop()
+        }
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// Toggle the in-person clothing-shop broadcast/browse opt-out (mirrors `setAllowNearbyRecipeShares`).
+    /// Turning it OFF stops the manager immediately (ending Multipeer discovery + the shop broadcast) so the
+    /// opt-out takes effect without waiting for the next lock / tab / scene-phase event.
+    func setAllowNearbyClothingShares(_ value: Bool) {
+        settings.allowNearbyClothingShares = value
+        if !value {
+            clothingShareManager.stop()
         }
         snapshotSaveCoordinator.schedule()
     }
@@ -1505,11 +1536,11 @@ final class FernletStore {
         }
         savedRecipeService.reset()
         customItemService.reset()
-        // Clears all earn/spend rows. Note `resetDiary()` is a SOFT reset — it wipes in-memory state but
-        // preserves the persisted day history — so the next `reconcileCoinLedger()` legitimately re-mints
-        // `earn` rows for any day still on record. That is intentional: coins are a pure function of the
-        // logged days that exist, so a soft reset keeps the spend history cleared while earned coins track
-        // whatever history survives. (A hard wipe of coins would require also wiping the day records.)
+        // Clears all earn/spend rows and appends a reset-boundary marker. The next `reconcileCoinLedger()`
+        // re-mints `earn` rows ONLY for active days at or after the reset boundary day — days before the
+        // reset stay voided and are never re-minted, so another device can't undo a reset by
+        // deterministically re-minting pre-reset earns. Activity logged on or after the reset day still
+        // earns normally (the reset zeroes the past, it doesn't disable earning going forward).
         coinLedgerService.reset()
         aiRetryQueueService.reset()
         proximityTrustVault.apply(peers: [], audit: [])

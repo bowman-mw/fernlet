@@ -38,6 +38,15 @@ public final class CustomItemService {
     public func reloadFromStore() {
         flushPendingSave()
         loadSync()
+        // If the flush FAILED, its mutations survive only in the pending queues (the write rolled back), and
+        // `loadSync()` just replaced `items` with store contents that LACK them — dropping a just-designed or
+        // just-bought item from the closet. Re-apply the still-pending mutations on top of the freshly loaded
+        // set (pending upserts win by id via the same dedup used everywhere; pending deletes are removed),
+        // keeping the queues intact so the next scheduled save retries. On a SUCCESSFUL flush both queues are
+        // empty, so this is a no-op and `loadSync()` stays authoritative.
+        guard !pendingUpserts.isEmpty || !pendingDeletes.isEmpty else { return }
+        let merged = Self.deduplicatedByID(Array(pendingUpserts.values) + items)
+        items = merged.filter { !pendingDeletes.contains($0.id) }
     }
 
     /// Inserts a new item or replaces the existing one with the same id.
@@ -86,10 +95,12 @@ public final class CustomItemService {
         let deletes = Array(pendingDeletes)
         // Clear each pending queue only AFTER its confirmed write — the queues are the sole un-persisted
         // copy of these mutations, so dropping them on a failed write would silently lose an item. On
-        // failure, keep them; the next mutation (or the background flush) retries.
+        // failure, keep them; the next mutation (or the background flush) retries, and `reloadFromStore`
+        // re-applies them so the in-memory closet still reflects the pending mutations. A failed write is an
+        // expected, handled runtime condition (Core Data / CloudKit hiccup), NOT a precondition violation — so
+        // it must not trap; the retry path above is exactly what makes it recoverable.
         let upsertOK = upserts.isEmpty || repository.upsert(upserts)
         let deleteOK = deletes.isEmpty || repository.delete(ids: deletes)
-        assert(upsertOK && deleteOK, "custom items should save")
         if upsertOK { pendingUpserts = [:] }
         if deleteOK { pendingDeletes = [] }
     }

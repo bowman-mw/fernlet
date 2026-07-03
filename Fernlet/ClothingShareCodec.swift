@@ -11,16 +11,24 @@ import FernletDomainModel
 /// charset/length), exactly as the recipe codec sanitizes incoming recipes.
 enum ClothingShareCodec {
 
-    /// Build this device's broadcast shop catalog. Only the user's OWN designs (`designer.id == designerID`)
-    /// that are marked shareable are listed, so a bought item can never be re-sold and provenance stays
-    /// honest. Listing is capped at `ClothingShopLimits.maxListedItems`.
+    /// Build this device's broadcast shop catalog. Only the user's OWN designs — an item whose designer id
+    /// is in `ownedDesignerIDs` (the whole set of ids this user has ever designed under, across their
+    /// devices) — that are marked shareable are listed, so a bought item can never be re-sold and
+    /// provenance stays honest. Filtering by the owned SET (not equality to the single, last-writer-wins
+    /// `localDesignerID`) matches the listing predicate `FernletStore.isSelfDesigned`, so an item designed
+    /// under a superseded-but-still-owned id — which counts against the shop cap and reads as "In your
+    /// shop" — is actually broadcast, not silently dropped. Listing is capped at
+    /// `ClothingShopLimits.maxListedItems`. `ownedDesignerIDs` defaults to just `{designerID}` for callers
+    /// that have only the single broadcast id.
     static func catalog(
         forShareable items: [CustomizationItem],
         designerID: UUID,
-        displayName: String
+        displayName: String,
+        ownedDesignerIDs: Set<UUID>? = nil
     ) -> ClothingCatalogPayload {
+        let owned = ownedDesignerIDs ?? [designerID]
         let listed = items
-            .filter { $0.isShareable && $0.designer.id == designerID }
+            .filter { $0.isShareable && owned.contains($0.designer.id) }
             .sorted(by: Self.deterministicOrder)
             .prefix(ClothingShopLimits.maxListedItems)
             .map { ClothingShopLimits.sanitizedForShop($0) }
