@@ -587,7 +587,10 @@ struct FernletTests {
         )
         let today = "2026-05-17"
         let past = "2026-05-16"
-        let todaySnapshot = FernletSnapshot(todayKey: today, day: FernletDay(date: today), settings: FernletSettings(), recentMeals: [], previousJournals: [], memories: [], goals: [], workshop: WorkshopData())
+        // `today` carries logged content (bottleCount) so it deterministically gets its own DayRecord row:
+        // an empty day writes no row (a device that merely launched must not stamp "existing data"), which
+        // would leave `today` out of loadAllDays.
+        let todaySnapshot = FernletSnapshot(todayKey: today, day: FernletDay(date: today, bottleCount: 3), settings: FernletSettings(), recentMeals: [], previousJournals: [], memories: [], goals: [], workshop: WorkshopData())
         let pastDay = FernletDay(date: past, meals: [sampleMeal()], workouts: [sampleWorkout()], journals: [sampleJournal()], sleep: nil)
 
         #expect(repository.saveSnapshot(todaySnapshot))
