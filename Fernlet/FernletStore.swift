@@ -1008,6 +1008,10 @@ final class FernletStore {
         diary.logWebImportedFoodProduct(foodItem, mealType: mealType, date: date)
     }
 
+    @discardableResult func logBarcodeScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
+        diary.logBarcodeScannedFoodItem(foodItem, mealType: mealType, date: date)
+    }
+
     func savedRecipeShareText(for recipe: RecipeDefinition) -> String {
         savedRecipeService.shareText(for: recipe)
     }

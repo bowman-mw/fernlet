@@ -72,8 +72,8 @@ enum FoodCatalogDatabaseBuilder {
         let foodSQL = """
         INSERT INTO food (food_id, id, name, normalized_name, brand_source, serving_size, serving_unit, \
         protein, carbs, fat, category, source, data_type, serving_description, verification_policy_days, \
-        is_flagged, micronutrients, tags, portions) \
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19);
+        is_flagged, micronutrients, tags, portions, gtin_upc) \
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20);
         """
         let ftsSQL = "INSERT INTO food_fts (rowid, name, category, tags) VALUES (?1, ?2, ?3, ?4);"
 
@@ -112,6 +112,8 @@ enum FoodCatalogDatabaseBuilder {
             sqliteBindText(foodStmt, 17, micros)
             sqliteBindText(foodStmt, 18, tags)
             sqliteBindText(foodStmt, 19, portions)
+            // v2: normalized GTIN, NULL for the (current) barcode-less USDA source data.
+            sqliteBindText(foodStmt, 20, FoodBarcode.normalized(item.barcode))
             try step(db, foodStmt)
 
             sqlite3_reset(ftsStmt)

@@ -464,8 +464,25 @@ public final class DiaryStore {
     }
 
     @discardableResult public func logWebImportedFoodProduct(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
+        logFoodItemMeal(
+            foodItem, mealType: mealType, date: date,
+            confidence: "Saved product", note: "Logged from saved product.", source: MealLogSource.webImport
+        )
+    }
+
+    /// Logs a product resolved from a barcode scan (user-item pairing or a barcode-carrying catalog)
+    /// as a single meal. Same shape as the saved-product path — one serving of a known food.
+    @discardableResult public func logBarcodeScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
+        logFoodItemMeal(
+            foodItem, mealType: mealType, date: date,
+            confidence: "Scanned product", note: "Logged from a barcode scan.", source: MealLogSource.barcodeScan
+        )
+    }
+
+    /// Shared "one serving of this known food" meal construction for the product-shaped log paths.
+    private func logFoodItemMeal(_ foodItem: FoodItem, mealType: MealType?, date: String?, confidence: String, note: String, source: String) -> Meal {
         let targetDate = date ?? todayKey
-        assert(!targetDate.isEmpty, "web imported product meal date required")
+        assert(!targetDate.isEmpty, "food product meal date required")
         let meal = Meal(
             name: foodItem.name,
             mealType: mealType ?? MealParser.classifyMealType(foodItem.name),
@@ -473,9 +490,9 @@ public final class DiaryStore {
             micronutrientSnapshot: foodItem.micronutrients,
             mealSource: .manual,
             quality: foodItem.macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
-            confidence: "Saved product",
-            note: "Logged from saved product.",
-            source: MealLogSource.webImport
+            confidence: confidence,
+            note: note,
+            source: source
         )
         appendMeal(meal, date: targetDate)
         return meal

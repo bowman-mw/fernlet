@@ -660,10 +660,24 @@ public nonisolated enum FoodItemSource: String, Codable, Sendable {
 public nonisolated enum MealLogSource {
     nonisolated public static let manual = "manual"
     nonisolated public static let labelScan = "label-scan"
+    nonisolated public static let barcodeScan = "barcode-scan"
     nonisolated public static let usdaRecipe = "usda-recipe"
     nonisolated public static let webImport = "web-import"
     nonisolated public static let foundationModel = "foundation-model"
     nonisolated public static let foundationModelFoodSelection = "foundation-model-food-selection"
+}
+
+/// GTIN/UPC barcode normalization shared by the catalog read path, the database builder, and
+/// user-item matching. Canonical form = digits only, left-padded to 14 (GTIN-14), so the UPC-A (12),
+/// EAN-13 (13), EAN-8 (8), and GTIN-14 renderings of the same code all compare equal — a UPC-A
+/// product scanned as EAN-13 (Vision reports UPC-A with a leading zero) still hits.
+public nonisolated enum FoodBarcode {
+    public static func normalized(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let digits = raw.filter(\.isNumber)
+        guard [8, 12, 13, 14].contains(digits.count) else { return nil }
+        return String(repeating: "0", count: 14 - digits.count) + digits
+    }
 }
 
 public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
@@ -684,6 +698,9 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
     public var isFlagged: Bool = false
     public var tags: [String]
     public var portions: [FoodPortion]
+    /// Normalized GTIN (see `FoodBarcode.normalized`) when this food was created from / matched to a
+    /// product barcode. Optional + `decodeIfPresent` so synced-blob snapshots stay backward compatible.
+    public var barcode: String?
 
     public var calories: Int {
         macros.protein * 4 + macros.carbs * 4 + macros.fat * 9
@@ -727,7 +744,8 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         lastVerified: Date? = nil,
         isFlagged: Bool = false,
         tags: [String],
-        portions: [FoodPortion] = []
+        portions: [FoodPortion] = [],
+        barcode: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -746,6 +764,7 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         self.isFlagged = isFlagged
         self.tags = tags
         self.portions = portions
+        self.barcode = barcode
     }
 
     public init(from decoder: Decoder) throws {
@@ -767,6 +786,7 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         isFlagged = try container.decodeIfPresent(Bool.self, forKey: .isFlagged) ?? false
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
         portions = try container.decodeIfPresent([FoodPortion].self, forKey: .portions) ?? []
+        barcode = try container.decodeIfPresent(String.self, forKey: .barcode)
     }
 }
 
@@ -1152,7 +1172,7 @@ public nonisolated enum RecipeImportError: Error, Equatable {
 
 public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
 
-    public init(id: UUID = UUID(), name: String = "", selectedFoodItemId: UUID? = nil, quantity: Double = 1, unit: String = "serving", protein: Int = 0, carbs: Int = 0, fat: Int = 0, scannedMicronutrients: Micronutrients? = nil) {
+    public init(id: UUID = UUID(), name: String = "", selectedFoodItemId: UUID? = nil, quantity: Double = 1, unit: String = "serving", protein: Int = 0, carbs: Int = 0, fat: Int = 0, scannedMicronutrients: Micronutrients? = nil, barcode: String? = nil) {
         self.id = id
         self.name = name
         self.selectedFoodItemId = selectedFoodItemId
@@ -1162,6 +1182,7 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
         self.carbs = carbs
         self.fat = fat
         self.scannedMicronutrients = scannedMicronutrients
+        self.barcode = barcode
     }
     public var id = UUID()
     public var name: String = ""
@@ -1172,6 +1193,9 @@ public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
     public var carbs: Int = 0
     public var fat: Int = 0
     public var scannedMicronutrients: Micronutrients?
+    /// Product barcode to remember on the created/updated user food item (barcode-scan flow), so
+    /// the next scan of the same code resolves instantly. Normalized at upsert time.
+    public var barcode: String?
 
     public var macros: Macros {
         Macros(protein: protein, carbs: carbs, fat: fat)

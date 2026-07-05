@@ -85,6 +85,18 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         userItems.first(where: { $0.id == id }) ?? source.item(id: id)
     }
 
+    /// Resolves a scanned product barcode: user items first (a product the user already paired via
+    /// the label-scan flow — their macros win), then the bundled catalog (only answers when the
+    /// backing file is v2 with barcode data; the shipped v1 file returns nil). `raw` may be any
+    /// scanner rendering (UPC-A/EAN-13/EAN-8/GTIN-14) — comparison is on the normalized GTIN.
+    public func item(forBarcode raw: String) -> FoodItem? {
+        guard let normalized = FoodBarcode.normalized(raw) else { return nil }
+        if let user = userItems.first(where: { FoodBarcode.normalized($0.barcode) == normalized }) {
+            return user
+        }
+        return source.item(barcode: normalized)
+    }
+
     public func items(ids: [UUID]) -> [FoodItem] {
         guard !ids.isEmpty else { return [] }
         let wanted = Set(ids)

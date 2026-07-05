@@ -17,7 +17,8 @@ public nonisolated struct CustomIngredientUpsert {
             category: "custom ingredient",
             source: .manual,
             lastVerified: verifiedAt,
-            tags: ["recipe", "custom"]
+            tags: ["recipe", "custom"],
+            barcode: FoodBarcode.normalized(ingredient.barcode)
         )
         let normalizedName = FoodItemSearch.normalized(foodItem.name)
         if let existingIndex = foodItems.firstIndex(where: { existing in
@@ -28,6 +29,10 @@ public nonisolated struct CustomIngredientUpsert {
             // Preserve existing micronutrients when no fresh label scan was provided.
             if ingredient.scannedMicronutrients == nil {
                 updatedFoodItem.micronutrients = foodItems[existingIndex].micronutrients
+            }
+            // Preserve a previously-remembered barcode when this save didn't come from a scan.
+            if updatedFoodItem.barcode == nil {
+                updatedFoodItem.barcode = foodItems[existingIndex].barcode
             }
             foodItems[existingIndex] = updatedFoodItem
             return updatedFoodItem

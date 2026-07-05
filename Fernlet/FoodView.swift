@@ -482,7 +482,7 @@ struct SavedRecipeNotesSheet: View {
 }
 
 enum MealFlowDestination: Hashable {
-    case scanLabel
+    case scanBarcode
     case reviewScan(NutritionLabelResult)
     case recipeSearch
     case productPageImport
@@ -502,6 +502,7 @@ struct RecipeSheet: View {
     @State private var expandedId: UUID?
     @State private var scannerPath = false
     @State private var didStartScanner = false
+    @State private var showingBarcodeScanner = false
 
     init(store: FernletStore, recipe: RecipeDefinition? = nil, isEmbeddedInNavigationStack: Bool = false, startsWithScanner: Bool = false) {
         self.store = store
@@ -574,20 +575,37 @@ struct RecipeSheet: View {
                                     )
                                 }
                             }
-                            Button {
-                                let new = ManualRecipeIngredientInput()
-                                ingredients.append(new)
-                                expandedId = new.id
-                            } label: {
-                                Label("Add ingredient", systemImage: "plus")
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(Color.moss)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(12)
-                                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                            HStack(spacing: 8) {
+                                Button {
+                                    let new = ManualRecipeIngredientInput()
+                                    ingredients.append(new)
+                                    expandedId = new.id
+                                } label: {
+                                    Label("Add ingredient", systemImage: "plus")
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(Color.moss)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(12)
+                                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+
+                                #if canImport(UIKit)
+                                Button {
+                                    showingBarcodeScanner = true
+                                } label: {
+                                    Label("Scan barcode", systemImage: "barcode.viewfinder")
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(Color.moss)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(12)
+                                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+                                #endif
                             }
-                            .buttonStyle(.plain)
                         }
                     }
 
@@ -679,11 +697,40 @@ struct RecipeSheet: View {
                 applyLabelScan(result)
             }
         }
+        #if canImport(UIKit)
+        .navigationDestination(isPresented: $showingBarcodeScanner) {
+            BarcodeResolveFlowView(store: store) { foodItem in
+                showingBarcodeScanner = false
+                appendIngredient(for: foodItem)
+            }
+        }
+        #endif
         .onAppear {
             guard startsWithScanner, didStartScanner == false else { return }
             didStartScanner = true
             scannerPath = true
         }
+    }
+
+    /// Lands a barcode-resolved food (catalog hit or just-remembered user item) in the ingredient
+    /// list, bound to the item exactly as `RecipeIngredientEditor.select` would bind a search pick.
+    private func appendIngredient(for foodItem: FoodItem) {
+        let unit = foodItem.preferredRecipeUnit
+        let input = ManualRecipeIngredientInput(
+            name: foodItem.name,
+            selectedFoodItemId: foodItem.id,
+            quantity: foodItem.defaultRecipeQuantity(for: unit),
+            unit: unit.rawValue,
+            protein: foodItem.macros.protein,
+            carbs: foodItem.macros.carbs,
+            fat: foodItem.macros.fat
+        )
+        if ingredients.count == 1, ingredients[0].trimmedName.isEmpty {
+            ingredients[0] = input
+        } else {
+            ingredients.append(input)
+        }
+        expandedId = input.id
     }
 
     private var canSave: Bool {
@@ -1013,6 +1060,7 @@ struct MealSheet: View {
     @State private var mealPhoto: UIImage?
     @State private var showingCamera = false
     @State private var selectedMealPhotoItem: PhotosPickerItem?
+    @State private var isIdentifyingPhoto = false
     #endif
 
     var body: some View {
@@ -1022,8 +1070,18 @@ struct MealSheet: View {
                     switch destination {
                     case .recipeSearch:
                         RecipeSheet(store: store, isEmbeddedInNavigationStack: true)
-                    case .scanLabel:
-                        NutritionLabelCameraSheet(showCalories: store.settings.showCalories) { _ in }
+                    case .scanBarcode:
+                        #if canImport(UIKit)
+                        // Barcode hit (or a just-remembered product) logs directly — scanning a
+                        // product is itself the explicit "log this" gesture, like a cached web product.
+                        BarcodeResolveFlowView(store: store) { foodItem in
+                            let meal = store.logBarcodeScannedFoodItem(foodItem, mealType: mealType)
+                            onLogged([meal])
+                            dismiss()
+                        }
+                        #else
+                        EmptyView()
+                        #endif
                     case .reviewScan:
                         EmptyView()
                     case .productPageImport:
@@ -1107,6 +1165,16 @@ struct MealSheet: View {
                     #if canImport(UIKit)
                     if let photo = mealPhoto {
                         mealPhotoPreview(photo)
+                        // On-device photo recognition, gated like every other inference path.
+                        if store.settings.aiStatus != .off {
+                            mealSecondaryButton(
+                                isIdentifyingPhoto ? "Identifying..." : "Identify from photo",
+                                icon: "sparkle.magnifyingglass"
+                            ) {
+                                identifyMealPhoto(photo)
+                            }
+                            .disabled(isIdentifyingPhoto)
+                        }
                     }
                     #endif
 
@@ -1118,6 +1186,9 @@ struct MealSheet: View {
                         #if canImport(UIKit)
                         mealSecondaryButton("Photo", icon: "camera") {
                             showingCamera = true
+                        }
+                        mealSecondaryButton("Scan", icon: "barcode.viewfinder") {
+                            path.append(.scanBarcode)
                         }
                         if !store.recentMeals.isEmpty {
                             Menu {
@@ -1217,6 +1288,28 @@ struct MealSheet: View {
         guard let photo, let photoID = store.saveMealPhoto(photo) else { return }
         for meal in meals {
             store.attachMealPhoto(mealID: meal.id, photoID: photoID)
+        }
+    }
+
+    /// "Identify from photo": Vision classification composes a description that runs the normal
+    /// resolveMeals cascade — and a photo guess ALWAYS pauses at the review sheet, never
+    /// silently committing. Nothing food-like → a gentle "want to type it?" fallback.
+    private func identifyMealPhoto(_ photo: UIImage) {
+        guard !isIdentifyingPhoto else { return }
+        isIdentifyingPhoto = true
+        notice = nil
+        Task {
+            let outcome = await MealPhotoRecognizer().identify(photo: photo, type: mealType, host: store)
+            isIdentifyingPhoto = false
+            switch outcome {
+            case .aiOff:
+                break
+            case .nothingRecognized:
+                notice = "Fernlet couldn't quite tell what's in this photo — want to type what you ate instead?"
+            case .resolved(let described, let resolution):
+                description = described
+                reviewContext = MealReviewContext(resolution: resolution, photo: photo)
+            }
         }
     }
     #endif

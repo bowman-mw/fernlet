@@ -16,6 +16,7 @@ struct USDAFoodItemRecord: Decodable {
     var dataType: String?
     var tags: [String]?
     var portions: [FoodPortion]?
+    var gtinUpc: String?
     var fiber: Double?
     var sugar: Double?
     var saturatedFat: Double?
@@ -48,12 +49,17 @@ struct USDAFoodItemRecord: Decodable {
         case potassium, sodium, zinc, omega3
         case description, dataType, brandOwner, brandName, foodCategory, foodNutrients, foodPortions
         case servingSizeUnit, householdServingFullText, labelNutrients
+        case gtinUpc
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id)
         fdcId = try container.decodeIfPresent(Int.self, forKey: .fdcId)
+
+        // Both branches: preserve a product barcode when the source data carries one (the current
+        // compact JSON does not — UPCs arrive only via a future re-derivation from raw FDC branded data).
+        gtinUpc = try container.decodeIfPresent(String.self, forKey: .gtinUpc)
 
         if let compactName = try container.decodeIfPresent(String.self, forKey: .name) {
             name = compactName
@@ -175,7 +181,8 @@ struct USDAFoodItemRecord: Decodable {
             dataType: classifiedDataType,
             lastVerified: nil,
             tags: tags ?? ["usda"],
-            portions: portions ?? []
+            portions: portions ?? [],
+            barcode: FoodBarcode.normalized(gtinUpc)
         )
     }
 

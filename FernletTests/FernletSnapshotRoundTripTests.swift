@@ -148,7 +148,7 @@ struct FernletSnapshotRoundTripTests {
         settings.proximityDisplayName = "Baseline Trainer"
 
         let foodItems = try [
-            foodItem(id: "00000000-0000-0000-0000-000000000401", name: "Eggs", protein: 12, carbs: 1, fat: 10, verifiedAt: date0),
+            foodItem(id: "00000000-0000-0000-0000-000000000401", name: "Eggs", protein: 12, carbs: 1, fat: 10, verifiedAt: date0, barcode: "00012345678905"),
             foodItem(id: "00000000-0000-0000-0000-000000000402", name: "Chicken Breast", protein: 31, carbs: 0, fat: 4, verifiedAt: date1),
             foodItem(id: "00000000-0000-0000-0000-000000000403", name: "Rice", protein: 4, carbs: 45, fat: 1, verifiedAt: date2)
         ]
@@ -343,7 +343,7 @@ struct FernletSnapshotRoundTripTests {
         )
     }
 
-    private func foodItem(id: String, name: String, protein: Int, carbs: Int, fat: Int, verifiedAt: Date) throws -> FoodItem {
+    private func foodItem(id: String, name: String, protein: Int, carbs: Int, fat: Int, verifiedAt: Date, barcode: String? = nil) throws -> FoodItem {
         FoodItem(
             id: try uuid(id),
             name: name,
@@ -356,7 +356,8 @@ struct FernletSnapshotRoundTripTests {
             source: .manual,
             verificationPolicyDays: 90,
             lastVerified: verifiedAt,
-            tags: ["baseline", "round-trip"]
+            tags: ["baseline", "round-trip"],
+            barcode: barcode
         )
     }
 
