@@ -603,6 +603,7 @@ struct ContentView: View {
             store.recipeShareManager.stop()
         }
         updateClothingShareListener()
+        updateHeartShareListener()
     }
 
     private var shouldListenForRecipeShares: Bool {
@@ -642,6 +643,31 @@ struct ContentView: View {
         guard store.settings.allowNearbyClothingShares else { return false }
         guard scenePhase == .active else { return false }
         guard selectedTab == .social else { return false }
+        switch lockService.state {
+        case .notConfigured, .unlocked:
+            return true
+        case .locked:
+            return false
+        }
+    }
+
+    private func updateHeartShareListener() {
+        if shouldListenForHearts {
+            store.heartShareManager.start()
+        } else {
+            store.heartShareManager.stop()
+        }
+    }
+
+    /// Hearts are in-person v1: listen on the recipe-share tabs (so a heart arrives while the
+    /// receiver is anywhere on the main surfaces) PLUS Social, where the send buttons live
+    /// (FriendListView + the session People list). Same privacy posture as the other two
+    /// listeners: never while backgrounded or locked, and the opt-out setter
+    /// (`FernletStore.setAllowNearbyHearts`) stops the manager immediately.
+    private var shouldListenForHearts: Bool {
+        guard store.settings.allowNearbyHearts else { return false }
+        guard scenePhase == .active else { return false }
+        guard selectedTab == .home || selectedTab == .food || selectedTab == .move || selectedTab == .social else { return false }
         switch lockService.state {
         case .notConfigured, .unlocked:
             return true

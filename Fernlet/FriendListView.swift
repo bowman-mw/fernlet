@@ -225,6 +225,11 @@ struct FriendListView: View {
                 }
             }
 
+            if peer.blockedAt == nil && peer.revokedAt == nil && store.settings.allowNearbyHearts {
+                Divider().overlay(Color.bark.opacity(0.08))
+                heartRow(peer)
+            }
+
             Divider().overlay(Color.bark.opacity(0.08))
 
             HStack(spacing: 10) {
@@ -252,6 +257,61 @@ struct FriendListView: View {
         .padding(16)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+    }
+
+    // MARK: - Send good vibes
+
+    /// One heart per friend per day, in person only. The button lights up only while the friend
+    /// is on a live, identity-verified heart connection; otherwise a gentle hint explains why.
+    /// No counts of sent or received hearts appear anywhere.
+    @ViewBuilder
+    private func heartRow(_ peer: ProximityTrustedPeerRecord) -> some View {
+        let alreadySentToday = !store.heartLedger.canSendHeart(to: peer.fingerprint)
+        let reachable = store.heartShareManager.isReachable(fingerprint: peer.fingerprint)
+        let firstName = ProximityHeartManager.firstName(of: peer.displayName)
+
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                store.heartShareManager.sendHeart(to: peer)
+            } label: {
+                Label("Send good vibes", systemImage: "heart.fill")
+            }
+            .buttonStyle(ChipButtonStyle(selected: reachable && !alreadySentToday))
+            .disabled(alreadySentToday || !reachable)
+            .accessibilityIdentifier("friends.sendHeart")
+
+            if alreadySentToday {
+                Text("You've already sent \(firstName) some warmth today.")
+                    .font(.caption)
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            } else if !reachable {
+                Text("Hearts travel in person for now — they can be sent when you're together.")
+                    .font(.caption)
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+
+            if let status = heartStatusText {
+                Text(status)
+                    .font(.caption.italic())
+                    .foregroundStyle(Color.moss)
+                    .fernletWrappingText()
+            }
+        }
+    }
+
+    private var heartStatusText: String? {
+        switch store.heartShareManager.sendState {
+        case .idle:
+            nil
+        case .sending(let recipientName):
+            "Sending to \(recipientName)..."
+        case .sent(let recipientName):
+            "Sent \(recipientName) some good vibes."
+        case .failed(let message):
+            message
+        }
     }
 
     private func detailRow(_ label: String, value: String, monospaced: Bool = false) -> some View {

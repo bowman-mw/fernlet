@@ -27,6 +27,9 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// held in memory only while connected. Buying is local (spend coins + copy the already-received item),
     /// so there is no separate item-transfer payload type.
     case clothingCatalog       = "fernlet.clothing.catalog.v1"
+    /// A "good vibes" heart sent to a trusted friend in person (`HeartPayload` — id + day key only,
+    /// no note, no numbers, no sender state). Always sealed to the recipient like a recipe share.
+    case friendHeart           = "fernlet.friend.heart.v1"
     // Mesh
     case meshDescriptor        = "fernlet.mesh.descriptor.v1"
     case meshAdmissionGrant    = "fernlet.mesh.admission.grant.v1"

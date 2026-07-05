@@ -564,7 +564,7 @@ struct HomeView: View {
                     }
                     .foregroundStyle(Color.slate)
                 }
-                HealthBar(state: store.companionState, value: store.score)
+                HealthBar(state: store.companionState, value: store.score, heartGlow: store.heartGlow)
             }
         }
     }
@@ -1410,6 +1410,10 @@ struct ThoughtBubble: View {
 struct HealthBar: View {
     var state: CompanionState
     var value: Double
+    /// Presentation-only warmth from a friend's heart, 0–1, decaying linearly over 24h from
+    /// receipt (`HeartGlowMath`). Renders a soft golden cap at the end of the bar — additive,
+    /// never numeric, and never an input to the score itself.
+    var heartGlow: Double = 0
 
     var body: some View {
         HStack(spacing: 4) {
@@ -1418,8 +1422,18 @@ struct HealthBar: View {
                     .fill(index < Int((value * 12).rounded()) ? state.color : Color.bark.opacity(0.12))
                     .frame(height: 8)
             }
+            if heartGlow > 0 {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.goldenrod.opacity(0.30 + 0.70 * heartGlow))
+                    .frame(width: 14, height: 8)
+                    .shadow(color: Color.goldenrod.opacity(0.7 * heartGlow), radius: 3)
+            }
         }
-        .accessibilityLabel("Care score \(Int(value * 100)) percent")
+        .accessibilityLabel(
+            heartGlow > 0
+                ? "Care score \(Int(value * 100)) percent, with a little warmth from a friend"
+                : "Care score \(Int(value * 100)) percent"
+        )
     }
 }
 

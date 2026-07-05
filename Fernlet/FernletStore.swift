@@ -117,6 +117,11 @@ final class FernletStore {
         manager.localCatalogProvider = { [weak self] in self?.buildShopCatalog() }
         return manager
     }()
+    /// Device-local hearts state (received hearts + per-friend-per-day rate limit). Deliberately
+    /// outside the snapshot: heart activity never enters any synced store.
+    @ObservationIgnored private(set) lazy var heartLedger = ProximityHeartLedger()
+    @ObservationIgnored private(set) lazy var heartShareManager: ProximityHeartManager =
+        ProximityHeartManager(store: self, ledger: heartLedger)
     @ObservationIgnored let derivedSignalsService = DerivedSignalsService()
     @ObservationIgnored private let healthKitService: (any HealthKitServicing)?
     @ObservationIgnored private lazy var healthSyncCoordinator = HealthSyncCoordinator(host: self, healthKitService: healthKitService)
@@ -726,6 +731,30 @@ final class FernletStore {
             clothingShareManager.stop()
         }
         snapshotSaveCoordinator.schedule()
+    }
+
+    /// Toggle in-person hearts (mirrors `setAllowNearbyRecipeShares`). Turning it OFF stops the
+    /// heart manager immediately so the opt-out takes effect without waiting for a scene event.
+    func setAllowNearbyHearts(_ value: Bool) {
+        settings.allowNearbyHearts = value
+        if !value {
+            heartShareManager.stop()
+        }
+        snapshotSaveCoordinator.schedule()
+    }
+
+    // MARK: - Received hearts (presentation-only surfacing)
+
+    /// Golden warmth for the Home health bar from hearts received in the last 24h — a display
+    /// overlay only, decaying linearly. Hearts NEVER feed `score`/`FernletScoring` (spec §10:
+    /// friend activity must not enter persisted health scoring).
+    var heartGlow: Double { heartLedger.activeGlow() }
+
+    /// The received heart whose warm Home bubble should show (undismissed, still within 24h).
+    var pendingHeartBubble: ReceivedHeartRecord? { heartLedger.pendingBubbleHeart }
+
+    func dismissHeartBubble(id: UUID) {
+        heartLedger.dismissBubble(id: id)
     }
 
     func replaceConnectionSessionLogs(_ logs: [ConnectionSessionLog]) {

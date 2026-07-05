@@ -800,6 +800,9 @@ struct DisposableCameraView: View {
                                 }
                                 Spacer()
                                 if !participant.isLocal {
+                                    if let friend = trustedFriend(for: participant) {
+                                        sessionHeartButton(for: friend)
+                                    }
                                     Menu {
                                         Button {
                                             manager.proposeRemoval(of: participant)
@@ -889,6 +892,45 @@ struct DisposableCameraView: View {
         .sheet(isPresented: $renamingMesh) {
             renameMeshSheet
         }
+    }
+
+    // MARK: - Send good vibes (in-session)
+
+    /// The trusted-friend record behind a session participant, when hearts can go to them:
+    /// consent on, known in the vault by fingerprint, not blocked or removed.
+    private func trustedFriend(for participant: MeshSessionParticipant) -> ProximityTrustedPeerRecord? {
+        guard store.settings.allowNearbyHearts else { return nil }
+        return store.trustedProximityPeers.first {
+            IdentityService.fingerprintsMatch($0.fingerprint, participant.fingerprint)
+                && $0.blockedAt == nil
+                && $0.revokedAt == nil
+        }
+    }
+
+    /// A quiet one-tap heart beside a connected friend. Enabled only while today's heart to them
+    /// is unsent AND they are reachable on a live heart connection; no counts shown anywhere.
+    /// A filled heart marks "already sent today" — a state, never a number.
+    private func sessionHeartButton(for friend: ProximityTrustedPeerRecord) -> some View {
+        let alreadySentToday = !store.heartLedger.canSendHeart(to: friend.fingerprint)
+        let reachable = store.heartShareManager.isReachable(fingerprint: friend.fingerprint)
+        let firstName = ProximityHeartManager.firstName(of: friend.displayName)
+        return Button {
+            store.heartShareManager.sendHeart(to: friend)
+        } label: {
+            Image(systemName: alreadySentToday ? "heart.fill" : "heart")
+                .foregroundStyle(
+                    alreadySentToday || !reachable ? Color.slate.opacity(0.5) : Color.terracotta
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(alreadySentToday || !reachable)
+        .accessibilityLabel(
+            alreadySentToday
+                ? "You've already sent \(firstName) some warmth today."
+                : reachable
+                    ? "Send good vibes to \(friend.displayName)"
+                    : "Hearts travel in person for now."
+        )
     }
 
     private var renameMeshSheet: some View {

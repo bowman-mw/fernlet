@@ -132,6 +132,13 @@ struct SettingsSheet: View {
                             set: { store.setAllowNearbyClothingShares($0) }
                         )
                     )
+                    Toggle(
+                        "Allow nearby hearts",
+                        isOn: Binding(
+                            get: { store.settings.allowNearbyHearts },
+                            set: { store.setAllowNearbyHearts($0) }
+                        )
+                    )
                 }
                 .listRowBackground(Color.cream)
 
