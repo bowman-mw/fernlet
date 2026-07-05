@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var launcher = LaunchPreparationService()
     @State private var periodStore = PeriodTrackerStore(healthService: HealthKitService())
     @State private var periodContext: PeriodContextBridge?
+    @State private var stressService = StressService()
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
@@ -98,6 +99,12 @@ struct ContentView: View {
                     store.attachPeriodScoringContext(bridge)
                     periodContext = bridge
                 }
+                // Body signals (opt-in): wire the stress service to the store + a fresh
+                // gateway fetch. Foreground-pull only — refreshed below and on scene-active.
+                stressService.attach(store: store, fetchMetricDays: { [storagePreferencesStore] daysBack in
+                    try await HealthKitService(preferencesStore: storagePreferencesStore).stressMetricDays(daysBack: daysBack)
+                })
+                store.attachStressScoringContext(stressService)
                 let initialLockState = lockService.state
                 store.lockState = initialLockState
                 if case .unlocked = initialLockState, let contentKey = lockService.contentKey() {
@@ -128,6 +135,7 @@ struct ContentView: View {
                 await store.processSharedRecipeImportQueue()
                 await loadPeriodEntriesIfPossible()
                 refreshPeriodContext()
+                await stressService.refreshIfNeeded()
             }
             .onChange(of: selectedTab) { oldTab, newTab in
                 tabResetTokens[oldTab, default: 0] += 1
@@ -147,6 +155,8 @@ struct ContentView: View {
                     // Credit any day that became active while backgrounded (or synced in from another
                     // device). Idempotent, so a no-op when nothing new is logged.
                     store.reconcileCoinLedger()
+                    // Body signals refresh (debounced to >= 30 min inside the service).
+                    Task { await stressService.refreshIfNeeded() }
                     if selectedTab == .social { startFriendsDiscovery() }
                 } else if selectedTab == .social {
                     stopFriendsDiscovery()
@@ -234,7 +244,8 @@ struct ContentView: View {
                 isTabBarCompact: $isHomeTabBarCompact,
                 tabResetToken: resetTokenBinding(for: .home),
                 periodStore: periodStore,
-                periodContext: periodContext
+                periodContext: periodContext,
+                stressService: stressService
             )
             .tag(FernletTab.home)
             FoodView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
@@ -395,6 +406,12 @@ struct ContentView: View {
             TrendsModal(signals: store.derivedSignals)
                 .uxScreenAnchor("sheet.trends")
                 .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        case .stressExplainer:
+            StressExplainerSheet(assessment: stressService.assessment)
+                .uxScreenAnchor("sheet.stressExplainer")
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .logPeriod(let targetDate, let editingEntry):

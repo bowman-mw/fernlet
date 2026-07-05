@@ -35,6 +35,31 @@ public protocol HealthKitServicing {
     func openHealthPrivacySettings() async
 }
 
+/// One calendar day of stress-relevant metrics from `stressMetricDays(daysBack:referenceDate:)`.
+/// Raw HealthKit aggregates only — the app-side `StressService` joins these with diary
+/// confounders (workouts, sick days) into `StressDaySample`s for the pure engine. This type
+/// must never be persisted into any synced store (the stress sidecar is device-local).
+public struct StressMetricDay: Equatable, Sendable {
+    /// `yyyy-MM-dd` day key.
+    public var dateKey: String
+    /// Daily mean HRV (SDNN, milliseconds).
+    public var hrvSDNN: Double?
+    /// Daily mean resting heart rate (bpm).
+    public var restingHR: Double?
+    /// Daily mean respiratory rate (breaths/min).
+    public var respiratoryRate: Double?
+    /// Daily mean sleeping wrist temperature (°C, absolute — the caller derives deltas).
+    public var wristTempC: Double?
+
+    public init(dateKey: String, hrvSDNN: Double? = nil, restingHR: Double? = nil, respiratoryRate: Double? = nil, wristTempC: Double? = nil) {
+        self.dateKey = dateKey
+        self.hrvSDNN = hrvSDNN
+        self.restingHR = restingHR
+        self.respiratoryRate = respiratoryRate
+        self.wristTempC = wristTempC
+    }
+}
+
 public enum HealthCapability: String, CaseIterable, Identifiable {
     case bodyProfile
     case cycleTracking
@@ -65,7 +90,7 @@ public enum HealthCapability: String, CaseIterable, Identifiable {
         case .cycleTracking:
             "Read and write cycle observations like menstrual flow, basal body temperature, cervical mucus, intermenstrual bleeding, and ovulation test results."
         case .bodyContext:
-            "Read sleep, resting heart rate, and heart rate variability for recovery-aware companion context."
+            "Read sleep, resting heart rate, heart rate variability, respiratory rate, and sleeping wrist temperature for recovery-aware companion context."
         case .workoutLogging:
             "Read and write workouts in Apple Health so Fernlet and Apple Fitness stay in sync."
         case .activityContext:
@@ -452,6 +477,66 @@ public final class HealthKitService: HealthKitServicing {
             }
             healthStore.execute(query)
         }
+    }
+
+    /// Day-bucketed history of the stress-relevant metrics (HRV SDNN, resting HR, respiratory
+    /// rate, sleeping wrist temperature) over the trailing window, one entry per calendar day
+    /// (fields nil on days without samples), oldest first.
+    ///
+    /// Deliberate scope (Batch A): FOREGROUND PULL ONLY — no `HKObserverQuery`, no
+    /// `enableBackgroundDelivery`, no new entitlement. The caller refreshes on launch and on
+    /// scene-active; a day-grain baseline does not need background wakes.
+    ///
+    /// Gating: on top of the master toggle this ALSO enforces the per-capability
+    /// `healthKitCapabilityEnabled["bodyContext"]` opt-in (read live from the keychain).
+    /// `loadDailyHealthContext` historically leaves capability filtering to its callers; a
+    /// stress baseline reads a 60-day clinical series, so this path fails closed itself.
+    /// Individual metric queries are best-effort (a type the user never authorized simply
+    /// contributes empty days) but the gates throw so the caller can scrub cached derivatives.
+    public func stressMetricDays(daysBack: Int = 60, referenceDate: Date = .now) async throws -> [StressMetricDay] {
+        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        let preferences = StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService)
+        guard preferences.healthKitCapabilityEnabled[HealthCapability.bodyContext.rawValue] == true else {
+            throw HealthKitServiceError.healthDataUnavailable
+        }
+
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: referenceDate)
+        let anchor = calendar.date(byAdding: .day, value: -(max(daysBack, 1) - 1), to: todayStart) ?? todayStart
+
+        async let hrv = dailyAverages(.heartRateVariabilitySDNN, unit: HKUnit.secondUnit(with: .milli), anchor: anchor)
+        async let restingHR = dailyAverages(.restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute()), anchor: anchor)
+        async let respiratory = dailyAverages(.respiratoryRate, unit: HKUnit.count().unitDivided(by: .minute()), anchor: anchor)
+        async let wristTemp = dailyAverages(.appleSleepingWristTemperature, unit: .degreeCelsius(), anchor: anchor)
+        let (hrvByDay, restingHRByDay, respiratoryByDay, wristTempByDay) = await (hrv, restingHR, respiratory, wristTemp)
+
+        var days: [StressMetricDay] = []
+        for offset in 0..<max(daysBack, 1) {
+            guard let dayStart = calendar.date(byAdding: .day, value: offset, to: anchor) else { continue }
+            let key = FernletDate.dayKey(for: dayStart)
+            days.append(StressMetricDay(
+                dateKey: key,
+                hrvSDNN: hrvByDay[key],
+                restingHR: restingHRByDay[key],
+                respiratoryRate: respiratoryByDay[key],
+                wristTempC: wristTempByDay[key]
+            ))
+        }
+        return days
+    }
+
+    /// Per-day `.discreteAverage` statistics for one quantity type, keyed by day key.
+    /// Best-effort: an unauthorized/unavailable type returns an empty map rather than
+    /// failing the whole stress fetch.
+    private func dailyAverages(_ identifier: HKQuantityTypeIdentifier, unit: HKUnit, anchor: Date) async -> [String: Double] {
+        guard let type = try? Self.quantityType(identifier) else { return [:] }
+        let stats = (try? await statistics(for: type, options: .discreteAverage, interval: DateComponents(day: 1), anchor: anchor)) ?? []
+        var byDay: [String: Double] = [:]
+        for entry in stats {
+            guard let value = entry.averageQuantity()?.doubleValue(for: unit) else { continue }
+            byDay[FernletDate.dayKey(for: entry.startDate)] = Self.roundedTenth(value)
+        }
+        return byDay
     }
 
     public func requestBodyProfileAuthorization() async throws -> HealthBodyProfile {
@@ -920,9 +1005,13 @@ public final class HealthKitService: HealthKitServicing {
             let types: Set<HKSampleType> = [menstrualFlow, basalBodyTemperature, cervicalMucusQuality, intermenstrualBleeding, ovulationTestResult]
             return (types, Set(types))
         case .bodyContext:
+            // Respiratory rate + sleeping wrist temperature feed the opt-in "body signals"
+            // stress baseline (illness confounders) — read-only, foreground-pull only.
             let types: Set<HKObjectType> = [
                 try quantityType(.heartRateVariabilitySDNN),
                 try quantityType(.restingHeartRate),
+                try quantityType(.respiratoryRate),
+                try quantityType(.appleSleepingWristTemperature),
                 try categoryType(.sleepAnalysis)
             ]
             return ([], types)

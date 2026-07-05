@@ -146,6 +146,9 @@ final class FernletStore {
     /// Read-only abstract egress from the private cycle data into scoring. Nil until the app wires a
     /// `PeriodContextBridge`; when nil (or the opt-in is off) scoring is byte-identical to period-unaware.
     @ObservationIgnored private(set) var periodScoringContext: (any PeriodScoringContextProviding)?
+    /// Read-only stress ("body signals") context for the gentle scoring nudge. Nil until the app wires a
+    /// `StressService`; when nil (or the opt-in is off) scoring is byte-identical to stress-unaware.
+    @ObservationIgnored private(set) var stressScoringContext: (any StressScoringContextProviding)?
 
     /// Preference key + current version for the one-time historical past-day journal scrub (WI-1).
     /// Bump `pastDayJournalScrubVersion` to force the full-repository scan to re-run on next activation.
@@ -215,6 +218,7 @@ final class FernletStore {
         self.diary.rewireHooks(
             scheduleSnapshotSave: { [weak self] in self?.snapshotSaveCoordinator.schedule() },
             periodAdjustment: { [weak self] key in self?.periodAdjustment(for: key) ?? .none },
+            stressModifier: { [weak self] key in self?.stressModifier(for: key) ?? 0 },
             sealedJournalIDs: { [weak self] in self?.journalSealingCoordinator.sealedJournalIDs ?? [] }
         )
         // Mint the anonymous designer id now (not lazily from a view body) so the first Wardrobe/Studio
@@ -264,6 +268,7 @@ final class FernletStore {
         self.diary.rewireHooks(
             scheduleSnapshotSave: { [weak self] in self?.snapshotSaveCoordinator.schedule() },
             periodAdjustment: { [weak self] key in self?.periodAdjustment(for: key) ?? .none },
+            stressModifier: { [weak self] key in self?.stressModifier(for: key) ?? 0 },
             sealedJournalIDs: { [weak self] in self?.journalSealingCoordinator.sealedJournalIDs ?? [] }
         )
         self.diary.ensureLocalDesignerID()
@@ -299,7 +304,8 @@ final class FernletStore {
             activitySteps: activity?.steps,
             activeEnergyKilocalories: activity?.activeEnergyKilocalories,
             exerciseMinutes: activity?.exerciseMinutes,
-            periodAdjustment: periodAdjustment(for: todayKey)
+            periodAdjustment: periodAdjustment(for: todayKey),
+            stressModifier: stressModifier(for: todayKey)
         )
     }
 
@@ -357,6 +363,15 @@ final class FernletStore {
         diary.setPeriodAwareScoringEnabled(enabled)
     }
 
+    func setStressAwarenessEnabled(_ enabled: Bool) {
+        diary.setStressAwarenessEnabled(enabled)
+        // Opting out scrubs the device-local sidecar (HealthKit-derived baselines) promptly
+        // rather than waiting for the next debounced refresh.
+        if !enabled {
+            stressScoringContext?.scrubStressLocalState()
+        }
+    }
+
     func markPeriodContextPrimerSeen() {
         diary.markPeriodContextPrimerSeen()
     }
@@ -375,6 +390,24 @@ final class FernletStore {
     func periodAdjustment(for dayKey: String) -> PeriodScoringAdjustment {
         guard settings.periodAwareScoringEnabled, let periodScoringContext else { return .none }
         return periodScoringContext.scoringAdjustment(forDayKey: dayKey)
+    }
+
+    /// Wires the stress ("body signals") context. Called once from `ContentView` after the
+    /// `StressService` exists. Held only as the abstract protocol — the store never sees
+    /// baselines or raw HealthKit series, just the current gentle assessment.
+    func attachStressScoringContext(_ context: any StressScoringContextProviding) {
+        stressScoringContext = context
+    }
+
+    /// The pre-gated stress scoring modifier for a day, or 0 when the opt-in is off or no
+    /// stress context is attached. TODAY-ONLY by design: the assessment describes the current
+    /// baseline deviation, so recomputed past days always get the identity 0 (a same-day
+    /// stored `DailyHealthScore` may bake today's modifier in — accepted, mirroring the
+    /// documented live-vs-stored nutrient-gap divergence). Supplied to DiaryStore as the
+    /// injected `stressModifier` closure, twin of `periodAdjustment(for:)`.
+    func stressModifier(for dayKey: String) -> Double {
+        guard settings.stressAwarenessEnabled, dayKey == todayKey, let stressScoringContext else { return 0 }
+        return StressEngine.scoringModifier(for: stressScoringContext.currentStressAssessment?.state)
     }
 
     /// Non-sensitive per-day wellbeing component scores (sleep/mood/exercise/nutrition) fed into the period
@@ -1544,6 +1577,9 @@ final class FernletStore {
         coinLedgerService.reset()
         aiRetryQueueService.reset()
         proximityTrustVault.apply(peers: [], audit: [])
+        // The stress sidecar caches HealthKit-derived baselines on-device; "reset everything"
+        // must not leave clinical derivatives behind.
+        stressScoringContext?.scrubStressLocalState()
     }
 
     private func rebuildDerivedSignals() {

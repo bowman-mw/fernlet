@@ -45,6 +45,10 @@ public final class DiaryStore {
     @ObservationIgnored public let foodCatalog: FoodCatalog
     @ObservationIgnored private var scheduleSnapshotSaveHook: () -> Void
     @ObservationIgnored private var periodAdjustmentHook: (String) -> PeriodScoringAdjustment
+    /// Facade-supplied, pre-gated stress scoring modifier for a day (the stress twin of
+    /// `periodAdjustmentHook`). The facade applies the `stressAwarenessEnabled` opt-in and the
+    /// today-only gate; the default `{ _ in 0 }` keeps scoring byte-identical to stress-unaware.
+    @ObservationIgnored private var stressModifierHook: (String) -> Double = { _ in 0 }
     /// Facade-supplied set of journal-entry ids whose plaintext is sealed in the encrypted narrative
     /// store. Read by `mutatePastDay` to strip sealed text before a past-day write reaches the
     /// (potentially iCloud-synced) repository — the past-day analogue of `FernletSnapshot.forStorage`.
@@ -67,16 +71,22 @@ public final class DiaryStore {
     /// `periodAdjustment(for:)` body that read the facade-only `PeriodContextBridge`.
     func periodAdjustment(_ dayKey: String) -> PeriodScoringAdjustment { periodAdjustmentHook(dayKey) }
 
-    /// Re-points the two injected hooks at the facade after the facade has constructed `self`.
+    /// Invokes the facade-supplied stress-modifier gate (0 unless the opt-in is on and the
+    /// facade has a stress context attached).
+    func stressModifier(_ dayKey: String) -> Double { stressModifierHook(dayKey) }
+
+    /// Re-points the injected hooks at the facade after the facade has constructed `self`.
     /// Needed because the closures must capture the facade weakly, but the facade can only build
     /// them after the DiaryStore (which it stores in a `let`) exists — avoiding an init-order cycle.
     public func rewireHooks(
         scheduleSnapshotSave: @escaping () -> Void,
         periodAdjustment: @escaping (String) -> PeriodScoringAdjustment,
+        stressModifier: @escaping (String) -> Double = { _ in 0 },
         sealedJournalIDs: @escaping () -> Set<UUID>
     ) {
         self.scheduleSnapshotSaveHook = scheduleSnapshotSave
         self.periodAdjustmentHook = periodAdjustment
+        self.stressModifierHook = stressModifier
         self.sealedJournalIDsHook = sealedJournalIDs
         self.hooksRewired = true
     }
@@ -156,7 +166,8 @@ public final class DiaryStore {
             activitySteps: activity?.steps,
             activeEnergyKilocalories: activity?.activeEnergyKilocalories,
             exerciseMinutes: activity?.exerciseMinutes,
-            periodAdjustment: periodAdjustment(targetDay.date)
+            periodAdjustment: periodAdjustment(targetDay.date),
+            stressModifier: stressModifier(targetDay.date)
         )
     }
 
@@ -261,6 +272,11 @@ public final class DiaryStore {
 
     public func setPeriodAwareScoringEnabled(_ enabled: Bool) {
         settings.periodAwareScoringEnabled = enabled
+        scheduleSnapshotSave()
+    }
+
+    public func setStressAwarenessEnabled(_ enabled: Bool) {
+        settings.stressAwarenessEnabled = enabled
         scheduleSnapshotSave()
     }
 

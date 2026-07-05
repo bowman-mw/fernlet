@@ -46,6 +46,10 @@ public nonisolated struct FernletSettings: Codable {
     public var periodAwareScoringEnabled: Bool = false
     /// Whether the one-time period-context primer (explaining cycle awareness + the opt-in) has been shown.
     public var periodContextPrimerSeen: Bool = false
+    /// Opt-in "Body signals": gently compare HRV/resting-heart-rate with the user's own baseline for a
+    /// small wellness reflection + capped score nudge. Default off. Only this flag syncs — the stress
+    /// baselines/EWMA state stay in a device-local sidecar (see `StressService`), never in any synced store.
+    public var stressAwarenessEnabled: Bool = false
     public var userProfile: UserNutritionProfile = UserNutritionProfile()
     public var nutritionPreferences: UserNutritionPreferences = UserNutritionPreferences()
     public var quickLogItems: [FernletShortcut] = FernletShortcut.defaultQuickLog
@@ -101,6 +105,7 @@ public nonisolated struct FernletSettings: Codable {
         hideFertileWindow = try container.decodeIfPresent(Bool.self, forKey: .hideFertileWindow) ?? false
         periodAwareScoringEnabled = try container.decodeIfPresent(Bool.self, forKey: .periodAwareScoringEnabled) ?? false
         periodContextPrimerSeen = try container.decodeIfPresent(Bool.self, forKey: .periodContextPrimerSeen) ?? false
+        stressAwarenessEnabled = try container.decodeIfPresent(Bool.self, forKey: .stressAwarenessEnabled) ?? false
         userProfile = try container.decodeIfPresent(UserNutritionProfile.self, forKey: .userProfile) ?? UserNutritionProfile()
         nutritionPreferences = try container.decodeIfPresent(UserNutritionPreferences.self, forKey: .nutritionPreferences) ?? UserNutritionPreferences()
         let decodedQuickLogItems = try container.decodeIfPresent([FernletShortcut].self, forKey: .quickLogItems) ?? FernletShortcut.defaultQuickLog

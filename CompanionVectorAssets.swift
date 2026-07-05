@@ -9,11 +9,22 @@ struct CompanionView: View {
     /// User-designed items currently equipped (one per occupied slot). Drawn as the topmost layer so
     /// they always read clearly over the base avatar.
     var equippedItems: [CustomizationItem] = []
+    /// Presentation-only "a little frazzled" accent (opt-in body signals, state >= tense):
+    /// slightly quicker breathing plus a small squiggle. DELIBERATELY not a `CompanionState`
+    /// case — new raw values in the persisted `DailyHealthScore.companionState` would fail
+    /// decode on older builds, so frazzled stays a render flag that is never persisted.
+    /// Ignored for the low-energy states (sick/resting/tired keep their own posture).
+    var stressTint: Bool = false
+
+    private var showsStressAccent: Bool {
+        stressTint && !state.isLowEnergy
+    }
 
     var body: some View {
         TimelineView(.animation) { timeline in
             let elapsed = timeline.date.timeIntervalSinceReferenceDate
-            let breath = (sin(elapsed * .pi / state.animationTempo) + 1) / 2
+            let tempo = showsStressAccent ? state.animationTempo * 0.8 : state.animationTempo
+            let breath = (sin(elapsed * .pi / tempo) + 1) / 2
             let petBounce = interactionLevel.isMultiple(of: 2) ? 0.0 : -size * 0.060
             let bodyColor = appearance.resolvedBodyColor(for: state)
 
@@ -68,6 +79,17 @@ struct CompanionView: View {
                     CompanionCustomItemLayer(item: item, size: size)
                         .offset(y: petBounce)
                         .zIndex(Self.itemPaintOrder(item.slot))
+                }
+
+                if showsStressAccent {
+                    // Tiny frazzle squiggle — a gentle "little frazzled" cue, never alarming.
+                    Image(systemName: "scribble")
+                        .font(.system(size: size * 0.13, weight: .semibold))
+                        .foregroundStyle(Color.slate.opacity(0.55))
+                        .rotationEffect(.degrees(-16))
+                        .offset(x: size * 0.40, y: -size * 0.36 + petBounce)
+                        .zIndex(5)
+                        .transition(.opacity)
                 }
             }
             .animation(.easeInOut(duration: 0.44), value: interactionLevel)

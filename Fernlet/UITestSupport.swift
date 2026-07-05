@@ -68,6 +68,7 @@ extension FernletSheet {
         case "settings":          self = .settings
         case "recipeBook":        self = .recipeBook
         case "trends":            self = .trends
+        case "stressExplainer":   self = .stressExplainer
         case "logPeriod":         self = .logPeriod(targetDate: nil, editingEntry: nil)
         case "logIntimacy":       self = .logIntimacy
         case "editRecipe":        self = .editRecipe(Self.uiTestRecipeFixture())

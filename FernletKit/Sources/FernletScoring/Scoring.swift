@@ -226,7 +226,8 @@ public enum FernletScoring {
         activitySteps: Int? = nil,
         activeEnergyKilocalories: Double? = nil,
         exerciseMinutes: Double? = nil,
-        periodAdjustment: PeriodScoringAdjustment = .none
+        periodAdjustment: PeriodScoringAdjustment = .none,
+        stressModifier: Double = 0
     ) -> Double {
         computeBreakdown(
             journalTag: journalTag,
@@ -247,7 +248,8 @@ public enum FernletScoring {
             activitySteps: activitySteps,
             activeEnergyKilocalories: activeEnergyKilocalories,
             exerciseMinutes: exerciseMinutes,
-            periodAdjustment: periodAdjustment
+            periodAdjustment: periodAdjustment,
+            stressModifier: stressModifier
         ).overall
     }
 
@@ -273,7 +275,8 @@ public enum FernletScoring {
         activitySteps: Int? = nil,
         activeEnergyKilocalories: Double? = nil,
         exerciseMinutes: Double? = nil,
-        periodAdjustment: PeriodScoringAdjustment = .none
+        periodAdjustment: PeriodScoringAdjustment = .none,
+        stressModifier: Double = 0
     ) -> ScoreBreakdown {
         let baseMealScore = min(mealCount >= 3 ? 0.9 : mealCount >= 2 ? 0.75 : Double(mealCount) * 0.4, 1)
         let micronutrientModifier = micronutrientDataCoverageRatio >= 0.5 ? micronutrientModifier(from: nutrientGaps) : 0
@@ -298,7 +301,7 @@ public enum FernletScoring {
         let careScore = hygieneScore(completedCount: careCompletedCount, taskCount: hygieneTaskCount)
         let journalScore = tagScore(journalTag)
         let sleepScoreValue = sleepScore(sleepQuality, sleepHours: sleepHours, stages: sleepStages)
-        let overall = min(
+        let baseOverall = min(
             journalScore * adjustedWeights.journalWeight +
             mealScore * adjustedWeights.mealWeight +
             workoutScore * adjustedWeights.workoutWeight +
@@ -307,6 +310,14 @@ public enum FernletScoring {
             careScore * adjustedWeights.hygieneWeight,
             1
         )
+        // Gentle stress modifier (opt-in "body signals"): a small, capped additive nudge on the
+        // overall — never a component, never dominant (mirrors `micronutrientModifier`). The
+        // clamp is re-applied here so no caller can exceed ±[−0.04, +0.02]. With the default 0
+        // the result is byte-identical to the stress-unaware score.
+        let clampedStressModifier = StressEngine.clampScoringModifier(stressModifier)
+        let overall = clampedStressModifier == 0
+            ? baseOverall
+            : min(max(baseOverall + clampedStressModifier, 0), 1)
         return ScoreBreakdown(
             overall: overall,
             components: [

@@ -7,6 +7,7 @@ import HealthKit
 import LocalAuthentication
 import SwiftUI
 import FernletDomainModel
+import FernletFoundation
 import FernletLock
 import FernletScoring
 import HealthKitGateway
@@ -17,6 +18,7 @@ struct SettingsSheet: View {
     @Environment(\.openURL) private var openURL
     @Bindable var store: FernletStore
     @Environment(FernletLockService.self) private var lockService
+    @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
@@ -909,6 +911,27 @@ struct SettingsSheet: View {
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
 
+            SectionLabel("Body signals")
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Notice body tension", isOn: stressAwarenessBinding)
+                Text("When this is on, Fernlet gently compares your heart rate variability, resting heart rate, respiration, and sleeping wrist temperature from Apple Health with your own usual range — never anyone else's — and may quietly note when your body seems a bit more tense than usual. Estimated and stored on this device only.")
+                    .font(.caption.italic())
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                Text("This is a wellbeing reflection, not medical advice. If you're worried about how you feel, please talk to a health professional.")
+                    .font(.caption.italic())
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                if store.settings.stressAwarenessEnabled && !storagePreferencesStore.preferences.healthKitMasterEnabled {
+                    Text("Body signals needs Apple Health. Turn on Health integration in Privacy & Data to feed it.")
+                        .font(.caption.italic())
+                        .foregroundStyle(Color.terracotta)
+                        .fernletWrappingText()
+                }
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+
             SectionLabel("Hydration")
             VStack(alignment: .leading, spacing: 10) {
                 Stepper("Bottle: \(store.settings.bottleOz) oz", value: $store.settings.bottleOz, in: 4...64)
@@ -926,6 +949,33 @@ struct SettingsSheet: View {
         Binding(
             get: { store.settings.aiStatus == .off },
             set: { store.settings.aiStatus = $0 ? .off : .ready }
+        )
+    }
+
+    /// Body-signals opt-in. Enabling is constructive and user-initiated, so it also (audited)
+    /// switches on the `bodyContext` capability when Health integration is already enabled —
+    /// the stress fetch fails closed on that per-capability gate — and triggers the contextual
+    /// Health authorization prompt for the bodyContext read types. Disabling flips the flag
+    /// and promptly scrubs the device-local sidecar (via `FernletStore.setStressAwarenessEnabled`).
+    private var stressAwarenessBinding: Binding<Bool> {
+        Binding(
+            get: { store.settings.stressAwarenessEnabled },
+            set: { newValue in
+                store.setStressAwarenessEnabled(newValue)
+                guard newValue else { return }
+                if storagePreferencesStore.preferences.healthKitMasterEnabled {
+                    if storagePreferencesStore.preferences.healthKitCapabilityEnabled[HealthCapability.bodyContext.rawValue] != true {
+                        FernletAuditLog.log(
+                            "privacy.healthKit.capabilityEnabled",
+                            context: ["capability": HealthCapability.bodyContext.rawValue, "source": "bodySignalsOptIn"]
+                        )
+                        storagePreferencesStore.update { preferences in
+                            preferences.healthKitCapabilityEnabled[HealthCapability.bodyContext.rawValue] = true
+                        }
+                    }
+                    Task { await healthKit.request(.bodyContext) }
+                }
+            }
         )
     }
 

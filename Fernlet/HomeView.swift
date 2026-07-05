@@ -23,6 +23,8 @@ struct HomeView: View {
     /// Shared period store + abstract bridge, threaded from ContentView for the (opt-in) cycle surfaces.
     var periodStore: PeriodTrackerStore? = nil
     var periodContext: PeriodContextBridge? = nil
+    /// Shared body-signals service, threaded from ContentView for the (opt-in) stress surfaces.
+    var stressService: StressService? = nil
     @State private var hasRecentPeriodEvent = false
     @State private var isCompanionThoughtVisible = true
     @State private var companionTapThought: String?
@@ -175,7 +177,8 @@ struct HomeView: View {
                 appearance: store.settings.companionAppearance,
                 size: 132,
                 interactionLevel: companionPetCount,
-                equippedItems: store.equippedCustomItems
+                equippedItems: store.equippedCustomItems,
+                stressTint: stressTintActive
             )
             .contentShape(Rectangle())
             .onTapGesture {
@@ -195,8 +198,65 @@ struct HomeView: View {
                 .background(store.companionState.color.opacity(0.13), in: Capsule())
 
             signalsCard
+
+            stressLineView
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Gentle opt-in body-signals line under the companion — offered, never alarming.
+    /// Tapping opens the small explainer sheet (Batch B adds a First Aid link from there).
+    @ViewBuilder
+    private var stressLineView: some View {
+        if let line = stressLine {
+            Button {
+                activeSheet = .stressExplainer
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "wind")
+                        .font(.caption.weight(.semibold))
+                    Text(line)
+                        .font(.caption)
+                        .multilineTextAlignment(.leading)
+                        .fernletWrappingText()
+                }
+                .foregroundStyle(Color.slate)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.slate.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home.stressLine")
+            .accessibilityHint("Opens how Fernlet estimates this")
+        }
+    }
+
+    /// The body-signals copy — shown only when opted in and the reading is at least "tense".
+    /// Calm/okay days keep Home quiet (a soft positive lives in the explainer instead).
+    private var stressLine: String? {
+        guard store.settings.stressAwarenessEnabled,
+              let assessment = stressService?.assessment else { return nil }
+        switch (assessment.state, assessment.annotation) {
+        case (.tense, .workedOut):
+            return "Your body is working a bit harder than your usual — probably that good kind of tired from moving."
+        case (.tense, .possiblyUnwell):
+            return "Your body seems a bit more tense than your usual — it might just be fighting something off. Rest counts."
+        case (.tense, nil):
+            return "Your body seems a bit more tense than your usual — be extra kind to yourself today."
+        case (.needsCare, _):
+            return "Your body has seemed extra tense for a couple of days. Going gently today is more than enough."
+        default:
+            return nil
+        }
+    }
+
+    /// Presentation-only frazzle flag for the companion. Never overrides the sick/resting
+    /// postures (their own care states win), and only ever appears when the user opted in.
+    private var stressTintActive: Bool {
+        guard store.settings.stressAwarenessEnabled,
+              let state = stressService?.assessment?.state,
+              state == .tense || state == .needsCare else { return false }
+        return store.companionState != .sick && store.companionState != .resting
     }
 
     /// A compact mood/energy/readiness chip row (plus a "resting today" sickness chip) that taps
