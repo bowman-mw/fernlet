@@ -19,6 +19,7 @@ import FernletDomainModel
 import FernletPersistence
 import PrivateStoreCore
 import PrivateHealthStore
+import PrivateMemoryStore
 import CloudKitSync
 @testable import Fernlet
 
@@ -218,5 +219,57 @@ struct SealedBackupRestoreTests {
             try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
         }
         #expect(try narrativeRepository.narrativeCount() == 1)   // unchanged
+    }
+
+    // MARK: - Fresh-install gate treats a bare HealthKit sync stamp as "device already in use"
+
+    /// Finding 7 (deferred design-judgment): the auto-restore fresh-install gate was narrowed onto the
+    /// shared `FernletDay.hasLoggedContent`, which intentionally ignores a *bare, metric-less*
+    /// `healthContext` (a HealthKit sync stamp — `syncedAt` set, every metric nil) so the coin economy
+    /// doesn't award an "active day" for merely opening the app. But the RESTORE gate must be
+    /// conservative: a device that already holds any day row — including a bare sync stamp — is in use,
+    /// and auto-restore must NOT run over it. `isFreshInstallForRestore` therefore applies the stricter
+    /// "any `healthContext` present ⇒ not fresh" check locally. Here the only content on the device is a
+    /// past-day row carrying a bare `HealthDailyContext()`, so restore must be SKIPPED as non-empty.
+    @MainActor
+    @Test func restoreSkippedWhenOnlyContentIsBareHealthKitSyncStamp() async {
+        // Sanity: a bare sync stamp is NOT "logged content" (shared-model semantics the gate overrides).
+        #expect(FernletDay(date: "2026-06-10", healthContext: HealthDailyContext()).hasLoggedContent == false)
+
+        // Seed a PAST-day ROW whose only content is a bare, metric-less HealthKit sync stamp — the shape a
+        // migrated legacy day takes (migration fans blob days into rows without item G's empty-content guard).
+        // Seed the row directly via the day-record store, bypassing saveSnapshot/updateDay (which item G would
+        // skip for a content-less day, so it would never persist and the gate would never see it).
+        let controller = PersistenceController(inMemory: true)
+        let legacyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+        let dayRepo = DayRecordRepository(controller: controller)
+        dayRepo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-06-10", healthContext: HealthDailyContext()), updatedAt: Date())])
+        let repository = CoreDataFernletRepository(
+            controller: controller,
+            legacyRepository: LocalFernletRepository(fileURL: legacyURL),
+            dayRecordRepository: dayRepo
+        )
+        let narratives = JournalNarrativeRepository(controller: PrivatePersistenceController(inMemory: true))
+        let store = makeStoreSharingStores(
+            date: FernletDate.date(fromDayKey: "2026-06-20")!,
+            repository: repository,
+            narratives: narratives
+        )
+
+        // The device is now "in use" for the restore gate → auto-restore must refuse (never clobbers).
+        let outcome = await store.restoreSealedBackupOutcome(payloadType: .sensitiveNotes)
+        #expect(outcome == .skippedStoreNotEmpty)
+    }
+
+    /// Positive control: the stricter gate must NOT wrongly block a legitimately blank device. With zero
+    /// day rows and empty caches, `isFreshInstallForRestore` still returns true, so restore is NOT
+    /// short-circuited as "store not empty" — it proceeds past the gate (and, with no CloudKit/escrow
+    /// wired in a unit test, lands on a deferred/nothing outcome rather than `.skippedStoreNotEmpty`).
+    @MainActor
+    @Test func restoreNotSkippedOnGenuinelyBlankDevice() async {
+        let store = makeTestStore()
+        let outcome = await store.restoreSealedBackupOutcome(payloadType: .sensitiveNotes)
+        #expect(outcome != .skippedStoreNotEmpty)
     }
 }

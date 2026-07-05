@@ -510,14 +510,18 @@ public final class CloudKitDataService {
 
         // Backward compat: meals/journals/workouts/sleep fall back to the derived log tables (rebuilt from
         // rows). Hygiene/hydration have no derived table, so they reflect the blob's recent window only.
+        // The per-day roll-up is the shared `DayContentSummary(days:)` definition (identical counting rules
+        // to what detection used before the blob's days were cleared) so this can't drift from the summary
+        // the primary branch consumes.
         let dayValues = Array(localDatabase.days.values)
+        let daySummary = DayContentSummary(days: dayValues)
         return ExistingDataSummary(
-            mealLogCount: localDatabase.mealLogs.isEmpty ? dayValues.reduce(0) { $0 + $1.meals.count } : localDatabase.mealLogs.count,
-            journalEntryCount: localDatabase.journalLogs.isEmpty ? dayValues.reduce(0) { $0 + $1.journals.count } : localDatabase.journalLogs.count,
-            workoutCount: localDatabase.workoutLogs.isEmpty ? dayValues.reduce(0) { $0 + $1.workouts.count } : localDatabase.workoutLogs.count,
-            hygieneLogCount: dayValues.reduce(0) { $0 + $1.hygiene.count },
-            hydrationLogCount: dayValues.reduce(0) { $0 + ($1.bottleCount > 0 ? 1 : 0) },
-            sleepRecordCount: localDatabase.dailyLogs.isEmpty ? dayValues.reduce(0) { $0 + ($1.sleep == nil ? 0 : 1) } : localDatabase.dailyLogs.reduce(0) { $0 + ($1.sleepHours == nil ? 0 : 1) }
+            mealLogCount: localDatabase.mealLogs.isEmpty ? daySummary.mealCount : localDatabase.mealLogs.count,
+            journalEntryCount: localDatabase.journalLogs.isEmpty ? daySummary.journalCount : localDatabase.journalLogs.count,
+            workoutCount: localDatabase.workoutLogs.isEmpty ? daySummary.workoutCount : localDatabase.workoutLogs.count,
+            hygieneLogCount: daySummary.hygieneCount,
+            hydrationLogCount: daySummary.hydrationCount,
+            sleepRecordCount: localDatabase.dailyLogs.isEmpty ? daySummary.sleepCount : localDatabase.dailyLogs.reduce(0) { $0 + ($1.sleepHours == nil ? 0 : 1) }
         )
     }
 

@@ -63,7 +63,7 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
                     existingByID[idString] = record
                 }
             }
-            let encoder = JSONEncoder()
+            let encoder = RowPayloadCoders.makeEncoder()
             for entry in entries {
                 guard let payload = try? encoder.encode(entry) else {
                     assertionFailure("coin ledger encode failed")
@@ -106,6 +106,6 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
 
     private static func entry(from record: NSManagedObject) -> CoinLedgerEntry? {
         guard let data = record.value(forKey: "payloadData") as? Data else { return nil }
-        return try? JSONDecoder().decode(CoinLedgerEntry.self, from: data)
+        return try? RowPayloadCoders.makeDecoder().decode(CoinLedgerEntry.self, from: data)
     }
 }

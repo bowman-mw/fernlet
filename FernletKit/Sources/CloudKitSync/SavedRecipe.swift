@@ -289,8 +289,9 @@ nonisolated public struct LegacySavedRecipeJSONRepository {
 
     public init(fileURL: URL? = nil) {
         self.fileURL = fileURL ?? Self.defaultFileURL()
-        self.encoder = Self.makeEncoder()
-        self.decoder = Self.makeDecoder()
+        // Pretty-printed on-disk JSON (a human-readable file), otherwise the canonical shared config.
+        self.encoder = RowPayloadCoders.makeEncoder(prettyPrinted: true)
+        self.decoder = RowPayloadCoders.makeDecoder()
     }
 
     public func load() -> [RecipeDefinition] {
@@ -322,18 +323,5 @@ nonisolated public struct LegacySavedRecipeJSONRepository {
         return (directory ?? URL(fileURLWithPath: NSTemporaryDirectory()))
             .appendingPathComponent("Fernlet", isDirectory: true)
             .appendingPathComponent("SavedRecipes.json")
-    }
-
-    private static func makeEncoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }
-
-    private static func makeDecoder() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
     }
 }

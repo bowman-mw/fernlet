@@ -84,13 +84,18 @@ extension UIColor {
         return 0.2126 * red.linearizedSRGB + 0.7152 * green.linearizedSRGB + 0.0722 * blue.linearizedSRGB
     }
 
-    convenience init?(hex: String) {
+    /// Parses a 6-hex `RRGGBB` string (any surrounding non-alphanumerics, e.g. a leading `#`, are
+    /// trimmed) into its 0–255 channel bytes. Returns `nil` for any malformed input. The single source
+    /// of truth for hex→RGB used by both `UIColor(hex:)` and the item-texture pixel renderer.
+    static func rgbBytes(fromHex hex: String) -> (UInt8, UInt8, UInt8)? {
         let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         guard cleaned.count == 6, let value = Int(cleaned, radix: 16) else { return nil }
-        let red = CGFloat((value >> 16) & 0xFF) / 255
-        let green = CGFloat((value >> 8) & 0xFF) / 255
-        let blue = CGFloat(value & 0xFF) / 255
-        self.init(red: red, green: green, blue: blue, alpha: 1)
+        return (UInt8((value >> 16) & 0xFF), UInt8((value >> 8) & 0xFF), UInt8(value & 0xFF))
+    }
+
+    convenience init?(hex: String) {
+        guard let rgb = UIColor.rgbBytes(fromHex: hex) else { return nil }
+        self.init(red: CGFloat(rgb.0) / 255, green: CGFloat(rgb.1) / 255, blue: CGFloat(rgb.2) / 255, alpha: 1)
     }
 
     var hexString: String? {

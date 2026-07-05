@@ -47,8 +47,8 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         self.controller = resolvedController
         self.legacyRepository = legacyRepository ?? LocalFernletRepository(fileURL: LocalFernletRepository.defaultFileURL())
         self.dayRecordRepository = dayRecordRepository ?? DayRecordRepository(controller: resolvedController)
-        self.encoder = Self.makeEncoder()
-        self.decoder = Self.makeDecoder()
+        self.encoder = RowPayloadCoders.makeEncoder()
+        self.decoder = RowPayloadCoders.makeDecoder()
         self.cancellable = self.controller.remoteChangePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -631,20 +631,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         let signpostID = StartupTiming.begin("CoreDataFernletRepository.loadDatabase.decode.async")
         defer { StartupTiming.end("CoreDataFernletRepository.loadDatabase.decode.async", signpostID: signpostID) }
 
-        let decoder = makeDecoder()
+        let decoder = RowPayloadCoders.makeDecoder()
         return try decoder.decode(LocalFernletDatabase.self, from: data)
-    }
-
-    nonisolated private static func makeEncoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }
-
-    nonisolated private static func makeDecoder() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
     }
 }

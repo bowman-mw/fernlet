@@ -75,7 +75,7 @@ public struct DayRecordRepository: DayRecordRepositoring {
                     existingByKey[key] = record
                 }
             }
-            let encoder = Self.makeEncoder()
+            let encoder = RowPayloadCoders.makeEncoder()
             for entry in days {
                 guard let payload = try? encoder.encode(entry.day) else {
                     assertionFailure("day record encode failed")
@@ -158,7 +158,7 @@ public struct DayRecordRepository: DayRecordRepositoring {
         // Group every decodable row by `dateKey` (a stable per-row tiebreak accompanies each).
         struct Row { let record: NSManagedObject; let day: FernletDay; let updatedAt: Date; let tiebreak: String }
         var rowsByKey: [String: [Row]] = [:]
-        let decoder = Self.makeDecoder()
+        let decoder = RowPayloadCoders.makeDecoder()
         for record in records {
             guard let key = record.value(forKey: "dateKey") as? String,
                   let payload = record.value(forKey: "payloadData") as? Data,
@@ -189,18 +189,5 @@ public struct DayRecordRepository: DayRecordRepositoring {
             if context.hasChanges { try? context.save() }
         }
         return result
-    }
-
-    nonisolated private static func makeEncoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }
-
-    nonisolated private static func makeDecoder() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
     }
 }

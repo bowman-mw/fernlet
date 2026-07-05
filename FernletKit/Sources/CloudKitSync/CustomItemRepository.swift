@@ -64,7 +64,7 @@ public struct CustomItemRepository: CustomItemRepositoring {
                     existingByID[idString] = record
                 }
             }
-            let encoder = JSONEncoder()
+            let encoder = RowPayloadCoders.makeEncoder()
             for item in items {
                 guard let payload = try? encoder.encode(item) else {
                     assertionFailure("custom item encode failed")
@@ -127,6 +127,6 @@ public struct CustomItemRepository: CustomItemRepositoring {
 
     private static func item(from record: NSManagedObject) -> CustomizationItem? {
         guard let data = record.value(forKey: "payloadData") as? Data else { return nil }
-        return try? JSONDecoder().decode(CustomizationItem.self, from: data)
+        return try? RowPayloadCoders.makeDecoder().decode(CustomizationItem.self, from: data)
     }
 }

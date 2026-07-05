@@ -560,6 +560,17 @@ struct ContentView: View {
 
     /// The clothing shop is in-person + social-only: discover/broadcast while on the Friends tab so the
     /// FriendShopView can browse nearby shops. Cleared (and the ephemeral peer catalogs dropped) otherwise.
+    ///
+    /// PRIVACY (deliberate — do NOT loosen): every guard here tears the manager down the moment its
+    /// condition fails, and `stop()` both ends the Multipeer session (so the display name / designer id /
+    /// shop catalog stop being advertised) AND drops the ephemeral peer catalogs — the session-only
+    /// guarantee. The `scenePhase == .active` gate is intentional: a privacy-first app must NOT keep
+    /// broadcasting its shop while inactive/backgrounded (notification shade, call banner, app switcher,
+    /// lock). Collapsing an in-progress shop session on a transient dip is the accepted cost of never
+    /// advertising in the background — favour not-broadcasting over shop-session convenience. The opt-out
+    /// (`allowNearbyClothingShares`) and lock (`.locked`) are enforced here too, and the opt-out setter
+    /// (`FernletStore.setAllowNearbyClothingShares`) calls `stop()` directly so turning it OFF takes effect
+    /// immediately without waiting for a scene / tab / lock event.
     private var shouldListenForClothingShares: Bool {
         guard store.settings.allowNearbyClothingShares else { return false }
         guard scenePhase == .active else { return false }

@@ -429,10 +429,21 @@ final class SealedBackupCoordinator {
         }
     }
 
-    /// True only when no day carries any logged content and the rolling in-memory caches are empty —
-    /// i.e. the user has not yet recorded anything on this device.
+    /// True only when the device holds genuinely no data — no day carries anything AND the rolling
+    /// in-memory caches are empty, i.e. the user has not yet recorded anything on this device.
+    ///
+    /// This gate is deliberately STRICTER than `FernletDay.hasLoggedContent`: it also treats a day whose
+    /// only content is a *bare, metric-less* `healthContext` (a HealthKit sync stamp — `syncedAt` set,
+    /// every metric nil) as "has data". `hasLoggedContent` intentionally ignores that stamp (so the coin
+    /// economy doesn't award an "active day" for merely opening the app with HealthKit enabled), but the
+    /// auto-restore gate must be CONSERVATIVE: any day row at all — including a bare sync stamp — means the
+    /// device is already in use, and auto-restore must NOT run over it. A truly-blank device has zero day
+    /// rows (or all-nil days with no `healthContext`), so it still classifies as fresh and a legitimate
+    /// restore proceeds. Do NOT relax this to `hasLoggedContent`/`hasContent` (that reopened the leak).
     private func isFreshInstallForRestore() -> Bool {
-        let anyLoggedDay = host.loadAllDaysFromRepository().values.contains { $0.hasLoggedContent }
-        return !anyLoggedDay && host.previousJournals.isEmpty && host.memories.isEmpty && host.recentMeals.isEmpty
+        let anyDayWithData = host.loadAllDaysFromRepository().values.contains {
+            $0.hasLoggedContent || $0.healthContext != nil
+        }
+        return !anyDayWithData && host.previousJournals.isEmpty && host.memories.isEmpty && host.recentMeals.isEmpty
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import CoreGraphics
 import FernletDomainModel
 
@@ -38,10 +39,10 @@ enum ItemTextureRenderer {
         }
     }
 
+    /// Palette hex → RGB bytes for the pixel path. Delegates to the single shared hex parser on
+    /// `UIColor` so the item renderer and `UIColor(hex:)` can never drift apart.
     static func rgb(_ hex: String) -> (UInt8, UInt8, UInt8)? {
-        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        guard cleaned.count == 6, let value = Int(cleaned, radix: 16) else { return nil }
-        return (UInt8((value >> 16) & 0xFF), UInt8((value >> 8) & 0xFF), UInt8(value & 0xFF))
+        UIColor.rgbBytes(fromHex: hex)
     }
 }
 

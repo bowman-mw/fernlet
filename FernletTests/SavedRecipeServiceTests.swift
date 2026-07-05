@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import FernletDomainModel
 import FernletScoring
+import FernletPersistence
 import CloudKitSync
 import StoreCore
 @testable import Fernlet
@@ -94,6 +95,32 @@ struct SavedRecipeServiceTests {
         #expect(reloadedService.savedRecipes == [recipe])
     }
 
+    @Test func reloadRetainsPendingRecipeWhenFlushFailsThenPersistsOnceOnRecovery() {
+        // A saved recipe whose flush WRITE fails must not vanish from the in-memory list when
+        // `reloadFromStore()` re-reads the (empty) store, and must persist exactly once — no duplicate — once
+        // the store recovers and a later flush succeeds. Mirrors the CustomItemService reload regression.
+        let repo = StubSavedRecipeRepository()
+        let service = SavedRecipeService(repository: repo)
+        let recipe = makeRecipe(name: "Pending")
+
+        repo.failWrites = true
+        service.add(recipe)
+        service.reloadFromStore() // flush fails, then loadSync() reads the empty store
+
+        // Still present in memory even though the store has nothing.
+        #expect(service.savedRecipes == [recipe])
+        #expect(repo.store.isEmpty)
+
+        // Store recovers; the retained pending upsert flushes and persists exactly once.
+        repo.failWrites = false
+        service.flushPendingSave()
+        #expect(repo.store == [recipe])
+
+        // A subsequent reload is a no-op (queues empty) and does not duplicate the row.
+        service.reloadFromStore()
+        #expect(service.savedRecipes == [recipe])
+    }
+
     private func makeService(initialRecipes: [RecipeDefinition] = []) -> SavedRecipeService {
         let controller = PersistenceController(inMemory: true)
         let legacyURL = FileManager.default.temporaryDirectory
@@ -134,4 +161,26 @@ struct SavedRecipeServiceTests {
             )
         )
     }
+}
+
+/// An in-memory, append/upsert-only saved-recipe repo. `failWrites` simulates a Core Data write error (the
+/// context rolls back → nothing persisted) so tests can exercise the failed-flush retry path.
+@MainActor
+private final class StubSavedRecipeRepository: SavedRecipeRepositoring {
+    private(set) var byID: [UUID: RecipeDefinition] = [:]
+    var failWrites = false
+    var store: [RecipeDefinition] { Array(byID.values) }
+    func load() -> [RecipeDefinition] { store }
+    func loadAsync() async -> [RecipeDefinition] { store }
+    @discardableResult func upsert(_ recipes: [RecipeDefinition]) -> Bool {
+        if failWrites { return false } // rolled back — nothing persisted
+        for recipe in recipes { byID[recipe.id] = recipe }
+        return true
+    }
+    @discardableResult func delete(ids: [UUID]) -> Bool {
+        if failWrites { return false }
+        for id in ids { byID[id] = nil }
+        return true
+    }
+    @discardableResult func deleteAll() -> Bool { byID.removeAll(); return true }
 }
