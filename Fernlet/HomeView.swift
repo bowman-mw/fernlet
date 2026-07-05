@@ -7,6 +7,7 @@ import FernletScoring
 import PrivateHealthStore
 import PeriodContextBridge
 import HealthKitGateway
+import AppServices
 
 #if canImport(UIKit)
 import UIKit
@@ -32,6 +33,12 @@ struct HomeView: View {
     @State private var companionPetCount = 0
     @State private var companionTapCount = 0
     @State private var isCompanionJumping = false
+    /// Gentle pet pacing (Quabble anti-compulsion pattern) — device-local state only.
+    @State private var petGovernor = PetInteractionGovernor()
+    /// Soft settle-squish shown when petting the already-content companion (no bounce).
+    @State private var isCompanionCalmSettling = false
+    /// Cached sky snapshot for the ambience layer; nil ⇒ time-of-day tint only.
+    @State private var companionAmbient: WeatherAmbient?
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -63,6 +70,14 @@ struct HomeView: View {
             withAnimation(.easeInOut(duration: 0.35)) {
                 isCompanionThoughtVisible = false
             }
+        }
+        .task {
+            // Ambience sky accents: opt-in (weather prompts) and served from the shared
+            // ≤30-min WeatherKitService cache, so this costs at most one fetch per half
+            // hour. Renders never wait on it — until (unless) it lands, the layer shows
+            // the time-of-day tint alone.
+            guard store.settings.weatherPromptsEnabled else { return }
+            companionAmbient = await WeatherKitService.shared.currentAmbient()
         }
         .onChange(of: activeSheet?.id) { _, new in
             if new == nil { Task { await refreshRecentPeriodActivity() } }
@@ -185,6 +200,7 @@ struct HomeView: View {
                 equippedItems: store.equippedCustomItems,
                 stressTint: stressTintActive
             )
+            .scaleEffect(isCompanionCalmSettling ? 0.98 : 1)
             .contentShape(Rectangle())
             .onTapGesture {
                 interactWithCompanion()
@@ -194,6 +210,17 @@ struct HomeView: View {
             }
             .accessibilityLabel("Fernlet companion")
             .accessibilityHint("Tap to interact. Press and hold to edit.")
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background {
+                // Home-only environment layer (time tint + optional sky accents).
+                // Composes beneath the companion; decorative only (no hit testing, no
+                // accessibility), so petting and the appearance probes are untouched.
+                CompanionAmbienceLayer(
+                    phase: .current(),
+                    ambient: store.settings.weatherPromptsEnabled ? companionAmbient : nil
+                )
+            }
 
             HStack(spacing: 8) {
                 Text(store.companionState.rawValue)
@@ -405,8 +432,27 @@ struct HomeView: View {
         ]
     }
 
+    /// The 5th-pet moment: Fern is visibly content and settles in for a while.
+    private static let companionSettledThought = "Fern is soaking up all this love — feeling completely content."
+    /// Shown at most once per settled period when petting continues. Warm, never a
+    /// refusal — Fern is settled, not "locked".
+    private static let companionSettledLine = "Fern is feeling nice and settled — check back in a little while."
+
     private func interactWithCompanion() {
         guard !isCompanionJumping else { return }
+        switch petGovernor.registerPet() {
+        case .bounce:
+            performPetBounce(settling: false)
+        case .settling:
+            performPetBounce(settling: true)
+        case .calmIdle(let showsSettledLine):
+            performCalmIdle(showsSettledLine: showsSettledLine)
+        }
+    }
+
+    /// The playful pet response: the two-phase bounce plus either the one-time settled
+    /// thought (final pet of the window) or the occasional rotating tap thought.
+    private func performPetBounce(settling: Bool) {
         isCompanionJumping = true
         companionTapCount += 1
         let tapID = companionTapCount
@@ -430,14 +476,47 @@ struct HomeView: View {
             }
         }
 
-        let shouldShowThought = companionTapCount.isMultiple(of: 3)
-        companionTapThought = shouldShowThought ? companionTapThoughts[companionTapCount % companionTapThoughts.count] : nil
+        let thought: String? = if settling {
+            Self.companionSettledThought
+        } else if companionTapCount.isMultiple(of: 3) {
+            companionTapThoughts[companionTapCount % companionTapThoughts.count]
+        } else {
+            nil
+        }
+        showCompanionTapThought(thought, tapID: tapID)
+    }
 
-        withAnimation(.easeInOut(duration: 0.22)) {
-            isCompanionThoughtVisible = shouldShowThought
+    /// Petting the already-settled companion: a soft settle-squish instead of a bounce
+    /// (content, not asleep), no new thought — except the gentle settled line, once.
+    private func performCalmIdle(showsSettledLine: Bool) {
+        isCompanionJumping = true
+        companionTapCount += 1
+        let tapID = companionTapCount
+
+        withAnimation(.easeInOut(duration: 0.5)) {
+            isCompanionCalmSettling = true
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(520))
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    isCompanionCalmSettling = false
+                }
+                isCompanionJumping = false
+            }
         }
 
-        guard shouldShowThought else { return }
+        showCompanionTapThought(showsSettledLine ? Self.companionSettledLine : nil, tapID: tapID)
+    }
+
+    /// Shows (or hides) the tap thought in the shared ThoughtBubble, auto-hiding after 4s.
+    private func showCompanionTapThought(_ thought: String?, tapID: Int) {
+        companionTapThought = thought
+        withAnimation(.easeInOut(duration: 0.22)) {
+            isCompanionThoughtVisible = thought != nil
+        }
+
+        guard thought != nil else { return }
         Task {
             try? await Task.sleep(for: .seconds(4))
             await MainActor.run {

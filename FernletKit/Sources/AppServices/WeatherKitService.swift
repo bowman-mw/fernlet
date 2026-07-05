@@ -22,6 +22,29 @@ public struct WeatherComfort: Equatable, Sendable {
     }
 }
 
+/// Coarse sky bucket for the Home ambience accents behind the companion. Deliberately
+/// tiny — the ambience layer only needs "what kind of sky", never a raw condition,
+/// temperature, or location.
+public enum AmbientSky: String, Equatable, Sendable {
+    case clear
+    case clouds
+    case rain
+    case snow
+}
+
+/// Minimal structured ambience snapshot (sky bucket + day/night) for the Home
+/// environment layer. `nil` from `currentAmbient()` means "weather unknown" — the
+/// layer then falls back to its time-of-day tint alone.
+public struct WeatherAmbient: Equatable, Sendable {
+    public let sky: AmbientSky
+    public let isDaytime: Bool
+
+    public init(sky: AmbientSky, isDaytime: Bool) {
+        self.sky = sky
+        self.isDaytime = isDaytime
+    }
+}
+
 @MainActor
 public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     public static let shared = WeatherKitService()
@@ -103,7 +126,44 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
         #endif
     }
 
+    /// Structured sky/daylight snapshot for the Home ambience layer, or `nil` whenever
+    /// weather is unavailable (no authorization, no entitlement — WeatherKit needs it at
+    /// runtime — or a network error). Callers gate on `settings.weatherPromptsEnabled`
+    /// and must treat `nil` as "time-of-day tint only"; this never blocks rendering.
+    /// Served from the same shared ≤30-min conditions cache as `moodRecoveryPrompt` and
+    /// `currentComfort` — one location + weather fetch covers all three surfaces.
+    public func currentAmbient() async -> WeatherAmbient? {
+        #if canImport(WeatherKit)
+        guard let conditions = await currentConditions() else { return nil }
+        return WeatherAmbient(
+            sky: Self.ambientSky(for: conditions.condition),
+            isDaytime: conditions.isDaylight
+        )
+        #else
+        return nil
+        #endif
+    }
+
     #if canImport(WeatherKit)
+    /// Pure condition → sky-bucket mapping, split out so tests can pin it. Buckets are
+    /// intentionally coarse: rain-family, snow-family, cloud/fog-family, everything
+    /// else (incl. wind/heat/cold on an open sky) reads as clear.
+    public static func ambientSky(for condition: WeatherCondition) -> AmbientSky {
+        switch condition {
+        case .rain, .heavyRain, .drizzle, .sunShowers, .thunderstorms, .strongStorms,
+             .isolatedThunderstorms, .scatteredThunderstorms, .freezingRain,
+             .freezingDrizzle, .hail, .hurricane, .tropicalStorm:
+            return .rain
+        case .snow, .heavySnow, .blizzard, .flurries, .sleet, .wintryMix,
+             .blowingSnow, .sunFlurries:
+            return .snow
+        case .cloudy, .mostlyCloudy, .partlyCloudy, .foggy, .haze, .smoky:
+            return .clouds
+        default:
+            return .clear
+        }
+    }
+
     /// Pure walk-friendliness classification, split out so tests can pin the thresholds.
     /// "Pleasant" = clear-ish sky AND a mild temperature; daytime comes straight from WeatherKit.
     public static func comfort(condition: WeatherCondition, temperatureCelsius: Double, isDaylight: Bool) -> WeatherComfort {

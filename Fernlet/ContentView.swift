@@ -127,7 +127,12 @@ struct ContentView: View {
                 }
                 #if DEBUG
                 // UX appearance tests: populate the diary so every tab renders real cards.
-                if UITestSupport.shouldSeedDemoContent { store.seedDemoContent() }
+                if UITestSupport.shouldSeedDemoContent {
+                    store.seedDemoContent()
+                    // Deterministic runs: never start with the companion already settled
+                    // from petting in a previous test on the same simulator.
+                    PetInteractionGovernor.clearPersistentState()
+                }
                 #endif
                 try? await Task.sleep(for: .milliseconds(120))
                 async let _ = autoImportHealthProfileIfAvailable()
