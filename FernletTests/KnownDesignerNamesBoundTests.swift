@@ -93,7 +93,9 @@ struct KnownDesignerNamesBoundTests {
                 legacyRepository: LegacySavedRecipeJSONRepository(fileURL: legacyURL)
             ),
             customItemRepository: CustomItemRepository(controller: controller),
-            coinLedgerRepository: CoinLedgerRepository(controller: controller)
+            coinLedgerRepository: CoinLedgerRepository(controller: controller),
+            // Hermetic: never fall back to MilestoneLedgerRepository() on PersistenceController.shared.
+            milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller)
         )
     }
 }
