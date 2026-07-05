@@ -151,6 +151,9 @@ struct ContentView: View {
                 updateRecipeShareListener()
                 store.deferredPostLaunchTasks()
                 store.ensureBundledFoodItemsSeeded()
+                // Widget bridge: wire the mirror, drain "+1 water" taps queued while the app was
+                // closed, and publish the first snapshot (store is fully loaded by this point).
+                store.activateWidgetBridge()
                 await store.processSharedRecipeImportQueue()
                 await loadPeriodEntriesIfPossible()
                 refreshPeriodContext()
@@ -171,6 +174,9 @@ struct ContentView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     Task { await store.processSharedRecipeImportQueue() }
+                    // Apply widget "+1 water" taps that arrived while backgrounded (also refreshes
+                    // the mirrored snapshot across day rollovers).
+                    store.processPendingWidgetActions()
                     // Credit any day that became active while backgrounded (or synced in from another
                     // device). Idempotent, so a no-op when nothing new is logged.
                     store.reconcileCoinLedger()

@@ -149,6 +149,13 @@ final class FernletStore {
         narrativeRepository: providedJournalNarrativeRepository ?? JournalNarrativeRepository()
     )
     @ObservationIgnored private var isProcessingSharedRecipeImportQueue = false
+    /// Widget bridge (nil until `activateWidgetBridge()` wires it from ContentView at store-ready,
+    /// so unit tests stay hermetic — no app-group writes/WidgetCenter pokes unless a test injects
+    /// its own mirror). Publishes the benign snapshot after every persisted save.
+    @ObservationIgnored var widgetSnapshotMirror: WidgetSnapshotMirror?
+    /// Inbound queue of widget App-Intent actions (injectable directory for tests).
+    @ObservationIgnored var pendingWidgetActionQueue = PendingWidgetActionQueue()
+    @ObservationIgnored private var isProcessingPendingWidgetActions = false
     /// Read-only abstract egress from the private cycle data into scoring. Nil until the app wires a
     /// `PeriodContextBridge`; when nil (or the opt-in is off) scoring is byte-identical to period-unaware.
     @ObservationIgnored private(set) var periodScoringContext: (any PeriodScoringContextProviding)?
@@ -1743,6 +1750,69 @@ final class FernletStore {
     private func handleAfterSnapshotSave() {
         rebuildDerivedSignals()
         reconcileMilestones(days: [todayKey: day])
+        // Mirror the benign widget snapshot on the same flush path every mutation funnels through
+        // (SnapshotSaveCoordinator.schedule()/flushPending() → performSnapshotSave → here).
+        publishWidgetSnapshot()
+    }
+
+    // MARK: - Widget bridge (FernletWidgets extension)
+
+    /// Called once from ContentView at store-ready: wires the mirror, drains any actions the
+    /// widget queued while the app was closed, and publishes the initial snapshot.
+    func activateWidgetBridge() {
+        if widgetSnapshotMirror == nil {
+            widgetSnapshotMirror = WidgetSnapshotMirror()
+        }
+        processPendingWidgetActions()
+    }
+
+    /// Drains the widget's pending-action queue (mirrors `processSharedRecipeImportQueue`'s two
+    /// call sites: launch .task + scenePhase .active). Rows are claimed atomically (removed under
+    /// one file coordination) so a row can never apply twice; each is applied via the canonical
+    /// dated water mutation against the row's OWN dateKey, so a tap after midnight with the app
+    /// closed still lands on the day it happened (day-rollover safety).
+    func processPendingWidgetActions() {
+        guard !isProcessingPendingWidgetActions else { return }
+        isProcessingPendingWidgetActions = true
+        defer { isProcessingPendingWidgetActions = false }
+
+        var increments: [String: Int] = [:]
+        var seenIDs = Set<UUID>()
+        for action in pendingWidgetActionQueue.claimAll() {
+            guard seenIDs.insert(action.id).inserted,                     // idempotent by row id
+                  action.action == PendingWidgetAction.waterPlusOne,      // only known actions
+                  FernletDate.date(fromDayKey: action.dateKey) != nil,    // well-formed day key
+                  action.dateKey <= todayKey                              // never create future days
+            else { continue }
+            increments[action.dateKey, default: 0] += 1
+        }
+        for (dateKey, count) in increments.sorted(by: { $0.key < $1.key }) {
+            let current = diary.loadDay(for: dateKey).bottleCount
+            diary.setBottleCount(current + count, date: dateKey)
+        }
+        // Always republish (even with zero actions): keeps the widget's dateKey/state fresh on
+        // every foreground, catching day rollovers that happened while the app was backgrounded.
+        publishWidgetSnapshot()
+    }
+
+    /// Writes the benign snapshot to the app-group container + reloads widget timelines. No-op
+    /// until `activateWidgetBridge()` has wired the mirror. PRIVACY: score/water/macros only.
+    func publishWidgetSnapshot() {
+        guard let widgetSnapshotMirror else { return }
+        let macros = macroTotals
+        widgetSnapshotMirror.publish(WidgetSnapshot(
+            companionStateRaw: companionState.rawValue,
+            score: score,
+            bottleCount: day.bottleCount,
+            hydrationTarget: settings.hydrationTarget,
+            macroSummary: WidgetSnapshot.MacroSummary(
+                protein: Double(macros.protein),
+                carbs: Double(macros.carbs),
+                fat: Double(macros.fat)
+            ),
+            dateKey: todayKey,
+            computedAt: Date()
+        ))
     }
 
     func deferredPostLaunchTasks() {

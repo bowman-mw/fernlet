@@ -21,7 +21,11 @@ struct S3BoundaryTests {
     private static let scanRoots = [
         "Fernlet",
         "FernletKit/Sources/AIProviders",
-        "FernletKit/Sources/AIContext"
+        "FernletKit/Sources/AIContext",
+        // The widget extension is standalone (it can't link the FernletKit umbrella, so it can't
+        // reach a sealed store by construction) — scanned anyway as belt-and-braces so future
+        // widget code can't silently grow an AI-facing file that names sealed tokens.
+        "FernletWidgets"
     ]
 
     /// Markers identifying an on-device-AI prompt builder (Apple FoundationModels API). Any Swift file

@@ -28,6 +28,7 @@
 		68B9EC1E2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EC1D2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md */; };
 		68B9EE622FCA75B600AF8FB6 /* Life-Tab-Redesign-Implementation-Plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EE612FCA75B600AF8FB6 /* Life-Tab-Redesign-Implementation-Plan.md */; };
 		68FE5E00000000000000A019 /* FernletShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 68FE5E00000000000000A011 /* FernletShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		68FE5E00000000000000B019 /* FernletWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 68FE5E00000000000000B011 /* FernletWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,6 +53,13 @@
 			remoteGlobalIDString = 68FE5E00000000000000A010;
 			remoteInfo = FernletShareExtension;
 		};
+		68FE5E00000000000000B01B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6869C2DA2FB8D39D0098A0F3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 68FE5E00000000000000B010;
+			remoteInfo = FernletWidgets;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -62,6 +70,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				68FE5E00000000000000A019 /* FernletShareExtension.appex in Embed Foundation Extensions */,
+				68FE5E00000000000000B019 /* FernletWidgets.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -97,6 +106,7 @@
 		68B9EE4E2FC9048C00AF8FB6 /* Fernlet-Review-and-Plan-Updates.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "Fernlet-Review-and-Plan-Updates.md"; sourceTree = "<group>"; };
 		68B9EE612FCA75B600AF8FB6 /* Life-Tab-Redesign-Implementation-Plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "Life-Tab-Redesign-Implementation-Plan.md"; sourceTree = "<group>"; };
 		68FE5E00000000000000A011 /* FernletShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FernletShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		68FE5E00000000000000B011 /* FernletWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FernletWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -113,6 +123,13 @@
 				Info.plist,
 			);
 			target = 68FE5E00000000000000A010 /* FernletShareExtension */;
+		};
+		68FE5E00000000000000B002 /* Exceptions for "FernletWidgets" folder in "FernletWidgets" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 68FE5E00000000000000B010 /* FernletWidgets */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -141,6 +158,14 @@
 				68FE5E00000000000000A002 /* Exceptions for "FernletShareExtension" folder in "FernletShareExtension" target */,
 			);
 			path = FernletShareExtension;
+			sourceTree = "<group>";
+		};
+		68FE5E00000000000000B001 /* FernletWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				68FE5E00000000000000B002 /* Exceptions for "FernletWidgets" folder in "FernletWidgets" target */,
+			);
+			path = FernletWidgets;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -177,6 +202,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		68FE5E00000000000000B013 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -194,6 +226,7 @@
 				6869C2E42FB8D39D0098A0F3 /* Fernlet */,
 				6869C2F92FB8D39D0098A0F3 /* FernletTests */,
 				6869C3032FB8D39D0098A0F3 /* FernletUITests */,
+				68FE5E00000000000000B001 /* FernletWidgets */,
 				6869C2E32FB8D39D0098A0F3 /* Products */,
 				6869C37B2FBBF3450098A0F3 /* Docs */,
 				6861B7802FCA9EF000B26022 /* DisposableCameraView.swift */,
@@ -209,6 +242,7 @@
 				6869C2F62FB8D39D0098A0F3 /* FernletTests.xctest */,
 				6869C3002FB8D39D0098A0F3 /* FernletUITests.xctest */,
 				68FE5E00000000000000A011 /* FernletShareExtension.appex */,
+				68FE5E00000000000000B011 /* FernletWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -266,6 +300,7 @@
 			);
 			dependencies = (
 				68FE5E00000000000000A01A /* PBXTargetDependency */,
+				68FE5E00000000000000B01A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				6869C2E42FB8D39D0098A0F3 /* Fernlet */,
@@ -348,6 +383,28 @@
 			productReference = 68FE5E00000000000000A011 /* FernletShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		68FE5E00000000000000B010 /* FernletWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 68FE5E00000000000000B015 /* Build configuration list for PBXNativeTarget "FernletWidgets" */;
+			buildPhases = (
+				68FE5E00000000000000B012 /* Sources */,
+				68FE5E00000000000000B013 /* Frameworks */,
+				68FE5E00000000000000B014 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				68FE5E00000000000000B001 /* FernletWidgets */,
+			);
+			name = FernletWidgets;
+			packageProductDependencies = (
+			);
+			productName = FernletWidgets;
+			productReference = 68FE5E00000000000000B011 /* FernletWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -370,6 +427,9 @@
 						TestTargetID = 6869C2E12FB8D39D0098A0F3;
 					};
 					68FE5E00000000000000A010 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					68FE5E00000000000000B010 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -396,6 +456,7 @@
 				6869C2F52FB8D39D0098A0F3 /* FernletTests */,
 				6869C2FF2FB8D39D0098A0F3 /* FernletUITests */,
 				68FE5E00000000000000A010 /* FernletShareExtension */,
+				68FE5E00000000000000B010 /* FernletWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -444,6 +505,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		68FE5E00000000000000B014 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -477,6 +545,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		68FE5E00000000000000B012 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -494,6 +569,11 @@
 			isa = PBXTargetDependency;
 			target = 68FE5E00000000000000A010 /* FernletShareExtension */;
 			targetProxy = 68FE5E00000000000000A01B /* PBXContainerItemProxy */;
+		};
+		68FE5E00000000000000B01A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 68FE5E00000000000000B010 /* FernletWidgets */;
+			targetProxy = 68FE5E00000000000000B01B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -860,6 +940,60 @@
 			};
 			name = Release;
 		};
+		68FE5E00000000000000B016 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FernletWidgets/FernletWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3RTUPF8FFH;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FernletWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = MBO.Fernlet.FernletWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		68FE5E00000000000000B017 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FernletWidgets/FernletWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3RTUPF8FFH;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FernletWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = MBO.Fernlet.FernletWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -904,6 +1038,15 @@
 			buildConfigurations = (
 				68FE5E00000000000000A016 /* Debug */,
 				68FE5E00000000000000A017 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		68FE5E00000000000000B015 /* Build configuration list for PBXNativeTarget "FernletWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				68FE5E00000000000000B016 /* Debug */,
+				68FE5E00000000000000B017 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
