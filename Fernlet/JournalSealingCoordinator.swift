@@ -57,6 +57,18 @@ final class JournalSealingCoordinator {
     /// Whether the entry's text is sealed in the narrative store (so the snapshot strips it).
     func isSealed(_ id: UUID) -> Bool { sealedJournalIDs.contains(id) }
 
+    /// True while a journal key is active (no-lock or unlocked): sealed entries are hydrated with
+    /// their text, so an EMPTY-text entry in memory is genuinely a tag-only mood check-in. While
+    /// locked/inactive, stripped sealed entries also sit in memory with empty text — a tag-only
+    /// check-in is indistinguishable from them, and callers (e.g. the one-tap mood row's
+    /// update-in-place) must fall back to appending instead of mutating what might be a real entry.
+    var canIdentifyTagOnlyEntries: Bool {
+        switch journalActivationMode {
+        case .noLock, .sealedUnlocked: true
+        case .inactive, .sealedLocked: false
+        }
+    }
+
     // MARK: - Activation (lock lifecycle)
 
     /// Call at startup when no lock is configured: seals any legacy plaintext blob entries
@@ -102,6 +114,12 @@ final class JournalSealingCoordinator {
     /// Uses the user content key when a lock is configured; falls back to the device key so that
     /// journal text is never written to the iCloud-synced blob even without a lock.
     func seal(_ entry: JournalEntry, dayKey: String) {
+        // Tag-only mood check-ins (empty text) are deliberately NOT sealed: there is nothing to
+        // protect (the tag stays plaintext by design, NEW-4), and keeping them out of both the
+        // narrative store and `sealedJournalIDs` keeps "empty text" unambiguous — an empty
+        // in-memory entry with no narrative row IS a mood check-in, not a stripped sealed entry.
+        // (Hydration paths already skip ids with no narrative row, so nothing downstream changes.)
+        guard !entry.text.isEmpty else { return }
         let key = journalContentKey ?? deviceJournalKey
         let narrative = JournalNarrative(
             id: entry.id, dayKey: dayKey, tag: entry.tag, entryDate: entry.date,

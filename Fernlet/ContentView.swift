@@ -120,6 +120,11 @@ struct ContentView: View {
                     store.activateNoLockJournals()
                 }
                 worryBoxService.updateActivation(lockState: initialLockState, contentKey: lockService.contentKey())
+                // A released worry counts toward the "worries let go" milestone. Only the worry's
+                // id crosses this seam — never its (sealed, about-to-be-deleted) text.
+                worryBoxService.onRelease = { [weak store] id in
+                    store?.recordMilestoneEvent(.worry, ref: id.uuidString)
+                }
                 #if DEBUG
                 // UX appearance tests: populate the diary so every tab renders real cards.
                 if UITestSupport.shouldSeedDemoContent { store.seedDemoContent() }

@@ -71,6 +71,14 @@ public final class CoinLedgerService {
         record(missing)
     }
 
+    /// Appends caller-built earn rows carrying DETERMINISTIC ids (milestone awards,
+    /// `milestone:<kind>:<threshold>` — see `MilestoneEconomy.missingAwards`, which also applies the
+    /// reset-boundary filter before building them). Idempotent per id via `record`; non-earn rows
+    /// are refused so this can never be misused to inject spends or reset markers.
+    public func grantEarns(_ newEntries: [CoinLedgerEntry]) {
+        record(newEntries.filter { $0.kind == .earn })
+    }
+
     // MARK: - Spending
 
     /// Spends `amount` coins if the balance covers it, appending a `spend` row keyed by `ref` (so a

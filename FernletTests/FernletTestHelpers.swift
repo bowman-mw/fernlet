@@ -86,6 +86,7 @@ func makeTestStoreWithRepositories(
         // SQLite store) — that shared coupling makes tests non-hermetic and flaky under parallel runs.
         customItemRepository: CustomItemRepository(controller: controller),
         coinLedgerRepository: CoinLedgerRepository(controller: controller),
+        milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller),
         journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems))
     )
@@ -118,6 +119,7 @@ func makeStoreSharingStores(
         savedRecipeRepository: savedRecipeRepository,
         customItemRepository: CustomItemRepository(controller: throwawayController),
         coinLedgerRepository: CoinLedgerRepository(controller: throwawayController),
+        milestoneLedgerRepository: MilestoneLedgerRepository(controller: throwawayController),
         journalNarrativeRepository: narratives,
         foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource([]))
     )

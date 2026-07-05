@@ -545,18 +545,50 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel("Quick log")
             FernletCard {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                    ForEach(FernletShortcut.visibleQuickLog(store.settings.quickLogItems, allowsIntimacy: store.isIntimateLoggingAllowed)) { item in
-                        QuickLogButton(
-                            title: title(for: item),
-                            systemImage: item.systemImage,
-                            active: isActive(item)
-                        ) {
-                            handleQuickLog(item)
+                VStack(spacing: 12) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                        ForEach(FernletShortcut.visibleQuickLog(store.settings.quickLogItems, allowsIntimacy: store.isIntimateLoggingAllowed)) { item in
+                            quickLogTile(item)
                         }
                     }
+                    FernletRowDivider()
+                    // One-tap mood check-in: a tag-only journal entry, no writing required.
+                    QuickMoodRow(store: store)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func quickLogTile(_ item: FernletShortcut) -> some View {
+        let button = QuickLogButton(
+            title: title(for: item),
+            systemImage: item.systemImage,
+            active: isActive(item)
+        ) {
+            handleQuickLog(item)
+        }
+        if item == .water {
+            // One-tap water quick-add: "+1 bottle" without opening the sheet (the tile itself
+            // still opens the full water sheet, unchanged).
+            button.overlay(alignment: .topTrailing) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        store.addBottle()
+                    }
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.body)
+                        .foregroundStyle(Color.moss)
+                        .background(Color.parchment, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(5)
+                .accessibilityLabel("Add a bottle of water")
+                .accessibilityIdentifier("home.water.quickAdd")
+            }
+        } else {
+            button
         }
     }
 
@@ -688,6 +720,7 @@ private struct CompanionCustomizationSheet: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         walletBadge
+                        milestonesLink
                         wardrobeLink
                         switch section {
                         case .style:
@@ -768,6 +801,40 @@ private struct CompanionCustomizationSheet: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(balance) coins, earned from days you showed up")
+    }
+
+    /// Entry to the Milestones sheet, placed right under the coin balance — milestone gifts are
+    /// where coins and lifetime counts meet, so this is where people will look for them.
+    private var milestonesLink: some View {
+        NavigationLink {
+            MilestonesView(store: store)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "leaf.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color.fern)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Milestones")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.bark)
+                    Text("All the care you've logged, added up over all time")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.bark.opacity(0.4))
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.cream)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("companion.milestones")
     }
 
     private var wardrobeLink: some View {

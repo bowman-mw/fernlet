@@ -106,6 +106,7 @@ final class FernletStore {
     @ObservationIgnored let savedRecipeService: SavedRecipeService
     @ObservationIgnored let customItemService: CustomItemService
     @ObservationIgnored let coinLedgerService: CoinLedgerService
+    @ObservationIgnored let milestoneLedgerService: MilestoneLedgerService
     @ObservationIgnored let proximityTrustVault: ProximityTrustVault
     @ObservationIgnored let aiRetryQueueService: AIRetryQueueService
     @ObservationIgnored private(set) lazy var meshNetworkManager: MeshNetworkManager = MeshNetworkManager(store: self)
@@ -125,7 +126,7 @@ final class FernletStore {
     @ObservationIgnored private lazy var snapshotSaveCoordinator = SnapshotSaveCoordinator(
         repository: diary.repository,
         buildSnapshot: { [unowned self] in self.currentSnapshot() },
-        onAfterSave: { [weak self] in self?.rebuildDerivedSignals() }
+        onAfterSave: { [weak self] in self?.handleAfterSnapshotSave() }
     )
     /// Read-only SQLite-backed bundled food store + user-item snapshot. Replaces the old in-memory
     /// `bundledFoodItems` array; see FoodCatalog.swift. Forwarded to DiaryStore (it owns it).
@@ -170,7 +171,7 @@ final class FernletStore {
     /// a fresh process launch resets it.
     @ObservationIgnored private var pastDayScrubBudgetConsumedThisSession = false
 
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled()) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled()) {
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
 
@@ -197,6 +198,11 @@ final class FernletStore {
         }
         coinLedgerService.loadSync()
         self.coinLedgerService = coinLedgerService
+        let milestoneLedgerService = StartupTiming.timed("MilestoneLedgerService.init") {
+            MilestoneLedgerService(repository: milestoneLedgerRepository ?? MilestoneLedgerRepository())
+        }
+        milestoneLedgerService.loadSync()
+        self.milestoneLedgerService = milestoneLedgerService
         self.healthKitService = healthKitService
         self.connectionSessionLogs = snapshot.connectionSessionLogs
         self.proximityTrustVault = ProximityTrustVault(
@@ -243,12 +249,14 @@ final class FernletStore {
         savedRecipeService: SavedRecipeService,
         customItemService: CustomItemService,
         coinLedgerService: CoinLedgerService,
+        milestoneLedgerService: MilestoneLedgerService,
         healthKitService: (any HealthKitServicing)? = nil,
         foodCatalog: FoodCatalog = .bundled()
     ) {
         self.savedRecipeService = savedRecipeService
         self.customItemService = customItemService
         self.coinLedgerService = coinLedgerService
+        self.milestoneLedgerService = milestoneLedgerService
         self.healthKitService = healthKitService
         self.connectionSessionLogs = snapshot.connectionSessionLogs
         self.proximityTrustVault = ProximityTrustVault(
@@ -508,8 +516,62 @@ final class FernletStore {
 
     /// Credits any active day not yet in the ledger. Idempotent; called at store launch and on app
     /// foreground so days logged on this or another device accrue exactly once.
+    ///
+    /// Also folds in the (equally idempotent) milestone reconcile over the same day history, so
+    /// every existing trigger point — launch, foreground, remote sync, pre-buy — doubles as a
+    /// milestone catch-up and awards feel immediate without new plumbing.
     func reconcileCoinLedger() {
-        coinLedgerService.reconcile(activeDayKeys: diary.activeDayKeys())
+        let days = loadDays()
+        coinLedgerService.reconcile(activeDayKeys: Set(days.compactMap { $0.value.hasLoggedContent ? $0.key : nil }))
+        reconcileMilestones(days: days)
+    }
+
+    // MARK: - Milestones (lifetime care counts — cumulative only, never streaks)
+    // Counted events live in `milestoneLedgerService` (its own append-only per-row store, mirroring
+    // the coin ledger; see `MilestoneEconomy`). Journal/meal/workout/water events are DERIVED from
+    // the day history by `reconcileMilestones` (backfill + steady state — an event that predates
+    // pruned/reset history is simply never counted: undercount accepted). Breathing + worry events
+    // are not in the diary and arrive only through `recordMilestoneEvent` live hooks.
+
+    /// Lifetime care counts per kind (distinct milestone-event rows — monotonic, union-merged).
+    var milestoneCounts: [MilestoneEventKind: Int] { milestoneLedgerService.lifetimeCounts }
+
+    /// Records one live milestone event that is NOT derivable from the day history (breathing
+    /// session completed, worry released). `ref` is the counted thing's stable identity — the row
+    /// id is deterministic from it, so a retried call can't double-count.
+    func recordMilestoneEvent(_ kind: MilestoneEventKind, ref: String) {
+        milestoneLedgerService.record([
+            .event(kind: kind, ref: ref, dayKey: todayKey, at: Date())
+        ])
+        awardMilestoneCoins()
+    }
+
+    /// Mints any milestone-event rows the surviving day history implies but the ledger lacks, then
+    /// awards any newly crossed milestone thresholds. Idempotent — deterministic row ids make
+    /// re-running with overlapping inputs a no-op.
+    func reconcileMilestones(days: [String: FernletDay]? = nil) {
+        let allDays = days ?? loadDays()
+        let derived = MilestoneEconomy.derivedEvents(
+            from: allDays,
+            hydrationTarget: settings.hydrationTarget,
+            at: Date()
+        )
+        milestoneLedgerService.record(derived)
+        awardMilestoneCoins()
+    }
+
+    /// Appends the coin awards for any milestone threshold reached but not yet awarded.
+    /// Exactly-once across devices (deterministic ids `milestone:<kind>:<threshold>`), and never
+    /// resurrects awards a full reset voided (`MilestoneEconomy.missingAwards` applies the coin
+    /// ledger's reset boundary).
+    private func awardMilestoneCoins() {
+        let awards = MilestoneEconomy.missingAwards(
+            events: milestoneLedgerService.entries,
+            coinEntries: coinLedgerService.entries,
+            at: Date()
+        )
+        guard !awards.isEmpty else { return }
+        coinLedgerService.grantEarns(awards)
     }
 
     // MARK: - Clothing shop (in-person friend shop, Increment 3)
@@ -1061,6 +1123,38 @@ final class FernletStore {
         }
     }
 
+    /// One-tap mood check-in: a tag-only journal entry (empty text, just a `FeelingTag`). It flows
+    /// through every existing "last entry's tag" consumer — the daily score's journal component,
+    /// the moodTrend derived signal, the Home ambient thought, and the calendar tint — with no
+    /// special-casing, and a later real journal simply appends after it (last entry wins, exactly
+    /// the existing same-day semantics).
+    ///
+    /// Changing your mind updates the check-in IN PLACE when today's latest entry is one we can
+    /// positively identify as tag-only (requires an active journal key — while locked, a stripped
+    /// sealed entry also has empty text, so we append instead of risking a retag of a real entry).
+    /// Empty-text entries are never sealed (see `JournalSealingCoordinator.seal`), so a check-in
+    /// works even while the private lock is closed.
+    func logQuickMood(_ tag: FeelingTag) {
+        if journalSealingCoordinator.canIdentifyTagOnlyEntries,
+           let last = day.journals.last,
+           last.text.isEmpty,
+           !journalSealingCoordinator.isSealed(last.id) {
+            guard last.tag != tag else { return }
+            var updated = last
+            updated.tag = tag
+            batchSnapshotPersistence {
+                if let index = day.journals.lastIndex(where: { $0.id == last.id }) {
+                    day.journals[index] = updated
+                }
+                if let index = previousJournals.firstIndex(where: { $0.id == last.id }) {
+                    previousJournals[index] = updated
+                }
+            }
+        } else {
+            addJournal(text: "", tag: tag)
+        }
+    }
+
     func setSleep(hours: Double?, quality: SleepQuality, note: String) {
         diary.setSleep(hours: hours, quality: quality, note: note)
     }
@@ -1258,7 +1352,15 @@ final class FernletStore {
         updatedEntry.text = trimmed
         updatedEntry.tag = tag
 
-        journalSealingCoordinator.updateSealedNarrative(for: entry, text: trimmed, tag: tag, dayKey: date)
+        if journalSealingCoordinator.isSealed(entry.id) {
+            journalSealingCoordinator.updateSealedNarrative(for: entry, text: trimmed, tag: tag, dayKey: date)
+        } else {
+            // The entry has no sealed narrative — a tag-only mood check-in gaining its first text
+            // (empty entries are deliberately never sealed), or an entry whose original seal failed.
+            // Seal it fresh so the new text is stripped from the synced blob like any other journal;
+            // without this the update would leave plaintext in the (iCloud-synced) days blob.
+            journalSealingCoordinator.seal(updatedEntry, dayKey: date)
+        }
 
         batchSnapshotPersistence {
             diary.mutateDay(date: date) { targetDay in
@@ -1583,6 +1685,13 @@ final class FernletStore {
         // deterministically re-minting pre-reset earns. Activity logged on or after the reset day still
         // earns normally (the reset zeroes the past, it doesn't disable earning going forward).
         coinLedgerService.reset()
+        // The MILESTONE ledger is deliberately NOT reset: lifetime care counts ("you've written 40
+        // journal moments") are memories of showing up, not spendable state, and the product call
+        // is that they survive a data reset. The rows carry no content — only kind + day of a
+        // counted event (accepted metadata retention; see `MilestoneLedgerRepositoring`, which has
+        // no delete API at all). Milestone COIN awards, by contrast, live in the coin ledger and
+        // were just voided with everything else; `MilestoneEconomy.missingAwards` honors the reset
+        // boundary, so pre-reset awards are never re-minted from the surviving events.
         aiRetryQueueService.reset()
         proximityTrustVault.apply(peers: [], audit: [])
         // The stress sidecar caches HealthKit-derived baselines on-device; "reset everything"
@@ -1592,6 +1701,15 @@ final class FernletStore {
 
     private func rebuildDerivedSignals() {
         derivedSignalsService.rebuild(allDays: loadDays(), todayKey: todayKey)
+    }
+
+    /// Post-save hook: rebuild derived signals (existing behavior) plus a TODAY-ONLY milestone
+    /// catch-up so a milestone award lands the moment the triggering log persists (journal saved,
+    /// meal logged, water target met…). Today-only keeps the per-save cost O(today's entries); the
+    /// full-history reconcile runs at the coin-ledger trigger points (launch/foreground/sync/buy).
+    private func handleAfterSnapshotSave() {
+        rebuildDerivedSignals()
+        reconcileMilestones(days: [todayKey: day])
     }
 
     func deferredPostLaunchTasks() {
@@ -1616,6 +1734,9 @@ final class FernletStore {
         // The coin ledger is likewise a separate per-row store with a yield-debounced write; flush any
         // pending earn/spend rows so a just-credited day or a buy can't be lost on background.
         coinLedgerService.flushPendingSave()
+        // Same for the milestone ledger — a just-counted care event (or a breathing/worry live hook)
+        // must survive backgrounding.
+        milestoneLedgerService.flushPendingSave()
     }
 
     private func reloadFromRepository() async {
@@ -1647,9 +1768,11 @@ final class FernletStore {
         // each in-memory collection so this device tracks the other's additions; because the stores are
         // append/upsert-only, the next local mutation can't then clobber what just synced in.
         coinLedgerService.reloadFromStore()
+        milestoneLedgerService.reloadFromStore()
         customItemService.reloadFromStore()
         savedRecipeService.reloadFromStore()
-        // Credit any newly active synced day. Idempotent — re-running never double-grants.
+        // Credit any newly active synced day (and reconcile milestones over the synced-in history).
+        // Idempotent — re-running never double-grants.
         reconcileCoinLedger()
     }
 
@@ -1876,6 +1999,9 @@ extension FernletStore {
         let coinLedgerService = StartupTiming.timed("CoinLedgerService.init") {
             CoinLedgerService(repository: CoinLedgerRepository())
         }
+        let milestoneLedgerService = StartupTiming.timed("MilestoneLedgerService.init") {
+            MilestoneLedgerService(repository: MilestoneLedgerRepository())
+        }
 
         statusUpdate("Reading recent days...")
         let snapshot: FernletSnapshot
@@ -1891,6 +2017,7 @@ extension FernletStore {
         await savedRecipeService.loadAsync()
         await customItemService.loadAsync()
         await coinLedgerService.loadAsync()
+        await milestoneLedgerService.loadAsync()
 
         return FernletStore(
             snapshot: snapshot,
@@ -1899,6 +2026,7 @@ extension FernletStore {
             savedRecipeService: savedRecipeService,
             customItemService: customItemService,
             coinLedgerService: coinLedgerService,
+            milestoneLedgerService: milestoneLedgerService,
             healthKitService: nil
         )
     }

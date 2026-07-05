@@ -8,6 +8,9 @@ import AppServices
 
 struct NutritionLabelCameraSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// Macros-first: the detected Calories row renders only behind the explicit opt-in (the value
+    /// is still parsed and passed through `onResult` untouched — only the display is gated).
+    var showCalories: Bool = false
     var onResult: (NutritionLabelResult) -> Void
 
     @State private var showingCamera = false
@@ -203,7 +206,7 @@ struct NutritionLabelCameraSheet: View {
     private func detectedValues(for scanResult: NutritionLabelResult) -> some View {
         if hasMacroValues(in: scanResult) {
             detectedGroup("Macros") {
-                if let calories = scanResult.calories {
+                if showCalories, let calories = scanResult.calories {
                     detectedRow("Calories", "\(calories)")
                 }
                 if let protein = scanResult.protein {
@@ -327,7 +330,9 @@ struct NutritionLabelCameraSheet: View {
     }
 
     private func hasMacroValues(in result: NutritionLabelResult) -> Bool {
-        result.calories != nil || result.protein != nil || result.carbs != nil || result.fat != nil
+        // Calories only count as a displayable value when their row is opted in — otherwise a
+        // calories-only scan would render an empty "Macros" group.
+        (showCalories && result.calories != nil) || result.protein != nil || result.carbs != nil || result.fat != nil
     }
 
     private func hasLabelDetailValues(in result: NutritionLabelResult) -> Bool {

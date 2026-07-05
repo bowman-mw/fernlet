@@ -10,6 +10,7 @@
 //
 
 import SwiftUI
+import FernletDomainModel
 import FernletFoundation
 import HealthKitGateway
 
@@ -174,8 +175,10 @@ struct FirstAidView: View {
     /// inside `saveMindfulSession`; a closed gate or failed write stays silent — the exercise
     /// itself already happened and nothing should dampen that.
     private func handleBreathingComplete(start: Date, end: Date) {
-        // TODO(Batch C): record a breathing-session achievement event in the milestone ledger
-        // here (append-only, deterministic id `event:breathing:<uuid>`), once the ledger exists.
+        // Count the session in the milestone ledger (append-only, `event:breathing:<uuid>`).
+        // Breathing isn't in the diary, so this live hook is the only place it's counted — a
+        // session finished before the ledger existed simply isn't (undercount accepted).
+        store.recordMilestoneEvent(.breathing, ref: UUID().uuidString)
         let preferencesStore = storagePreferencesStore
         Task {
             try? await HealthKitService(preferencesStore: preferencesStore).saveMindfulSession(start: start, end: end)

@@ -568,6 +568,7 @@ struct RecipeSheet: View {
                                     CollapsedIngredientRow(
                                         ingredient: ingredient,
                                         catalog: store.foodCatalog,
+                                        showCalories: store.settings.showCalories,
                                         onExpand: { expandedId = ingredient.id },
                                         onRemove: { removeIngredient(ingredient.id) }
                                     )
@@ -600,9 +601,12 @@ struct RecipeSheet: View {
                                 .font(.headline)
                                 .foregroundStyle(Color.bark)
                             Spacer()
-                            Text("\(perServingTotals.calories) cal")
-                                .font(.caption)
-                                .foregroundStyle(Color.slate)
+                            // Macros-first: calories render only behind the explicit opt-in.
+                            if store.settings.showCalories {
+                                Text("\(perServingTotals.calories) cal")
+                                    .font(.caption)
+                                    .foregroundStyle(Color.slate)
+                            }
                         }
                         .padding(14)
                         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -671,7 +675,7 @@ struct RecipeSheet: View {
         }
         .background(Color.parchment)
         .navigationDestination(isPresented: $scannerPath) {
-            NutritionLabelCameraSheet { result in
+            NutritionLabelCameraSheet(showCalories: store.settings.showCalories) { result in
                 applyLabelScan(result)
             }
         }
@@ -768,6 +772,8 @@ struct RecipeSheet: View {
 struct CollapsedIngredientRow: View {
     var ingredient: ManualRecipeIngredientInput
     var catalog: FoodCatalog
+    /// Macros-first: the trailing calorie figure renders only behind the explicit opt-in.
+    var showCalories: Bool
     var onExpand: () -> Void
     var onRemove: () -> Void
 
@@ -779,6 +785,14 @@ struct CollapsedIngredientRow: View {
         macros.protein * 4 + macros.carbs * 4 + macros.fat * 9
     }
 
+    private var summaryLine: String {
+        var line = "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) · P\(macros.protein)g C\(macros.carbs)g F\(macros.fat)g"
+        if showCalories {
+            line += " · \(calories) cal"
+        }
+        return line
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             Button(action: onExpand) {
@@ -787,7 +801,7 @@ struct CollapsedIngredientRow: View {
                         .font(.body.weight(.medium))
                         .foregroundStyle(Color.bark)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    Text("\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) · P\(macros.protein)g C\(macros.carbs)g F\(macros.fat)g · \(calories) cal")
+                    Text(summaryLine)
                         .font(.caption)
                         .foregroundStyle(Color.slate)
                 }
@@ -1009,7 +1023,7 @@ struct MealSheet: View {
                     case .recipeSearch:
                         RecipeSheet(store: store, isEmbeddedInNavigationStack: true)
                     case .scanLabel:
-                        NutritionLabelCameraSheet { _ in }
+                        NutritionLabelCameraSheet(showCalories: store.settings.showCalories) { _ in }
                     case .reviewScan:
                         EmptyView()
                     case .productPageImport:
@@ -1325,6 +1339,7 @@ struct FoodProductPageImportView: View {
                 FoodProductReviewSheet(
                     preview: preview,
                     product: importedProduct,
+                    showCalories: store.settings.showCalories,
                     onSearchAgain: searchAgain,
                     onConfirm: saveConfirmedProduct
                 )
@@ -1444,6 +1459,8 @@ struct FoodProductReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     var preview: ProductPagePreview
     var product: ImportedFoodProduct?
+    /// Macros-first: the Calories pill renders only behind the explicit opt-in.
+    var showCalories: Bool
     var onSearchAgain: () -> Void
     var onConfirm: () -> Void
     @State private var showingSafari = false
@@ -1535,12 +1552,14 @@ struct FoodProductReviewSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
 
             HStack(spacing: 8) {
-                NutritionPill(title: "Calories", value: "\(calories(for: product))")
                 NutritionPill(title: "Protein", value: "\(product.macros.protein)g")
+                NutritionPill(title: "Carbs", value: "\(product.macros.carbs)g")
             }
             HStack(spacing: 8) {
-                NutritionPill(title: "Carbs", value: "\(product.macros.carbs)g")
                 NutritionPill(title: "Fat", value: "\(product.macros.fat)g")
+                if showCalories {
+                    NutritionPill(title: "Calories", value: "\(calories(for: product))")
+                }
             }
 
             Text("Check the serving size and nutrition values before saving. Fernlet will add this product to your local food catalog only after confirmation.")

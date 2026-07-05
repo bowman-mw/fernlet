@@ -334,6 +334,7 @@ nonisolated public final class PersistenceController {
             makeSavedRecipeRecordEntity(),
             makeCustomItemRecordEntity(),
             makeCoinLedgerRecordEntity(),
+            makeMilestoneLedgerRecordEntity(),
             makeDayRecordEntity()
         ]
         return model
@@ -400,6 +401,22 @@ nonisolated public final class PersistenceController {
             // idempotent and double-grant-free across devices.
             makeAttribute("idString", type: .stringAttributeType),
             // The CoinLedgerEntry as JSON (plain binary, tens of bytes — far under CloudKit's budget).
+            makeAttribute("payloadData", type: .binaryDataAttributeType),
+            makeAttribute("createdAt", type: .dateAttributeType)
+        ]
+        return entity
+    }
+
+    private static func makeMilestoneLedgerRecordEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "MilestoneLedgerRecord"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            // `idString` is the milestone event's deterministic id (e.g. "event:journal:<uuid>").
+            // Same dedup story as CoinLedgerRecord: one device upserts by it; across devices CloudKit
+            // can hold duplicate-id rows and `MilestoneEconomy` collapses them when aggregating.
+            makeAttribute("idString", type: .stringAttributeType),
+            // The MilestoneLedgerEntry as JSON (plain binary, tens of bytes).
             makeAttribute("payloadData", type: .binaryDataAttributeType),
             makeAttribute("createdAt", type: .dateAttributeType)
         ]

@@ -148,9 +148,19 @@ public nonisolated enum CoinEconomy {
         amount > 0 && balance(in: entries) >= amount
     }
 
-    /// The set of day keys already credited by an `earn` row.
+    /// The set of day keys already credited by an ACTIVE-DAY `earn` row (`earn:<dayKey>`).
+    ///
+    /// Matched by the deterministic active-day id, not by `kind == .earn` alone: milestone awards
+    /// (`milestone:<kind>:<threshold>`, see `MilestoneEconomy`) are also earn rows and carry their
+    /// threshold-crossing day as `dayKey` (so the reset boundary voids them like any earn) — but a
+    /// milestone award for a day must NOT make `missingEarnEntries` think that day's 5 active-day
+    /// coins were already minted.
     public static func earnedDayKeys(in entries: [CoinLedgerEntry]) -> Set<String> {
-        Set(entries.compactMap { $0.kind == .earn ? $0.dayKey : nil })
+        Set(entries.compactMap { entry in
+            guard entry.kind == .earn, let dayKey = entry.dayKey,
+                  entry.id == CoinLedgerEntry.earnID(dayKey: dayKey) else { return nil }
+            return dayKey
+        })
     }
 
     /// The earn entries that SHOULD exist for `activeDayKeys` but don't yet — i.e. the idempotent delta a

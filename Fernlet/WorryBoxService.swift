@@ -37,6 +37,11 @@ final class WorryBoxService {
     @ObservationIgnored private let repository: any WorryStoring
     @ObservationIgnored private var mode: ActivationMode = .inactive
     @ObservationIgnored private var userContentKey: SymmetricKey?
+    /// Fired after a worry is released, with the worry's id. ContentView wires this to the
+    /// milestone ledger (`event:worry:<uuid>` — deterministic per worry, so a repeated release of
+    /// the same id can't double-count). The id is the ONLY thing that leaves this service: worry
+    /// text stays sealed and is deleted with the row.
+    @ObservationIgnored var onRelease: ((UUID) -> Void)?
 
     init(repository: (any WorryStoring)? = nil) {
         self.repository = repository ?? WorryNarrativeRepository()
@@ -88,6 +93,7 @@ final class WorryBoxService {
     func release(_ id: UUID) {
         try? repository.delete(id: id)
         worries.removeAll { $0.id == id }
+        onRelease?(id)
     }
 
     /// Re-reads the sealed store with the currently active key (empty while locked/inactive).

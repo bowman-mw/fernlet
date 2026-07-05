@@ -24,6 +24,11 @@ struct JournalView: View {
                     }
                     .padding(.top, 4)
 
+                    // One-tap mood check-in — a tag-only entry, no writing required.
+                    FernletCard {
+                        QuickMoodRow(store: store)
+                    }
+
                     JournalCalendarCard(
                         displayedMonth: $displayedMonth,
                         allDays: allDays,
@@ -102,6 +107,7 @@ struct JournalSheet: View {
     @State private var tag: FeelingTag = .neutral
     @State private var promptedReasons: Set<JournalPromptReason> = []
     @State private var journalPromptNotification: JournalPromptNotification?
+    @State private var inspirationDismissed = false
 
     private var limitedText: Binding<String> {
         Binding(
@@ -128,7 +134,10 @@ struct JournalSheet: View {
                     }
 
                     SheetField("How was today?") {
-                        SheetTextEditor(text: limitedText, placeholder: "What happened today?", minHeight: 200)
+                        VStack(alignment: .leading, spacing: 10) {
+                            inspirationChip
+                            SheetTextEditor(text: limitedText, placeholder: "What happened today?", minHeight: 200)
+                        }
                     }
 
                     Text("\(text.count)/800")
@@ -157,6 +166,54 @@ struct JournalSheet: View {
             }
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: journalPromptNotification?.id)
+    }
+
+    /// A dismissible "inspiration" chip: today's prompt from the static library (deterministic
+    /// daily rotation — see `JournalPromptLibrary`; never AI, journal text is walled from models).
+    /// "Start from this" inserts the prompt as a starter the user writes under; the chip hides once
+    /// there's text, and dismissing it is remembered for this sheet only — never required.
+    @ViewBuilder
+    private var inspirationChip: some View {
+        if !inspirationDismissed && text.isEmpty {
+            let prompt = JournalPromptLibrary.prompt(for: store.todayKey)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.goldenrod)
+                        .padding(.top, 2)
+                    Text(prompt)
+                        .font(.callout.italic())
+                        .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
+                    Spacer(minLength: 0)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            inspirationDismissed = true
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Color.slate)
+                            .frame(width: 24, height: 24)
+                            .background(Color.slate.opacity(0.10), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss the prompt")
+                }
+                Button("Start from this") {
+                    text = prompt + "\n"
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.moss)
+                .buttonStyle(.plain)
+                .accessibilityHint("Inserts the prompt so you can write under it")
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.goldenrod.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .accessibilityIdentifier("journal.inspiration")
+        }
     }
 
     private func updateText(_ newValue: String) {
@@ -651,9 +708,16 @@ struct JournalRow: View {
                     Text(FernletDate.shortDate(for: entry.date)).font(.caption).foregroundStyle(Color.slate)
                 }
             }
-            Text(entry.text)
-                .font(.callout)
-                .lineLimit(compact ? 3 : nil)
+            if entry.text.isEmpty {
+                // Tag-only mood check-in (one-tap mood): no text, just the feeling above.
+                Text("A quick mood check-in.")
+                    .font(.callout.italic())
+                    .foregroundStyle(Color.slate)
+            } else {
+                Text(entry.text)
+                    .font(.callout)
+                    .lineLimit(compact ? 3 : nil)
+            }
             if !entry.emotions.isEmpty {
                 Text(entry.emotions.joined(separator: ", "))
                     .font(.caption)
