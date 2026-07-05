@@ -85,7 +85,12 @@ struct HomeView: View {
         case .hygiene:
             HygieneCard(store: store, activeSheet: $activeSheet)
         case .ambient:
-            AmbientCardsView(store: store, activeSheet: $activeSheet, periodPrediction: homePeriodPrediction)
+            AmbientCardsView(
+                store: store,
+                activeSheet: $activeSheet,
+                periodPrediction: homePeriodPrediction,
+                stressState: store.settings.stressAwarenessEnabled ? stressService?.assessment?.state : nil
+            )
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .trends:
             HomeActionWidget(widget: widget) {
                 handleHomeWidget(widget)
@@ -190,12 +195,16 @@ struct HomeView: View {
             .accessibilityLabel("Fernlet companion")
             .accessibilityHint("Tap to interact. Press and hold to edit.")
 
-            Text(store.companionState.rawValue)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(store.companionState.color)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(store.companionState.color.opacity(0.13), in: Capsule())
+            HStack(spacing: 8) {
+                Text(store.companionState.rawValue)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(store.companionState.color)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(store.companionState.color.opacity(0.13), in: Capsule())
+
+                firstAidPill
+            }
 
             signalsCard
 
@@ -204,8 +213,30 @@ struct HomeView: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// Small persistent First Aid affordance beside the companion state chip (quick-log-chip
+    /// styling): always reachable, quietly present, never demanding attention.
+    private var firstAidPill: some View {
+        Button {
+            activeSheet = .firstAid(nil)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "heart.circle")
+                    .font(.caption.weight(.semibold))
+                Text("First aid")
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(Color.moss)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(Color.moss.opacity(0.13), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.firstAid")
+        .accessibilityHint("Opens calm tools: breathing, grounding, and the worry box")
+    }
+
     /// Gentle opt-in body-signals line under the companion — offered, never alarming.
-    /// Tapping opens the small explainer sheet (Batch B adds a First Aid link from there).
+    /// Tapping opens the small explainer sheet, which also links on to First Aid.
     @ViewBuilder
     private var stressLineView: some View {
         if let line = stressLine {

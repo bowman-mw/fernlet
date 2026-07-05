@@ -4,6 +4,7 @@ import FernletFoundation
 import FernletLock
 import HealthKitGateway
 import PrivateStoreCore
+import UserNotifications
 #if canImport(UIKit)
 import UIKit
 import FernletDomainModel
@@ -26,6 +27,11 @@ struct FernletApp: App {
         // purge); the real cleaner reaches CloudKitSync/LocalPersistence (which the gateway
         // must not depend on) and therefore lives app-side, injected through this static seam.
         HealthKitService.defaultCacheClearer = CoreDataHealthKitCacheCleaner()
+
+        // Foreground presentation + tap deep-links for the gentle daily check-in. Must be set
+        // before launch finishes so a cold-launch notification tap is delivered; `shared` keeps
+        // the strong reference the weak center delegate needs.
+        UNUserNotificationCenter.current().delegate = FernletNotificationDelegate.shared
 
         StartupTiming.beginAppLaunch()
 

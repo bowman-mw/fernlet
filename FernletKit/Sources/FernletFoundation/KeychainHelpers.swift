@@ -11,6 +11,10 @@ public nonisolated enum KeychainItem {
     public enum Account: String {
         case storagePreferences = "com.fernlet.storage-preferences.preferences"
         case deviceJournalKey = "com.fernlet.journal.deviceKey"
+        /// Device-bound fallback key for Worry Box notes (sealed, local-only) when no user lock is
+        /// configured or the lock is closed. Lives under `journalService` beside the journal device key
+        /// so lock reset (`KeychainItem.deleteAll`-adjacent flows) treats the sealed-content keys alike.
+        case deviceWorryKey = "com.fernlet.worry.deviceKey"
     }
 
     /// Which synchronizable variant of an item a query should match. The default `.any` preserves the

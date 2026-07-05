@@ -53,7 +53,8 @@ struct S3BoundaryTests {
         // Sealed narrative/log stores, repositories + the private persistence controller.
         "PrivatePersistenceController",
         "MenstrualNarrativeRepository", "JournalNarrativeRepository", "IntimacyLogRepository",
-        "MenstrualNarrative", "JournalNarrative", "IntimacyLog",
+        "WorryNarrativeRepository",
+        "MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative",
         // Raw cycle/intimacy value types — must travel only as de-identified AIContext payloads.
         "CyclePhase", "CycleDayEntry", "UserLoggedCycleEvent", "PeriodTrackerStore",
         // Sealed media stores + the pending-narrative buffer/payload.

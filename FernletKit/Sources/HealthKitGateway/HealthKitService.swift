@@ -704,6 +704,37 @@ public final class HealthKitService: HealthKitServicing {
         FernletAuditLog.log("hk.write.saved", context: ["type": "intimacy", "externalUUID": externalUUID.uuidString])
     }
 
+    /// Writes a completed in-app breathing session to Apple Health as an `HKCategorySample`
+    /// `.mindfulSession` (the write authorization has been declared since the HealthKit integration
+    /// shipped; this is its first writer).
+    ///
+    /// Gating mirrors `stressMetricDays`: the master toggle AND the per-capability
+    /// `healthKitCapabilityEnabled["mindfulness"]` opt-in are enforced here (fail closed), and the
+    /// write additionally requires granted mindful-session share authorization — it never triggers
+    /// an authorization prompt of its own. Throws on any closed gate so tests can observe it; the
+    /// First Aid caller deliberately swallows errors (a missed Health write must stay silent and
+    /// non-blocking after a breathing exercise).
+    public func saveMindfulSession(start: Date, end: Date) async throws {
+        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        let preferences = StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService)
+        guard preferences.healthKitCapabilityEnabled[HealthCapability.mindfulness.rawValue] == true else {
+            throw HealthKitServiceError.healthDataUnavailable
+        }
+        let type = try Self.categoryType(.mindfulSession)
+        guard storeController.authorizationStatus(for: type) == .sharingAuthorized else {
+            throw HealthKitServiceError.healthDataUnavailable
+        }
+        guard end > start else { return }
+        let sample = HKCategorySample(
+            type: type,
+            value: HKCategoryValue.notApplicable.rawValue,
+            start: start,
+            end: end
+        )
+        try await save([sample])
+        FernletAuditLog.log("hk.write.saved", context: ["type": "mindfulSession"])
+    }
+
     private func sleepHours(referenceDate: Date) async throws -> Double? {
         let sleepType = try Self.categoryType(.sleepAnalysis)
         let interval = Self.sleepNightInterval(containing: referenceDate)

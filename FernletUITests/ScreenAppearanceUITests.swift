@@ -120,6 +120,8 @@ final class ScreenAppearanceUITests: XCTestCase {
     @MainActor
     func testTrendsSheetAppearance()            { probeSheet("trends", "Sheet · Trends") }
     @MainActor
+    func testFirstAidSheetAppearance()          { probeSheet("firstAid", "Sheet · First aid") }
+    @MainActor
     func testRecipeSheetAppearance()            { probeSheet("recipe", "Sheet · Recipe") }
     @MainActor
     func testRecipeBookSheetAppearance()        { probeSheet("recipeBook", "Sheet · Recipe book") }

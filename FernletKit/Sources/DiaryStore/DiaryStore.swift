@@ -719,6 +719,31 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    // MARK: - Gentle offers
+
+    /// Key into the persisted `nutrientBubbleDismissedUntil` map for the ambient gentle-offer card.
+    /// A new key in the existing synced `[String: Date]` map is decode-safe on old builds.
+    public static let gentleOfferDismissalKey = "gentleOffer"
+
+    /// Whether today's single ambient gentle offer may still be shown (max one per day).
+    public func isGentleOfferAvailable(now: Date = Date()) -> Bool {
+        guard let until = settings.nutrientBubbleDismissedUntil[Self.gentleOfferDismissalKey] else { return true }
+        return now >= until
+    }
+
+    /// Suppresses the ambient gentle-offer card until the start of the next local day. Both
+    /// dismissing and accepting an offer consume it — one invitation per day, never nagging.
+    public func dismissGentleOfferForToday(now: Date = Date()) {
+        settings.nutrientBubbleDismissedUntil[Self.gentleOfferDismissalKey] = Self.gentleOfferSuppressionEnd(now: now)
+        scheduleSnapshotSave()
+    }
+
+    /// Start of the next local day — the moment a fresh gentle offer becomes possible again.
+    public static func gentleOfferSuppressionEnd(now: Date = Date()) -> Date {
+        let startOfDay = Calendar.current.startOfDay(for: now)
+        return Calendar.current.date(byAdding: .day, value: 1, to: startOfDay) ?? now.addingTimeInterval(86_400)
+    }
+
     // MARK: - Onboarding
 
     public func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {

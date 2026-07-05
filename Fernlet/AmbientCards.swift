@@ -2,11 +2,13 @@ import SwiftUI
 import LocalPersistence
 import FernletFoundation
 import FernletDomainModel
+import FernletScoring
 import PrivateHealthStore
 import AppServices
 
-/// Gentle, low-cost "ambient" home surfaces (spec §12): a looking-back journal card, a macro-gap
-/// meal nudge, forgotten-favorite meal chips, a forgotten-good workout nudge, and a dismissible
+/// Gentle, low-cost "ambient" home surfaces (spec §12): an at-most-once-a-day gentle offer
+/// (breathing / worry box / short walk), a looking-back journal card, a macro-gap meal nudge,
+/// forgotten-favorite meal chips, a forgotten-good workout nudge, and a dismissible
 /// preventive-care micronutrient bubble. Each renders only when it has something worth surfacing,
 /// so the section quietly disappears on a sparse day rather than nagging.
 struct AmbientCardsView: View {
@@ -15,17 +17,22 @@ struct AmbientCardsView: View {
     /// Calendar-math next-period outlook, already gated by the caller for opt-in + hide-predictions.
     /// Nil when there is nothing to show (locked, too few cycles, or surfacing turned off).
     var periodPrediction: CyclePrediction? = nil
+    /// Today's opt-in body-signals reading, already gated by the caller on `stressAwarenessEnabled`
+    /// (nil when opted out, cold-starting, or simply fine). One of the gentle-offer gates.
+    var stressState: StressState? = nil
 
     @State private var didLoad = false
     @State private var lookBack: LookBack?
     @State private var forgottenFavorites: [String] = []
     @State private var forgottenWorkout: String?
     @State private var weatherPrompt: String?
+    @State private var walkComfort: WeatherComfort?
 
     struct LookBack: Equatable { let label: String; let text: String }
 
     var body: some View {
         VStack(spacing: 12) {
+            gentleOfferCard
             lookingBackCard
             macroGapCard
             forgottenFavoritesCard
@@ -42,8 +49,81 @@ struct AmbientCardsView: View {
             forgottenFavorites = computeForgottenFavorites()
             forgottenWorkout = computeForgottenWorkout()
             if store.settings.weatherPromptsEnabled {
+                // Both reads share the service's ≤30-min conditions cache (one fetch, two prompts).
                 weatherPrompt = await WeatherKitService.shared.moodRecoveryPrompt()
+                walkComfort = await WeatherKitService.shared.currentComfort()
             }
+        }
+    }
+
+    // MARK: - Gentle offer (max one per day)
+
+    /// One quiet invitation on a heavier day. Gated by the pure `GentleOfferEngine` (body signals
+    /// tense/needs-care, or moodTrend "needs gentleness"); dismissing OR accepting consumes it
+    /// until tomorrow (persisted via the settings dismissal map — see `DiaryStore`).
+    @ViewBuilder
+    private var gentleOfferCard: some View {
+        if let kind = activeGentleOffer {
+            FernletCard {
+                HStack(alignment: .top, spacing: 12) {
+                    Button {
+                        acceptGentleOffer(kind)
+                    } label: {
+                        HStack(alignment: .top, spacing: 12) {
+                            ambientIcon(kind.icon, tint: .moss)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("A gentle offer")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.moss)
+                                Text(kind.invitation)
+                                    .font(.callout)
+                                    .foregroundStyle(Color.bark)
+                                    .fernletWrappingText()
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("home.gentleOffer")
+                    Button {
+                        store.dismissGentleOffer()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.slate)
+                            .frame(width: 28, height: 28)
+                            .background(Color.slate.opacity(0.10), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Not today")
+                }
+            }
+        }
+    }
+
+    private var activeGentleOffer: GentleOfferKind? {
+        guard store.isGentleOfferAvailableToday else { return nil }
+        let moodTrend = store.derivedSignals.first { $0.signalName == "moodTrend" }?.value
+        return GentleOfferEngine.offer(
+            dateKey: store.todayKey,
+            stressAwarenessEnabled: store.settings.stressAwarenessEnabled,
+            stressState: stressState,
+            moodTrendValue: moodTrend,
+            walkIsInviting: (walkComfort?.isPleasant ?? false) && (walkComfort?.isDaytime ?? false)
+        )
+    }
+
+    /// Accepting an offer opens the matching tool and consumes today's offer (the walk has no
+    /// in-app tool — accepting it is simply a warm send-off).
+    private func acceptGentleOffer(_ kind: GentleOfferKind) {
+        store.dismissGentleOffer()
+        switch kind {
+        case .breathing:
+            activeSheet = .firstAid(.breathing)
+        case .worryBox:
+            activeSheet = .firstAid(.worryBox)
+        case .shortWalk:
+            break
         }
     }
 

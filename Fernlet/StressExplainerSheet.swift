@@ -4,8 +4,8 @@
 //
 //  The gentle "how we estimate this" sheet behind the Home body-signals line. Wellness
 //  framing only — plain language, the user's own baseline, and an explicit not-medical
-//  disclaimer (App Store 1.4.1). Batch B will add a First Aid link from here; for now the
-//  sheet is informational only.
+//  disclaimer (App Store 1.4.1). Also offers the First Aid tools — an invitation, never
+//  an instruction.
 //
 
 import SwiftUI
@@ -14,6 +14,8 @@ import FernletScoring
 struct StressExplainerSheet: View {
     /// Nil during cold start (fewer than ~7 days of body signals).
     var assessment: StressAssessment?
+    /// Set by ContentView to chain into the First Aid sheet (dismiss-then-represent).
+    var onFirstAid: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -54,6 +56,8 @@ struct StressExplainerSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
 
+                firstAidLink
+
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel("How Fernlet estimates this")
                     Text("Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week.")
@@ -77,6 +81,42 @@ struct StressExplainerSheet: View {
             .padding(20)
         }
         .background(Color.parchment)
+    }
+
+    /// A soft door to the First Aid tools — worded as an offer, shown whenever the host wired it.
+    @ViewBuilder
+    private var firstAidLink: some View {
+        if let onFirstAid {
+            Button {
+                onFirstAid()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "heart.circle")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(Color.moss)
+                        .frame(width: 34, height: 34)
+                        .background(Color.moss.opacity(0.14), in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Something for right now?")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.bark)
+                        Text("First aid has slow breathing, grounding, and a worry box — only if it sounds nice.")
+                            .font(.caption)
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.slate.opacity(0.6))
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("stressExplainer.firstAid")
+        }
     }
 
     private var currentReadingTitle: String {

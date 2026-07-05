@@ -7,6 +7,9 @@ enum PrivateHubSection: String, CaseIterable, Identifiable {
     case journal = "Journal"
     case period = "Period"
     case intimacy = "Intimacy"
+    // Worry Box: always visible (no per-user gating), so BOTH visible-section computations —
+    // this helper AND the inline filter in `PrivateHubView.body` — pick it up via `allCases`.
+    case worryBox = "Worry Box"
     var id: String { rawValue }
 
     static func visibleSections(allowsIntimacy: Bool) -> [PrivateHubSection] {
@@ -18,6 +21,7 @@ struct PrivateHubView: View {
     var store: FernletStore
     var periodStore: PeriodTrackerStore
     var periodContext: PeriodContextBridge? = nil
+    var worryBox: WorryBoxService
     @Binding var activeSheet: FernletSheet?
     @Binding var section: PrivateHubSection
     @Binding var isTabBarCompact: Bool
@@ -35,6 +39,8 @@ struct PrivateHubView: View {
                 PersonalScreenView(screen: .intimacyTracking, store: store, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                     .tag(PrivateHubSection.intimacy)
             }
+            WorryBoxView(worryBox: worryBox)
+                .tag(PrivateHubSection.worryBox)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .safeAreaInset(edge: .top, spacing: 0) {

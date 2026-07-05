@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var periodStore = PeriodTrackerStore(healthService: HealthKitService())
     @State private var periodContext: PeriodContextBridge?
     @State private var stressService = StressService()
+    @State private var worryBoxService = WorryBoxService()
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
@@ -33,6 +34,9 @@ struct ContentView: View {
     @State private var mealLogNotification: MealLogNotification?
     @State private var editingRecipeFromHome: RecipeDefinition?
     @State private var editingSavedRecipeFromHome: RecipeDefinition?
+    /// Set by the stress explainer's First Aid link; consumed by `handleActiveSheetDismiss`
+    /// (the same dismiss-then-represent chaining the recipe editors use).
+    @State private var pendingFirstAidAfterDismiss = false
     @State private var didAutoImportHealthProfile = false
     @State private var didAutoImportHealthContext = false
     @State private var discoveryTimeoutTask: Task<Void, Never>?
@@ -80,6 +84,7 @@ struct ContentView: View {
                 } else if case .notConfigured = newState {
                     store.activateNoLockJournals()
                 }
+                worryBoxService.updateActivation(lockState: newState, contentKey: lockService.contentKey())
                 updateRecipeShareListener()
             }
             .overlay(alignment: .top) {
@@ -114,6 +119,7 @@ struct ContentView: View {
                 } else {
                     store.activateNoLockJournals()
                 }
+                worryBoxService.updateActivation(lockState: initialLockState, contentKey: lockService.contentKey())
                 #if DEBUG
                 // UX appearance tests: populate the diary so every tab renders real cards.
                 if UITestSupport.shouldSeedDemoContent { store.seedDemoContent() }
@@ -128,6 +134,9 @@ struct ContentView: View {
                 // (generalizes the older FERNLET_UI_TEST_OPEN_SETTINGS hook).
                 if let initialSheet = UITestSupport.initialSheet { activeSheet = initialSheet }
                 #endif
+                // A notification tapped during a cold launch stored its deep-link before this
+                // view finished preparing — open it now (live taps arrive via onReceive below).
+                consumePendingNotificationSheet()
                 store.meshNetworkManager.injectUITestStateIfNeeded()
                 updateRecipeShareListener()
                 store.deferredPostLaunchTasks()
@@ -163,6 +172,23 @@ struct ContentView: View {
                 }
                 updateRecipeShareListener()
             }
+            .onReceive(NotificationCenter.default.publisher(for: FernletNotificationDelegate.pendingSheetRequestNotification)) { _ in
+                consumePendingNotificationSheet()
+            }
+    }
+
+    /// Opens the sheet a notification tap asked for (daily check-in → journal). Skipped while
+    /// launch preparation is still running — the startup task consumes the flag afterwards.
+    private func consumePendingNotificationSheet() {
+        guard launcher.isDone else { return }
+        guard let id = FernletNotificationDelegate.shared.pendingSheetID else { return }
+        FernletNotificationDelegate.shared.pendingSheetID = nil
+        guard activeSheet == nil else { return }
+        switch id {
+        case "journal": activeSheet = .journal
+        case "firstAid": activeSheet = .firstAid(nil)
+        default: break
+        }
     }
 
     private func resetTokenBinding(for tab: FernletTab) -> Binding<Int> {
@@ -254,7 +280,7 @@ struct ContentView: View {
                 .tag(FernletTab.move)
             SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
                 .tag(FernletTab.social)
-            PrivateHubView(store: store, periodStore: periodStore, periodContext: periodContext, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal))
+            PrivateHubView(store: store, periodStore: periodStore, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal))
                 .tag(FernletTab.personal)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
@@ -409,11 +435,22 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         case .stressExplainer:
-            StressExplainerSheet(assessment: stressService.assessment)
+            StressExplainerSheet(assessment: stressService.assessment, onFirstAid: {
+                // Chain into First Aid via the dismiss-then-represent pattern (single-active sheet).
+                pendingFirstAidAfterDismiss = true
+                activeSheet = nil
+            })
                 .uxScreenAnchor("sheet.stressExplainer")
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
+        case .firstAid(let tool):
+            FirstAidView(store: store, worryBox: worryBoxService, initialTool: tool)
+                .uxScreenAnchor("sheet.firstAid")
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+                .environment(storagePreferencesStore)
         case .logPeriod(let targetDate, let editingEntry):
             LogPeriodSheet(periodStore: periodStore, targetDate: targetDate, editingEntry: editingEntry)
                 .uxScreenAnchor("sheet.logPeriod")
@@ -543,6 +580,9 @@ struct ContentView: View {
         } else if let recipe = editingSavedRecipeFromHome {
             editingSavedRecipeFromHome = nil
             activeSheet = .editSavedRecipe(recipe)
+        } else if pendingFirstAidAfterDismiss {
+            pendingFirstAidAfterDismiss = false
+            activeSheet = .firstAid(nil)
         }
     }
 

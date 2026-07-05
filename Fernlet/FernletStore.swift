@@ -1142,6 +1142,14 @@ final class FernletStore {
         diary.dismissNutrientBubble(key)
     }
 
+    /// Whether today's single ambient gentle offer (breathing / worry box / short walk) may still show.
+    var isGentleOfferAvailableToday: Bool { diary.isGentleOfferAvailable() }
+
+    /// Consumes today's gentle offer (dismissed or accepted) until the start of the next local day.
+    func dismissGentleOffer() {
+        diary.dismissGentleOfferForToday()
+    }
+
     // MARK: - Sealed CloudKit backup (see SealedBackupCoordinator)
 
     /// Error surfaced when period-data sealing/restore is attempted while locked.

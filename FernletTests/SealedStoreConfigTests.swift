@@ -11,7 +11,7 @@ import CloudKitSync
 /// Addresses SEC-3 from the architecture audit (Fernlet-Review-and-Plan-Updates.md).
 struct SealedStoreConfigTests {
 
-    private let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog"]
+    private let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative"]
     private let cloudEntityNames = ["FernletDatabaseRecord", "SavedRecipeRecord"]
 
     // MARK: - Cloud model exclusion

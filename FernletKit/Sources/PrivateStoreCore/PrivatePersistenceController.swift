@@ -80,7 +80,7 @@ public final class PrivatePersistenceController {
     public func purgeEncryptedEntities() throws {
         let context = container.viewContext
         try context.performAndWait {
-            for entityName in ["MenstrualNarrative", "JournalNarrative", "IntimacyLog"] {
+            for entityName in ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative"] {
                 let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
                 try context.fetch(request).forEach(context.delete)
             }
@@ -95,7 +95,7 @@ public final class PrivatePersistenceController {
 
     static func makeManagedObjectModel() -> NSManagedObjectModel {
         let model = NSManagedObjectModel()
-        model.entities = [makeMenstrualNarrativeEntity(), makeJournalNarrativeEntity(), makeIntimacyLogEntity()]
+        model.entities = [makeMenstrualNarrativeEntity(), makeJournalNarrativeEntity(), makeIntimacyLogEntity(), makeWorryNarrativeEntity()]
         return model
     }
 
@@ -165,6 +165,22 @@ public final class PrivatePersistenceController {
                 NSFetchIndexElementDescription(property: dayKeyProp, collationType: .binary)
             ])]
         }
+        return entity
+    }
+
+    static func makeWorryNarrativeEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "WorryNarrative"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        // Worry Box notes are deliberately DEVICE-ONLY: sealed in this local store, never mirrored into
+        // FernletDay/the synced blob, and deliberately NOT part of any SealedBackup payload — "let it go"
+        // data shouldn't follow you across devices. Model kept minimal: plaintext id/createdAt for
+        // ordering + deletion, all text in the sealed ciphertext column (same NEW-4 posture as journals).
+        entity.properties = [
+            makeAttribute("id", type: .UUIDAttributeType),
+            makeAttribute("createdAt", type: .dateAttributeType),
+            makeAttribute("textCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true)
+        ]
         return entity
     }
 

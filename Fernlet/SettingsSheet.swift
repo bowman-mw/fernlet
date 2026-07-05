@@ -28,6 +28,13 @@ struct SettingsSheet: View {
     @State private var newCareTaskName = ""
     @State private var newCareTaskGroup = "Anytime"
     @State private var healthKit = HealthKitAuthorizationViewModel()
+    // Daily check-in reminder. The pending notification request IS the persistence (it survives
+    // relaunches and matches whatever onboarding scheduled), so these mirror it — loaded once
+    // per Settings visit, written straight through NotificationService.
+    @State private var dailyCheckInEnabled = false
+    @State private var dailyCheckInTime = Calendar.current.date(bySettingHour: 19, minute: 0, second: 0, of: Date()) ?? Date()
+    @State private var didLoadDailyCheckIn = false
+    @State private var dailyCheckInAuthDenied = false
 
     var body: some View {
         NavigationStack {
@@ -932,6 +939,31 @@ struct SettingsSheet: View {
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
 
+            SectionLabel("Reminders")
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Daily check-in", isOn: dailyCheckInBinding)
+                if dailyCheckInEnabled {
+                    DatePicker("Time", selection: $dailyCheckInTime, displayedComponents: .hourAndMinute)
+                }
+                Text("One gentle nudge a day — however the day went, a small note of care still counts. Change or turn it off any time.")
+                    .font(.caption.italic())
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                if dailyCheckInAuthDenied {
+                    Text("Notifications are off for Fernlet in iOS Settings — allow them there and this toggle will work.")
+                        .font(.caption.italic())
+                        .foregroundStyle(Color.terracotta)
+                        .fernletWrappingText()
+                }
+            }
+            .padding(14)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            .task { await loadDailyCheckInState() }
+            .onChange(of: dailyCheckInTime) { _, newValue in
+                guard didLoadDailyCheckIn, dailyCheckInEnabled else { return }
+                Task { await scheduleDailyCheckIn(at: newValue) }
+            }
+
             SectionLabel("Hydration")
             VStack(alignment: .leading, spacing: 10) {
                 Stepper("Bottle: \(store.settings.bottleOz) oz", value: $store.settings.bottleOz, in: 4...64)
@@ -977,6 +1009,49 @@ struct SettingsSheet: View {
                 }
             }
         )
+    }
+
+    /// Daily check-in toggle: enabling requests notification permission then schedules at the
+    /// picked time; disabling cancels the pending request (`cancelDailyCheckIn` finally has a
+    /// caller — before this, onboarding could only ever turn the reminder on).
+    private var dailyCheckInBinding: Binding<Bool> {
+        Binding(
+            get: { dailyCheckInEnabled },
+            set: { newValue in
+                if newValue {
+                    Task {
+                        if await NotificationService.requestAuthorization() {
+                            dailyCheckInAuthDenied = false
+                            dailyCheckInEnabled = true
+                            await scheduleDailyCheckIn(at: dailyCheckInTime)
+                        } else {
+                            dailyCheckInAuthDenied = true
+                            dailyCheckInEnabled = false
+                        }
+                    }
+                } else {
+                    dailyCheckInEnabled = false
+                    NotificationService.cancelDailyCheckIn()
+                }
+            }
+        )
+    }
+
+    /// Mirrors the pending notification request into the toggle/time picker once per visit.
+    private func loadDailyCheckInState() async {
+        guard !didLoadDailyCheckIn else { return }
+        if let scheduled = await NotificationService.scheduledDailyCheckIn() {
+            dailyCheckInEnabled = true
+            dailyCheckInTime = Calendar.current.date(
+                bySettingHour: scheduled.hour, minute: scheduled.minute, second: 0, of: Date()
+            ) ?? dailyCheckInTime
+        }
+        didLoadDailyCheckIn = true
+    }
+
+    private func scheduleDailyCheckIn(at time: Date) async {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: time)
+        await NotificationService.scheduleDailyCheckIn(hour: components.hour ?? 19, minute: components.minute ?? 0)
     }
 
     private var personalCareSettings: some View {

@@ -132,6 +132,9 @@ enum FernletSheet: Identifiable {
     case recipeBook
     case trends
     case stressExplainer
+    /// Calm first-aid tools (breathing / grounding / worry box); the optional tool deep-links
+    /// straight into one of them (gentle-offer cards use it).
+    case firstAid(FirstAidTool?)
     case logPeriod(targetDate: Date?, editingEntry: CycleDayEntry?)
     case logIntimacy
     case editRecipe(RecipeDefinition)
@@ -153,6 +156,7 @@ enum FernletSheet: Identifiable {
         case .recipeBook: "recipeBook"
         case .trends: "trends"
         case .stressExplainer: "stressExplainer"
+        case .firstAid: "firstAid"
         case .logPeriod: "logPeriod"
         case .logIntimacy: "logIntimacy"
         case .editRecipe(let r): "editRecipe-\(r.id)"
