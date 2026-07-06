@@ -69,6 +69,8 @@ struct BreathingExerciseView: View {
     @State private var sessionStart: Date?
     @State private var sessionTask: Task<Void, Never>?
 
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some View {
         VStack(spacing: 24) {
             Spacer(minLength: 8)
@@ -98,6 +100,15 @@ struct BreathingExerciseView: View {
         .navigationTitle("Slow breathing")
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear { sessionTask?.cancel() }
+        .onChange(of: scenePhase) { _, newPhase in
+            // Breathing is a present-moment activity. If the app is actually backgrounded mid-session
+            // (locked, home-swiped) the wall-clock timer would otherwise "complete" whenever the
+            // process resumes — minutes or an hour later — and write an inflated `.mindfulSession` to
+            // Health for an exercise that was abandoned. Treat backgrounding as a gentle abandon (no
+            // completion write, no achievement). Transient `.inactive` (a banner, Control Center) is
+            // left alone: the process isn't suspended, so the clock stays honest.
+            if newPhase == .background, isRunning { stopSession() }
+        }
     }
 
     private var breathingCircle: some View {

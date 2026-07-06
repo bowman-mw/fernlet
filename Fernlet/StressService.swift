@@ -109,6 +109,14 @@ final class StressService: StressScoringContextProviding {
 
         do {
             let metricDays = try await fetchMetricDays(Self.historyDays)
+            // Consent can be revoked mid-flight — the toggle-off and "Reset everything" paths both
+            // scrub the sidecar WHILE these HealthKit queries are suspended. Re-check before writing:
+            // persisting now would silently re-create the clinical baselines after the user withdrew
+            // consent (and un-do part of resetAll). Bail and re-scrub if it's off.
+            guard store.settings.stressAwarenessEnabled else {
+                scrubStressLocalState()
+                return
+            }
             let samples = makeSamples(metricDays: metricDays, store: store)
             assessment = StressEngine.assess(samples: samples)
             lastRefreshedAt = now

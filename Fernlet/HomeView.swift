@@ -289,22 +289,30 @@ struct HomeView: View {
         }
     }
 
-    /// The body-signals copy — shown only when opted in and the reading is at least "tense".
-    /// Calm/okay days keep Home quiet (a soft positive lives in the explainer instead).
+    /// The body-signals copy. Shown on EVERY day the user has opted in — including calm/okay days and
+    /// the ~week-long cold start — so the reading (and the explainer it opens, whose "still getting to
+    /// know you" / "settled" / "about your usual" copy would otherwise be unreachable) is always
+    /// available, and opting in never looks like it silently did nothing. Tense/needs-care days get the
+    /// gentle "be kind to yourself" wording; quieter states get a soft, low-key line.
     private var stressLine: String? {
-        guard store.settings.stressAwarenessEnabled,
-              let assessment = stressService?.assessment else { return nil }
+        guard store.settings.stressAwarenessEnabled else { return nil }
+        guard let assessment = stressService?.assessment else {
+            // Cold start: not enough baseline yet. Reassure the opted-in user the feature is on.
+            return "Body signals: still getting to know your usual rhythm."
+        }
         switch (assessment.state, assessment.annotation) {
         case (.tense, .workedOut):
             return "Your body is working a bit harder than your usual — probably that good kind of tired from moving."
         case (.tense, .possiblyUnwell):
             return "Your body seems a bit more tense than your usual — it might just be fighting something off. Rest counts."
-        case (.tense, nil):
+        case (.tense, _):
             return "Your body seems a bit more tense than your usual — be extra kind to yourself today."
         case (.needsCare, _):
             return "Your body has seemed extra tense for a couple of days. Going gently today is more than enough."
-        default:
-            return nil
+        case (.calm, _):
+            return "Your body seems calm and settled today."
+        case (.okay, _):
+            return "Body signals: about your usual today."
         }
     }
 

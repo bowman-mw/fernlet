@@ -25,7 +25,7 @@ struct MilestonesView: View {
                     .fernletWrappingText()
 
                 VStack(spacing: 10) {
-                    ForEach(MilestoneRowModel.rows(counts: store.milestoneCounts), id: \.kind) { row in
+                    ForEach(MilestoneRowModel.rows(counts: store.milestoneCounts, worriesLetGo: store.lifetimeWorriesLetGo), id: \.kind) { row in
                         milestoneRow(row)
                     }
                 }
@@ -56,12 +56,10 @@ struct MilestonesView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// Coins gifted by milestone awards so far: the deduped `milestone:` earn rows. Reads the same
-    /// in-memory ledger the balance uses, so it can never disagree with the wallet.
+    /// Coins gifted by milestone awards so far. Reset-aware (the same voiding the wallet applies to
+    /// milestone earns), so it can never disagree with the balance after a "Reset everything".
     private var totalMilestoneCoins: Int {
-        CoinEconomy.deduplicatedByID(store.coinLedgerService.entries)
-            .filter { $0.kind == .earn && $0.id.hasPrefix("milestone:") }
-            .reduce(0) { $0 + max(0, $1.amount) }
+        CoinEconomy.milestoneAwardCoins(in: store.coinLedgerService.entries)
     }
 
     private func milestoneRow(_ row: MilestoneRowModel) -> some View {
@@ -100,7 +98,7 @@ struct MilestoneRowModel {
     let headline: String
     let reachedCount: Int
 
-    static func rows(counts: [MilestoneEventKind: Int]) -> [MilestoneRowModel] {
+    static func rows(counts: [MilestoneEventKind: Int], worriesLetGo: Int) -> [MilestoneRowModel] {
         let order: [(MilestoneEventKind, String, Color)] = [
             (.journal, "book.closed", .moss),
             (.meal, "fork.knife", .goldenrod),
@@ -110,13 +108,16 @@ struct MilestoneRowModel {
             (.worry, "archivebox", .goldenrod)
         ]
         return order.map { kind, icon, tint in
-            let count = counts[kind] ?? 0
+            // Worry counts come from the device-local Worry Box (never the synced ledger), and worries
+            // award no coins (a device-local coin award would desync the wallet), so their "gifts" is 0.
+            let count = kind == .worry ? worriesLetGo : (counts[kind] ?? 0)
+            let reachedCount = kind == .worry ? 0 : MilestoneEconomy.thresholds.filter { $0 <= count }.count
             return MilestoneRowModel(
                 kind: kind,
                 icon: icon,
                 tint: tint,
                 headline: headline(kind: kind, count: count),
-                reachedCount: MilestoneEconomy.thresholds.filter { $0 <= count }.count
+                reachedCount: reachedCount
             )
         }
     }

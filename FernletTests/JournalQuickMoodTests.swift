@@ -46,14 +46,31 @@ struct JournalQuickMoodTests {
         #expect(store.previousJournals.first?.tag == .tired)
     }
 
-    @Test func quickMoodAppendsWhenSealedStateIsAmbiguous() {
-        // No activation (inactive/locked): an empty-text entry could be a stripped sealed entry,
-        // so the check-in must append rather than risk retagging a real journal.
-        let store = makeTestStore(date: testDate)
+    @Test func quickMoodUpdatesInPlaceEvenWhileLockedViaMarker() {
+        // Regression (finding #19): with the positive `isQuickMood` marker, our own check-in is
+        // identifiable even with no journal key active (locked/inactive), so re-taps UPDATE IN PLACE
+        // instead of appending a fresh entry per tap (which inflated milestone counts while locked).
+        let store = makeTestStore(date: testDate)   // no activation → .inactive/locked-like
         store.logQuickMood(.good)
         store.logQuickMood(.tired)
+        store.logQuickMood(.good)                    // same-chip re-taps included
+        #expect(store.day.journals.count == 1)
+        #expect(store.day.journals.last?.tag == .good)
+        #expect(store.day.journals.first?.isQuickMood == true)
+    }
+
+    @Test func quickMoodNeverRetagsAForeignEmptyEntry() {
+        // Regression (finding #16): a real sealed journal entry synced from another device arrives
+        // with text stripped to "" and isQuickMood == false. A quick-mood tap must APPEND its own
+        // check-in, never retag the foreign entry (whose author's chosen tag must be preserved).
+        let store = makeTestStore(date: testDate)
+        store.activateNoLockJournals()               // key active — the old empty-text heuristic would have retagged
+        store.day.journals = [JournalEntry(text: "", tag: .good, isQuickMood: false)]  // a stripped remote seal
+        store.logQuickMood(.tired)
         #expect(store.day.journals.count == 2)
+        #expect(store.day.journals.first?.tag == .good)   // foreign entry's tag untouched
         #expect(store.day.journals.last?.tag == .tired)
+        #expect(store.day.journals.last?.isQuickMood == true)
     }
 
     @Test func realJournalAfterQuickMoodAppendsAndWins() {

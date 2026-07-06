@@ -7,9 +7,10 @@
 // per-friend-per-day rate limit across "relaunch" (new ledger on the same file) with an
 // injected clock, and the pure 24h glow-decay math.
 
-import ProximityKit
+@testable import ProximityKit
 import Foundation
 import Testing
+import MultipeerConnectivity
 import FernletFoundation
 import FernletDomainModel
 @testable import Fernlet
@@ -314,6 +315,224 @@ struct HeartShareTests {
         #expect(message.contains("already sent Aisha some warmth today"))
     }
 
+    // MARK: - Auto-connect trust gate (findings [7]/[12]): non-friends torn down, friends stay
+
+    /// Drives a real coordinator through the full handshake to `.connected`, so the peer identity's
+    /// signing key equals `remote`'s (which the caller may or may not have trusted in the vault).
+    /// Returns the connected coordinator, its retained trust policy, and the transport peer.
+    private func connectedCoordinator(
+        local: IdentityService,
+        remote: IdentityService,
+        vault: ProximityTrustVault,
+        peerName: String
+    ) async throws -> (ProximityCoordinator, FriendSessionTrustPolicy, MultipeerPeer) {
+        let transport = MockMultipeerTransport()
+        let trustPolicy = FriendSessionTrustPolicy(vault: vault)
+        let coordinator = ProximityCoordinator(
+            identity: local,
+            transport: transport,
+            ranging: MockRangingProvider(),
+            inspector: nil,
+            trustPolicy: trustPolicy,
+            replayCache: ReplayCache(),
+            foregroundAnchor: NoopProximityForegroundAnchor(),
+            displayName: "Local",
+            timeoutSeconds: 0
+        )
+        let peer = MultipeerPeer(
+            id: UUID(),
+            displayName: peerName,
+            discoveryInfo: ["fp": remote.localFingerprint],
+            advertisedFingerprint: remote.localFingerprint,
+            underlying: MCPeerID(displayName: peerName)
+        )
+        let intro = try FernletIdentityEnvelope.signed(
+            identityService: remote,
+            senderDisplayName: peerName,
+            payloadType: .identityIntroduction,
+            payloadSummary: PayloadSummary(title: "Hello from \(peerName)"),
+            payload: Data()
+        )
+        await coordinator.begin(role: .browser, mode: .trainer)
+        transport.simulateConnected(peer: peer)
+        // Poll rather than sleep-a-fixed-amount: the transport→coordinator hop is async and 10 ms is
+        // not reliable under parallel test execution.
+        await waitUntil { if case .awaitingTapConfirmation = coordinator.state { return true }; return false }
+        await coordinator.tapToConfirm()
+        transport.simulateInboundData(try JSONEncoder().encode(intro), from: peer)
+        await waitUntil {
+            switch coordinator.state {
+            case .awaitingUserConfirmation, .connected: return true
+            default: return false
+            }
+        }
+        // FriendSessionTrustPolicy.isTrustedProximityPeer always returns true, so in trainer mode the
+        // coordinator auto-confirms to .connected on its own; only confirm explicitly if it hasn't yet
+        // (otherwise pendingPeerIdentity is already consumed and a second confirm fails).
+        if case .awaitingUserConfirmation = coordinator.state {
+            await coordinator.confirmPeerIdentity()
+        }
+        guard case .connected = coordinator.state else {
+            throw TestFailure.notConnected(String(describing: coordinator.state))
+        }
+        return (coordinator, trustPolicy, peer)
+    }
+
+    private enum TestFailure: Error { case notConnected(String) }
+
+    private func waitUntil(
+        timeout: Duration = .seconds(2),
+        condition: @escaping @MainActor () -> Bool
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition(), clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    @Test func verifiedNonFriendHeartPeerIsTornDownAndNotReachable() async throws {
+        let host = MockHeartProximityHost()
+        let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
+        let (stranger, strangerID) = try makeIdentity(); defer { cleanup(strangerID) }
+        let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
+        let manager = ProximityHeartManager(store: host, ledger: ledger)
+
+        // The stranger is NEVER trusted in the vault.
+        let (coordinator, policy, peer) = try await connectedCoordinator(
+            local: local, remote: stranger, vault: host.proximityTrustVault, peerName: "Stranger"
+        )
+        let reachable = manager.evaluateConnectedCoordinatorForTesting(coordinator, peer: peer, trustPolicy: policy)
+
+        #expect(!reachable)
+        #expect(!manager.isReachable(fingerprint: stranger.localFingerprint))
+        #expect(manager.reachableFingerprints.isEmpty)
+    }
+
+    @Test func verifiedTrustedFriendBecomesReachable() async throws {
+        let host = MockHeartProximityHost()
+        let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
+        let (friend, friendID) = try makeIdentity(); defer { cleanup(friendID) }
+        let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
+        let manager = ProximityHeartManager(store: host, ledger: ledger)
+
+        // Trust the friend's real signing key in the vault (mode .friend).
+        host.proximityTrustVault.trust(
+            ProximityCoordinator.PeerIdentity(
+                id: UUID(),
+                displayName: "Aisha Bloom",
+                signingPublicKey: friend.localSigningPublicKey,
+                keyAgreementPublicKey: friend.localKeyAgreementPublicKey,
+                fingerprint: friend.localFingerprint,
+                rangingMode: .none,
+                firstSeenAt: baseDate
+            ),
+            mode: .friend
+        )
+
+        let (coordinator, policy, peer) = try await connectedCoordinator(
+            local: local, remote: friend, vault: host.proximityTrustVault, peerName: "Aisha Bloom"
+        )
+        let reachable = manager.evaluateConnectedCoordinatorForTesting(coordinator, peer: peer, trustPolicy: policy)
+
+        #expect(reachable)
+        #expect(manager.isReachable(fingerprint: friend.localFingerprint))
+    }
+
+    @Test func blockedFriendHeartPeerIsNeverEligibleForTeardownGate() async throws {
+        // A once-trusted friend who is now blocked is treated as NOT a trusted friend by the gate.
+        // (`vault.block` also revokes, so the live coordinator additionally rejects their envelopes at
+        // the wire layer — see retainedTrustPolicyDropsEnvelopeFromRevokedKey; this test isolates the
+        // manager-side gate decision so it doesn't depend on the handshake reaching .connected.)
+        let host = MockHeartProximityHost()
+        let (peerIdentity, peerID) = try makeIdentity(); defer { cleanup(peerID) }
+
+        let identity = ProximityCoordinator.PeerIdentity(
+            id: UUID(),
+            displayName: "Ex Friend",
+            signingPublicKey: peerIdentity.localSigningPublicKey,
+            keyAgreementPublicKey: peerIdentity.localKeyAgreementPublicKey,
+            fingerprint: peerIdentity.localFingerprint,
+            rangingMode: .none,
+            firstSeenAt: baseDate
+        )
+        host.proximityTrustVault.trust(identity, mode: .friend)
+        // Before block: the gate accepts them.
+        #expect(ProximityHeartManager.isHeartEligibleFriendForTesting(identity, in: host))
+
+        host.proximityTrustVault.block(signingPublicKey: peerIdentity.localSigningPublicKey)
+        // After block: the gate rejects them (blocked signing key + blocked fingerprint).
+        #expect(!ProximityHeartManager.isHeartEligibleFriendForTesting(identity, in: host))
+    }
+
+    // MARK: - Retained trust policy enforces revoked/blocked keys at the envelope layer (finding [11])
+
+    @Test func retainedTrustPolicyDropsEnvelopeFromRevokedKey() async throws {
+        // With the trust policy RETAINED (as the connection now does), an envelope from a revoked
+        // signing key is rejected inside the coordinator (state → .failed), and the manager never
+        // sees the payload. This is the enforcement that silently no-oped when the policy deallocated.
+        let vault = ProximityTrustVault()
+        let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
+        let (remote, remoteID) = try makeIdentity(); defer { cleanup(remoteID) }
+
+        // Trust then revoke the remote's signing key.
+        let remotePeer = ProximityCoordinator.PeerIdentity(
+            id: UUID(),
+            displayName: "Revoked",
+            signingPublicKey: remote.localSigningPublicKey,
+            keyAgreementPublicKey: remote.localKeyAgreementPublicKey,
+            fingerprint: remote.localFingerprint,
+            rangingMode: .none,
+            firstSeenAt: baseDate
+        )
+        vault.trust(remotePeer, mode: .friend)
+        vault.revoke(signingPublicKey: remote.localSigningPublicKey)
+
+        let transport = MockMultipeerTransport()
+        let trustPolicy = FriendSessionTrustPolicy(vault: vault)   // held for the test's lifetime
+        let coordinator = ProximityCoordinator(
+            identity: local,
+            transport: transport,
+            ranging: MockRangingProvider(),
+            inspector: nil,
+            trustPolicy: trustPolicy,
+            replayCache: ReplayCache(),
+            foregroundAnchor: NoopProximityForegroundAnchor(),
+            displayName: "Local",
+            timeoutSeconds: 0
+        )
+        let peer = MultipeerPeer(
+            id: UUID(),
+            displayName: "Revoked",
+            discoveryInfo: ["fp": remote.localFingerprint],
+            advertisedFingerprint: remote.localFingerprint,
+            underlying: MCPeerID(displayName: "Revoked")
+        )
+        let intro = try FernletIdentityEnvelope.signed(
+            identityService: remote,
+            senderDisplayName: "Revoked",
+            payloadType: .identityIntroduction,
+            payloadSummary: PayloadSummary(title: "Hello"),
+            payload: Data()
+        )
+
+        await coordinator.begin(role: .browser, mode: .trainer)
+        transport.simulateConnected(peer: peer)
+        await waitUntil { if case .awaitingTapConfirmation = coordinator.state { return true }; return false }
+        await coordinator.tapToConfirm()
+        transport.simulateInboundData(try JSONEncoder().encode(intro), from: peer)
+        await waitUntil { if case .failed = coordinator.state { return true }; return false }
+
+        // The revoked-key check fired: the coordinator failed instead of processing the envelope.
+        guard case .failed(let reason) = coordinator.state else {
+            Issue.record("Expected .failed from revoked-key drop, got \(coordinator.state)")
+            return
+        }
+        #expect(reason.contains("revokedKey"))
+        // And the audit trail recorded the block (recordTrainerAudit ran because the policy was alive).
+        #expect(vault.auditEvents.contains { $0.kind == .revokedPeerBlocked })
+    }
+
     private func trustedRecord(displayName: String) -> ProximityTrustedPeerRecord {
         let signingKey = Data((0..<32).map { _ in UInt8.random(in: .min ... .max) })
         return ProximityTrustedPeerRecord(
@@ -423,16 +642,18 @@ struct HeartShareTests {
 
     // MARK: - Settings
 
-    @Test func allowNearbyHeartsDefaultsOnAndDecodesWhenAbsent() throws {
-        #expect(FernletSettings().allowNearbyHearts)
+    @Test func allowNearbyHeartsDefaultsOffAndDecodesWhenAbsent() throws {
+        // Opt-in (default off): the auto-connecting heart listener stays silent until the user turns
+        // it on, so no signed-identity exchange happens without consent.
+        #expect(!FernletSettings().allowNearbyHearts)
 
         let legacy = try JSONDecoder().decode(FernletSettings.self, from: Data("{}".utf8))
-        #expect(legacy.allowNearbyHearts)
+        #expect(!legacy.allowNearbyHearts)
 
         var settings = FernletSettings()
-        settings.allowNearbyHearts = false
+        settings.allowNearbyHearts = true
         let decoded = try JSONDecoder().decode(FernletSettings.self, from: JSONEncoder().encode(settings))
-        #expect(!decoded.allowNearbyHearts)
+        #expect(decoded.allowNearbyHearts)
     }
 }
 

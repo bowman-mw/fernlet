@@ -47,9 +47,12 @@ enum GentleOfferEngine {
     /// - the opt-in body-signals reading is at least "tense" (`stressAwarenessEnabled` + state), or
     /// - the mood trend derived signal reads "needs gentleness" (its exact emitted literal).
     ///
-    /// Rotation is deterministic per `dateKey` so the offer doesn't shuffle between renders, and
-    /// the short walk only enters the rotation when the (opt-in, cached) weather comfort check
-    /// says pleasant + daytime.
+    /// Rotation is deterministic per `dateKey` so the offer doesn't shuffle between renders. The
+    /// index is taken over the FIXED three-kind rotation (never a candidate count that flips 2↔3 as
+    /// the async, cached weather resolves — that made the offer swap identity mid-day). The short
+    /// walk only appears when the (opt-in, cached) weather comfort check says pleasant + daytime;
+    /// when it's the day's pick but the weather isn't inviting, we fall back deterministically to one
+    /// of the two always-available kinds, so breathing/worry-box days stay stable regardless of weather.
     static func offer(
         dateKey: String,
         stressAwarenessEnabled: Bool,
@@ -61,9 +64,11 @@ enum GentleOfferEngine {
         let moodGate = moodTrendValue == "needs gentleness"
         guard bodyGate || moodGate else { return nil }
 
-        var candidates: [GentleOfferKind] = [.breathing, .worryBox]
-        if walkIsInviting { candidates.append(.shortWalk) }
-        return candidates[rotationSeed(dateKey: dateKey) % candidates.count]
+        let seed = rotationSeed(dateKey: dateKey)
+        let rotation = GentleOfferKind.allCases                       // [breathing, worryBox, shortWalk]
+        let pick = rotation[seed % rotation.count]
+        guard pick == .shortWalk, !walkIsInviting else { return pick }
+        return [GentleOfferKind.breathing, .worryBox][seed % 2]
     }
 
     /// Stable per-day seed (djb2 over the day key) — `String.hashValue` is randomized per launch,

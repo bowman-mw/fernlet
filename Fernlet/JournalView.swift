@@ -709,10 +709,19 @@ struct JournalRow: View {
                 }
             }
             if entry.text.isEmpty {
-                // Tag-only mood check-in (one-tap mood): no text, just the feeling above.
-                Text("A quick mood check-in.")
-                    .font(.callout.italic())
-                    .foregroundStyle(Color.slate)
+                if entry.isQuickMood {
+                    // Positively a tag-only mood check-in (one-tap mood): no text, just the feeling above.
+                    Text("A quick mood check-in.")
+                        .font(.callout.italic())
+                        .foregroundStyle(Color.slate)
+                } else {
+                    // Empty text without the check-in marker: the words are sealed and unavailable in
+                    // this state (locked, or synced from another device before the sealed narrative
+                    // restored) — never claim the entry was "just a check-in".
+                    Text("This entry is sealed.")
+                        .font(.callout.italic())
+                        .foregroundStyle(Color.slate)
+                }
             } else {
                 Text(entry.text)
                     .font(.callout)

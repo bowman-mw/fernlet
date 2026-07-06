@@ -31,6 +31,10 @@ public protocol WorryStoring: AnyObject {
     func insert(_ worry: WorryNarrative, contentKey: SymmetricKey?) throws
     func worries(contentKey: SymmetricKey?) throws -> [WorryNarrative]
     func delete(id: UUID) throws
+    /// Deletes EVERY worry row without needing a content key (rows are dropped, not decrypted) — the
+    /// bulk purge "Reset everything" needs so worries don't survive a full data reset even while the
+    /// private lock is closed. See `FernletStore.resetAll` / `WorryBoxService.releaseAll`.
+    func deleteAll() throws
     /// Re-seals every row that decrypts under `oldKey` with `newKey` (rows already under another
     /// key are skipped). Used when the user unlocks after writing worries while locked/no-lock —
     /// the same device-key → user-key migration journals perform on activation.
@@ -94,6 +98,17 @@ public final class WorryNarrativeRepository: WorryStoring {
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.entityName)
             request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
             try context.fetch(request).forEach(context.delete)
+            try context.save()
+            try PrivatePersistentHistoryPruner.prune(context: context)
+        }
+    }
+
+    public func deleteAll() throws {
+        try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: Self.entityName)
+            let rows = try context.fetch(request)
+            guard !rows.isEmpty else { return }
+            rows.forEach(context.delete)
             try context.save()
             try PrivatePersistentHistoryPruner.prune(context: context)
         }

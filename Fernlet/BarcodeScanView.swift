@@ -54,17 +54,29 @@ struct BarcodeScanView: View {
     @State private var stillImage: UIImage?
     @State private var isDetecting = false
     @State private var detectionNotice: String?
+    /// Set when the live scanner reports it became unavailable at runtime (camera permission denied
+    /// after the viewfinder presented) — flips us to the still-photo fallback so the user never
+    /// stares at a frozen black viewfinder. Reset on foreground so enabling access in Settings retries.
+    @State private var liveScannerUnavailable = false
+
+    @Environment(\.scenePhase) private var scenePhase
 
     private var liveScannerAvailable: Bool {
-        DataScannerViewController.isSupported && DataScannerViewController.isAvailable
+        DataScannerViewController.isSupported && DataScannerViewController.isAvailable && !liveScannerUnavailable
     }
 
     var body: some View {
         VStack(spacing: 0) {
             if liveScannerAvailable {
-                BarcodeDataScannerView { payload in
-                    onCode(payload)
-                }
+                BarcodeDataScannerView(
+                    onPayload: { payload in onCode(payload) },
+                    onUnavailable: {
+                        // Camera access was denied (or the scanner otherwise went unavailable) — drop
+                        // to the still-photo fallback with a gentle hint instead of a dead viewfinder.
+                        liveScannerUnavailable = true
+                        detectionNotice = "Camera access looks off — you can turn it on in Settings, or snap or choose a photo of the barcode below."
+                    }
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(20)
 
@@ -81,6 +93,11 @@ struct BarcodeScanView: View {
         .background(Color.parchment)
         .navigationTitle("Scan barcode")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: scenePhase) { _, newPhase in
+            // Returning from Settings (where the user may have just enabled camera access) retries
+            // the live scanner; if it's still denied, becameUnavailable flips us back.
+            if newPhase == .active, liveScannerUnavailable { liveScannerUnavailable = false }
+        }
         .fullScreenCover(isPresented: $showingCamera) {
             ImagePickerView(sourceType: .camera) { image in
                 handlePickedImage(image)
@@ -185,6 +202,7 @@ struct BarcodeScanView: View {
 
 private struct BarcodeDataScannerView: UIViewControllerRepresentable {
     var onPayload: (String) -> Void
+    var onUnavailable: () -> Void
 
     func makeUIViewController(context: Context) -> DataScannerViewController {
         let scanner = DataScannerViewController(
@@ -199,24 +217,45 @@ private struct BarcodeDataScannerView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ scanner: DataScannerViewController, context: Context) {
         guard !scanner.isScanning else { return }
-        // Re-arm after a pop back into the scanner (delivery stops scanning below).
+        // Re-arm after a pop back into the scanner (delivery stops scanning below). If arming throws
+        // (e.g. permission just denied), surface it so the parent drops to the still-photo fallback
+        // rather than leaving a frozen viewfinder.
         context.coordinator.delivered = false
-        try? scanner.startScanning()
+        do {
+            try scanner.startScanning()
+        } catch {
+            context.coordinator.reportUnavailable()
+        }
     }
 
     static func dismantleUIViewController(_ scanner: DataScannerViewController, coordinator: Coordinator) {
         scanner.stopScanning()
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(onPayload: onPayload) }
+    func makeCoordinator() -> Coordinator { Coordinator(onPayload: onPayload, onUnavailable: onUnavailable) }
 
     @MainActor
     final class Coordinator: NSObject, DataScannerViewControllerDelegate {
         let onPayload: (String) -> Void
+        let onUnavailable: () -> Void
         var delivered = false
+        private var reportedUnavailable = false
 
-        init(onPayload: @escaping (String) -> Void) {
+        init(onPayload: @escaping (String) -> Void, onUnavailable: @escaping () -> Void) {
             self.onPayload = onPayload
+            self.onUnavailable = onUnavailable
+        }
+
+        func reportUnavailable() {
+            guard !reportedUnavailable else { return }
+            reportedUnavailable = true
+            onUnavailable()
+        }
+
+        // VisionKit gives this a no-op default, so it MUST be implemented explicitly or a runtime
+        // denial (camera access off) is silently swallowed and the viewfinder freezes.
+        func dataScanner(_ dataScanner: DataScannerViewController, becameUnavailableWithError error: DataScannerViewController.ScanningUnavailable) {
+            reportUnavailable()
         }
 
         func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {

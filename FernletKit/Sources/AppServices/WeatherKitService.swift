@@ -58,6 +58,12 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     private var authContinuation: CheckedContinuation<Bool, Never>?
     private var locationContinuation: CheckedContinuation<CLLocation?, Never>?
 
+    /// The single in-flight location request, shared by all concurrent callers so a cold-launch
+    /// burst of Home/ambient `.task`s issues one `requestLocation()` and awaits one continuation.
+    /// Without this, a second caller would overwrite `locationContinuation` and leak the first
+    /// (SWIFT TASK CONTINUATION MISUSE → a stuck weather surface).
+    private var locationRequest: Task<CLLocation?, Never>?
+
     #if canImport(WeatherKit)
     /// The cached current-conditions snapshot (only the three fields Fernlet ever reads).
     private struct ConditionsSnapshot {
@@ -68,6 +74,11 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     }
 
     private var cachedConditions: ConditionsSnapshot?
+
+    /// The single in-flight conditions fetch, shared by concurrent callers on a cache miss so
+    /// `moodRecoveryPrompt`/`currentComfort`/`currentAmbient` firing together cost one WeatherKit
+    /// fetch, not one each.
+    private var conditionsRequest: Task<ConditionsSnapshot?, Never>?
     #endif
 
     override init() {
@@ -175,34 +186,53 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     }
 
     /// Fetches (or serves from cache) the tiny current-conditions snapshot both prompt APIs read.
+    /// Concurrent callers on a cache miss coalesce onto one in-flight `conditionsRequest` so the
+    /// three weather surfaces appearing together share a single location + WeatherKit fetch.
     private func currentConditions() async -> ConditionsSnapshot? {
         if let cachedConditions, Date().timeIntervalSince(cachedConditions.fetchedAt) < Self.cacheInterval {
             return cachedConditions
         }
-        guard isAuthorized, let location = await currentLocation() else { return nil }
-        do {
-            let current = try await WeatherService.shared.weather(for: location).currentWeather
-            let snapshot = ConditionsSnapshot(
-                condition: current.condition,
-                temperatureCelsius: current.temperature.converted(to: .celsius).value,
-                isDaylight: current.isDaylight,
-                fetchedAt: Date()
-            )
-            cachedConditions = snapshot
-            return snapshot
-        } catch {
-            return nil
+        if let conditionsRequest { return await conditionsRequest.value }
+        let request = Task<ConditionsSnapshot?, Never> { [weak self] in
+            guard let self else { return nil }
+            defer { self.conditionsRequest = nil }
+            guard self.isAuthorized, let location = await self.currentLocation() else { return nil }
+            do {
+                let current = try await WeatherService.shared.weather(for: location).currentWeather
+                let snapshot = ConditionsSnapshot(
+                    condition: current.condition,
+                    temperatureCelsius: current.temperature.converted(to: .celsius).value,
+                    isDaylight: current.isDaylight,
+                    fetchedAt: Date()
+                )
+                self.cachedConditions = snapshot
+                return snapshot
+            } catch {
+                return nil
+            }
         }
+        conditionsRequest = request
+        return await request.value
     }
     #endif
 
     private func currentLocation() async -> CLLocation? {
+        // Fast path: a fresh fix is already on hand — no continuation, no request.
         if let cached = locationManager.location { return cached }
         guard isAuthorized else { return nil }
-        return await withCheckedContinuation { continuation in
-            locationContinuation = continuation
-            locationManager.requestLocation()
+        // Coalesce a concurrent burst onto one request: only this Task ever installs
+        // `locationContinuation`, so no caller can overwrite (and leak) another's.
+        if let locationRequest { return await locationRequest.value }
+        let request = Task<CLLocation?, Never> { [weak self] in
+            guard let self else { return nil }
+            defer { self.locationRequest = nil }
+            return await withCheckedContinuation { continuation in
+                self.locationContinuation = continuation
+                self.locationManager.requestLocation()
+            }
         }
+        locationRequest = request
+        return await request.value
     }
 
     // MARK: - CLLocationManagerDelegate

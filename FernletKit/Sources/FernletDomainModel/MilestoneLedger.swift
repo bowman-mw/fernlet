@@ -130,9 +130,15 @@ public nonisolated enum MilestoneEconomy {
     ///
     /// Day-history kinds only (journal/meal/workout/water). Breathing + worry events are not in the
     /// diary and arrive exclusively through their live hooks.
+    ///
+    /// `excludingMealIDs` skips meals still pending AI resolution (queued in the retry service): an
+    /// AI-fallback placeholder is replaced by a fresh-UUID resolved meal on retry, so counting the
+    /// placeholder now AND the resolved meal later would count one logged meal twice (rows are never
+    /// deleted). Excluding the pending placeholder means only the resolved meal is ever counted, once.
     public static func derivedEvents(
         from days: [String: FernletDay],
         hydrationTarget: Int,
+        excludingMealIDs: Set<UUID> = [],
         at date: Date
     ) -> [MilestoneLedgerEntry] {
         var events: [MilestoneLedgerEntry] = []
@@ -140,7 +146,7 @@ public nonisolated enum MilestoneEconomy {
             for entry in day.journals {
                 events.append(.event(kind: .journal, ref: entry.id.uuidString, dayKey: dayKey, at: date))
             }
-            for meal in day.meals {
+            for meal in day.meals where !excludingMealIDs.contains(meal.id) {
                 events.append(.event(kind: .meal, ref: meal.id.uuidString, dayKey: dayKey, at: date))
             }
             // HealthKit-imported workouts are passive data, not a deliberate log — excluded.
@@ -157,13 +163,14 @@ public nonisolated enum MilestoneEconomy {
     /// The milestone coin awards that SHOULD exist for the current lifetime counts but don't yet —
     /// the idempotent delta a reconcile appends to the COIN ledger. Deterministic and sync-safe:
     ///   • Award ids are threshold-deterministic, so two devices crossing 40 offline mint one award.
-    ///   • Each award's `dayKey` is the threshold-crossing day — the Nth distinct event's day under a
-    ///     (dayKey, id) sort, which every device computes identically from the merged event rows.
-    ///   • Awards whose crossing day is STRICTLY BEFORE the coin ledger's latest reset boundary are
-    ///     never (re-)minted, and `CoinEconomy.totals` voids them if a stale copy re-syncs — so a
-    ///     full reset zeroes milestone coins like all other coins, even though the milestone EVENTS
-    ///     survive. (Pre-reset progress still counts toward *later* thresholds: a threshold crossed
-    ///     after the reset day mints normally.)
+    ///   • A threshold already REACHED as of the latest reset instant belongs to pre-reset milestone
+    ///     coins that the reset zeroed — it is never (re-)minted here (otherwise the surviving events
+    ///     would silently re-award coins seconds after "Reset everything" with no user action), and
+    ///     `CoinEconomy.totals` voids any stale pre-reset award that re-syncs (createdAt <= reset). A
+    ///     threshold reached only once POST-reset events are counted is a genuine new milestone and
+    ///     mints normally with a post-reset `createdAt` that survives. So a full reset zeroes milestone
+    ///     coins like all other coins, even though the milestone EVENTS survive; the user then earns
+    ///     toward the next-higher threshold from there.
     public static func missingAwards(
         events: [MilestoneLedgerEntry],
         coinEntries: [CoinLedgerEntry],
@@ -171,22 +178,39 @@ public nonisolated enum MilestoneEconomy {
     ) -> [CoinLedgerEntry] {
         let deduped = deduplicatedByID(events)
         let existingCoinIDs = Set(coinEntries.map(\.id))
-        let resetBoundary = CoinEconomy.latestReset(in: coinEntries)?.dayKey
+        let reset = CoinEconomy.latestReset(in: coinEntries)
         var awards: [CoinLedgerEntry] = []
         for kind in MilestoneEventKind.allCases {
             let rows = deduped
                 .filter { $0.kind == kind }
                 .sorted { ($0.dayKey, $0.id) < ($1.dayKey, $1.id) }
+            // How many of this kind's events are pre-reset — thresholds up to this count were crossed
+            // before the reset (their coins were zeroed) and must not be re-minted. An event is
+            // pre-reset if its day is strictly before the reset day, OR it's on the reset day itself
+            // but was created at/before the reset instant (this createdAt tiebreak is what catches the
+            // same-day case dayKey alone can't: a threshold crossed earlier today, then "reset
+            // everything"). A day AFTER the reset day is always post-reset. Order-independent (a
+            // count, not a sorted position), so UUID sort order can't fool it.
+            let preResetCount = reset.map { r in
+                rows.reduce(0) { count, row in
+                    let isPreReset: Bool
+                    if let boundary = r.dayKey {
+                        isPreReset = row.dayKey < boundary || (row.dayKey == boundary && row.createdAt <= r.createdAt)
+                    } else {
+                        isPreReset = row.createdAt <= r.createdAt
+                    }
+                    return count + (isPreReset ? 1 : 0)
+                }
+            } ?? 0
             for threshold in thresholds where threshold <= rows.count {
+                guard threshold > preResetCount else { continue }
                 let id = awardID(kind: kind, threshold: threshold)
                 guard !existingCoinIDs.contains(id) else { continue }
-                let crossingDay = rows[threshold - 1].dayKey
-                if let resetBoundary, crossingDay < resetBoundary { continue }
                 awards.append(CoinLedgerEntry(
                     id: id,
                     kind: .earn,
                     amount: coinsPerMilestone,
-                    dayKey: crossingDay,
+                    dayKey: rows[threshold - 1].dayKey,
                     createdAt: date
                 ))
             }

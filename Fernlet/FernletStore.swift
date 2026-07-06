@@ -163,6 +163,13 @@ final class FernletStore {
     /// `StressService`; when nil (or the opt-in is off) scoring is byte-identical to stress-unaware.
     @ObservationIgnored private(set) var stressScoringContext: (any StressScoringContextProviding)?
 
+    /// Device-local Worry Box seams (the `WorryBoxService` is a `ContentView` @State, not owned here).
+    /// The lifetime "worries let go" count is read through `worriesLetGoProvider` — it stays device-local
+    /// (never the synced milestone ledger) so worry metadata honors the box's "never sync" promise —
+    /// and `worryBoxResetHook` lets `resetAll` purge the sealed worry rows + count.
+    @ObservationIgnored var worriesLetGoProvider: (() -> Int)?
+    @ObservationIgnored var worryBoxResetHook: (() -> Void)?
+
     /// Preference key + current version for the one-time historical past-day journal scrub (WI-1).
     /// Bump `pastDayJournalScrubVersion` to force the full-repository scan to re-run on next activation.
     static let pastDayJournalScrubFlagKey = "pastDayJournalScrubVersion"
@@ -546,7 +553,12 @@ final class FernletStore {
     // are not in the diary and arrive only through `recordMilestoneEvent` live hooks.
 
     /// Lifetime care counts per kind (distinct milestone-event rows — monotonic, union-merged).
+    /// NOTE: `.worry` is intentionally NOT sourced here — worry counts are device-local (see
+    /// `lifetimeWorriesLetGo`) to honor the Worry Box's "never sync" promise.
     var milestoneCounts: [MilestoneEventKind: Int] { milestoneLedgerService.lifetimeCounts }
+
+    /// Lifetime "worries let go", read from the device-local `WorryBoxService` (never synced).
+    var lifetimeWorriesLetGo: Int { worriesLetGoProvider?() ?? 0 }
 
     /// Records one live milestone event that is NOT derivable from the day history (breathing
     /// session completed, worry released). `ref` is the counted thing's stable identity — the row
@@ -566,6 +578,9 @@ final class FernletStore {
         let derived = MilestoneEconomy.derivedEvents(
             from: allDays,
             hydrationTarget: settings.hydrationTarget,
+            // Meals still pending AI resolution are placeholders that will be replaced by a
+            // fresh-UUID resolved meal — exclude them so one logged meal isn't counted twice.
+            excludingMealIDs: Set(aiRetryQueueService.retryQueue.map(\.sourceId)),
             at: Date()
         )
         milestoneLedgerService.record(derived)
@@ -1170,15 +1185,16 @@ final class FernletStore {
     /// the existing same-day semantics).
     ///
     /// Changing your mind updates the check-in IN PLACE when today's latest entry is one we can
-    /// positively identify as tag-only (requires an active journal key — while locked, a stripped
-    /// sealed entry also has empty text, so we append instead of risking a retag of a real entry).
+    /// POSITIVELY identify as a tag-only check-in via its synced `isQuickMood` marker. We never infer
+    /// "tag-only" from empty text alone: a sealed journal entry synced from another device (or an
+    /// unhydrated local seal) also has empty text, so inferring would (a) silently retag a real
+    /// entry cross-device, and (b) while locked — where no such entry can be identified — append a
+    /// fresh row on every tap, inflating milestone counts. The marker is available on every device and
+    /// regardless of lock state, so re-tapping always updates in place instead of duplicating.
     /// Empty-text entries are never sealed (see `JournalSealingCoordinator.seal`), so a check-in
     /// works even while the private lock is closed.
     func logQuickMood(_ tag: FeelingTag) {
-        if journalSealingCoordinator.canIdentifyTagOnlyEntries,
-           let last = day.journals.last,
-           last.text.isEmpty,
-           !journalSealingCoordinator.isSealed(last.id) {
+        if let last = day.journals.last, last.isQuickMood, last.text.isEmpty {
             guard last.tag != tag else { return }
             var updated = last
             updated.tag = tag
@@ -1191,7 +1207,13 @@ final class FernletStore {
                 }
             }
         } else {
-            addJournal(text: "", tag: tag)
+            let entry = JournalEntry(text: "", tag: tag, isQuickMood: true)
+            journalSealingCoordinator.seal(entry, dayKey: todayKey)  // no-op for empty text
+            batchSnapshotPersistence {
+                day.journals.append(entry)
+                previousJournals.insert(entry, at: 0)
+                previousJournals = Array(previousJournals.prefix(30))
+            }
         }
     }
 
@@ -1391,6 +1413,10 @@ final class FernletStore {
         var updatedEntry = entry
         updatedEntry.text = trimmed
         updatedEntry.tag = tag
+        // Gaining real text turns a tag-only check-in into a genuine journal entry — drop the
+        // quick-mood marker so it seals + labels like any written entry (and can't be retagged
+        // in place by `logQuickMood`).
+        updatedEntry.isQuickMood = false
 
         if journalSealingCoordinator.isSealed(entry.id) {
             journalSealingCoordinator.updateSealedNarrative(for: entry, text: trimmed, tag: tag, dayKey: date)
@@ -1737,6 +1763,12 @@ final class FernletStore {
         // The stress sidecar caches HealthKit-derived baselines on-device; "reset everything"
         // must not leave clinical derivatives behind.
         stressScoringContext?.scrubStressLocalState()
+        // Worry Box notes are the app's most sensitive free-text data and a no-lock user has no
+        // other bulk-wipe path — purge the sealed rows + the device-local let-go count.
+        worryBoxResetHook?()
+        // Received-heart records (friend names, fingerprints, glow, rate-limit keys) outlive the
+        // trust-vault wipe otherwise; clear the device-local sidecar too.
+        heartLedger.clearAll()
     }
 
     private func rebuildDerivedSignals() {
@@ -1776,13 +1808,18 @@ final class FernletStore {
         isProcessingPendingWidgetActions = true
         defer { isProcessingPendingWidgetActions = false }
 
+        // The CURRENT wall-clock day, not the launch-pinned `todayKey`: the store is built once at
+        // launch and never rebuilt on foreground, so a `+1 water` tap made after midnight on a
+        // still-resident app carries the real new-day key. Filtering against the stale launch day
+        // would drop that row AFTER `claimAll()` already removed it — a silently lost tap.
+        let currentDayKey = FernletDate.dayKey(for: Date())
         var increments: [String: Int] = [:]
         var seenIDs = Set<UUID>()
         for action in pendingWidgetActionQueue.claimAll() {
             guard seenIDs.insert(action.id).inserted,                     // idempotent by row id
                   action.action == PendingWidgetAction.waterPlusOne,      // only known actions
                   FernletDate.date(fromDayKey: action.dateKey) != nil,    // well-formed day key
-                  action.dateKey <= todayKey                              // never create future days
+                  action.dateKey <= currentDayKey                         // never create future days
             else { continue }
             increments[action.dateKey, default: 0] += 1
         }

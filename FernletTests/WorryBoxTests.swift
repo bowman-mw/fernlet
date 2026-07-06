@@ -156,7 +156,10 @@ struct WorryBoxServiceTests {
 
     private func makeService() -> (service: WorryBoxService, repository: WorryNarrativeRepository) {
         let repository = WorryNarrativeRepository(controller: PrivatePersistenceController(inMemory: true))
-        return (WorryBoxService(repository: repository), repository)
+        // Ephemeral, per-test UserDefaults so the device-local lifetime count never leaks across tests
+        // (or the shared `.standard` domain).
+        let defaults = UserDefaults(suiteName: "worry-tests-\(UUID().uuidString)")!
+        return (WorryBoxService(repository: repository, defaults: defaults), repository)
     }
 
     @Test func noLockModeWritesAndReadsWithDeviceKey() throws {
@@ -219,6 +222,42 @@ struct WorryBoxServiceTests {
 
         try service.addWorry("   \n ")
 
+        #expect(service.worries.isEmpty)
+        #expect(service.lifetimeLetGoCount == 0, "an ignored empty worry doesn't count as a letting-go")
+    }
+
+    @Test func letGoCountGrowsAtWriteNotAtRelease() throws {
+        // Finding #23: the "let it go" gesture (addWorry, First Aid's primary flow) is what counts —
+        // once per worry, keyed to the write — so a later hub "Release" of the same worry doesn't
+        // double-count it. And the count is DEVICE-LOCAL (never the synced milestone ledger, #6).
+        let (service, _) = makeService()
+        service.updateActivation(lockState: .notConfigured, contentKey: nil)
+
+        try service.addWorry("one")
+        try service.addWorry("two")
+        #expect(service.lifetimeLetGoCount == 2)
+
+        let id = try #require(service.worries.first?.id)
+        service.release(id)
+        #expect(service.lifetimeLetGoCount == 2, "releasing a kept worry is not a new letting-go")
+    }
+
+    @Test func releaseAllPurgesWorriesAndZeroesCount() throws {
+        // Finding #4: "Reset everything" must purge the sealed worry rows AND the device-local count —
+        // even while locked (rows are dropped by id, not decrypted).
+        let (service, _) = makeService()
+        service.updateActivation(lockState: .notConfigured, contentKey: nil)
+        try service.addWorry("kept a")
+        try service.addWorry("kept b")
+        #expect(service.lifetimeLetGoCount == 2)
+
+        service.releaseAll()
+
+        #expect(service.worries.isEmpty)
+        #expect(service.lifetimeLetGoCount == 0)
+        // The sealed rows are physically gone: a fresh read under the still-active device key (no-lock
+        // mode) finds nothing.
+        service.reload()
         #expect(service.worries.isEmpty)
     }
 }

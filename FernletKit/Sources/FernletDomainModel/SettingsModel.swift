@@ -60,9 +60,12 @@ public nonisolated struct FernletSettings: Codable {
     public var allowNearbyRecipeShares: Bool = true
     /// Opt-in: broadcast/browse clothing shops with nearby friends in person (Increment 3). Default on.
     public var allowNearbyClothingShares: Bool = true
-    /// Opt-out: send/receive "good vibes" hearts with trusted friends in person. Default on,
-    /// mirroring `allowNearbyRecipeShares`; turning it off stops the heart listener immediately.
-    public var allowNearbyHearts: Bool = true
+    /// Opt-IN: send/receive "good vibes" hearts with trusted friends in person. Unlike recipe/clothing
+    /// shares (which only invite on an explicit user send), the heart listener AUTO-connects to discover
+    /// reachable friends, so a brief signed-identity exchange happens before a non-friend can be
+    /// classified + torn down. Defaulting OFF makes the whole feature consent-gated (privacy-first) and
+    /// removes that ambient-exchange window entirely; turning it off stops the heart listener immediately.
+    public var allowNearbyHearts: Bool = false
     /// `yyyy-MM-dd` of the last day the user changed their shop's listed set. Drives the gentle
     /// once-per-day "you've already updated your shop today" note. Nil until the first listing change.
     public var shopLastPublishedDayKey: String? = nil
@@ -121,7 +124,7 @@ public nonisolated struct FernletSettings: Codable {
         showProximityDebugTools = try container.decodeIfPresent(Bool.self, forKey: .showProximityDebugTools) ?? false
         allowNearbyRecipeShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyRecipeShares) ?? true
         allowNearbyClothingShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyClothingShares) ?? true
-        allowNearbyHearts = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyHearts) ?? true
+        allowNearbyHearts = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyHearts) ?? false
         shopLastPublishedDayKey = try container.decodeIfPresent(String.self, forKey: .shopLastPublishedDayKey)
         companionName = try container.decodeIfPresent(String.self, forKey: .companionName) ?? ""
         workoutProfile = try container.decodeIfPresent(WorkoutProfile.self, forKey: .workoutProfile) ?? WorkoutProfile()

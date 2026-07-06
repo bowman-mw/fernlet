@@ -118,7 +118,20 @@ public nonisolated enum CoinEconomy {
         return deduped.reduce(into: (earned: 0, spent: 0)) { totals, entry in
             switch entry.kind {
             case .earn:
-                if let boundary = reset?.dayKey, let day = entry.dayKey, day < boundary { return }
+                if let reset {
+                    if entry.id.hasPrefix("milestone:") {
+                        // Milestone AWARD earns (`milestone:<kind>:<threshold>`, see `MilestoneEconomy`)
+                        // are voided by the reset INSTANT like spends (createdAt-based), NOT by dayKey:
+                        // an award minted post-reset carries a post-reset createdAt and survives, while a
+                        // stale pre-reset award re-synced from an offline device carries a pre-reset
+                        // createdAt and is voided — so a full reset zeroes milestone coins too, even
+                        // though the milestone EVENTS themselves deliberately survive.
+                        if entry.createdAt <= reset.createdAt { return }
+                    } else if let boundary = reset.dayKey, let day = entry.dayKey, day < boundary {
+                        // Active-day earns: void days STRICTLY BEFORE the reset day (the reset day stays earnable).
+                        return
+                    }
+                }
                 totals.earned += max(0, entry.amount)
             case .spend:
                 if let resetAt = reset?.createdAt, entry.createdAt <= resetAt { return }
@@ -126,6 +139,19 @@ public nonisolated enum CoinEconomy {
             case .reset:
                 break
             }
+        }
+    }
+
+    /// Coins granted specifically by milestone AWARD earns (`milestone:*`), reset-aware — voided by
+    /// the same createdAt rule `totals` applies to milestone earns, so this can never disagree with
+    /// the wallet after a reset (a stale pre-reset award re-synced from an offline device is excluded).
+    public static func milestoneAwardCoins(in entries: [CoinLedgerEntry]) -> Int {
+        let deduped = deduplicatedByID(entries)
+        let reset = latestReset(in: deduped)
+        return deduped.reduce(0) { sum, entry in
+            guard entry.kind == .earn, entry.id.hasPrefix("milestone:") else { return sum }
+            if let reset, entry.createdAt <= reset.createdAt { return sum }
+            return sum + max(0, entry.amount)
         }
     }
 

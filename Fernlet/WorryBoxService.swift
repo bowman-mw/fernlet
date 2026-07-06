@@ -34,17 +34,29 @@ final class WorryBoxService {
     /// blocks the list UI anyway; this keeps plaintext out of memory too).
     private(set) var worries: [WorryNarrative] = []
 
+    /// Lifetime count of worries let go — the number MilestonesView shows ("you've let N worries go").
+    /// DEVICE-LOCAL by design: kept in `UserDefaults`, never in the synced milestone ledger, because
+    /// even the metadata "a worry was let go on day X" would contradict the Worry Box's promise that
+    /// worries "never sync anywhere". No coins are awarded for it (a device-local coin award would
+    /// desync the wallet across devices). Monotonic — only `releaseAll` (a full data reset) zeroes it.
+    private(set) var lifetimeLetGoCount: Int {
+        didSet { defaults.set(lifetimeLetGoCount, forKey: Self.letGoCountKey) }
+    }
+    private static let letGoCountKey = "worryBox.lifetimeLetGoCount"
+
     @ObservationIgnored private let repository: any WorryStoring
+    @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var mode: ActivationMode = .inactive
     @ObservationIgnored private var userContentKey: SymmetricKey?
-    /// Fired after a worry is released, with the worry's id. ContentView wires this to the
-    /// milestone ledger (`event:worry:<uuid>` — deterministic per worry, so a repeated release of
-    /// the same id can't double-count). The id is the ONLY thing that leaves this service: worry
-    /// text stays sealed and is deleted with the row.
+    /// Fired after a worry is released (deleted) from the hub, with the worry's id. Optional hook for
+    /// callers that want to react to a release; the lifetime count is NOT driven from here — it is
+    /// incremented at the "let it go" gesture (`addWorry`) so First Aid's primary flow counts.
     @ObservationIgnored var onRelease: ((UUID) -> Void)?
 
-    init(repository: (any WorryStoring)? = nil) {
+    init(repository: (any WorryStoring)? = nil, defaults: UserDefaults = .standard) {
         self.repository = repository ?? WorryNarrativeRepository()
+        self.defaults = defaults
+        self.lifetimeLetGoCount = defaults.integer(forKey: Self.letGoCountKey)
     }
 
     // MARK: - Lock lifecycle (driven by ContentView's lock-state observers)
@@ -86,14 +98,27 @@ final class WorryBoxService {
         if activeKey != nil {
             worries.insert(worry, at: 0)
         }
+        // Writing a worry down and setting it aside IS the "letting go" gesture (First Aid's "Let it
+        // go" button routes here), so this is where the lifetime count grows — once per worry, keyed
+        // to the write, so a later hub "Release" of the same worry doesn't double-count it.
+        lifetimeLetGoCount += 1
     }
 
     /// Releases (deletes) a kept worry. Best-effort — releasing is a letting-go gesture and
-    /// should never surface an error.
+    /// should never surface an error. Does NOT change the lifetime count (that grew at `addWorry`).
     func release(_ id: UUID) {
         try? repository.delete(id: id)
         worries.removeAll { $0.id == id }
         onRelease?(id)
+    }
+
+    /// Bulk purge for "Reset everything": deletes every sealed worry row (even while locked — rows
+    /// are dropped, not decrypted) and zeroes the lifetime count. Wired from `FernletStore.resetAll`
+    /// so the app's most sensitive free-text data doesn't survive a full data reset.
+    func releaseAll() {
+        try? repository.deleteAll()
+        worries = []
+        lifetimeLetGoCount = 0
     }
 
     /// Re-reads the sealed store with the currently active key (empty while locked/inactive).

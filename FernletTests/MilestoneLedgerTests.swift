@@ -154,6 +154,65 @@ struct MilestoneLedgerTests {
         #expect(awards.first?.dayKey == "2026-06-02")
     }
 
+    @Test func sameDayCrossingsAreVoidedByAResetLaterTheSameDay() {
+        // Regression: a day-one user crosses thresholds TODAY, then taps "Reset everything" the same
+        // day. The crossing events survive (dayKey == reset day), so a dayKey-only rule would re-mint
+        // their awards seconds later with no user action. The createdAt tiebreak voids them.
+        let today = "2026-06-08"
+        let events = [
+            event(.journal, ref: "j1", dayKey: today),
+            event(.meal, ref: "m1", dayKey: today),
+            event(.workout, ref: "w1", dayKey: today),
+            event(.water, ref: today, dayKey: today),
+        ]
+        let reset = CoinLedgerEntry.reset(dayKey: today, at: now.addingTimeInterval(60))  // reset AFTER the crossings
+        #expect(MilestoneEconomy.missingAwards(events: events, coinEntries: [reset], at: now.addingTimeInterval(120)).isEmpty)
+
+        // A stale same-day award re-synced from another device (dayKey == reset day, so the plain
+        // day<boundary rule can't void it) is voided by the milestone createdAt rule in the balance.
+        let staleAward = CoinLedgerEntry(
+            id: MilestoneEconomy.awardID(kind: .journal, threshold: 1),
+            kind: .earn, amount: MilestoneEconomy.coinsPerMilestone,
+            dayKey: today, createdAt: now
+        )
+        #expect(CoinEconomy.balance(in: [reset, staleAward]) == 0)
+        #expect(CoinEconomy.milestoneAwardCoins(in: [reset, staleAward]) == 0)
+    }
+
+    @Test func thresholdCrossedByPostResetActivityStillMints() {
+        // After a same-day reset, genuinely NEW post-reset events crossing a fresh threshold mint
+        // normally (createdAt after the reset instant), while the pre-reset survivor stays voided.
+        let today = "2026-06-08"
+        let reset = CoinLedgerEntry.reset(dayKey: today, at: now)
+        var events = [MilestoneLedgerEntry.event(kind: .journal, ref: "old", dayKey: today, at: now.addingTimeInterval(-60))]
+        for i in 1...5 { events.append(.event(kind: .journal, ref: "new\(i)", dayKey: today, at: now.addingTimeInterval(60))) }
+        // 6 journal events, preResetCount 1 → threshold 1 (pre-reset) stays voided, threshold 5 mints.
+        let awards = MilestoneEconomy.missingAwards(events: events, coinEntries: [reset], at: now.addingTimeInterval(120))
+        #expect(awards.map(\.id) == ["milestone:journal:5"])
+        // The freshly-minted post-reset award (createdAt after the reset) counts toward the wallet.
+        #expect(CoinEconomy.milestoneAwardCoins(in: [reset] + awards) == MilestoneEconomy.coinsPerMilestone)
+    }
+
+    @Test func pendingAIMealsAreExcludedFromDerivedEventsUntilResolved() {
+        // Regression: an AI-fallback placeholder meal is replaced by a fresh-UUID resolved meal on
+        // retry; counting both would double-count one logged meal. While pending, it's excluded.
+        var day = FernletDay(date: "2026-05-01")
+        let placeholder = Meal(
+            name: "chicken and rice", mealType: .dinner, macros: Macros(protein: 30, carbs: 40, fat: 10),
+            quality: .good, confidence: "low", note: "", source: "fallback"
+        )
+        day.meals = [placeholder]
+        let withPlaceholder = MilestoneEconomy.derivedEvents(
+            from: ["2026-05-01": day], hydrationTarget: 8, excludingMealIDs: [placeholder.id], at: now
+        )
+        #expect(!withPlaceholder.contains { $0.kind == .meal })
+        // Once resolved (no longer in the queue), the meal is counted.
+        let counted = MilestoneEconomy.derivedEvents(
+            from: ["2026-05-01": day], hydrationTarget: 8, excludingMealIDs: [], at: now
+        )
+        #expect(counted.filter { $0.kind == .meal }.count == 1)
+    }
+
     @Test func milestoneAwardDoesNotBlockTheSameDaysActiveDayEarn() {
         // Regression for the earnedDayKeys narrowing: a milestone award row carries a dayKey (its
         // crossing day), but only true active-day rows ("earn:<dayKey>") may satisfy the active-day

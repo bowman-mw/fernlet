@@ -83,6 +83,21 @@ struct GentleOfferEngineTests {
         #expect(withWalk.contains(.shortWalk), "pleasant daytime weather should rotate the walk in")
     }
 
+    @Test func nonWalkOfferIsStableWhenWeatherFlips() {
+        // Regression (finding #22): the day's offer must not change identity when the async, cached
+        // weather comfort flips walk eligibility — except on days whose pick IS the walk (inherently
+        // weather-gated). Previously the modulo base flipped 2↔3 and swapped breathing↔worryBox too.
+        for dateKey in (1...31).map({ String(format: "2026-07-%02d", $0) }) {
+            let dry = offer(dateKey: dateKey, stressEnabled: true, stressState: .tense, walk: false)
+            let pleasant = offer(dateKey: dateKey, stressEnabled: true, stressState: .tense, walk: true)
+            if pleasant == .shortWalk {
+                #expect(dry == .breathing || dry == .worryBox)
+            } else {
+                #expect(dry == pleasant, "\(dateKey): non-walk offer must not shuffle when weather flips")
+            }
+        }
+    }
+
     @Test func rotationVariesAcrossDays() {
         let days = (1...31).map { String(format: "2026-07-%02d", $0) }
         let kinds = Set(days.compactMap { offer(dateKey: $0, stressEnabled: true, stressState: .tense, walk: false) })
@@ -167,6 +182,21 @@ struct WeatherComfortTests {
         // (same nil-on-any-failure contract as moodRecoveryPrompt) — never throw, never block.
         let comfort = await WeatherKitService.shared.currentComfort()
         #expect(comfort == nil)
+    }
+
+    @Test func concurrentWeatherSurfacesCoalesceWithoutCrashing() async {
+        // Regression guard for the shared-continuation bug: a cold-launch burst of the three
+        // weather surfaces firing at once (Home ambient + comfort + mood prompt) used to overwrite
+        // the single locationContinuation and leak the first waiter (SWIFT TASK CONTINUATION MISUSE).
+        // The test host has no location authorization, so each concurrent caller on the same cache
+        // miss must coalesce and return nil — never hang, never double-resume, never crash.
+        async let comfort = WeatherKitService.shared.currentComfort()
+        async let ambient = WeatherKitService.shared.currentAmbient()
+        async let prompt = WeatherKitService.shared.moodRecoveryPrompt()
+        let results = await (comfort, ambient, prompt)
+        #expect(results.0 == nil)
+        #expect(results.1 == nil)
+        #expect(results.2 == nil)
     }
 }
 

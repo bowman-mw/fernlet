@@ -120,11 +120,12 @@ struct ContentView: View {
                     store.activateNoLockJournals()
                 }
                 worryBoxService.updateActivation(lockState: initialLockState, contentKey: lockService.contentKey())
-                // A released worry counts toward the "worries let go" milestone. Only the worry's
-                // id crosses this seam — never its (sealed, about-to-be-deleted) text.
-                worryBoxService.onRelease = { [weak store] id in
-                    store?.recordMilestoneEvent(.worry, ref: id.uuidString)
-                }
+                // Worry "let go" counts are DEVICE-LOCAL (WorryBoxService owns them, incremented at the
+                // "let it go" write) — never the synced milestone ledger, so worry metadata honors the
+                // box's "never sync anywhere" promise. The store reads the count through this provider
+                // for MilestonesView, and purges the sealed rows + count on "Reset everything".
+                store.worriesLetGoProvider = { worryBoxService.lifetimeLetGoCount }
+                store.worryBoxResetHook = { worryBoxService.releaseAll() }
                 #if DEBUG
                 // UX appearance tests: populate the diary so every tab renders real cards.
                 if UITestSupport.shouldSeedDemoContent {
@@ -197,9 +198,11 @@ struct ContentView: View {
     /// launch preparation is still running — the startup task consumes the flag afterwards.
     private func consumePendingNotificationSheet() {
         guard launcher.isDone else { return }
+        // A sheet is already open — leave the request PENDING (don't clear it) so it isn't silently
+        // dropped; `handleActiveSheetDismiss` re-consumes it once the covering sheet closes.
+        guard activeSheet == nil else { return }
         guard let id = FernletNotificationDelegate.shared.pendingSheetID else { return }
         FernletNotificationDelegate.shared.pendingSheetID = nil
-        guard activeSheet == nil else { return }
         switch id {
         case "journal": activeSheet = .journal
         case "firstAid": activeSheet = .firstAid(nil)
@@ -599,6 +602,10 @@ struct ContentView: View {
         } else if pendingFirstAidAfterDismiss {
             pendingFirstAidAfterDismiss = false
             activeSheet = .firstAid(nil)
+        } else {
+            // A notification tap that arrived while a sheet was open left its request pending — now
+            // that the sheet has closed, honor it (no-op if there was nothing pending).
+            consumePendingNotificationSheet()
         }
     }
 

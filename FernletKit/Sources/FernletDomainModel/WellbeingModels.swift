@@ -239,9 +239,16 @@ public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
     public var tag: FeelingTag
     public var date = Date()
     public var emotions: [String] = []
+    /// True only for one-tap tag-only mood check-ins (created by `FernletStore.logQuickMood`). This is
+    /// the POSITIVE discriminator that distinguishes a genuine empty-text check-in from a sealed real
+    /// journal entry whose text was stripped to "" for the synced blob (both otherwise look identical:
+    /// empty text, empty emotions). Optional/defaulted so old builds ignore it and a pre-marker entry
+    /// decodes to `false` (treated as a sealed entry, never falsely labelled a check-in). Carries no
+    /// content — only the fact that the entry was a mood tap — so syncing it leaks nothing.
+    public var isQuickMood: Bool = false
 
-    public init(id: UUID = UUID(), text: String, tag: FeelingTag, date: Date = Date(), emotions: [String] = []) {
-        self.id = id; self.text = text; self.tag = tag; self.date = date; self.emotions = emotions
+    public init(id: UUID = UUID(), text: String, tag: FeelingTag, date: Date = Date(), emotions: [String] = [], isQuickMood: Bool = false) {
+        self.id = id; self.text = text; self.tag = tag; self.date = date; self.emotions = emotions; self.isQuickMood = isQuickMood
     }
 
     public init(from decoder: Decoder) throws {
@@ -251,6 +258,7 @@ public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
         tag = try c.decode(FeelingTag.self, forKey: .tag)
         date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
         emotions = try c.decodeIfPresent([String].self, forKey: .emotions) ?? []
+        isQuickMood = try c.decodeIfPresent(Bool.self, forKey: .isQuickMood) ?? false
     }
 
     /// Returns a copy with `text` + `emotions` cleared when this entry's `id` is in `sealedIDs`
@@ -262,7 +270,9 @@ public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
     /// reach the synced store regardless of which save path runs (the S3 privacy wall).
     public func strippedIfSealed(in sealedIDs: Set<UUID>) -> JournalEntry {
         guard sealedIDs.contains(id) else { return self }
-        return JournalEntry(id: id, text: "", tag: tag, date: date, emotions: [])
+        // isQuickMood preserved (a check-in is never sealed, so this stays false — but keep it explicit
+        // so the discriminator survives any future path that seals a marked entry).
+        return JournalEntry(id: id, text: "", tag: tag, date: date, emotions: [], isQuickMood: isQuickMood)
     }
 }
 
