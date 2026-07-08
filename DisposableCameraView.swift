@@ -279,12 +279,100 @@ extension CameraCaptureController: AVCapturePhotoCaptureDelegate {
     }
 }
 
+// MARK: - Island viewfinder geometry
+
+/// Pure, testable geometry for the wind-driven viewfinder that grows out of the Dynamic Island.
+///
+/// iOS exposes no public API for the island's rectangle (only ActivityKit can render into it), so we
+/// *approximate* its band from the top safe-area inset and classify the device into island / notch /
+/// flat buckets. The heuristic supplies only the closed "island" shape; every vertical position is
+/// derived from `topInset` at runtime, so an unknown future device degrades gracefully to the notch/
+/// flat case rather than mispositioning. Coordinates are measured from the true top of the screen.
+struct IslandViewfinderMetrics: Equatable {
+    enum DeviceClass: Equatable { case island, notch, flat }
+
+    let topInset: CGFloat
+    let screenWidth: CGFloat
+    let deviceClass: DeviceClass
+
+    init(topInset: CGFloat, screenWidth: CGFloat) {
+        self.topInset = topInset
+        self.screenWidth = screenWidth
+        self.deviceClass = Self.classify(topInset: topInset)
+    }
+
+    /// Dynamic Island devices report ~59pt of top inset; notched devices ~44–50pt; home-button
+    /// phones and iPad ~20pt.
+    static func classify(topInset: CGFloat) -> DeviceClass {
+        if topInset >= 55 { return .island }
+        if topInset >= 30 { return .notch }
+        return .flat
+    }
+
+    /// Closed anchor — reads as (or tucks under) the island itself.
+    var closedSize: CGSize {
+        switch deviceClass {
+        case .island: return CGSize(width: 126, height: 37)
+        case .notch:  return CGSize(width: 96, height: 28)
+        case .flat:   return CGSize(width: 72, height: 10)
+        }
+    }
+    var closedCornerRadius: CGFloat {
+        switch deviceClass {
+        case .island: return 18.5
+        case .notch:  return 13
+        case .flat:   return 5
+        }
+    }
+    var closedCenterY: CGFloat {
+        switch deviceClass {
+        case .island: return topInset * 0.5          // ~30pt: the island's own center
+        case .notch:  return max(topInset - 12, 6)   // tucked just under the notch
+        case .flat:   return topInset + 3            // just below the top edge
+        }
+    }
+
+    /// Open, resting viewfinder — a chunky rounded square in the upper third.
+    var openSize: CGSize {
+        let side = min(max(screenWidth * 0.64, 180), 300)
+        return CGSize(width: side, height: side)
+    }
+    var openCornerRadius: CGFloat { 30 }
+    private var topGap: CGFloat { deviceClass == .flat ? 12 : 18 }
+    var openCenterY: CGFloat { topInset + topGap + openSize.height / 2 }
+
+    var centerX: CGFloat { screenWidth / 2 }
+
+    struct Frame: Equatable {
+        var size: CGSize
+        var cornerRadius: CGFloat
+        var centerY: CGFloat
+    }
+
+    /// Interpolate the housing between the closed island anchor (`openness` 0) and the open
+    /// viewfinder (`openness` 1). `openness` is clamped to [0, 1].
+    func frame(openness: Double) -> Frame {
+        let t = CGFloat(min(max(openness, 0), 1))
+        return Frame(
+            size: CGSize(
+                width: lerp(closedSize.width, openSize.width, t),
+                height: lerp(closedSize.height, openSize.height, t)
+            ),
+            cornerRadius: lerp(closedCornerRadius, openCornerRadius, t),
+            centerY: lerp(closedCenterY, openCenterY, t)
+        )
+    }
+
+    private func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat { a + (b - a) * t }
+}
+
 // MARK: - Disposable camera view
 
 struct DisposableCameraView: View {
     var store: FernletStore
 
     @State private var camera = CameraCaptureController()
+    @State private var flashOpacity: Double = 0
     @State private var showInfo = false
     @State private var reviewPresented = false
     @State private var selectedForSave: Set<UUID> = []
@@ -303,11 +391,28 @@ struct DisposableCameraView: View {
         GeometryReader { geometry in
             let isLandscape = geometry.size.width > geometry.size.height
             ZStack {
-                Color(red: 0.13, green: 0.10, blue: 0.08).ignoresSafeArea()
+                Color(red: 0.13, green: 0.10, blue: 0.08)
+                    .ignoresSafeArea()
+                    .overlay {
+                        // Portrait: the viewfinder grows out of the Dynamic Island as the camera is
+                        // wound (openness = armed ? 1 : windProgress) and retracts into it after a shot.
+                        // Landscape keeps the centered framed preview — the island is on the long edge
+                        // there, so a top-anchored animation doesn't apply.
+                        if !isLandscape {
+                            islandViewfinder(
+                                metrics: IslandViewfinderMetrics(
+                                    topInset: geometry.safeAreaInsets.top,
+                                    screenWidth: geometry.size.width
+                                )
+                            )
+                        }
+                    }
 
-                viewfinderArea
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, isLandscape ? 18 : 28)
+                if isLandscape {
+                    viewfinderArea
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 18)
+                }
 
                 infoButton
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -318,6 +423,12 @@ struct DisposableCameraView: View {
                 } else {
                     portraitControls
                 }
+
+                // Shutter flash — brief white wash over the whole surface on capture.
+                Color.white
+                    .opacity(flashOpacity)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
             }
             .onAppear { updateLandscapeState(isLandscape) }
             .onChange(of: isLandscape) { _, newValue in
@@ -455,6 +566,49 @@ struct DisposableCameraView: View {
     }
 
     // MARK: - Viewfinder
+
+    /// Portrait viewfinder that grows out of the Dynamic Island as the camera is wound. `openness`
+    /// tracks the wind: 0 while unwound (a black pill sitting where the island is), 1 once armed
+    /// (fully-open square). Winding animates it open; `disarm()` after a shot animates it back into
+    /// the island. Purely presentational — the wind gesture lives on the thumbwheel control.
+    private func islandViewfinder(metrics: IslandViewfinderMetrics) -> some View {
+        let openness = camera.isArmed ? 1.0 : camera.windProgress
+        let frame = metrics.frame(openness: openness)
+        // Hide the squished preview while the housing is still island-sized; fade it in as it opens.
+        let previewOpacity = max(0, min((openness - 0.3) / 0.6, 1))
+        let previewInset: CGFloat = 5
+
+        return RoundedRectangle(cornerRadius: frame.cornerRadius, style: .continuous)
+            .fill(Color.black)
+            .overlay {
+                ZStack {
+                    CameraPreviewView(session: camera.session)
+                        .opacity(previewOpacity)
+                    if camera.needsCameraPermissionPrompt && openness > 0.85 {
+                        cameraPermissionPrompt
+                    }
+                }
+                .padding(previewInset)
+                .clipShape(
+                    RoundedRectangle(cornerRadius: max(2, frame.cornerRadius - previewInset), style: .continuous)
+                )
+            }
+            .overlay(alignment: .top) {
+                // The classic "camera on" green LED, riding at the top of the housing.
+                Circle()
+                    .fill(Color(red: 0.36, green: 0.85, blue: 0.42))
+                    .frame(width: 7, height: 7)
+                    .shadow(color: Color.green.opacity(0.7), radius: 3)
+                    .opacity(camera.isArmed ? 1 : previewOpacity)
+                    .padding(.top, 7)
+            }
+            .frame(width: frame.size.width, height: frame.size.height)
+            .position(x: metrics.centerX, y: frame.centerY)
+            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: openness)
+            .allowsHitTesting(false)
+            .accessibilityElement()
+            .accessibilityLabel(camera.isArmed ? "Viewfinder ready" : "Wind to open the viewfinder")
+    }
 
     private var viewfinderArea: some View {
         ZStack {
@@ -637,14 +791,21 @@ struct DisposableCameraView: View {
 
     private func takePhoto() async {
         guard camera.isArmed, manager.filmRemaining > 0, camera.canCapturePhoto else { return }
-        camera.disarm()
+        camera.disarm()  // openness → 0: the viewfinder retracts into the island.
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        flashShutter()
         do {
             let data = try await camera.capturePhoto()
             manager.addPhoto(data)
         } catch {
             manager.meshError = error.localizedDescription
         }
+    }
+
+    /// Brief white flash confirming the shot fired.
+    private func flashShutter() {
+        flashOpacity = 0.85
+        withAnimation(.easeOut(duration: 0.3)) { flashOpacity = 0 }
     }
 
     // MARK: - Develop / leave
