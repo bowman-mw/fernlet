@@ -66,35 +66,22 @@ struct BreathingExerciseView: View {
     @State private var isFinished = false
     @State private var phaseLabel = "Ready when you are"
     @State private var circleScale: CGFloat = 0.55
+    @State private var idleBreathing = false
     @State private var sessionStart: Date?
     @State private var sessionTask: Task<Void, Never>?
 
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer(minLength: 8)
-
-            breathingCircle
-
-            Text(phaseLabel)
-                .font(.title3.weight(.medium))
-                .foregroundStyle(Color.bark)
-                .animation(.easeInOut(duration: 0.3), value: phaseLabel)
-
-            Spacer(minLength: 8)
-
+        Group {
             if isFinished {
-                finishedFooter
+                finishedScreen
             } else if isRunning {
-                Button("End early") { stopSession() }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.slate)
+                runningScreen
             } else {
-                setupControls
+                setupScreen
             }
         }
-        .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.parchment)
         .navigationTitle("Slow breathing")
@@ -111,51 +98,31 @@ struct BreathingExerciseView: View {
         }
     }
 
-    private var breathingCircle: some View {
-        ZStack {
-            Circle()
-                .fill(Color.moss.opacity(0.10))
-                .frame(width: 240, height: 240)
-            Circle()
-                .fill(Color.moss.opacity(0.22))
-                .frame(width: 220, height: 220)
-                .scaleEffect(circleScale)
-            Circle()
-                .fill(Color.moss.opacity(0.30))
-                .frame(width: 150, height: 150)
-                .scaleEffect(circleScale)
-        }
-        .accessibilityHidden(true)
-    }
+    // MARK: - Setup
 
-    private var setupControls: some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 8) {
-                ForEach(BreathingPreset.all) { candidate in
-                    Button {
-                        preset = candidate
-                    } label: {
-                        VStack(spacing: 2) {
-                            Text(candidate.name).font(.subheadline.weight(.semibold))
-                            Text(candidate.caption).font(.caption2)
+    private var setupScreen: some View {
+        VStack(spacing: 20) {
+            Spacer(minLength: 8)
+
+            VStack(spacing: 20) {
+                breathingCircle
+                    .scaleEffect(idleBreathing ? 1.0 : 0.94)
+                    .onAppear {
+                        // A gentle resting sway so the circle feels alive before Begin.
+                        circleScale = 0.94
+                        withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
+                            idleBreathing = true
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
                     }
-                    .buttonStyle(ChipButtonStyle(selected: preset == candidate))
-                }
+                    .onDisappear { idleBreathing = false }
+                Text("Ready when you are.")
+                    .font(.system(size: 19, weight: .regular, design: .serif).italic())
+                    .foregroundStyle(Color.slate)
             }
 
-            HStack(spacing: 8) {
-                ForEach(1...3, id: \.self) { candidate in
-                    Button("\(candidate) min") { minutes = candidate }
-                        .buttonStyle(ChipButtonStyle(selected: minutes == candidate))
-                }
-            }
+            Spacer(minLength: 8)
 
-            Toggle("Gentle haptics", isOn: $hapticsEnabled)
-                .font(.subheadline)
-                .padding(.horizontal, 4)
+            setupControls
 
             Button {
                 startSession()
@@ -164,29 +131,250 @@ struct BreathingExerciseView: View {
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                    .padding(.vertical, 16)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("firstAid.breathing.begin")
         }
+        .padding(20)
     }
 
-    private var finishedFooter: some View {
-        VStack(spacing: 10) {
+    // MARK: - Running
+
+    private var runningScreen: some View {
+        VStack(spacing: 24) {
+            Spacer(minLength: 8)
+
+            Text(phaseLabel)
+                .font(.system(size: 30, weight: .medium, design: .serif))
+                .foregroundStyle(Color.moss)
+                .animation(.easeInOut(duration: 0.3), value: phaseLabel)
+
+            breathingCircle
+
+            Spacer(minLength: 8)
+
+            Button("End early") { stopSession() }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.softTaupe)
+        }
+        .padding(20)
+    }
+
+    // MARK: - Finished
+
+    private var finishedScreen: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            checkMedallion
+                .padding(.bottom, 30)
+
+            Text("All done")
+                .font(.system(size: 36, weight: .semibold, design: .serif))
+                .foregroundStyle(Color.bark)
+                .padding(.bottom, 12)
+
             Text("That was a whole \(minutes == 1 ? "minute" : "\(minutes) minutes") of care. Nicely done.")
-                .font(.subheadline)
+                .font(.system(size: 19, weight: .regular, design: .serif))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
-            Button("Once more") {
-                isFinished = false
-                phaseLabel = "Ready when you are"
-                circleScale = 0.55
+                .frame(maxWidth: 260)
+                .padding(.bottom, 34)
+
+            Button {
+                startSession()
+            } label: {
+                Text("Once more")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(Color.moss)
+            .buttonStyle(.plain)
+            .frame(maxWidth: 300)
+            .padding(.bottom, 10)
+
+            Button("Done for now") { finishToSetup() }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.slate)
+
+            Spacer()
         }
+        .padding(.horizontal, 34)
+        .padding(.vertical, 40)
+        .transition(.opacity)
+    }
+
+    /// Nested translucent moss circles with a soft highlight — the "breath" made visible.
+    /// In setup it eases idly (a calm resting scale); in running it swells with `circleScale`.
+    private var breathingCircle: some View {
+        ZStack {
+            Circle()
+                .fill(Color.moss.opacity(0.12))
+                .frame(width: 280, height: 280)
+                .scaleEffect(circleScale)
+            Circle()
+                .fill(Color.moss.opacity(0.20))
+                .frame(width: 216, height: 216)
+                .scaleEffect(circleScale)
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.fern, Color.moss],
+                        center: UnitPoint(x: 0.42, y: 0.36),
+                        startRadius: 4,
+                        endRadius: 100
+                    )
+                )
+                .frame(width: 150, height: 150)
+                .scaleEffect(circleScale)
+                .shadow(color: Color.moss.opacity(0.28), radius: 22, x: 0, y: 12)
+                .overlay(
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.white.opacity(0.5), Color.white.opacity(0)],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 28
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+                        .offset(x: -22, y: -22)
+                        .scaleEffect(circleScale)
+                )
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// A soft moss medallion with a gentle amber halo, cradling a check — the finish reward.
+    private var checkMedallion: some View {
+        ZStack {
+            Circle()
+                .fill(Color.goldenrod.opacity(0.14))
+                .frame(width: 150, height: 150)
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.fern, Color.moss],
+                        center: UnitPoint(x: 0.42, y: 0.36),
+                        startRadius: 4,
+                        endRadius: 70
+                    )
+                )
+                .frame(width: 104, height: 104)
+                .shadow(color: Color.moss.opacity(0.28), radius: 18, x: 0, y: 10)
+            Image(systemName: "checkmark")
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundStyle(Color.parchment)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var setupControls: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel("Pattern")
+                HStack(spacing: 10) {
+                    ForEach(BreathingPreset.all) { candidate in
+                        patternTile(candidate)
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel("Length")
+                HStack(spacing: 8) {
+                    ForEach(1...3, id: \.self) { candidate in
+                        lengthPill(candidate)
+                    }
+                }
+            }
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Haptics")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.bark)
+                    Text("a soft tap on each turn")
+                        .font(.system(size: 13, weight: .regular, design: .serif).italic())
+                        .foregroundStyle(Color.slate)
+                }
+                Spacer()
+                Toggle("", isOn: $hapticsEnabled)
+                    .labelsHidden()
+                    .tint(Color.moss)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: .bark.opacity(0.05), radius: 3, x: 0, y: 1)
+    }
+
+    private func patternTile(_ candidate: BreathingPreset) -> some View {
+        let selected = preset == candidate
+        return Button {
+            preset = candidate
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(candidate.name)
+                    .font(.system(size: 17, weight: .regular, design: .serif))
+                    .foregroundStyle(Color.bark)
+                Text(candidate.caption)
+                    .font(.caption)
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(Color.parchment, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .stroke(Color.moss.opacity(selected ? 1 : 0), lineWidth: 2)
+            )
+            .overlay(alignment: .topTrailing) {
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.moss)
+                        .padding(9)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func lengthPill(_ candidate: Int) -> some View {
+        let selected = minutes == candidate
+        return Button {
+            minutes = candidate
+        } label: {
+            Text("\(candidate) min")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.bark)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(Color.parchment, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.moss.opacity(selected ? 1 : 0), lineWidth: 2)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Return to the setup screen from the finished screen (no session running).
+    private func finishToSetup() {
+        isFinished = false
+        isRunning = false
+        phaseLabel = "Ready when you are"
+        circleScale = 0.55
     }
 
     // MARK: - Session

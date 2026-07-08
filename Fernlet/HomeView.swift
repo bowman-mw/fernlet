@@ -37,6 +37,10 @@ struct HomeView: View {
     @State private var petGovernor = PetInteractionGovernor()
     /// Soft settle-squish shown when petting the already-content companion (no bounce).
     @State private var isCompanionCalmSettling = false
+    /// Presentation-only mirror of `petGovernor.isSettled` — drives the droopy-happy "settled"
+    /// companion pose during the pet-cooldown window. Set when a pet settles the companion and
+    /// re-checked against the governor so the pose fades once the window ends.
+    @State private var isCompanionSettled = false
     /// Cached sky snapshot for the ambience layer; nil ⇒ time-of-day tint only.
     @State private var companionAmbient: WeatherAmbient?
     var body: some View {
@@ -65,6 +69,8 @@ struct HomeView: View {
             .presentationCornerRadius(20)
         }
         .task {
+            // Restore the settled pose if the app returned during an active cooldown window.
+            isCompanionSettled = petGovernor.isSettled
             await refreshRecentPeriodActivity()
             try? await Task.sleep(for: .seconds(6))
             withAnimation(.easeInOut(duration: 0.35)) {
@@ -198,7 +204,9 @@ struct HomeView: View {
                 size: 132,
                 interactionLevel: companionPetCount,
                 equippedItems: store.equippedCustomItems,
-                stressTint: stressTintActive
+                stressTint: stressTintActive,
+                calmTint: calmTintActive,
+                settled: isCompanionSettled
             )
             .scaleEffect(isCompanionCalmSettling ? 0.98 : 1)
             .contentShape(Rectangle())
@@ -263,25 +271,33 @@ struct HomeView: View {
     }
 
     /// Gentle opt-in body-signals line under the companion — offered, never alarming.
-    /// Tapping opens the small explainer sheet, which also links on to First Aid.
+    /// Tapping opens the small explainer sheet, which also links on to First Aid. On tense /
+    /// needs-care days it reads as a soft warm cream bubble with an italic serif line (per the
+    /// companion-moments "feeling a bit fizzy" bubble); quieter days stay low-key and slate.
     @ViewBuilder
     private var stressLineView: some View {
         if let line = stressLine {
+            let warm = stressTintActive
             Button {
                 activeSheet = .stressExplainer
             } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: "wind")
                         .font(.caption.weight(.semibold))
+                        .foregroundStyle(warm ? Color.goldenrod : Color.slate)
                     Text(line)
-                        .font(.caption)
+                        .font(warm ? .callout.italic() : .caption)
                         .multilineTextAlignment(.leading)
+                        .foregroundStyle(warm ? Color.bark : Color.slate)
                         .fernletWrappingText()
                 }
-                .foregroundStyle(Color.slate)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.slate.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, warm ? 16 : 12)
+                .padding(.vertical, warm ? 12 : 8)
+                .background(
+                    warm ? Color.cream : Color.slate.opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: warm ? 18 : 12, style: .continuous)
+                )
+                .shadow(color: warm ? Color.bark.opacity(0.08) : .clear, radius: warm ? 6 : 0, y: warm ? 2 : 0)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("home.stressLine")
@@ -322,6 +338,15 @@ struct HomeView: View {
         guard store.settings.stressAwarenessEnabled,
               let state = stressService?.assessment?.state,
               state == .tense || state == .needsCare else { return false }
+        return store.companionState != .sick && store.companionState != .resting
+    }
+
+    /// Presentation-only calm/settled accent for the companion — the positive counterpart to
+    /// `stressTintActive`. Shows when opted-in body signals read `.calm`; like the frazzle flag,
+    /// it never overrides the sick/resting postures.
+    private var calmTintActive: Bool {
+        guard store.settings.stressAwarenessEnabled,
+              stressService?.assessment?.state == .calm else { return false }
         return store.companionState != .sick && store.companionState != .resting
     }
 
@@ -455,6 +480,26 @@ struct HomeView: View {
             performPetBounce(settling: true)
         case .calmIdle(let showsSettledLine):
             performCalmIdle(showsSettledLine: showsSettledLine)
+        }
+        syncCompanionSettled()
+    }
+
+    /// Mirrors the governor's time-based cooldown into the observable `isCompanionSettled` flag so
+    /// the droopy-happy pose appears during the settled window and eases out once it ends. When a
+    /// window opens, schedules a single re-sync at its end so the pose fades on its own.
+    private func syncCompanionSettled() {
+        let settled = petGovernor.isSettled
+        withAnimation(.easeInOut(duration: 0.5)) {
+            isCompanionSettled = settled
+        }
+        guard settled else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(petGovernor.settleDuration))
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    isCompanionSettled = petGovernor.isSettled
+                }
+            }
         }
     }
 
@@ -1431,10 +1476,7 @@ struct HealthBar: View {
                     .frame(height: 8)
             }
             if heartGlow > 0 {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.goldenrod.opacity(0.30 + 0.70 * heartGlow))
-                    .frame(width: 14, height: 8)
-                    .shadow(color: Color.goldenrod.opacity(0.7 * heartGlow), radius: 3)
+                heartGlowCap
             }
         }
         .accessibilityLabel(
@@ -1442,6 +1484,34 @@ struct HealthBar: View {
                 ? "Care score \(Int(value * 100)) percent, with a little warmth from a friend"
                 : "Care score \(Int(value * 100)) percent"
         )
+    }
+
+    /// The 24h "afterglow" at the end of the bar (good-vibes 10b): two goldenrod/sun heart-bonus
+    /// segments wrapped in a soft golden radial glow whose reach and opacity scale with `heartGlow`
+    /// (1 just-received → 0 after a day). No number, no earned segment — just warmth that fades.
+    private var heartGlowCap: some View {
+        let glow = min(max(heartGlow, 0), 1)
+        return HStack(spacing: 2) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.goldenrod)
+                .frame(width: 8, height: 8)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.sun)
+                .frame(width: 8, height: 8)
+        }
+        .padding(.leading, 3)
+        .background {
+            // Soft radial afterglow — brighter and wider fresh, nearly gone near 24h.
+            RadialGradient(
+                colors: [Color.sun.opacity(0.15 + 0.55 * glow), Color.sun.opacity(0)],
+                center: .center,
+                startRadius: 0,
+                endRadius: 12 + 8 * glow
+            )
+            .blur(radius: 2)
+            .allowsHitTesting(false)
+        }
+        .shadow(color: Color.goldenrod.opacity(0.75 * glow), radius: 2 + 3 * glow)
     }
 }
 

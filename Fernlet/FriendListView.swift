@@ -274,9 +274,9 @@ struct FriendListView: View {
             Button {
                 store.heartShareManager.sendHeart(to: peer)
             } label: {
-                Label("Send good vibes", systemImage: "heart.fill")
+                SendGoodVibesLabel(state: SendGoodVibesLabel.state(alreadySentToday: alreadySentToday, reachable: reachable))
             }
-            .buttonStyle(ChipButtonStyle(selected: reachable && !alreadySentToday))
+            .buttonStyle(.plain)
             .disabled(alreadySentToday || !reachable)
             .accessibilityIdentifier("friends.sendHeart")
 
@@ -354,6 +354,56 @@ struct FriendListView: View {
         case .all: return "No trusted peers yet."
         case .friends: return "No friends yet."
         case .blocked: return "No blocked peers."
+        }
+    }
+}
+
+/// The "Send good vibes" affordance label in its three presentation states (good-vibes 10c):
+/// a filled dusty-rose/terracotta button when ready, a soft filled "Sent for today" state once
+/// today's heart has gone, and a muted state when the friend isn't nearby. Presentation only —
+/// the enabling/disabling and the send action stay with the caller.
+struct SendGoodVibesLabel: View {
+    enum SendState { case ready, sent, notNearby }
+
+    var state: SendState
+
+    static func state(alreadySentToday: Bool, reachable: Bool) -> SendState {
+        if alreadySentToday { return .sent }
+        return reachable ? .ready : .notNearby
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: state == .sent ? "checkmark" : "heart.fill")
+                .font(.subheadline.weight(.semibold))
+            Text(state == .sent ? "Sent for today" : "Send good vibes")
+                .font(.subheadline.weight(.semibold))
+        }
+        .foregroundStyle(foreground)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity)
+        .background(background, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .shadow(
+            color: state == .ready ? Color.terracotta.opacity(0.30) : .clear,
+            radius: state == .ready ? 8 : 0,
+            y: state == .ready ? 3 : 0
+        )
+    }
+
+    private var foreground: Color {
+        switch state {
+        case .ready: Color.parchment
+        case .sent: Color.terracotta.opacity(0.7)
+        case .notNearby: Color.bark.opacity(0.35)
+        }
+    }
+
+    private var background: Color {
+        switch state {
+        case .ready: Color.terracotta
+        case .sent: Color.dustyRose.opacity(0.16)
+        case .notNearby: Color.bark.opacity(0.06)
         }
     }
 }

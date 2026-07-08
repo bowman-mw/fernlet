@@ -13,12 +13,17 @@ import PrivateMemoryStore
 
 // MARK: - Entry (First Aid)
 
-/// Write a worry, then "let it go": the note drifts down into the box and is sealed away.
+/// Write a worry, then "let it go": the words tuck down into the box, a lid closes over
+/// them with a soft seal glow, and the worry is sealed away.
 struct WorryEntryView: View {
     var worryBox: WorryBoxService
+
+    /// The compose → release → confirmation flow.
+    private enum Phase { case writing, releasing, tucked }
+
     @State private var text = ""
-    @State private var isLettingGo = false
-    @State private var didLetGo = false
+    @State private var phase: Phase = .writing
+    @State private var releasedText = ""
     @State private var gentleError: String?
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isEditorFocused: Bool
@@ -27,33 +32,41 @@ struct WorryEntryView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            if didLetGo {
-                letGoConfirmation
-            } else {
+            switch phase {
+            case .writing:
                 composer
+            case .releasing:
+                TuckIntoBoxView(worryText: releasedText)
+            case .tucked:
+                letGoConfirmation
             }
         }
         .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: phase == .writing ? .top : .center)
         .background(Color.parchment)
         .navigationTitle("Worry Box")
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("What's circling around? Write it down — the box can hold it for a while so you don't have to.")
-                .font(.subheadline)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("What's circling around?")
+                .font(.system(size: 23, weight: .regular, design: .serif))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+
+            Text("Write it down — the box can hold it for a while, so you don't have to.")
+                .font(.system(size: 17, weight: .regular, design: .serif))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
             TextEditor(text: $text)
                 .focused($isEditorFocused)
-                .frame(minHeight: 110, maxHeight: 160)
-                .padding(10)
+                .frame(minHeight: 150, maxHeight: 220)
+                .padding(12)
                 .scrollContentBackground(.hidden)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-                .font(.body)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .font(.system(size: 17, weight: .regular, design: .serif))
                 .onChange(of: text) { _, newValue in
                     if newValue.count > Self.characterLimit {
                         text = String(newValue.prefix(Self.characterLimit))
@@ -61,10 +74,15 @@ struct WorryEntryView: View {
                 }
                 .accessibilityLabel("Worry text")
 
-            Text("Stays sealed on this device only — worries never sync anywhere.")
-                .font(.caption.italic())
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+            HStack(spacing: 8) {
+                Image(systemName: "lock")
+                    .font(.caption)
+                    .foregroundStyle(Color.slate)
+                Text("Stays sealed on this device only — worries never sync anywhere.")
+                    .font(.system(size: 13, weight: .regular, design: .serif).italic())
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
 
             if let gentleError {
                 Text(gentleError)
@@ -76,71 +94,226 @@ struct WorryEntryView: View {
             Button {
                 letGo()
             } label: {
-                Label("Let it go", systemImage: "archivebox")
+                Text("Let it go")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                    .padding(.vertical, 16)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
             .buttonStyle(.plain)
-            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLettingGo)
+            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .opacity(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
             .accessibilityIdentifier("firstAid.worry.letGo")
         }
-        // Placeholder "let it go" animation (composer gently sinks + fades before the
-        // confirmation appears) — flagged for design-mockup refinement.
-        .offset(y: isLettingGo ? 60 : 0)
-        .opacity(isLettingGo ? 0 : 1)
-        .scaleEffect(isLettingGo ? 0.9 : 1)
     }
 
     private var letGoConfirmation: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "archivebox.fill")
-                .font(.system(size: 34, weight: .medium))
-                .foregroundStyle(Color.goldenrod)
-                .frame(width: 72, height: 72)
-                .background(Color.goldenrod.opacity(0.14), in: Circle())
+        VStack(spacing: 0) {
+            SealedBoxView()
+                .padding(.bottom, 30)
+
             Text("Tucked away.")
-                .font(.title3.weight(.semibold))
+                .font(.system(size: 36, weight: .semibold, design: .serif))
                 .foregroundStyle(Color.bark)
-            Text("You can set it down for now. It's kept safe in the Worry Box on your Personal tab, whenever — if ever — you want to look again.")
-                .font(.subheadline)
+                .padding(.bottom, 12)
+
+            Text("You can set it down for now. It's kept safe in the Worry Box on your Personal tab, sealed on this device.")
+                .font(.system(size: 18, weight: .regular, design: .serif))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
-            HStack(spacing: 14) {
-                Button("Another") {
-                    text = ""
-                    didLetGo = false
-                    isLettingGo = false
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.moss)
-                Button("Done") { dismiss() }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.moss)
+                .frame(maxWidth: 280)
+                .padding(.bottom, 34)
+
+            Button {
+                text = ""
+                withAnimation(.easeOut(duration: 0.3)) { phase = .writing }
+            } label: {
+                Text("Write another")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
+            .buttonStyle(.plain)
+            .frame(maxWidth: 300)
+            .padding(.bottom, 10)
+
+            Button("Done") { dismiss() }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.slate)
         }
-        .padding(.top, 40)
         .transition(.opacity)
     }
 
     private func letGo() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isLettingGo else { return }
+        guard !trimmed.isEmpty, phase == .writing else { return }
         do {
             try worryBox.addWorry(trimmed)
             gentleError = nil
             isEditorFocused = false
-            withAnimation(.easeIn(duration: 0.6)) { isLettingGo = true }
+            releasedText = trimmed
+            withAnimation(.easeInOut(duration: 0.4)) { phase = .releasing }
+            // The tuck (words sink) + lid close + seal glow run for ~2.2s; then settle onto
+            // the confirmation. The worry is already sealed in the store above — the wait is
+            // purely the animation.
             Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(620))
-                withAnimation(.easeOut(duration: 0.4)) { didLetGo = true }
+                try? await Task.sleep(for: .milliseconds(2200))
+                withAnimation(.easeOut(duration: 0.4)) { phase = .tucked }
             }
         } catch {
             gentleError = "The box couldn't quite close just now. Your words are still here — try once more in a moment."
+        }
+    }
+}
+
+// MARK: - Tuck-into-the-box release animation
+
+/// The "let it go" motif: the words lift and shrink down into an open box, the lid swings
+/// closed over them, and a soft amber seal-glow pulses. Purely decorative — the worry is
+/// sealed in the store before this appears.
+private struct TuckIntoBoxView: View {
+    var worryText: String
+
+    @State private var tucked = false      // words sink + shrink into the box
+    @State private var lidClosed = false   // lid rotates down over the opening
+    @State private var sealGlow = false    // amber halo blooms once sealed
+
+    // Warm wood tones for the box — outside the shared palette, so kept local.
+    private let boxBody = Color(red: 0.745, green: 0.561, blue: 0.322)
+    private let boxLid = Color(red: 0.796, green: 0.627, blue: 0.388)
+    private let boxInside = Color(red: 0.306, green: 0.227, blue: 0.133)
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("Letting it go…")
+                .font(.system(size: 18, weight: .regular, design: .serif).italic())
+                .foregroundStyle(Color.slate)
+                .padding(.bottom, 30)
+
+            ZStack(alignment: .bottom) {
+                // The worry note, drifting down into the box and fading as it goes.
+                Text(worryText)
+                    .font(.system(size: 15, weight: .regular, design: .serif).italic())
+                    .foregroundStyle(Color.bark)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: 200)
+                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .shadow(color: .bark.opacity(0.16), radius: 12, x: 0, y: 8)
+                    .scaleEffect(tucked ? 0.32 : 1)
+                    .offset(y: tucked ? 92 : -110)
+                    .opacity(tucked ? 0 : 1)
+
+                box
+            }
+            .frame(width: 230, height: 250)
+        }
+        .onAppear(perform: runSequence)
+    }
+
+    private var box: some View {
+        ZStack {
+            // Inner shadow / opening
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(boxInside)
+                .frame(width: 160, height: 102)
+                .offset(y: -6)
+
+            // Front face
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(
+                    LinearGradient(colors: [boxLid, boxBody], startPoint: .top, endPoint: .bottom)
+                )
+                .frame(width: 174, height: 72)
+                .offset(y: 22)
+
+            // Clasp
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.goldenrod)
+                .frame(width: 18, height: 15)
+                .offset(y: 30)
+
+            // The lid, hinged at its lower edge, swinging closed over the opening.
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    LinearGradient(colors: [boxLid, boxBody], startPoint: .top, endPoint: .bottom)
+                )
+                .frame(width: 182, height: 34)
+                .rotationEffect(.degrees(lidClosed ? 0 : -104), anchor: .bottom)
+                .offset(y: -34)
+
+            // Seal glow bloom
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.goldenrod.opacity(0.6), Color.goldenrod.opacity(0)],
+                        center: .center, startRadius: 0, endRadius: 45
+                    )
+                )
+                .frame(width: 90, height: 90)
+                .scaleEffect(sealGlow ? 1.5 : 0.6)
+                .opacity(sealGlow ? 0 : 0.9)
+                .offset(y: -6)
+        }
+        .frame(width: 182, height: 122)
+        .accessibilityHidden(true)
+    }
+
+    private func runSequence() {
+        withAnimation(.easeIn(duration: 0.9)) { tucked = true }
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.62).delay(1.05)) { lidClosed = true }
+        withAnimation(.easeOut(duration: 0.9).delay(1.7)) { sealGlow = true }
+    }
+}
+
+/// The settled, latched box shown on the "Tucked away." confirmation — a soft amber halo
+/// pulses gently around it.
+private struct SealedBoxView: View {
+    @State private var pulse = false
+
+    private let boxBody = Color(red: 0.745, green: 0.561, blue: 0.322)
+    private let boxLid = Color(red: 0.796, green: 0.627, blue: 0.388)
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.goldenrod.opacity(0.22), Color.goldenrod.opacity(0)],
+                        center: .center, startRadius: 0, endRadius: 95
+                    )
+                )
+                .frame(width: 180, height: 180)
+                .scaleEffect(pulse ? 1.06 : 0.94)
+                .opacity(pulse ? 0.9 : 0.55)
+
+            VStack(spacing: 0) {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(LinearGradient(colors: [boxLid, boxBody], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 138, height: 30)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(LinearGradient(colors: [boxLid, boxBody], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 134, height: 74)
+                    .offset(y: -2)
+            }
+            .overlay(alignment: .center) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.goldenrod)
+                    .frame(width: 18, height: 15)
+                    .offset(y: 6)
+            }
+            .shadow(color: Color(red: 0.353, green: 0.267, blue: 0.133).opacity(0.28), radius: 14, x: 0, y: 10)
+        }
+        .frame(width: 180, height: 150)
+        .accessibilityHidden(true)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) { pulse = true }
         }
     }
 }
@@ -152,6 +325,8 @@ struct WorryEntryView: View {
 struct WorryBoxView: View {
     var worryBox: WorryBoxService
     @State private var composeText = ""
+    @State private var releasingID: WorryNarrative.ID?
+    @State private var emberLifted = false
     @FocusState private var isComposeFocused: Bool
 
     var body: some View {
@@ -160,7 +335,7 @@ struct WorryBoxView: View {
                 ScreenHeader(title: "Worry Box", subtitle: "SET DOWN, NOT CARRIED", subtitleFirst: true, identifier: "screen.worryBox")
 
                 Text("Worries you've set down. They stay sealed on this device only — releasing one lets it go for good.")
-                    .font(.subheadline)
+                    .font(.system(size: 16, weight: .regular, design: .serif))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
@@ -174,6 +349,7 @@ struct WorryBoxView: View {
                             worryCard(worry)
                         }
                     }
+                    .animation(.easeOut(duration: 0.45), value: worryBox.worries.count)
                 }
             }
             .padding(20)
@@ -209,51 +385,101 @@ struct WorryBoxView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        HStack(spacing: 20) {
             Image(systemName: "archivebox")
-                .font(.system(size: 30, weight: .medium))
-                .foregroundStyle(Color.goldenrod)
-            Text("The box is empty right now.")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.bark)
-            Text("That's a good thing. When something feels heavy, First aid on the Home screen can tuck it in here.")
-                .font(.caption)
-                .foregroundStyle(Color.slate)
-                .multilineTextAlignment(.center)
-                .fernletWrappingText()
+                .font(.system(size: 34, weight: .regular))
+                .foregroundStyle(Color.goldenrod.opacity(0.75))
+                .frame(width: 56)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("The box is empty right now.")
+                    .font(.system(size: 20, weight: .regular, design: .serif))
+                    .foregroundStyle(Color.bark)
+                Text("That's a good thing. When something feels heavy, First aid on the Home screen can tuck it in here.")
+                    .font(.system(size: 16, weight: .regular, design: .serif))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(24)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private func worryCard(_ worry: WorryNarrative) -> some View {
-        FernletCard {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(worry.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Color.slate)
+        let releasing = releasingID == worry.id
+        return HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "archivebox")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(Color.goldenrod)
+                .frame(width: 30, height: 30)
+                .background(Color.goldenrod.opacity(0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 10) {
                 Text(worry.text)
-                    .font(.callout)
+                    .font(.system(size: 16, weight: .regular, design: .serif))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
-                Button {
-                    // Placeholder release animation (card fades from the list) — flagged
-                    // for design-mockup refinement alongside the entry animation.
-                    withAnimation(.easeOut(duration: 0.45)) {
-                        worryBox.release(worry.id)
+                HStack {
+                    Text(worry.createdAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption2)
+                        .foregroundStyle(Color.slate)
+                    Spacer(minLength: 12)
+                    Button {
+                        release(worry)
+                    } label: {
+                        Label("Release this worry", systemImage: "arrow.up")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.goldenrod)
                     }
-                } label: {
-                    Label("Release", systemImage: "wind")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.moss)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.moss.opacity(0.12), in: Capsule())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Release this worry")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Release this worry")
             }
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.92)))
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .bark.opacity(0.05), radius: 3, x: 0, y: 1)
+        // The row lifts away like an ember on release: its words dim under a soft veil while a
+        // warm ember rises and fades. When the ember has lifted, the store removes the row and
+        // the list closes the gap.
+        .opacity(releasing ? 0.25 : 1)
+        .overlay {
+            if releasing {
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.goldenrod, Color.goldenrod.opacity(0)],
+                                center: .center, startRadius: 0, endRadius: 14
+                            )
+                        )
+                        .frame(width: 22, height: 22)
+                        .offset(y: emberLifted ? -66 : 6)
+                        .opacity(emberLifted ? 0 : 1)
+                    Text("letting it go…")
+                        .font(.system(size: 14, weight: .regular, design: .serif).italic())
+                        .foregroundStyle(Color.goldenrod)
+                }
+            }
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    /// Ember-lift release: dim the row, float a warm ember up out of it, then remove it from
+    /// the sealed store. The store call is the real deletion; the wait is only the animation.
+    private func release(_ worry: WorryNarrative) {
+        guard releasingID == nil else { return }
+        emberLifted = false
+        withAnimation(.easeOut(duration: 0.3)) { releasingID = worry.id }
+        withAnimation(.easeOut(duration: 1.1)) { emberLifted = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(760))
+            withAnimation(.easeOut(duration: 0.45)) {
+                worryBox.release(worry.id)
+            }
+            releasingID = nil
+            emberLifted = false
+        }
     }
 }

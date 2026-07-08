@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/fernlet-design-system-04a550e7-3931-4afa-9f34-34348a4713f9/colors_and_type.css">
+<script src="_ds/fernlet-design-system-04a550e7-3931-4afa-9f34-34348a4713f9/_ds_bundle.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=DM+Serif+Display:ital@0;1&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #211A13; }
+  .grain { position:absolute; inset:0; pointer-events:none; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E"); background-size:200px; }
+  @keyframes breatheCalm { 0%,100%{transform:scale(0.975);} 50%{transform:scale(1.0);} }
+  @keyframes breatheTense { 0%,100%{transform:scale(0.99);} 50%{transform:scale(1.0);} }
+  @keyframes sweatBead { 0%{transform:translateY(-2px) rotate(45deg);opacity:0;} 18%{opacity:0.95;} 72%{opacity:0.95;} 100%{transform:translateY(13px) rotate(45deg);opacity:0;} }
+  @keyframes steamRise { 0%{transform:translateY(5px);opacity:0;} 32%{opacity:0.55;} 100%{transform:translateY(-13px);opacity:0;} }
+  @keyframes zFloat { 0%{transform:translateY(2px) rotate(-5deg);opacity:0;} 22%{opacity:0.9;} 100%{transform:translateY(-30px) rotate(7deg);opacity:0;} }
+  @keyframes twinkle { 0%,100%{opacity:0.15;transform:scale(0.6);} 50%{opacity:0.85;transform:scale(1);} }
+  @keyframes floatY { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-5px);} }
+</style>
+</helmet>
+
+<div style="min-width:100%; width:max-content; padding:64px 80px 120px; background:radial-gradient(120% 80% at 50% 0%, #2A2119 0%, #1C160F 100%); font-family:'DM Sans',system-ui,sans-serif;">
+
+  <!-- HEADER -->
+  <div style="max-width:940px; margin-bottom:8px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+      <span style="width:34px; height:34px; border-radius:11px; background:rgba(138,173,126,0.16); border:1px solid rgba(138,173,126,0.3); display:flex; align-items:center; justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9FC091" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><circle cx="9.5" cy="12" r="1"/><circle cx="14.5" cy="12" r="1"/><path d="M9.5 15.5a3 3 0 0 0 5 0"/></svg>
+      </span>
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.22em; text-transform:uppercase; color:#B8A98E;">Fernlet · Companion moments</span>
+    </div>
+    <h1 style="margin:0 0 14px; font-family:'Fraunces',Georgia,serif; font-weight:500; font-size:52px; line-height:1.04; color:#F3EAD8; letter-spacing:-0.01em;">Accents that read like feelings,<br>never like alarms.</h1>
+    <p style="margin:0; max-width:660px; font-family:'Instrument Serif',Georgia,serif; font-size:21px; line-height:1.55; color:#C9BCA4;">Two gentle overlays on the same silhouette: a <span style="color:#E0B860;">frazzled / tense</span> accent when opt-in body-signals read wound-up, and a soft <span style="color:#9FC091;">calm / settled</span> one when they ease. Plus the pet-cooldown “settled” beat. Reference regions by badge (<span style="color:#E0B860;">5a</span>–<span style="color:#E0B860;">8b</span>).</p>
+  </div>
+
+  <!-- ===== 5 · BODY-SIGNAL ACCENTS ===== -->
+  <section id="5a" style="margin-top:60px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:6px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">5a</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">The accent, composited</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">presentation-only — the underlying mood never changes</span>
+    </div>
+    <p style="margin:0 0 30px; max-width:620px; font-family:'DM Sans'; font-size:13px; line-height:1.6; color:#8C8069;">The base companion is untouched; the accent layers over it. Shown over both the Okay (amber) and Thriving (green) bases so it reads as a wash of feeling, not a new character.</p>
+
+    <!-- comparison grid -->
+    <div style="display:inline-grid; grid-template-columns:auto 220px 220px; gap:0; background:#F5EFE0; border-radius:28px; overflow:hidden; box-shadow:0 30px 70px rgba(0,0,0,0.4);">
+      <div class="grain" style="opacity:0.4; mix-blend-mode:multiply; border-radius:28px;"></div>
+
+      <!-- header row -->
+      <div style="padding:22px 26px; display:flex; align-items:flex-end;"><span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#A08E6E;">Base</span></div>
+      <div style="padding:22px 0 18px; text-align:center; border-left:1px solid rgba(61,46,30,0.07);"><div style="font-family:'DM Serif Display',Georgia,serif; font-size:19px; color:#3D2E1E;">Okay</div><div style="font-family:'DM Sans'; font-size:11px; color:#A08E6E;">amber base</div></div>
+      <div style="padding:22px 0 18px; text-align:center; border-left:1px solid rgba(61,46,30,0.07);"><div style="font-family:'DM Serif Display',Georgia,serif; font-size:19px; color:#3D2E1E;">Thriving</div><div style="font-family:'DM Sans'; font-size:11px; color:#A08E6E;">green base</div></div>
+
+      <!-- ROW: plain -->
+      <div style="padding:26px; display:flex; flex-direction:column; justify-content:center; border-top:1px solid rgba(61,46,30,0.07);">
+        <div style="font-family:'DM Serif Display',Georgia,serif; font-size:18px; color:#3D2E1E; margin-bottom:4px;">No accent</div>
+        <div style="font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62; line-height:1.4; max-width:150px;">the companion as it is today</div>
+      </div>
+      <div style="padding:26px 0; display:flex; align-items:center; justify-content:center; border-top:1px solid rgba(61,46,30,0.07); border-left:1px solid rgba(61,46,30,0.07);">
+        <!-- Okay plain -->
+        <div style="position:relative; width:132px; height:132px;">
+          <div style="position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:86px; height:15px; border-radius:50%; background:rgba(61,46,30,0.13); filter:blur(5px);"></div>
+          <div style="position:absolute; top:6px; left:8px; width:116px; height:116px; border-radius:50%; background:radial-gradient(circle at 36% 30%,#E4BE7E 0%,#CE9A4E 46%,#B67E34 100%); box-shadow:0 12px 26px rgba(176,126,56,0.3), inset 0 -9px 16px rgba(120,84,30,0.26), inset 0 9px 14px rgba(255,244,214,0.42); animation:breatheCalm 6s cubic-bezier(0.42,0,0.58,1) infinite;">
+            <div style="position:absolute; top:52%; left:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:9px;">
+              <div style="display:flex; gap:20px;">
+                <div style="position:relative; width:13px; height:15px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:2.5px; width:8px; height:8px; border-radius:50%; background:#3D2E1E;"></div><div style="position:absolute; bottom:6px; left:3px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+                <div style="position:relative; width:13px; height:15px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:2.5px; width:8px; height:8px; border-radius:50%; background:#3D2E1E;"></div><div style="position:absolute; bottom:6px; left:3px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+              </div>
+              <div style="width:17px; height:8px; border-radius:0 0 10px 10px; background:rgba(61,46,30,0.5);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:26px 0; display:flex; align-items:center; justify-content:center; border-top:1px solid rgba(61,46,30,0.07); border-left:1px solid rgba(61,46,30,0.07);">
+        <!-- Thriving plain -->
+        <div style="position:relative; width:132px; height:132px;">
+          <div style="position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:86px; height:15px; border-radius:50%; background:rgba(61,46,30,0.13); filter:blur(5px);"></div>
+          <div style="position:absolute; top:6px; left:8px; width:116px; height:116px; border-radius:50%; background:radial-gradient(circle at 36% 30%,#A6D093 0%,#6B9E62 48%,#4E7A48 100%); box-shadow:0 12px 26px rgba(90,140,75,0.3), inset 0 -9px 16px rgba(60,96,52,0.3), inset 0 9px 14px rgba(232,247,216,0.4); animation:breatheCalm 6s cubic-bezier(0.42,0,0.58,1) infinite;">
+            <div style="position:absolute; top:52%; left:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:9px;">
+              <div style="display:flex; gap:20px;">
+                <div style="position:relative; width:13px; height:15px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:2.5px; width:8px; height:8px; border-radius:50%; background:#3D2E1E;"></div><div style="position:absolute; bottom:6px; left:3px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+                <div style="position:relative; width:13px; height:15px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:2.5px; width:8px; height:8px; border-radius:50%; background:#3D2E1E;"></div><div style="position:absolute; bottom:6px; left:3px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+              </div>
+              <div style="width:19px; height:9px; border-radius:0 0 11px 11px; background:rgba(61,46,30,0.55);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROW: tense -->
+      <div style="padding:26px; display:flex; flex-direction:column; justify-content:center; border-top:1px solid rgba(61,46,30,0.07);">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;"><span style="width:9px; height:9px; border-radius:50%; background:#D9A03E;"></span><div style="font-family:'DM Serif Display',Georgia,serif; font-size:18px; color:#3D2E1E;">Frazzled / tense</div></div>
+        <div style="font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62; line-height:1.4; max-width:158px;">a bead of sweat, faint steam, a soft furrow, a marginally quicker breath</div>
+      </div>
+      <!-- Okay + tense -->
+      <div style="padding:26px 0; display:flex; align-items:center; justify-content:center; border-top:1px solid rgba(61,46,30,0.07); border-left:1px solid rgba(61,46,30,0.07);">
+        <div style="position:relative; width:132px; height:132px;">
+          <div style="position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:86px; height:15px; border-radius:50%; background:rgba(61,46,30,0.13); filter:blur(5px);"></div>
+          <!-- steam -->
+          <div style="position:absolute; top:-6px; left:44px; z-index:3; animation:steamRise 2.6s ease-in-out infinite;"><svg width="40" height="26" viewBox="0 0 40 26" fill="none" stroke="rgba(120,104,80,0.5)" stroke-width="1.6" stroke-linecap="round"><path d="M11 25c-3-4 3-6 0-10s3-6 0-10"/><path d="M22 25c-3-4 3-6 0-10s3-6 0-10"/><path d="M31 24c-2.4-3 2.4-5 0-8"/></svg></div>
+          <div style="position:absolute; top:6px; left:8px; width:116px; height:116px; border-radius:50%; background:radial-gradient(circle at 36% 30%,#E4BE7E 0%,#CE9A4E 46%,#B67E34 100%); box-shadow:0 12px 26px rgba(176,126,56,0.3), inset 0 -9px 16px rgba(120,84,30,0.26), inset 0 9px 14px rgba(255,244,214,0.42); animation:breatheTense 3.1s cubic-bezier(0.42,0,0.58,1) infinite;">
+            <!-- brows -->
+            <div style="position:absolute; top:31px; left:34px; width:15px; height:3px; border-radius:3px; background:rgba(61,46,30,0.55); transform:rotate(11deg);"></div>
+            <div style="position:absolute; top:31px; right:34px; width:15px; height:3px; border-radius:3px; background:rgba(61,46,30,0.55); transform:rotate(-11deg);"></div>
+            <div style="position:absolute; top:54%; left:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:8px;">
+              <div style="display:flex; gap:20px;">
+                <div style="position:relative; width:13px; height:15px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:2.5px; width:8px; height:8px; border-radius:50%; background:#3D2E1E;"></div><div style="position:absolute; bottom:6px; left:3px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+                <div style="position:relative; width:13px; height:15px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:2.5px; width:8px; height:8px; border-radius:50%; background:#3D2E1E;"></div><div style="position:absolute; bottom:6px; left:3px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+              </div>
+              <div style="width:13px; height:4px; border-radius:3px; background:rgba(61,46,30,0.42);"></div>
+            </div>
+          </div>
+          <!-- sweat bead -->
+          <div style="position:absolute; top:30px; right:20px; z-index:4; width:11px; height:11px; border-radius:0 50% 50% 50%; background:linear-gradient(150deg,#EEF4F4,#CBDDE0); box-shadow:0 1px 2px rgba(80,110,120,0.3); animation:sweatBead 2.8s ease-in-out infinite;"><div style="position:absolute; top:2px; left:2px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+        </div>
+      </div>
+      <!-- Thriving + tense -->
+      <div style="padding:26px 0; display:flex; align-items:center; justify-content:center; border-top:1px solid rgba(61,46,30,0.07); border-left:1px solid rgba(61,46,30,0.07);">
+        <div style="position:relative; width:132px; height:132px;">
+          <div style="position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:86px; height:15px; border-radius:50%; background:rgba(61,46,30,0.13); filter:blur(5px);"></div>
+          <div style="position:absolute; top:-6px; left:44px; z-index:3; animation:steamRise 2.6s ease-in-out infinite 0.4s;"><svg width="40" height="26" viewBox="0 0 40 26" fill="none" stroke="rgba(120,104,80,0.5)" stroke-width="1.6" stroke-linecap="round"><path d="M11 25c-3-4 3-6 0-10s3-6 0-10"/><path d="M22 25c-3-4 3-6 0-10s3-6 0-10"/><path d="M31 24c-2.4-3 2.4-5 0-8"/></svg></div>
+          <div style="position:absolute; top:6px; left:8px; width:116px; height:116px; border-radius:50%; background:radial-gradient(circle at 36% 30%,#A6D093 0%,#6B9E62 48%,#4E7A48 100%); box-shadow:0 12px 26px rgba(90,140,75,0.3), inset 0 -9px 16px rgba(60,96,52,0.3), inset 0 9px 14px rgba(232,247,216,0.4); animation:breatheTense 3.1s cubic-bezier(0.42,0,0.58,1) infinite;">
+            <div style="position:absolute; top:31px; left:34px; width:15px; height:3px; border-radius:3px; background:rgba(61,46,30,0.5); transform:rotate(11deg);"></div>
+            <div style="position:absolute; top:31px; right:34px; width:15px; height:3px; border-radius:3px; background:rgba(61,46,30,0.5); transform:rotate(-11deg);"></div>
+            <div style="position:absolute; top:54%; left:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:8px;">
+              <div style="display:flex; gap:20px;">
+                <div style="position:relative; width:13px; height:15px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:2.5px; width:8px; height:8px; border-radius:50%; background:#3D2E1E;"></div><div style="position:absolute; bottom:6px; left:3px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+                <div style="position:relative; width:13px; height:15px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:2.5px; width:8px; height:8px; border-radius:50%; background:#3D2E1E;"></div><div style="position:absolute; bottom:6px; left:3px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+              </div>
+              <div style="width:13px; height:4px; border-radius:3px; background:rgba(61,46,30,0.42);"></div>
+            </div>
+          </div>
+          <div style="position:absolute; top:30px; right:20px; z-index:4; width:11px; height:11px; border-radius:0 50% 50% 50%; background:linear-gradient(150deg,#EEF4F4,#CBDDE0); box-shadow:0 1px 2px rgba(80,110,120,0.3); animation:sweatBead 2.8s ease-in-out infinite 0.5s;"><div style="position:absolute; top:2px; left:2px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+        </div>
+      </div>
+
+      <!-- ROW: calm -->
+      <div style="padding:26px; display:flex; flex-direction:column; justify-content:center; border-top:1px solid rgba(61,46,30,0.07);">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;"><span style="width:9px; height:9px; border-radius:50%; background:#8AAD7E;"></span><div style="font-family:'DM Serif Display',Georgia,serif; font-size:18px; color:#3D2E1E;">Calm / settled</div></div>
+        <div style="font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62; line-height:1.4; max-width:158px;">eyes soften to happy arcs, a warm blush, a slow breath, two drifting motes</div>
+      </div>
+      <!-- Okay + calm -->
+      <div style="padding:26px 0; display:flex; align-items:center; justify-content:center; border-top:1px solid rgba(61,46,30,0.07); border-left:1px solid rgba(61,46,30,0.07);">
+        <div style="position:relative; width:132px; height:132px;">
+          <div style="position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:86px; height:15px; border-radius:50%; background:rgba(61,46,30,0.13); filter:blur(5px);"></div>
+          <div style="position:absolute; top:18px; right:14px; z-index:4; width:6px; height:6px; border-radius:50%; background:#8AAD7E; animation:twinkle 3s ease-in-out infinite;"></div>
+          <div style="position:absolute; top:38px; right:6px; z-index:4; width:4px; height:4px; border-radius:50%; background:#D9A03E; animation:twinkle 3s ease-in-out infinite 1.1s;"></div>
+          <div style="position:absolute; top:6px; left:8px; width:116px; height:116px; border-radius:50%; background:radial-gradient(circle at 36% 30%,#E4BE7E 0%,#CE9A4E 46%,#B67E34 100%); box-shadow:0 12px 26px rgba(176,126,56,0.3), inset 0 -9px 16px rgba(120,84,30,0.26), inset 0 9px 14px rgba(255,244,214,0.42); animation:breatheCalm 6.6s cubic-bezier(0.42,0,0.58,1) infinite;">
+            <div style="position:absolute; top:60%; left:16px; width:16px; height:8px; border-radius:50%; background:rgba(224,140,120,0.4);"></div>
+            <div style="position:absolute; top:60%; right:16px; width:16px; height:8px; border-radius:50%; background:rgba(224,140,120,0.4);"></div>
+            <div style="position:absolute; top:53%; left:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:10px;">
+              <div style="display:flex; gap:20px;">
+                <div style="width:14px; height:8px; border:2.5px solid #3D2E1E; border-bottom:none; border-radius:9px 9px 0 0;"></div>
+                <div style="width:14px; height:8px; border:2.5px solid #3D2E1E; border-bottom:none; border-radius:9px 9px 0 0;"></div>
+              </div>
+              <div style="width:18px; height:9px; border-radius:0 0 11px 11px; background:rgba(61,46,30,0.5);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Thriving + calm -->
+      <div style="padding:26px 0; display:flex; align-items:center; justify-content:center; border-top:1px solid rgba(61,46,30,0.07); border-left:1px solid rgba(61,46,30,0.07);">
+        <div style="position:relative; width:132px; height:132px;">
+          <div style="position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:86px; height:15px; border-radius:50%; background:rgba(61,46,30,0.13); filter:blur(5px);"></div>
+          <div style="position:absolute; top:18px; right:14px; z-index:4; width:6px; height:6px; border-radius:50%; background:#8AAD7E; animation:twinkle 3s ease-in-out infinite 0.6s;"></div>
+          <div style="position:absolute; top:38px; right:6px; z-index:4; width:4px; height:4px; border-radius:50%; background:#D9A03E; animation:twinkle 3s ease-in-out infinite 1.6s;"></div>
+          <div style="position:absolute; top:6px; left:8px; width:116px; height:116px; border-radius:50%; background:radial-gradient(circle at 36% 30%,#A6D093 0%,#6B9E62 48%,#4E7A48 100%); box-shadow:0 12px 26px rgba(90,140,75,0.3), inset 0 -9px 16px rgba(60,96,52,0.3), inset 0 9px 14px rgba(232,247,216,0.4); animation:breatheCalm 6.6s cubic-bezier(0.42,0,0.58,1) infinite;">
+            <div style="position:absolute; top:60%; left:16px; width:16px; height:8px; border-radius:50%; background:rgba(224,140,120,0.38);"></div>
+            <div style="position:absolute; top:60%; right:16px; width:16px; height:8px; border-radius:50%; background:rgba(224,140,120,0.38);"></div>
+            <div style="position:absolute; top:53%; left:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:10px;">
+              <div style="display:flex; gap:20px;">
+                <div style="width:14px; height:8px; border:2.5px solid #3D2E1E; border-bottom:none; border-radius:9px 9px 0 0;"></div>
+                <div style="width:14px; height:8px; border:2.5px solid #3D2E1E; border-bottom:none; border-radius:9px 9px 0 0;"></div>
+              </div>
+              <div style="width:20px; height:10px; border-radius:0 0 12px 12px; background:rgba(61,46,30,0.55);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===== 5b · ANATOMY + IN-SITU ===== -->
+  <section id="5b" style="margin-top:70px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:26px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">5b</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">Anatomy &amp; in-situ</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">the four parts, and how it sits on Home</span>
+    </div>
+
+    <div style="display:flex; gap:44px; flex-wrap:wrap; align-items:flex-start;">
+
+      <!-- anatomy panel -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Tense · the four parts</span>
+        <div style="width:520px; background:#F5EFE0; border-radius:26px; padding:30px; position:relative; overflow:hidden;">
+          <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+          <div style="position:relative; z-index:2; display:grid; grid-template-columns:1fr 1fr; gap:22px;">
+            <div style="display:flex; gap:16px; align-items:center;">
+              <div style="flex-shrink:0; width:56px; height:56px; border-radius:16px; background:#FBF7EE; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(61,46,30,0.06);"><div style="position:relative; width:16px; height:16px; border-radius:0 50% 50% 50%; background:linear-gradient(150deg,#EEF4F4,#CBDDE0); transform:rotate(45deg); box-shadow:0 1px 2px rgba(80,110,120,0.3);"><div style="position:absolute; top:3px; left:3px; width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div></div>
+              <div><div style="font-family:'DM Serif Display',Georgia,serif; font-size:17px; color:#3D2E1E;">Sweat bead</div><div style="font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62; line-height:1.35;">one soft cool droplet, slides &amp; fades</div></div>
+            </div>
+            <div style="display:flex; gap:16px; align-items:center;">
+              <div style="flex-shrink:0; width:56px; height:56px; border-radius:16px; background:#FBF7EE; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(61,46,30,0.06);"><svg width="30" height="22" viewBox="0 0 40 26" fill="none" stroke="rgba(120,104,80,0.6)" stroke-width="2" stroke-linecap="round"><path d="M13 25c-3-4 3-6 0-10s3-6 0-10"/><path d="M25 25c-3-4 3-6 0-10s3-6 0-10"/></svg></div>
+              <div><div style="font-family:'DM Serif Display',Georgia,serif; font-size:17px; color:#3D2E1E;">Faint steam</div><div style="font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62; line-height:1.35;">two low-opacity squiggles, rising</div></div>
+            </div>
+            <div style="display:flex; gap:16px; align-items:center;">
+              <div style="flex-shrink:0; width:56px; height:56px; border-radius:16px; background:#FBF7EE; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(61,46,30,0.06); position:relative;"><div style="position:absolute; top:20px; left:14px; width:14px; height:3px; border-radius:3px; background:rgba(61,46,30,0.55); transform:rotate(11deg);"></div><div style="position:absolute; top:20px; right:14px; width:14px; height:3px; border-radius:3px; background:rgba(61,46,30,0.55); transform:rotate(-11deg);"></div></div>
+              <div><div style="font-family:'DM Serif Display',Georgia,serif; font-size:17px; color:#3D2E1E;">Soft furrow</div><div style="font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62; line-height:1.35;">brows tip up at the inner ends</div></div>
+            </div>
+            <div style="display:flex; gap:16px; align-items:center;">
+              <div style="flex-shrink:0; width:56px; height:56px; border-radius:16px; background:#FBF7EE; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(61,46,30,0.06);"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#5A7A52" stroke-width="1.6" stroke-linecap="round"><path d="M4 9h10a2.5 2.5 0 1 0-2.5-2.5"/><path d="M4 15h13a2.5 2.5 0 1 1-2.5 2.5"/></svg></div>
+              <div><div style="font-family:'DM Serif Display',Georgia,serif; font-size:17px; color:#3D2E1E;">Quicker breath</div><div style="font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62; line-height:1.35;">the swell cycles ~3s, not ~6s</div></div>
+            </div>
+          </div>
+          <div style="position:relative; z-index:2; margin-top:24px; padding-top:20px; border-top:1px solid rgba(61,46,30,0.1); font-family:'Instrument Serif',Georgia,serif; font-size:15px; color:#7A6A55; line-height:1.5;">Everything stays in warm neutrals — no red, no shake, no flash. It should read as “a little wound up,” the way a friend looks when they’ve had a day.</div>
+        </div>
+
+        <!-- calm anatomy mini -->
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69; margin-top:14px;">Calm · the positive accent</span>
+        <div style="width:520px; background:#F5EFE0; border-radius:26px; padding:26px 30px; position:relative; overflow:hidden;">
+          <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+          <div style="position:relative; z-index:2; display:flex; gap:26px; align-items:center;">
+            <div style="display:flex; gap:12px; align-items:center;"><div style="width:14px; height:8px; border:2.5px solid #3D2E1E; border-bottom:none; border-radius:9px 9px 0 0;"></div><span style="font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62;">happy-arc eyes</span></div>
+            <div style="display:flex; gap:12px; align-items:center;"><div style="width:16px; height:8px; border-radius:50%; background:rgba(224,140,120,0.5);"></div><span style="font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62;">warm blush</span></div>
+            <div style="display:flex; gap:12px; align-items:center;"><div style="width:7px; height:7px; border-radius:50%; background:#8AAD7E;"></div><span style="font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62;">drifting motes</span></div>
+            <div style="display:flex; gap:12px; align-items:center;"><span style="font-family:'DM Sans'; font-size:13px; color:#5A7A52;">breath ~6.6s</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- in-situ Home phone -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">On Home · tense accent, mood unchanged</span>
+        <div style="width:390px; height:640px; border-radius:52px 52px 30px 30px; background:#12100D; padding:10px 10px 0; box-shadow:0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px 42px 0 0; overflow:hidden; background:linear-gradient(#EFE6D0,#EAE0C8);">
+            <div class="grain" style="opacity:0.5; mix-blend-mode:multiply; z-index:1;"></div>
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#12100D; border-radius:0 0 18px 18px; z-index:60;"></div>
+            <!-- polaroids behind -->
+            <div style="position:absolute; top:70px; left:24px; width:70px; height:82px; background:#FBF7EE; border-radius:3px; transform:rotate(-7deg); box-shadow:0 6px 14px rgba(61,46,30,0.14); opacity:0.75; z-index:2; padding:6px 6px 14px;"><div style="width:100%; height:100%; background:linear-gradient(135deg,#C7B79B,#A89876); border-radius:1px;"></div></div>
+            <div style="position:absolute; top:88px; right:22px; width:64px; height:76px; background:#FBF7EE; border-radius:3px; transform:rotate(6deg); box-shadow:0 6px 14px rgba(61,46,30,0.14); opacity:0.7; z-index:2; padding:5px 5px 12px;"><div style="width:100%; height:100%; background:linear-gradient(135deg,#B9C4A6,#93A17E); border-radius:1px;"></div></div>
+
+            <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center; padding:56px 26px 0;">
+              <div style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:#9A8A6E; margin-bottom:34px;">Home</div>
+
+              <!-- companion tense, Okay base -->
+              <div style="position:relative; width:150px; height:150px; margin-bottom:20px;">
+                <div style="position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:96px; height:16px; border-radius:50%; background:rgba(61,46,30,0.13); filter:blur(5px);"></div>
+                <div style="position:absolute; top:-8px; left:52px; z-index:3; animation:steamRise 2.6s ease-in-out infinite;"><svg width="44" height="28" viewBox="0 0 44 28" fill="none" stroke="rgba(120,104,80,0.45)" stroke-width="1.6" stroke-linecap="round"><path d="M13 27c-3-4 3-7 0-11s3-6 0-10"/><path d="M25 27c-3-4 3-7 0-11s3-6 0-10"/><path d="M35 26c-2.4-3 2.4-5 0-8"/></svg></div>
+                <div style="position:absolute; top:8px; left:11px; width:128px; height:128px; border-radius:50%; background:radial-gradient(circle at 36% 30%,#E4BE7E 0%,#CE9A4E 46%,#B67E34 100%); box-shadow:0 14px 30px rgba(176,126,56,0.32), inset 0 -10px 18px rgba(120,84,30,0.26), inset 0 10px 16px rgba(255,244,214,0.44); animation:breatheTense 3.1s cubic-bezier(0.42,0,0.58,1) infinite;">
+                  <div style="position:absolute; top:35px; left:38px; width:16px; height:3px; border-radius:3px; background:rgba(61,46,30,0.55); transform:rotate(11deg);"></div>
+                  <div style="position:absolute; top:35px; right:38px; width:16px; height:3px; border-radius:3px; background:rgba(61,46,30,0.55); transform:rotate(-11deg);"></div>
+                  <div style="position:absolute; top:54%; left:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:9px;">
+                    <div style="display:flex; gap:22px;">
+                      <div style="position:relative; width:14px; height:16px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:3px; width:9px; height:9px; border-radius:50%; background:#3D2E1E;"></div><div style="position:absolute; bottom:6px; left:3.5px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+                      <div style="position:relative; width:14px; height:16px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:3px; width:9px; height:9px; border-radius:50%; background:#3D2E1E;"></div><div style="position:absolute; bottom:6px; left:3.5px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+                    </div>
+                    <div style="width:14px; height:4px; border-radius:3px; background:rgba(61,46,30,0.42);"></div>
+                  </div>
+                </div>
+                <div style="position:absolute; top:34px; right:24px; z-index:4; width:12px; height:12px; border-radius:0 50% 50% 50%; background:linear-gradient(150deg,#EEF4F4,#CBDDE0); box-shadow:0 1px 2px rgba(80,110,120,0.3); animation:sweatBead 2.8s ease-in-out infinite;"><div style="position:absolute; top:2px; left:2px; width:3px; height:3px; border-radius:50%; background:rgba(255,255,255,0.9);"></div></div>
+              </div>
+
+              <!-- health bar unchanged -->
+              <div style="width:236px; display:flex; align-items:center; margin-bottom:8px;">
+                <div style="flex:1; display:flex; height:10px; border-radius:6px; overflow:hidden; gap:2px;">
+                  <div style="flex:0.6; background:#C9964A; border-radius:3px;"></div>
+                  <div style="flex:0.4; background:#DFCDA8; border-radius:3px;"></div>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;"><span style="background:rgba(201,150,74,0.16); color:#A9762C; font-family:'DM Sans'; font-size:12px; font-weight:500; padding:4px 10px; border-radius:8px;">Okay</span><span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:13px; color:#9A8A72;">accent doesn’t touch the bar</span></div>
+
+              <!-- gentle bubble -->
+              <div style="margin-top:22px; background:#FBF7EE; border-radius:20px; padding:14px 18px; box-shadow:0 2px 8px rgba(61,46,30,0.08); max-width:250px; position:relative;">
+                <div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:15px; color:#3D2E1E; line-height:1.55;">Feeling a bit fizzy today. A slow breath sounds nice.</div>
+                <div style="position:absolute; bottom:-8px; left:30px; width:14px; height:14px; background:#FBF7EE; border-radius:50%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===== 8 · PET COOLDOWN ===== -->
+  <section id="8a" style="margin-top:80px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:6px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">8a</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">Pet cooldown — “settled”</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">a content beat, framed as a gift — never a limit</span>
+    </div>
+    <p style="margin:0 0 30px; max-width:640px; font-family:'DM Sans'; font-size:13px; line-height:1.6; color:#8C8069;">After a few pets, the companion slumps into a droopy-happy “settled” pose for about ten minutes. The pose does the talking; the copy just reassures. Two moments: the cap (“completely content”) and the wait (“nice and settled”).</p>
+
+    <div style="display:flex; gap:44px; flex-wrap:wrap; align-items:flex-start;">
+
+      <!-- close-up settled pose -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">The settled pose</span>
+        <div style="width:360px; height:360px; background:radial-gradient(circle at 50% 40%, #F7F1E3, #ECE2CB); border-radius:32px; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center;">
+          <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+          <!-- floating z's -->
+          <div style="position:absolute; top:66px; left:210px; z-index:5; font-family:'DM Serif Display',Georgia,serif; font-size:22px; color:rgba(90,122,82,0.6); animation:zFloat 3.4s ease-in-out infinite;">z</div>
+          <div style="position:absolute; top:84px; left:230px; z-index:5; font-family:'DM Serif Display',Georgia,serif; font-size:15px; color:rgba(90,122,82,0.5); animation:zFloat 3.4s ease-in-out infinite 1.2s;">z</div>
+          <!-- settled body: slumped, wider than tall -->
+          <div style="position:relative; width:210px; height:200px; z-index:2;">
+            <div style="position:absolute; bottom:8px; left:50%; transform:translateX(-50%); width:150px; height:22px; border-radius:50%; background:rgba(61,46,30,0.13); filter:blur(7px);"></div>
+            <div style="position:absolute; bottom:16px; left:50%; transform:translateX(-50%); width:198px; height:172px; border-radius:50% 50% 48% 48%; background:radial-gradient(circle at 38% 30%,#A6D093 0%,#6B9E62 50%,#4E7A48 100%); box-shadow:0 18px 34px rgba(90,140,75,0.3), inset 0 -14px 24px rgba(60,96,52,0.28), inset 0 12px 20px rgba(232,247,216,0.42); animation:breatheCalm 6.8s cubic-bezier(0.42,0,0.58,1) infinite;">
+              <!-- blush -->
+              <div style="position:absolute; top:96px; left:30px; width:26px; height:13px; border-radius:50%; background:rgba(224,140,120,0.45);"></div>
+              <div style="position:absolute; top:96px; right:30px; width:26px; height:13px; border-radius:50%; background:rgba(224,140,120,0.45);"></div>
+              <!-- droopy happy eyes -->
+              <div style="position:absolute; top:78px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:13px;">
+                <div style="display:flex; gap:34px;">
+                  <div style="width:26px; height:15px; border:4px solid #3D2E1E; border-bottom:none; border-radius:16px 16px 0 0;"></div>
+                  <div style="width:26px; height:15px; border:4px solid #3D2E1E; border-bottom:none; border-radius:16px 16px 0 0;"></div>
+                </div>
+                <div style="width:34px; height:17px; border-radius:0 0 20px 20px; background:rgba(61,46,30,0.55);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="width:360px; font-family:'Instrument Serif',Georgia,serif; font-size:15px; color:#C9BCA4; line-height:1.5;">Droopy-happy eyes, a wide soft smile, a low relaxed slump, warm blush, and a drifting “z”. Reads as <em>completely content</em> — a full belly of love.</div>
+      </div>
+
+      <!-- Home phone: on cap -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">On Home · reaching the cap</span>
+        <div style="width:390px; height:560px; border-radius:52px 52px 30px 30px; background:#12100D; padding:10px 10px 0; box-shadow:0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px 42px 0 0; overflow:hidden; background:linear-gradient(#EFE6D0,#EAE0C8);">
+            <div class="grain" style="opacity:0.5; mix-blend-mode:multiply; z-index:1;"></div>
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#12100D; border-radius:0 0 18px 18px; z-index:60;"></div>
+            <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center; padding:56px 26px 0;">
+              <div style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:#9A8A6E; margin-bottom:24px;">Home</div>
+              <div style="position:relative; width:180px; height:150px; margin-bottom:8px;">
+                <div style="position:absolute; top:8px; left:150px; z-index:5; font-family:'DM Serif Display',Georgia,serif; font-size:20px; color:rgba(90,122,82,0.6); animation:zFloat 3.4s ease-in-out infinite;">z</div>
+                <div style="position:absolute; bottom:4px; left:50%; transform:translateX(-50%); width:128px; height:18px; border-radius:50%; background:rgba(61,46,30,0.13); filter:blur(6px);"></div>
+                <div style="position:absolute; bottom:10px; left:50%; transform:translateX(-50%); width:172px; height:140px; border-radius:50% 50% 48% 48%; background:radial-gradient(circle at 38% 30%,#A6D093 0%,#6B9E62 50%,#4E7A48 100%); box-shadow:0 16px 30px rgba(90,140,75,0.3), inset 0 -12px 20px rgba(60,96,52,0.28), inset 0 10px 16px rgba(232,247,216,0.42); animation:breatheCalm 6.8s cubic-bezier(0.42,0,0.58,1) infinite;">
+                  <div style="position:absolute; top:80px; left:26px; width:22px; height:11px; border-radius:50%; background:rgba(224,140,120,0.45);"></div>
+                  <div style="position:absolute; top:80px; right:26px; width:22px; height:11px; border-radius:50%; background:rgba(224,140,120,0.45);"></div>
+                  <div style="position:absolute; top:62px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:11px;">
+                    <div style="display:flex; gap:28px;">
+                      <div style="width:22px; height:12px; border:3.5px solid #3D2E1E; border-bottom:none; border-radius:14px 14px 0 0;"></div>
+                      <div style="width:22px; height:12px; border:3.5px solid #3D2E1E; border-bottom:none; border-radius:14px 14px 0 0;"></div>
+                    </div>
+                    <div style="width:28px; height:14px; border-radius:0 0 17px 17px; background:rgba(61,46,30,0.55);"></div>
+                  </div>
+                </div>
+              </div>
+              <div style="background:#FBF7EE; border-radius:22px; padding:16px 20px; box-shadow:0 2px 8px rgba(61,46,30,0.08); max-width:280px; position:relative; text-align:center;">
+                <div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#3D2E1E; line-height:1.55;">Fern is soaking up all this love — feeling completely content.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Home phone: during cooldown + dark -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Dark · during the wait</span>
+        <div style="width:390px; height:560px; border-radius:52px 52px 30px 30px; background:#080705; padding:10px 10px 0; box-shadow:0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px 42px 0 0; overflow:hidden; background:linear-gradient(#252017,#1E1810);">
+            <div class="grain" style="opacity:0.22; z-index:1;"></div>
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#080705; border-radius:0 0 18px 18px; z-index:60;"></div>
+            <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center; padding:56px 26px 0;">
+              <div style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:#8C7C63; margin-bottom:24px;">Home</div>
+              <div style="position:relative; width:180px; height:150px; margin-bottom:8px;">
+                <div style="position:absolute; top:8px; left:150px; z-index:5; font-family:'DM Serif Display',Georgia,serif; font-size:20px; color:rgba(159,192,145,0.6); animation:zFloat 3.4s ease-in-out infinite;">z</div>
+                <div style="position:absolute; bottom:4px; left:50%; transform:translateX(-50%); width:128px; height:18px; border-radius:50%; background:rgba(0,0,0,0.3); filter:blur(6px);"></div>
+                <div style="position:absolute; bottom:10px; left:50%; transform:translateX(-50%); width:172px; height:140px; border-radius:50% 50% 48% 48%; background:radial-gradient(circle at 38% 30%,#8FBE7E 0%,#5E8E56 50%,#456B41 100%); box-shadow:0 16px 30px rgba(70,120,60,0.34), inset 0 -12px 20px rgba(40,70,36,0.4), inset 0 10px 16px rgba(190,224,170,0.28); animation:breatheCalm 6.8s cubic-bezier(0.42,0,0.58,1) infinite;">
+                  <div style="position:absolute; top:80px; left:26px; width:22px; height:11px; border-radius:50%; background:rgba(224,140,120,0.4);"></div>
+                  <div style="position:absolute; top:80px; right:26px; width:22px; height:11px; border-radius:50%; background:rgba(224,140,120,0.4);"></div>
+                  <div style="position:absolute; top:62px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:11px;">
+                    <div style="display:flex; gap:28px;">
+                      <div style="width:22px; height:12px; border:3.5px solid #2A2016; border-bottom:none; border-radius:14px 14px 0 0;"></div>
+                      <div style="width:22px; height:12px; border:3.5px solid #2A2016; border-bottom:none; border-radius:14px 14px 0 0;"></div>
+                    </div>
+                    <div style="width:28px; height:14px; border-radius:0 0 17px 17px; background:rgba(42,32,22,0.6);"></div>
+                  </div>
+                </div>
+              </div>
+              <div style="background:#2E2620; border-radius:22px; padding:16px 20px; max-width:280px; position:relative; text-align:center;">
+                <div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#ECE3D1; line-height:1.55;">Fern is feeling nice and settled — check back in a little while.</div>
+              </div>
+              <div style="margin-top:18px; display:flex; align-items:center; gap:7px; opacity:0.7;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C7C63" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                <span style="font-family:'DM Sans'; font-size:12px; color:#8C7C63;">a content beat — not a limit</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+</x-dc>
+</body>
+</html>

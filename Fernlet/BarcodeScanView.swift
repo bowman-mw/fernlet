@@ -39,6 +39,14 @@ struct ScannedBarcode: Identifiable, Hashable {
     var id: String { code }
 }
 
+// MARK: - Local palette (barcode handoff mockup 11a–11c)
+
+/// Warm off-white used for the viewfinder corner brackets — reads clearly over live camera video in
+/// both light and dark. Local to this file per the styling rules (no shared color-file edits).
+private extension Color {
+    static let scannerBracket = Color(white: 0.91)
+}
+
 // MARK: - Scanner screen
 
 /// Live barcode viewfinder (VisionKit `DataScannerViewController`) with a graceful still-photo
@@ -54,6 +62,10 @@ struct BarcodeScanView: View {
     @State private var stillImage: UIImage?
     @State private var isDetecting = false
     @State private var detectionNotice: String?
+    /// Drives the library branch of the camera-off "Add a photo instead" menu. Presenting a
+    /// `PhotosPicker` on demand (rather than from a bare label button) lets the moss primary offer
+    /// camera + library while preserving the existing `selectedPhotoItem` → `handlePickedImage` path.
+    @State private var isPhotoLibraryPickerActive = false
     /// Set when the live scanner reports it became unavailable at runtime (camera permission denied
     /// after the viewfinder presented) — flips us to the still-photo fallback so the user never
     /// stares at a frozen black viewfinder. Reset on foreground so enabling access in Settings retries.
@@ -68,30 +80,13 @@ struct BarcodeScanView: View {
     var body: some View {
         VStack(spacing: 0) {
             if liveScannerAvailable {
-                BarcodeDataScannerView(
-                    onPayload: { payload in onCode(payload) },
-                    onUnavailable: {
-                        // Camera access was denied (or the scanner otherwise went unavailable) — drop
-                        // to the still-photo fallback with a gentle hint instead of a dead viewfinder.
-                        liveScannerUnavailable = true
-                        detectionNotice = "Camera access looks off — you can turn it on in Settings, or snap or choose a photo of the barcode below."
-                    }
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .padding(20)
-
-                Text("Point the camera at the product's barcode.")
-                    .font(.callout)
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 20)
+                liveScanner
             } else {
-                stillPhotoFallback
+                cameraOffFallback
             }
         }
         .background(Color.parchment)
-        .navigationTitle("Scan barcode")
+        .navigationTitle("Scan a food")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: scenePhase) { _, newPhase in
             // Returning from Settings (where the user may have just enabled camera access) retries
@@ -116,48 +111,131 @@ struct BarcodeScanView: View {
         }
     }
 
-    private var stillPhotoFallback: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                Text("Take a photo of the product's barcode and Fernlet will read it.")
-                    .font(.callout)
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+    // MARK: Live viewfinder (11a)
 
-                HStack(spacing: 12) {
-                    Button {
-                        showingCamera = true
+    /// The DataScanner representable with a calm frame overlaid on top: dimmed surround, warm corner
+    /// brackets, a soft moss scan line, and the one caption. The scanner + delivery behavior is
+    /// untouched — this is presentation chrome layered over the live video.
+    private var liveScanner: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            BarcodeDataScannerView(
+                onPayload: { payload in onCode(payload) },
+                onUnavailable: {
+                    // Camera access was denied (or the scanner otherwise went unavailable) — drop
+                    // to the still-photo fallback with a gentle hint instead of a dead viewfinder.
+                    liveScannerUnavailable = true
+                    detectionNotice = "Camera access looks off — you can turn it on in Settings, or snap or choose a photo of the barcode below."
+                }
+            )
+            .ignoresSafeArea()
+
+            ScanFrameOverlay(caption: "Point the camera at the product's barcode.")
+        }
+    }
+
+    // MARK: Camera-off fallback (11a, right)
+
+    /// Calm, non-blocking landing when the camera is unavailable: never a red error, just "no worries"
+    /// with a photo path (existing `showingCamera` / `PhotosPicker`) and a hand-entry escape hatch.
+    private var cameraOffFallback: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Soft camera-off icon tile.
+                ZStack {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(Color.goldenrod.opacity(0.14))
+                    Image(systemName: "camera.metering.none")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(Color.goldenrod)
+                }
+                .frame(width: 80, height: 80)
+                .padding(.top, 40)
+
+                VStack(spacing: 12) {
+                    Text("Camera access is off")
+                        .font(.system(size: 25, weight: .semibold, design: .serif))
+                        .foregroundStyle(Color.bark)
+                        .multilineTextAlignment(.center)
+
+                    Text("No worries — you can add a photo of the barcode, or just enter it by hand.")
+                        .font(.callout)
+                        .foregroundStyle(Color.slate)
+                        .multilineTextAlignment(.center)
+                        .fernletWrappingText()
+                        .frame(maxWidth: 300)
+                }
+
+                VStack(spacing: 11) {
+                    // Primary — moss, wired to the existing photo path (camera → library fallback).
+                    Menu {
+                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                            Button {
+                                showingCamera = true
+                            } label: {
+                                Label("Take a photo", systemImage: "camera.fill")
+                            }
+                        }
+                        Button {
+                            isPhotoLibraryPickerActive = true
+                        } label: {
+                            Label("Choose from library", systemImage: "photo.on.rectangle")
+                        }
                     } label: {
-                        Label("Camera", systemImage: "camera.fill")
+                        Label("Add a photo instead", systemImage: "camera.fill")
                             .font(.headline)
                             .foregroundStyle(Color.cream)
                             .frame(maxWidth: .infinity)
-                            .padding(14)
-                            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+                            .padding(15)
+                            .background(Color.moss, in: RoundedRectangle(cornerRadius: 15))
                     }
                     .buttonStyle(.plain)
-                    .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
+                    // The library branch is a PhotosPicker so we keep the exact existing selection path.
+                    .photosPicker(isPresented: $isPhotoLibraryPickerActive, selection: $selectedPhotoItem, matching: .images)
 
-                    PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                        Label("Library", systemImage: "photo.on.rectangle")
+                    // Secondary — enter the barcode's macros by hand (skips detection, opens the
+                    // remember-a-food naming screen for this scan with no payload found).
+                    Button {
+                        onCode("")
+                    } label: {
+                        Text("Enter details by hand")
                             .font(.headline)
-                            .foregroundStyle(Color.bark)
+                            .foregroundStyle(Color.goldenrod)
                             .frame(maxWidth: .infinity)
                             .padding(14)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                            .background(
+                                RoundedRectangle(cornerRadius: 15)
+                                    .stroke(Color.goldenrod.opacity(0.4), lineWidth: 1.5)
+                            )
                     }
                     .buttonStyle(.plain)
                 }
+                .frame(maxWidth: 300)
 
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Text("Turn on camera in Settings")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.slate)
+                        .underline()
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+
+                // Preview + detection status for a picked photo, so the fallback stays a working flow.
                 if let stillImage {
                     Image(uiImage: stillImage)
                         .resizable()
                         .scaledToFit()
-                        .frame(maxHeight: 260)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                        .frame(maxHeight: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bark.opacity(0.10), lineWidth: 1))
                         .frame(maxWidth: .infinity)
+                        .padding(.top, 6)
                 }
 
                 if isDetecting {
@@ -167,18 +245,20 @@ struct BarcodeScanView: View {
                             .font(.callout.italic())
                             .foregroundStyle(Color.slate)
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
                 }
 
                 if let detectionNotice {
                     Text(detectionNotice)
                         .font(.caption.italic())
                         .foregroundStyle(Color.slate)
+                        .multilineTextAlignment(.center)
                         .fernletWrappingText()
+                        .frame(maxWidth: 320)
                 }
             }
-            .padding(20)
-            .padding(.bottom, 10)
+            .frame(maxWidth: .infinity)
+            .padding(24)
+            .padding(.bottom, 20)
         }
     }
 
@@ -194,6 +274,135 @@ struct BarcodeScanView: View {
             } else {
                 detectionNotice = "Fernlet couldn't spot a barcode in that photo — try moving closer so the code fills the frame."
             }
+        }
+    }
+}
+
+// MARK: - Viewfinder chrome (11a)
+
+/// Clean scan-frame chrome drawn over the live DataScanner: a dimmed surround with a clear window,
+/// warm off-white rounded corner brackets, a soft glowing moss scan line, and one gentle caption.
+/// Purely decorative — it never intercepts the camera or its delivery.
+private struct ScanFrameOverlay: View {
+    var caption: String
+
+    /// A slow, gentle vertical sweep for the scan line (matches the companion's calm — never clinical).
+    @State private var sweep = false
+
+    private let windowWidth: CGFloat = 250
+    private let windowHeight: CGFloat = 160
+    private let cornerRadius: CGFloat = 22
+
+    var body: some View {
+        GeometryReader { geo in
+            let window = CGRect(
+                x: (geo.size.width - windowWidth) / 2,
+                y: geo.size.height * 0.42 - windowHeight / 2,
+                width: windowWidth,
+                height: windowHeight
+            )
+
+            ZStack {
+                // Dimmed surround with a clear cut-out window.
+                Color.black.opacity(0.5)
+                    .reverseMask {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .frame(width: window.width, height: window.height)
+                            .position(x: window.midX, y: window.midY)
+                    }
+
+                // Corner brackets + scan line, positioned on the window.
+                ZStack {
+                    ScanBrackets(cornerRadius: cornerRadius)
+                        .stroke(Color.scannerBracket, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .frame(width: window.width, height: window.height)
+
+                    // Soft glowing moss scan line, sweeping between the top and bottom of the window.
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.moss.opacity(0), Color.moss, Color.moss.opacity(0)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: window.width - 16, height: 2)
+                        .shadow(color: Color.moss.opacity(0.8), radius: 6)
+                        .offset(y: sweep ? window.height / 2 - 8 : -window.height / 2 + 8)
+                        .animation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: sweep)
+                }
+                .position(x: window.midX, y: window.midY)
+
+                // Caption below the window.
+                Text(caption)
+                    .font(.system(size: 19, design: .serif))
+                    .foregroundStyle(Color.cream)
+                    .multilineTextAlignment(.center)
+                    .shadow(color: .black.opacity(0.4), radius: 6)
+                    .frame(maxWidth: geo.size.width - 80)
+                    .position(x: geo.size.width / 2, y: window.maxY + 64)
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear { sweep = true }
+        .accessibilityElement()
+        .accessibilityLabel(caption)
+    }
+}
+
+/// The four rounded L-shaped corner brackets of the scan window, as one stroked Shape.
+private struct ScanBrackets: Shape {
+    var cornerRadius: CGFloat
+    /// How far each bracket arm extends along an edge from its corner.
+    var arm: CGFloat = 30
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let r = cornerRadius
+
+        // Top-left
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY + arm + r))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
+        path.addArc(center: CGPoint(x: rect.minX + r, y: rect.minY + r), radius: r,
+                    startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+        path.addLine(to: CGPoint(x: rect.minX + r + arm, y: rect.minY))
+
+        // Top-right
+        path.move(to: CGPoint(x: rect.maxX - r - arm, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+        path.addArc(center: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r,
+                    startAngle: .degrees(270), endAngle: .degrees(0), clockwise: false)
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + r + arm))
+
+        // Bottom-right
+        path.move(to: CGPoint(x: rect.maxX, y: rect.maxY - r - arm))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+        path.addArc(center: CGPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r,
+                    startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+        path.addLine(to: CGPoint(x: rect.maxX - r - arm, y: rect.maxY))
+
+        // Bottom-left
+        path.move(to: CGPoint(x: rect.minX + r + arm, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
+        path.addArc(center: CGPoint(x: rect.minX + r, y: rect.maxY - r), radius: r,
+                    startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - r - arm))
+
+        return path
+    }
+}
+
+private extension View {
+    /// Masks out (punches a hole through) the receiver using the given shape — used to cut the clear
+    /// scan window into the dimmed surround.
+    func reverseMask<Mask: View>(@ViewBuilder _ mask: () -> Mask) -> some View {
+        self.mask {
+            Rectangle()
+                .overlay(alignment: .center) {
+                    mask()
+                        .blendMode(.destinationOut)
+                }
+                .compositingGroup()
         }
     }
 }
@@ -289,62 +498,124 @@ struct BarcodeNotFoundView: View {
     @State private var name = ""
     @State private var scanResult: NutritionLabelResult?
     @State private var showingLabelScanner = false
+    /// Once the food is saved we show the "Remembered" (11c) confirmation and hold the item; the
+    /// user's "Done" tap fires `onCreated`, so the create logic itself is unchanged — we only give
+    /// the confirmation its moment before the flow dismisses.
+    @State private var rememberedItem: FoodItem?
 
     var body: some View {
+        Group {
+            if let rememberedItem {
+                RememberedConfirmationView(item: rememberedItem) {
+                    onCreated(rememberedItem)
+                }
+            } else {
+                namingScreen
+            }
+        }
+        .background(Color.parchment)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: Naming screen (11b)
+
+    private var namingScreen: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("New to Fernlet")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
-                        .foregroundStyle(Color.bark)
+                    // Friendly "New to Fernlet" header with a little companion face.
+                    HStack(spacing: 12) {
+                        CompanionFace()
+                            .frame(width: 52, height: 52)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("New to Fernlet")
+                                .font(.caption.weight(.semibold))
+                                .tracking(1.2)
+                                .textCase(.uppercase)
+                                .foregroundStyle(Color.goldenrod)
+                            Text("We haven't met this one")
+                                .font(.system(size: 25, weight: .semibold, design: .serif))
+                                .foregroundStyle(Color.bark)
+                                .fernletWrappingText()
+                        }
+                    }
 
-                    Text("Fernlet doesn't know this barcode yet. Give it a name — and scan the nutrition label if you like — and Fernlet will remember it for next time.")
+                    Text("Give it a name and it'll be here next time you scan.")
                         .font(.callout)
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
-                    SheetField("Name") {
-                        TextField("oat granola bar", text: $name)
+                    SheetField("What should we call it?") {
+                        TextField("Hazelnut oat bar", text: $name)
                             .sheetTextInput()
                     }
 
+                    // Optional dashed label-scan (wired to the existing NutritionLabelScanner flow).
                     Button {
                         showingLabelScanner = true
                     } label: {
-                        Label(scanResult == nil ? "Scan the nutrition label" : "Rescan the nutrition label", systemImage: "camera.viewfinder")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(Color.moss)
-                            .frame(maxWidth: .infinity)
-                            .padding(12)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                        HStack(spacing: 14) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                    .fill(Color.moss.opacity(0.14))
+                                Image(systemName: "doc.viewfinder")
+                                    .font(.system(size: 20, weight: .regular))
+                                    .foregroundStyle(Color.moss)
+                            }
+                            .frame(width: 44, height: 44)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(scanResult == nil ? "Scan the nutrition label" : "Rescan the nutrition label")
+                                    .font(.system(size: 17, weight: .regular, design: .serif))
+                                    .foregroundStyle(Color.bark)
+                                Text("optional — we'll read the macros for you")
+                                    .font(.footnote)
+                                    .foregroundStyle(Color.slate)
+                                    .fernletWrappingText()
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(Color.softTaupe)
+                        }
+                        .padding(16)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .stroke(Color.moss.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                        )
                     }
                     .buttonStyle(.plain)
 
-                    if let scanResult {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("FROM THE LABEL")
+                    // Macros, per serving — grams only. NEVER a calorie value.
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Macros, per serving")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(Color.slate)
-                                .tracking(0.8)
-                            // Macros-first: the scanned calories are deliberately not rendered here.
-                            Text("P \(scanResult.protein ?? 0)g · C \(scanResult.carbs ?? 0)g · F \(scanResult.fat ?? 0)g")
-                                .font(.headline)
-                                .foregroundStyle(Color.bark)
-                            if let servingSize = scanResult.servingSize {
-                                Text("Per serving: \(servingSize)")
-                                    .font(.caption)
-                                    .foregroundStyle(Color.slate)
-                            }
+                            Spacer()
+                            Text("grams — no calories here")
+                                .font(.caption.italic())
+                                .foregroundStyle(Color.softTaupe)
                         }
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                    } else {
-                        Text("Scanning the label fills in the macros — you can also add them later.")
-                            .font(.caption.italic())
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
+
+                        HStack(spacing: 11) {
+                            MacroRingTile(label: "Protein", grams: scanResult?.protein ?? 0, tint: .moss)
+                            MacroRingTile(label: "Carbs", grams: scanResult?.carbs ?? 0, tint: .goldenrod)
+                            MacroRingTile(label: "Fat", grams: scanResult?.fat ?? 0, tint: .terracotta)
+                        }
+
+                        if scanResult == nil {
+                            Text("Scanning the label fills in the macros — you can also add them later.")
+                                .font(.caption.italic())
+                                .foregroundStyle(Color.slate)
+                                .fernletWrappingText()
+                        } else if let servingSize = scanResult?.servingSize, servingSize.isEmpty == false {
+                            Text("Per serving: \(servingSize)")
+                                .font(.caption)
+                                .foregroundStyle(Color.slate)
+                        }
                     }
                 }
                 .padding(20)
@@ -364,12 +635,10 @@ struct BarcodeNotFoundView: View {
                     barcode: barcode
                 )
                 guard let item = store.saveCustomIngredient(input) else { return }
-                onCreated(item)
+                rememberedItem = item
             }
         }
-        .background(Color.parchment)
         .navigationTitle("Remember product")
-        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showingLabelScanner) {
             NutritionLabelCameraSheet(showCalories: store.settings.showCalories) { result in
                 scanResult = result
@@ -382,6 +651,198 @@ struct BarcodeNotFoundView: View {
 
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+// MARK: - Remembered confirmation (11c)
+
+/// The soft "Remembered" success state: a green check medallion, a warm line naming the food, and a
+/// mini food chip showing the macros in grams (never calories). "Done" hands the just-created item
+/// back to the flow.
+private struct RememberedConfirmationView: View {
+    let item: FoodItem
+    var onDone: () -> Void
+
+    @State private var appeared = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+
+            VStack(spacing: 26) {
+                // Green check medallion.
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.moss.opacity(0.2), Color.moss.opacity(0)],
+                                center: .center, startRadius: 0, endRadius: 52
+                            )
+                        )
+                        .frame(width: 104, height: 104)
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.fern, Color.moss],
+                                center: UnitPoint(x: 0.42, y: 0.36), startRadius: 2, endRadius: 60
+                            )
+                        )
+                        .frame(width: 80, height: 80)
+                        .shadow(color: Color.moss.opacity(0.3), radius: 12, y: 8)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundStyle(Color.cream)
+                }
+                .scaleEffect(appeared ? 1 : 0.6)
+                .opacity(appeared ? 1 : 0)
+
+                VStack(spacing: 12) {
+                    Text("Remembered")
+                        .font(.system(size: 32, weight: .semibold, design: .serif))
+                        .foregroundStyle(Color.bark)
+
+                    Text("\(item.name) is in your foods now — scan it again and it'll log in a tap.")
+                        .font(.system(size: 18, design: .serif))
+                        .foregroundStyle(Color.slate)
+                        .multilineTextAlignment(.center)
+                        .fernletWrappingText()
+                        .frame(maxWidth: 300)
+                }
+
+                // Mini food chip — name + grams (P / C / F). No calories.
+                HStack(spacing: 13) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.goldenrod.opacity(0.16))
+                        Image(systemName: "bag.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Color.goldenrod)
+                    }
+                    .frame(width: 42, height: 42)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(item.name)
+                            .font(.system(size: 16, weight: .regular, design: .serif))
+                            .foregroundStyle(Color.bark)
+                            .lineLimit(1)
+                        HStack(spacing: 10) {
+                            Text("P \(item.macros.protein)")
+                                .foregroundStyle(Color.moss)
+                            Text("C \(item.macros.carbs)")
+                                .foregroundStyle(Color.goldenrod)
+                            Text("F \(item.macros.fat)")
+                                .foregroundStyle(Color.terracotta)
+                        }
+                        .font(.caption.weight(.medium))
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(15)
+                .frame(maxWidth: 290)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(item.name), \(item.macros.protein) grams protein, \(item.macros.carbs) grams carbs, \(item.macros.fat) grams fat")
+            }
+            .padding(.horizontal, 34)
+
+            Spacer(minLength: 0)
+
+            Button(action: onDone) {
+                Text("Done")
+                    .font(.headline)
+                    .foregroundStyle(Color.cream)
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
+            .padding(20)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { appeared = true }
+        }
+    }
+}
+
+// MARK: - Small pieces
+
+/// A macro ring tile: a tinted progress-style ring with the grams count inside and a colored label
+/// beneath. Grams only — this tile never renders or computes calories.
+private struct MacroRingTile: View {
+    var label: String
+    var grams: Int
+    var tint: Color
+
+    /// A gentle, purely decorative fill so an all-zero tile still reads as a ring, not an error. The
+    /// value is cosmetic — the truth is the "\(grams)g" in the center.
+    private var fill: CGFloat {
+        let capped = min(max(grams, 0), 40)
+        return 0.12 + CGFloat(capped) / 40 * 0.78
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .stroke(tint.opacity(0.18), lineWidth: 6)
+                Circle()
+                    .trim(from: 0, to: fill)
+                    .stroke(tint, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text("\(grams)g")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.bark)
+            }
+            .frame(width: 56, height: 56)
+
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 12)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(grams) grams")
+    }
+}
+
+/// A small, friendly companion face for the "New to Fernlet" header (nice-to-have, decorative).
+private struct CompanionFace: View {
+    var body: some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [Color.fern, Color.moss],
+                    center: UnitPoint(x: 0.36, y: 0.3), startRadius: 2, endRadius: 34
+                )
+            )
+            .overlay {
+                VStack(spacing: 5) {
+                    HStack(spacing: 14) {
+                        eye
+                        eye
+                    }
+                    Capsule()
+                        .fill(Color.bark.opacity(0.5))
+                        .frame(width: 11, height: 5)
+                }
+            }
+            .shadow(color: Color.moss.opacity(0.3), radius: 6, y: 4)
+    }
+
+    private var eye: some View {
+        Capsule()
+            .fill(Color.cream)
+            .frame(width: 6, height: 8)
+            .overlay(alignment: .bottom) {
+                Circle()
+                    .fill(Color.bark)
+                    .frame(width: 3.5, height: 3.5)
+                    .offset(y: -1)
+            }
     }
 }
 

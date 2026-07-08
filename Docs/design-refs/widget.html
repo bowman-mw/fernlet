@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/fernlet-design-system-04a550e7-3931-4afa-9f34-34348a4713f9/colors_and_type.css">
+<script src="_ds/fernlet-design-system-04a550e7-3931-4afa-9f34-34348a4713f9/_ds_bundle.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=DM+Serif+Display:ital@0;1&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #211A13; }
+  .grain { position:absolute; inset:0; pointer-events:none; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E"); background-size:200px; }
+</style>
+</helmet>
+
+<div style="min-width:100%; width:max-content; padding:64px 80px 120px; background:radial-gradient(120% 80% at 50% 0%, #2A2119 0%, #1C160F 100%); font-family:'DM Sans',system-ui,sans-serif;">
+
+  <!-- shared glyph masks (face = true negative space) -->
+  <svg width="0" height="0" style="position:absolute;" aria-hidden="true"><defs>
+    <mask id="gThriving" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+      <circle cx="50" cy="52" r="42" fill="#fff"/>
+      <circle cx="37" cy="45" r="5.5" fill="#000"/><circle cx="63" cy="45" r="5.5" fill="#000"/>
+      <path d="M33 55 Q50 75 67 55" stroke="#000" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+    </mask>
+    <mask id="gOkay" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+      <circle cx="50" cy="52" r="42" fill="#fff"/>
+      <circle cx="37" cy="48" r="5.5" fill="#000"/><circle cx="63" cy="48" r="5.5" fill="#000"/>
+      <path d="M41 61 Q50 68 59 61" stroke="#000" stroke-width="5.5" stroke-linecap="round" fill="none"/>
+    </mask>
+    <mask id="gTired" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+      <circle cx="50" cy="52" r="42" fill="#fff"/>
+      <path d="M31 47 L44 50" stroke="#000" stroke-width="5.5" stroke-linecap="round"/><path d="M69 47 L56 50" stroke="#000" stroke-width="5.5" stroke-linecap="round"/>
+      <path d="M42 63 L58 63" stroke="#000" stroke-width="5" stroke-linecap="round"/>
+    </mask>
+    <mask id="gResting" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+      <circle cx="50" cy="52" r="42" fill="#fff"/>
+      <path d="M31 50 Q37.5 56 44 50" stroke="#000" stroke-width="5" stroke-linecap="round" fill="none"/>
+      <path d="M56 50 Q62.5 56 69 50" stroke="#000" stroke-width="5" stroke-linecap="round" fill="none"/>
+      <path d="M44 62 Q50 66 56 62" stroke="#000" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+      <path d="M70 20 H80 L70 31 H80" stroke="#000" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </mask>
+    <mask id="gSick" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+      <circle cx="50" cy="52" r="42" fill="#fff"/>
+      <path d="M32 44 L40 48 L32 52" stroke="#000" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <path d="M68 44 L60 48 L68 52" stroke="#000" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <path d="M38 63 Q42 58 46 63 Q50 68 54 63 Q58 58 62 63" stroke="#000" stroke-width="4" stroke-linecap="round" fill="none"/>
+    </mask>
+  </defs></svg>
+
+  <!-- HEADER -->
+  <div style="max-width:940px; margin-bottom:8px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+      <span style="width:34px; height:34px; border-radius:11px; background:rgba(138,173,126,0.16); border:1px solid rgba(138,173,126,0.3); display:flex; align-items:center; justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9FC091" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+      </span>
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.22em; text-transform:uppercase; color:#B8A98E;">Fernlet · Widgets</span>
+    </div>
+    <h1 style="margin:0 0 14px; font-family:'Fraunces',Georgia,serif; font-weight:500; font-size:52px; line-height:1.04; color:#F3EAD8; letter-spacing:-0.01em;">A glyph that reads by shape,<br>even in one colour.</h1>
+    <p style="margin:0; max-width:680px; font-family:'Instrument Serif',Georgia,serif; font-size:21px; line-height:1.55; color:#C9BCA4;">The full vector companion can’t render in a widget, so each mood becomes a simple glyph whose <span style="color:#9FC091;">face is negative space</span> — legible small and in monochrome. Companion + water only; never anything sensitive. Badges <span style="color:#E0B860;">9a</span>–<span style="color:#E0B860;">9c</span>.</p>
+  </div>
+
+  <!-- ===== 9a · GLYPH SET ===== -->
+  <section id="9a" style="margin-top:56px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:26px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">9a</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">The mood glyph set</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">five moods, told by expression alone</span>
+    </div>
+
+    <!-- color master -->
+    <div style="background:#F5EFE0; border-radius:26px; padding:34px 30px 28px; position:relative; overflow:hidden; margin-bottom:20px; display:inline-block;">
+      <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+      <div style="position:relative; z-index:2; font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#A08E6E; margin-bottom:22px;">In colour · on Home</div>
+      <div style="position:relative; z-index:2; display:flex; gap:34px;">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;"><svg viewBox="0 0 100 100" width="82" height="82" style="filter:drop-shadow(0 6px 12px rgba(90,140,75,0.3));"><rect width="100" height="100" fill="#6B9E62" mask="url(#gThriving)"/></svg><span style="font-family:'DM Sans'; font-size:13px; font-weight:500; color:#3D2E1E;">Thriving</span></div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;"><svg viewBox="0 0 100 100" width="82" height="82" style="filter:drop-shadow(0 6px 12px rgba(201,150,74,0.3));"><rect width="100" height="100" fill="#C9964A" mask="url(#gOkay)"/></svg><span style="font-family:'DM Sans'; font-size:13px; font-weight:500; color:#3D2E1E;">Okay</span></div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;"><svg viewBox="0 0 100 100" width="82" height="82" style="filter:drop-shadow(0 6px 12px rgba(139,123,158,0.3));"><rect width="100" height="100" fill="#8B7B9E" mask="url(#gTired)"/></svg><span style="font-family:'DM Sans'; font-size:13px; font-weight:500; color:#3D2E1E;">Tired</span></div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;"><svg viewBox="0 0 100 100" width="82" height="82" style="filter:drop-shadow(0 6px 12px rgba(140,166,182,0.3));"><rect width="100" height="100" fill="#8CA6B6" mask="url(#gResting)"/></svg><span style="font-family:'DM Sans'; font-size:13px; font-weight:500; color:#3D2E1E;">Resting</span></div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;"><svg viewBox="0 0 100 100" width="82" height="82" style="filter:drop-shadow(0 6px 12px rgba(192,103,74,0.3));"><rect width="100" height="100" fill="#C0674A" mask="url(#gSick)"/></svg><span style="font-family:'DM Sans'; font-size:13px; font-weight:500; color:#3D2E1E;">Sick</span></div>
+      </div>
+    </div>
+
+    <!-- monochrome proof -->
+    <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:stretch;">
+      <div style="background:#141019; border-radius:26px; padding:34px 30px 28px; position:relative; display:inline-block;">
+        <div style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#7C7488; margin-bottom:22px;">Monochrome · Lock Screen tint</div>
+        <div style="display:flex; gap:34px;">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:12px;"><svg viewBox="0 0 100 100" width="70" height="70"><rect width="100" height="100" fill="rgba(255,255,255,0.94)" mask="url(#gThriving)"/></svg><span style="font-family:'DM Sans'; font-size:12px; color:#9A93A6;">Thriving</span></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:12px;"><svg viewBox="0 0 100 100" width="70" height="70"><rect width="100" height="100" fill="rgba(255,255,255,0.94)" mask="url(#gOkay)"/></svg><span style="font-family:'DM Sans'; font-size:12px; color:#9A93A6;">Okay</span></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:12px;"><svg viewBox="0 0 100 100" width="70" height="70"><rect width="100" height="100" fill="rgba(255,255,255,0.94)" mask="url(#gTired)"/></svg><span style="font-family:'DM Sans'; font-size:12px; color:#9A93A6;">Tired</span></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:12px;"><svg viewBox="0 0 100 100" width="70" height="70"><rect width="100" height="100" fill="rgba(255,255,255,0.94)" mask="url(#gResting)"/></svg><span style="font-family:'DM Sans'; font-size:12px; color:#9A93A6;">Resting</span></div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:12px;"><svg viewBox="0 0 100 100" width="70" height="70"><rect width="100" height="100" fill="rgba(255,255,255,0.94)" mask="url(#gSick)"/></svg><span style="font-family:'DM Sans'; font-size:12px; color:#9A93A6;">Sick</span></div>
+        </div>
+      </div>
+      <!-- tiny size proof -->
+      <div style="background:#F5EFE0; border-radius:26px; padding:28px 30px; position:relative; overflow:hidden; display:flex; flex-direction:column; justify-content:center;">
+        <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+        <div style="position:relative; z-index:2; font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#A08E6E; margin-bottom:16px;">At 28px</div>
+        <div style="position:relative; z-index:2; display:flex; gap:16px; align-items:center;">
+          <svg viewBox="0 0 100 100" width="28" height="28"><rect width="100" height="100" fill="#6B9E62" mask="url(#gThriving)"/></svg>
+          <svg viewBox="0 0 100 100" width="28" height="28"><rect width="100" height="100" fill="#C9964A" mask="url(#gOkay)"/></svg>
+          <svg viewBox="0 0 100 100" width="28" height="28"><rect width="100" height="100" fill="#8B7B9E" mask="url(#gTired)"/></svg>
+          <svg viewBox="0 0 100 100" width="28" height="28"><rect width="100" height="100" fill="#8CA6B6" mask="url(#gResting)"/></svg>
+          <svg viewBox="0 0 100 100" width="28" height="28"><rect width="100" height="100" fill="#C0674A" mask="url(#gSick)"/></svg>
+        </div>
+        <div style="position:relative; z-index:2; margin-top:16px; max-width:220px; font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62; line-height:1.4;">Still legible at the size a Lock Screen circular renders.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 9b · HOME WIDGET ===== -->
+  <section id="9b" style="margin-top:76px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:26px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">9b</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">Home Screen widget</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">small · companion + water, with a +1 tap</span>
+    </div>
+
+    <div style="display:flex; gap:44px; flex-wrap:wrap; align-items:flex-start;">
+      <!-- home screen context -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">On the Home Screen</span>
+        <div style="width:360px; height:360px; border-radius:32px; background:linear-gradient(150deg,#7C8FA6,#6E7C93 55%,#5E6A82); padding:34px; position:relative; overflow:hidden; box-shadow:0 30px 60px rgba(0,0,0,0.4);">
+          <div style="position:absolute; top:24px; left:0; right:0; text-align:center; font-family:'DM Sans'; font-size:13px; font-weight:600; color:rgba(255,255,255,0.9); letter-spacing:0.02em;">9:41</div>
+          <!-- the widget -->
+          <div style="margin-top:34px; width:170px; height:170px; border-radius:24px; background:#FBF7EE; box-shadow:0 10px 26px rgba(0,0,0,0.22); position:relative; overflow:hidden; padding:16px;">
+            <div class="grain" style="opacity:0.5; mix-blend-mode:multiply;"></div>
+            <div style="position:relative; z-index:2; display:flex; justify-content:space-between; align-items:flex-start;">
+              <svg viewBox="0 0 100 100" width="52" height="52" style="filter:drop-shadow(0 4px 8px rgba(90,140,75,0.3));"><rect width="100" height="100" fill="#6B9E62" mask="url(#gThriving)"/></svg>
+              <!-- water ring -->
+              <div style="position:relative; width:52px; height:52px;">
+                <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="21" fill="none" stroke="rgba(94,124,140,0.18)" stroke-width="6"/><circle cx="26" cy="26" r="21" fill="none" stroke="#5E7C8C" stroke-width="6" stroke-linecap="round" stroke-dasharray="132" stroke-dashoffset="66" transform="rotate(-90 26 26)"/></svg>
+                <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E7C8C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11z"/></svg></div>
+              </div>
+            </div>
+            <div style="position:relative; z-index:2; margin-top:12px; display:flex; align-items:flex-end; justify-content:space-between;">
+              <div>
+                <div style="font-family:'DM Sans'; font-size:22px; font-weight:700; color:#3D2E1E; line-height:1;">3<span style="font-size:14px; font-weight:500; color:#8A7A62;"> of 6</span></div>
+                <div style="font-family:'DM Sans'; font-size:12px; color:#8A7A62; margin-top:2px;">bottles today</div>
+              </div>
+              <button style="width:40px; height:40px; border-radius:13px; border:none; background:#5A7A52; color:#F5EFE0; font-family:'DM Sans'; font-size:18px; font-weight:600; cursor:pointer; box-shadow:0 3px 8px rgba(90,122,82,0.35); display:flex; align-items:center; justify-content:center; padding-bottom:2px;">+1</button>
+            </div>
+          </div>
+          <div style="margin-top:12px; width:170px; text-align:center; font-family:'DM Sans'; font-size:12px; font-weight:500; color:rgba(255,255,255,0.9);">Fernlet</div>
+        </div>
+      </div>
+
+      <!-- specimen: widget bigger + placeholder -->
+      <div style="display:flex; gap:28px; flex-wrap:wrap;">
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">The widget, up close</span>
+          <div style="width:220px; height:220px; border-radius:30px; background:#FBF7EE; box-shadow:0 20px 40px rgba(0,0,0,0.35); position:relative; overflow:hidden; padding:22px;">
+            <div class="grain" style="opacity:0.5; mix-blend-mode:multiply;"></div>
+            <div style="position:relative; z-index:2; display:flex; justify-content:space-between; align-items:flex-start;">
+              <svg viewBox="0 0 100 100" width="68" height="68" style="filter:drop-shadow(0 5px 10px rgba(90,140,75,0.3));"><rect width="100" height="100" fill="#6B9E62" mask="url(#gThriving)"/></svg>
+              <div style="position:relative; width:66px; height:66px;">
+                <svg width="66" height="66" viewBox="0 0 66 66"><circle cx="33" cy="33" r="27" fill="none" stroke="rgba(94,124,140,0.18)" stroke-width="7"/><circle cx="33" cy="33" r="27" fill="none" stroke="#5E7C8C" stroke-width="7" stroke-linecap="round" stroke-dasharray="169.6" stroke-dashoffset="84.8" transform="rotate(-90 33 33)"/></svg>
+                <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5E7C8C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11z"/></svg></div>
+              </div>
+            </div>
+            <div style="position:relative; z-index:2; margin-top:18px; display:flex; align-items:flex-end; justify-content:space-between;">
+              <div><div style="font-family:'DM Sans'; font-size:28px; font-weight:700; color:#3D2E1E; line-height:1;">3<span style="font-size:17px; font-weight:500; color:#8A7A62;"> of 6</span></div><div style="font-family:'DM Sans'; font-size:13px; color:#8A7A62; margin-top:3px;">bottles today</div></div>
+              <button style="width:48px; height:48px; border-radius:15px; border:none; background:#5A7A52; color:#F5EFE0; font-family:'DM Sans'; font-size:21px; font-weight:600; cursor:pointer; box-shadow:0 3px 8px rgba(90,122,82,0.35); display:flex; align-items:center; justify-content:center; padding-bottom:2px;">+1</button>
+            </div>
+          </div>
+          <div style="width:220px; font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#C9BCA4; line-height:1.45;">Tapping <span style="color:#9FC091;">+1</span> logs a bottle straight from the Home Screen — the ring fills, the number ticks up. No app launch.</div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Before first launch</span>
+          <div style="width:220px; height:220px; border-radius:30px; background:#FBF7EE; box-shadow:0 20px 40px rgba(0,0,0,0.35); position:relative; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:22px;">
+            <div class="grain" style="opacity:0.5; mix-blend-mode:multiply;"></div>
+            <svg viewBox="0 0 100 100" width="74" height="74" style="position:relative; z-index:2; opacity:0.5;"><rect width="100" height="100" fill="none"/><circle cx="50" cy="52" r="40" fill="none" stroke="#C6B79A" stroke-width="3.5" stroke-dasharray="5 7" stroke-linecap="round"/><circle cx="38" cy="48" r="4" fill="#C6B79A"/><circle cx="62" cy="48" r="4" fill="#C6B79A"/><path d="M40 62 Q50 69 60 62" stroke="#C6B79A" stroke-width="4" stroke-linecap="round" fill="none"/></svg>
+            <div style="position:relative; z-index:2; text-align:center;"><div style="font-family:'DM Serif Display',Georgia,serif; font-size:18px; color:#3D2E1E; margin-bottom:4px;">Open Fernlet</div><div style="font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62; line-height:1.4;">to meet your companion</div></div>
+          </div>
+          <div style="width:220px; font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#C9BCA4; line-height:1.45;">A soft dashed outline until there’s a companion to show.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 9c · LOCK SCREEN ===== -->
+  <section id="9c" style="margin-top:76px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:26px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">9c</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">Lock Screen accessories</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">circular + rectangular · monochrome-safe</span>
+    </div>
+
+    <div style="display:flex; gap:44px; flex-wrap:wrap; align-items:flex-start;">
+      <!-- lock screen mock -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">On the Lock Screen</span>
+        <div style="width:340px; height:600px; border-radius:48px; background:#080705; padding:9px; box-shadow:0 40px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06);">
+          <div style="position:relative; width:100%; height:100%; border-radius:40px; overflow:hidden; background:linear-gradient(160deg,#3E4A63 0%,#5A5570 42%,#8A6E72 78%,#B08A6E 100%);">
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:110px; height:28px; background:#080705; border-radius:0 0 16px 16px; z-index:60;"></div>
+            <!-- date + clock -->
+            <div style="position:absolute; top:58px; left:0; right:0; text-align:center;">
+              <div style="font-family:'DM Sans'; font-size:15px; font-weight:500; color:rgba(255,255,255,0.85); letter-spacing:0.04em;">Monday, July 6</div>
+              <div style="font-family:'DM Sans'; font-weight:600; font-size:78px; color:rgba(255,255,255,0.96); line-height:1; letter-spacing:-0.02em; margin-top:2px;">9:41</div>
+            </div>
+            <!-- widget accessory row (below clock) -->
+            <div style="position:absolute; top:230px; left:0; right:0; display:flex; justify-content:center; gap:14px;">
+              <!-- circular: companion -->
+              <div style="width:60px; height:60px; border-radius:50%; background:rgba(255,255,255,0.14); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;"><svg viewBox="0 0 100 100" width="42" height="42"><rect width="100" height="100" fill="rgba(255,255,255,0.94)" mask="url(#gThriving)"/></svg></div>
+              <!-- circular: water ring -->
+              <div style="width:60px; height:60px; border-radius:50%; background:rgba(255,255,255,0.14); backdrop-filter:blur(4px); position:relative; display:flex; align-items:center; justify-content:center;">
+                <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="20" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="5"/><circle cx="26" cy="26" r="20" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="5" stroke-linecap="round" stroke-dasharray="125.6" stroke-dashoffset="62.8" transform="rotate(-90 26 26)"/></svg>
+                <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11z"/></svg></div>
+              </div>
+              <!-- circular: 3 of 6 dots -->
+              <div style="width:60px; height:60px; border-radius:50%; background:rgba(255,255,255,0.14); backdrop-filter:blur(4px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;">
+                <div style="display:flex; gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.95);"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.95);"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.95);"></span></div>
+                <div style="display:flex; gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.3);"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.3);"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.3);"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- accessory specimens -->
+      <div style="display:flex; flex-direction:column; gap:22px;">
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Circular · three options</span>
+          <div style="display:flex; gap:18px;">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px;"><div style="width:78px; height:78px; border-radius:50%; background:#2A2E3C; display:flex; align-items:center; justify-content:center;"><svg viewBox="0 0 100 100" width="54" height="54"><rect width="100" height="100" fill="rgba(255,255,255,0.94)" mask="url(#gThriving)"/></svg></div><span style="font-family:'DM Sans'; font-size:11px; color:#9C8F79;">companion</span></div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px;"><div style="width:78px; height:78px; border-radius:50%; background:#2A2E3C; position:relative; display:flex; align-items:center; justify-content:center;"><svg width="66" height="66" viewBox="0 0 66 66"><circle cx="33" cy="33" r="26" fill="none" stroke="rgba(255,255,255,0.26)" stroke-width="6"/><circle cx="33" cy="33" r="26" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="6" stroke-linecap="round" stroke-dasharray="163.3" stroke-dashoffset="81.6" transform="rotate(-90 33 33)"/></svg><div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11z"/></svg></div></div><span style="font-family:'DM Sans'; font-size:11px; color:#9C8F79;">water ring</span></div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px;"><div style="width:78px; height:78px; border-radius:50%; background:#2A2E3C; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;"><div style="display:flex; gap:5px;"><span style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.95);"></span><span style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.95);"></span><span style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.95);"></span></div><div style="display:flex; gap:5px;"><span style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.32);"></span><span style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.32);"></span><span style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.32);"></span></div></div><span style="font-family:'DM Sans'; font-size:11px; color:#9C8F79;">3 of 6 dots</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Rectangular</span>
+          <div style="width:280px; height:80px; border-radius:18px; background:#2A2E3C; display:flex; align-items:center; gap:14px; padding:0 18px;">
+            <svg viewBox="0 0 100 100" width="52" height="52" style="flex-shrink:0;"><rect width="100" height="100" fill="rgba(255,255,255,0.94)" mask="url(#gThriving)"/></svg>
+            <div style="flex:1;">
+              <div style="font-family:'DM Sans'; font-size:15px; font-weight:600; color:rgba(255,255,255,0.95);">Thriving · 3 of 6 bottles</div>
+              <div style="display:flex; gap:5px; margin-top:8px;"><span style="width:26px;height:6px;border-radius:3px;background:rgba(255,255,255,0.95);"></span><span style="width:26px;height:6px;border-radius:3px;background:rgba(255,255,255,0.95);"></span><span style="width:26px;height:6px;border-radius:3px;background:rgba(255,255,255,0.95);"></span><span style="width:26px;height:6px;border-radius:3px;background:rgba(255,255,255,0.3);"></span><span style="width:26px;height:6px;border-radius:3px;background:rgba(255,255,255,0.3);"></span><span style="width:26px;height:6px;border-radius:3px;background:rgba(255,255,255,0.3);"></span></div>
+            </div>
+          </div>
+          <div style="width:280px; font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#C9BCA4; line-height:1.45;">Tinted or fully monochrome, the same three marks hold up: companion shape, water fill, nothing private.</div>
+        </div>
+
+        <div style="width:280px; display:flex; align-items:center; gap:10px; padding:14px 16px; background:rgba(138,173,126,0.12); border:1px solid rgba(138,173,126,0.26); border-radius:16px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9FC091" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          <span style="font-family:'DM Sans'; font-size:12.5px; color:#A9BC9E; line-height:1.4;">Companion mood + water only. No macros, journal, period, or friend data ever reaches a widget.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</x-dc>
+</body>
+</html>

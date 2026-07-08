@@ -33,7 +33,7 @@ struct FirstAidView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 24) {
                     header
 
                     VStack(spacing: 12) {
@@ -48,14 +48,14 @@ struct FirstAidView: View {
                             .grounding,
                             icon: "leaf",
                             tint: .fern,
-                            title: "5-4-3-2-1 grounding",
+                            title: "5·4·3·2·1 grounding",
                             caption: "Arrive back in the room, one gentle sense at a time."
                         )
                         toolCard(
                             .worryBox,
                             icon: "archivebox",
                             tint: .goldenrod,
-                            title: "Worry Box",
+                            title: "Worry box",
                             caption: "Write a worry down and let the box hold it for a while."
                         )
                     }
@@ -84,20 +84,18 @@ struct FirstAidView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("First aid")
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(Color.bark)
-                Text("Small tools for a heavy moment. Pick whatever feels kind — or nothing at all.")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel("First aid")
+                Spacer()
+                Button("Done") { dismiss() }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.moss)
             }
-            Spacer()
-            Button("Done") { dismiss() }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.moss)
+            Text("Small tools for a heavy moment. Pick whatever feels kind — or nothing at all.")
+                .font(.system(size: 21, weight: .regular, design: .serif))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
         }
     }
 
@@ -105,67 +103,96 @@ struct FirstAidView: View {
         Button {
             path.append(tool)
         } label: {
-            FernletCard {
-                HStack(spacing: 12) {
-                    Image(systemName: icon)
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(tint)
-                        .frame(width: 38, height: 38)
-                        .background(tint.opacity(0.14), in: Circle())
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(title)
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(Color.bark)
-                        Text(caption)
-                            .font(.callout)
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.slate.opacity(0.6))
+            HStack(spacing: 15) {
+                Image(systemName: icon)
+                    .font(.system(size: 21, weight: .regular))
+                    .foregroundStyle(tint)
+                    .frame(width: 46, height: 46)
+                    .background(tint.opacity(0.18), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 19, weight: .regular, design: .serif))
+                        .foregroundStyle(Color.bark)
+                    Text(caption)
+                        .font(.system(size: 15, weight: .regular, design: .serif))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
                 }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.softTaupe)
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 17)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: .bark.opacity(0.05), radius: 3, x: 0, y: 1)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("firstAid.tool.\(tool.rawValue)")
     }
 
     /// Static gentle-support row — always visible, never conditional, never tracking anything.
+    /// Set apart from the tools with a warmer, goldenrod-tinted card.
     private var supportRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("If things feel heavy")
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Some moments are bigger than any app. You deserve real support — the 988 line is free, kind, and there around the clock.")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                HStack(spacing: 10) {
-                    supportLink("Call 988", icon: "phone", url: "tel:988")
-                    supportLink("Text 988", icon: "message", url: "sms:988")
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "heart")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(Color.goldenrod)
+                Text("If things feel heavy")
+                    .font(.system(size: 18, weight: .regular, design: .serif))
+                    .foregroundStyle(Color.bark)
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            Text("Some moments are bigger than any app. You deserve real support — the 988 line is free, kind, and there around the clock.")
+                .font(.system(size: 16, weight: .regular, design: .serif))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            HStack(spacing: 10) {
+                supportLink("Call 988", icon: "phone.fill", url: "tel:988", filled: true)
+                supportLink("Text 988", icon: "message.fill", url: "sms:988", filled: false)
+            }
+            .padding(.top, 4)
         }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [Color.goldenrod.opacity(0.16), Color.goldenrod.opacity(0.10)],
+                startPoint: .top,
+                endPoint: .bottom
+            ),
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.goldenrod.opacity(0.32), lineWidth: 1)
+        )
     }
 
     @ViewBuilder
-    private func supportLink(_ title: String, icon: String, url: String) -> some View {
+    private func supportLink(_ title: String, icon: String, url: String, filled: Bool) -> some View {
         if let destination = URL(string: url) {
             Link(destination: destination) {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Image(systemName: icon)
                         .font(.subheadline.weight(.semibold))
                     Text(title)
                         .font(.subheadline.weight(.semibold))
                 }
-                .foregroundStyle(Color.moss)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(Color.moss.opacity(0.13), in: Capsule())
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .foregroundStyle(filled ? Color.white : Color.moss)
+                .background {
+                    if filled {
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .fill(Color.moss)
+                    } else {
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .stroke(Color.moss.opacity(0.45), lineWidth: 1.5)
+                    }
+                }
             }
         }
     }

@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/fernlet-design-system-04a550e7-3931-4afa-9f34-34348a4713f9/colors_and_type.css">
+<script src="_ds/fernlet-design-system-04a550e7-3931-4afa-9f34-34348a4713f9/_ds_bundle.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=DM+Serif+Display:ital@0;1&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #211A13; }
+  .grain { position:absolute; inset:0; pointer-events:none; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E"); background-size:200px; }
+  @keyframes floatIn { from { opacity:0; transform:translateY(10px);} to { opacity:1; transform:translateY(0);} }
+  @keyframes breatheIdle { 0%,100%{transform:scale(0.94);} 50%{transform:scale(1.0);} }
+  @keyframes blink { 0%,92%,100%{transform:scaleY(1);} 96%{transform:scaleY(0.12);} }
+  @keyframes softPulse { 0%,100%{opacity:0.55;} 50%{opacity:0.9;} }
+  @keyframes rippleOut { 0%{transform:scale(0.7);opacity:0.5;} 100%{transform:scale(1.7);opacity:0;} }
+  @keyframes tuckWords { 0%{opacity:1;transform:translateY(0) scale(1);} 55%{opacity:0.5;transform:translateY(46px) scale(0.7);} 100%{opacity:0;transform:translateY(92px) scale(0.32);} }
+  @keyframes lidClose { 0%{transform:rotate(-104deg);} 70%{transform:rotate(4deg);} 100%{transform:rotate(0deg);} }
+  @keyframes sealGlow { 0%{opacity:0;transform:scale(0.6);} 50%{opacity:1;} 100%{opacity:0;transform:scale(1.5);} }
+  @keyframes confIn { 0%{opacity:0;transform:translateY(14px);} 100%{opacity:1;transform:translateY(0);} }
+  @keyframes emberLift { 0%{opacity:1;transform:translateY(0) translateX(0) scale(1);} 30%{opacity:1;} 100%{opacity:0;transform:translateY(-140px) translateX(18px) scale(0.5);} }
+  @keyframes emberFlick { 0%,100%{transform:translateX(0);} 50%{transform:translateX(-7px);} }
+  @keyframes boatDrift { 0%{opacity:1;transform:translateX(0) rotate(0deg);} 100%{opacity:0;transform:translateX(150px) rotate(6deg);} }
+  @keyframes bobGently { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-4px);} }
+  @keyframes releaseRow { 0%{opacity:1;transform:translateX(0);max-height:120px;} 60%{opacity:0;transform:translateX(40px);max-height:120px;} 100%{opacity:0;max-height:0;transform:translateX(60px);margin:0;padding:0;} }
+</style>
+</helmet>
+
+<div style="min-width:100%; width:max-content; padding:64px 80px 120px; background:radial-gradient(120% 80% at 50% 0%, #2A2119 0%, #1C160F 100%); font-family:'DM Sans',system-ui,sans-serif;">
+
+  <!-- ===== HEADER ===== -->
+  <div style="max-width:920px; margin-bottom:8px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+      <span style="width:34px; height:34px; border-radius:11px; background:rgba(212,168,67,0.16); border:1px solid rgba(212,168,67,0.3); display:flex; align-items:center; justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E0B860" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2h2a2 2 0 0 1 2 2v3h3a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-3v3a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-3H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3V4a2 2 0 0 1 2-2z"/></svg>
+      </span>
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.22em; text-transform:uppercase; color:#B8A98E;">Fernlet · First Aid</span>
+    </div>
+    <h1 style="margin:0 0 14px; font-family:'Fraunces',Georgia,serif; font-weight:500; font-size:52px; line-height:1.04; color:#F3EAD8; letter-spacing:-0.01em;">A quiet safe room,<br>not an emergency screen.</h1>
+    <p style="margin:0; max-width:640px; font-family:'Instrument Serif',Georgia,serif; font-size:21px; line-height:1.55; color:#C9BCA4;">The menu and its three tools — slow breathing, 5·4·3·2·1 grounding, and the worry box — each shown as a working screen, in light and dark. Reference any region by its badge (<span style="color:#E0B860;">1a</span>–<span style="color:#E0B860;">1d</span>).</p>
+  </div>
+
+  <!-- ===== 1a · THE MENU ===== -->
+  <section id="1a" style="margin-top:64px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:26px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">1a</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">The menu</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">opened from the “First aid” pill on Home</span>
+    </div>
+
+    <div style="display:flex; gap:44px; flex-wrap:wrap;">
+
+      <!-- LIGHT -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Light</span>
+        <div style="width:390px; height:844px; border-radius:52px; background:#12100D; padding:10px; box-shadow:0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px; overflow:hidden; background:#F5EFE0; display:flex; flex-direction:column;">
+            <div class="grain" style="opacity:0.5; mix-blend-mode:multiply; z-index:1;"></div>
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#12100D; border-radius:0 0 18px 18px; z-index:60;"></div>
+
+            <!-- dimmed Home peeking behind the sheet -->
+            <div style="position:absolute; inset:0 0 auto; height:70px; background:linear-gradient(#E8DFC9,#EDE4CF); z-index:2; display:flex; align-items:flex-end; justify-content:center;">
+              <div style="width:150px; height:150px; border-radius:50%; background:#6B9E62; opacity:0.4; margin-bottom:-92px; filter:blur(1px);"></div>
+            </div>
+            <div style="position:absolute; inset:0 0 auto; height:70px; background:rgba(28,22,15,0.28); z-index:3;"></div>
+
+            <!-- SHEET -->
+            <div style="position:relative; z-index:5; margin-top:56px; flex:1; background:#F5EFE0; border-radius:30px 30px 0 0; box-shadow:0 -8px 30px rgba(61,46,30,0.16); display:flex; flex-direction:column; overflow:hidden;">
+              <div class="grain" style="opacity:0.5; mix-blend-mode:multiply; z-index:1; border-radius:30px 30px 0 0;"></div>
+              <div style="position:relative; z-index:2; padding:14px 26px 26px; overflow-y:auto;">
+                <div style="width:38px; height:5px; border-radius:3px; background:rgba(61,46,30,0.18); margin:0 auto 22px;"></div>
+
+                <div style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#A08E6E; margin-bottom:10px;">First aid</div>
+                <p style="margin:0 0 26px; font-family:'Instrument Serif',Georgia,serif; font-size:22px; line-height:1.42; color:#3D2E1E; letter-spacing:0.01em;">Small tools for a heavy moment. Pick whatever feels kind — or nothing at all.</p>
+
+                <!-- tool rows -->
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                  <!-- breathing -->
+                  <div style="display:flex; align-items:center; gap:15px; background:#FBF7EE; border-radius:20px; padding:17px 18px; box-shadow:0 1px 3px rgba(61,46,30,0.05);">
+                    <span style="flex-shrink:0; width:46px; height:46px; border-radius:15px; background:rgba(138,173,126,0.2); display:flex; align-items:center; justify-content:center;">
+                      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#5A7A52" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.6 4.6A2 2 0 1 1 11 8H3"/><path d="M12.6 19.4A2 2 0 1 0 14 16H3"/><path d="M17.7 7.7A2.5 2.5 0 1 1 19.5 12H3"/></svg>
+                    </span>
+                    <div style="flex:1;">
+                      <div style="font-family:'DM Serif Display',Georgia,serif; font-size:19px; color:#3D2E1E; line-height:1.15;">Slow breathing</div>
+                      <div style="font-family:'Instrument Serif',Georgia,serif; font-size:15px; color:#7A6A55; line-height:1.32; margin-top:2px;">A quiet minute or three with a slowly swelling circle.</div>
+                    </div>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B6A788" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 6l6 6-6 6"/></svg>
+                  </div>
+                  <!-- grounding -->
+                  <div style="display:flex; align-items:center; gap:15px; background:#FBF7EE; border-radius:20px; padding:17px 18px; box-shadow:0 1px 3px rgba(61,46,30,0.05);">
+                    <span style="flex-shrink:0; width:46px; height:46px; border-radius:15px; background:rgba(148,174,191,0.24); display:flex; align-items:center; justify-content:center;">
+                      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#5E7C8C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.4"/><circle cx="12" cy="12" r="6.4" opacity="0.6"/><circle cx="12" cy="12" r="10.4" opacity="0.3"/></svg>
+                    </span>
+                    <div style="flex:1;">
+                      <div style="font-family:'DM Serif Display',Georgia,serif; font-size:19px; color:#3D2E1E; line-height:1.15;">5·4·3·2·1 grounding</div>
+                      <div style="font-family:'Instrument Serif',Georgia,serif; font-size:15px; color:#7A6A55; line-height:1.32; margin-top:2px;">Arrive back in the room, one gentle sense at a time.</div>
+                    </div>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B6A788" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 6l6 6-6 6"/></svg>
+                  </div>
+                  <!-- worry box -->
+                  <div style="display:flex; align-items:center; gap:15px; background:#FBF7EE; border-radius:20px; padding:17px 18px; box-shadow:0 1px 3px rgba(61,46,30,0.05);">
+                    <span style="flex-shrink:0; width:46px; height:46px; border-radius:15px; background:rgba(212,168,67,0.2); display:flex; align-items:center; justify-content:center;">
+                      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#B58A2E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h16V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8.5z"/><path d="M3 4.5h18v4H3z"/><path d="M10 12.5h4"/></svg>
+                    </span>
+                    <div style="flex:1;">
+                      <div style="font-family:'DM Serif Display',Georgia,serif; font-size:19px; color:#3D2E1E; line-height:1.15;">Worry box</div>
+                      <div style="font-family:'Instrument Serif',Georgia,serif; font-size:15px; color:#7A6A55; line-height:1.32; margin-top:2px;">Write a worry down and let the box hold it for a while.</div>
+                    </div>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B6A788" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 6l6 6-6 6"/></svg>
+                  </div>
+                </div>
+
+                <!-- footer — set apart, warmer -->
+                <div style="margin-top:26px; background:linear-gradient(180deg, #F6ECD4 0%, #F3E7C9 100%); border:1px solid rgba(197,151,58,0.32); border-radius:22px; padding:20px 20px 22px;">
+                  <div style="display:flex; align-items:center; gap:10px; margin-bottom:9px;">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#B07A2E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7 0l-1.8 1.8-1.8-1.8a5 5 0 1 0-7 7l1.8 1.8L12 21l7-6.6 1.8-1.8a5 5 0 0 0 0-7z"/></svg>
+                    <div style="font-family:'DM Serif Display',Georgia,serif; font-size:18px; color:#5A4322;">If things feel heavy</div>
+                  </div>
+                  <p style="margin:0 0 16px; font-family:'Instrument Serif',Georgia,serif; font-size:16px; line-height:1.5; color:#6A5333;">Some moments are bigger than any app. You deserve real support — the 988 line is free, kind, and there around the clock.</p>
+                  <div style="display:flex; gap:10px;">
+                    <button style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; background:#5A7A52; border:none; border-radius:13px; padding:13px; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:600; color:#F5EFE0;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F5EFE0" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1.8.4 1.6.7 2.3a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.7-1.7a2 2 0 0 1 2.1-.5c.7.3 1.5.6 2.3.7a2 2 0 0 1 1.8 2z"/></svg>
+                      Call 988
+                    </button>
+                    <button style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; background:transparent; border:1.5px solid rgba(90,67,34,0.35); border-radius:13px; padding:13px; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:600; color:#5A4322;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5A4322" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z"/></svg>
+                      Text 988
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DARK -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Dark</span>
+        <div style="width:390px; height:844px; border-radius:52px; background:#080705; padding:10px; box-shadow:0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px; overflow:hidden; background:#211A13; display:flex; flex-direction:column;">
+            <div class="grain" style="opacity:0.22; z-index:1;"></div>
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#080705; border-radius:0 0 18px 18px; z-index:60;"></div>
+
+            <div style="position:absolute; inset:0 0 auto; height:70px; background:linear-gradient(#2A2118,#241D15); z-index:2; display:flex; align-items:flex-end; justify-content:center;">
+              <div style="width:150px; height:150px; border-radius:50%; background:#5A7A52; opacity:0.34; margin-bottom:-92px; filter:blur(1px);"></div>
+            </div>
+            <div style="position:absolute; inset:0 0 auto; height:70px; background:rgba(0,0,0,0.42); z-index:3;"></div>
+
+            <div style="position:relative; z-index:5; margin-top:56px; flex:1; background:#211A13; border-radius:30px 30px 0 0; box-shadow:0 -8px 30px rgba(0,0,0,0.4); display:flex; flex-direction:column; overflow:hidden;">
+              <div class="grain" style="opacity:0.22; z-index:1; border-radius:30px 30px 0 0;"></div>
+              <div style="position:relative; z-index:2; padding:14px 26px 26px; overflow-y:auto;">
+                <div style="width:38px; height:5px; border-radius:3px; background:rgba(236,227,209,0.16); margin:0 auto 22px;"></div>
+
+                <div style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#9A8B6E; margin-bottom:10px;">First aid</div>
+                <p style="margin:0 0 26px; font-family:'Instrument Serif',Georgia,serif; font-size:22px; line-height:1.42; color:#ECE3D1; letter-spacing:0.01em;">Small tools for a heavy moment. Pick whatever feels kind — or nothing at all.</p>
+
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                  <div style="display:flex; align-items:center; gap:15px; background:#2E2620; border-radius:20px; padding:17px 18px;">
+                    <span style="flex-shrink:0; width:46px; height:46px; border-radius:15px; background:rgba(138,173,126,0.18); display:flex; align-items:center; justify-content:center;">
+                      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#9FC091" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.6 4.6A2 2 0 1 1 11 8H3"/><path d="M12.6 19.4A2 2 0 1 0 14 16H3"/><path d="M17.7 7.7A2.5 2.5 0 1 1 19.5 12H3"/></svg>
+                    </span>
+                    <div style="flex:1;">
+                      <div style="font-family:'DM Serif Display',Georgia,serif; font-size:19px; color:#ECE3D1; line-height:1.15;">Slow breathing</div>
+                      <div style="font-family:'Instrument Serif',Georgia,serif; font-size:15px; color:#A99C85; line-height:1.32; margin-top:2px;">A quiet minute or three with a slowly swelling circle.</div>
+                    </div>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6353" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 6l6 6-6 6"/></svg>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:15px; background:#2E2620; border-radius:20px; padding:17px 18px;">
+                    <span style="flex-shrink:0; width:46px; height:46px; border-radius:15px; background:rgba(148,174,191,0.2); display:flex; align-items:center; justify-content:center;">
+                      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#9DB8C6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.4"/><circle cx="12" cy="12" r="6.4" opacity="0.6"/><circle cx="12" cy="12" r="10.4" opacity="0.3"/></svg>
+                    </span>
+                    <div style="flex:1;">
+                      <div style="font-family:'DM Serif Display',Georgia,serif; font-size:19px; color:#ECE3D1; line-height:1.15;">5·4·3·2·1 grounding</div>
+                      <div style="font-family:'Instrument Serif',Georgia,serif; font-size:15px; color:#A99C85; line-height:1.32; margin-top:2px;">Arrive back in the room, one gentle sense at a time.</div>
+                    </div>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6353" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 6l6 6-6 6"/></svg>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:15px; background:#2E2620; border-radius:20px; padding:17px 18px;">
+                    <span style="flex-shrink:0; width:46px; height:46px; border-radius:15px; background:rgba(212,168,67,0.16); display:flex; align-items:center; justify-content:center;">
+                      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#E0B860" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h16V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8.5z"/><path d="M3 4.5h18v4H3z"/><path d="M10 12.5h4"/></svg>
+                    </span>
+                    <div style="flex:1;">
+                      <div style="font-family:'DM Serif Display',Georgia,serif; font-size:19px; color:#ECE3D1; line-height:1.15;">Worry box</div>
+                      <div style="font-family:'Instrument Serif',Georgia,serif; font-size:15px; color:#A99C85; line-height:1.32; margin-top:2px;">Write a worry down and let the box hold it for a while.</div>
+                    </div>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6353" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 6l6 6-6 6"/></svg>
+                  </div>
+                </div>
+
+                <div style="margin-top:26px; background:linear-gradient(180deg, #37301F 0%, #332A1B 100%); border:1px solid rgba(224,184,96,0.3); border-radius:22px; padding:20px 20px 22px;">
+                  <div style="display:flex; align-items:center; gap:10px; margin-bottom:9px;">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#E0B860" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7 0l-1.8 1.8-1.8-1.8a5 5 0 1 0-7 7l1.8 1.8L12 21l7-6.6 1.8-1.8a5 5 0 0 0 0-7z"/></svg>
+                    <div style="font-family:'DM Serif Display',Georgia,serif; font-size:18px; color:#F0DFB4;">If things feel heavy</div>
+                  </div>
+                  <p style="margin:0 0 16px; font-family:'Instrument Serif',Georgia,serif; font-size:16px; line-height:1.5; color:#CBB98F;">Some moments are bigger than any app. You deserve real support — the 988 line is free, kind, and there around the clock.</p>
+                  <div style="display:flex; gap:10px;">
+                    <button style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; background:#6B9160; border:none; border-radius:13px; padding:13px; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:600; color:#1A150E;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A150E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1.8.4 1.6.7 2.3a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.7-1.7a2 2 0 0 1 2.1-.5c.7.3 1.5.6 2.3.7a2 2 0 0 1 1.8 2z"/></svg>
+                      Call 988
+                    </button>
+                    <button style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; background:transparent; border:1.5px solid rgba(224,184,96,0.4); border-radius:13px; padding:13px; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:600; color:#E0B860;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E0B860" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z"/></svg>
+                      Text 988
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 1b BREATHING -->
+  <section id="1b" style="margin-top:96px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:8px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">1b</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">Slow breathing</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">tap Begin — the circle keeps time so no numbers race</span>
+    </div>
+    <p style="margin:0 0 26px; max-width:560px; font-family:'DM Sans'; font-size:13px; line-height:1.6; color:#8C8069;">The left phone is live: pick a pattern and length, then Begin. Watch it swell on the inhale and settle on the exhale.</p>
+
+    <div style="display:flex; gap:44px; flex-wrap:wrap; align-items:flex-start;">
+
+      <!-- LIGHT INTERACTIVE -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Light · live</span>
+        <div style="width:390px; height:844px; border-radius:52px; background:#12100D; padding:10px; box-shadow:0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px; overflow:hidden; background:#F5EFE0;">
+            <div class="grain" style="opacity:0.5; mix-blend-mode:multiply; z-index:1;"></div>
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#12100D; border-radius:0 0 18px 18px; z-index:60;"></div>
+
+            <sc-if value="{{ isSetup }}" hint-placeholder-val="{{ true }}">
+              <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; padding:60px 28px 28px; overflow-y:auto;">
+                <div style="display:flex; align-items:center; justify-content:center; position:relative; margin-bottom:6px;">
+                  <span style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:#A08E6E;">Slow breathing</span>
+                  <span style="position:absolute; right:0; width:30px; height:30px; border-radius:50%; background:rgba(61,46,30,0.06); display:flex; align-items:center; justify-content:center;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C7C63" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                  </span>
+                </div>
+
+                <div style="flex:1; min-height:200px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;">
+                  <div style="position:relative; width:168px; height:168px; display:flex; align-items:center; justify-content:center; animation:breatheIdle 6s cubic-bezier(0.42,0,0.58,1) infinite;">
+                    <div style="position:absolute; width:168px; height:168px; border-radius:50%; background:radial-gradient(circle,rgba(138,173,126,0.14) 42%,rgba(138,173,126,0) 72%);"></div>
+                    <div style="position:absolute; width:126px; height:126px; border-radius:50%; background:radial-gradient(circle,rgba(138,173,126,0.22) 45%,rgba(138,173,126,0) 78%);"></div>
+                    <div style="position:absolute; width:90px; height:90px; border-radius:50%; background:radial-gradient(circle at 42% 36%,#AECC9F 0%,#82A776 52%,#5E7F55 100%); box-shadow:0 8px 26px rgba(90,122,82,0.26);"></div>
+                    <div style="position:absolute; width:34px; height:34px; border-radius:50%; top:42px; left:58px; background:radial-gradient(circle,rgba(255,255,255,0.55),rgba(255,255,255,0) 70%);"></div>
+                  </div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:19px; color:#8A7A62;">Ready when you are.</div>
+                </div>
+
+                <div style="background:#FBF7EE; border-radius:22px; padding:18px; box-shadow:0 1px 3px rgba(61,46,30,0.05);">
+                  <div style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:#A08E6E; margin-bottom:10px;">Pattern</div>
+                  <div style="display:flex; gap:10px; margin-bottom:18px;">
+                    <button onClick="{{ setBox }}" style="flex:1; position:relative; text-align:left; background:#F5EFE0; border:none; border-radius:15px; padding:13px 14px; cursor:pointer;">
+                      <div style="font-family:'DM Serif Display',Georgia,serif; font-size:17px; color:#3D2E1E;">Box</div>
+                      <div style="font-family:'DM Sans'; font-size:11px; color:#8A7A62; margin-top:3px;">In 4 · hold 4 · out 4 · hold 4</div>
+                      <sc-if value="{{ isBox }}" hint-placeholder-val="{{ true }}">
+                        <div style="position:absolute; inset:0; border:2px solid #5A7A52; border-radius:15px; background:rgba(90,122,82,0.06); pointer-events:none;"></div>
+                        <div style="position:absolute; top:10px; right:10px; width:18px; height:18px; border-radius:50%; background:#5A7A52; display:flex; align-items:center; justify-content:center;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-11"/></svg></div>
+                      </sc-if>
+                    </button>
+                    <button onClick="{{ setRelax }}" style="flex:1; position:relative; text-align:left; background:#F5EFE0; border:none; border-radius:15px; padding:13px 14px; cursor:pointer;">
+                      <div style="font-family:'DM Serif Display',Georgia,serif; font-size:17px; color:#3D2E1E;">Relax</div>
+                      <div style="font-family:'DM Sans'; font-size:11px; color:#8A7A62; margin-top:3px;">In 4 · hold 7 · out 8</div>
+                      <sc-if value="{{ isRelax }}">
+                        <div style="position:absolute; inset:0; border:2px solid #5A7A52; border-radius:15px; background:rgba(90,122,82,0.06); pointer-events:none;"></div>
+                        <div style="position:absolute; top:10px; right:10px; width:18px; height:18px; border-radius:50%; background:#5A7A52; display:flex; align-items:center; justify-content:center;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-11"/></svg></div>
+                      </sc-if>
+                    </button>
+                  </div>
+
+                  <div style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:#A08E6E; margin-bottom:10px;">Length</div>
+                  <div style="display:flex; gap:8px; margin-bottom:18px;">
+                    <button onClick="{{ setMin1 }}" style="flex:1; position:relative; background:#F5EFE0; border:none; border-radius:12px; padding:11px; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:500; color:#3D2E1E;">1 min<sc-if value="{{ bMin1 }}" hint-placeholder-val="{{ true }}"><div style="position:absolute; inset:0; border:2px solid #5A7A52; border-radius:12px; background:rgba(90,122,82,0.06); pointer-events:none;"></div></sc-if></button>
+                    <button onClick="{{ setMin2 }}" style="flex:1; position:relative; background:#F5EFE0; border:none; border-radius:12px; padding:11px; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:500; color:#3D2E1E;">2 min<sc-if value="{{ bMin2 }}"><div style="position:absolute; inset:0; border:2px solid #5A7A52; border-radius:12px; background:rgba(90,122,82,0.06); pointer-events:none;"></div></sc-if></button>
+                    <button onClick="{{ setMin3 }}" style="flex:1; position:relative; background:#F5EFE0; border:none; border-radius:12px; padding:11px; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:500; color:#3D2E1E;">3 min<sc-if value="{{ bMin3 }}"><div style="position:absolute; inset:0; border:2px solid #5A7A52; border-radius:12px; background:rgba(90,122,82,0.06); pointer-events:none;"></div></sc-if></button>
+                  </div>
+
+                  <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <div>
+                      <div style="font-family:'DM Sans'; font-size:14px; font-weight:500; color:#3D2E1E;">Haptics</div>
+                      <div style="font-family:'Instrument Serif',Georgia,serif; font-size:13px; color:#9A8A72;">a soft tap on each turn</div>
+                    </div>
+                    <button onClick="{{ toggleHaptics }}" style="position:relative; width:48px; height:28px; border-radius:14px; border:none; cursor:pointer; background:#E4DAC6;">
+                      <sc-if value="{{ bHaptics }}" hint-placeholder-val="{{ true }}">
+                        <div style="position:absolute; inset:0; border-radius:14px; background:#5A7A52;"></div>
+                        <div style="position:absolute; top:3px; left:23px; width:22px; height:22px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+                      </sc-if>
+                      <sc-if value="{{ bHapticsOff }}">
+                        <div style="position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+                      </sc-if>
+                    </button>
+                  </div>
+                </div>
+
+                <button onClick="{{ startBreathing }}" style="margin-top:16px; width:100%; background:#5A7A52; border:none; border-radius:15px; padding:16px; cursor:pointer; font-family:'DM Sans'; font-size:16px; font-weight:600; color:#F5EFE0;">Begin</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isRunning }}">
+              <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center; padding:96px 28px 40px;">
+                <div style="font-family:'Fraunces',Georgia,serif; font-weight:500; font-size:30px; color:#5E7F55; letter-spacing:0.01em; margin-bottom:6px;">{{ bWord }}</div>
+                <div style="flex:1; display:flex; align-items:center; justify-content:center; width:100%;">{{ bCircle }}</div>
+                <button onClick="{{ endBreathing }}" style="background:none; border:none; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:500; color:#A99A80; letter-spacing:0.02em; padding:10px;">End early</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isFinished }}">
+              <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 34px; animation:confIn 0.6s cubic-bezier(0.22,0.61,0.36,1) both;">
+                <div style="position:relative; width:150px; height:150px; display:flex; align-items:center; justify-content:center; margin-bottom:30px;">
+                  <div style="position:absolute; width:150px; height:150px; border-radius:50%; background:radial-gradient(circle,rgba(212,168,67,0.14) 42%,rgba(212,168,67,0) 74%);"></div>
+                  <div style="position:absolute; width:104px; height:104px; border-radius:50%; background:radial-gradient(circle at 42% 36%,#AECC9F 0%,#82A776 55%,#5E7F55 100%); box-shadow:0 10px 30px rgba(90,122,82,0.26);"></div>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#FBF7EE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:relative; z-index:2;"><path d="M5 12.5l4.5 4.5L19 6.5"/></svg>
+                </div>
+                <div style="font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:36px; color:#3D2E1E; margin-bottom:12px;">All done</div>
+                <p style="margin:0 0 34px; text-align:center; font-family:'Instrument Serif',Georgia,serif; font-size:19px; line-height:1.5; color:#7A6A55; max-width:260px;">{{ bDoneLabel }}</p>
+                <button onClick="{{ startBreathing }}" style="width:100%; max-width:280px; background:#5A7A52; border:none; border-radius:15px; padding:15px; cursor:pointer; font-family:'DM Sans'; font-size:15px; font-weight:600; color:#F5EFE0; margin-bottom:10px;">Once more</button>
+                <button onClick="{{ finishToSetup }}" style="width:100%; max-width:280px; background:none; border:none; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:500; color:#9A8A72; padding:8px;">Done for now</button>
+              </div>
+            </sc-if>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- DARK STATIC RUNNING -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Dark · mid-breath</span>
+        <div style="width:390px; height:844px; border-radius:52px; background:#080705; padding:10px; box-shadow:0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px; overflow:hidden; background:#1C160F;">
+            <div class="grain" style="opacity:0.22; z-index:1;"></div>
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#080705; border-radius:0 0 18px 18px; z-index:60;"></div>
+            <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center; padding:96px 28px 40px;">
+              <div style="font-family:'Fraunces',Georgia,serif; font-weight:500; font-size:30px; color:#A6C79A; letter-spacing:0.01em; margin-bottom:6px;">Breathe in</div>
+              <div style="flex:1; display:flex; align-items:center; justify-content:center; width:100%;">
+                <div style="position:relative; width:280px; height:280px; display:flex; align-items:center; justify-content:center;">
+                  <div style="position:absolute; width:280px; height:280px; border-radius:50%; background:radial-gradient(circle,rgba(138,173,126,0.14) 40%,rgba(138,173,126,0) 72%);"></div>
+                  <div style="position:absolute; width:216px; height:216px; border-radius:50%; background:radial-gradient(circle,rgba(138,173,126,0.22) 45%,rgba(138,173,126,0) 78%);"></div>
+                  <div style="position:absolute; width:150px; height:150px; border-radius:50%; background:radial-gradient(circle at 42% 36%,#9DC08F 0%,#6E9463 52%,#547449 100%); box-shadow:0 12px 44px rgba(120,160,105,0.34);"></div>
+                  <div style="position:absolute; width:56px; height:56px; border-radius:50%; top:78px; left:98px; background:radial-gradient(circle,rgba(255,255,255,0.4),rgba(255,255,255,0) 70%);"></div>
+                </div>
+              </div>
+              <button style="background:none; border:none; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:500; color:#8A7C63; letter-spacing:0.02em; padding:10px;">End early</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KEYFRAME STRIP -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">The swell — inhale to exhale</span>
+        <div style="display:grid; grid-template-columns:repeat(2, 200px); gap:16px;">
+
+          <div style="position:relative; height:230px; background:#F5EFE0; border-radius:24px; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <div class="grain" style="opacity:0.45; mix-blend-mode:multiply;"></div>
+            <div style="font-family:'Fraunces',Georgia,serif; font-size:19px; color:#5E7F55; position:absolute; top:22px; z-index:2;">Breathe in</div>
+            <div style="position:relative; width:130px; height:130px; display:flex; align-items:center; justify-content:center; z-index:2; margin-top:14px;">
+              <div style="position:absolute; width:130px; height:130px; border-radius:50%; background:radial-gradient(circle,rgba(138,173,126,0.18) 44%,rgba(138,173,126,0) 74%);"></div>
+              <div style="position:absolute; width:96px; height:96px; border-radius:50%; background:radial-gradient(circle at 42% 36%,#AECC9F,#82A776 52%,#5E7F55);"></div>
+            </div>
+            <div style="position:absolute; bottom:16px; font-family:'DM Sans'; font-size:11px; color:#A99A80; z-index:2;">large · full</div>
+          </div>
+
+          <div style="position:relative; height:230px; background:#F5EFE0; border-radius:24px; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <div class="grain" style="opacity:0.45; mix-blend-mode:multiply;"></div>
+            <div style="font-family:'Fraunces',Georgia,serif; font-size:19px; color:#5E7F55; position:absolute; top:22px; z-index:2;">Hold</div>
+            <div style="position:relative; width:130px; height:130px; display:flex; align-items:center; justify-content:center; z-index:2; margin-top:14px;">
+              <div style="position:absolute; width:130px; height:130px; border-radius:50%; background:radial-gradient(circle,rgba(138,173,126,0.18) 44%,rgba(138,173,126,0) 74%); animation:softPulse 3s ease-in-out infinite;"></div>
+              <div style="position:absolute; width:96px; height:96px; border-radius:50%; background:radial-gradient(circle at 42% 36%,#AECC9F,#82A776 52%,#5E7F55);"></div>
+            </div>
+            <div style="position:absolute; bottom:16px; font-family:'DM Sans'; font-size:11px; color:#A99A80; z-index:2;">held · still</div>
+          </div>
+
+          <div style="position:relative; height:230px; background:#F5EFE0; border-radius:24px; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <div class="grain" style="opacity:0.45; mix-blend-mode:multiply;"></div>
+            <div style="font-family:'Fraunces',Georgia,serif; font-size:19px; color:#5E7F55; position:absolute; top:22px; z-index:2;">Breathe out</div>
+            <div style="position:relative; width:130px; height:130px; display:flex; align-items:center; justify-content:center; z-index:2; margin-top:14px;">
+              <div style="position:absolute; width:130px; height:130px; border-radius:50%; background:radial-gradient(circle,rgba(138,173,126,0.10) 44%,rgba(138,173,126,0) 74%);"></div>
+              <div style="position:absolute; width:56px; height:56px; border-radius:50%; background:radial-gradient(circle at 42% 36%,#AECC9F,#82A776 52%,#5E7F55);"></div>
+            </div>
+            <div style="position:absolute; bottom:16px; font-family:'DM Sans'; font-size:11px; color:#A99A80; z-index:2;">small · settled</div>
+          </div>
+
+          <div style="position:relative; height:230px; background:#F5EFE0; border-radius:24px; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <div class="grain" style="opacity:0.45; mix-blend-mode:multiply;"></div>
+            <div style="font-family:'Fraunces',Georgia,serif; font-size:19px; color:#B58A2E; position:absolute; top:22px; z-index:2;">All done</div>
+            <div style="position:relative; width:110px; height:110px; display:flex; align-items:center; justify-content:center; z-index:2; margin-top:14px;">
+              <div style="position:absolute; width:110px; height:110px; border-radius:50%; background:radial-gradient(circle,rgba(212,168,67,0.16) 42%,rgba(212,168,67,0) 74%);"></div>
+              <div style="position:absolute; width:74px; height:74px; border-radius:50%; background:radial-gradient(circle at 42% 36%,#AECC9F,#82A776 55%,#5E7F55);"></div>
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#FBF7EE" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="position:relative; z-index:2;"><path d="M5 12.5l4.5 4.5L19 6.5"/></svg>
+            </div>
+            <div style="position:absolute; bottom:16px; font-family:'DM Sans'; font-size:11px; color:#A99A80; z-index:2;">a minute of care</div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 1c GROUNDING -->
+  <section id="1c" style="margin-top:96px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:8px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">1c</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">5·4·3·2·1 grounding</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">tap the phone anywhere to move through the senses</span>
+    </div>
+    <p style="margin:0 0 26px; max-width:560px; font-family:'DM Sans'; font-size:13px; line-height:1.6; color:#8C8069;">One sense per screen, one calm colour per sense. No timers — tapping is the only pace. The left phone is live; the strip shows every step.</p>
+
+    <div style="display:flex; gap:44px; flex-wrap:wrap; align-items:flex-start;">
+
+      <!-- LIGHT INTERACTIVE -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Light · live · tap to advance</span>
+        <div style="width:390px; height:844px; border-radius:52px; background:#12100D; padding:10px; box-shadow:0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px; overflow:hidden; background:#F5EFE0;">
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#12100D; border-radius:0 0 18px 18px; z-index:60;"></div>
+
+            <!-- SEE (5) -->
+            <sc-if value="{{ showSee }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ gAdvance }}" style="position:absolute; inset:0; z-index:5; background:rgba(138,173,126,0.16); display:flex; flex-direction:column; padding:64px 34px 40px; cursor:pointer;">
+                <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+                <div style="position:relative; z-index:2; text-align:center; font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:#7E8E72;">Grounding</div>
+                <div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+                  <div style="font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:128px; line-height:1; color:#41623A;">5</div>
+                  <div style="width:58px; height:58px; border-radius:19px; background:rgba(138,173,126,0.3); display:flex; align-items:center; justify-content:center;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#41623A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></div>
+                  <div style="font-family:'DM Serif Display',Georgia,serif; font-size:25px; color:#3D2E1E; text-align:center; line-height:1.2;">Notice five things you can see</div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-size:17px; color:#7A6A55; text-align:center; max-width:280px; line-height:1.5;">Anything at all — a corner of the ceiling, the light on your hand.</div>
+                </div>
+                <div style="position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:16px;">
+                  <div style="display:flex; gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:#5E7C54;"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(94,124,84,0.25);"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(94,124,84,0.25);"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(94,124,84,0.25);"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(94,124,84,0.25);"></span></div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:14px; color:#8F8068; text-align:center; max-width:260px; line-height:1.45;">Tap anywhere when you're ready for the next one — take all the time you like.</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- TOUCH (4) -->
+            <sc-if value="{{ showTouch }}">
+              <div onClick="{{ gAdvance }}" style="position:absolute; inset:0; z-index:5; background:rgba(201,150,74,0.15); display:flex; flex-direction:column; padding:64px 34px 40px; cursor:pointer;">
+                <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+                <div style="position:relative; z-index:2; text-align:center; font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:#A38A5E;">Grounding</div>
+                <div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+                  <div style="font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:128px; line-height:1; color:#8A6224;">4</div>
+                  <div style="width:58px; height:58px; border-radius:19px; background:rgba(201,150,74,0.28); display:flex; align-items:center; justify-content:center;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#8A6224" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg></div>
+                  <div style="font-family:'DM Serif Display',Georgia,serif; font-size:25px; color:#3D2E1E; text-align:center; line-height:1.2;">Notice four things you can touch</div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-size:17px; color:#7A6A55; text-align:center; max-width:280px; line-height:1.5;">The fabric on your knee, a cool table edge, your own two hands.</div>
+                </div>
+                <div style="position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:16px;">
+                  <div style="display:flex; gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:#A07C3C;"></span><span style="width:8px;height:8px;border-radius:50%;background:#A07C3C;"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(160,124,60,0.25);"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(160,124,60,0.25);"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(160,124,60,0.25);"></span></div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:14px; color:#8F8068; text-align:center; max-width:260px; line-height:1.45;">Tap anywhere when you're ready for the next one — take all the time you like.</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- HEAR (3) -->
+            <sc-if value="{{ showHear }}">
+              <div onClick="{{ gAdvance }}" style="position:absolute; inset:0; z-index:5; background:rgba(140,166,182,0.18); display:flex; flex-direction:column; padding:64px 34px 40px; cursor:pointer;">
+                <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+                <div style="position:relative; z-index:2; text-align:center; font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:#6E8493;">Grounding</div>
+                <div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+                  <div style="font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:128px; line-height:1; color:#4C6472;">3</div>
+                  <div style="width:58px; height:58px; border-radius:19px; background:rgba(140,166,182,0.3); display:flex; align-items:center; justify-content:center;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#4C6472" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0"/><path d="M9 8.7a3 3 0 0 1 6 0c0 2-2.2 2.6-2.6 4.3"/></svg></div>
+                  <div style="font-family:'DM Serif Display',Georgia,serif; font-size:25px; color:#3D2E1E; text-align:center; line-height:1.2;">Notice three things you can hear</div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-size:17px; color:#7A6A55; text-align:center; max-width:280px; line-height:1.5;">Near or far — a hum in the walls, a bird, your own breath.</div>
+                </div>
+                <div style="position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:16px;">
+                  <div style="display:flex; gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:#62798A;"></span><span style="width:8px;height:8px;border-radius:50%;background:#62798A;"></span><span style="width:8px;height:8px;border-radius:50%;background:#62798A;"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(98,121,138,0.25);"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(98,121,138,0.25);"></span></div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:14px; color:#8F8068; text-align:center; max-width:260px; line-height:1.45;">Tap anywhere when you're ready for the next one — take all the time you like.</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- SMELL (2) -->
+            <sc-if value="{{ showSmell }}">
+              <div onClick="{{ gAdvance }}" style="position:absolute; inset:0; z-index:5; background:rgba(169,155,180,0.18); display:flex; flex-direction:column; padding:64px 34px 40px; cursor:pointer;">
+                <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+                <div style="position:relative; z-index:2; text-align:center; font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:#7E7290;">Grounding</div>
+                <div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+                  <div style="font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:128px; line-height:1; color:#5F5470;">2</div>
+                  <div style="width:58px; height:58px; border-radius:19px; background:rgba(169,155,180,0.32); display:flex; align-items:center; justify-content:center;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#5F5470" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v7"/><path d="M12 10c0 2-1.6 3.2-3.4 3.2S5.4 12 5.4 10.4"/><path d="M12 10c0 2 1.6 3.2 3.4 3.2S18.6 12 18.6 10.4"/><path d="M7.5 16.5a5 5 0 0 0 9 0"/></svg></div>
+                  <div style="font-family:'DM Serif Display',Georgia,serif; font-size:25px; color:#3D2E1E; text-align:center; line-height:1.2;">Notice two things you can smell</div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-size:17px; color:#7A6A55; text-align:center; max-width:280px; line-height:1.5;">Faint is fine — the air itself has a scent, if you let it.</div>
+                </div>
+                <div style="position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:16px;">
+                  <div style="display:flex; gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:#786A87;"></span><span style="width:8px;height:8px;border-radius:50%;background:#786A87;"></span><span style="width:8px;height:8px;border-radius:50%;background:#786A87;"></span><span style="width:8px;height:8px;border-radius:50%;background:#786A87;"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(120,106,135,0.25);"></span></div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:14px; color:#8F8068; text-align:center; max-width:260px; line-height:1.45;">Tap anywhere when you're ready for the next one — take all the time you like.</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- TASTE (1) -->
+            <sc-if value="{{ showTaste }}">
+              <div onClick="{{ gAdvance }}" style="position:absolute; inset:0; z-index:5; background:rgba(192,138,112,0.16); display:flex; flex-direction:column; padding:64px 34px 40px; cursor:pointer;">
+                <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+                <div style="position:relative; z-index:2; text-align:center; font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:#9C6A54;">Grounding</div>
+                <div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+                  <div style="font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:128px; line-height:1; color:#7A4A38;">1</div>
+                  <div style="width:58px; height:58px; border-radius:19px; background:rgba(192,138,112,0.28); display:flex; align-items:center; justify-content:center;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#7A4A38" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11c2-1.6 5-1.6 8-1.6s6 0 8 1.6"/><path d="M4 11c1 3.6 4.5 5.6 8 5.6s7-2 8-5.6"/><path d="M9.5 10.4v1.6M14.5 10.4v1.6"/></svg></div>
+                  <div style="font-family:'DM Serif Display',Georgia,serif; font-size:25px; color:#3D2E1E; text-align:center; line-height:1.2;">Notice one thing you can taste</div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-size:17px; color:#7A6A55; text-align:center; max-width:280px; line-height:1.5;">Even just the inside of your mouth counts.</div>
+                </div>
+                <div style="position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:16px;">
+                  <div style="display:flex; gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:#986452;"></span><span style="width:8px;height:8px;border-radius:50%;background:#986452;"></span><span style="width:8px;height:8px;border-radius:50%;background:#986452;"></span><span style="width:8px;height:8px;border-radius:50%;background:#986452;"></span><span style="width:8px;height:8px;border-radius:50%;background:#986452;"></span></div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:14px; color:#8F8068; text-align:center; max-width:260px; line-height:1.45;">Tap anywhere when you're ready for the next one — take all the time you like.</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- FINAL -->
+            <sc-if value="{{ isFinalGround }}">
+              <div style="position:absolute; inset:0; z-index:5; background:rgba(138,173,126,0.12); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 40px; text-align:center; animation:confIn 0.7s cubic-bezier(0.22,0.61,0.36,1) both;">
+                <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+                <div style="position:relative; z-index:2; width:118px; height:118px; border-radius:50%; background:radial-gradient(circle at 42% 36%,#AECC9F,#82A776 55%,#5E7F55); box-shadow:0 12px 34px rgba(90,122,82,0.3); display:flex; align-items:center; justify-content:center; margin-bottom:28px;">
+                  <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#FBF7EE" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V11"/><path d="M12 11c0-3.6 2.4-6 6-6 0 3.6-2.4 6-6 6z"/><path d="M12 13c0-2.8-2.2-5-5-5 0 2.8 2.2 5 5 5z"/></svg>
+                </div>
+                <div style="position:relative; z-index:2; font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:42px; color:#3D2E1E; margin-bottom:14px;">You're here.</div>
+                <p style="position:relative; z-index:2; margin:0 0 34px; font-family:'Instrument Serif',Georgia,serif; font-size:19px; line-height:1.5; color:#7A6A55; max-width:280px;">That's enough. Take the calm with you — there's nothing else to do.</p>
+                <button onClick="{{ gReset }}" style="position:relative; z-index:2; background:none; border:1.5px solid rgba(90,122,82,0.4); border-radius:14px; padding:12px 26px; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:500; color:#5A7A52;">Begin again</button>
+              </div>
+            </sc-if>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- DARK STATIC (HEAR) -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Dark · one sense</span>
+        <div style="width:390px; height:844px; border-radius:52px; background:#080705; padding:10px; box-shadow:0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px; overflow:hidden; background:#1C160F;">
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#080705; border-radius:0 0 18px 18px; z-index:60;"></div>
+            <div style="position:absolute; inset:0; z-index:5; background:rgba(140,166,182,0.12); display:flex; flex-direction:column; padding:64px 34px 40px;">
+              <div style="text-align:center; font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:#8CA6B6;">Grounding</div>
+              <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+                <div style="font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:128px; line-height:1; color:#AEC6D4;">3</div>
+                <div style="width:58px; height:58px; border-radius:19px; background:rgba(140,166,182,0.2); display:flex; align-items:center; justify-content:center;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#AEC6D4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0"/><path d="M9 8.7a3 3 0 0 1 6 0c0 2-2.2 2.6-2.6 4.3"/></svg></div>
+                <div style="font-family:'DM Serif Display',Georgia,serif; font-size:25px; color:#ECE3D1; text-align:center; line-height:1.2;">Notice three things you can hear</div>
+                <div style="font-family:'Instrument Serif',Georgia,serif; font-size:17px; color:#A99C85; text-align:center; max-width:280px; line-height:1.5;">Near or far — a hum in the walls, a bird, your own breath.</div>
+              </div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:16px;">
+                <div style="display:flex; gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:#8CA6B6;"></span><span style="width:8px;height:8px;border-radius:50%;background:#8CA6B6;"></span><span style="width:8px;height:8px;border-radius:50%;background:#8CA6B6;"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(140,166,182,0.28);"></span><span style="width:8px;height:8px;border-radius:50%;background:rgba(140,166,182,0.28);"></span></div>
+                <div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:14px; color:#9A8C74; text-align:center; max-width:260px; line-height:1.45;">Tap anywhere when you're ready for the next one — take all the time you like.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEQUENCE STRIP -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Every step · see → here</span>
+        <div style="display:grid; grid-template-columns:repeat(2, 176px); gap:14px;">
+          <div style="position:relative; height:150px; border-radius:20px; background:rgba(138,173,126,0.18); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; overflow:hidden;"><div class="grain" style="opacity:0.35; mix-blend-mode:multiply;"></div><div style="position:relative; z-index:2; font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:46px; color:#41623A; line-height:1;">5</div><div style="position:relative; z-index:2; font-family:'DM Sans'; font-size:12px; font-weight:500; color:#5E7C54; letter-spacing:0.04em;">see</div></div>
+          <div style="position:relative; height:150px; border-radius:20px; background:rgba(201,150,74,0.16); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; overflow:hidden;"><div class="grain" style="opacity:0.35; mix-blend-mode:multiply;"></div><div style="position:relative; z-index:2; font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:46px; color:#8A6224; line-height:1;">4</div><div style="position:relative; z-index:2; font-family:'DM Sans'; font-size:12px; font-weight:500; color:#A07C3C; letter-spacing:0.04em;">touch</div></div>
+          <div style="position:relative; height:150px; border-radius:20px; background:rgba(140,166,182,0.2); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; overflow:hidden;"><div class="grain" style="opacity:0.35; mix-blend-mode:multiply;"></div><div style="position:relative; z-index:2; font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:46px; color:#4C6472; line-height:1;">3</div><div style="position:relative; z-index:2; font-family:'DM Sans'; font-size:12px; font-weight:500; color:#62798A; letter-spacing:0.04em;">hear</div></div>
+          <div style="position:relative; height:150px; border-radius:20px; background:rgba(169,155,180,0.2); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; overflow:hidden;"><div class="grain" style="opacity:0.35; mix-blend-mode:multiply;"></div><div style="position:relative; z-index:2; font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:46px; color:#5F5470; line-height:1;">2</div><div style="position:relative; z-index:2; font-family:'DM Sans'; font-size:12px; font-weight:500; color:#786A87; letter-spacing:0.04em;">smell</div></div>
+          <div style="position:relative; height:150px; border-radius:20px; background:rgba(192,138,112,0.16); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; overflow:hidden;"><div class="grain" style="opacity:0.35; mix-blend-mode:multiply;"></div><div style="position:relative; z-index:2; font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:46px; color:#7A4A38; line-height:1;">1</div><div style="position:relative; z-index:2; font-family:'DM Sans'; font-size:12px; font-weight:500; color:#986452; letter-spacing:0.04em;">taste</div></div>
+          <div style="position:relative; height:150px; border-radius:20px; background:rgba(138,173,126,0.14); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; overflow:hidden;"><div class="grain" style="opacity:0.35; mix-blend-mode:multiply;"></div><div style="position:relative; z-index:2; width:40px; height:40px; border-radius:50%; background:radial-gradient(circle at 42% 36%,#AECC9F,#82A776 55%,#5E7F55);"></div><div style="position:relative; z-index:2; font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:14px; color:#5E7C54;">You're here.</div></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 1d WORRY BOX -->
+  <section id="1d" style="margin-top:96px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:8px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">1d</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">Worry box</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">the box holds it · releasing lets it go for good</span>
+    </div>
+    <p style="margin:0 0 26px; max-width:600px; font-family:'DM Sans'; font-size:13px; line-height:1.6; color:#8C8069;">Write a worry and tap “Let it go” — the words tuck into the box and it latches. On the Personal tab, the kept worries wait; releasing one lifts it away like an ember. Both phones are live and share the same box.</p>
+
+    <div style="display:flex; gap:44px; flex-wrap:wrap; align-items:flex-start;">
+
+      <!-- WRITE FLOW (light, interactive) -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Light · live · write &amp; let go</span>
+        <div style="width:390px; height:844px; border-radius:52px; background:#12100D; padding:10px; box-shadow:0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px; overflow:hidden; background:#F5EFE0;">
+            <div class="grain" style="opacity:0.5; mix-blend-mode:multiply; z-index:1;"></div>
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#12100D; border-radius:0 0 18px 18px; z-index:60;"></div>
+
+            <!-- WRITING -->
+            <sc-if value="{{ isWriting }}" hint-placeholder-val="{{ true }}">
+              <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; padding:60px 28px 28px;">
+                <div style="display:flex; align-items:center; justify-content:center; position:relative; margin-bottom:26px;">
+                  <span style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:#A08E6E;">Worry box</span>
+                  <span style="position:absolute; right:0; width:30px; height:30px; border-radius:50%; background:rgba(61,46,30,0.06); display:flex; align-items:center; justify-content:center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C7C63" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
+                </div>
+
+                <p style="margin:0 0 20px; font-family:'DM Serif Display',Georgia,serif; font-size:23px; line-height:1.32; color:#3D2E1E;">What's circling around?</p>
+                <p style="margin:0 0 18px; font-family:'Instrument Serif',Georgia,serif; font-size:17px; line-height:1.5; color:#7A6A55;">Write it down — the box can hold it for a while, so you don't have to.</p>
+
+                <textarea value="{{ wText }}" onChange="{{ onWorryInput }}" placeholder="It's alright. Just start typing…" style="width:100%; flex:1; min-height:180px; resize:none; border:none; outline:none; background:#FBF7EE; border-radius:20px; padding:18px; font-family:'Instrument Serif',Georgia,serif; font-size:17px; line-height:1.6; color:#3D2E1E; box-shadow:inset 0 1px 3px rgba(61,46,30,0.06);"></textarea>
+
+                <div style="display:flex; align-items:center; gap:8px; margin:16px 2px 18px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9A8A72" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10" rx="2.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+                  <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:13.5px; color:#9A8A72; line-height:1.4;">Stays sealed on this device only — worries never sync anywhere.</span>
+                </div>
+
+                <sc-if value="{{ canLetGo }}">
+                  <button onClick="{{ letItGo }}" style="width:100%; background:#5A7A52; border:none; border-radius:15px; padding:16px; cursor:pointer; font-family:'DM Sans'; font-size:16px; font-weight:600; color:#F5EFE0;">Let it go</button>
+                </sc-if>
+                <sc-if value="{{ cannotLetGo }}" hint-placeholder-val="{{ true }}">
+                  <button style="width:100%; background:rgba(90,122,82,0.18); border:none; border-radius:15px; padding:16px; cursor:default; font-family:'DM Sans'; font-size:16px; font-weight:600; color:rgba(90,122,82,0.55);">Let it go</button>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <!-- RELEASING (tuck into box) -->
+            <sc-if value="{{ isReleasing }}">
+              <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 34px;">
+                <div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:18px; color:#9A8A72; position:absolute; top:120px;">Letting it go…</div>
+                <div style="position:relative; width:230px; height:250px; display:flex; align-items:flex-end; justify-content:center;">
+                  <div style="position:absolute; top:0; left:0; right:0; display:flex; justify-content:center; animation:tuckWords 1.3s cubic-bezier(0.5,0,0.75,0) forwards;">
+                    <div style="max-width:200px; background:#FBF7EE; border-radius:14px; padding:12px 16px; box-shadow:0 8px 24px rgba(61,46,30,0.16); font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:15px; color:#3D2E1E; line-height:1.4; text-align:center;">{{ wText }}</div>
+                  </div>
+                  <div style="position:relative; width:174px; height:122px;">
+                    <div style="position:absolute; bottom:0; left:7px; right:7px; height:102px; border-radius:6px 6px 16px 16px; background:#4E3A22;"></div>
+                    <div style="position:absolute; top:22px; left:7px; right:7px; height:22px; background:linear-gradient(rgba(0,0,0,0.32),rgba(0,0,0,0));"></div>
+                    <div style="position:absolute; bottom:0; left:0; right:0; height:72px; border-radius:4px 4px 16px 16px; background:linear-gradient(#BE8F52,#A87A3F); border-top:2px solid #CBA063;"></div>
+                    <div style="position:absolute; bottom:30px; left:0; right:0; height:2px; background:rgba(78,58,34,0.35);"></div>
+                    <div style="position:absolute; bottom:21px; left:50%; transform:translateX(-50%); width:18px; height:15px; border-radius:3px; background:#E0B860;"></div>
+                    <div style="position:absolute; top:0; left:-4px; right:-4px; height:34px; border-radius:10px 10px 4px 4px; background:linear-gradient(#CBA063,#B0824A); transform-origin:50% 100%; transform:rotate(-104deg); animation:lidClose 0.9s cubic-bezier(0.34,1.3,0.6,1) 1.05s forwards;"></div>
+                    <div style="position:absolute; bottom:40px; left:50%; transform:translateX(-50%); width:70px; height:70px; border-radius:50%; background:radial-gradient(circle,rgba(224,184,96,0.6),rgba(224,184,96,0) 70%); animation:sealGlow 0.9s ease-out 1.7s both;"></div>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- TUCKED -->
+            <sc-if value="{{ isTucked }}">
+              <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 34px; animation:confIn 0.6s cubic-bezier(0.22,0.61,0.36,1) both;">
+                <div style="position:relative; width:150px; height:120px; margin-bottom:30px;">
+                  <div style="position:absolute; bottom:0; left:8px; right:8px; height:78px; border-radius:6px 6px 16px 16px; background:linear-gradient(#BE8F52,#A87A3F); border-top:2px solid #CBA063; box-shadow:0 10px 26px rgba(90,68,34,0.28);"></div>
+                  <div style="position:absolute; top:20px; left:2px; right:2px; height:30px; border-radius:9px 9px 3px 3px; background:linear-gradient(#CBA063,#B0824A);"></div>
+                  <div style="position:absolute; bottom:26px; left:50%; transform:translateX(-50%); width:18px; height:15px; border-radius:3px; background:#E0B860;"></div>
+                  <div style="position:absolute; inset:-14px; border-radius:50%; background:radial-gradient(circle,rgba(224,184,96,0.22),rgba(224,184,96,0) 68%); animation:softPulse 3.5s ease-in-out infinite;"></div>
+                </div>
+                <div style="font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:36px; color:#3D2E1E; margin-bottom:12px;">Tucked away.</div>
+                <p style="margin:0 0 34px; text-align:center; font-family:'Instrument Serif',Georgia,serif; font-size:18px; line-height:1.5; color:#7A6A55; max-width:280px;">You can set it down for now. It's kept safe in the Worry Box on your Personal tab, sealed on this device.</p>
+                <button onClick="{{ resetWorry }}" style="width:100%; max-width:280px; background:#5A7A52; border:none; border-radius:15px; padding:15px; cursor:pointer; font-family:'DM Sans'; font-size:15px; font-weight:600; color:#F5EFE0; margin-bottom:10px;">Write another</button>
+                <button onClick="{{ resetWorry }}" style="width:100%; max-width:280px; background:none; border:none; cursor:pointer; font-family:'DM Sans'; font-size:14px; font-weight:500; color:#9A8A72; padding:8px;">Done</button>
+              </div>
+            </sc-if>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- KEPT LIST (Personal tab, light, interactive) -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Light · live · Personal tab</span>
+        <div style="width:390px; height:844px; border-radius:52px; background:#12100D; padding:10px; box-shadow:0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px; overflow:hidden; background:#F5EFE0;">
+            <div class="grain" style="opacity:0.5; mix-blend-mode:multiply; z-index:1;"></div>
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#12100D; border-radius:0 0 18px 18px; z-index:60;"></div>
+            <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; padding:60px 24px 24px;">
+              <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px;">
+                <span style="width:40px; height:40px; border-radius:14px; background:rgba(212,168,67,0.2); display:flex; align-items:center; justify-content:center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#B58A2E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h16V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8.5z"/><path d="M3 4.5h18v4H3z"/><path d="M10 12.5h4"/></svg></span>
+                <div style="font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:26px; color:#3D2E1E;">Worry box</div>
+              </div>
+              <p style="margin:0 0 20px; font-family:'Instrument Serif',Georgia,serif; font-size:16px; line-height:1.5; color:#7A6A55;">Worries you've set down. The box keeps them — releasing one lets it go for good.</p>
+
+              <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px;">
+                <sc-for list="{{ wKept }}" as="w" hint-placeholder-count="3">
+                  <div style="position:relative; background:#FBF7EE; border-radius:18px; padding:15px 16px; overflow:hidden; box-shadow:0 1px 3px rgba(61,46,30,0.05);">
+                    <div style="display:flex; gap:12px; align-items:flex-start;">
+                      <span style="flex-shrink:0; margin-top:2px; width:30px; height:30px; border-radius:10px; background:rgba(212,168,67,0.16); display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B58A2E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h16V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8.5z"/><path d="M3 4.5h18v4H3z"/></svg></span>
+                      <div style="flex:1;">
+                        <div style="font-family:'Instrument Serif',Georgia,serif; font-size:16px; line-height:1.4; color:#3D2E1E;">{{ w.text }}</div>
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
+                          <span style="font-family:'DM Sans'; font-size:11px; color:#A79A82;">{{ w.when }}</span>
+                          <button onClick="{{ w.onRelease }}" style="display:flex; align-items:center; gap:5px; background:none; border:none; cursor:pointer; font-family:'DM Sans'; font-size:12px; font-weight:500; color:#9A7A3E; padding:2px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A7A3E" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>Release this worry</button>
+                        </div>
+                      </div>
+                    </div>
+                    <sc-if value="{{ w.releasing }}">
+                      <div style="position:absolute; inset:0; background:rgba(251,247,238,0.72); animation:confIn 0.4s ease both;"></div>
+                      <div style="position:absolute; left:0; right:0; bottom:14px; display:flex; justify-content:center; animation:emberLift 1.4s cubic-bezier(0.4,0,0.5,1) forwards;">
+                        <div style="width:16px; height:16px; border-radius:50%; background:radial-gradient(circle,#F2D488,#E0B860 55%,rgba(224,184,96,0)); box-shadow:0 0 16px 5px rgba(224,184,96,0.5);"></div>
+                      </div>
+                      <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:14px; color:#9A7A3E;">letting it go…</div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DARK (tucked) + keyframe strips -->
+      <div style="display:flex; flex-direction:column; gap:34px;">
+
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Dark · tucked away</span>
+          <div style="width:390px; height:520px; border-radius:52px 52px 30px 30px; background:#080705; padding:10px 10px 0; box-shadow:0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06); flex-shrink:0;">
+            <div style="position:relative; width:100%; height:100%; border-radius:42px 42px 0 0; overflow:hidden; background:#1C160F;">
+              <div class="grain" style="opacity:0.22; z-index:1;"></div>
+              <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#080705; border-radius:0 0 18px 18px; z-index:60;"></div>
+              <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:70px 34px 40px;">
+                <div style="position:relative; width:140px; height:112px; margin-bottom:26px;">
+                  <div style="position:absolute; bottom:0; left:8px; right:8px; height:74px; border-radius:6px 6px 16px 16px; background:linear-gradient(#B0824A,#946A38); border-top:2px solid #C29456;"></div>
+                  <div style="position:absolute; top:18px; left:2px; right:2px; height:28px; border-radius:9px 9px 3px 3px; background:linear-gradient(#C29456,#A67B42);"></div>
+                  <div style="position:absolute; bottom:24px; left:50%; transform:translateX(-50%); width:17px; height:14px; border-radius:3px; background:#E0B860;"></div>
+                  <div style="position:absolute; inset:-14px; border-radius:50%; background:radial-gradient(circle,rgba(224,184,96,0.26),rgba(224,184,96,0) 68%); animation:softPulse 3.5s ease-in-out infinite;"></div>
+                </div>
+                <div style="font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:34px; color:#ECE3D1; margin-bottom:12px;">Tucked away.</div>
+                <p style="margin:0; text-align:center; font-family:'Instrument Serif',Georgia,serif; font-size:17px; line-height:1.5; color:#A99C85; max-width:280px;">Kept safe in the Worry Box on your Personal tab, sealed on this device.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">“Let it go” — into the box</span>
+          <div style="display:flex; gap:12px;">
+            <div style="position:relative; width:112px; height:150px; background:#F5EFE0; border-radius:20px; overflow:hidden; display:flex; align-items:flex-end; justify-content:center;"><div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div><div style="position:absolute; top:16px; left:14px; right:14px; background:#FBF7EE; border-radius:8px; padding:6px; font-family:'Instrument Serif'; font-style:italic; font-size:9px; color:#7A6A55; text-align:center; box-shadow:0 3px 8px rgba(61,46,30,0.12);">the worry</div><div style="position:relative; z-index:2; width:72px; height:52px; margin-bottom:20px;"><div style="position:absolute; bottom:0; left:3px; right:3px; height:44px; border-radius:2px 2px 7px 7px; background:#4E3A22;"></div><div style="position:absolute; bottom:0; left:0; right:0; height:32px; border-radius:2px 2px 7px 7px; background:linear-gradient(#BE8F52,#A87A3F);"></div><div style="position:absolute; top:-16px; left:-2px; right:-2px; height:15px; border-radius:5px; background:#CBA063; transform-origin:50% 100%; transform:rotate(-100deg);"></div></div><div style="position:absolute; bottom:8px; font-family:'DM Sans'; font-size:9px; color:#A99A80; z-index:2;">open</div></div>
+
+            <div style="position:relative; width:112px; height:150px; background:#F5EFE0; border-radius:20px; overflow:hidden; display:flex; align-items:flex-end; justify-content:center;"><div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div><div style="position:absolute; top:34px; left:26px; right:26px; background:#FBF7EE; border-radius:6px; padding:4px; font-family:'Instrument Serif'; font-style:italic; font-size:8px; color:#9A8A72; text-align:center; opacity:0.6; transform:scale(0.8);">the worry</div><div style="position:relative; z-index:2; width:72px; height:52px; margin-bottom:20px;"><div style="position:absolute; bottom:0; left:3px; right:3px; height:44px; border-radius:2px 2px 7px 7px; background:#4E3A22;"></div><div style="position:absolute; bottom:0; left:0; right:0; height:32px; border-radius:2px 2px 7px 7px; background:linear-gradient(#BE8F52,#A87A3F);"></div><div style="position:absolute; top:-14px; left:-2px; right:-2px; height:15px; border-radius:5px; background:#CBA063; transform-origin:50% 100%; transform:rotate(-58deg);"></div></div><div style="position:absolute; bottom:8px; font-family:'DM Sans'; font-size:9px; color:#A99A80; z-index:2;">tuck in</div></div>
+
+            <div style="position:relative; width:112px; height:150px; background:#F5EFE0; border-radius:20px; overflow:hidden; display:flex; align-items:flex-end; justify-content:center;"><div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div><div style="position:relative; z-index:2; width:72px; height:52px; margin-bottom:20px;"><div style="position:absolute; bottom:0; left:3px; right:3px; height:44px; border-radius:2px 2px 7px 7px; background:#4E3A22;"></div><div style="position:absolute; bottom:0; left:0; right:0; height:34px; border-radius:2px 2px 7px 7px; background:linear-gradient(#BE8F52,#A87A3F);"></div><div style="position:absolute; top:-3px; left:-2px; right:-2px; height:15px; border-radius:5px; background:#CBA063; transform-origin:50% 100%; transform:rotate(-12deg);"></div></div><div style="position:absolute; bottom:8px; font-family:'DM Sans'; font-size:9px; color:#A99A80; z-index:2;">closing</div></div>
+
+            <div style="position:relative; width:112px; height:150px; background:#F5EFE0; border-radius:20px; overflow:hidden; display:flex; align-items:flex-end; justify-content:center;"><div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div><div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px;"><div style="position:relative; width:72px; height:50px;"><div style="position:absolute; bottom:0; left:0; right:0; height:34px; border-radius:2px 2px 7px 7px; background:linear-gradient(#BE8F52,#A87A3F);"></div><div style="position:absolute; top:6px; left:-2px; right:-2px; height:14px; border-radius:5px; background:#CBA063;"></div><div style="position:absolute; bottom:12px; left:50%; transform:translateX(-50%); width:9px; height:8px; border-radius:2px; background:#E0B860;"></div><div style="position:absolute; inset:-8px; border-radius:50%; background:radial-gradient(circle,rgba(224,184,96,0.3),rgba(224,184,96,0) 70%);"></div></div><div style="font-family:'Instrument Serif'; font-style:italic; font-size:11px; color:#B58A2E; z-index:2;">Tucked away.</div></div></div>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">“Release” — for good · lifts like an ember</span>
+          <div style="display:flex; gap:12px; align-items:flex-start;">
+            <div style="position:relative; width:112px; height:150px; background:#F5EFE0; border-radius:20px; overflow:hidden; display:flex; align-items:center; justify-content:center;"><div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div><div style="position:relative; z-index:2; width:58px; height:42px;"><div style="position:absolute; bottom:0; left:0; right:0; height:28px; border-radius:2px 2px 6px 6px; background:linear-gradient(#BE8F52,#A87A3F);"></div><div style="position:absolute; top:2px; left:-2px; right:-2px; height:12px; border-radius:4px; background:#CBA063;"></div><div style="position:absolute; bottom:9px; left:50%; transform:translateX(-50%); width:8px; height:7px; border-radius:2px; background:#E0B860;"></div></div><div style="position:absolute; bottom:8px; font-family:'DM Sans'; font-size:9px; color:#A99A80; z-index:2;">kept</div></div>
+
+            <div style="position:relative; width:112px; height:150px; background:#F5EFE0; border-radius:20px; overflow:hidden; display:flex; align-items:flex-end; justify-content:center;"><div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div><div style="position:absolute; top:34px; left:50%; transform:translateX(-50%); width:14px; height:14px; border-radius:50%; background:radial-gradient(circle,#F2D488,#E0B860 55%,rgba(224,184,96,0)); box-shadow:0 0 14px 4px rgba(224,184,96,0.45);"></div><div style="position:absolute; top:58px; left:50%; transform:translateX(-58%); width:8px; height:8px; border-radius:50%; background:radial-gradient(circle,#F2D488,rgba(224,184,96,0)); opacity:0.6;"></div><div style="position:relative; z-index:2; width:58px; height:42px; margin-bottom:22px; opacity:0.5;"><div style="position:absolute; bottom:0; left:0; right:0; height:28px; border-radius:2px 2px 6px 6px; background:linear-gradient(#BE8F52,#A87A3F);"></div><div style="position:absolute; top:2px; left:-2px; right:-2px; height:12px; border-radius:4px; background:#CBA063;"></div></div><div style="position:absolute; bottom:8px; font-family:'DM Sans'; font-size:9px; color:#A99A80; z-index:2;">lifts away</div></div>
+
+            <div style="position:relative; width:112px; height:150px; background:#F5EFE0; border-radius:20px; overflow:hidden; display:flex; align-items:center; justify-content:center;"><div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div><div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; padding:0 14px; text-align:center;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#9FB893" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7L9 18l-5-5"/></svg><div style="font-family:'Instrument Serif'; font-style:italic; font-size:11px; color:#7E9072; line-height:1.35;">gone, for good</div></div></div>
+
+            <div style="width:150px; padding:6px 4px;">
+              <div style="font-family:'Instrument Serif',Georgia,serif; font-size:15px; line-height:1.5; color:#C9BCA4;">The box <em>holds</em> a worry; releasing <em>carries it off</em> as an ember — final, warm, never deleted with a cold swipe.</div>
+              <div style="font-family:'DM Sans'; font-size:11px; line-height:1.5; color:#8C8069; margin-top:10px;">Also explored: a drifting leaf and a paper boat — say the word and I'll swap the release motif.</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Empty state</span>
+          <div style="position:relative; width:360px; padding:34px 30px; background:#F5EFE0; border-radius:24px; overflow:hidden; display:flex; align-items:center; gap:20px;">
+            <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+            <div style="position:relative; z-index:2; flex-shrink:0; width:64px; height:52px;"><div style="position:absolute; bottom:0; left:0; right:0; height:34px; border-radius:3px 3px 9px 9px; background:linear-gradient(#C9A873,#B89A62); opacity:0.75;"></div><div style="position:absolute; top:0; left:6px; right:6px; height:16px; border-radius:6px 6px 3px 3px; background:#D4B784; transform-origin:right; transform:rotate(-24deg);"></div></div>
+            <div style="position:relative; z-index:2;">
+              <div style="font-family:'DM Serif Display',Georgia,serif; font-size:20px; color:#3D2E1E; margin-bottom:5px;">The box is empty right now.</div>
+              <div style="font-family:'Instrument Serif',Georgia,serif; font-size:16px; line-height:1.45; color:#7A6A55;">That's a good thing — nothing's weighing on you enough to set down.</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    // Breathing
+    bPreset: 'box',
+    bMinutes: 1,
+    bHaptics: true,
+    bPhase: 'setup',        // setup | running | finished
+    bWord: 'Ready when you are.',
+    bScale: 0.6,
+    bDur: '1.4s',
+    // Grounding
+    gStep: 0,               // 0..4 senses, 5 = final
+    // Worry
+    wText: '',
+    wPhase: 'writing',      // writing | releasing | tucked
+    wKept: [
+      { id: 1, text: 'The meeting on Thursday I keep replaying in my head.', when: 'Set down yesterday' },
+      { id: 2, text: 'Whether I said the wrong thing to Sam at lunch.', when: 'Set down 3 days ago' },
+      { id: 3, text: 'Money, mostly. The usual low hum of it.', when: 'Set down last week' },
+    ],
+    wReleasingId: null,
+  };
+
+  presets = {
+    box:   { name: 'Box',   detail: 'In 4 · hold 4 · out 4 · hold 4',
+             seq: [ {w:'Breathe in',d:4,s:1}, {w:'Hold',d:4,s:1}, {w:'Breathe out',d:4,s:0.56}, {w:'Hold',d:4,s:0.56} ] },
+    relax: { name: 'Relax', detail: 'In 4 · hold 7 · out 8',
+             seq: [ {w:'Breathe in',d:4,s:1}, {w:'Hold',d:7,s:1}, {w:'Breathe out',d:8,s:0.56} ] },
+  };
+
+  senses = [
+    { n:5, key:'see',   prompt:'Notice five things you can see',   hint:'Anything at all — a corner of the ceiling, the light on your hand.', tint:'#8AAD7E', wash:'rgba(138,173,126,0.16)', ink:'#41623A', inkSoft:'#5E7C54' },
+    { n:4, key:'touch', prompt:'Notice four things you can touch',  hint:'The fabric on your knee, a cool table edge, your own two hands.',     tint:'#C9964A', wash:'rgba(201,150,74,0.15)',  ink:'#8A6224', inkSoft:'#A07C3C' },
+    { n:3, key:'hear',  prompt:'Notice three things you can hear',  hint:'Near or far — a hum in the walls, a bird, your own breath.',          tint:'#8CA6B6', wash:'rgba(140,166,182,0.18)', ink:'#4C6472', inkSoft:'#62798A' },
+    { n:2, key:'smell', prompt:'Notice two things you can smell',   hint:'Faint is fine — the air itself has a scent, if you let it.',          tint:'#A99BB4', wash:'rgba(169,155,180,0.18)', ink:'#5F5470', inkSoft:'#786A87' },
+    { n:1, key:'taste', prompt:'Notice one thing you can taste',    hint:'Even just the inside of your mouth counts.',                          tint:'#C08A70', wash:'rgba(192,138,112,0.16)', ink:'#7A4A38', inkSoft:'#986452' },
+  ];
+
+  componentWillUnmount() { this.clearTimers(); }
+  clearTimers() { (this._timers || []).forEach(t => clearTimeout(t)); this._timers = []; }
+
+  startBreathing() {
+    this.clearTimers();
+    this._bStart = Date.now();
+    this._bTotal = this.state.bMinutes * 60 * 1000;
+    this.setState({ bPhase: 'running' }, () => this.runPhase(0));
+  }
+  runPhase(i) {
+    const seq = this.presets[this.state.bPreset].seq;
+    const p = seq[i % seq.length];
+    this.setState({ bWord: p.w, bScale: p.s, bDur: p.d + 's' });
+    const t = setTimeout(() => {
+      if (Date.now() - this._bStart >= this._bTotal - 200) {
+        this.setState({ bPhase: 'finished' });
+      } else {
+        this.runPhase(i + 1);
+      }
+    }, p.d * 1000);
+    this._timers = [t];
+  }
+  endBreathing() { this.clearTimers(); this.setState({ bPhase: 'finished' }); }
+
+  gAdvance() { this.setState(s => ({ gStep: Math.min(s.gStep + 1, 5) })); }
+
+  letItGo() {
+    if (!this.state.wText.trim()) return;
+    this.clearTimers();
+    const txt = this.state.wText.trim();
+    this.setState({ wPhase: 'releasing' });
+    const t = setTimeout(() => {
+      this.setState(s => ({
+        wPhase: 'tucked',
+        wKept: [{ id: Date.now(), text: txt, when: 'Set down just now' }, ...s.wKept],
+      }));
+    }, 2200);
+    this._timers = [t];
+  }
+  releaseKept(id) {
+    this.setState({ wReleasingId: id });
+    const t = setTimeout(() => {
+      this.setState(s => ({ wKept: s.wKept.filter(w => w.id !== id), wReleasingId: null }));
+    }, 1500);
+    this._timers = [t];
+  }
+
+  mkCircle(scale, dur) {
+    const h = React.createElement;
+    const ring = (d, bg) => h('div', { style: { position:'absolute', width:d, height:d, borderRadius:'50%', background:bg } });
+    return h('div', {
+      style: { position:'relative', width:280, height:280, display:'flex', alignItems:'center', justifyContent:'center', transform:'scale('+scale+')', transition:'transform '+dur+' cubic-bezier(0.42,0,0.58,1)', willChange:'transform' }
+    },
+      ring(280,'radial-gradient(circle,rgba(138,173,126,0.12) 40%,rgba(138,173,126,0) 72%)'),
+      ring(216,'radial-gradient(circle,rgba(138,173,126,0.20) 45%,rgba(138,173,126,0) 78%)'),
+      h('div',{ style:{ position:'absolute', width:150, height:150, borderRadius:'50%', background:'radial-gradient(circle at 42% 36%,#AECC9F 0%,#82A776 52%,#5E7F55 100%)', boxShadow:'0 12px 40px rgba(90,122,82,0.30)' } }),
+      h('div',{ style:{ position:'absolute', width:56, height:56, borderRadius:'50%', top:78, left:98, background:'radial-gradient(circle,rgba(255,255,255,0.55),rgba(255,255,255,0) 70%)' } })
+    );
+  }
+
+  renderVals() {
+    const S = this.state;
+    const preset = this.presets[S.bPreset];
+    const cur = this.senses[Math.min(S.gStep, 4)];
+    return {
+      // Breathing
+      isSetup: S.bPhase === 'setup',
+      isRunning: S.bPhase === 'running',
+      isFinished: S.bPhase === 'finished',
+      bWord: S.bWord,
+      bCircle: this.mkCircle(S.bScale, S.bDur),
+      isBox: S.bPreset === 'box',
+      isRelax: S.bPreset === 'relax',
+      bMinutes: S.bMinutes,
+      bMin1: S.bMinutes === 1, bMin2: S.bMinutes === 2, bMin3: S.bMinutes === 3,
+      bHaptics: S.bHaptics,
+      bHapticsOff: !S.bHaptics,
+      bDoneLabel: S.bMinutes === 1 ? 'That was a whole minute of care. Nicely done.' : `That was ${S.bMinutes} whole minutes of care. Nicely done.`,
+      setBox: () => this.setState({ bPreset: 'box' }),
+      setRelax: () => this.setState({ bPreset: 'relax' }),
+      setMin1: () => this.setState({ bMinutes: 1 }),
+      setMin2: () => this.setState({ bMinutes: 2 }),
+      setMin3: () => this.setState({ bMinutes: 3 }),
+      toggleHaptics: () => this.setState({ bHaptics: !S.bHaptics }),
+      startBreathing: () => this.startBreathing(),
+      endBreathing: () => this.endBreathing(),
+      finishToSetup: () => this.setState({ bPhase: 'setup' }),
+      presetDetail: preset.detail,
+      // Grounding
+      gStep: S.gStep,
+      senses: this.senses,
+      isFinalGround: S.gStep >= 5,
+      showSee: S.gStep === 0, showTouch: S.gStep === 1, showHear: S.gStep === 2,
+      showSmell: S.gStep === 3, showTaste: S.gStep === 4,
+      curN: cur.n, curPrompt: cur.prompt, curHint: cur.hint,
+      curWash: cur.wash, curInk: cur.ink, curTint: cur.tint,
+      gProgress: `${(Math.min(S.gStep, 5) / 5) * 100}%`,
+      gAdvance: () => this.gAdvance(),
+      gReset: () => this.setState({ gStep: 0 }),
+      // Worry
+      wText: S.wText,
+      onWorryInput: (e) => this.setState({ wText: e.target.value }),
+      isWriting: S.wPhase === 'writing',
+      isReleasing: S.wPhase === 'releasing',
+      isTucked: S.wPhase === 'tucked',
+      canLetGo: S.wText.trim().length > 0,
+      cannotLetGo: S.wText.trim().length === 0,
+      letItGo: () => this.letItGo(),
+      resetWorry: () => this.setState({ wPhase: 'writing', wText: '' }),
+      wKept: S.wKept.map(w => ({ ...w, releasing: w.id === S.wReleasingId, onRelease: () => this.releaseKept(w.id) })),
+      hasKept: S.wKept.length > 0,
+      wEmpty: S.wKept.length === 0,
+      keptCount: S.wKept.length,
+      releaseKept: (id) => this.releaseKept(id),
+      wReleasingId: S.wReleasingId,
+    };
+  }
+}
+</script>
+</body>
+</html>

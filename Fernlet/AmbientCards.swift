@@ -61,38 +61,50 @@ struct AmbientCardsView: View {
     // MARK: - Received heart (good vibes from a friend)
 
     /// A warm, dismissible note when a friend sent good vibes in person — first name only, no
-    /// counts, nothing numeric. Dismissing hides the bubble; the health bar's golden warmth
-    /// keeps fading on its own 24h clock.
+    /// counts, nothing numeric (good-vibes 10a). A floating dusty-rose heart badge crowns a soft
+    /// cream bubble; tapping anywhere tucks it away. Dismissing hides the bubble; the health bar's
+    /// golden warmth keeps fading on its own 24h clock.
     @ViewBuilder
     private var receivedHeartCard: some View {
         if let heart = store.pendingHeartBubble {
-            FernletCard {
-                HStack(alignment: .top, spacing: 12) {
-                    ambientIcon("heart.fill", tint: .goldenrod)
-                    VStack(alignment: .leading, spacing: 4) {
+            Button {
+                store.dismissHeartBubble(id: heart.id)
+            } label: {
+                FernletCard {
+                    VStack(spacing: 8) {
+                        Image(systemName: "heart.fill")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(Color.dustyRose)
+                            .frame(width: 44, height: 44)
+                            .background(Color.dustyRose.opacity(0.14), in: Circle())
+                            .overlay(Circle().stroke(Color.dustyRose.opacity(0.28), lineWidth: 1))
+                            .shadow(color: Color.terracotta.opacity(0.20), radius: 6, y: 3)
+
                         Text("Good vibes")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color.goldenrod)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(Color.bark)
+
                         Text("\(ProximityHeartManager.firstName(of: heart.senderDisplayName)) sent you some warmth — a friend is thinking of you.")
                             .font(.callout)
-                            .foregroundStyle(Color.bark)
-                            .fernletWrappingText()
-                    }
-                    Spacer(minLength: 0)
-                    Button {
-                        store.dismissHeartBubble(id: heart.id)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.caption.weight(.semibold))
                             .foregroundStyle(Color.slate)
-                            .frame(width: 28, height: 28)
-                            .background(Color.slate.opacity(0.10), in: Circle())
+                            .multilineTextAlignment(.center)
+                            .fernletWrappingText()
+
+                        Divider()
+                            .overlay(Color.bark.opacity(0.08))
+                            .padding(.top, 4)
+
+                        Text("tap to tuck away")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.softTaupe)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Dismiss")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
                 }
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("home.receivedHeart")
+            .accessibilityLabel("Good vibes from \(ProximityHeartManager.firstName(of: heart.senderDisplayName)). Tap to tuck away.")
         }
     }
 

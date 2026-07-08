@@ -10,20 +10,42 @@ struct CompanionView: View {
     /// they always read clearly over the base avatar.
     var equippedItems: [CustomizationItem] = []
     /// Presentation-only "a little frazzled" accent (opt-in body signals, state >= tense):
-    /// slightly quicker breathing plus a small squiggle. DELIBERATELY not a `CompanionState`
-    /// case — new raw values in the persisted `DailyHealthScore.companionState` would fail
-    /// decode on older builds, so frazzled stays a render flag that is never persisted.
-    /// Ignored for the low-energy states (sick/resting/tired keep their own posture).
+    /// a sliding sweat bead, faint rising steam, a soft brow furrow, and a slightly quicker
+    /// breath. DELIBERATELY not a `CompanionState` case — new raw values in the persisted
+    /// `DailyHealthScore.companionState` would fail decode on older builds, so frazzled stays
+    /// a render flag that is never persisted. It stays warm-neutral (no red, shake, or flash),
+    /// and is ignored for the low-energy states (sick/resting/tired keep their own posture).
     var stressTint: Bool = false
+    /// Presentation-only "calm / settled" accent (opt-in body signals read `.calm`): eyes soften
+    /// to happy arcs, a warm blush, a slower breath, and two drifting motes. A gentle positive
+    /// counterpart to `stressTint` — also a pure render flag, never persisted, and suppressed
+    /// for the low-energy states. `stressTint` wins if both are somehow set.
+    var calmTint: Bool = false
+    /// Presentation-only "settled" pet-cooldown pose: a droopy-happy slump (wider than tall),
+    /// happy-arc eyes, a wide soft smile, a warm blush, and a drifting "z". Driven from the
+    /// pet-interaction cooldown window — not a mood, never persisted.
+    var settled: Bool = false
 
     private var showsStressAccent: Bool {
-        stressTint && !state.isLowEnergy
+        stressTint && !state.isLowEnergy && !settled
+    }
+
+    private var showsCalmAccent: Bool {
+        calmTint && !stressTint && !state.isLowEnergy && !settled
     }
 
     var body: some View {
         TimelineView(.animation) { timeline in
             let elapsed = timeline.date.timeIntervalSinceReferenceDate
-            let tempo = showsStressAccent ? state.animationTempo * 0.8 : state.animationTempo
+            // Breath tempo: the tense accent quickens the swell (~3s), the calm accent and the
+            // settled pose slow it into a longer, softer cycle (~6.6s). The sine period is 2·tempo.
+            let tempo: Double = if showsStressAccent {
+                state.animationTempo * 0.8
+            } else if settled || showsCalmAccent {
+                max(state.animationTempo, 3.3)
+            } else {
+                state.animationTempo
+            }
             let breath = (sin(elapsed * .pi / tempo) + 1) / 2
             let petBounce = interactionLevel.isMultiple(of: 2) ? 0.0 : -size * 0.060
             let bodyColor = appearance.resolvedBodyColor(for: state)
@@ -41,8 +63,12 @@ struct CompanionView: View {
                 CompanionBlobShape(style: appearance.bodyStyle, state: state, breath: breath)
                     .fill(bodyColor)
                     .frame(width: size, height: size)
-                    .scaleEffect(x: 1 + breath * state.horizontalBreath, y: 1 + breath * state.verticalBreath)
-                    .offset(y: state == .resting ? size * 0.04 : petBounce)
+                    // Settled reads as a low relaxed slump — a touch wider than tall.
+                    .scaleEffect(
+                        x: (settled ? 1.06 : 1) + breath * state.horizontalBreath,
+                        y: (settled ? 0.94 : 1) + breath * state.verticalBreath
+                    )
+                    .offset(y: settled ? size * 0.05 : (state == .resting ? size * 0.04 : petBounce))
                     .shadow(color: bodyColor.opacity(0.20), radius: size * 0.08, x: 0, y: size * 0.04)
 
                 Ellipse()
@@ -64,16 +90,40 @@ struct CompanionView: View {
                 )
                 .offset(y: petBounce)
 
-                HStack(spacing: size * 0.18) {
-                    EyeView(tired: state.isLowEnergy, size: size)
-                    EyeView(tired: state.isLowEnergy, size: size)
-                }
-                .offset(y: -size * 0.08 + petBounce)
+                let showsHappyArcEyes = settled || showsCalmAccent
+                let facePetBounce = settled ? size * 0.05 : petBounce
 
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(.white.opacity(0.72))
-                    .frame(width: size * 0.18, height: state.mouthHeight(for: size))
-                    .offset(y: size * 0.14 + petBounce)
+                if settled || showsCalmAccent {
+                    // Warm blush cheeks that ride with the settled/calm face.
+                    HStack(spacing: size * 0.18) {
+                        Ellipse()
+                            .fill(Color.dustyRose.opacity(0.34))
+                            .frame(width: size * 0.13, height: size * 0.07)
+                        Ellipse()
+                            .fill(Color.dustyRose.opacity(0.34))
+                            .frame(width: size * 0.13, height: size * 0.07)
+                    }
+                    .offset(y: size * 0.02 + facePetBounce)
+                }
+
+                HStack(spacing: size * 0.18) {
+                    EyeView(tired: state.isLowEnergy, happyArc: showsHappyArcEyes, size: size)
+                    EyeView(tired: state.isLowEnergy, happyArc: showsHappyArcEyes, size: size)
+                }
+                .offset(y: -size * 0.08 + facePetBounce)
+
+                if settled {
+                    // A wide soft smile completes the droopy-happy "completely content" read.
+                    CompanionSettledMouth()
+                        .fill(.white.opacity(0.78))
+                        .frame(width: size * 0.30, height: size * 0.15)
+                        .offset(y: size * 0.14 + facePetBounce)
+                } else {
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(.white.opacity(0.72))
+                        .frame(width: size * 0.18, height: state.mouthHeight(for: size))
+                        .offset(y: size * 0.14 + facePetBounce)
+                }
 
                 ForEach(equippedItems) { item in
                     CompanionCustomItemLayer(item: item, size: size)
@@ -82,17 +132,42 @@ struct CompanionView: View {
                 }
 
                 if showsStressAccent {
-                    // Tiny frazzle squiggle — a gentle "little frazzled" cue, never alarming.
-                    Image(systemName: "scribble")
-                        .font(.system(size: size * 0.13, weight: .semibold))
-                        .foregroundStyle(Color.slate.opacity(0.55))
-                        .rotationEffect(.degrees(-16))
-                        .offset(x: size * 0.40, y: -size * 0.36 + petBounce)
+                    // Frazzled / tense: a soft brow furrow, faint rising steam, and one cool
+                    // sweat bead that slides down and fades. Warm-neutral, never alarming.
+                    CompanionBrowFurrow(size: size)
+                        .offset(y: -size * 0.20 + petBounce)
                         .zIndex(5)
+                        .transition(.opacity)
+
+                    CompanionSteam(size: size, elapsed: elapsed)
+                        .offset(x: -size * 0.02, y: -size * 0.52 + petBounce)
+                        .zIndex(5)
+                        .transition(.opacity)
+
+                    CompanionSweatBead(size: size, elapsed: elapsed)
+                        .offset(x: size * 0.30, y: -size * 0.24 + petBounce)
+                        .zIndex(6)
+                        .transition(.opacity)
+                }
+
+                if showsCalmAccent {
+                    // Calm / settled: two soft motes drifting up beside the companion.
+                    CompanionMotes(size: size, elapsed: elapsed)
+                        .offset(x: size * 0.36, y: -size * 0.30 + petBounce)
+                        .zIndex(5)
+                        .transition(.opacity)
+                }
+
+                if settled {
+                    // A single drifting "z" — a content, sleepy-happy beat.
+                    CompanionDriftingZ(size: size, elapsed: elapsed)
+                        .offset(x: size * 0.34, y: -size * 0.30)
+                        .zIndex(6)
                         .transition(.opacity)
                 }
             }
             .animation(.easeInOut(duration: 0.44), value: interactionLevel)
+            .animation(.easeInOut(duration: 0.5), value: settled)
         }
         .accessibilityLabel("Fernlet companion, \(state.rawValue)")
     }
@@ -192,17 +267,211 @@ struct CompanionBlobShape: Shape {
 
 struct EyeView: View {
     var tired: Bool
+    /// Presentation-only "happy arc" eye (calm/settled accents): an upward crescent instead of
+    /// the round pupil, reading as a soft, content squint. Wins over `tired`.
+    var happyArc: Bool = false
     var size: CGFloat
 
     var body: some View {
-        ZStack {
-            Ellipse()
-                .fill(.white.opacity(0.92))
-                .frame(width: size * 0.13, height: tired ? size * 0.07 : size * 0.13)
-            Circle()
-                .fill(Color(red: 0.239, green: 0.180, blue: 0.118))
-                .frame(width: size * 0.06, height: size * 0.06)
+        if happyArc {
+            CompanionHappyArcEye()
+                .stroke(
+                    Color(red: 0.239, green: 0.180, blue: 0.118),
+                    style: StrokeStyle(lineWidth: max(2, size * 0.024), lineCap: .round)
+                )
+                .frame(width: size * 0.15, height: size * 0.085)
+        } else {
+            ZStack {
+                Ellipse()
+                    .fill(.white.opacity(0.92))
+                    .frame(width: size * 0.13, height: tired ? size * 0.07 : size * 0.13)
+                Circle()
+                    .fill(Color(red: 0.239, green: 0.180, blue: 0.118))
+                    .frame(width: size * 0.06, height: size * 0.06)
+            }
         }
+    }
+}
+
+/// An upward-opening crescent — the calm/settled "happy arc" eye. Drawn as a quadratic arc so it
+/// reads as a gentle smile-shaped squint rather than a full closed lid.
+struct CompanionHappyArcEye: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.maxY),
+            control: CGPoint(x: rect.midX, y: rect.minY - rect.height * 0.4)
+        )
+        return path
+    }
+}
+
+/// The settled pose's wide soft smile — a downward-opening lens (flat top, rounded bottom).
+struct CompanionSettledMouth: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY),
+            control: CGPoint(x: rect.midX, y: rect.maxY + rect.height * 0.6)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - Frazzled / tense accent parts (presentation-only)
+
+/// The soft brow furrow: two short bars tipped up at their inner ends. Warm-neutral, never harsh.
+struct CompanionBrowFurrow: View {
+    var size: CGFloat
+
+    var body: some View {
+        HStack(spacing: size * 0.16) {
+            Capsule()
+                .fill(Color.bark.opacity(0.5))
+                .frame(width: size * 0.12, height: max(2, size * 0.022))
+                .rotationEffect(.degrees(11))
+            Capsule()
+                .fill(Color.bark.opacity(0.5))
+                .frame(width: size * 0.12, height: max(2, size * 0.022))
+                .rotationEffect(.degrees(-11))
+        }
+    }
+}
+
+/// Faint rising steam: two low-opacity squiggles that drift up and fade on a slow loop.
+struct CompanionSteam: View {
+    var size: CGFloat
+    var elapsed: TimeInterval
+
+    var body: some View {
+        // A ~2.6s loop: rise a little and fade in/out.
+        let t = (elapsed.truncatingRemainder(dividingBy: 2.6)) / 2.6
+        let rise = -size * 0.10 * CGFloat(t)
+        let fade = sin(t * .pi) * 0.5
+        HStack(spacing: size * 0.05) {
+            CompanionSquiggle()
+                .stroke(Color.softTaupe.opacity(0.9), style: StrokeStyle(lineWidth: max(1.4, size * 0.016), lineCap: .round))
+                .frame(width: size * 0.07, height: size * 0.16)
+            CompanionSquiggle()
+                .stroke(Color.softTaupe.opacity(0.9), style: StrokeStyle(lineWidth: max(1.4, size * 0.016), lineCap: .round))
+                .frame(width: size * 0.07, height: size * 0.16)
+        }
+        .opacity(fade)
+        .offset(y: rise)
+    }
+}
+
+/// One vertical S-squiggle used for the steam wisps.
+struct CompanionSquiggle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addCurve(
+            to: CGPoint(x: rect.midX, y: rect.midY),
+            control1: CGPoint(x: rect.maxX, y: rect.maxY - rect.height * 0.18),
+            control2: CGPoint(x: rect.minX, y: rect.midY + rect.height * 0.10)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.midX, y: rect.minY),
+            control1: CGPoint(x: rect.maxX, y: rect.midY - rect.height * 0.10),
+            control2: CGPoint(x: rect.minX, y: rect.minY + rect.height * 0.18)
+        )
+        return path
+    }
+}
+
+/// One cool sweat bead that slides down and fades on a slow loop.
+struct CompanionSweatBead: View {
+    var size: CGFloat
+    var elapsed: TimeInterval
+
+    // A soft blue-grey teardrop, cool against the warm body — never red.
+    private let beadColor = Color(red: 0.80, green: 0.87, blue: 0.88)
+
+    var body: some View {
+        let t = (elapsed.truncatingRemainder(dividingBy: 2.8)) / 2.8
+        // Fade in quickly, hold, fade out as it reaches the bottom of the slide.
+        let fade: Double = t < 0.18 ? t / 0.18 : (t > 0.72 ? max(0, (1 - t) / 0.28) : 1)
+        let slide = size * 0.12 * CGFloat(t)
+        CompanionTeardrop()
+            .fill(beadColor)
+            .frame(width: size * 0.08, height: size * 0.10)
+            .opacity(fade * 0.95)
+            .offset(y: slide)
+    }
+}
+
+/// A teardrop: a rounded droplet with a pointed top (rotated so it hangs point-up like sweat).
+struct CompanionTeardrop: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY + h * 0.68),
+            control: CGPoint(x: rect.maxX, y: rect.minY + h * 0.32)
+        )
+        path.addArc(
+            center: CGPoint(x: rect.midX, y: rect.minY + h * 0.68),
+            radius: w * 0.5,
+            startAngle: .degrees(0),
+            endAngle: .degrees(180),
+            clockwise: false
+        )
+        path.addQuadCurve(
+            to: CGPoint(x: rect.midX, y: rect.minY),
+            control: CGPoint(x: rect.minX, y: rect.minY + h * 0.32)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - Calm / settled accent parts (presentation-only)
+
+/// Two soft motes drifting up and fading — the quiet, positive counterpart to the frazzle steam.
+struct CompanionMotes: View {
+    var size: CGFloat
+    var elapsed: TimeInterval
+
+    var body: some View {
+        ZStack {
+            mote(period: 3.0, phase: 0.0, dx: 0, tint: Color.moss, diameter: size * 0.05)
+            mote(period: 3.0, phase: 1.1, dx: size * 0.06, tint: Color.goldenrod, diameter: size * 0.035)
+        }
+    }
+
+    private func mote(period: TimeInterval, phase: TimeInterval, dx: CGFloat, tint: Color, diameter: CGFloat) -> some View {
+        let t = ((elapsed + phase).truncatingRemainder(dividingBy: period)) / period
+        let rise = -size * 0.16 * CGFloat(t)
+        let twinkle = 0.15 + 0.7 * sin(t * .pi)
+        return Circle()
+            .fill(tint)
+            .frame(width: diameter, height: diameter)
+            .opacity(max(0, twinkle))
+            .offset(x: dx, y: rise)
+    }
+}
+
+/// A single drifting "z" for the settled pose — rises, drifts, and fades on a slow loop.
+struct CompanionDriftingZ: View {
+    var size: CGFloat
+    var elapsed: TimeInterval
+
+    var body: some View {
+        let t = (elapsed.truncatingRemainder(dividingBy: 3.4)) / 3.4
+        let rise = -size * 0.22 * CGFloat(t)
+        let fade = sin(t * .pi)
+        Text("z")
+            .font(.system(size: size * 0.16, weight: .semibold, design: .serif))
+            .foregroundStyle(Color.moss.opacity(0.6))
+            .rotationEffect(.degrees(-5 + 12 * t))
+            .opacity(fade)
+            .offset(y: rise)
     }
 }
 

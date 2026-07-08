@@ -914,13 +914,17 @@ struct DisposableCameraView: View {
         let alreadySentToday = !store.heartLedger.canSendHeart(to: friend.fingerprint)
         let reachable = store.heartShareManager.isReachable(fingerprint: friend.fingerprint)
         let firstName = ProximityHeartManager.firstName(of: friend.displayName)
+        let state = SendGoodVibesLabel.state(alreadySentToday: alreadySentToday, reachable: reachable)
         return Button {
             store.heartShareManager.sendHeart(to: friend)
         } label: {
-            Image(systemName: alreadySentToday ? "heart.fill" : "heart")
-                .foregroundStyle(
-                    alreadySentToday || !reachable ? Color.slate.opacity(0.5) : Color.terracotta
-                )
+            // Compact in-row form of the "Send good vibes" affordance (good-vibes 10c): a
+            // dusty-rose/terracotta heart when ready, a soft-filled check once sent, muted apart.
+            Image(systemName: state == .sent ? "checkmark" : "heart.fill")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(sessionHeartForeground(for: state))
+                .frame(width: 30, height: 30)
+                .background(sessionHeartBackground(for: state), in: Circle())
         }
         .buttonStyle(.plain)
         .disabled(alreadySentToday || !reachable)
@@ -931,6 +935,22 @@ struct DisposableCameraView: View {
                     ? "Send good vibes to \(friend.displayName)"
                     : "Hearts travel in person for now."
         )
+    }
+
+    private func sessionHeartForeground(for state: SendGoodVibesLabel.SendState) -> Color {
+        switch state {
+        case .ready: Color.terracotta
+        case .sent: Color.terracotta.opacity(0.7)
+        case .notNearby: Color.bark.opacity(0.35)
+        }
+    }
+
+    private func sessionHeartBackground(for state: SendGoodVibesLabel.SendState) -> Color {
+        switch state {
+        case .ready: Color.terracotta.opacity(0.14)
+        case .sent: Color.dustyRose.opacity(0.16)
+        case .notNearby: Color.bark.opacity(0.06)
+        }
     }
 
     private var renameMeshSheet: some View {

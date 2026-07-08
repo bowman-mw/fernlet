@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/fernlet-design-system-04a550e7-3931-4afa-9f34-34348a4713f9/colors_and_type.css">
+<script src="_ds/fernlet-design-system-04a550e7-3931-4afa-9f34-34348a4713f9/_ds_bundle.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=DM+Serif+Display:ital@0;1&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #211A13; }
+  .grain { position:absolute; inset:0; pointer-events:none; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E"); background-size:200px; }
+  @keyframes heartFloat { 0%,100%{transform:translateY(0) rotate(-3deg);} 50%{transform:translateY(-6px) rotate(3deg);} }
+  @keyframes glowPulse { 0%,100%{opacity:0.6;} 50%{opacity:1;} }
+  @keyframes breatheCalm { 0%,100%{transform:scale(0.975);} 50%{transform:scale(1.0);} }
+</style>
+</helmet>
+
+<div style="min-width:100%; width:max-content; padding:64px 80px 120px; background:radial-gradient(120% 80% at 50% 0%, #2A2119 0%, #1C160F 100%); font-family:'DM Sans',system-ui,sans-serif;">
+
+  <!-- HEADER -->
+  <div style="max-width:940px; margin-bottom:8px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+      <span style="width:34px; height:34px; border-radius:11px; background:rgba(198,139,122,0.18); border:1px solid rgba(198,139,122,0.34); display:flex; align-items:center; justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#C68B7A" stroke="none"><path d="M12 21C12 21 4 14.5 4 8.8 4 6.1 6.1 4 8.8 4c1.7 0 3.2.9 4 2.3C13.6 4.9 15.1 4 16.8 4 19.5 4 21.6 6.1 21.6 8.8 21.6 14.5 12 21 12 21z"/></svg>
+      </span>
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.22em; text-transform:uppercase; color:#B8A98E;">Fernlet · Good vibes</span>
+    </div>
+    <h1 style="margin:0 0 14px; font-family:'Fraunces',Georgia,serif; font-weight:500; font-size:52px; line-height:1.04; color:#F3EAD8; letter-spacing:-0.01em;">Warmth from a friend,<br>never a number.</h1>
+    <p style="margin:0; max-width:680px; font-family:'Instrument Serif',Georgia,serif; font-size:21px; line-height:1.55; color:#C9BCA4;">A wordless “thinking of you,” sent in person. Three moments: the <span style="color:#D69C88;">received bubble</span>, a soft <span style="color:#E0B860;">glow</span> on the well-being bar for 24h, and the gentle <span style="color:#D69C88;">send</span> affordance. First names only; no counts, ever. Badges <span style="color:#E0B860;">10a</span>–<span style="color:#E0B860;">10c</span>.</p>
+  </div>
+
+  <!-- ===== 10a · RECEIVED ===== -->
+  <section id="10a" style="margin-top:56px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:26px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">10a</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">The received bubble</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">arrives on Home · dismissible</span>
+    </div>
+
+    <div style="display:flex; gap:44px; flex-wrap:wrap; align-items:flex-start;">
+      <!-- home frame -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">On Home · light</span>
+        <div style="width:390px; height:640px; border-radius:52px 52px 30px 30px; background:#12100D; padding:10px 10px 0; box-shadow:0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05); flex-shrink:0;">
+          <div style="position:relative; width:100%; height:100%; border-radius:42px 42px 0 0; overflow:hidden; background:linear-gradient(#EFE6D0,#EAE0C8);">
+            <div class="grain" style="opacity:0.5; mix-blend-mode:multiply; z-index:1;"></div>
+            <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:118px; height:30px; background:#12100D; border-radius:0 0 18px 18px; z-index:60;"></div>
+            <div style="position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center; padding:54px 26px 0;">
+              <div style="font-family:'DM Sans'; font-size:12px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:#9A8A6E; margin-bottom:20px;">Home</div>
+              <!-- companion -->
+              <div style="position:relative; width:128px; height:128px; margin-bottom:16px;">
+                <div style="position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:84px; height:14px; border-radius:50%; background:rgba(61,46,30,0.13); filter:blur(5px);"></div>
+                <div style="position:absolute; top:6px; left:8px; width:112px; height:112px; border-radius:50%; background:radial-gradient(circle at 36% 30%,#A6D093,#6B9E62 48%,#4E7A48); box-shadow:0 12px 26px rgba(90,140,75,0.3), inset 0 -9px 16px rgba(60,96,52,0.3), inset 0 9px 14px rgba(232,247,216,0.4); animation:breatheCalm 6s cubic-bezier(0.42,0,0.58,1) infinite;">
+                  <div style="position:absolute; top:52%; left:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:9px;">
+                    <div style="display:flex; gap:19px;"><div style="position:relative; width:12px; height:14px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:2.5px; width:7px; height:7px; border-radius:50%; background:#3D2E1E;"></div></div><div style="position:relative; width:12px; height:14px; border-radius:50%; background:#fff;"><div style="position:absolute; bottom:2px; left:2.5px; width:7px; height:7px; border-radius:50%; background:#3D2E1E;"></div></div></div>
+                    <div style="width:18px; height:9px; border-radius:0 0 11px 11px; background:rgba(61,46,30,0.55);"></div>
+                  </div>
+                </div>
+              </div>
+              <!-- health bar with glow -->
+              <div style="position:relative; width:236px; display:flex; align-items:center; margin-bottom:8px;">
+                <div style="flex:1; display:flex; height:10px; border-radius:6px; overflow:hidden; gap:2px;"><div style="flex:0.8; background:#5A7A52; border-radius:3px;"></div><div style="flex:0.2; background:#8AAD7E; border-radius:3px;"></div></div>
+                <div style="position:relative; margin-left:6px; display:flex; gap:2px; align-items:center;">
+                  <div style="position:absolute; inset:-8px -6px; border-radius:8px; background:radial-gradient(circle, rgba(224,184,96,0.55), rgba(224,184,96,0) 70%); animation:glowPulse 3s ease-in-out infinite;"></div>
+                  <div style="position:relative; width:10px; height:10px; border-radius:2px; background:#D4A843;"></div>
+                  <div style="position:relative; width:10px; height:10px; border-radius:2px; background:#D4A843;"></div>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;"><span style="background:rgba(90,122,82,0.14); color:#5A7A52; font-family:'DM Sans'; font-size:12px; font-weight:500; padding:4px 10px; border-radius:8px;">Thriving</span></div>
+
+              <!-- received bubble -->
+              <div style="margin-top:24px; position:relative; width:300px; background:#FBF7EE; border-radius:22px; padding:18px 18px 16px; box-shadow:0 8px 26px rgba(190,120,86,0.18), 0 2px 6px rgba(61,46,30,0.08);">
+                <div style="position:absolute; top:-16px; left:50%; transform:translateX(-50%); width:44px; height:44px; border-radius:50%; background:#FBF2EE; box-shadow:0 4px 10px rgba(190,120,86,0.22); display:flex; align-items:center; justify-content:center; animation:heartFloat 3.2s ease-in-out infinite;"><svg width="22" height="22" viewBox="0 0 24 24" fill="#C68B7A"><path d="M12 21C12 21 4 14.5 4 8.8 4 6.1 6.1 4 8.8 4c1.7 0 3.2.9 4 2.3C13.6 4.9 15.1 4 16.8 4 19.5 4 21.6 6.1 21.6 8.8 21.6 14.5 12 21 12 21z"/></svg></div>
+                <div style="text-align:center; margin-top:12px;">
+                  <div style="font-family:'DM Serif Display',Georgia,serif; font-size:22px; color:#3D2E1E; margin-bottom:6px;">Good vibes</div>
+                  <div style="font-family:'Instrument Serif',Georgia,serif; font-size:16px; color:#7A6A55; line-height:1.5;">Maya sent you some warmth — a friend is thinking of you.</div>
+                </div>
+                <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(61,46,30,0.08); text-align:center; font-family:'DM Sans'; font-size:12px; font-weight:500; color:#A79A82;">tap to tuck away</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- bubble specimens -->
+      <div style="display:flex; flex-direction:column; gap:22px;">
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Bubble · light</span>
+          <div style="position:relative; width:320px; background:#FBF7EE; border-radius:22px; padding:22px 20px 16px; box-shadow:0 8px 26px rgba(190,120,86,0.18), 0 2px 6px rgba(61,46,30,0.08);">
+            <div style="position:absolute; top:-16px; left:28px; width:44px; height:44px; border-radius:50%; background:#FBF2EE; box-shadow:0 4px 10px rgba(190,120,86,0.22); display:flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="#C68B7A"><path d="M12 21C12 21 4 14.5 4 8.8 4 6.1 6.1 4 8.8 4c1.7 0 3.2.9 4 2.3C13.6 4.9 15.1 4 16.8 4 19.5 4 21.6 6.1 21.6 8.8 21.6 14.5 12 21 12 21z"/></svg></div>
+            <div style="margin-top:14px;"><div style="font-family:'DM Serif Display',Georgia,serif; font-size:21px; color:#3D2E1E; margin-bottom:5px;">Good vibes</div><div style="font-family:'Instrument Serif',Georgia,serif; font-size:16px; color:#7A6A55; line-height:1.5;">Maya sent you some warmth — a friend is thinking of you.</div></div>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Bubble · dark</span>
+          <div style="position:relative; width:320px; background:#2E2620; border-radius:22px; padding:22px 20px 16px; box-shadow:0 8px 26px rgba(0,0,0,0.4);">
+            <div style="position:absolute; top:-16px; left:28px; width:44px; height:44px; border-radius:50%; background:#3A2E28; box-shadow:0 4px 10px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="#D69C88"><path d="M12 21C12 21 4 14.5 4 8.8 4 6.1 6.1 4 8.8 4c1.7 0 3.2.9 4 2.3C13.6 4.9 15.1 4 16.8 4 19.5 4 21.6 6.1 21.6 8.8 21.6 14.5 12 21 12 21z"/></svg></div>
+            <div style="margin-top:14px;"><div style="font-family:'DM Serif Display',Georgia,serif; font-size:21px; color:#ECE3D1; margin-bottom:5px;">Good vibes</div><div style="font-family:'Instrument Serif',Georgia,serif; font-size:16px; color:#A99C85; line-height:1.5;">Sam sent you some warmth — a friend is thinking of you.</div></div>
+          </div>
+        </div>
+        <div style="width:320px; display:flex; align-items:center; gap:10px; padding:14px 16px; background:rgba(198,139,122,0.12); border:1px solid rgba(198,139,122,0.26); border-radius:16px;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#C68B7A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          <span style="font-family:'DM Sans'; font-size:12.5px; color:#CDB0A6; line-height:1.4;">First name only. No count, no “×3,” no history — just that someone was thinking of you.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 10b · HEALTH-BAR GLOW ===== -->
+  <section id="10b" style="margin-top:76px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:26px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">10b</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">The 24-hour glow</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">warmth on the bar’s end — a feeling, not a stat</span>
+    </div>
+    <p style="margin:0 0 26px; max-width:620px; font-family:'DM Sans'; font-size:13px; line-height:1.6; color:#8C8069;">After a heart, the end of the well-being bar picks up a soft golden glow that fades over a day. It never adds a number or a segment you have to earn — it’s just a little afterglow.</p>
+
+    <div style="background:#F5EFE0; border-radius:26px; padding:34px 36px; position:relative; overflow:hidden; display:inline-block;">
+      <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+      <div style="position:relative; z-index:2; display:flex; flex-direction:column; gap:26px;">
+        <!-- without -->
+        <div style="display:flex; align-items:center; gap:22px;">
+          <div style="width:110px; font-family:'DM Sans'; font-size:12px; font-weight:600; color:#8A7A62;">No heart</div>
+          <div style="position:relative; width:300px; display:flex; align-items:center;">
+            <div style="flex:1; display:flex; height:11px; border-radius:6px; overflow:hidden; gap:2px;"><div style="flex:0.8; background:#5A7A52; border-radius:3px;"></div><div style="flex:0.2; background:#8AAD7E; border-radius:3px;"></div></div>
+          </div>
+        </div>
+        <!-- fresh -->
+        <div style="display:flex; align-items:center; gap:22px;">
+          <div style="width:110px;"><div style="font-family:'DM Sans'; font-size:12px; font-weight:600; color:#3D2E1E;">Just now</div><div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:12px; color:#A9812E;">full glow</div></div>
+          <div style="position:relative; width:300px; display:flex; align-items:center;">
+            <div style="flex:1; display:flex; height:11px; border-radius:6px; overflow:hidden; gap:2px;"><div style="flex:0.8; background:#5A7A52; border-radius:3px;"></div><div style="flex:0.2; background:#8AAD7E; border-radius:3px;"></div></div>
+            <div style="position:relative; margin-left:7px; display:flex; gap:2px; align-items:center;"><div style="position:absolute; inset:-11px -9px; border-radius:10px; background:radial-gradient(circle, rgba(224,184,96,0.7), rgba(224,184,96,0) 68%);"></div><div style="position:relative; width:11px; height:11px; border-radius:3px; background:#D4A843; box-shadow:0 0 6px rgba(212,168,67,0.8);"></div><div style="position:relative; width:11px; height:11px; border-radius:3px; background:#D4A843; box-shadow:0 0 6px rgba(212,168,67,0.8);"></div></div>
+          </div>
+        </div>
+        <!-- ~12h -->
+        <div style="display:flex; align-items:center; gap:22px;">
+          <div style="width:110px;"><div style="font-family:'DM Sans'; font-size:12px; font-weight:600; color:#3D2E1E;">~12 hours</div><div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:12px; color:#B79B6A;">softening</div></div>
+          <div style="position:relative; width:300px; display:flex; align-items:center;">
+            <div style="flex:1; display:flex; height:11px; border-radius:6px; overflow:hidden; gap:2px;"><div style="flex:0.8; background:#5A7A52; border-radius:3px;"></div><div style="flex:0.2; background:#8AAD7E; border-radius:3px;"></div></div>
+            <div style="position:relative; margin-left:7px; display:flex; gap:2px; align-items:center;"><div style="position:absolute; inset:-8px -6px; border-radius:9px; background:radial-gradient(circle, rgba(224,184,96,0.4), rgba(224,184,96,0) 70%);"></div><div style="position:relative; width:11px; height:11px; border-radius:3px; background:#D8B45E;"></div><div style="position:relative; width:11px; height:11px; border-radius:3px; background:#D8B45E;"></div></div>
+          </div>
+        </div>
+        <!-- ~20h -->
+        <div style="display:flex; align-items:center; gap:22px;">
+          <div style="width:110px;"><div style="font-family:'DM Sans'; font-size:12px; font-weight:600; color:#3D2E1E;">~20 hours</div><div style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:12px; color:#C3B091;">nearly gone</div></div>
+          <div style="position:relative; width:300px; display:flex; align-items:center;">
+            <div style="flex:1; display:flex; height:11px; border-radius:6px; overflow:hidden; gap:2px;"><div style="flex:0.8; background:#5A7A52; border-radius:3px;"></div><div style="flex:0.2; background:#8AAD7E; border-radius:3px;"></div></div>
+            <div style="position:relative; margin-left:7px; display:flex; gap:2px; align-items:center;"><div style="position:absolute; inset:-5px -4px; border-radius:8px; background:radial-gradient(circle, rgba(224,184,96,0.2), rgba(224,184,96,0) 72%);"></div><div style="position:relative; width:11px; height:11px; border-radius:3px; background:#D8C6A0;"></div><div style="position:relative; width:11px; height:11px; border-radius:3px; background:#D8C6A0;"></div></div>
+          </div>
+        </div>
+      </div>
+      <div style="position:relative; z-index:2; margin-top:26px; padding-top:20px; border-top:1px solid rgba(61,46,30,0.1); max-width:432px; font-family:'Instrument Serif',Georgia,serif; font-size:15px; color:#7A6A55; line-height:1.5;">The heart-bonus segments were always goldenrod; the glow just breathes warmth into them for a day, then settles back. Nothing is lost when it fades.</div>
+    </div>
+  </section>
+
+  <!-- ===== 10c · SEND ===== -->
+  <section id="10c" style="margin-top:76px;">
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:26px;">
+      <span style="font-family:'DM Sans'; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#1C160F; background:#E0B860; padding:4px 10px; border-radius:8px;">10c</span>
+      <h2 style="margin:0; font-family:'DM Serif Display',Georgia,serif; font-size:26px; color:#F3EAD8;">Sending good vibes</h2>
+      <span style="font-family:'Instrument Serif',Georgia,serif; font-style:italic; font-size:17px; color:#9C8F79;">from a friend’s card · in person, once a day</span>
+    </div>
+
+    <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:stretch;">
+
+      <!-- enabled -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Together · ready to send</span>
+        <div style="width:300px; background:#FBF7EE; border-radius:24px; padding:24px; position:relative; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+          <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+          <div style="position:relative; z-index:2; display:flex; align-items:center; gap:14px; margin-bottom:20px;">
+            <div style="width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,#C08A70,#9E6B54); display:flex; align-items:center; justify-content:center; font-family:'DM Serif Display',Georgia,serif; font-size:22px; color:#FBF2EE;">M</div>
+            <div><div style="font-family:'DM Serif Display',Georgia,serif; font-size:19px; color:#3D2E1E;">Maya</div><div style="display:flex; align-items:center; gap:5px; margin-top:2px;"><span style="width:7px; height:7px; border-radius:50%; background:#5A7A52;"></span><span style="font-family:'DM Sans'; font-size:12px; color:#8A7A62;">Nearby now</span></div></div>
+          </div>
+          <button style="position:relative; z-index:2; width:100%; display:flex; align-items:center; justify-content:center; gap:9px; background:#C07A5E; border:none; border-radius:15px; padding:15px; cursor:pointer; font-family:'DM Sans'; font-size:15px; font-weight:600; color:#FBF2EE; box-shadow:0 4px 12px rgba(190,120,86,0.35);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#FBF2EE"><path d="M12 21C12 21 4 14.5 4 8.8 4 6.1 6.1 4 8.8 4c1.7 0 3.2.9 4 2.3C13.6 4.9 15.1 4 16.8 4 19.5 4 21.6 6.1 21.6 8.8 21.6 14.5 12 21 12 21z"/></svg>
+            Send good vibes
+          </button>
+        </div>
+        <div style="width:300px; font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#C9BCA4; line-height:1.45;">Dusty-rose heart, moss-adjacent warmth. Enabled only when you’re actually together.</div>
+      </div>
+
+      <!-- already sent -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Already sent today</span>
+        <div style="width:300px; background:#FBF7EE; border-radius:24px; padding:24px; position:relative; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+          <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+          <div style="position:relative; z-index:2; display:flex; align-items:center; gap:14px; margin-bottom:20px;">
+            <div style="width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,#C08A70,#9E6B54); display:flex; align-items:center; justify-content:center; font-family:'DM Serif Display',Georgia,serif; font-size:22px; color:#FBF2EE;">M</div>
+            <div><div style="font-family:'DM Serif Display',Georgia,serif; font-size:19px; color:#3D2E1E;">Maya</div><div style="display:flex; align-items:center; gap:5px; margin-top:2px;"><span style="width:7px; height:7px; border-radius:50%; background:#5A7A52;"></span><span style="font-family:'DM Sans'; font-size:12px; color:#8A7A62;">Nearby now</span></div></div>
+          </div>
+          <button style="position:relative; z-index:2; width:100%; display:flex; align-items:center; justify-content:center; gap:9px; background:rgba(192,122,94,0.16); border:none; border-radius:15px; padding:15px; cursor:default; font-family:'DM Sans'; font-size:15px; font-weight:600; color:rgba(150,90,64,0.6);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(150,90,64,0.55)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            Sent for today
+          </button>
+          <div style="position:relative; z-index:2; margin-top:12px; text-align:center; font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62; line-height:1.45;">You’ve already sent Maya some warmth today.</div>
+        </div>
+        <div style="width:300px; font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#C9BCA4; line-height:1.45;">One a day per friend — softly rate-limited by opacity, never a red error.</div>
+      </div>
+
+      <!-- not together -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span style="font-family:'DM Sans'; font-size:11px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#8C7F69;">Apart · can’t send yet</span>
+        <div style="width:300px; background:#FBF7EE; border-radius:24px; padding:24px; position:relative; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+          <div class="grain" style="opacity:0.4; mix-blend-mode:multiply;"></div>
+          <div style="position:relative; z-index:2; display:flex; align-items:center; gap:14px; margin-bottom:20px;">
+            <div style="width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,#8FA6B2,#6E8794); display:flex; align-items:center; justify-content:center; font-family:'DM Serif Display',Georgia,serif; font-size:22px; color:#F0F5F7;">S</div>
+            <div><div style="font-family:'DM Serif Display',Georgia,serif; font-size:19px; color:#3D2E1E;">Sam</div><div style="display:flex; align-items:center; gap:5px; margin-top:2px;"><span style="width:7px; height:7px; border-radius:50%; background:#B6A788;"></span><span style="font-family:'DM Sans'; font-size:12px; color:#A79A82;">Not nearby</span></div></div>
+          </div>
+          <button style="position:relative; z-index:2; width:100%; display:flex; align-items:center; justify-content:center; gap:9px; background:rgba(61,46,30,0.06); border:none; border-radius:15px; padding:15px; cursor:default; font-family:'DM Sans'; font-size:15px; font-weight:600; color:rgba(61,46,30,0.34);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(61,46,30,0.34)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21C12 21 4 14.5 4 8.8 4 6.1 6.1 4 8.8 4c1.7 0 3.2.9 4 2.3C13.6 4.9 15.1 4 16.8 4 19.5 4 21.6 6.1 21.6 8.8 21.6 14.5 12 21 12 21z"/></svg>
+            Send good vibes
+          </button>
+          <div style="position:relative; z-index:2; margin-top:12px; text-align:center; font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#8A7A62; line-height:1.45;">Hearts travel in person for now — they can be sent when you’re together.</div>
+        </div>
+        <div style="width:300px; font-family:'Instrument Serif',Georgia,serif; font-size:14px; color:#C9BCA4; line-height:1.45;">Same in-person handshake as friending — warmth is a thing you do side by side.</div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+</x-dc>
+</body>
+</html>
