@@ -345,7 +345,7 @@ struct ContentView: View {
                             .frame(height: isCompact ? 0 : nil)
                             .accessibilityHidden(isCompact)
                     }
-                    .foregroundStyle(isSelected ? Color.moss : Color(UIColor.secondaryLabel))
+                    .foregroundStyle(isSelected ? Color.moss : Color.slate)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, isCompact ? 8 : 9)
                     .background(

@@ -146,7 +146,7 @@ struct NutritionLabelCameraSheet: View {
                     if let scanError {
                         Text(scanError)
                             .font(.caption.italic())
-                            .foregroundStyle(Color.red.opacity(0.8))
+                            .foregroundStyle(Color.terracotta)
                             .fernletWrappingText()
                     }
                 }

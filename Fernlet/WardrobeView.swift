@@ -30,7 +30,7 @@ struct WardrobeView: View {
                 Section {
                     Label(shopStatusText, systemImage: "bag")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.slate)
                 }
             }
 
@@ -49,10 +49,13 @@ struct WardrobeView: View {
                 Section {
                     Text("No items yet — design your first one above. New creations appear on your companion right away.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.slate)
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(Color.parchment)
+        .listRowBackground(Color.cream)
         .navigationTitle("Wardrobe")
         .navigationBarTitleDisplayMode(.inline)
         .alert(item: $shopAlert) { alert in
@@ -101,7 +104,7 @@ struct WardrobeView: View {
                     } else {
                         Text("Designed by \(store.designerDisplayName(for: item))")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.slate)
                     }
                 }
                 Spacer()

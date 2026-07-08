@@ -157,7 +157,7 @@ struct CreationStudioView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Palette")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.slate)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     eraserSwatch
@@ -210,7 +210,7 @@ struct CreationStudioView: View {
     private var detailsCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             TextField("Name your item", text: $name)
-                .textFieldStyle(.roundedBorder)
+                .sheetTextInput()
 
             if canSell {
                 Toggle(isOn: $isShareable) {
@@ -218,7 +218,7 @@ struct CreationStudioView: View {
                         Text("Available in my shop")
                         Text("Friends can browse and buy this when you connect in person.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.slate)
                     }
                 }
                 .tint(Color.moss)
@@ -233,7 +233,7 @@ struct CreationStudioView: View {
                     }
                     Text(shopHint)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.slate)
                 }
             }
 

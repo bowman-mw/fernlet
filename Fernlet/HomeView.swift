@@ -865,6 +865,7 @@ private struct CompanionCustomizationSheet: View {
                 }
             }
             .background(Color.parchment)
+            .tint(Color.moss)
             .navigationTitle("Fernlet")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -921,7 +922,7 @@ private struct CompanionCustomizationSheet: View {
                     .contentTransition(.numericText())
                 Text("earned from days you showed up")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.slate)
             }
             Spacer()
         }
@@ -951,7 +952,7 @@ private struct CompanionCustomizationSheet: View {
                         .foregroundStyle(Color.bark)
                     Text("All the care you've logged, added up over all time")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.slate)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
@@ -983,7 +984,7 @@ private struct CompanionCustomizationSheet: View {
                         .foregroundStyle(Color.bark)
                     Text("Design your own clothes in the grid editor")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.slate)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")

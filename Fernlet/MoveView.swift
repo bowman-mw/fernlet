@@ -1190,9 +1190,11 @@ struct WorkoutCalendarCard: View {
                         Image(systemName: "chevron.left")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(Color.slate)
-                            .frame(width: 32, height: 32)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Previous week")
 
                     Text(model.weekTitle)
                         .font(.title3.weight(.semibold))
@@ -1205,9 +1207,11 @@ struct WorkoutCalendarCard: View {
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(Color.slate)
-                            .frame(width: 32, height: 32)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Next week")
                 }
 
                 HStack(spacing: 6) {

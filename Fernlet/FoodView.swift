@@ -1701,8 +1701,13 @@ struct MealRow: View {
                         if showCalories {
                             Text("\(meal.calories) cal").font(.subheadline.weight(.semibold))
                         }
-                        Button(role: .destructive, action: onDelete) { Image(systemName: "xmark") }
-                            .buttonStyle(.plain)
+                        Button(role: .destructive, action: onDelete) {
+                            Image(systemName: "xmark")
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Delete meal")
                     }
                 }
                 if let breakdownText {
@@ -2308,7 +2313,8 @@ private struct RecipeShareButton: View {
             Image(systemName: "square.and.arrow.up")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Color.moss)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Share recipe")
@@ -2329,7 +2335,8 @@ private struct RecipeMealTypeMenu: View {
             Image(systemName: "fork.knife")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Color.moss)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Log recipe as meal")

@@ -63,8 +63,10 @@ struct PeriodDayDetailView: View {
 
                 HStack {
                     Button("Edit", action: onEdit)
+                        .foregroundStyle(Color.moss)
                     Spacer()
                     Button("Delete", role: .destructive, action: onDelete)
+                        .foregroundStyle(Color.terracotta)
                 }
                 .font(.headline)
                 .padding(.horizontal, 4)

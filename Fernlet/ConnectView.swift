@@ -132,13 +132,19 @@ struct FriendsView: View {
                         ScreenHeader(title: "Friends", subtitle: "", identifier: "screen.friends")
                         Spacer()
                         HStack(spacing: 10) {
-                            NavigationLink {
-                                FriendShopView(store: store, manager: store.clothingShareManager)
-                            } label: {
-                                headerButtonLabel("bag")
+                            // Only surface the shop when a friend's shop is actually live nearby: a catalog
+                            // arrives only over a verified, sealed channel, so a non-empty peerCatalogs means
+                            // we're connected in a shop mesh. Interim gate pending the clothing/photo mesh
+                            // merge — once unified, gate on the single session's isInSession instead.
+                            if !store.clothingShareManager.peerCatalogs.isEmpty {
+                                NavigationLink {
+                                    FriendShopView(store: store, manager: store.clothingShareManager)
+                                } label: {
+                                    headerButtonLabel("bag")
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("friends.friendShops")
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("friends.friendShops")
                             NavigationLink {
                                 FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                             } label: {

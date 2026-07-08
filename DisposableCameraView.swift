@@ -442,7 +442,7 @@ struct DisposableCameraView: View {
             Text("\(manager.filmRemaining)")
                 .font(.system(size: 15, weight: .bold, design: .monospaced))
         }
-        .foregroundStyle(manager.filmRemaining > 0 ? Color.yellow : Color.red)
+        .foregroundStyle(manager.filmRemaining > 0 ? Color.goldenrod : Color.terracotta)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 7))
@@ -553,7 +553,7 @@ struct DisposableCameraView: View {
                 } else if manager.filmRemaining == 0 {
                     Image(systemName: "film.slash")
                         .font(.system(size: 18))
-                        .foregroundStyle(Color.red.opacity(0.7))
+                        .foregroundStyle(Color.terracotta.opacity(0.9))
                 } else if !camera.canCapturePhoto {
                     Image(systemName: "camera.slash")
                         .font(.system(size: 18))

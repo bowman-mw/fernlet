@@ -71,11 +71,11 @@ struct FriendShopView: View {
             ProgressView().tint(Color.moss)
             Text("Looking for friends' shops nearby…")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.slate)
             Text("Connect with a friend in person and their shop appears here. It vanishes again when you part.")
                 .font(.caption)
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.slate)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
@@ -91,7 +91,7 @@ struct FriendShopView: View {
             if items.isEmpty {
                 Text("Nothing for sale right now.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.slate)
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
                     ForEach(items) { item in
@@ -112,7 +112,7 @@ struct FriendShopView: View {
                 .lineLimit(1)
             Text("designed by \(sellerName(catalog))")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.slate)
 
             Button {
                 buy(item, from: catalog)
@@ -131,7 +131,7 @@ struct FriendShopView: View {
             if !owned && !affordable {
                 Text("Not enough coins yet")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.slate)
             }
         }
         .padding(12)
