@@ -1,6 +1,8 @@
-import ProximityKit
+@testable import ProximityKit
 import Foundation
 import Testing
+import MultipeerConnectivity
+import FernletFoundation
 import FernletDomainModel
 @testable import Fernlet
 
@@ -163,6 +165,96 @@ struct RecipeShareCodecTests {
         }
     }
 
+    // MARK: - Retained trust policy enforces revoked keys at the envelope layer
+    //
+    // Regression for the manager-side weak-trust-policy deallocation (cloned from the heart-manager bug):
+    // ProximityRecipeShareManager created its FriendSessionTrustPolicy as a local in `handleChannelReady`
+    // and passed it to a ProximityCoordinator that holds it only `weak`. The local deallocated when
+    // handleChannelReady returned, so by the time an envelope arrived the coordinator's revoked/blocked-key
+    // rejection + audit calls all no-op'd against nil. The fix retains the policy on RecipeShareConnection.
+    // This drives a connection the manager actually built (and retains in its `connections` array); after
+    // the seam returns the local policy is gone, so the coordinator's weak ref survives ONLY because the
+    // connection holds it. A revoked-key envelope is then dropped (`.failed("revokedKey")`) and audited —
+    // enforcement that silently no-op'd before the fix. Mirrors
+    // HeartShareTests.retainedTrustPolicyDropsEnvelopeFromRevokedKey.
+    @MainActor
+    @Test func retainedTrustPolicyDropsEnvelopeFromRevokedKey() async throws {
+        let host = RecipeRevokedKeyTestHost()
+        let (remote, remoteID) = try makeProvisionedIdentity(); defer { KeychainItem.deleteAll(service: remoteID) }
+
+        // Trust then revoke the remote's signing key in the host's vault (the manager's policy reads it).
+        let remotePeer = ProximityCoordinator.PeerIdentity(
+            id: UUID(),
+            displayName: "Revoked",
+            signingPublicKey: remote.localSigningPublicKey,
+            keyAgreementPublicKey: remote.localKeyAgreementPublicKey,
+            fingerprint: remote.localFingerprint,
+            rangingMode: .none,
+            firstSeenAt: Date(timeIntervalSince1970: 1_780_000_000)
+        )
+        host.proximityTrustVault.trust(remotePeer, mode: .friend)
+        host.proximityTrustVault.revoke(signingPublicKey: remote.localSigningPublicKey)
+
+        let manager = ProximityRecipeShareManager(store: host)
+        let transport = MockMultipeerTransport()
+        let peer = MultipeerPeer(
+            id: UUID(),
+            displayName: "Revoked",
+            discoveryInfo: ["fp": remote.localFingerprint],
+            advertisedFingerprint: remote.localFingerprint,
+            underlying: MCPeerID(displayName: "Revoked")
+        )
+        // The manager builds AND retains the connection — its FriendSessionTrustPolicy lives on the
+        // connection struct, and the coordinator holds it only `weak`, so this exercises the retention fix.
+        let coordinator = manager.makeRetainedConnectionCoordinatorForTesting(
+            peer: peer, transport: transport, ranging: MockRangingProvider()
+        )
+
+        let intro = try FernletIdentityEnvelope.signed(
+            identityService: remote,
+            senderDisplayName: "Revoked",
+            payloadType: .identityIntroduction,
+            payloadSummary: PayloadSummary(title: "Hello"),
+            payload: Data()
+        )
+        // Trainer harness reaches handleInbound with the simplest deterministic path (tapToConfirm); the
+        // revoked-key gate there runs before any mode-specific identity handling, so it exercises the same
+        // enforcement the friend-mode production session relies on.
+        await coordinator.begin(role: .browser, mode: .trainer)
+        transport.simulateConnected(peer: peer)
+        await waitUntil { if case .awaitingTapConfirmation = coordinator.state { return true }; return false }
+        await coordinator.tapToConfirm()
+        transport.simulateInboundData(try JSONEncoder().encode(intro), from: peer)
+        await waitUntil { if case .failed = coordinator.state { return true }; return false }
+
+        guard case .failed(let reason) = coordinator.state else {
+            Issue.record("Expected .failed from revoked-key drop, got \(coordinator.state)")
+            return
+        }
+        #expect(reason.contains("revokedKey"))
+        #expect(host.proximityTrustVault.auditEvents.contains { $0.kind == .revokedPeerBlocked })
+    }
+
+    @MainActor
+    private func makeProvisionedIdentity() throws -> (IdentityService, String) {
+        let id = "com.fernlet.proximity.recipe.trust.test.\(UUID().uuidString)"
+        let service = IdentityService(keychainService: id)
+        try service.ensureProvisioned()
+        return (service, id)
+    }
+
+    @MainActor
+    private func waitUntil(
+        timeout: Duration = .seconds(2),
+        condition: @escaping @MainActor () -> Bool
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition(), clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
     private func makeRecipeFixture() -> (recipe: RecipeDefinition, foodItems: [FoodItem]) {
         let oats = foodItem(
             name: "Rolled oats",
@@ -230,5 +322,20 @@ struct RecipeShareCodecTests {
             source: .manual,
             tags: ["recipe"]
         )
+    }
+}
+
+/// Minimal `ProximityHost` for the trust-policy regression test — the manager only reads the display name
+/// and the trust vault, and delegates block checks to the vault so it is the single source of truth.
+@MainActor
+private final class RecipeRevokedKeyTestHost: ProximityHost {
+    var proximityDisplayName: String { "Tester" }
+    var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
+    let proximityTrustVault = ProximityTrustVault()
+    func isBlockedFingerprint(_ fingerprint: String) -> Bool {
+        proximityTrustVault.isBlockedFingerprint(fingerprint)
+    }
+    func blockProximityPeer(signingPublicKey: Data) {
+        proximityTrustVault.block(signingPublicKey: signingPublicKey)
     }
 }
