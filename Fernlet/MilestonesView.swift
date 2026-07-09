@@ -25,6 +25,7 @@ struct MilestonesView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                eyebrow
                 header
 
                 VStack(spacing: 11) {
@@ -40,6 +41,18 @@ struct MilestonesView: View {
         .background(Color.parchment)
         .navigationTitle("Milestones")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Eyebrow
+
+    /// A small, spaced "MILESTONES" label sitting above the title — the keepsake-shelf eyebrow from
+    /// the mockup, so the screen opens like a quiet page in a memento book rather than a stat panel.
+    private var eyebrow: some View {
+        Text("MILESTONES")
+            .font(.fernlet(.labelSmall))
+            .tracking(1.6)
+            .foregroundStyle(Color.slate)
+            .frame(maxWidth: .infinity)
     }
 
     // MARK: - Data
@@ -78,6 +91,11 @@ struct MilestonesView: View {
                     .fernletWrappingText()
             }
         } else {
+            Text("All of it, added up")
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+
             Text("Every bit of care you've logged, added up over all time. These numbers only ever grow — nothing here resets, expires, or asks you to keep a streak.")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)

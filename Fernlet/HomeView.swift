@@ -8,6 +8,7 @@ import PrivateHealthStore
 import PeriodContextBridge
 import HealthKitGateway
 import AppServices
+import StoreCore
 
 #if canImport(UIKit)
 import UIKit
@@ -52,6 +53,7 @@ struct HomeView: View {
                     ForEach(store.settings.homeWidgets) { widget in
                         homeWidget(widget)
                     }
+                    milestonesCard
                 }
                 .padding(20)
             }
@@ -88,6 +90,58 @@ struct HomeView: View {
         .onChange(of: activeSheet?.id) { _, new in
             if new == nil { Task { await refreshRecentPeriodActivity() } }
         }
+    }
+
+    // MARK: - Milestones entry card
+
+    /// A compact keepsake-shelf preview that always shows on the home feed — even when it's mostly
+    /// empty — and taps through to `MilestonesView`. Cumulative-only, never a scoreboard: it shows a
+    /// warm sentence and a soft coins aside, no streaks or percentages. Behaviour lives in
+    /// MilestonesView; this is a warm doorway to it.
+    private var milestonesCard: some View {
+        NavigationLink {
+            MilestonesView(store: store)
+        } label: {
+            FernletCard {
+                HStack(spacing: 12) {
+                    MilestoneKeepsakeGlyph(diameter: 40)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Milestones")
+                            .font(.fernlet(.header))
+                            .foregroundStyle(Color.bark)
+                        Text(milestonesCardSummary)
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.slate.opacity(0.65))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.milestones")
+        .accessibilityLabel("Milestones")
+        .accessibilityHint(milestonesCardSummary)
+    }
+
+    /// A warm, count-aware one-liner for the milestones card. Keeps the keepsake framing: kinds with
+    /// keepsakes are "kept", coins are a soft aside, and the empty case is gentle — never a to-do.
+    private var milestonesCardSummary: String {
+        let keptKinds = store.milestoneCounts.values.filter { $0 > 0 }.count
+            + (store.lifetimeWorriesLetGo > 0 ? 1 : 0)
+        let coins = CoinEconomy.milestoneAwardCoins(in: store.coinLedgerService.entries)
+
+        if keptKinds == 0 {
+            return "Your keepsake shelf is waiting — every bit of care will find a place here."
+        }
+        let kindsPhrase = keptKinds == 1 ? "One kind of care" : "\(keptKinds) kinds of care"
+        if coins > 0 {
+            return "\(kindsPhrase) kept so far · \(coins) coins gifted."
+        }
+        return "\(kindsPhrase) kept so far, added up over all time."
     }
 
     @ViewBuilder
@@ -1812,6 +1866,39 @@ struct PhotowallTile: Identifiable {
 
     var id: String {
         photoID?.uuidString ?? caption
+    }
+}
+
+/// The small pressed-gold keepsake medallion for the home Milestones card. A radial-gold face with a
+/// soft top highlight and a thin inner ring — the same "struck keepsake" language as the medallions
+/// inside MilestonesView, shrunk to a doorway glyph. Purely decorative.
+private struct MilestoneKeepsakeGlyph: View {
+    var diameter: CGFloat = 40
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.sun, Color.goldenrod, Color.goldenrod.opacity(0.85)],
+                        center: UnitPoint(x: 0.38, y: 0.32),
+                        startRadius: 1,
+                        endRadius: diameter * 0.7
+                    )
+                )
+                .overlay(
+                    Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1)
+                )
+            // Thin inner ring — the pressed-keepsake edge.
+            Circle()
+                .strokeBorder(Color.white.opacity(0.3), lineWidth: 1.2)
+                .padding(diameter * 0.16)
+            Image(systemName: "seal")
+                .font(.system(size: diameter * 0.42, weight: .regular))
+                .foregroundStyle(Color.bark.opacity(0.6))
+        }
+        .frame(width: diameter, height: diameter)
+        .shadow(color: Color.goldenrod.opacity(0.35), radius: 4, x: 0, y: 3)
     }
 }
 
