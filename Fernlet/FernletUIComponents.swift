@@ -177,7 +177,7 @@ struct ScreenHeader: View {
         VStack(alignment: .leading, spacing: 4) {
             if subtitleFirst { subtitleView }
             Text(title)
-                .font(.system(size: 36, weight: .bold, design: .serif))
+                .font(.fernlet(.display))
                 .foregroundStyle(Color.bark)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
@@ -190,7 +190,8 @@ struct ScreenHeader: View {
 
     private var subtitleView: some View {
         Text(subtitle)
-            .font(.system(size: subtitleFirst ? 13 : 17, weight: .medium, design: .serif).italic())
+            .font(.fernlet(.bodySmall))
+            .italic()
             .foregroundStyle(Color.slate)
             .lineLimit(2)
             .minimumScaleFactor(0.82)
@@ -218,7 +219,7 @@ struct HeaderActionButton: View {
                 }
                 if let title {
                     Text(title)
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.label))
                 }
             }
             .foregroundStyle(Color.bark)
@@ -257,7 +258,7 @@ struct PolaroidTile: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 3))
             Text(caption)
-                .font(.system(size: 11, design: .serif).italic())
+                .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate.opacity(0.58))
                 .lineLimit(1)
         }
@@ -350,7 +351,7 @@ struct SheetField<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label.uppercased())
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
                 .tracking(0.8)
             content
@@ -363,7 +364,7 @@ struct ChipButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.subheadline.weight(.medium))
+            .font(.fernlet(.label))
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .foregroundStyle(selected ? Color.parchment : Color.bark)
@@ -392,7 +393,7 @@ struct SheetTextEditor: View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(placeholder)
-                    .font(.body)
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate.opacity(0.45))
                     .padding(14)
                     .allowsHitTesting(false)
@@ -427,7 +428,7 @@ struct HubSectionPicker<Section: Hashable>: View {
                     }
                 } label: {
                     Text(label(section))
-                        .font(.subheadline.weight(isSelected ? .semibold : .medium))
+                        .font(.fernlet(.label))
                         .foregroundStyle(isSelected ? Color.bark : Color.slate)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
@@ -490,7 +491,7 @@ struct SheetSaveBar: View {
             Spacer()
             Button(label, action: action)
                 .buttonStyle(.plain)
-                .font(.headline)
+                .font(.fernlet(.label))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)

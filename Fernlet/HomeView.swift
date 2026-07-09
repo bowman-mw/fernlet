@@ -1440,7 +1440,7 @@ struct SectionLabel: View {
 
     var body: some View {
         Text(text.uppercased())
-            .font(.caption2.weight(.semibold))
+            .font(.fernlet(.labelSmall))
             .tracking(0.8)
             .foregroundStyle(Color.slate)
     }
@@ -1451,7 +1451,7 @@ struct ThoughtBubble: View {
 
     var body: some View {
         Text(text)
-            .font(.callout.italic())
+            .font(.fernlet(.bubble))
             .foregroundStyle(Color.bark)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 18)
