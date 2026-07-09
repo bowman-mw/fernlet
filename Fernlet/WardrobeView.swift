@@ -21,41 +21,70 @@ struct WardrobeView: View {
                 NavigationLink {
                     CreationStudioView(store: store)
                 } label: {
-                    Label("Design a new item", systemImage: "plus.circle.fill")
-                        .foregroundStyle(Color.moss)
+                    designNewItemRow
                 }
+                .listRowInsets(EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
 
             if !store.listedShopItems.isEmpty || store.shopUpdatedToday {
                 Section {
-                    Label(shopStatusText, systemImage: "bag")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                    HStack(spacing: 6) {
+                        Image(systemName: "bag")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.moss)
+                        Text(shopStatusText)
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                    }
+                    .listRowInsets(EdgeInsets(top: 2, leading: 24, bottom: 6, trailing: 24))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
+            }
+
+            if !store.customItems.isEmpty {
+                Section {
+                    sectionLabel("Your items")
+                        .listRowInsets(EdgeInsets(top: 6, leading: 24, bottom: 4, trailing: 24))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
             }
 
             ForEach(ItemSlot.allCases) { slot in
                 let items = store.customItems.filter { $0.slot == slot }
                 if !items.isEmpty {
-                    Section(slot.label) {
+                    Section {
                         ForEach(items) { item in
                             row(for: item)
+                                .listRowInsets(EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
                         }
+                    } header: {
+                        Text(slot.label)
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                            .textCase(nil)
                     }
                 }
             }
 
             if store.customItems.isEmpty {
                 Section {
-                    Text("No items yet — design your first one above. New creations appear on your companion right away.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
+                    emptyCloset
+                        .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 20, trailing: 20))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
             }
         }
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Color.parchment)
-        .listRowBackground(Color.cream)
+        .tint(Color.moss)
         .navigationTitle("Wardrobe")
         .navigationBarTitleDisplayMode(.inline)
         .alert(item: $shopAlert) { alert in
@@ -84,6 +113,55 @@ struct WardrobeView: View {
         return "\(listed) of \(ClothingShopLimits.maxListedItems) in your shop"
     }
 
+    // MARK: - Rows
+
+    /// The "Design a new item" affordance — a cream card with a moss-tinted icon tile.
+    private var designNewItemRow: some View {
+        HStack(spacing: 12) {
+            iconTile
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Design a new item")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.bark)
+                Text("Open the Creation Studio")
+                    .font(.fernlet(.bodySmall))
+                    .italic()
+                    .foregroundStyle(Color.slate)
+            }
+
+            Spacer(minLength: 8)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.bark.opacity(0.35))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .fernletSmallShadow()
+    }
+
+    private var iconTile: some View {
+        RoundedRectangle(cornerRadius: 11, style: .continuous)
+            .fill(Color.moss.opacity(0.14))
+            .frame(width: 38, height: 38)
+            .overlay {
+                Image(systemName: "plus")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color.moss)
+            }
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.fernlet(.labelSmall))
+            .foregroundStyle(Color.slate)
+            .tracking(0.8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     @ViewBuilder
     private func row(for item: CustomizationItem) -> some View {
         let isEquipped = store.equippedCustomItems.contains { $0.id == item.id }
@@ -91,30 +169,28 @@ struct WardrobeView: View {
             CreationStudioView(store: store, editingItem: item)
         } label: {
             HStack(spacing: 12) {
-                CustomItemThumbnail(texture: item.texture, size: 52)
-                VStack(alignment: .leading, spacing: 3) {
+                CustomItemThumbnail(texture: item.texture, size: 44)
+
+                VStack(alignment: .leading, spacing: 2) {
                     Text(item.name.isEmpty ? item.slot.label : item.name)
                         .font(.fernlet(.label))
-                    if store.isSelfDesigned(item) {
-                        if item.isShareable {
-                            Label("In your shop · \(item.price) coins", systemImage: "bag")
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.moss)
-                        }
-                    } else {
-                        Text("Designed by \(store.designerDisplayName(for: item))")
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                    }
+                        .foregroundStyle(Color.bark)
+                    provenance(for: item)
                 }
-                Spacer()
+
+                Spacer(minLength: 8)
+
                 if isEquipped {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.moss)
-                        .accessibilityLabel("Equipped")
+                    equippedPill
                 }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .fernletSmallShadow()
         }
+        .buttonStyle(.plain)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 if isEquipped {
@@ -133,6 +209,7 @@ struct WardrobeView: View {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+            .tint(Color.terracotta)
             // Only your own designs can be listed for sale (provenance / no reselling).
             if store.isSelfDesigned(item) {
                 Button {
@@ -140,9 +217,91 @@ struct WardrobeView: View {
                 } label: {
                     Label(item.isShareable ? "Unlist" : "Sell", systemImage: item.isShareable ? "bag.badge.minus" : "bag.badge.plus")
                 }
-                .tint(Color.sun)
+                .tint(Color.moss)
             }
         }
+    }
+
+    /// The provenance line: shop status for your own listed items, "designed by …" for the rest.
+    @ViewBuilder
+    private func provenance(for item: CustomizationItem) -> some View {
+        if store.isSelfDesigned(item) {
+            if item.isShareable {
+                HStack(spacing: 5) {
+                    Image(systemName: "bag")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.moss)
+                    Text("In your shop · \(item.price) coins")
+                        .font(.fernlet(.bodySmall))
+                        .italic()
+                        .foregroundStyle(Color.moss)
+                }
+            } else {
+                Text("designed by you")
+                    .font(.fernlet(.bodySmall))
+                    .italic()
+                    .foregroundStyle(Color.slate)
+            }
+        } else {
+            Text("Designed by \(store.designerDisplayName(for: item))")
+                .font(.fernlet(.bodySmall))
+                .italic()
+                .foregroundStyle(Color.slate)
+        }
+    }
+
+    private var equippedPill: some View {
+        Text("Equipped")
+            .font(.fernlet(.labelSmall))
+            .foregroundStyle(Color.moss)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.moss.opacity(0.12), in: Capsule())
+            .accessibilityLabel("Equipped")
+    }
+
+    // MARK: - Empty state
+
+    private var emptyCloset: some View {
+        VStack(spacing: 0) {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.moss.opacity(0.16))
+                .frame(width: 56, height: 56)
+                .overlay {
+                    Image(systemName: "tshirt")
+                        .font(.system(size: 24, weight: .light))
+                        .foregroundStyle(Color.moss)
+                }
+                .padding(.bottom, 16)
+
+            Text("Your closet is empty")
+                .font(.fernlet(.headerMedium))
+                .foregroundStyle(Color.bark)
+                .padding(.bottom, 6)
+
+            Text("Make the first little thing for your companion to wear. New creations appear on your companion right away.")
+                .font(.fernlet(.body))
+                .italic()
+                .foregroundStyle(Color.slate)
+                .multilineTextAlignment(.center)
+
+            NavigationLink {
+                CreationStudioView(store: store)
+            } label: {
+                Text("Design your first item")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 11)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 18)
+        }
+        .padding(.horizontal, 26)
+        .padding(.vertical, 32)
+        .frame(maxWidth: .infinity)
+        .background(Color.cream.opacity(0.6), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     /// Unlisting is always allowed. Listing goes through the store gate (cap + name moderation); the price

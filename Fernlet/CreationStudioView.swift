@@ -62,15 +62,12 @@ struct CreationStudioView: View {
             .padding(20)
         }
         .background(Color.parchment)
+        .tint(Color.moss)
         .navigationTitle(editingItem == nil ? "New item" : "Edit item")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Save") { save() }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(canSave ? Color.moss : Color.bark.opacity(0.35))
-                    .disabled(!canSave)
-            }
+        .safeAreaInset(edge: .bottom) {
+            // Prominent capsule save, not a bare toolbar link.
+            SheetSaveBar(label: "Save to closet", disabled: !canSave) { save() }
         }
         .alert(item: $shopAlert) { alert in
             switch alert {
@@ -129,7 +126,7 @@ struct CreationStudioView: View {
                         if idx >= 0, idx < palette.count, let color = Color(itemHex: palette[idx]) {
                             context.fill(Path(rect), with: .color(color))
                         }
-                        context.stroke(Path(rect), with: .color(Color.bark.opacity(0.12)), lineWidth: 0.5)
+                        context.stroke(Path(rect), with: .color(Color.bark.opacity(0.08)), lineWidth: 0.5)
                     }
                 }
             }
@@ -140,24 +137,46 @@ struct CreationStudioView: View {
                         paint(at: value.location, cellW: cellW, cellH: cellH)
                     }
             )
+            .overlay {
+                // Gentle first-touch hint when the grid is still blank.
+                if isCanvasBlank {
+                    Text("Drag to paint")
+                        .font(.fernlet(.body))
+                        .italic()
+                        .foregroundStyle(Color.slate.opacity(0.6))
+                        .allowsHitTesting(false)
+                }
+            }
         }
         .aspectRatio(CGFloat(slot.gridCols) / CGFloat(slot.gridRows), contentMode: .fit)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.cream)
+                .fill(Color.parchment)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.bark.opacity(0.12), lineWidth: 1)
+                .strokeBorder(Color.bark.opacity(0.10), lineWidth: 1)
         )
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.cream)
+        )
+        .fernletCardShadow()
+    }
+
+    /// True while every cell is still transparent — drives the "Drag to paint" hint.
+    private var isCanvasBlank: Bool {
+        !pixels.contains { $0 != ItemGridTexture.transparent }
     }
 
     private var paletteRow: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Palette")
+            Text("Palette".uppercased())
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
+                .tracking(0.8)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     eraserSwatch
@@ -176,8 +195,26 @@ struct CreationStudioView: View {
             selectedColor = ItemGridTexture.transparent
         } label: {
             ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.parchment)
+                // A checker fill reads as "transparent / erase" — it can never blend into the card.
+                Canvas { context, size in
+                    let step: CGFloat = 7
+                    context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color.cream))
+                    var y: CGFloat = 0
+                    var row = 0
+                    while y < size.height {
+                        var x: CGFloat = (row.isMultiple(of: 2) ? 0 : step)
+                        while x < size.width {
+                            context.fill(
+                                Path(CGRect(x: x, y: y, width: step, height: step)),
+                                with: .color(Color.bark.opacity(0.14))
+                            )
+                            x += step * 2
+                        }
+                        y += step
+                        row += 1
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Image(systemName: "eraser")
                     .font(.system(size: 14))
                     .foregroundStyle(Color.bark.opacity(0.7))
@@ -202,37 +239,67 @@ struct CreationStudioView: View {
         .accessibilityLabel("Color \(index + 1)")
     }
 
+    /// Selected → moss ring; unselected → a hairline so light swatches (cream, parchment, white) never
+    /// vanish into the cream card behind them (the 6b "palette that never disappears" fix).
     private func selectionRing(isSelected: Bool) -> some View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .strokeBorder(isSelected ? Color.moss : Color.bark.opacity(0.15), lineWidth: isSelected ? 2.5 : 1)
+            .strokeBorder(isSelected ? Color.moss : Color.bark.opacity(0.22), lineWidth: isSelected ? 2.5 : 1)
     }
 
     private var detailsCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            TextField("Name your item", text: $name)
-                .sheetTextInput()
+        VStack(alignment: .leading, spacing: 18) {
+            SheetField("Name") {
+                TextField("Name your item", text: $name)
+                    .sheetTextInput()
+            }
 
             if canSell {
-                Toggle(isOn: $isShareable) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Available in my shop")
-                        Text("Friends can browse and buy this when you connect in person.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                    }
-                }
-                .tint(Color.moss)
+                SheetField("Shop") {
+                    VStack(spacing: 0) {
+                        Toggle(isOn: $isShareable) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("List in my shop")
+                                    .font(.fernlet(.label))
+                                    .foregroundStyle(Color.bark)
+                                Text("Friends nearby can buy it for their companion.")
+                                    .font(.fernlet(.bodySmall))
+                                    .italic()
+                                    .foregroundStyle(Color.slate)
+                            }
+                        }
+                        .tint(Color.moss)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
 
-                if isShareable {
-                    Stepper(value: $price, in: ClothingShopLimits.minPrice...ClothingShopLimits.maxPrice) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "circlebadge.2.fill").foregroundStyle(Color.sun)
-                            Text("Price: \(price) coins")
-                                .font(.fernlet(.stat))
+                        if isShareable {
+                            Divider().overlay(Color.bark.opacity(0.08))
+                            Stepper(value: $price, in: ClothingShopLimits.minPrice...ClothingShopLimits.maxPrice) {
+                                HStack(spacing: 6) {
+                                    Text("Price")
+                                        .font(.fernlet(.label))
+                                        .foregroundStyle(Color.bark)
+                                    Spacer(minLength: 8)
+                                    Image(systemName: "circlebadge.2.fill").foregroundStyle(Color.sun)
+                                    Text("\(price) coins")
+                                        .font(.fernlet(.stat))
+                                        .foregroundStyle(Color.bark)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
                         }
                     }
+                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.bark.opacity(0.08), lineWidth: 1)
+                    )
+                }
+
+                if isShareable {
                     Text(shopHint)
                         .font(.fernlet(.bodySmall))
+                        .italic()
                         .foregroundStyle(Color.slate)
                 }
             }
@@ -242,13 +309,15 @@ struct CreationStudioView: View {
             } label: {
                 Label("Clear canvas", systemImage: "trash")
                     .font(.fernlet(.label))
+                    .foregroundStyle(Color.terracotta)
             }
+            .buttonStyle(.plain)
         }
-        .padding(16)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.cream)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.cream.opacity(0.55))
         )
     }
 
