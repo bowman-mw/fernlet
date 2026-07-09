@@ -278,10 +278,15 @@ struct HomeView: View {
                 // Home-only environment layer (time tint + optional sky accents).
                 // Composes beneath the companion; decorative only (no hit testing, no
                 // accessibility), so petting and the appearance probes are untouched.
+                // Full-bleed per the mockup: the wash feathers its own edges, so let it
+                // extend a little past the companion's tight bounds to dissolve into the
+                // parchment strip rather than stop at the frame.
                 CompanionAmbienceLayer(
                     phase: .current(),
                     ambient: store.settings.weatherPromptsEnabled ? companionAmbient : nil
                 )
+                .padding(.horizontal, -FernletMetrics.spaceMd)
+                .padding(.vertical, -FernletMetrics.spaceSm)
             }
 
             HStack(spacing: 8) {

@@ -8,16 +8,22 @@
 //  weather prompts are enabled AND WeatherKit has cached conditions.
 //
 //  ┌─ DESIGN SOURCE ─────────────────────────────────────────────────────────────────┐
-//  │ Restyled from Docs/design-refs/home-ambiance.html · badge 6a (the compose        │
-//  │ matrix: time-of-day tint × weather accent, at true strength). The gradient       │
-//  │ directions, colors, and opacities below trace that matrix cell-for-cell:         │
+//  │ Restyled from the "Home Ambiance" mockup · badge 6a (the compose matrix:          │
+//  │ time-of-day tint × weather accent, at true strength). The gradient directions,    │
+//  │ colors, and opacities below trace that matrix cell-for-cell:                      │
 //  │   · Dawn — warm radial from the TOP, a small rising sun glow.                     │
 //  │   · Day  — cool clean radial from the TOP, a faint high sun.                      │
 //  │   · Dusk — amber radial from the BOTTOM, a low warm sun.                          │
 //  │   · Night— deep-blue vertical wash + upper-right sky glow, crescent moon + stars. │
 //  │ Weather accents stay under half-opacity and are tuned per phase (warmer clouds    │
 //  │ at dawn/dusk, cooler by day, muted/blue at night). Everything is dialed low so    │
-//  │ the companion stays the hero; the whole treatment lives behind this single view. │
+//  │ the companion stays the hero.                                                     │
+//  │                                                                                   │
+//  │ Per the mockup's "a sky felt more than seen" direction, this is a FULL-BLEED      │
+//  │ wash: no rounded-rect card clip. A soft radial feather dissolves the whole        │
+//  │ treatment into the parchment (or dark theme) on every edge, all geometry is a     │
+//  │ fraction of the slot so it composes in the wide Home strip, and night bends       │
+//  │ slightly with the app appearance so it registers in either scheme.                │
 //  └────────────────────────────────────────────────────────────────────────────────┘
 //
 
@@ -54,61 +60,93 @@ struct CompanionAmbienceLayer: View {
     /// `nil` ⇒ time-of-day tint only (weather off, unauthorized, or unavailable).
     var ambient: WeatherAmbient?
 
-    /// Corner radius of the Home background slot this layer fills. Kept as a constant so
-    /// the tint fill, the always-on celestial glow, and the weather-accent canvas all
-    /// clip to the same rounded rect.
-    private static let cornerRadius: CGFloat = 26
+    /// The app appearance. The sky wash is dialed low either way, but night in particular
+    /// wants a touch more presence over the dark theme and a touch less over parchment, so
+    /// the tint strength and the feather profile both bend slightly with the scheme.
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// A full-bleed feather: the wash reaches true strength through the middle band and
+    /// dissolves to nothing at every edge, so it reads as "a sky felt more than seen"
+    /// rather than a contained card. Radial so all four sides + the corners melt into the
+    /// parchment/theme evenly, tuned a hair softer in dark mode.
+    private var edgeFeather: some ShapeStyle {
+        RadialGradient(
+            gradient: Gradient(stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: colorScheme == .dark ? 0.60 : 0.66),
+                .init(color: .clear, location: 1)
+            ]),
+            center: .center,
+            startRadius: 0,
+            endRadius: 1
+        )
+    }
 
     var body: some View {
-        ZStack {
-            // 1 · Time-of-day tint — always on. Directional per the matrix (radial from
-            //     top for dawn/day, from the bottom for dusk, a vertical wash for night).
-            Self.tintGradient(for: phase)
+        // Size-relative so the whole treatment composes in the wide Home strip: every
+        // radius, glow, and accet position below is a fraction of the slot it fills.
+        GeometryReader { geo in
+            let size = geo.size
+            ZStack {
+                // 1 · Time-of-day tint — always on. Directional per the matrix (radial from
+                //     top for dawn/day, from the bottom for dusk, a vertical wash for night).
+                Self.tintGradient(for: phase, size: size, scheme: colorScheme)
 
-            // 2 · Celestial glow — also always on, mirroring the matrix's "Clear" row
-            //     where the tint alone carries the sun (dawn/day/dusk) or the crescent
-            //     moon + faint stars (night). Weather accents layer over this.
-            TimelineView(.animation(minimumInterval: 0.5)) { timeline in
-                Canvas { context, size in
-                    Self.drawCelestial(
-                        context: &context,
-                        size: size,
-                        phase: phase,
-                        time: timeline.date.timeIntervalSinceReferenceDate
-                    )
-                }
-            }
-
-            // 3 · Weather accents — only when weather is enabled AND available. Slow,
-            //     deterministic drift driven by wall-clock time; a lazy update interval
-            //     keeps this far cheaper than the companion's own breath loop.
-            if let ambient {
-                TimelineView(.animation(minimumInterval: 0.25)) { timeline in
+                // 2 · Celestial glow — also always on, mirroring the matrix's "Clear" row
+                //     where the tint alone carries the sun (dawn/day/dusk) or the crescent
+                //     moon + faint stars (night). Weather accents layer over this.
+                TimelineView(.animation(minimumInterval: 0.5)) { timeline in
                     Canvas { context, size in
-                        Self.drawAccents(
+                        Self.drawCelestial(
                             context: &context,
                             size: size,
-                            ambient: ambient,
                             phase: phase,
                             time: timeline.date.timeIntervalSinceReferenceDate
                         )
                     }
                 }
+
+                // 3 · Weather accents — only when weather is enabled AND available. Slow,
+                //     deterministic drift driven by wall-clock time; a lazy update interval
+                //     keeps this far cheaper than the companion's own breath loop.
+                if let ambient {
+                    TimelineView(.animation(minimumInterval: 0.25)) { timeline in
+                        Canvas { context, size in
+                            Self.drawAccents(
+                                context: &context,
+                                size: size,
+                                ambient: ambient,
+                                phase: phase,
+                                time: timeline.date.timeIntervalSinceReferenceDate
+                            )
+                        }
+                    }
+                }
+            }
+            // No rounded-rect clip: the wash is masked by a soft radial feather that scales
+            // with the slot, so the sky dissolves into the parchment on every edge instead
+            // of stopping at a card boundary.
+            .mask {
+                Rectangle().fill(edgeFeather)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
     // MARK: - Time-of-day tint
 
-    /// The directional tint view per phase. Radials sit at the edges (top for the rising
-    /// dawn/day light, bottom for the amber dusk fall) so the shift reads as "the light
-    /// changed" and leaves the parchment centre clear for the companion. Night is a
-    /// deep-blue vertical wash with a faint upper-right sky glow.
+    /// The directional tint view per phase, sized relative to the slot so it composes at
+    /// any strip width. Radials sit at the edges (top for the rising dawn/day light, bottom
+    /// for the amber dusk fall) so the shift reads as "the light changed" and leaves the
+    /// parchment centre clear for the companion. Night is a deep-blue vertical wash with a
+    /// faint upper-right sky glow. `scheme` nudges night's strength: a hair richer over the
+    /// dark theme so the wash still registers, a hair softer over parchment.
     @ViewBuilder
-    static func tintGradient(for phase: CompanionDayPhase) -> some View {
+    static func tintGradient(for phase: CompanionDayPhase, size: CGSize, scheme: ColorScheme) -> some View {
+        // Reach for the directional radials: past the far edge so the tint fills the strip
+        // from its origin edge, scaled to the slot's larger dimension.
+        let reach = max(size.width, size.height) * 0.92
         switch phase {
         case .dawn:
             // Warm radial rising from the top edge.
@@ -119,7 +157,7 @@ struct CompanionAmbienceLayer: View {
                 ]),
                 center: .top,
                 startRadius: 0,
-                endRadius: 260
+                endRadius: reach
             )
         case .day:
             // Cool, clean radial from the top — the lightest of the four.
@@ -130,7 +168,7 @@ struct CompanionAmbienceLayer: View {
                 ]),
                 center: .top,
                 startRadius: 0,
-                endRadius: 240
+                endRadius: reach
             )
         case .dusk:
             // Amber radial welling up from the bottom edge.
@@ -141,33 +179,40 @@ struct CompanionAmbienceLayer: View {
                 ]),
                 center: .bottom,
                 startRadius: 0,
-                endRadius: 250
+                endRadius: reach
             )
         case .night:
-            // Deep-blue vertical wash + a faint sky glow in the upper trailing corner.
+            // Deep-blue vertical wash + a faint sky glow in the upper trailing corner. Over
+            // the dark theme, lift the wash a touch so it keeps its presence; over parchment
+            // ease it back so it never turns the centre muddy.
+            let washBoost = scheme == .dark ? 0.10 : 0.0
+            let glowBoost = scheme == .dark ? 0.06 : 0.0
             ZStack {
                 LinearGradient(
-                    gradient: Gradient(colors: Self.tintColors(for: .night)),
+                    gradient: Gradient(colors: [
+                        AmbiencePalette.nightTop.opacity(0.44 + washBoost),
+                        AmbiencePalette.nightBottom.opacity(0.50 + washBoost)
+                    ]),
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 RadialGradient(
                     gradient: Gradient(colors: [
-                        AmbiencePalette.nightGlow.opacity(0.16),
+                        AmbiencePalette.nightGlow.opacity(0.16 + glowBoost),
                         AmbiencePalette.nightGlow.opacity(0)
                     ]),
                     center: UnitPoint(x: 0.74, y: 0.18),
                     startRadius: 0,
-                    endRadius: 190
+                    endRadius: max(size.width, size.height) * 0.72
                 )
             }
         }
     }
 
     /// A two-stop tint sample per phase. Retained as a static, testable entry point (the
-    /// contract is "≥ 2 usable colors per phase") and used directly for night's vertical
-    /// wash. The other phases render as radials via `tintGradient(for:)`, but the endpoint
-    /// colors here match those gradients so this stays a faithful summary of each tint.
+    /// contract is "≥ 2 usable colors per phase"). `tintGradient(for:size:scheme:)` renders
+    /// the shipping wash — scheme-nudged for night — but the base endpoint colors here match
+    /// those gradients so this stays a faithful summary of each tint.
     static func tintColors(for phase: CompanionDayPhase) -> [Color] {
         switch phase {
         case .dawn:
