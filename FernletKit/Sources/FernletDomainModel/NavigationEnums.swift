@@ -164,6 +164,9 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
     case periodTracking
     case intimacyTracking
     case friends
+    case breathing
+    case grounding
+    case worryBox
 
     nonisolated public static let defaultQuickLog: [FernletShortcut] = [.meal, .water, .move, .sleep, .journal, .care]
 
@@ -181,6 +184,9 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         case .periodTracking: "Period"
         case .intimacyTracking: "Intimacy"
         case .friends: "Friends"
+        case .breathing: "Slow breathing"
+        case .grounding: "Grounding"
+        case .worryBox: "Worry box"
         }
     }
 
@@ -196,6 +202,9 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         case .periodTracking: "calendar.badge.clock"
         case .intimacyTracking: "lock.shield"
         case .friends: "person.2"
+        case .breathing: "wind"
+        case .grounding: "leaf"
+        case .worryBox: "archivebox"
         }
     }
 
@@ -206,7 +215,7 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         case .periodTracking: .periodTracking
         case .intimacyTracking: .intimacyTracking
         case .friends: .friends
-        case .meal, .water, .sleep, .care, .logPeriod:
+        case .meal, .water, .sleep, .care, .logPeriod, .breathing, .grounding, .worryBox:
             nil
         }
     }

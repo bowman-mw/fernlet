@@ -692,7 +692,7 @@ struct HomeView: View {
             "Journal"
         case .care:
             "Care"
-        case .logPeriod, .periodTracking, .intimacyTracking, .friends:
+        case .logPeriod, .periodTracking, .intimacyTracking, .friends, .breathing, .grounding, .worryBox:
             item.title
         }
     }
@@ -719,6 +719,8 @@ struct HomeView: View {
             store.day.healthContext?.intimate != nil
         case .friends:
             store.memories.contains { $0.category.localizedCaseInsensitiveContains("friend") }
+        case .breathing, .grounding, .worryBox:
+            false
         }
     }
 
@@ -772,6 +774,12 @@ struct HomeView: View {
             selectedTab = .personal
         case .friends:
             selectedTab = .social
+        case .breathing:
+            activeSheet = .firstAid(.breathing)
+        case .grounding:
+            activeSheet = .firstAid(.grounding)
+        case .worryBox:
+            activeSheet = .firstAid(.worryBox)
         }
     }
 
