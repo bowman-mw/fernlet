@@ -289,7 +289,6 @@ struct ContentView: View {
                 isTabBarCompact: $isHomeTabBarCompact,
                 tabResetToken: resetTokenBinding(for: .home),
                 periodStore: periodStore,
-                periodContext: periodContext,
                 stressService: stressService
             )
             .tag(FernletTab.home)

@@ -22,9 +22,8 @@ struct HomeView: View {
     @Binding var privateHubSection: PrivateHubSection
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
-    /// Shared period store + abstract bridge, threaded from ContentView for the (opt-in) cycle surfaces.
+    /// Shared period store, threaded from ContentView for the (opt-in) cycle surfaces.
     var periodStore: PeriodTrackerStore? = nil
-    var periodContext: PeriodContextBridge? = nil
     /// Shared body-signals service, threaded from ContentView for the (opt-in) stress surfaces.
     var stressService: StressService? = nil
     @State private var hasRecentPeriodEvent = false
@@ -1143,14 +1142,6 @@ private struct CompanionCustomizationSheet: View {
         }
     }
 
-    private func colorLabel(_ color: CompanionAssetColor) -> some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(color.color(for: store.companionState))
-                .frame(width: 12, height: 12)
-            Text(color.label)
-        }
-    }
 }
 
 private extension Color {
