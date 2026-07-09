@@ -1183,31 +1183,40 @@ struct MealSheet: View {
                         SheetTextEditor(text: $description, placeholder: "scrambled eggs and toast", minHeight: 100)
                     }
 
-                    HStack(spacing: 8) {
+                    // One primary, quiet helpers. "Capture" opens the camera as the delightful
+                    // default; barcode Scan, Recent history, and Import stay reachable but demoted.
+                    VStack(spacing: 10) {
                         #if canImport(UIKit)
-                        mealSecondaryButton("Photo", icon: "camera") {
+                        mealCapturePrimaryButton {
                             showingCamera = true
                         }
-                        mealSecondaryButton("Scan", icon: "barcode.viewfinder") {
-                            path.append(.scanBarcode)
-                        }
-                        if !store.recentMeals.isEmpty {
-                            Menu {
-                                ForEach(store.recentMeals.prefix(8)) { meal in
-                                    Button(meal.name) {
-                                        let copiedMeal = store.copyMeal(meal)
-                                        onLogged([copiedMeal])
-                                        dismiss()
+
+                        HStack(spacing: 8) {
+                            mealSecondaryButton("Scan", icon: "barcode.viewfinder") {
+                                path.append(.scanBarcode)
+                            }
+                            if !store.recentMeals.isEmpty {
+                                Menu {
+                                    ForEach(store.recentMeals.prefix(8)) { meal in
+                                        Button(meal.name) {
+                                            let copiedMeal = store.copyMeal(meal)
+                                            onLogged([copiedMeal])
+                                            dismiss()
+                                        }
                                     }
+                                } label: {
+                                    mealSecondaryLabel("Recent", icon: "clock.arrow.circlepath")
                                 }
-                            } label: {
-                                mealSecondaryLabel("Recent", icon: "clock.arrow.circlepath")
+                            }
+                            mealSecondaryButton("Import", icon: "link.badge.plus") {
+                                path.append(.productPageImport)
                             }
                         }
-                        #endif
+                        #else
                         mealSecondaryButton("Import", icon: "link.badge.plus") {
                             path.append(.productPageImport)
                         }
+                        #endif
                     }
 
                     SheetField("Meal type") {
@@ -1332,6 +1341,28 @@ struct MealSheet: View {
             )
         }
     }
+
+    #if canImport(UIKit)
+    /// The single prominent capture affordance — "one button points at food." It opens the camera
+    /// (the delightful default). Barcode/scan/import remain as quiet helpers beneath it.
+    private func mealCapturePrimaryButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                Text("Capture")
+                    .font(.fernlet(.label))
+            }
+            .foregroundStyle(Color.cream)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
+            .fernletSmallShadow()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Capture food")
+    }
+    #endif
 
     private func mealSecondaryButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
