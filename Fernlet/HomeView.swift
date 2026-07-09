@@ -53,6 +53,7 @@ struct HomeView: View {
                     ForEach(store.settings.homeWidgets) { widget in
                         homeWidget(widget)
                     }
+                    firstAidAction
                     milestonesCard
                 }
                 .padding(20)
@@ -288,107 +289,53 @@ struct HomeView: View {
                 .padding(.horizontal, -FernletMetrics.spaceMd)
                 .padding(.vertical, -FernletMetrics.spaceSm)
             }
-
-            HStack(spacing: 8) {
-                Text(store.companionState.rawValue)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(store.companionState.color)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(store.companionState.color.opacity(0.13), in: Capsule())
-
-                firstAidPill
-            }
-
-            signalsCard
-
-            stressLineView
         }
         .frame(maxWidth: .infinity)
     }
 
-    /// Small persistent First Aid affordance beside the companion state chip (quick-log-chip
-    /// styling): always reachable, quietly present, never demanding attention.
-    private var firstAidPill: some View {
+    /// First Aid as its own calm, standalone action (not a status chip): a soft moss-tinted row
+    /// with an icon tile, a title, a gentle italic subtitle, and a chevron — always reachable,
+    /// quietly present, never demanding attention. Sits below quick-log per the mockup.
+    private var firstAidAction: some View {
         Button {
             activeSheet = .firstAid(nil)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 12) {
                 Image(systemName: "heart.circle")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(Color.moss)
+                    .frame(width: 34, height: 34)
+                    .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("First aid")
+                        .font(.fernlet(.header))
+                        .foregroundStyle(Color.bark)
+                    Text("A quiet minute, whenever")
+                        .font(.fernlet(.bodySmall))
+                        .italic()
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                Text("First aid")
-                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss.opacity(0.7))
             }
-            .foregroundStyle(Color.moss)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
-            .background(Color.moss.opacity(0.13), in: Capsule())
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.moss.opacity(0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.moss.opacity(0.22), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.firstAid")
+        .accessibilityLabel("First aid")
         .accessibilityHint("Opens calm tools: breathing, grounding, and the worry box")
-    }
-
-    /// Gentle opt-in body-signals line under the companion — offered, never alarming.
-    /// Tapping opens the small explainer sheet, which also links on to First Aid. On tense /
-    /// needs-care days it reads as a soft warm cream bubble with an italic serif line (per the
-    /// companion-moments "feeling a bit fizzy" bubble); quieter days stay low-key and slate.
-    @ViewBuilder
-    private var stressLineView: some View {
-        if let line = stressLine {
-            let warm = stressTintActive
-            Button {
-                activeSheet = .stressExplainer
-            } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "wind")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(warm ? Color.goldenrod : Color.slate)
-                    Text(line)
-                        .font(warm ? .fernlet(.bubble) : .fernlet(.bodySmall))
-                        .multilineTextAlignment(.leading)
-                        .foregroundStyle(warm ? Color.bark : Color.slate)
-                        .fernletWrappingText()
-                }
-                .padding(.horizontal, warm ? 16 : 12)
-                .padding(.vertical, warm ? 12 : 8)
-                .background(
-                    warm ? Color.cream : Color.slate.opacity(0.08),
-                    in: RoundedRectangle(cornerRadius: warm ? 18 : 12, style: .continuous)
-                )
-                .shadow(color: warm ? Color.bark.opacity(0.08) : .clear, radius: warm ? 6 : 0, y: warm ? 2 : 0)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("home.stressLine")
-            .accessibilityHint("Opens how Fernlet estimates this")
-        }
-    }
-
-    /// The body-signals copy. Shown on EVERY day the user has opted in — including calm/okay days and
-    /// the ~week-long cold start — so the reading (and the explainer it opens, whose "still getting to
-    /// know you" / "settled" / "about your usual" copy would otherwise be unreachable) is always
-    /// available, and opting in never looks like it silently did nothing. Tense/needs-care days get the
-    /// gentle "be kind to yourself" wording; quieter states get a soft, low-key line.
-    private var stressLine: String? {
-        guard store.settings.stressAwarenessEnabled else { return nil }
-        guard let assessment = stressService?.assessment else {
-            // Cold start: not enough baseline yet. Reassure the opted-in user the feature is on.
-            return "Body signals: still getting to know your usual rhythm."
-        }
-        switch (assessment.state, assessment.annotation) {
-        case (.tense, .workedOut):
-            return "Your body is working a bit harder than your usual — probably that good kind of tired from moving."
-        case (.tense, .possiblyUnwell):
-            return "Your body seems a bit more tense than your usual — it might just be fighting something off. Rest counts."
-        case (.tense, _):
-            return "Your body seems a bit more tense than your usual — be extra kind to yourself today."
-        case (.needsCare, _):
-            return "Your body has seemed extra tense for a couple of days. Going gently today is more than enough."
-        case (.calm, _):
-            return "Your body seems calm and settled today."
-        case (.okay, _):
-            return "Body signals: about your usual today."
-        }
     }
 
     /// Presentation-only frazzle flag for the companion. Never overrides the sick/resting
@@ -409,94 +356,10 @@ struct HomeView: View {
         return store.companionState != .sick && store.companionState != .resting
     }
 
-    /// A compact mood/energy/readiness chip row (plus a "resting today" sickness chip) that taps
-    /// through to the Trends modal. Reads the already-built derived signals.
-    @ViewBuilder
-    private var signalsCard: some View {
-        let chips = signalChips(from: store.derivedSignals)
-        let resting = store.isSick(on: store.todayKey)
-        let phaseChip = periodPhaseChip
-        if !chips.isEmpty || resting || phaseChip != nil {
-            Button {
-                activeSheet = .trends
-            } label: {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        if resting {
-                            signalChip(text: "Resting today", color: .terracotta, icon: "thermometer.medium")
-                        }
-                        if let phaseChip {
-                            signalChip(text: phaseChip.label, color: phaseChip.color, icon: phaseChip.icon)
-                        }
-                        ForEach(chips) { chip in
-                            signalChip(text: chip.label, color: chip.color, icon: chip.icon)
-                        }
-                    }
-                    .padding(.horizontal, 2)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Wellbeing signals")
-            .accessibilityHint("Opens trends")
-        }
-    }
-
-    /// Abstract cycle-phase chip, shown only when the user has opted into period-aware care and isn't
-    /// hiding predictions. Reads the bridge's abstract phase (never raw cycle data) so a glance at Home
-    /// surfaces the phase without exposing dates or symptoms.
-    private var periodPhaseChip: HomeSignalChip? {
-        guard store.settings.periodAwareScoringEnabled, !store.settings.hidePredictions,
-              let phase = periodContext?.currentPhaseSignal(), phase != .unknown else { return nil }
-        return HomeSignalChip(label: "Cycle: \(phase.rawValue.capitalized)", color: .dustyRose, icon: "drop")
-    }
-
     /// The next-period outlook for the Home ambient bubble, gated by the same opt-in + hide-predictions.
     private var homePeriodPrediction: CyclePrediction? {
         guard store.settings.periodAwareScoringEnabled, !store.settings.hidePredictions else { return nil }
         return periodStore?.prediction
-    }
-
-    private struct HomeSignalChip: Identifiable {
-        let id = UUID()
-        let label: String
-        let color: Color
-        let icon: String
-    }
-
-    private func signalChips(from signals: [DerivedSignalRecord]) -> [HomeSignalChip] {
-        var chips: [HomeSignalChip] = []
-        if let mood = signals.first(where: { $0.signalName == "moodTrend" }) {
-            chips.append(HomeSignalChip(label: "Mood: \(compactSignalValue(mood.value))", color: .dustyRose, icon: "heart"))
-        }
-        if let energy = signals.first(where: { $0.signalName == "energyTrend" }) {
-            chips.append(HomeSignalChip(label: "Energy: \(compactSignalValue(energy.value))", color: .goldenrod, icon: "bolt"))
-        }
-        if let readiness = signals.first(where: { $0.signalName == "intensityReadiness" }) {
-            chips.append(HomeSignalChip(label: "Readiness: \(compactSignalValue(readiness.value))", color: .moss, icon: "figure.run"))
-        }
-        return chips
-    }
-
-    private func compactSignalValue(_ value: String) -> String {
-        switch value {
-        case "needs gentleness": return "gentle"
-        case "ready for hard": return "hard"
-        case "ready for light": return "light"
-        case "ready for moderate": return "moderate"
-        case "improving", "rising": return "up"
-        default: return value
-        }
-    }
-
-    private func signalChip(text: String, color: Color, icon: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon).font(.caption2.weight(.semibold))
-            Text(text).font(.fernlet(.labelSmall))
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
-        .background(color.opacity(0.13), in: Capsule())
     }
 
     private var ambientThought: String {
