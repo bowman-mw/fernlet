@@ -132,6 +132,28 @@ struct BarcodeScanView: View {
             .ignoresSafeArea()
 
             ScanFrameOverlay(caption: "Point the camera at the product's barcode.")
+
+            // A kind way out, right on the frame (mockup 11a): a translucent "Add by hand" pill
+            // pinned to the bottom, wired to the same hand-entry path as the camera-off fallback so
+            // the user is never trapped waiting for a scan.
+            VStack {
+                Spacer()
+                Button {
+                    onCode("")
+                } label: {
+                    Label("Add by hand", systemImage: "plus")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.cream)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Color.cream.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 44)
+                .accessibilityIdentifier("barcodeAddByHand")
+            }
+            .ignoresSafeArea(edges: .bottom)
         }
     }
 
@@ -523,20 +545,29 @@ struct BarcodeNotFoundView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    // Friendly "New to Fernlet" header with a little companion face.
-                    HStack(spacing: 12) {
-                        CompanionFace()
-                            .frame(width: 52, height: 52)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("New to Fernlet")
-                                .font(.fernlet(.labelSmall))
-                                .tracking(1.2)
-                                .textCase(.uppercase)
-                                .foregroundStyle(Color.goldenrod)
-                            Text("We haven't met this one")
-                                .font(.fernlet(.header))
-                                .foregroundStyle(Color.bark)
-                                .fernletWrappingText()
+                    VStack(alignment: .leading, spacing: 18) {
+                        // Quiet "ADD A FOOD" eyebrow above the friendly header (mockup 11b).
+                        Text("Add a food")
+                            .font(.fernlet(.labelSmall))
+                            .tracking(1.4)
+                            .textCase(.uppercase)
+                            .foregroundStyle(Color.softTaupe)
+
+                        // Friendly "New to Fernlet" header with a little companion face.
+                        HStack(spacing: 12) {
+                            CompanionFace()
+                                .frame(width: 52, height: 52)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("New to Fernlet")
+                                    .font(.fernlet(.labelSmall))
+                                    .tracking(1.2)
+                                    .textCase(.uppercase)
+                                    .foregroundStyle(Color.goldenrod)
+                                Text("We haven't met this one")
+                                    .font(.fernlet(.header))
+                                    .foregroundStyle(Color.bark)
+                                    .fernletWrappingText()
+                            }
                         }
                     }
 
