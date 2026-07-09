@@ -289,8 +289,39 @@ struct HomeView: View {
                 .padding(.horizontal, -FernletMetrics.spaceMd)
                 .padding(.vertical, -FernletMetrics.spaceSm)
             }
+
+            if store.settings.stressAwarenessEnabled {
+                bodySignalsLink
+            }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Quiet door to the body-signals explainer (its App Store 1.4.1 not-medical disclaimer + First Aid
+    /// invite). Home is chip-free now, so this is a subtle link — shown only when stress awareness is on —
+    /// rather than the old status line, and it stays the sole production entry to `StressExplainerSheet`
+    /// (setting the top-level `activeSheet` so the sheet's dismiss-then-First-Aid chain keeps working).
+    private var bodySignalsLink: some View {
+        Button {
+            activeSheet = .stressExplainer
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.caption)
+                Text("Body signals")
+                    .font(.fernlet(.labelSmall))
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .opacity(0.6)
+            }
+            .foregroundStyle(Color.slate)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.stressLine")
+        .accessibilityLabel("Body signals — how Fernlet reads this")
+        .accessibilityHint("Explains how body signals are estimated")
     }
 
     /// First Aid as its own calm, standalone action (not a status chip): a soft moss-tinted row
