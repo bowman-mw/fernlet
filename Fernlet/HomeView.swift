@@ -832,34 +832,22 @@ struct HomeView: View {
 }
 
 private struct CompanionCustomizationSheet: View {
-    enum Section: String, CaseIterable, Identifiable {
-        case style = "Style"
-        case slots = "Customization"
-
-        var id: String { rawValue }
-    }
-
     var store: FernletStore
     @Binding var petCount: Int
     @Environment(\.dismiss) private var dismiss
-    @State private var section: Section = .style
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                companionPreview
+                companionHeader
 
                 ScrollView {
-                    VStack(spacing: 16) {
-                        walletBadge
-                        milestonesLink
-                        wardrobeLink
-                        switch section {
-                        case .style:
-                            styleControls
-                        case .slots:
-                            slotControls
-                        }
+                    VStack(spacing: 9) {
+                        bodyRow
+                        accessoryRow
+                        clothingRow
+                        sideItemRow
+                        customRow
                     }
                     .padding(20)
                 }
@@ -877,23 +865,29 @@ private struct CompanionCustomizationSheet: View {
         }
     }
 
-    private var companionPreview: some View {
-        VStack(spacing: 14) {
+    /// A live preview of the companion next to a calm "Customize" title. Replaces the old
+    /// segmented Style/Customization control — the selector rows below carry the structure now.
+    private var companionHeader: some View {
+        HStack(spacing: 14) {
             CompanionView(
                 state: store.companionState,
                 appearance: store.settings.companionAppearance,
-                size: 150,
+                size: 84,
                 interactionLevel: petCount,
                 equippedItems: store.equippedCustomItems
             )
-            .frame(maxWidth: .infinity)
+            .frame(width: 84, height: 84)
 
-            Picker("Companion options", selection: $section) {
-                ForEach(Section.allCases) { section in
-                    Text(section.rawValue).tag(section)
-                }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Customize")
+                    .font(.fernlet(.header))
+                    .foregroundStyle(Color.bark)
+                Text(hasAnythingOn ? "Tap a slot to change it" : "Nothing on yet — pick a slot")
+                    .font(.fernlet(.body))
+                    .italic()
+                    .foregroundStyle(Color.slate)
             }
-            .pickerStyle(.segmented)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)
@@ -906,25 +900,184 @@ private struct CompanionCustomizationSheet: View {
         }
     }
 
-    private var walletBadge: some View {
-        // Read `store.coinBalance` directly (not a snapshot): it is a cheap derived read over the
-        // warm-cached day history, so it stays correct from the first frame and refreshes with the
-        // observable store instead of going stale or flashing 0 → N on appear.
-        let balance = store.coinBalance
-        return HStack(spacing: 12) {
-            Image(systemName: "circlebadge.2.fill")
-                .font(.system(size: 18))
-                .foregroundStyle(Color.sun)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(balance) coins")
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.bark)
-                    .contentTransition(.numericText())
-                Text("earned from days you showed up")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+    // Is anything at all equipped (beyond the default body)? Drives the header's first-run nudge.
+    private var hasAnythingOn: Bool {
+        let appearance = store.settings.companionAppearance
+        return appearance.accessory != .none
+            || appearance.clothing != .none
+            || appearance.sideItem != .none
+            || !store.equippedCustomItems.isEmpty
+    }
+
+    // MARK: Selector rows — one per slot, each showing what's equipped and pushing its picker.
+
+    private var bodyRow: some View {
+        let appearance = store.settings.companionAppearance
+        return NavigationLink {
+            slotPicker(
+                title: "Body",
+                items: CompanionBodyStyle.allCases,
+                selection: appearanceBinding(\.bodyStyle),
+                colorTitle: "Body color",
+                colorSelection: colorPresetBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
+                customColorHex: appearanceBinding(\.bodyCustomColorHex),
+                customColor: customColorBinding(\.bodyColor, customHex: \.bodyCustomColorHex)
+            ) { style in
+                Label(style.label, systemImage: "seal")
             }
-            Spacer()
+        } label: {
+            slotRowLabel(
+                slot: "Body",
+                value: appearance.bodyStyle.label,
+                isEmpty: false,
+                accent: false
+            ) {
+                Circle()
+                    .fill(appearance.bodyColor.color(for: store.companionState))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var accessoryRow: some View {
+        let appearance = store.settings.companionAppearance
+        return NavigationLink {
+            slotPicker(
+                title: "Accessory",
+                items: CompanionAccessory.allCases,
+                selection: appearanceBinding(\.accessory),
+                colorTitle: "Accessory color",
+                colorSelection: colorPresetBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
+                customColorHex: appearanceBinding(\.accessoryCustomColorHex),
+                customColor: customColorBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex)
+            ) { accessory in
+                Label(accessory.label, systemImage: accessoryIcon(accessory))
+            }
+        } label: {
+            slotRowLabel(
+                slot: "Accessory",
+                value: appearance.accessory.label,
+                isEmpty: appearance.accessory == .none,
+                accent: false
+            ) {
+                slotIcon(accessoryIcon(appearance.accessory))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var clothingRow: some View {
+        let appearance = store.settings.companionAppearance
+        return NavigationLink {
+            slotPicker(
+                title: "Clothing",
+                items: CompanionClothing.allCases,
+                selection: appearanceBinding(\.clothing),
+                colorTitle: "Clothing color",
+                colorSelection: colorPresetBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
+                customColorHex: appearanceBinding(\.clothingCustomColorHex),
+                customColor: customColorBinding(\.clothingColor, customHex: \.clothingCustomColorHex)
+            ) { clothing in
+                Label(clothing.label, systemImage: clothingIcon(clothing))
+            }
+        } label: {
+            slotRowLabel(
+                slot: "Clothing",
+                value: appearance.clothing.label,
+                isEmpty: appearance.clothing == .none,
+                accent: false
+            ) {
+                slotIcon(clothingIcon(appearance.clothing))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sideItemRow: some View {
+        let appearance = store.settings.companionAppearance
+        return NavigationLink {
+            slotPicker(
+                title: "Side item",
+                items: CompanionSideItem.allCases,
+                selection: appearanceBinding(\.sideItem),
+                colorTitle: "Item color",
+                colorSelection: colorPresetBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
+                customColorHex: appearanceBinding(\.sideItemCustomColorHex),
+                customColor: customColorBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex)
+            ) { item in
+                Label(item.label, systemImage: item.systemImage)
+            }
+        } label: {
+            slotRowLabel(
+                slot: "Side item",
+                value: appearance.sideItem.label,
+                isEmpty: appearance.sideItem == .none,
+                accent: false
+            ) {
+                slotIcon(appearance.sideItem.systemImage)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Custom items fold into the selector as a final slot that opens the Wardrobe — the recolor
+    /// and design "workshop" lives there now, keeping this sheet a calm picker.
+    private var customRow: some View {
+        let count = store.equippedCustomItems.count
+        let value = count == 0 ? "Make one" : "\(count) equipped · closet"
+        return NavigationLink {
+            WardrobeView(store: store)
+        } label: {
+            slotRowLabel(
+                slot: "Custom",
+                value: value,
+                isEmpty: count == 0,
+                accent: true
+            ) {
+                Image(systemName: "tshirt.fill")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.moss)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("companion.wardrobe")
+    }
+
+    /// The shared selector-row chrome: a small icon/swatch, an uppercase slot label, the current
+    /// value right-aligned, and a chevron. `isEmpty` renders the value as a soft italic nudge;
+    /// `accent` tints the value + chevron moss for the Custom → Wardrobe route.
+    private func slotRowLabel<Icon: View>(
+        slot: String,
+        value: String,
+        isEmpty: Bool,
+        accent: Bool,
+        @ViewBuilder icon: () -> Icon
+    ) -> some View {
+        HStack(spacing: 12) {
+            icon()
+                .frame(width: 30, height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(accent ? Color.moss.opacity(0.14) : Color.bark.opacity(0.06))
+                )
+
+            Text(slot.uppercased())
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .frame(width: 66, alignment: .leading)
+
+            Spacer(minLength: 8)
+
+            Text(value)
+                .font(.fernlet(.body))
+                .italic(isEmpty)
+                .foregroundStyle(accent ? Color.moss : (isEmpty ? Color.slate : Color.bark))
+                .multilineTextAlignment(.trailing)
+                .lineLimit(1)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(accent ? Color.moss : Color.bark.opacity(0.4))
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -933,132 +1086,45 @@ private struct CompanionCustomizationSheet: View {
                 .fill(Color.cream)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(balance) coins, earned from days you showed up")
+        .accessibilityLabel("\(slot): \(value)")
     }
 
-    /// Entry to the Milestones sheet, placed right under the coin balance — milestone gifts are
-    /// where coins and lifetime counts meet, so this is where people will look for them.
-    private var milestonesLink: some View {
-        NavigationLink {
-            MilestonesView(store: store)
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "leaf.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(Color.fern)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Milestones")
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                    Text("All the care you've logged, added up over all time")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.bark.opacity(0.4))
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.cream)
+    /// A slot swatch built from an SF Symbol, tinted to read as a quiet placeholder.
+    private func slotIcon(_ systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 15))
+            .foregroundStyle(Color.slate.opacity(0.7))
+    }
+
+    /// A full-screen picker for one slot: the item grid + recolor controls, reusing the existing
+    /// customization card so all pick / recolor / custom-color behavior is preserved verbatim.
+    private func slotPicker<Item: Identifiable & Hashable, LabelContent: View>(
+        title: String,
+        items: [Item],
+        selection: Binding<Item>,
+        colorTitle: String,
+        colorSelection: Binding<CompanionAssetColor>,
+        customColorHex: Binding<String?>,
+        customColor: Binding<Color>,
+        @ViewBuilder label: @escaping (Item) -> LabelContent
+    ) -> some View {
+        ScrollView {
+            CompanionCustomizationCard(
+                title: title,
+                items: items,
+                selection: selection,
+                colorTitle: colorTitle,
+                colorSelection: colorSelection,
+                customColorHex: customColorHex,
+                customColor: customColor,
+                state: store.companionState,
+                label: label
             )
+            .padding(20)
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("companion.milestones")
-    }
-
-    private var wardrobeLink: some View {
-        NavigationLink {
-            WardrobeView(store: store)
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "tshirt.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(Color.moss)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Custom items & wardrobe")
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                    Text("Design your own clothes in the grid editor")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.bark.opacity(0.4))
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.cream)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var styleControls: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            CompanionCustomizationCard(
-                title: "Blob",
-                items: CompanionBodyStyle.allCases,
-                selection: appearanceBinding(\.bodyStyle),
-                colorTitle: "Body color",
-                colorSelection: colorPresetBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
-                customColorHex: appearanceBinding(\.bodyCustomColorHex),
-                customColor: customColorBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
-                state: store.companionState
-            ) { style in
-                Label(style.label, systemImage: "seal")
-            }
-
-            CompanionCustomizationCard(
-                title: "Accessory",
-                items: CompanionAccessory.allCases,
-                selection: appearanceBinding(\.accessory),
-                colorTitle: "Accessory color",
-                colorSelection: colorPresetBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
-                customColorHex: appearanceBinding(\.accessoryCustomColorHex),
-                customColor: customColorBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
-                state: store.companionState
-            ) { accessory in
-                Label(accessory.label, systemImage: accessoryIcon(accessory))
-            }
-        }
-    }
-
-    private var slotControls: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            CompanionCustomizationCard(
-                title: "Clothing",
-                items: CompanionClothing.allCases,
-                selection: appearanceBinding(\.clothing),
-                colorTitle: "Clothing color",
-                colorSelection: colorPresetBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
-                customColorHex: appearanceBinding(\.clothingCustomColorHex),
-                customColor: customColorBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
-                state: store.companionState
-            ) { clothing in
-                Label(clothing.label, systemImage: clothingIcon(clothing))
-            }
-
-            CompanionCustomizationCard(
-                title: "Side item",
-                items: CompanionSideItem.allCases,
-                selection: appearanceBinding(\.sideItem),
-                colorTitle: "Item color",
-                colorSelection: colorPresetBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
-                customColorHex: appearanceBinding(\.sideItemCustomColorHex),
-                customColor: customColorBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
-                state: store.companionState
-            ) { item in
-                Label(item.label, systemImage: item.systemImage)
-            }
-        }
+        .background(Color.parchment)
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func appearanceBinding<Value>(_ keyPath: WritableKeyPath<CompanionAppearance, Value>) -> Binding<Value> {
