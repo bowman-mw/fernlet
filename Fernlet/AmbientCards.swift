@@ -70,16 +70,11 @@ struct AmbientCardsView: View {
             Button {
                 store.dismissHeartBubble(id: heart.id)
             } label: {
+                // A soft cream bubble crowned by a floating dusty-rose heart that overlaps the
+                // top edge (good-vibes 10a). The heart badge is drawn as an overlay so it can rise
+                // half above the card; extra top padding inside keeps the title clear of it.
                 FernletCard {
-                    VStack(spacing: 8) {
-                        Image(systemName: "heart.fill")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(Color.dustyRose)
-                            .frame(width: 44, height: 44)
-                            .background(Color.dustyRose.opacity(0.14), in: Circle())
-                            .overlay(Circle().stroke(Color.dustyRose.opacity(0.28), lineWidth: 1))
-                            .shadow(color: Color.terracotta.opacity(0.20), radius: 6, y: 3)
-
+                    VStack(spacing: FernletMetrics.spaceSm) {
                         Text("Good vibes")
                             .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
@@ -92,17 +87,29 @@ struct AmbientCardsView: View {
 
                         Divider()
                             .overlay(Color.bark.opacity(0.08))
-                            .padding(.top, 4)
+                            .padding(.top, FernletMetrics.spaceXs)
 
                         Text("tap to tuck away")
                             .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.softTaupe)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
+                    .padding(.top, 16)
+                    .padding(.bottom, FernletMetrics.spaceXs)
+                }
+                .overlay(alignment: .top) {
+                    Image(systemName: "heart.fill")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Color.dustyRose)
+                        .frame(width: 44, height: 44)
+                        .background(Color.cream, in: Circle())
+                        .overlay(Circle().stroke(Color.dustyRose.opacity(0.22), lineWidth: 1))
+                        .shadow(color: Color.terracotta.opacity(0.22), radius: 8, y: 4)
+                        .offset(y: -22)
                 }
             }
             .buttonStyle(.plain)
+            .padding(.top, 22)
             .accessibilityIdentifier("home.receivedHeart")
             .accessibilityLabel("Good vibes from \(ProximityHeartManager.firstName(of: heart.senderDisplayName)). Tap to tuck away.")
         }

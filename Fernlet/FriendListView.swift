@@ -270,7 +270,18 @@ struct FriendListView: View {
         let reachable = store.heartShareManager.isReachable(fingerprint: peer.fingerprint)
         let firstName = ProximityHeartManager.firstName(of: peer.displayName)
 
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            // Presence line: a soft moss dot means you're actually together (good-vibes 10c);
+            // otherwise a muted taupe dot — warmth is a thing you do side by side.
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(reachable ? Color.moss : Color.softTaupe)
+                    .frame(width: 7, height: 7)
+                Text(reachable ? "Nearby now" : "Not nearby")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(reachable ? Color.moss : Color.slate)
+            }
+
             Button {
                 store.heartShareManager.sendHeart(to: peer)
             } label: {
@@ -284,11 +295,15 @@ struct FriendListView: View {
                 Text("You've already sent \(firstName) some warmth today.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
                     .fernletWrappingText()
             } else if !reachable {
                 Text("Hearts travel in person for now — they can be sent when you're together.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
                     .fernletWrappingText()
             }
 
@@ -296,6 +311,7 @@ struct FriendListView: View {
                 Text(status)
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.moss)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .fernletWrappingText()
             }
         }
@@ -373,7 +389,7 @@ struct SendGoodVibesLabel: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 9) {
             Image(systemName: state == .sent ? "checkmark" : "heart.fill")
                 .font(.subheadline.weight(.semibold))
             Text(state == .sent ? "Sent for today" : "Send good vibes")
@@ -381,13 +397,13 @@ struct SendGoodVibesLabel: View {
         }
         .foregroundStyle(foreground)
         .padding(.horizontal, 16)
-        .padding(.vertical, 11)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
         .background(background, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         .shadow(
-            color: state == .ready ? Color.terracotta.opacity(0.30) : .clear,
-            radius: state == .ready ? 8 : 0,
-            y: state == .ready ? 3 : 0
+            color: state == .ready ? Color.terracotta.opacity(0.32) : .clear,
+            radius: state == .ready ? 10 : 0,
+            y: state == .ready ? 4 : 0
         )
     }
 
