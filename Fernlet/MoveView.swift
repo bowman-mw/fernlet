@@ -35,48 +35,12 @@ struct MoveView: View {
                     }
                     .padding(.top, 4)
 
-                    MoveGoalSummaryLine(store: store) {
-                        activeSheet = .goals
-                    }
-
-                    if let readiness = store.derivedSignals.first(where: { $0.signalName == "intensityReadiness" }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "gauge.with.dots.needle.50percent")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Color.moss)
-                            Text("Today's readiness: \(readiness.value)")
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.bark)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .background(Color.moss.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
-                    }
-
-                    Button {
-                        showingLocations = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "mappin.and.ellipse")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Color.moss)
-                            Text("\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.bark)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.82)
-                            Spacer(minLength: 8)
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Color.slate)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.08), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
+                    MoveContextStrip(
+                        store: store,
+                        readiness: store.derivedSignals.first(where: { $0.signalName == "intensityReadiness" })?.value,
+                        onEditGoal: { activeSheet = .goals },
+                        onEditSpace: { showingLocations = true }
+                    )
 
                     WorkoutCalendarCard(
                         displayedWeek: $displayedWeek,
@@ -807,40 +771,112 @@ private extension GoalType {
     }
 }
 
-struct MoveGoalSummaryLine: View {
+/// The three look-alike cream boxes above the calendar — a navigational goal, a passive readiness
+/// band, and a navigational location — collapse into one thin two-segment context strip
+/// (Goal · Space). Readiness, already surfaced on Home and inside Suggest, steps aside into a small
+/// inline caption below the strip rather than claiming its own band.
+struct MoveContextStrip: View {
     var store: FernletStore
-    var onEdit: () -> Void
+    /// The derived intensity-readiness value, e.g. "ready for hard"; nil when no signal is present.
+    var readiness: String?
+    var onEditGoal: () -> Void
+    var onEditSpace: () -> Void
 
-    private var summary: String {
+    /// Goal segment value, mirroring the prior summary logic; nil renders the empty "Tap to plan"
+    /// treatment so a first-run goal reads as an invitation, not a set value.
+    private var goalValue: String? {
         if let goal = store.goals.first {
             return "\(goal.goal) · \(goal.timeframe)"
         }
-        return "\(store.settings.selectedGoal.displayName) · Tap to plan goals"
+        return store.settings.selectedGoal == .exploring ? nil : store.settings.selectedGoal.displayName
+    }
+
+    private var spaceValue: String {
+        "\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items"
     }
 
     var body: some View {
-        Button(action: onEdit) {
-            HStack(spacing: 8) {
-                Image(systemName: "target")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                Text(summary)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                Spacer(minLength: 8)
-                Image(systemName: "pencil")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.slate)
+        VStack(alignment: .leading, spacing: FernletMetrics.spaceSm) {
+            HStack(spacing: 0) {
+                MoveContextSegment(
+                    icon: "target",
+                    label: "Goal",
+                    value: goalValue,
+                    emptyPrompt: "Tap to plan",
+                    action: onEditGoal
+                )
+                .accessibilityLabel("Edit movement goals")
+
+                Rectangle()
+                    .fill(Color.bark.opacity(0.10))
+                    .frame(width: 1)
+                    .padding(.vertical, 10)
+
+                MoveContextSegment(
+                    icon: "mappin.and.ellipse",
+                    label: "Space",
+                    value: store.settings.activeWorkoutLocation.name,
+                    emptyPrompt: "Set up your space",
+                    action: onEditSpace
+                )
+                .accessibilityLabel(spaceValue)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+            .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
+            .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusSm).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+
+            if let readiness {
+                Text("Ready for \(readiness.replacingOccurrences(of: "ready for ", with: ""))")
+                    .font(.fernlet(.bubble))
+                    .foregroundStyle(Color.moss)
+                    .padding(.leading, 4)
+                    .accessibilityLabel("Today's readiness: \(readiness)")
+            }
+        }
+    }
+}
+
+/// One tappable half of the context strip: a small uppercase label over a value line, with a
+/// leading icon. Each segment truncates independently; the icon never clips.
+private struct MoveContextSegment: View {
+    var icon: String
+    var label: String
+    /// The set value; nil shows the italic empty prompt.
+    var value: String?
+    var emptyPrompt: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(value == nil ? Color.slate.opacity(0.5) : Color.moss)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label.uppercased())
+                        .font(.fernlet(.labelSmall))
+                        .tracking(0.6)
+                        .foregroundStyle(value == nil ? Color.slate.opacity(0.5) : Color.slate)
+                    if let value {
+                        Text(value)
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.bark)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    } else {
+                        Text(emptyPrompt)
+                            .font(.fernlet(.bubble))
+                            .foregroundStyle(Color.slate)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Edit movement goals")
     }
 }
 
