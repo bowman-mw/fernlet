@@ -382,6 +382,15 @@ struct DisposableCameraView: View {
     @State private var renamingMesh = false
     @State private var newMeshName = ""
     @State private var leaveSessionConfirm = false
+    @State private var ledPulse = false
+
+    // Housing / LED palette. The camera surface is a standalone "hardware housing" scene rather
+    // than a parchment card, so a couple of colors are literal rather than design-system tokens:
+    // the near-black shell (#050403) and the vivid hardware-LED green (#5EE06A) have no token.
+    private static let housingBlack = Color(red: 0.020, green: 0.016, blue: 0.012)
+    private static let ledGreen = Color(red: 0.369, green: 0.878, blue: 0.416)
+    // Warm shutter-button cream (#FBF7EE), the film-camera release color from the mockup.
+    private static let shutterCream = Color(red: 0.984, green: 0.969, blue: 0.933)
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
     private let portraitWindThreshold: Double = 120
@@ -576,31 +585,35 @@ struct DisposableCameraView: View {
         let frame = metrics.frame(openness: openness)
         // Hide the squished preview while the housing is still island-sized; fade it in as it opens.
         let previewOpacity = max(0, min((openness - 0.3) / 0.6, 1))
-        let previewInset: CGFloat = 5
+        // The live-preview square is inset from the near-black housing shell; the LED rides in the
+        // gap above it. Track the mockup's ~14pt shell / 30pt top gap, scaled down with openness so
+        // the inset never swallows the housing while it's still island-sized.
+        let shellInset: CGFloat = 13 * openness + 2
+        let ledGap: CGFloat = 30 * openness + 4
 
         return RoundedRectangle(cornerRadius: frame.cornerRadius, style: .continuous)
-            .fill(Color.black)
+            .fill(Self.housingBlack)
+            .shadow(color: Color.black.opacity(0.55), radius: 16, y: 12)
             .overlay {
+                // Live-preview window, inset inside the housing shell and pushed below the LED.
                 ZStack {
                     CameraPreviewView(session: camera.session)
+                        .opacity(previewOpacity)
+                    islandViewfinderReticle
                         .opacity(previewOpacity)
                     if camera.needsCameraPermissionPrompt && openness > 0.85 {
                         cameraPermissionPrompt
                     }
                 }
-                .padding(previewInset)
                 .clipShape(
-                    RoundedRectangle(cornerRadius: max(2, frame.cornerRadius - previewInset), style: .continuous)
+                    RoundedRectangle(cornerRadius: max(3, frame.cornerRadius - shellInset), style: .continuous)
                 )
+                .padding(.top, ledGap)
+                .padding([.horizontal, .bottom], shellInset)
             }
             .overlay(alignment: .top) {
-                // The classic "camera on" green LED, riding at the top of the housing.
-                Circle()
-                    .fill(Color(red: 0.36, green: 0.85, blue: 0.42))
-                    .frame(width: 7, height: 7)
-                    .shadow(color: Color.green.opacity(0.7), radius: 3)
-                    .opacity(camera.isArmed ? 1 : previewOpacity)
-                    .padding(.top, 7)
+                islandCameraLED(openness: openness)
+                    .padding(.top, ledGap * 0.4 + 3)
             }
             .frame(width: frame.size.width, height: frame.size.height)
             .position(x: metrics.centerX, y: frame.centerY)
@@ -608,6 +621,52 @@ struct DisposableCameraView: View {
             .allowsHitTesting(false)
             .accessibilityElement()
             .accessibilityLabel(camera.isArmed ? "Viewfinder ready" : "Wind to open the viewfinder")
+    }
+
+    /// The classic "camera on" green LED (#5EE06A) that rides at the top of the housing, breathing
+    /// with a slow pulse once the viewfinder is open.
+    private func islandCameraLED(openness: Double) -> some View {
+        // Base visibility fades the LED in with the housing; once armed it breathes 0.8↔1.0. The
+        // pulse endpoints hang off `ledPulse` so repeatForever(autoreverses:) has something to
+        // interpolate between.
+        let visible = camera.isArmed ? 1.0 : Double(openness)
+        let breathe = camera.isArmed ? (ledPulse ? 1.0 : 0.8) : 0.82
+        return Circle()
+            .fill(Self.ledGreen)
+            .frame(width: 7, height: 7)
+            .shadow(color: Self.ledGreen.opacity(0.75), radius: 5)
+            .opacity(visible * breathe)
+            .animation(
+                camera.isArmed
+                    ? .easeInOut(duration: 1.9).repeatForever(autoreverses: true)
+                    : .default,
+                value: ledPulse
+            )
+            .onAppear { ledPulse = true }
+    }
+
+    /// White reticle corner brackets framing the live preview, matching the mockup's armed frame.
+    private var islandViewfinderReticle: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let len: CGFloat = 16, t: CGFloat = 2, m: CGFloat = 8
+            let c = Color.white.opacity(0.7)
+            ZStack {
+                // top-left
+                rect(c, w: len, h: t).position(x: m + len / 2, y: m + t / 2)
+                rect(c, w: t, h: len).position(x: m + t / 2, y: m + len / 2)
+                // top-right
+                rect(c, w: len, h: t).position(x: w - m - len / 2, y: m + t / 2)
+                rect(c, w: t, h: len).position(x: w - m - t / 2, y: m + len / 2)
+                // bottom-left
+                rect(c, w: len, h: t).position(x: m + len / 2, y: h - m - t / 2)
+                rect(c, w: t, h: len).position(x: m + t / 2, y: h - m - len / 2)
+                // bottom-right
+                rect(c, w: len, h: t).position(x: w - m - len / 2, y: h - m - t / 2)
+                rect(c, w: t, h: len).position(x: w - m - t / 2, y: h - m - len / 2)
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     private var viewfinderArea: some View {
@@ -623,22 +682,34 @@ struct DisposableCameraView: View {
     }
 
     private var cameraPermissionPrompt: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 14) {
             Image(systemName: "camera.fill")
-                .font(.system(size: 26, weight: .semibold))
-            Text("Camera access needed")
-                .font(.fernlet(.headerMedium))
+                .font(.system(size: 28, weight: .regular))
+                .foregroundStyle(Color.dustyRose)
+                .frame(width: 60, height: 60)
+                .background(Color.dustyRose.opacity(0.14), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.bottom, 4)
+            Text("Camera access is off")
+                .font(.fernlet(.header))
+                .foregroundStyle(.white)
+            Text("Fernlet needs the camera to take photos with friends. You can turn it on any time.")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.white.opacity(0.65))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             Button("Open Settings") {
                 openAppSettings()
             }
             .font(.fernlet(.label))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Color.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 7))
+            .foregroundStyle(Color.midnight)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color.stateThriving.opacity(0.9), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .padding(.top, 6)
         }
-        .foregroundStyle(.white)
+        .padding(.horizontal, 26)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
+        .background(Self.housingBlack.opacity(0.9), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityIdentifier("camera.permissionPrompt")
     }
 
@@ -693,26 +764,34 @@ struct DisposableCameraView: View {
             guard canShoot else { return }
             Task { await takePhoto() }
         } label: {
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.45), lineWidth: 3)
-                    .frame(width: 82, height: 82)
-                Circle()
-                    .fill(canShoot ? Color.white : Color.white.opacity(0.2))
-                    .frame(width: 70, height: 70)
-                if !camera.isArmed && manager.filmRemaining > 0 {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.5))
-                } else if manager.filmRemaining == 0 {
-                    Image(systemName: "film.slash")
-                        .font(.system(size: 18))
-                        .foregroundStyle(Color.terracotta.opacity(0.9))
-                } else if !camera.canCapturePhoto {
-                    Image(systemName: "camera.slash")
-                        .font(.system(size: 18))
-                        .foregroundStyle(Color.white.opacity(0.5))
+            VStack(spacing: 7) {
+                ZStack {
+                    // Bright, glowing ring when ready; muted ring when locked.
+                    Circle()
+                        .stroke(Color.white.opacity(canShoot ? 0.85 : 0.16), lineWidth: 3)
+                        .frame(width: 82, height: 82)
+                        .shadow(color: Color.white.opacity(canShoot ? 0.25 : 0), radius: 10)
+                    Circle()
+                        .fill(canShoot ? Self.shutterCream : Color.white.opacity(0.14))
+                        .frame(width: 70, height: 70)
+                    if !camera.isArmed && manager.filmRemaining > 0 {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.5))
+                    } else if manager.filmRemaining == 0 {
+                        Image(systemName: "film.slash")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Color.terracotta.opacity(0.9))
+                    } else if !camera.canCapturePhoto {
+                        Image(systemName: "camera.slash")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Color.white.opacity(0.5))
+                    }
                 }
+                // Captions replace the mockup's cryptic glyphs: name each shutter state in words.
+                Text(shutterCaption(canShoot: canShoot))
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(canShoot ? Color.stateThriving : Color.white.opacity(0.4))
             }
         }
         .disabled(!canShoot)
@@ -720,6 +799,14 @@ struct DisposableCameraView: View {
         .animation(.spring(response: 0.2, dampingFraction: 0.7), value: canShoot)
         .accessibilityLabel(shutterAccessibilityLabel(canShoot: canShoot))
         .accessibilityIdentifier("camera.shutter")
+    }
+
+    /// A short caption under the shutter, so its ring state reads without decoding a glyph.
+    private func shutterCaption(canShoot: Bool) -> String {
+        if canShoot { return "Tap to shoot" }
+        if manager.filmRemaining == 0 { return "No film left" }
+        if !camera.canCapturePhoto { return "Camera off" }
+        return "Wind to arm"
     }
 
     private func shutterAccessibilityLabel(canShoot: Bool) -> String {
@@ -730,31 +817,71 @@ struct DisposableCameraView: View {
     }
 
     private func windIndicator(isLandscape: Bool) -> some View {
-        VStack(spacing: 5) {
-            ZStack {
-                Circle()
-                    .stroke(
-                        Color.white.opacity(0.24),
-                        style: StrokeStyle(lineWidth: 5, dash: [5, 4])
-                    )
-                    .frame(width: 52, height: 52)
-                    .rotationEffect(.degrees(camera.windProgress * 360))
-                    .offset(y: -8)
-                Circle()
-                    .stroke(Color.white.opacity(0.5), lineWidth: 2)
-                    .frame(width: 36, height: 36)
-                    .rotationEffect(.degrees(camera.windProgress * 360))
-                    .offset(y: -8)
-            }
-            .frame(width: 58, height: 20, alignment: .bottom)
-            .clipped()
+        // A larger, legible ridged thumbwheel (mockup 5d "after") with its ridges scrolling as the
+        // wheel turns and a slim progress track underneath. Green ridges/accents once winding starts.
+        let winding = !camera.isArmed && camera.windProgress > 0
+        return VStack(spacing: 6) {
+            windThumbwheel(active: winding)
             Text(camera.isArmed ? "Ready" : isLandscape ? "Swipe →" : "Slide ↓")
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.white.opacity(0.4))
+                .foregroundStyle(camera.isArmed ? Color.stateThriving : Color.white.opacity(0.42))
+            windProgressTrack(active: winding)
         }
-        .frame(width: 66, height: 48)
+        .frame(width: 64)
         .contentShape(Rectangle())
         .gesture(windGesture(isLandscape: isLandscape))
+    }
+
+    private func windThumbwheel(active: Bool) -> some View {
+        let ridgeCount = 6
+        let rowHeight: CGFloat = 44
+        let scroll = camera.windProgress.truncatingRemainder(dividingBy: 1) * (rowHeight / CGFloat(ridgeCount) * 2)
+        return RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [Color(red: 0.20, green: 0.17, blue: 0.14), Color(red: 0.09, green: 0.075, blue: 0.06)],
+                    startPoint: .leading, endPoint: .trailing
+                )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .overlay {
+                VStack(spacing: 5) {
+                    ForEach(0..<ridgeCount, id: \.self) { i in
+                        Capsule()
+                            .fill(
+                                active && i.isMultiple(of: 2)
+                                    ? Color.stateThriving.opacity(0.55)
+                                    : Color.white.opacity(0.16)
+                            )
+                            .frame(height: 2.5)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .offset(y: CGFloat(scroll))
+                .frame(height: rowHeight, alignment: .top)
+                .clipped()
+            }
+            .frame(width: 40, height: rowHeight)
+    }
+
+    @ViewBuilder
+    private func windProgressTrack(active: Bool) -> some View {
+        Capsule()
+            .fill(Color.white.opacity(0.12))
+            .frame(height: 5)
+            .overlay(alignment: .leading) {
+                GeometryReader { geo in
+                    Capsule()
+                        .fill(Color.stateThriving)
+                        .frame(width: geo.size.width * (camera.isArmed ? 1 : camera.windProgress))
+                }
+            }
+            .frame(height: 5)
+            .opacity(active || camera.isArmed ? 1 : 0.5)
+            .animation(.easeOut(duration: 0.15), value: camera.windProgress)
     }
 
     // MARK: - Thumbwheel gesture
