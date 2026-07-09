@@ -37,7 +37,6 @@ struct MoveView: View {
 
                     MoveContextStrip(
                         store: store,
-                        readiness: store.derivedSignals.first(where: { $0.signalName == "intensityReadiness" })?.value,
                         onEditGoal: { activeSheet = .goals },
                         onEditSpace: { showingLocations = true }
                     )
@@ -773,12 +772,10 @@ private extension GoalType {
 
 /// The three look-alike cream boxes above the calendar — a navigational goal, a passive readiness
 /// band, and a navigational location — collapse into one thin two-segment context strip
-/// (Goal · Space). Readiness, already surfaced on Home and inside Suggest, steps aside into a small
-/// inline caption below the strip rather than claiming its own band.
+/// (Goal · Space). Readiness, already surfaced on Home and inside Suggest, no longer claims a band
+/// or caption here.
 struct MoveContextStrip: View {
     var store: FernletStore
-    /// The derived intensity-readiness value, e.g. "ready for hard"; nil when no signal is present.
-    var readiness: String?
     var onEditGoal: () -> Void
     var onEditSpace: () -> Void
 
@@ -796,42 +793,32 @@ struct MoveContextStrip: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FernletMetrics.spaceSm) {
-            HStack(spacing: 0) {
-                MoveContextSegment(
-                    icon: "target",
-                    label: "Goal",
-                    value: goalValue,
-                    emptyPrompt: "Tap to plan",
-                    action: onEditGoal
-                )
-                .accessibilityLabel("Edit movement goals")
+        HStack(spacing: 0) {
+            MoveContextSegment(
+                icon: "target",
+                label: "Goal",
+                value: goalValue,
+                emptyPrompt: "Tap to plan",
+                action: onEditGoal
+            )
+            .accessibilityLabel("Edit movement goals")
 
-                Rectangle()
-                    .fill(Color.bark.opacity(0.10))
-                    .frame(width: 1)
-                    .padding(.vertical, 10)
+            Rectangle()
+                .fill(Color.bark.opacity(0.10))
+                .frame(width: 1)
+                .padding(.vertical, 10)
 
-                MoveContextSegment(
-                    icon: "mappin.and.ellipse",
-                    label: "Space",
-                    value: store.settings.activeWorkoutLocation.name,
-                    emptyPrompt: "Set up your space",
-                    action: onEditSpace
-                )
-                .accessibilityLabel(spaceValue)
-            }
-            .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
-            .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusSm).stroke(Color.bark.opacity(0.08), lineWidth: 1))
-
-            if let readiness {
-                Text("Ready for \(readiness.replacingOccurrences(of: "ready for ", with: ""))")
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.moss)
-                    .padding(.leading, 4)
-                    .accessibilityLabel("Today's readiness: \(readiness)")
-            }
+            MoveContextSegment(
+                icon: "mappin.and.ellipse",
+                label: "Space",
+                value: store.settings.activeWorkoutLocation.name,
+                emptyPrompt: "Set up your space",
+                action: onEditSpace
+            )
+            .accessibilityLabel(spaceValue)
         }
+        .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
+        .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusSm).stroke(Color.bark.opacity(0.08), lineWidth: 1))
     }
 }
 
