@@ -221,7 +221,7 @@ struct OnboardingScreenContainer<Content: View>: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text(stepText)
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.moss)
                         .accessibilityIdentifier("onboarding.step")
                     ScreenHeader(title: title, subtitle: subtitle)
@@ -440,10 +440,10 @@ struct OnboardingChoiceRow: View {
                     .frame(width: 28, height: 28)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                     Text(subtitle)
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
