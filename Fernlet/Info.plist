@@ -42,5 +42,16 @@
 			<key>UIColorName</key>
 			<string>LaunchParchment</string>
 		</dict>
+		<key>UIAppFonts</key>
+		<array>
+			<string>Fraunces-SemiBold.ttf</string>
+			<string>DMSerifDisplay-Regular.ttf</string>
+			<string>DMSerifDisplay-Italic.ttf</string>
+			<string>InstrumentSerif-Regular.ttf</string>
+			<string>InstrumentSerif-Italic.ttf</string>
+			<string>DMSans-Regular.ttf</string>
+			<string>DMSans-Medium.ttf</string>
+			<string>PlayfairDisplay-Italic.ttf</string>
+		</array>
 	</dict>
 </plist>
