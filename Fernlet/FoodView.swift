@@ -488,6 +488,11 @@ enum MealFlowDestination: Hashable {
     case recipeSearch
     case productPageImport
     case productSearch(String)
+    /// Auto-router landings for a captured photo (Food Capture mockup §2b–2c): a barcode the router
+    /// already read, and a nutrition label it already parsed. Both hand off to existing create/log
+    /// flows via `BarcodePayloadResolveView` / `BarcodeNotFoundView(prefilledScan:)`.
+    case captureBarcode(String)
+    case captureLabel(NutritionLabelResult)
 }
 
 struct RecipeSheet: View {
@@ -1062,6 +1067,16 @@ struct MealSheet: View {
     @State private var showingCamera = false
     @State private var selectedMealPhotoItem: PhotosPickerItem?
     @State private var isIdentifyingPhoto = false
+    // Unified Capture auto-routing (Food Capture mockup §2b–2e).
+    /// The photo captured by the prominent Capture button, held while we auto-detect what it is.
+    @State private var captureImage: UIImage?
+    /// Calm "analyzing…" state shown while the router runs barcode → label → meal detection.
+    @State private var isAnalyzingCapture = false
+    /// Presented when detection is ambiguous/low-confidence — a gentle Barcode · Label · Meal chooser.
+    @State private var captureChooser: CaptureChooserContext?
+    /// Set when the router (or a chooser branch) couldn't read the photo — a calm retry prompt, never
+    /// a hard error.
+    @State private var captureError: String?
     #endif
 
     var body: some View {
@@ -1085,6 +1100,27 @@ struct MealSheet: View {
                         #endif
                     case .reviewScan:
                         EmptyView()
+                    #if canImport(UIKit)
+                    case .captureBarcode(let payload):
+                        // The auto-router already read this barcode from the captured photo — resolve
+                        // it through the same catalog-hit / name-&-remember path as a live scan.
+                        BarcodePayloadResolveView(store: store, payload: payload) { foodItem in
+                            let meal = store.logBarcodeScannedFoodItem(foodItem, mealType: mealType)
+                            onLogged([meal])
+                            dismiss()
+                        }
+                    case .captureLabel(let result):
+                        // The auto-router parsed a nutrition label — hand off to the existing
+                        // name-it-&-remember screen with the macros pre-filled (no barcode, no rescan).
+                        BarcodeNotFoundView(store: store, barcode: "", prefilledScan: result) { foodItem in
+                            let meal = store.logBarcodeScannedFoodItem(foodItem, mealType: mealType)
+                            onLogged([meal])
+                            dismiss()
+                        }
+                    #else
+                    case .captureBarcode, .captureLabel:
+                        EmptyView()
+                    #endif
                     case .productPageImport:
                         FoodProductPageImportView(store: store) { product in
                             description = product.name
@@ -1101,6 +1137,15 @@ struct MealSheet: View {
                 }
         }
         .background(Color.parchment)
+        #if canImport(UIKit)
+        .overlay {
+            if isAnalyzingCapture {
+                CaptureAnalyzingOverlay()
+                    .transition(.opacity)
+            }
+        }
+        .animation(FernletMotion.ui, value: isAnalyzingCapture)
+        #endif
         .onAppear {
             store.markLaunchScreenDismissed()
             store.ensureBundledFoodItemsSeeded()
@@ -1138,9 +1183,34 @@ struct MealSheet: View {
         #if canImport(UIKit)
         .fullScreenCover(isPresented: $showingCamera) {
             ImagePickerView(sourceType: .camera) { image in
-                mealPhoto = image
+                // The unified front door: auto-detect what was captured and route it.
+                handleCapturedPhoto(image)
             }
             .ignoresSafeArea()
+        }
+        .sheet(item: $captureChooser) { context in
+            CaptureChooserSheet(
+                aiEnabled: store.settings.aiStatus != .off,
+                onBarcode: {
+                    captureChooser = nil
+                    mealPhoto = context.image
+                    lookUpBarcode(in: context.image)
+                },
+                onLabel: {
+                    captureChooser = nil
+                    routeCapturedLabel(context.parsedLabel, from: context.image)
+                },
+                onMeal: {
+                    captureChooser = nil
+                    mealPhoto = context.image
+                },
+                onTypeInstead: {
+                    captureChooser = nil
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
         }
         .onChange(of: selectedMealPhotoItem) { _, newItem in
             guard let newItem else { return }
@@ -1237,6 +1307,12 @@ struct MealSheet: View {
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
+
+                    #if canImport(UIKit)
+                    if let captureError {
+                        captureCouldntReadBanner(captureError)
+                    }
+                    #endif
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -1322,6 +1398,104 @@ struct MealSheet: View {
                 reviewContext = MealReviewContext(resolution: resolution, photo: photo)
             }
         }
+    }
+
+    // MARK: - Unified Capture auto-routing (Food Capture mockup §2b–2e)
+
+    struct CaptureChooserContext: Identifiable {
+        let id = UUID()
+        let image: UIImage
+        /// The best-effort label parse (may be nil) so "Read the label" can prefill instead of rescan.
+        let parsedLabel: NutritionLabelResult?
+    }
+
+    /// The prominent Capture button's handler: run the auto-router over the still photo (barcode →
+    /// label → meal), showing a calm "analyzing…" state, then route to the matching EXISTING flow. On
+    /// an ambiguous/weak reading, offer the gentle chooser; the meal branch is the graceful default.
+    private func handleCapturedPhoto(_ image: UIImage) {
+        captureError = nil
+        isAnalyzingCapture = true
+        Task {
+            let route = await FoodCaptureRouter().route(for: image)
+            isAnalyzingCapture = false
+            switch route {
+            case .barcode(let payload):
+                mealPhoto = image
+                path.append(.captureBarcode(payload))
+            case .label(let result):
+                path.append(.captureLabel(result))
+            case .meal:
+                // Graceful default — land the photo in the meal composer (existing meal-photo path).
+                mealPhoto = image
+            case .ambiguous(let label):
+                captureChooser = CaptureChooserContext(image: image, parsedLabel: label)
+            }
+        }
+    }
+
+    /// Chooser "Look up the barcode" branch — re-runs barcode detection on the held photo (via the
+    /// existing still-photo detector). If it still can't find one, a calm "couldn't read that" prompt.
+    private func lookUpBarcode(in image: UIImage) {
+        captureError = nil
+        isAnalyzingCapture = true
+        Task {
+            let payload = try? await VisionBarcodeDetector().payload(in: image)
+            isAnalyzingCapture = false
+            if let payload, payload.isEmpty == false {
+                path.append(.captureBarcode(payload))
+            } else {
+                captureError = "Fernlet couldn't spot a barcode in that photo. Steady hands and a little more light usually does it — or type it instead."
+            }
+        }
+    }
+
+    /// Chooser "Read the label" branch — use the parse the router already made if it read anything,
+    /// otherwise re-run the OCR scanner on the held photo before handing off to the label flow.
+    private func routeCapturedLabel(_ prefetched: NutritionLabelResult?, from image: UIImage) {
+        if let prefetched, FoodCaptureRouter.recognizedFieldCount(in: prefetched) > 0 {
+            path.append(.captureLabel(prefetched))
+            return
+        }
+        captureError = nil
+        isAnalyzingCapture = true
+        Task {
+            let parsed = try? await NutritionLabelScanner.scanAll(image: image).primary
+            isAnalyzingCapture = false
+            if let parsed {
+                path.append(.captureLabel(parsed))
+            } else {
+                captureError = "Fernlet couldn't read that label. Steady hands and a little more light usually does it — or type it instead."
+            }
+        }
+    }
+
+    /// Calm "couldn't read that one" banner (mockup §2e) — never a red hard error; every dead-end
+    /// offers a way forward (retake, or just type it in the field above).
+    private func captureCouldntReadBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "camera.metering.none")
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(Color.goldenrod)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(message)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                Button {
+                    captureError = nil
+                    showingCamera = true
+                } label: {
+                    Label("Try again", systemImage: "arrow.clockwise")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color.goldenrod.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityIdentifier("captureCouldntReadBanner")
     }
     #endif
 

@@ -515,6 +515,10 @@ private struct BarcodeDataScannerView: UIViewControllerRepresentable {
 struct BarcodeNotFoundView: View {
     var store: FernletStore
     let barcode: String
+    /// When the auto-router already parsed a nutrition label from the captured photo, the macros
+    /// arrive pre-filled here so the naming screen opens with the rings populated (no rescan needed).
+    /// nil for the ordinary barcode not-found handoff.
+    var prefilledScan: NutritionLabelResult? = nil
     var onCreated: (FoodItem) -> Void
 
     @State private var name = ""
@@ -537,6 +541,15 @@ struct BarcodeNotFoundView: View {
         }
         .background(Color.parchment)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // Seed the macros the auto-router already read (once — don't clobber a rescan).
+            if scanResult == nil, let prefilledScan {
+                scanResult = prefilledScan
+                if trimmedName.isEmpty, let servingSize = prefilledScan.servingSize, servingSize.isEmpty == false {
+                    name = "Scanned item (\(servingSize))"
+                }
+            }
+        }
     }
 
     // MARK: Naming screen (11b)
