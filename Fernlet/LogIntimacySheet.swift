@@ -21,7 +21,7 @@ struct LogIntimacySheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Log intimacy")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     SheetField("Date and time") {
@@ -47,7 +47,7 @@ struct LogIntimacySheet: View {
                     }
 
                     Text("Add who was involved and any details you want to remember. This note stays encrypted on this device.")
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
 
                     SheetField("Apple Health") {
@@ -56,7 +56,7 @@ struct LogIntimacySheet: View {
                                 writesToHealthKit ? "Apple Health sync is on" : "Apple Health sync is off",
                                 systemImage: writesToHealthKit ? "heart.text.square.fill" : "heart.slash"
                             )
-                            .font(.callout.weight(.medium))
+                            .font(.fernlet(.label))
                             .foregroundStyle(writesToHealthKit ? Color.moss : Color.slate)
 
                             if writesToHealthKit {
@@ -71,7 +71,7 @@ struct LogIntimacySheet: View {
                             }
 
                             Text(healthKitSummary)
-                                .font(.caption)
+                                .font(.fernlet(.bodySmall))
                                 .foregroundStyle(Color.slate)
                                 .fernletWrappingText()
                         }
@@ -82,7 +82,7 @@ struct LogIntimacySheet: View {
 
                     if let statusMessage {
                         Text(statusMessage)
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.terracotta)
                             .fernletWrappingText()
                     }

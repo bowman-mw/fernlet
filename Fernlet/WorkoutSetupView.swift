@@ -63,7 +63,7 @@ struct WorkoutSetupSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Workout setup")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     splitSection
@@ -137,11 +137,11 @@ struct WorkoutSetupSheet: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(title)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
                         if let badge {
                             Text(badge)
-                                .font(.caption2.weight(.bold))
+                                .font(.fernlet(.labelSmall))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Color.moss.opacity(0.18), in: Capsule())
@@ -149,10 +149,10 @@ struct WorkoutSetupSheet: View {
                         }
                     }
                     if subtitle.isEmpty == false {
-                        Text(subtitle).font(.caption).foregroundStyle(Color.slate)
+                        Text(subtitle).font(.fernlet(.bodySmall)).foregroundStyle(Color.slate)
                     }
                     if tag.isEmpty == false {
-                        Text(tag).font(.caption2.weight(.medium)).foregroundStyle(Color.moss)
+                        Text(tag).font(.fernlet(.labelSmall)).foregroundStyle(Color.moss)
                     }
                 }
                 Spacer(minLength: 0)
@@ -174,10 +174,10 @@ struct WorkoutSetupSheet: View {
                         .foregroundStyle(Color.moss)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(store.settings.activeWorkoutLocation.name)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
                         Text("\(store.settings.activeWorkoutLocation.ownedEquipment.count) pieces of equipment")
-                            .font(.caption)
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                     }
                     Spacer(minLength: 8)

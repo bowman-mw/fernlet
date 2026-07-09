@@ -38,10 +38,10 @@ struct OnboardingWelcomeView: View {
                 .background(Color.moss.opacity(0.10), in: Circle())
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 Text(body)
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }

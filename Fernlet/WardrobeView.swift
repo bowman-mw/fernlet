@@ -29,7 +29,7 @@ struct WardrobeView: View {
             if !store.listedShopItems.isEmpty || store.shopUpdatedToday {
                 Section {
                     Label(shopStatusText, systemImage: "bag")
-                        .font(.caption)
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
             }
@@ -48,7 +48,7 @@ struct WardrobeView: View {
             if store.customItems.isEmpty {
                 Section {
                     Text("No items yet — design your first one above. New creations appear on your companion right away.")
-                        .font(.subheadline)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                 }
             }
@@ -94,16 +94,16 @@ struct WardrobeView: View {
                 CustomItemThumbnail(texture: item.texture, size: 52)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.name.isEmpty ? item.slot.label : item.name)
-                        .font(.subheadline.weight(.medium))
+                        .font(.fernlet(.label))
                     if store.isSelfDesigned(item) {
                         if item.isShareable {
                             Label("In your shop · \(item.price) coins", systemImage: "bag")
-                                .font(.caption)
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.moss)
                         }
                     } else {
                         Text("Designed by \(store.designerDisplayName(for: item))")
-                            .font(.caption)
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                     }
                 }

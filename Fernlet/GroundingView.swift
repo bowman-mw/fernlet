@@ -70,7 +70,7 @@ struct GroundingView: View {
 
             VStack(spacing: 0) {
                 Text("Grounding")
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.labelSmall))
                     .tracking(2.6)
                     .foregroundStyle((isComplete ? Color.moss : Self.steps[stepIndex].ink).opacity(0.85))
                     .textCase(.uppercase)
@@ -100,7 +100,7 @@ struct GroundingView: View {
     private func stepContent(_ step: GroundingStep) -> some View {
         VStack(spacing: 16) {
             Text("\(step.count)")
-                .font(.system(size: 118, weight: .semibold, design: .serif))
+                .font(.fernlet(.display))
                 .foregroundStyle(step.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
@@ -110,12 +110,12 @@ struct GroundingView: View {
                 .frame(width: 58, height: 58)
                 .background(step.tint.opacity(0.3), in: RoundedRectangle(cornerRadius: 19, style: .continuous))
             Text(step.prompt)
-                .font(.system(size: 25, weight: .regular, design: .serif))
+                .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
             Text(step.hint)
-                .font(.system(size: 17, weight: .regular, design: .serif))
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
@@ -142,10 +142,10 @@ struct GroundingView: View {
                 )
                 .shadow(color: Color.moss.opacity(0.3), radius: 16, x: 0, y: 10)
             Text("You're here.")
-                .font(.system(size: 40, weight: .semibold, design: .serif))
+                .font(.fernlet(.display))
                 .foregroundStyle(Color.bark)
             Text("That's enough. Take the calm with you — there's nothing else to do.")
-                .font(.system(size: 18, weight: .regular, design: .serif))
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
@@ -158,7 +158,7 @@ struct GroundingView: View {
         Group {
             if isComplete {
                 Button("Done") { dismiss() }
-                    .font(.headline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
@@ -168,7 +168,7 @@ struct GroundingView: View {
                 VStack(spacing: 16) {
                     progressDots
                     Text("Tap anywhere when you're ready for the next one — take all the time you like.")
-                        .font(.system(size: 14, weight: .regular, design: .serif).italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()

@@ -28,7 +28,7 @@ struct NutritionLabelCameraSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Take a photo of a nutrition facts label and Fernlet will fill in the values it can read.")
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
@@ -37,7 +37,7 @@ struct NutritionLabelCameraSheet: View {
                             showingCamera = true
                         } label: {
                             Label("Camera", systemImage: "camera.fill")
-                                .font(.headline)
+                                .font(.fernlet(.label))
                                 .foregroundStyle(Color.cream)
                                 .frame(maxWidth: .infinity)
                                 .padding(14)
@@ -48,7 +48,7 @@ struct NutritionLabelCameraSheet: View {
 
                         PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                             Label("Library", systemImage: "photo.on.rectangle")
-                                .font(.headline)
+                                .font(.fernlet(.label))
                                 .foregroundStyle(Color.bark)
                                 .frame(maxWidth: .infinity)
                                 .padding(14)
@@ -85,7 +85,7 @@ struct NutritionLabelCameraSheet: View {
                                 HStack(spacing: 8) {
                                     ProgressView()
                                     Text("Reading label...")
-                                        .font(.callout.italic())
+                                        .font(.fernlet(.bubble))
                                         .foregroundStyle(Color.slate)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -100,7 +100,7 @@ struct NutritionLabelCameraSheet: View {
                     if let dual = dualColumnResult {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("TWO-COLUMN LABEL DETECTED")
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                                 .tracking(0.8)
 
@@ -113,7 +113,7 @@ struct NutritionLabelCameraSheet: View {
                                         scanResult = index == 0 ? dual.col1 : dual.col2
                                     } label: {
                                         Text(label)
-                                            .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                                            .font(.fernlet(.label))
                                             .foregroundStyle(isSelected ? Color.bark : Color.slate)
                                             .frame(maxWidth: .infinity)
                                             .padding(.vertical, 10)
@@ -130,7 +130,7 @@ struct NutritionLabelCameraSheet: View {
                     if let scanResult {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("DETECTED VALUES")
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                                 .tracking(0.8)
 
@@ -145,7 +145,7 @@ struct NutritionLabelCameraSheet: View {
 
                     if let scanError {
                         Text(scanError)
-                            .font(.caption.italic())
+                            .font(.fernlet(.bubble))
                             .foregroundStyle(Color.terracotta)
                             .fernletWrappingText()
                     }
@@ -197,7 +197,7 @@ struct NutritionLabelCameraSheet: View {
             Text("Move closer so the label fills the frame.")
             Text("Use the flashlight in dim lighting.")
         }
-        .font(.caption.italic())
+        .font(.fernlet(.bubble))
         .foregroundStyle(Color.slate)
         .fernletWrappingText()
     }
@@ -310,7 +310,7 @@ struct NutritionLabelCameraSheet: View {
     private func detectedGroup<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             content()
         }
@@ -320,11 +320,11 @@ struct NutritionLabelCameraSheet: View {
     private func detectedRow(_ label: String, _ value: String) -> some View {
         HStack {
             Text(label)
-                .font(.subheadline)
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
             Spacer()
             Text(value)
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.moss)
         }
     }

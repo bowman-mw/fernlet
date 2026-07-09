@@ -25,7 +25,7 @@ struct FriendListView: View {
         List {
             HStack(spacing: 10) {
                 Text("You appear as")
-                    .font(.subheadline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.slate)
                 Spacer()
                 TextField("Your name", text: $displayName)
@@ -158,7 +158,7 @@ struct FriendListView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(peer.displayName)
-                    .font(.body.weight(.semibold))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
 
                 Text(peer.fingerprint)
@@ -168,7 +168,7 @@ struct FriendListView: View {
                     .truncationMode(.middle)
 
                 Text("Last seen \(peer.lastSeenAt.relativeFormatted)")
-                    .font(.caption)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
 
@@ -184,7 +184,7 @@ struct FriendListView: View {
     private func statusBadge(for peer: ProximityTrustedPeerRecord) -> some View {
         if peer.blockedAt != nil {
             Text("Blocked")
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .foregroundStyle(Color.terracotta)
@@ -192,7 +192,7 @@ struct FriendListView: View {
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.20), lineWidth: 1))
         } else if peer.revokedAt != nil {
             Text("Removed")
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .foregroundStyle(Color.slate)
@@ -200,7 +200,7 @@ struct FriendListView: View {
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
         } else {
             Text("Friend")
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .foregroundStyle(Color.parchment)
@@ -282,19 +282,19 @@ struct FriendListView: View {
 
             if alreadySentToday {
                 Text("You've already sent \(firstName) some warmth today.")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             } else if !reachable {
                 Text("Hearts travel in person for now — they can be sent when you're together.")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
 
             if let status = heartStatusText {
                 Text(status)
-                    .font(.caption.italic())
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.moss)
                     .fernletWrappingText()
             }
@@ -317,7 +317,7 @@ struct FriendListView: View {
     private func detailRow(_ label: String, value: String, monospaced: Bool = false) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             Spacer(minLength: 12)
             Text(value)
@@ -377,7 +377,7 @@ struct SendGoodVibesLabel: View {
             Image(systemName: state == .sent ? "checkmark" : "heart.fill")
                 .font(.subheadline.weight(.semibold))
             Text(state == .sent ? "Sent for today" : "Send good vibes")
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.label))
         }
         .foregroundStyle(foreground)
         .padding(.horizontal, 16)

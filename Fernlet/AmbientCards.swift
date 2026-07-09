@@ -81,11 +81,11 @@ struct AmbientCardsView: View {
                             .shadow(color: Color.terracotta.opacity(0.20), radius: 6, y: 3)
 
                         Text("Good vibes")
-                            .font(.title3.weight(.semibold))
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
 
                         Text("\(ProximityHeartManager.firstName(of: heart.senderDisplayName)) sent you some warmth — a friend is thinking of you.")
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.slate)
                             .multilineTextAlignment(.center)
                             .fernletWrappingText()
@@ -95,7 +95,7 @@ struct AmbientCardsView: View {
                             .padding(.top, 4)
 
                         Text("tap to tuck away")
-                            .font(.caption.weight(.medium))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.softTaupe)
                     }
                     .frame(maxWidth: .infinity)
@@ -125,10 +125,10 @@ struct AmbientCardsView: View {
                             ambientIcon(kind.icon, tint: .moss)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("A gentle offer")
-                                    .font(.caption.weight(.semibold))
+                                    .font(.fernlet(.labelSmall))
                                     .foregroundStyle(Color.moss)
                                 Text(kind.invitation)
-                                    .font(.callout)
+                                    .font(.fernlet(.body))
                                     .foregroundStyle(Color.bark)
                                     .fernletWrappingText()
                             }
@@ -189,10 +189,10 @@ struct AmbientCardsView: View {
                     RoundedRectangle(cornerRadius: 2).fill(Color.goldenrod).frame(width: 3)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(lookBack.label)
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.goldenrod)
                         Text(lookBack.text)
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                             .lineLimit(4)
@@ -226,10 +226,10 @@ struct AmbientCardsView: View {
                         ambientIcon("fork.knife", tint: .fern)
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Room for a little more")
-                                .font(.headline.weight(.semibold))
+                                .font(.fernlet(.header))
                                 .foregroundStyle(Color.bark)
                             Text(gap)
-                                .font(.callout)
+                                .font(.fernlet(.body))
                                 .foregroundStyle(Color.slate)
                                 .fernletWrappingText()
                         }
@@ -256,7 +256,7 @@ struct AmbientCardsView: View {
             FernletCard {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Haven't had these in a while")
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     FlowLayout(spacing: 8) {
                         ForEach(forgottenFavorites, id: \.self) { name in
@@ -265,7 +265,7 @@ struct AmbientCardsView: View {
                                 forgottenFavorites.removeAll { $0 == name }
                             } label: {
                                 Text(name)
-                                    .font(.caption.weight(.semibold))
+                                    .font(.fernlet(.label))
                                     .foregroundStyle(Color.bark)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
@@ -302,10 +302,10 @@ struct AmbientCardsView: View {
                         ambientIcon("figure.run", tint: .moss)
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Remember this one?")
-                                .font(.headline.weight(.semibold))
+                                .font(.fernlet(.header))
                                 .foregroundStyle(Color.bark)
                             Text("You did \u{201C}\(name)\u{201D} before — it might feel good again.")
-                                .font(.callout)
+                                .font(.fernlet(.body))
                                 .foregroundStyle(Color.slate)
                                 .fernletWrappingText()
                         }
@@ -347,10 +347,10 @@ struct AmbientCardsView: View {
                     ambientIcon("cloud.rain", tint: .slate)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("A gentler day")
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                         Text(weatherPrompt)
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                     }
@@ -370,10 +370,10 @@ struct AmbientCardsView: View {
                     ambientIcon("calendar", tint: .dustyRose)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Cycle outlook")
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.dustyRose)
                         Text(periodOutlookText(prediction))
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                     }
@@ -404,10 +404,10 @@ struct AmbientCardsView: View {
                     ambientIcon("leaf", tint: .fern)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("A gentle nudge")
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.fern)
                         Text("\(gap.nutrientName) has been a little low lately. No pressure — a bit more when it's easy.")
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                     }

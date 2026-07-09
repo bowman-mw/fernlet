@@ -40,12 +40,12 @@ struct FoodView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
                                     Label("\(store.pendingRetryCount) pending", systemImage: "clock.arrow.circlepath")
-                                        .font(.headline)
+                                        .font(.fernlet(.header))
                                         .foregroundStyle(Color.bark)
                                     Spacer()
                                 }
                                 Text(FernletVoice.message(for: .retryAvailable))
-                                    .font(.callout.italic())
+                                    .font(.fernlet(.bubble))
                                     .foregroundStyle(Color.slate)
                                 Button("Retry oldest") {
                                     Task { await store.retryOldestMeal() }
@@ -79,7 +79,7 @@ struct FoodView: View {
                             SectionLabel("Recipes")
                             Spacer()
                             Button("Recipe book") { showingRecipeBook = true }
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.label))
                                 .foregroundStyle(Color.fern)
                         }
                         if recentRecipePreviews.isEmpty {
@@ -213,10 +213,10 @@ struct NutritionPill: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.caption2.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             Text(value)
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -237,14 +237,14 @@ struct RecipeImportSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Import recipe")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     Button {
                         importFromPasteboardURL()
                     } label: {
                         Label(isImportingURL ? "Importing URL" : "Paste URL", systemImage: isImportingURL ? "hourglass" : "link.badge.plus")
-                            .font(.headline)
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.cream)
                             .frame(maxWidth: .infinity)
                             .padding(14)
@@ -263,7 +263,8 @@ struct RecipeImportSheet: View {
 
                     if let notice {
                         Text(notice)
-                            .font(.caption.italic())
+                            .font(.fernlet(.bodySmall))
+                            .italic()
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -330,12 +331,12 @@ struct SavedRecipeRow: View {
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(recipe.name)
-                        .font(.headline)
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
                     if let sourceURL = webImport?.sourceURL {
                         Text(sourceURL.host() ?? sourceURL.absoluteString)
-                            .font(.caption)
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                             .lineLimit(1)
                     }
@@ -343,12 +344,12 @@ struct SavedRecipeRow: View {
             }
             if !recipe.notes.isEmpty {
                 Text(recipe.notes)
-                    .font(.callout)
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
             }
             Text((webImport?.ingredientLines ?? []).prefix(4).joined(separator: " | "))
-                .font(.caption)
+                .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
             if let macros = webImport?.macros, macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 {
@@ -360,7 +361,7 @@ struct SavedRecipeRow: View {
                         Text("· \(recipe.servings) servings")
                     }
                 }
-                .font(.caption.weight(.medium))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             }
         }
@@ -389,7 +390,7 @@ struct SavedRecipeNotesSheet: View {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(recipe.name)
-                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .font(.fernlet(.displayMedium))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                         if let sourceURL = webImport?.sourceURL {
@@ -400,7 +401,7 @@ struct SavedRecipeNotesSheet: View {
                                     Image(systemName: "safari")
                                         .font(.caption)
                                     Text(sourceURL.host() ?? sourceURL.absoluteString)
-                                        .font(.caption)
+                                        .font(.fernlet(.labelSmall))
                                         .underline()
                                 }
                                 .foregroundStyle(Color.fern)
@@ -412,7 +413,7 @@ struct SavedRecipeNotesSheet: View {
                     if let macros = webImport?.macros, macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(recipe.servings > 1 ? "PER SERVING" : "MACROS")
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                                 .tracking(0.8)
                             HStack(spacing: 14) {
@@ -422,11 +423,11 @@ struct SavedRecipeNotesSheet: View {
                                 Spacer()
                                 if recipe.servings > 1 {
                                     Text("\(recipe.servings) servings")
-                                        .font(.caption)
+                                        .font(.fernlet(.stat))
                                         .foregroundStyle(Color.slate)
                                 }
                             }
-                            .font(.headline)
+                            .font(.fernlet(.stat))
                             .foregroundStyle(Color.bark)
                         }
                         .padding(14)
@@ -443,7 +444,7 @@ struct SavedRecipeNotesSheet: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 ForEach(ingredientLines, id: \.self) { ingredient in
                                     Text("• \(ingredient)")
-                                        .font(.callout)
+                                        .font(.fernlet(.body))
                                         .foregroundStyle(Color.bark)
                                 }
                             }
@@ -458,7 +459,7 @@ struct SavedRecipeNotesSheet: View {
                         dismiss()
                     } label: {
                         Label("Delete recipe", systemImage: "trash")
-                            .font(.subheadline.weight(.medium))
+                            .font(.fernlet(.label))
                             .frame(maxWidth: .infinity)
                             .padding(14)
                     }
@@ -539,7 +540,7 @@ struct RecipeSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text(editingRecipe == nil ? "New recipe" : "Edit recipe")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     SheetField("Recipe name") {
@@ -582,7 +583,7 @@ struct RecipeSheet: View {
                                     expandedId = new.id
                                 } label: {
                                     Label("Add ingredient", systemImage: "plus")
-                                        .font(.subheadline.weight(.medium))
+                                        .font(.fernlet(.label))
                                         .foregroundStyle(Color.moss)
                                         .frame(maxWidth: .infinity)
                                         .padding(12)
@@ -596,7 +597,7 @@ struct RecipeSheet: View {
                                     showingBarcodeScanner = true
                                 } label: {
                                     Label("Scan barcode", systemImage: "barcode.viewfinder")
-                                        .font(.subheadline.weight(.medium))
+                                        .font(.fernlet(.label))
                                         .foregroundStyle(Color.moss)
                                         .frame(maxWidth: .infinity)
                                         .padding(12)
@@ -611,18 +612,18 @@ struct RecipeSheet: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("PER SERVING")
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                             .tracking(0.8)
                         HStack {
                             Text("P \(perServingTotals.protein)g · C \(perServingTotals.carbs)g · F \(perServingTotals.fat)g")
-                                .font(.headline)
+                                .font(.fernlet(.stat))
                                 .foregroundStyle(Color.bark)
                             Spacer()
                             // Macros-first: calories render only behind the explicit opt-in.
                             if store.settings.showCalories {
                                 Text("\(perServingTotals.calories) cal")
-                                    .font(.caption)
+                                    .font(.fernlet(.stat))
                                     .foregroundStyle(Color.slate)
                             }
                         }
@@ -643,7 +644,7 @@ struct RecipeSheet: View {
                             dismiss()
                         } label: {
                             Label("Delete recipe", systemImage: "trash")
-                                .font(.subheadline.weight(.medium))
+                                .font(.fernlet(.label))
                                 .frame(maxWidth: .infinity)
                                 .padding(14)
                         }
@@ -660,7 +661,7 @@ struct RecipeSheet: View {
                         dismiss()
                     }
                     .buttonStyle(.plain)
-                    .font(.headline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -675,7 +676,7 @@ struct RecipeSheet: View {
                         dismiss()
                     }
                     .buttonStyle(.plain)
-                    .font(.headline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -845,11 +846,11 @@ struct CollapsedIngredientRow: View {
             Button(action: onExpand) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(ingredient.name)
-                        .font(.body.weight(.medium))
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Text(summaryLine)
-                        .font(.caption)
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                 }
             }
@@ -881,7 +882,7 @@ struct RecipeIngredientEditor: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(Color.slate)
                     TextField("Search ingredient", text: $ingredient.name)
-                        .font(.body.weight(.medium))
+                        .font(.fernlet(.body))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
                         .textContentType(.none)
@@ -889,7 +890,7 @@ struct RecipeIngredientEditor: View {
                 if let onCollapse, !ingredient.trimmedName.isEmpty {
                     Button("Done", action: onCollapse)
                         .buttonStyle(.plain)
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.moss)
                 }
                 Button(action: onRemove) {
@@ -908,17 +909,17 @@ struct RecipeIngredientEditor: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack(spacing: 6) {
                                         Text(foodItem.name)
-                                            .font(.subheadline.weight(.medium))
+                                            .font(.fernlet(.body))
                                             .foregroundStyle(Color.bark)
                                         Text(foodItem.dataSourceLabel)
-                                            .font(.caption2.weight(.semibold))
+                                            .font(.fernlet(.labelSmall))
                                             .foregroundStyle(Color.slate)
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 1)
                                             .background(Color.parchment, in: Capsule())
                                     }
                                     Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
-                                        .font(.caption)
+                                        .font(.fernlet(.stat))
                                         .foregroundStyle(Color.slate)
                                 }
                                 Spacer()
@@ -939,7 +940,7 @@ struct RecipeIngredientEditor: View {
                     }
                 } label: {
                     Label("Save custom ingredient", systemImage: "plus.circle")
-                        .font(.subheadline.weight(.medium))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.moss)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
@@ -1026,19 +1027,19 @@ struct LockedMacroSummary: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(foodItem.source == .manual ? "Saved macros" : "USDA macros", systemImage: foodItem.source == .manual ? "checkmark.circle.fill" : "lock.fill")
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.moss)
                 Spacer()
                 Button("Manual", action: onUseManual)
                     .buttonStyle(.plain)
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.slate)
             }
             Text("P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g")
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
             Text("\(foodItem.category) · \(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) reference")
-                .font(.caption)
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
         }
         .padding(12)
@@ -1159,7 +1160,7 @@ struct MealSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Log meal")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     #if canImport(UIKit)
@@ -1222,7 +1223,8 @@ struct MealSheet: View {
 
                     if let notice {
                         Text(notice)
-                            .font(.caption.italic())
+                            .font(.fernlet(.bodySmall))
+                            .italic()
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -1340,7 +1342,7 @@ struct MealSheet: View {
 
     private func mealSecondaryLabel(_ title: String, icon: String) -> some View {
         Label(title, systemImage: icon)
-            .font(.subheadline.weight(.medium))
+            .font(.fernlet(.label))
             .foregroundStyle(Color.moss)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
@@ -1395,7 +1397,7 @@ struct FoodProductPageImportView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Import product")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     urlEntry
@@ -1405,7 +1407,8 @@ struct FoodProductPageImportView: View {
                             ProgressView()
                                 .tint(Color.moss)
                             Text(importedProduct == nil && preview != nil ? "Reading nutrition label..." : "Finding product page...")
-                                .font(.callout.italic())
+                                .font(.fernlet(.body))
+                                .italic()
                                 .foregroundStyle(Color.slate)
                         }
                         .padding(14)
@@ -1416,7 +1419,8 @@ struct FoodProductPageImportView: View {
 
                     if let notice {
                         Text(notice)
-                            .font(.caption.italic())
+                            .font(.fernlet(.bodySmall))
+                            .italic()
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -1456,7 +1460,8 @@ struct FoodProductPageImportView: View {
                     .sheetTextInput()
             }
             Text("Search for a specific packaged food or paste its product page. Fernlet will read the nutrition label and show the source and extracted values together before saving.")
-                .font(.caption.italic())
+                .font(.fernlet(.bodySmall))
+                .italic()
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
             actionButton(label: isLoading ? "Finding page" : "Find product page", systemImage: "magnifyingglass") {
@@ -1486,7 +1491,7 @@ struct FoodProductPageImportView: View {
     private func actionButton(label: String, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(label, systemImage: systemImage)
-                .font(.headline)
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.cream)
                 .frame(maxWidth: .infinity)
                 .padding(14)
@@ -1563,7 +1568,7 @@ struct FoodProductReviewSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Confirm product")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     VStack(alignment: .leading, spacing: 12) {
@@ -1618,11 +1623,11 @@ struct FoodProductReviewSheet: View {
     private func detail(label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label.uppercased())
-                .font(.caption2.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
                 .tracking(0.8)
             Text(value)
-                .font(label == "Product" ? .body.weight(.semibold) : .caption)
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .fernletWrappingText()
         }
@@ -1632,11 +1637,11 @@ struct FoodProductReviewSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("SERVING SIZE")
-                    .font(.caption2.weight(.semibold))
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .tracking(0.8)
                 Text(product.servingSize)
-                    .font(.headline)
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
             }
             .padding(14)
@@ -1656,7 +1661,8 @@ struct FoodProductReviewSheet: View {
             }
 
             Text("Check the serving size and nutrition values before saving. Fernlet will add this product to your local food catalog only after confirmation.")
-                .font(.caption.italic())
+                .font(.fernlet(.bodySmall))
+                .italic()
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
         }
@@ -1685,21 +1691,21 @@ struct MealRow: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(meal.name).font(.headline)
+                            Text(meal.name).font(.fernlet(.header))
                             Text(meal.mealType.rawValue)
-                                .font(.caption2.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
                                 .background(meal.mealType.color.opacity(0.25), in: Capsule())
                         }
                         Text(displayNote)
-                            .font(.caption.italic())
+                            .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                     }
                     Spacer()
                     VStack(alignment: .trailing) {
                         if showCalories {
-                            Text("\(meal.calories) cal").font(.subheadline.weight(.semibold))
+                            Text("\(meal.calories) cal").font(.fernlet(.stat))
                         }
                         Button(role: .destructive, action: onDelete) {
                             Image(systemName: "xmark")
@@ -1712,7 +1718,7 @@ struct MealRow: View {
                 }
                 if let breakdownText {
                     Text(breakdownText)
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1727,10 +1733,10 @@ struct MealRow: View {
                     Spacer(minLength: 0)
                     Button("Looks off?", action: onCorrect)
                         .buttonStyle(.plain)
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.fern)
                 }
-                .font(.caption.weight(.medium))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             }
         }
@@ -1819,7 +1825,7 @@ struct MealCorrectionSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Adjust meal")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     SheetField("Meal name") {
@@ -1897,18 +1903,18 @@ struct MealComponentEditorRows: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(component.name)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                         Spacer()
                         Text("\(component.quantity.formatted(.number.precision(.fractionLength(0...1)))) \(component.unit)")
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.stat))
                             .foregroundStyle(Color.moss)
                     }
                     Stepper("", value: $component.quantity, in: 0...2000, step: component.unit == RecipeUnit.gram.rawValue ? 5 : 0.25)
                         .labelsHidden()
                     let macros = component.snapshot.macros
                     Text("P \(macros.protein)g  C \(macros.carbs)g  F \(macros.fat)g")
-                        .font(.caption)
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                 }
                 .padding(12)
@@ -1921,7 +1927,7 @@ struct MealComponentEditorRows: View {
                 Text("F \(componentMacros.fat)g")
                 Spacer(minLength: 0)
             }
-            .font(.caption.weight(.semibold))
+            .font(.fernlet(.stat))
             .foregroundStyle(Color.slate)
         }
         .padding(14)
@@ -2020,17 +2026,17 @@ struct MealReviewSheet: View {
                 VStack(alignment: .leading, spacing: 20) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Check this meal")
-                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .font(.fernlet(.displayMedium))
                             .foregroundStyle(Color.bark)
                         Spacer()
                         Button("Discard", action: onDiscard)
                             .buttonStyle(.plain)
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.slate)
                     }
 
                     Text(reviewMessage)
-                        .font(.caption.italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
@@ -2121,18 +2127,18 @@ struct RecipeRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(recipe.name)
-                    .font(.headline)
+                    .font(.fernlet(.header))
                 Spacer()
                 Text("\(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")")
-                    .font(.caption)
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
             Text("\(recipe.ingredients.count) ingredient\(recipe.ingredients.count == 1 ? "" : "s")")
-                .font(.caption)
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             if !recipe.notes.isEmpty {
                 Text(recipe.notes)
-                    .font(.caption.italic())
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .lineLimit(2)
             }
@@ -2144,7 +2150,7 @@ struct RecipeRow: View {
                     Text("\(perServing.calories) cal").foregroundStyle(Color.goldenrod)
                 }
             }
-            .font(.caption.weight(.medium))
+            .font(.fernlet(.stat))
             .foregroundStyle(Color.slate)
         }
         .padding(.vertical, 4)
@@ -2172,7 +2178,7 @@ struct MacroInputRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.body)
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
             Spacer()
             if isEditing {
@@ -2196,7 +2202,7 @@ struct MacroInputRow: View {
                     isEditing = true
                 } label: {
                     Text("\(value)\(unit)")
-                        .font(.body.weight(.medium))
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.moss)
                         .underline()
                 }
@@ -2286,10 +2292,10 @@ struct RecipeCreationOptionRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.headline.weight(.semibold))
+                    .font(.fernlet(.header))
                     .foregroundStyle(Color.bark)
                 Text(subtitle)
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -2355,18 +2361,18 @@ private struct WebImportedFoodRow: View {
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(foodItem.name)
-                        .font(.headline)
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
                     Text(foodItem.brandSource ?? foodItem.sourceURL?.host() ?? "Saved web product")
-                        .font(.caption)
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                         .lineLimit(1)
                 }
             }
             if let servingDescription = foodItem.servingDescription, !servingDescription.isEmpty {
                 Text("Serving: \(servingDescription)")
-                    .font(.caption)
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
             HStack(spacing: 14) {
@@ -2374,7 +2380,7 @@ private struct WebImportedFoodRow: View {
                 Text("C \(foodItem.macros.carbs)g")
                 Text("F \(foodItem.macros.fat)g")
             }
-            .font(.caption.weight(.medium))
+            .font(.fernlet(.stat))
             .foregroundStyle(Color.slate)
         }
         .padding(.vertical, 6)
@@ -2400,7 +2406,7 @@ struct RecipeBookSheet: View {
                         RecipeCreationOptionsView(store: store)
                     } label: {
                         Label("Create recipe", systemImage: "plus")
-                            .font(.headline)
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.cream)
                             .frame(maxWidth: .infinity)
                             .padding(14)
@@ -2467,7 +2473,7 @@ struct RecipeBookSheet: View {
                     let allProducts = filteredWebImportedProducts
                     if !allProducts.isEmpty {
                         Text("Imported products")
-                            .font(.headline)
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
                         FernletCard {
                             VStack(spacing: 0) {

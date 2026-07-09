@@ -73,7 +73,7 @@ struct FernletLockSetupView: View {
         VStack(alignment: .leading, spacing: 20) {
             SectionLabel("Choose a lock type")
             Text("Your lock type protects the period and intimacy sections.")
-                .font(.callout.italic())
+                .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
@@ -105,11 +105,11 @@ struct FernletLockSetupView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
                         Text(title)
-                            .font(.headline.weight(.semibold))
+                            .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
                         if recommended {
                             Text("RECOMMENDED")
-                                .font(.caption2.weight(.bold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.moss)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -117,7 +117,7 @@ struct FernletLockSetupView: View {
                         }
                     }
                     Text(subtitle)
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                 }
                 Spacer()
@@ -146,7 +146,7 @@ struct FernletLockSetupView: View {
             Text(selectedKind == .alphanumeric
                  ? "Choose a password (8–64 characters)."
                  : "Enter your \(selectedKind == .pin4 ? "4" : "6")-digit PIN.")
-                .font(.callout.italic())
+                .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
@@ -187,7 +187,7 @@ struct FernletLockSetupView: View {
         VStack(alignment: .leading, spacing: 20) {
             SectionLabel(selectedKind == .alphanumeric ? "Confirm password" : "Confirm PIN")
             Text("Re-enter to confirm.")
-                .font(.callout.italic())
+                .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
 
             if let msg = errorMessage {
@@ -237,14 +237,14 @@ struct FernletLockSetupView: View {
 
             let biometryName = biometricName(lockService.biometricType)
             Text("\(biometryName) lets you unlock quickly without entering your passcode. Your passcode is still required to change lock settings.")
-                .font(.callout.italic())
+                .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
             if lockService.biometricType != .none {
                 Toggle(isOn: $biometricEnabled) {
                     Label("Enable \(biometryName)", systemImage: biometricSystemImage(lockService.biometricType))
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                 }
                 .toggleStyle(SwitchToggleStyle(tint: Color.moss))
@@ -276,16 +276,16 @@ struct FernletLockSetupView: View {
                         .padding(.top, 8)
 
                     Text("If you forget your passcode:")
-                        .font(.title3.weight(.bold))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
 
                     Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
-                        .font(.body)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
 
                     Text("There is no recovery path. Only set a passcode if you're confident you'll remember it.")
-                        .font(.callout.italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
@@ -298,7 +298,7 @@ struct FernletLockSetupView: View {
 
                     Button("Cancel") { showDisclosure = false }
                         .frame(maxWidth: .infinity)
-                        .font(.headline)
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.slate)
                         .padding(.bottom, 8)
                 }
@@ -342,7 +342,7 @@ struct FernletLockSetupView: View {
     private func actionButton(_ title: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
             .buttonStyle(.plain)
-            .font(.headline)
+            .font(.fernlet(.label))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
@@ -355,7 +355,7 @@ struct FernletLockSetupView: View {
 
     private func errorBanner(_ msg: String) -> some View {
         Text(msg)
-            .font(.subheadline.weight(.medium))
+            .font(.fernlet(.body))
             .foregroundStyle(Color.terracotta)
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -370,7 +370,7 @@ struct FernletLockSetupView: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(Color.moss)
                 Text("App lock is set up.")
-                    .font(.headline)
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 Spacer()
             }
@@ -416,18 +416,18 @@ struct FernletLockView: View {
                         .background(Color.moss.opacity(0.10), in: Circle())
 
                     Text("Fernlet Lock")
-                        .font(.system(size: 26, weight: .bold, design: .serif))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
 
                     Text("Enter your \(credentialLabel) to continue.")
-                        .font(.callout.italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                 }
 
                 // Error / cooldown feedback
                 if let msg = errorMessage {
                     Text(msg)
-                        .font(.subheadline.weight(.medium))
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.terracotta)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
@@ -437,7 +437,7 @@ struct FernletLockView: View {
                 let attempts = lockService.currentAttemptCount
                 if attempts > 0 && !isInputDisabled {
                     Text("\(4 - attempts) attempt\(4 - attempts == 1 ? "" : "s") remaining before lockout")
-                        .font(.caption.weight(.medium))
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.goldenrod)
                 }
 
@@ -538,11 +538,11 @@ struct FernletLockView: View {
                 .foregroundStyle(Color.goldenrod)
 
             Text("Too many failed attempts")
-                .font(.headline.weight(.semibold))
+                .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
 
             Text(cooldownDisplayText)
-                .font(.body)
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
         }
@@ -567,18 +567,18 @@ struct FernletLockView: View {
                 .foregroundStyle(Color.terracotta)
 
             Text("Too many failed attempts")
-                .font(.headline.weight(.semibold))
+                .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
 
             Text("You must reset app lock to continue. Private journal, cycle, and intimacy notes will become permanently unreadable.")
-                .font(.callout)
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
 
             if let onReset = onResetRequested {
                 Button("Reset app lock", role: .destructive, action: onReset)
-                    .font(.headline.weight(.semibold))
+                    .font(.fernlet(.label))
                     .padding(.top, 4)
             }
         }
@@ -594,7 +594,7 @@ struct FernletLockView: View {
                 biometricName(lockService.biometricType),
                 systemImage: biometricSystemImage(lockService.biometricType)
             )
-            .font(.subheadline.weight(.semibold))
+            .font(.fernlet(.label))
             .foregroundStyle(Color.moss)
         }
         .buttonStyle(.plain)
@@ -681,7 +681,7 @@ struct FernletLockView: View {
     private func actionButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
             .buttonStyle(.plain)
-            .font(.headline)
+            .font(.fernlet(.label))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
@@ -739,7 +739,7 @@ struct FernletNumericPad: View {
                     Color.clear
                 } else {
                     Text(key)
-                        .font(.system(size: 26, weight: .semibold, design: .rounded))
+                        .font(.fernlet(.stat))
                 }
             }
             .foregroundStyle(Color.bark)

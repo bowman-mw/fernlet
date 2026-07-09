@@ -16,14 +16,14 @@ struct PeriodDayDetailView: View {
                 FernletCard {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Health samples")
-                            .font(.headline.weight(.semibold))
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
                         if entry.samples.isEmpty {
                             EmptyState(text: "No cycle samples for this day.")
                         } else {
                             ForEach(Array(entry.samples.enumerated()), id: \.offset) { _, sample in
                                 Text(label(for: sample))
-                                    .font(.callout)
+                                    .font(.fernlet(.body))
                                     .foregroundStyle(Color.bark)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -34,12 +34,12 @@ struct PeriodDayDetailView: View {
                 FernletCard {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Narrative")
-                            .font(.headline.weight(.semibold))
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
                         if let narrative = entry.narrative {
                             if let note = narrative.note, !note.isEmpty {
                                 Text(note)
-                                    .font(.body)
+                                    .font(.fernlet(.body))
                                     .foregroundStyle(Color.bark)
                                     .fernletWrappingText()
                             }
@@ -47,7 +47,7 @@ struct PeriodDayDetailView: View {
                                 FlowLayout(spacing: 6) {
                                     ForEach(narrative.symptomFlags.sorted()) { symptom in
                                         Text(symptomLabel(symptom, in: narrative))
-                                            .font(.caption.weight(.medium))
+                                            .font(.fernlet(.labelSmall))
                                             .foregroundStyle(Color.slate)
                                             .padding(.horizontal, 8)
                                             .padding(.vertical, 5)
@@ -68,7 +68,7 @@ struct PeriodDayDetailView: View {
                     Button("Delete", role: .destructive, action: onDelete)
                         .foregroundStyle(Color.terracotta)
                 }
-                .font(.headline)
+                .font(.fernlet(.label))
                 .padding(.horizontal, 4)
             }
             .padding(20)

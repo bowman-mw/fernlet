@@ -551,7 +551,7 @@ struct DisposableCameraView: View {
             Image(systemName: "film")
                 .font(.system(size: 11, weight: .semibold))
             Text("\(manager.filmRemaining)")
-                .font(.system(size: 15, weight: .bold, design: .monospaced))
+                .font(.fernlet(.stat))
         }
         .foregroundStyle(manager.filmRemaining > 0 ? Color.goldenrod : Color.terracotta)
         .padding(.horizontal, 12)
@@ -627,11 +627,11 @@ struct DisposableCameraView: View {
             Image(systemName: "camera.fill")
                 .font(.system(size: 26, weight: .semibold))
             Text("Camera access needed")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.fernlet(.headerMedium))
             Button("Open Settings") {
                 openAppSettings()
             }
-            .font(.system(size: 13, weight: .semibold))
+            .font(.fernlet(.label))
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(Color.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 7))
@@ -680,7 +680,7 @@ struct DisposableCameraView: View {
                     .font(.system(size: 22))
                     .foregroundStyle(Color.white.opacity(0.65))
                 Text("Develop")
-                    .font(.system(size: 11))
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.white.opacity(0.5))
             }
         }
@@ -749,7 +749,7 @@ struct DisposableCameraView: View {
             .frame(width: 58, height: 20, alignment: .bottom)
             .clipped()
             Text(camera.isArmed ? "Ready" : isLandscape ? "Swipe →" : "Slide ↓")
-                .font(.system(size: 10))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.white.opacity(0.4))
         }
         .frame(width: 66, height: 48)
@@ -889,7 +889,7 @@ struct DisposableCameraView: View {
                             } label: {
                                 HStack(spacing: 7) {
                                     Text(mesh.name)
-                                        .font(.system(size: 32, weight: .bold, design: .serif))
+                                        .font(.fernlet(.display))
                                     Image(systemName: "pencil")
                                         .font(.body)
                                 }
@@ -899,31 +899,31 @@ struct DisposableCameraView: View {
                             .accessibilityIdentifier("sessionInfo.rename")
                         } else {
                             Text("Session")
-                                .font(.system(size: 32, weight: .bold, design: .serif))
+                                .font(.fernlet(.display))
                                 .foregroundStyle(Color.bark)
                         }
                         Spacer()
                         Button("Done") { showInfo = false }
-                            .font(.body.weight(.semibold))
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.bark)
                             .buttonStyle(.plain)
                     }
 
                     Text("\(manager.sessionParticipants.count) person(s) connected")
-                        .font(.callout.italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
 
                     HStack(spacing: 6) {
                         Image(systemName: "film")
                             .foregroundStyle(Color.slate)
                         Text("\(manager.filmRemaining) shot(s) remaining")
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.slate)
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Session access")
-                            .font(.headline)
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
 
                         Picker("Session access", selection: Binding(
@@ -938,7 +938,7 @@ struct DisposableCameraView: View {
                     }
 
                     Text("People")
-                        .font(.headline)
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
 
                     VStack(spacing: 0) {
@@ -947,16 +947,16 @@ struct DisposableCameraView: View {
                                 Image(systemName: participant.isLocal ? "person.crop.circle.fill" : "person.crop.circle")
                                     .foregroundStyle(Color.moss)
                                 Text(participant.displayName)
-                                    .font(.body)
+                                    .font(.fernlet(.body))
                                     .foregroundStyle(Color.bark)
                                 if !participant.isLocal, let vouchLabel = manager.vouchLabel(for: participant.fingerprint) {
                                     Text(vouchLabel)
-                                        .font(.caption)
+                                        .font(.fernlet(.labelSmall))
                                         .foregroundStyle(Color.slate)
                                 }
                                 if participant.isLocal {
                                     Text("You")
-                                        .font(.caption.weight(.semibold))
+                                        .font(.fernlet(.labelSmall))
                                         .foregroundStyle(Color.slate)
                                 }
                                 Spacer()
@@ -999,7 +999,7 @@ struct DisposableCameraView: View {
                                 Image(systemName: "dot.radiowaves.left.and.right")
                                     .foregroundStyle(Color.moss)
                                 Text("Connection Inspector")
-                                    .font(.body.weight(.medium))
+                                    .font(.fernlet(.label))
                                     .foregroundStyle(Color.bark)
                                 Spacer()
                                 Image(systemName: "chevron.right")
@@ -1015,22 +1015,22 @@ struct DisposableCameraView: View {
 
                     if !manager.pendingRemovalProposals.isEmpty {
                         Text("Removal Requests")
-                            .font(.headline)
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
 
                         ForEach(manager.pendingRemovalProposals) { proposal in
                             VStack(alignment: .leading, spacing: 10) {
                                 Text("\(proposal.proposerDisplayName) asked to remove \(proposal.targetDisplayName).")
-                                    .font(.callout)
+                                    .font(.fernlet(.body))
                                     .foregroundStyle(Color.bark)
                                 if manager.canSecondRemoval(proposal) {
                                     Button("Second Removal", role: .destructive) {
                                         manager.secondRemoval(proposal)
                                     }
-                                    .font(.callout.weight(.semibold))
+                                    .font(.fernlet(.label))
                                 } else {
                                     Text("Waiting for another participant to second this decision.")
-                                        .font(.caption)
+                                        .font(.fernlet(.bodySmall))
                                         .foregroundStyle(Color.slate)
                                 }
                             }
@@ -1120,7 +1120,7 @@ struct DisposableCameraView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
                         Text("Rename session")
-                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .font(.fernlet(.displayMedium))
                             .foregroundStyle(Color.bark)
 
                         SheetField("New name") {

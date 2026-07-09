@@ -54,7 +54,7 @@ struct FriendShopView: View {
                 .font(.system(size: 18))
                 .foregroundStyle(Color.sun)
             Text("\(store.coinBalance) coins")
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
                 .contentTransition(.numericText())
             Spacer()
@@ -70,10 +70,10 @@ struct FriendShopView: View {
         VStack(spacing: 10) {
             ProgressView().tint(Color.moss)
             Text("Looking for friends' shops nearby…")
-                .font(.subheadline)
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
             Text("Connect with a friend in person and their shop appears here. It vanishes again when you part.")
-                .font(.caption)
+                .font(.fernlet(.bodySmall))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Color.slate)
         }
@@ -85,12 +85,12 @@ struct FriendShopView: View {
         let items = ClothingShareCodec.sanitizedItems(from: catalog.payload)
         return VStack(alignment: .leading, spacing: 12) {
             Text("\(sellerName(catalog))’s shop")
-                .font(.headline)
+                .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
 
             if items.isEmpty {
                 Text("Nothing for sale right now.")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
@@ -108,10 +108,10 @@ struct FriendShopView: View {
         return VStack(spacing: 8) {
             CustomItemThumbnail(texture: item.texture, size: 72)
             Text(item.name.isEmpty ? item.slot.label : item.name)
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.headerMedium))
                 .lineLimit(1)
             Text("designed by \(sellerName(catalog))")
-                .font(.caption2)
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
 
             Button {
@@ -119,10 +119,10 @@ struct FriendShopView: View {
             } label: {
                 if owned {
                     Label("Owned", systemImage: "checkmark.circle.fill")
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.label))
                 } else {
                     Label("\(item.price) coins", systemImage: "bag")
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.label))
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -130,7 +130,7 @@ struct FriendShopView: View {
             .disabled(owned || !affordable)
             if !owned && !affordable {
                 Text("Not enough coins yet")
-                    .font(.caption2)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
         }

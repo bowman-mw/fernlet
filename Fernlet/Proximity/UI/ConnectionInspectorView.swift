@@ -16,7 +16,7 @@ struct ConnectionInspectorView: View {
                             .font(.largeTitle)
                             .foregroundStyle(Color.slate)
                         Text("No active session")
-                            .font(.headline)
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -58,13 +58,13 @@ struct ConnectionInspectorLogDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(log.endState.capitalized)
-                .font(.title2.weight(.bold))
+                .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
             HStack(spacing: 10) {
                 Label(durationText, systemImage: "timer")
                 Label(log.localFingerprint, systemImage: "key.horizontal")
             }
-            .font(.caption.monospacedDigit())
+            .font(.fernlet(.stat))
             .foregroundStyle(Color.slate)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -87,22 +87,22 @@ struct ConnectionInspectorLogDetailView: View {
             let latest = log.ranging.samples.last?.meters
             HStack(alignment: .firstTextBaseline) {
                 Text(latest.map { "\(Int($0 * 100))" } ?? "--")
-                    .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
+                    .font(.fernlet(.display))
                     .foregroundStyle(distanceColor(latest))
                 Text("cm")
-                    .font(.headline)
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("min \(centimeters(log.ranging.minDistanceMeters))")
                     Text("max \(centimeters(log.ranging.maxDistanceMeters))")
                 }
-                .font(.caption.monospacedDigit())
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             }
             if let rangingStatusText {
                 Text(rangingStatusText)
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -146,16 +146,16 @@ struct ConnectionInspectorLogDetailView: View {
                         .padding(.top, 6)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(event.kind.rawValue)
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                         Text(event.message)
-                            .font(.subheadline)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                     }
                     Spacer()
                     Text(event.timestamp.formatted(date: .omitted, time: .standard))
-                        .font(.caption2.monospacedDigit())
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                 }
             }
@@ -195,11 +195,11 @@ struct ConnectionInspectorLogDetailView: View {
     private func inspectorRow(_ title: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             Spacer(minLength: 16)
             Text(value)
-                .font(.subheadline.monospacedDigit())
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
                 .multilineTextAlignment(.trailing)
                 .lineLimit(2)

@@ -156,7 +156,7 @@ struct CreationStudioView: View {
     private var paletteRow: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Palette")
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
@@ -217,7 +217,7 @@ struct CreationStudioView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Available in my shop")
                         Text("Friends can browse and buy this when you connect in person.")
-                            .font(.caption)
+                            .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                     }
                 }
@@ -228,11 +228,11 @@ struct CreationStudioView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "circlebadge.2.fill").foregroundStyle(Color.sun)
                             Text("Price: \(price) coins")
-                                .font(.subheadline.weight(.medium))
+                                .font(.fernlet(.stat))
                         }
                     }
                     Text(shopHint)
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                 }
             }
@@ -241,7 +241,7 @@ struct CreationStudioView: View {
                 pixels = Self.blankPixels(for: slot)
             } label: {
                 Label("Clear canvas", systemImage: "trash")
-                    .font(.subheadline)
+                    .font(.fernlet(.label))
             }
         }
         .padding(16)

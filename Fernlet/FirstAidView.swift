@@ -89,11 +89,11 @@ struct FirstAidView: View {
                 SectionLabel("First aid")
                 Spacer()
                 Button("Done") { dismiss() }
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
             }
             Text("Small tools for a heavy moment. Pick whatever feels kind — or nothing at all.")
-                .font(.system(size: 21, weight: .regular, design: .serif))
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .fernletWrappingText()
         }
@@ -111,10 +111,10 @@ struct FirstAidView: View {
                     .background(tint.opacity(0.18), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 19, weight: .regular, design: .serif))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                     Text(caption)
-                        .font(.system(size: 15, weight: .regular, design: .serif))
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
@@ -142,11 +142,11 @@ struct FirstAidView: View {
                     .font(.system(size: 17, weight: .regular))
                     .foregroundStyle(Color.goldenrod)
                 Text("If things feel heavy")
-                    .font(.system(size: 18, weight: .regular, design: .serif))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
             }
             Text("Some moments are bigger than any app. You deserve real support — the 988 line is free, kind, and there around the clock.")
-                .font(.system(size: 16, weight: .regular, design: .serif))
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
             HStack(spacing: 10) {
@@ -179,7 +179,7 @@ struct FirstAidView: View {
                     Image(systemName: icon)
                         .font(.subheadline.weight(.semibold))
                     Text(title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.label))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)

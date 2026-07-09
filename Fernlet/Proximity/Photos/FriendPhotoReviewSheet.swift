@@ -58,11 +58,11 @@ struct FriendPhotoReviewSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Review pictures")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     Text("Choose which shared pictures to save. Everything else is deleted from this device's temporary cache.")
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 

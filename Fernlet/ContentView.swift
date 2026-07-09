@@ -340,7 +340,7 @@ struct ContentView: View {
                             .font(.system(size: isCompact ? 18 : 20))
                             .frame(height: isCompact ? 22 : 24)
                         Text(tab.title)
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.fernlet(.labelSmall))
                             .opacity(isCompact ? 0 : 1)
                             .frame(height: isCompact ? 0 : nil)
                             .accessibilityHidden(isCompact)
@@ -786,10 +786,10 @@ struct PersonalScreenView: View {
         case .periodTracking:
             VStack(alignment: .leading, spacing: 8) {
                 Label(cycleSummary, systemImage: screen.systemImage)
-                    .font(.body.weight(.medium))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 Text("Use Health access in Settings to keep cycle context available here.")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -801,7 +801,7 @@ struct PersonalScreenView: View {
                     eventsByDay: intimacyEventsByDay
                 )
                 Text("Intimacy access is private, optional, and age-gated.")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
@@ -812,17 +812,17 @@ struct PersonalScreenView: View {
                         ForEach(Array(intimacyLogs.prefix(12).enumerated()), id: \.element.id) { index, log in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(log.eventDate.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
-                                    .font(.caption.weight(.semibold))
+                                    .font(.fernlet(.labelSmall))
                                     .foregroundStyle(Color.slate)
                                 if !log.note.isEmpty {
                                     Text(log.note)
-                                        .font(.callout)
+                                        .font(.fernlet(.body))
                                         .foregroundStyle(Color.bark)
                                         .fernletWrappingText()
                                 }
                                 if log.healthKitExternalUUID != nil {
                                     Label("Saved to Apple Health", systemImage: "heart.text.square")
-                                        .font(.caption2)
+                                        .font(.fernlet(.labelSmall))
                                         .foregroundStyle(Color.moss)
                                 }
                             }
@@ -848,7 +848,7 @@ struct PersonalScreenView: View {
                     PolaroidTile(color: .goldenrod.opacity(0.45), caption: "places", rotation: -1)
                 }
                 Text("Photo imports can live here when the photo picker is added.")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -915,11 +915,11 @@ struct PersonalMemoryList: View {
             ForEach(Array(memories.prefix(8).enumerated()), id: \.element.id) { index, memory in
                 VStack(alignment: .leading, spacing: 4) {
                     Text(memory.text)
-                        .font(.body)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
                     Text(memory.sourceDate.formatted(.dateTime.month(.abbreviated).day().year()))
-                        .font(.caption2)
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
                 .padding(.vertical, 4)
@@ -959,12 +959,12 @@ struct MealLogNotificationView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(notification.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
                 Text("P \(notification.macros.protein)g · C \(notification.macros.carbs)g · F \(notification.macros.fat)g")
-                    .font(.caption.weight(.medium))
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
                     .lineLimit(1)
             }
@@ -1033,11 +1033,11 @@ struct LaunchScreen: View {
 
                 VStack(spacing: 10) {
                     Text(greeting)
-                        .font(.system(size: 34, weight: .bold, design: .serif))
+                        .font(.fernlet(.display))
                         .foregroundStyle(Color.bark)
 
                     Text(displayedStatusMessage)
-                        .font(.callout.italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .animation(.easeInOut(duration: 0.25), value: displayedStatusMessage)
                 }
@@ -1088,7 +1088,7 @@ private struct IntimacyCalendarCard: View {
                     .buttonStyle(.plain)
 
                     Text(model.monthTitle)
-                        .font(.title3.weight(.semibold))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                         .frame(maxWidth: .infinity)
 
@@ -1109,7 +1109,7 @@ private struct IntimacyCalendarCard: View {
 
                 LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
-                        Text(day).font(.caption2.weight(.semibold)).foregroundStyle(Color.slate)
+                        Text(day).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                     }
                     ForEach(model.cells) { cell in
                         IntimacyCalendarCell(cell: cell)
@@ -1134,7 +1134,7 @@ private struct IntimacyCalendarCell: View {
             if let day = cell.day {
                 VStack(spacing: 1) {
                     Text("\(day)")
-                        .font(.caption2.weight(cell.isToday ? .bold : .medium))
+                        .font(.fernlet(.stat))
                         .foregroundStyle(
                             cell.isFuture ? Color.bark.opacity(0.28)
                                 : cell.isToday ? Color.moss

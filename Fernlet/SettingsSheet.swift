@@ -42,7 +42,7 @@ struct SettingsSheet: View {
                 Section {
                 } header: {
                     Text("Your data stays local by default. iCloud sync and web nutrition lookup are off unless you turn them on.")
-                        .font(.callout.italic())
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .textCase(nil)
                         .fernletWrappingText()
@@ -208,7 +208,7 @@ struct SettingsSheet: View {
             SectionLabel("Backgrounds")
             VStack(alignment: .leading, spacing: 12) {
                 Text("Choose separate backgrounds for light and dark mode. Cards and input boxes stay in the same color family so the existing text colors remain readable.")
-                    .font(.callout.italic())
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
@@ -244,14 +244,14 @@ struct SettingsSheet: View {
     private func themeColorRow(title: String, color: Binding<Color>, hex: String, defaultHex: String, reset: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
             ColorPicker(title, selection: color, supportsOpacity: false)
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
             Text(hex.uppercased())
-                .font(.caption.monospacedDigit())
+                .font(.fernlet(.stat).monospacedDigit())
                 .foregroundStyle(Color.slate)
             Button("Reset", action: reset)
                 .buttonStyle(.plain)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.moss)
                 .disabled(hex.caseInsensitiveCompare(defaultHex) == .orderedSame)
         }
@@ -281,7 +281,7 @@ struct SettingsSheet: View {
             SectionLabel("Home widgets")
             VStack(alignment: .leading, spacing: 8) {
                 Text("Choose what appears on the main page and put the widgets in the order you want.")
-                    .font(.callout.italic())
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
@@ -304,7 +304,7 @@ struct SettingsSheet: View {
                     store.setHomeWidgets(HomeWidget.defaultWidgets)
                 }
                 .buttonStyle(.plain)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.moss)
             }
             .padding(14)
@@ -313,7 +313,7 @@ struct SettingsSheet: View {
             SectionLabel("Quick log")
             VStack(alignment: .leading, spacing: 8) {
                 Text("Choose the six home shortcuts and put them in the order you want.")
-                    .font(.callout.italic())
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
@@ -361,7 +361,7 @@ struct SettingsSheet: View {
             .foregroundStyle(Color.slate)
 
             Label(widget.title, systemImage: widget.systemImage)
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
 
             Spacer(minLength: 4)
@@ -425,7 +425,7 @@ struct SettingsSheet: View {
                 .foregroundStyle(Color.slate)
 
                 Label("Slot \(index + 1): \(currentItem.title)", systemImage: currentItem.systemImage)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
 
                 Spacer(minLength: 4)
@@ -481,24 +481,24 @@ struct SettingsSheet: View {
             SectionLabel("Apple Fitness sync")
             VStack(alignment: .leading, spacing: 10) {
                 Text("When enabled, Fernlet writes your logged workouts to Apple Health so they appear in the Fitness app, and pulls workouts logged elsewhere back into Fernlet.")
-                    .font(.callout.italic())
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Status")
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                         Text("Available after Apple Fitness integration lands (M2)")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                     }
                     Spacer(minLength: 8)
                     Button("Request access") {}
                         .buttonStyle(.plain)
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.slate.opacity(0.55))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -514,7 +514,7 @@ struct SettingsSheet: View {
     private var memoriesTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Edit or remove the notes Fernlet keeps from journals, plus the local trends it is inferring.")
-                .font(.callout.italic())
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
@@ -523,7 +523,7 @@ struct SettingsSheet: View {
                     .font(.subheadline)
                     .foregroundStyle(Color.slate)
                 TextField("Search or type \"forget [keyword]\"", text: $memorySearch)
-                    .font(.subheadline)
+                    .font(.fernlet(.body))
                     .autocorrectionDisabled()
                 if !memorySearch.isEmpty {
                     Button { memorySearch = "" } label: {
@@ -591,16 +591,16 @@ struct SettingsSheet: View {
         } else {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Forget \(matches.count) memor\(matches.count == 1 ? "y" : "ies") matching \"\(keyword)\"?")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 HStack(spacing: 16) {
                     Button("Delete \(matches.count)", role: .destructive) {
                         matches.forEach { store.deleteMemory($0) }
                         memorySearch = ""
                     }
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.label))
                     Button("Cancel") { memorySearch = "" }
-                        .font(.subheadline)
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.slate)
                 }
             }
@@ -612,7 +612,7 @@ struct SettingsSheet: View {
     private var signalsTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Local trends Fernlet is inferring from journals, meals, sleep, and workouts.")
-                .font(.callout.italic())
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
             if store.derivedSignals.isEmpty {
@@ -628,16 +628,16 @@ struct SettingsSheet: View {
     private var sleepTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Last sleep logged for today.")
-                .font(.callout.italic())
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
             FernletCard {
                 if let sleep = store.day.sleep {
                     HStack {
                         Circle().fill(sleep.quality == .poor ? Color.terracotta : Color.moss).frame(width: 10, height: 10)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(sleep.quality.label).font(.headline).foregroundStyle(Color.bark)
+                            Text(sleep.quality.label).font(.fernlet(.header)).foregroundStyle(Color.bark)
                             Text(sleep.hours.map { "\($0, specifier: "%.1f") hours" } ?? "Hours not logged")
-                                .font(.caption).foregroundStyle(Color.slate)
+                                .font(.fernlet(.stat)).foregroundStyle(Color.slate)
                         }
                         Spacer()
                     }
@@ -651,7 +651,7 @@ struct SettingsSheet: View {
     private var healthTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Health access is optional and requested by feature. Apple does not reveal read-denial status, so empty Health results are handled as normal.")
-                .font(.callout.italic())
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
@@ -665,7 +665,7 @@ struct SettingsSheet: View {
 
             if !healthKit.statusMessage.isEmpty {
                 Text(healthKit.statusMessage)
-                    .font(.caption.weight(.medium))
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -683,14 +683,14 @@ struct SettingsSheet: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(capability.title)
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Text(capability.summary)
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                     Text(writeStatusSummary(for: capability))
-                        .font(.caption2.weight(.semibold))
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
                 Spacer(minLength: 8)
@@ -703,7 +703,7 @@ struct SettingsSheet: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
-            .font(.subheadline.weight(.semibold))
+            .font(.fernlet(.label))
             .foregroundStyle(.white)
             .padding(.vertical, 11)
             .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
@@ -718,7 +718,7 @@ struct SettingsSheet: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.label))
                 .foregroundStyle(.white)
                 .padding(.vertical, 11)
                 .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
@@ -850,7 +850,7 @@ struct SettingsSheet: View {
                     }
                 }
                 Text(store.settings.selectedGoal.tagline)
-                    .font(.caption.italic())
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                 Divider().overlay(Color.bark.opacity(0.08))
@@ -876,7 +876,7 @@ struct SettingsSheet: View {
                         NutritionPill(title: "Fiber", value: "\(targets.fiber)g")
                     }
                     Text("Targets update automatically from goal, profile, activity, and eating pattern.")
-                        .font(.caption.italic())
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
@@ -888,7 +888,7 @@ struct SettingsSheet: View {
                     Text("Current")
                     Spacer()
                     Text(store.settings.aiStatus.label)
-                        .font(.headline)
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                 }
                 Toggle("Manual off mode", isOn: aiManualOffBinding)
@@ -896,7 +896,7 @@ struct SettingsSheet: View {
                 Toggle("Web nutrition lookup", isOn: $store.settings.webNutritionLookupEnabled)
                     .disabled(store.settings.aiStatus == .off)
                 Text("Fernlet can search the web for chain and packaged-food nutrition. Your meal description is sent to a search provider only when this is on.")
-                    .font(.caption.italic())
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                 Divider().overlay(Color.bark.opacity(0.08))
@@ -914,11 +914,11 @@ struct SettingsSheet: View {
                     }
                 ))
                 Text("On heavy, gloomy days Fernlet can offer a gentle recovery nudge. Uses your approximate location for weather only, never stored or shared.")
-                    .font(.caption.italic())
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                 Text(FernletVoice.message(for: store.settings.aiStatus == .off ? .aiUnavailable : .retryAvailable))
-                    .font(.caption.italic())
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -929,16 +929,16 @@ struct SettingsSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Notice body tension", isOn: stressAwarenessBinding)
                 Text("When this is on, Fernlet gently compares your heart rate variability, resting heart rate, respiration, and sleeping wrist temperature from Apple Health with your own usual range — never anyone else's — and may quietly note when your body seems a bit more tense than usual. Estimated and stored on this device only.")
-                    .font(.caption.italic())
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                 Text("This is a wellbeing reflection, not medical advice. If you're worried about how you feel, please talk to a health professional.")
-                    .font(.caption.italic())
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                 if store.settings.stressAwarenessEnabled && !storagePreferencesStore.preferences.healthKitMasterEnabled {
                     Text("Body signals needs Apple Health. Turn on Health integration in Privacy & Data to feed it.")
-                        .font(.caption.italic())
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.terracotta)
                         .fernletWrappingText()
                 }
@@ -953,12 +953,12 @@ struct SettingsSheet: View {
                     DatePicker("Time", selection: $dailyCheckInTime, displayedComponents: .hourAndMinute)
                 }
                 Text("One gentle nudge a day — however the day went, a small note of care still counts. Change or turn it off any time.")
-                    .font(.caption.italic())
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                 if dailyCheckInAuthDenied {
                     Text("Notifications are off for Fernlet in iOS Settings — allow them there and this toggle will work.")
-                        .font(.caption.italic())
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.terracotta)
                         .fernletWrappingText()
                 }
@@ -1081,7 +1081,7 @@ struct SettingsSheet: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.label))
                 .foregroundStyle(.white)
                 .padding(.vertical, 11)
                 .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
@@ -1096,12 +1096,12 @@ struct SettingsSheet: View {
                 if !tasks.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(group)
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                         ForEach(tasks) { task in
                             HStack(spacing: 10) {
                                 Label(task.label, systemImage: task.systemImage)
-                                    .font(.subheadline.weight(.medium))
+                                    .font(.fernlet(.label))
                                     .foregroundStyle(Color.bark)
                                 Spacer()
                                 Button { store.removePersonalCareTask(task) } label: {
@@ -1129,7 +1129,7 @@ struct SettingsSheet: View {
                 Text("File: \(store.storageLocation)")
                 Text("Today key: \(store.todayKey)")
             }
-            .font(.caption)
+            .font(.fernlet(.labelSmall))
             .foregroundStyle(Color.slate)
         }
     }
@@ -1137,7 +1137,7 @@ struct SettingsSheet: View {
     private var debugTab: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Prototype only — not production-private. Debug surfaces for local inspection during development.")
-                .font(.callout.italic())
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.terracotta)
                 .fernletWrappingText()
 
@@ -1151,7 +1151,7 @@ struct SettingsSheet: View {
                     )
                 )
                 Text("Shows the connection inspector button and a Force override on the Friends tab that bypasses distance requirements.")
-                    .font(.caption.italic())
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -1161,7 +1161,7 @@ struct SettingsSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionLabel("Tier 2 memory (test-only view)")
                 Text("Tier 2 memories are inferred context records. In production these will not be readable. This view exists for prototype inspection only.")
-                    .font(.caption.italic())
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
@@ -1173,20 +1173,20 @@ struct SettingsSheet: View {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text(record.category.uppercased())
-                                    .font(.caption2.weight(.semibold))
+                                    .font(.fernlet(.labelSmall))
                                     .foregroundStyle(Color.slate)
                                 Spacer()
                                 Text(record.extractedDate.formatted(.dateTime.month(.abbreviated).day().year()))
-                                    .font(.caption2)
+                                    .font(.fernlet(.labelSmall))
                                     .foregroundStyle(Color.slate)
                             }
                             Text(record.text)
-                                .font(.body)
+                                .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                                 .fernletWrappingText()
                             if !record.active {
                                 Text("Inactive")
-                                    .font(.caption2.weight(.semibold))
+                                    .font(.fernlet(.labelSmall))
                                     .foregroundStyle(Color.terracotta)
                             }
                         }
@@ -1206,15 +1206,15 @@ struct SettingsSheet: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text(signal.signalName)
-                                    .font(.caption.weight(.semibold))
+                                    .font(.fernlet(.labelSmall))
                                     .foregroundStyle(Color.slate)
                                 Spacer()
                                 Text(signal.value.capitalized)
-                                    .font(.caption.weight(.semibold))
+                                    .font(.fernlet(.labelSmall))
                                     .foregroundStyle(SignalPresentation.color(for: signal.value))
                             }
                             Text("Window: \(signal.windowStart) → \(signal.windowEnd)")
-                                .font(.caption2)
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                         }
                         .padding(12)
@@ -1228,7 +1228,7 @@ struct SettingsSheet: View {
     private var connectionInspectorTab: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Connection Inspector captures proximity pairing diagnostics for local troubleshooting.")
-                .font(.callout.italic())
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
@@ -1242,7 +1242,7 @@ struct SettingsSheet: View {
                 .pickerStyle(.segmented)
 
                 Text(connectionInspectorModeDescription)
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -1256,10 +1256,10 @@ struct SettingsSheet: View {
                     Label("Connection History", systemImage: "clock.arrow.circlepath")
                     Spacer()
                     Text("\(store.connectionInspector.historicalLogs.count)")
-                        .font(.caption.monospacedDigit())
+                        .font(.fernlet(.stat).monospacedDigit())
                         .foregroundStyle(Color.slate)
                 }
-                .font(.headline)
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
                 .padding(14)
                 .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
@@ -1291,7 +1291,7 @@ struct SettingsSheet: View {
                 Button("Reset everything", role: .destructive) { confirmReset = true }
             }
         }
-        .font(.headline)
+        .font(.fernlet(.label))
     }
 
     private var doneBar: some View {
@@ -1299,7 +1299,7 @@ struct SettingsSheet: View {
             Spacer()
             Button("Done") { dismiss() }
                 .buttonStyle(.plain)
-                .font(.headline)
+                .font(.fernlet(.label))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
@@ -1321,11 +1321,11 @@ struct SettingsSheet: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(memory.text)
-                    .font(.body)
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
                 Text(memory.sourceDate.formatted(.dateTime.month(.abbreviated).day().year()))
-                    .font(.caption2)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
             Spacer()
@@ -1369,7 +1369,7 @@ struct MemoryEditorSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Core memory")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     SheetField("Category") {
@@ -1382,16 +1382,16 @@ struct MemoryEditorSheet: View {
                     }
 
                     Text("\(text.count)/240")
-                        .font(.caption)
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                         .frame(maxWidth: .infinity, alignment: .trailing)
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Source date")
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                         Text(memory.sourceDate.formatted(.dateTime.month(.wide).day().year()))
-                            .font(.body)
+                            .font(.fernlet(.stat))
                             .foregroundStyle(Color.bark)
                     }
                     .padding(14)
@@ -1400,7 +1400,7 @@ struct MemoryEditorSheet: View {
                     if confirmDelete {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Delete this memory?")
-                                .font(.headline)
+                                .font(.fernlet(.header))
                                 .foregroundStyle(Color.bark)
                             HStack {
                                 Button("Delete", role: .destructive) {
@@ -1409,11 +1409,11 @@ struct MemoryEditorSheet: View {
                                 }
                                 Button("Cancel") { confirmDelete = false }
                             }
-                            .font(.headline)
+                            .font(.fernlet(.label))
                         }
                     } else {
                         Button("Delete memory", role: .destructive) { confirmDelete = true }
-                            .font(.headline)
+                            .font(.fernlet(.label))
                     }
                 }
                 .padding(20)
@@ -1504,11 +1504,11 @@ struct AppLockSettingsView: View {
                     .frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(statusLabel)
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     if let kind = lockService.credentialKind {
                         Text(kindLabel(kind))
-                            .font(.caption)
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                     }
                 }
@@ -1555,7 +1555,7 @@ struct AppLockSettingsView: View {
                 .toggleStyle(SwitchToggleStyle(tint: Color.moss))
             } else {
                 Text("No biometric authentication available on this device.")
-                    .font(.callout.italic())
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -1580,13 +1580,13 @@ struct AppLockSettingsView: View {
     private var setupCTACard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("App lock is not set up. Set a passcode to protect your journal, period, and intimacy history.")
-                .font(.callout.italic())
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
             Button("Set up app lock") { showSetup = true }
                 .buttonStyle(.plain)
-                .font(.headline)
+                .font(.fernlet(.label))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -1604,13 +1604,13 @@ struct AppLockSettingsView: View {
                 Color.parchment.ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Enter your current passcode to \(pendingBiometricEnable ? "enable" : "disable") \(biometricName(lockService.biometricType)).")
-                        .font(.callout.italic())
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
                     if let err = verifyError {
                         Text(err)
-                            .font(.subheadline.weight(.medium))
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.terracotta)
                     }
 
@@ -1632,7 +1632,7 @@ struct AppLockSettingsView: View {
                     if lockService.credentialKind == .alphanumeric {
                         Button("Confirm") { commitBiometricToggle() }
                             .buttonStyle(.plain)
-                            .font(.headline)
+                            .font(.fernlet(.label))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
@@ -1726,7 +1726,7 @@ struct AppLockSettingsView: View {
                 .foregroundStyle(destructive ? Color.terracotta : Color.moss)
                 .frame(width: 28)
             Text(title)
-                .font(.headline.weight(.semibold))
+                .font(.fernlet(.label))
                 .foregroundStyle(destructive ? Color.terracotta : Color.bark)
             Spacer()
             if !destructive {
@@ -1790,7 +1790,7 @@ private struct FernletLockChangePasscodeView: View {
         VStack(alignment: .leading, spacing: 20) {
             SectionLabel("Current passcode")
             Text("Enter your current passcode to continue.")
-                .font(.callout.italic())
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
 
             if let msg = errorMessage { errorBanner(msg) }
@@ -1835,7 +1835,7 @@ private struct FernletLockChangePasscodeView: View {
         VStack(alignment: .leading, spacing: 20) {
             SectionLabel("New passcode")
             Text("Choose a lock type for your new passcode.")
-                .font(.callout.italic())
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
 
             VStack(spacing: 12) {
@@ -1874,7 +1874,7 @@ private struct FernletLockChangePasscodeView: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(kind == selectedKind ? Color.moss : Color.slate.opacity(0.4))
                 Text(title)
-                    .font(.headline.weight(.semibold))
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                 Spacer()
             }
@@ -1946,7 +1946,7 @@ private struct FernletLockChangePasscodeView: View {
     private func continueButton(disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button("Continue", action: action)
             .buttonStyle(.plain)
-            .font(.headline)
+            .font(.fernlet(.label))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
@@ -1956,7 +1956,7 @@ private struct FernletLockChangePasscodeView: View {
 
     private func errorBanner(_ msg: String) -> some View {
         Text(msg)
-            .font(.subheadline.weight(.medium))
+            .font(.fernlet(.body))
             .foregroundStyle(Color.terracotta)
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)

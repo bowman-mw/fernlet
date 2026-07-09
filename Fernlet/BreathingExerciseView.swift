@@ -116,7 +116,7 @@ struct BreathingExerciseView: View {
                     }
                     .onDisappear { idleBreathing = false }
                 Text("Ready when you are.")
-                    .font(.system(size: 19, weight: .regular, design: .serif).italic())
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
             }
 
@@ -128,7 +128,7 @@ struct BreathingExerciseView: View {
                 startSession()
             } label: {
                 Text("Begin")
-                    .font(.headline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -147,7 +147,7 @@ struct BreathingExerciseView: View {
             Spacer(minLength: 8)
 
             Text(phaseLabel)
-                .font(.system(size: 30, weight: .medium, design: .serif))
+                .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.moss)
                 .animation(.easeInOut(duration: 0.3), value: phaseLabel)
 
@@ -156,7 +156,7 @@ struct BreathingExerciseView: View {
             Spacer(minLength: 8)
 
             Button("End early") { stopSession() }
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.softTaupe)
         }
         .padding(20)
@@ -172,12 +172,12 @@ struct BreathingExerciseView: View {
                 .padding(.bottom, 30)
 
             Text("All done")
-                .font(.system(size: 36, weight: .semibold, design: .serif))
+                .font(.fernlet(.display))
                 .foregroundStyle(Color.bark)
                 .padding(.bottom, 12)
 
             Text("That was a whole \(minutes == 1 ? "minute" : "\(minutes) minutes") of care. Nicely done.")
-                .font(.system(size: 19, weight: .regular, design: .serif))
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
@@ -188,7 +188,7 @@ struct BreathingExerciseView: View {
                 startSession()
             } label: {
                 Text("Once more")
-                    .font(.headline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
@@ -199,7 +199,7 @@ struct BreathingExerciseView: View {
             .padding(.bottom, 10)
 
             Button("Done for now") { finishToSetup() }
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.slate)
 
             Spacer()
@@ -298,10 +298,10 @@ struct BreathingExerciseView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Haptics")
-                        .font(.subheadline.weight(.medium))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                     Text("a soft tap on each turn")
-                        .font(.system(size: 13, weight: .regular, design: .serif).italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                 }
                 Spacer()
@@ -323,10 +323,10 @@ struct BreathingExerciseView: View {
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(candidate.name)
-                    .font(.system(size: 17, weight: .regular, design: .serif))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 Text(candidate.caption)
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -356,7 +356,7 @@ struct BreathingExerciseView: View {
             minutes = candidate
         } label: {
             Text("\(candidate) min")
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)

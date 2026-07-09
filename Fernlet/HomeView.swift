@@ -232,7 +232,7 @@ struct HomeView: View {
 
             HStack(spacing: 8) {
                 Text(store.companionState.rawValue)
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(store.companionState.color)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
@@ -258,7 +258,7 @@ struct HomeView: View {
                 Image(systemName: "heart.circle")
                     .font(.caption.weight(.semibold))
                 Text("First aid")
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.label))
             }
             .foregroundStyle(Color.moss)
             .padding(.horizontal, 14)
@@ -286,7 +286,7 @@ struct HomeView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(warm ? Color.goldenrod : Color.slate)
                     Text(line)
-                        .font(warm ? .callout.italic() : .caption)
+                        .font(warm ? .fernlet(.bubble) : .fernlet(.bodySmall))
                         .multilineTextAlignment(.leading)
                         .foregroundStyle(warm ? Color.bark : Color.slate)
                         .fernletWrappingText()
@@ -432,7 +432,7 @@ struct HomeView: View {
     private func signalChip(text: String, color: Color, icon: String) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon).font(.caption2.weight(.semibold))
-            Text(text).font(.caption2.weight(.semibold))
+            Text(text).font(.fernlet(.labelSmall))
         }
         .foregroundStyle(color)
         .padding(.horizontal, 9)
@@ -607,13 +607,13 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("Today")
-                        .font(.title3.weight(.semibold))
+                        .font(.fernlet(.header))
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(FernletDate.niceDate().components(separatedBy: ",").first ?? "Today")
-                            .font(.caption)
+                            .font(.fernlet(.labelSmall))
                         Text(store.settings.selectedGoal.displayName)
-                            .font(.caption2.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                     }
                     .foregroundStyle(Color.slate)
                 }
@@ -634,10 +634,10 @@ struct HomeView: View {
                         .background(Color.goldenrod.opacity(0.14), in: Circle())
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Today's intent")
-                            .font(.headline.weight(.semibold))
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
                         Text("One small care note is still a real note.")
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -917,11 +917,11 @@ private struct CompanionCustomizationSheet: View {
                 .foregroundStyle(Color.sun)
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(balance) coins")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
                     .contentTransition(.numericText())
                 Text("earned from days you showed up")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
             }
             Spacer()
@@ -948,10 +948,10 @@ private struct CompanionCustomizationSheet: View {
                     .foregroundStyle(Color.fern)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Milestones")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                     Text("All the care you've logged, added up over all time")
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                 }
                 Spacer()
@@ -980,10 +980,10 @@ private struct CompanionCustomizationSheet: View {
                     .foregroundStyle(Color.moss)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Custom items & wardrobe")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                     Text("Design your own clothes in the grid editor")
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                 }
                 Spacer()
@@ -1173,7 +1173,7 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
                             selection = item
                         } label: {
                             label(item)
-                                .font(.subheadline.weight(.semibold))
+                                .font(.fernlet(.label))
                                 .foregroundStyle(selection.id == item.id ? Color.cream : Color.bark)
                                 .frame(maxWidth: .infinity, minHeight: 42)
                                 .background(
@@ -1214,7 +1214,7 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
                     .fill(color.color(for: state))
                     .frame(width: 11, height: 11)
                 Text(color.label)
-                    .font(.caption2.weight(.semibold))
+                    .font(.fernlet(.label))
                     .lineLimit(1)
             }
             .foregroundStyle(isSelected ? Color.cream : Color.bark)
@@ -1242,13 +1242,13 @@ struct SignalDetailRow: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(SignalPresentation.title(for: signal.signalName))
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Text(signal.value.capitalized)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(SignalPresentation.color(for: signal.value))
                     Text(SignalPresentation.explanation(for: signal))
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
@@ -1260,7 +1260,7 @@ struct SignalDetailRow: View {
             FlowLayout(spacing: 6) {
                 ForEach(signal.sourceFields, id: \.self) { field in
                     Text(field)
-                        .font(.caption2.weight(.medium))
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
@@ -1273,11 +1273,11 @@ struct SignalDetailRow: View {
                     ForEach(signal.nutrientGaps.prefix(4)) { gap in
                         HStack {
                             Text(gap.nutrientName)
-                                .font(.caption.weight(.medium))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.bark)
                             Spacer()
                             Text(gap.status == .gap ? "gap" : "covered")
-                                .font(.caption2.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(gap.status == .gap ? Color.terracotta : Color.moss)
                         }
                     }
@@ -1408,7 +1408,7 @@ struct TrendsModal: View {
             Spacer()
             Button("Done") { dismiss() }
                 .buttonStyle(.plain)
-                .font(.headline)
+                .font(.fernlet(.label))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
@@ -1531,10 +1531,10 @@ struct HomeActionWidget: View {
                         .background(Color.moss.opacity(0.12), in: Circle())
                     VStack(alignment: .leading, spacing: 3) {
                         Text(widget.title)
-                            .font(.headline.weight(.semibold))
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
                         Text(actionSubtitle)
-                            .font(.caption)
+                            .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -1576,7 +1576,7 @@ struct QuickLogButton: View {
                 Image(systemName: systemImage)
                     .font(.title3)
                 Text(title)
-                    .font(.caption2.weight(.semibold))
+                    .font(.fernlet(.label))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -1609,7 +1609,7 @@ struct MacroCard: View {
                     }
                     Label("Fiber \(targets.fiber)g", systemImage: "leaf")
                 }
-                .font(.caption.weight(.medium))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             }
         }
@@ -1633,13 +1633,13 @@ struct MacroRing: View {
                     .stroke(color, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Text("\(current)g")
-                    .font(.caption.weight(.medium))
+                    .font(.fernlet(.stat))
             }
             .frame(width: 68, height: 68)
             Text(label)
-                .font(.caption.weight(.medium))
+                .font(.fernlet(.labelSmall))
             Text("of \(goal)g")
-                .font(.caption2)
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
         }
         .frame(maxWidth: .infinity)
@@ -1659,7 +1659,7 @@ struct HygieneCard: View {
                         SectionLabel("Hygiene")
                         Spacer()
                         Text("\(progress.completed)/\(progress.total)")
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.stat))
                             .foregroundStyle(progress.completed == progress.total ? Color.moss : Color.slate)
                     }
                     HStack(spacing: 3) {
@@ -1673,7 +1673,7 @@ struct HygieneCard: View {
                         ForEach(store.personalCareTasks) { task in
                             Button { store.togglePersonalCareTask(task) } label: {
                                 Label(task.label, systemImage: task.systemImage)
-                                    .font(.caption2.weight(.medium))
+                                    .font(.fernlet(.label))
                                     .lineLimit(1)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 6)
@@ -1696,7 +1696,7 @@ struct EmptyState: View {
 
     var body: some View {
         Text(text)
-            .font(.callout.italic())
+            .font(.fernlet(.bubble))
             .foregroundStyle(Color.slate)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.vertical, 18)

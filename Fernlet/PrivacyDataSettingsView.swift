@@ -142,13 +142,13 @@ struct PrivacyDataSettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             SectionLabel("Fresh verification required")
             Text("Privacy & Data requires a fresh biometric or device passcode check every time you enter.")
-                .font(.callout.italic())
+                .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
             if let verificationError {
                 Text(verificationError)
-                    .font(.caption.weight(.medium))
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.terracotta)
                     .fernletWrappingText()
             }
@@ -160,7 +160,7 @@ struct PrivacyDataSettingsView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
-            .font(.headline.weight(.semibold))
+            .font(.fernlet(.label))
             .foregroundStyle(.white)
             .padding(.vertical, 14)
             .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
@@ -176,17 +176,17 @@ struct PrivacyDataSettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             SectionLabel("App lock needed")
             Text("Set up app lock to access privacy settings")
-                .font(.title3.weight(.semibold))
+                .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
                 .fernletWrappingText()
             Text("Privacy controls include iCloud deletion, Health access, and backup behavior, so Fernlet requires a lock before showing them.")
-                .font(.callout.italic())
+                .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
             Button("Set up app lock") { showLockSetup = true }
                 .buttonStyle(.plain)
-                .font(.headline.weight(.semibold))
+                .font(.fernlet(.label))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -209,7 +209,7 @@ struct PrivacyDataSettingsView: View {
 
             if let operationError {
                 Text(operationError)
-                    .font(.caption.weight(.medium))
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.terracotta)
                     .fernletWrappingText()
                     .padding(.horizontal, 4)
@@ -224,10 +224,10 @@ struct PrivacyDataSettingsView: View {
             Toggle(isOn: iCloudBinding) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Sync to iCloud")
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                     Text("Private database sync for daily logs across your Fernlet devices.")
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
@@ -242,7 +242,7 @@ struct PrivacyDataSettingsView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
-            .font(.subheadline.weight(.semibold))
+            .font(.fernlet(.label))
             .foregroundStyle(.white)
             .padding(.vertical, 11)
             .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
@@ -286,12 +286,12 @@ struct PrivacyDataSettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("Multiple devices")
                 Text(warning.message)
-                    .font(.callout.weight(.medium))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
                 if warning == .anotherDeviceHasData, let summary = existingDataSummary {
                     Text("Found \(summary.mealLogCount) meal logs, \(summary.journalEntryCount) journal entries, \(summary.workoutCount) workouts in this iCloud account.")
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
@@ -320,7 +320,7 @@ struct PrivacyDataSettingsView: View {
 
                     if store.sealedBackupEscrowConflict {
                         Text("We found the backup key from your other device. To keep your encrypted backups in sync across devices, this device can switch to it. Backups made only on this device may need to be re-uploaded.")
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                         Button { resolveEscrowConflict() } label: {
@@ -329,7 +329,7 @@ struct PrivacyDataSettingsView: View {
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.plain)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(.white)
                         .padding(.vertical, 11)
                         .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
@@ -339,7 +339,7 @@ struct PrivacyDataSettingsView: View {
 
                     ForEach(attentionItems) { item in
                         Text(restoreStatusMessage(item.outcome, payload: item.payload))
-                            .font(.caption.weight(.medium))
+                            .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -350,7 +350,7 @@ struct PrivacyDataSettingsView: View {
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.plain)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(.white)
                         .padding(.vertical, 11)
                         .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
@@ -402,10 +402,10 @@ struct PrivacyDataSettingsView: View {
             Toggle(isOn: healthKitMasterBinding) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Health integration")
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                     Text("Turns Fernlet's Health access on or off. Disabling clears locally cached Health data.")
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
@@ -429,7 +429,7 @@ struct PrivacyDataSettingsView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
-            .font(.subheadline.weight(.semibold))
+            .font(.fernlet(.label))
             .foregroundStyle(.white)
             .padding(.vertical, 11)
             .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
@@ -445,10 +445,10 @@ struct PrivacyDataSettingsView: View {
             Toggle(isOn: localBackupIncludedBinding) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Include local data in iOS backup")
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                     Text("When off, your local Fernlet data is excluded from iOS and iCloud device backups.")
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
@@ -464,7 +464,7 @@ struct PrivacyDataSettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel("App lock data")
             Text("Fernlet protects your data with its own passcode, separate from your device passcode. Removing your device passcode will not affect your Fernlet app lock or erase your protected data.")
-                .font(.caption)
+                .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
@@ -475,7 +475,7 @@ struct PrivacyDataSettingsView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
-            .font(.subheadline.weight(.semibold))
+            .font(.fernlet(.label))
             .foregroundStyle(.white)
             .padding(.vertical, 11)
             .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
@@ -500,7 +500,7 @@ struct PrivacyDataSettingsView: View {
                 ProgressView()
                     .tint(Color.moss)
                 Text("Updating storage settings…")
-                    .font(.headline.weight(.semibold))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
             }
             .padding(20)
@@ -518,7 +518,7 @@ struct PrivacyDataSettingsView: View {
                         ProgressView()
                             .tint(Color.moss)
                         Text("Updating storage settings…")
-                            .font(.headline.weight(.semibold))
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                         Spacer()
                     }
@@ -535,7 +535,7 @@ struct PrivacyDataSettingsView: View {
                             cloudCountsCard
 
                             Text("Stopping sync keeps your data on this device but disconnects it from iCloud: changes you make here will no longer reach your other Fernlet devices, and theirs won't reach you. The two will drift apart until you turn sync back on.")
-                                .font(.callout.weight(.medium))
+                                .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                                 .fernletWrappingText()
                                 .padding(14)
@@ -543,7 +543,7 @@ struct PrivacyDataSettingsView: View {
                                 .accessibilityIdentifier("privacy.icloud.divergenceWarning")
 
                             Text("This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else.")
-                                .font(.callout.weight(.medium))
+                                .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                                 .fernletWrappingText()
                                 .padding(14)
@@ -565,7 +565,7 @@ struct PrivacyDataSettingsView: View {
                             stopSyncingKeepCloudData()
                         }
                         .buttonStyle(.plain)
-                        .font(.headline)
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.moss)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -578,7 +578,7 @@ struct PrivacyDataSettingsView: View {
                                 disableICloudSyncAndDeleteCloudData()
                             }
                             .buttonStyle(.plain)
-                            .font(.headline)
+                            .font(.fernlet(.label))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 28)
                             .padding(.vertical, 16)
@@ -611,21 +611,21 @@ struct PrivacyDataSettingsView: View {
                 HStack(spacing: 8) {
                     ProgressView()
                     Text("Checking iCloud")
-                        .font(.caption.weight(.medium))
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
             } else if let summary = existingDataSummary {
                 Text("\(summary.mealLogCount) meal logs, \(summary.journalEntryCount) journal entries, \(summary.workoutCount) workouts")
-                    .font(.headline.weight(.semibold))
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
                     .accessibilityIdentifier("privacy.icloud.counts")
                 Text("Also found \(summary.hygieneLogCount) hygiene logs, \(summary.hydrationLogCount) hydration logs, and \(summary.sleepRecordCount) sleep records.")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             } else {
                 Text("No Fernlet iCloud records were found.")
-                    .font(.headline.weight(.semibold))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
             }
         }

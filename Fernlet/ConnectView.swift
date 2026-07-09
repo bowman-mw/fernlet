@@ -200,7 +200,7 @@ struct FriendsView: View {
                     HStack(spacing: 10) {
                         ProgressView().tint(Color.moss).scaleEffect(0.85)
                         Text("Looking for nearby friends…")
-                            .font(.footnote)
+                            .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                         Spacer()
                     }
@@ -232,10 +232,10 @@ struct FriendsView: View {
                     .foregroundStyle(Color.goldenrod)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Your photo shelf is nearly full")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                     Text("You're keeping \(manager.meshPhotos.count) of \(PrivateMediaStore.maxCachedPhotos) shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep.")
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -329,7 +329,7 @@ struct FriendsView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(Color.bark.opacity(0.18))
             Text("Photos from your hangouts\nwill appear here")
-                .font(.callout.italic())
+                .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
         }
@@ -447,7 +447,7 @@ private struct FriendPhotoCarouselPostView: View {
             .overlay(alignment: .topTrailing) {
                 if chromeVisible, post.photos.count > 1 {
                     Text("\(selectedIndex + 1) / \(post.photos.count)")
-                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .font(.fernlet(.stat))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -523,10 +523,10 @@ private struct FriendPhotoCarouselPostView: View {
             FriendProfilePlaceholder()
             VStack(alignment: .leading, spacing: 2) {
                 Text(selectedPhoto.senderName)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 Text(selectedPhoto.addedAt, style: .date)
-                    .font(.caption)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
             Spacer()
@@ -696,10 +696,10 @@ private struct NearbySlotRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(peerName)
-                    .font(.subheadline.weight(.medium))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 Text(stateLabel)
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
             }
             Spacer()
@@ -721,11 +721,11 @@ private struct NearbySlotRow: View {
             if showDebugOverride {
                 Button("Force", action: onForceConnect)
                     .buttonStyle(ChipButtonStyle(selected: true))
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.label))
                     .accessibilityIdentifier("friends.forceConnect.\(slot.id)")
             } else if let d = distanceMeters {
                 Text(String(format: "%.0f cm", d * 100))
-                    .font(.caption.monospacedDigit())
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
         case .awaitingManualCommit:
@@ -823,12 +823,12 @@ struct ConnectionSuccessOverlay: View {
 
                 VStack(spacing: 6) {
                     Text(peerName)
-                        .font(.system(size: 30, weight: .bold, design: .serif))
+                        .font(.fernlet(.display))
                         .foregroundStyle(Color.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     Text("Connected")
-                        .font(.footnote.weight(.semibold))
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.moss)
                         .textCase(.uppercase)
                         .tracking(1.4)

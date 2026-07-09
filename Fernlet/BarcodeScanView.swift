@@ -155,12 +155,12 @@ struct BarcodeScanView: View {
 
                 VStack(spacing: 12) {
                     Text("Camera access is off")
-                        .font(.system(size: 25, weight: .semibold, design: .serif))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                         .multilineTextAlignment(.center)
 
                     Text("No worries — you can add a photo of the barcode, or just enter it by hand.")
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
@@ -184,7 +184,7 @@ struct BarcodeScanView: View {
                         }
                     } label: {
                         Label("Add a photo instead", systemImage: "camera.fill")
-                            .font(.headline)
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.cream)
                             .frame(maxWidth: .infinity)
                             .padding(15)
@@ -200,7 +200,7 @@ struct BarcodeScanView: View {
                         onCode("")
                     } label: {
                         Text("Enter details by hand")
-                            .font(.headline)
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.goldenrod)
                             .frame(maxWidth: .infinity)
                             .padding(14)
@@ -219,7 +219,7 @@ struct BarcodeScanView: View {
                     }
                 } label: {
                     Text("Turn on camera in Settings")
-                        .font(.subheadline.weight(.medium))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.slate)
                         .underline()
                 }
@@ -242,14 +242,14 @@ struct BarcodeScanView: View {
                     HStack(spacing: 8) {
                         ProgressView()
                         Text("Looking for a barcode...")
-                            .font(.callout.italic())
+                            .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                     }
                 }
 
                 if let detectionNotice {
                     Text(detectionNotice)
-                        .font(.caption.italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
@@ -335,7 +335,7 @@ private struct ScanFrameOverlay: View {
 
                 // Caption below the window.
                 Text(caption)
-                    .font(.system(size: 19, design: .serif))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.cream)
                     .multilineTextAlignment(.center)
                     .shadow(color: .black.opacity(0.4), radius: 6)
@@ -529,19 +529,19 @@ struct BarcodeNotFoundView: View {
                             .frame(width: 52, height: 52)
                         VStack(alignment: .leading, spacing: 3) {
                             Text("New to Fernlet")
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .tracking(1.2)
                                 .textCase(.uppercase)
                                 .foregroundStyle(Color.goldenrod)
                             Text("We haven't met this one")
-                                .font(.system(size: 25, weight: .semibold, design: .serif))
+                                .font(.fernlet(.header))
                                 .foregroundStyle(Color.bark)
                                 .fernletWrappingText()
                         }
                     }
 
                     Text("Give it a name and it'll be here next time you scan.")
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
@@ -566,10 +566,10 @@ struct BarcodeNotFoundView: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(scanResult == nil ? "Scan the nutrition label" : "Rescan the nutrition label")
-                                    .font(.system(size: 17, weight: .regular, design: .serif))
+                                    .font(.fernlet(.body))
                                     .foregroundStyle(Color.bark)
                                 Text("optional — we'll read the macros for you")
-                                    .font(.footnote)
+                                    .font(.fernlet(.bodySmall))
                                     .foregroundStyle(Color.slate)
                                     .fernletWrappingText()
                             }
@@ -592,11 +592,11 @@ struct BarcodeNotFoundView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack(alignment: .firstTextBaseline) {
                             Text("Macros, per serving")
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                             Spacer()
                             Text("grams — no calories here")
-                                .font(.caption.italic())
+                                .font(.fernlet(.bubble))
                                 .foregroundStyle(Color.softTaupe)
                         }
 
@@ -608,12 +608,12 @@ struct BarcodeNotFoundView: View {
 
                         if scanResult == nil {
                             Text("Scanning the label fills in the macros — you can also add them later.")
-                                .font(.caption.italic())
+                                .font(.fernlet(.bubble))
                                 .foregroundStyle(Color.slate)
                                 .fernletWrappingText()
                         } else if let servingSize = scanResult?.servingSize, servingSize.isEmpty == false {
                             Text("Per serving: \(servingSize)")
-                                .font(.caption)
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                         }
                     }
@@ -698,11 +698,11 @@ private struct RememberedConfirmationView: View {
 
                 VStack(spacing: 12) {
                     Text("Remembered")
-                        .font(.system(size: 32, weight: .semibold, design: .serif))
+                        .font(.fernlet(.display))
                         .foregroundStyle(Color.bark)
 
                     Text("\(item.name) is in your foods now — scan it again and it'll log in a tap.")
-                        .font(.system(size: 18, design: .serif))
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
@@ -722,7 +722,7 @@ private struct RememberedConfirmationView: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(item.name)
-                            .font(.system(size: 16, weight: .regular, design: .serif))
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .lineLimit(1)
                         HStack(spacing: 10) {
@@ -733,7 +733,7 @@ private struct RememberedConfirmationView: View {
                             Text("F \(item.macros.fat)")
                                 .foregroundStyle(Color.terracotta)
                         }
-                        .font(.caption.weight(.medium))
+                        .font(.fernlet(.stat))
                     }
                     Spacer(minLength: 0)
                 }
@@ -749,7 +749,7 @@ private struct RememberedConfirmationView: View {
 
             Button(action: onDone) {
                 Text("Done")
-                    .font(.headline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.cream)
                     .frame(maxWidth: .infinity)
                     .padding(16)
@@ -791,13 +791,13 @@ private struct MacroRingTile: View {
                     .stroke(tint, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Text("\(grams)g")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
             }
             .frame(width: 56, height: 56)
 
             Text(label)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(tint)
         }
         .frame(maxWidth: .infinity)

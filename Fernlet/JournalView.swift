@@ -40,7 +40,7 @@ struct JournalView: View {
                         if store.day.journals.isEmpty {
                             Button { activeSheet = .journal } label: {
                                 Text("How was today?")
-                                    .font(.body.italic())
+                                    .font(.fernlet(.bubble))
                                     .foregroundStyle(Color.slate)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.vertical, 10)
@@ -121,7 +121,7 @@ struct JournalSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Journal")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     SheetField("Feeling") {
@@ -141,7 +141,7 @@ struct JournalSheet: View {
                     }
 
                     Text("\(text.count)/800")
-                        .font(.caption)
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
@@ -183,7 +183,7 @@ struct JournalSheet: View {
                         .foregroundStyle(Color.goldenrod)
                         .padding(.top, 2)
                     Text(prompt)
-                        .font(.callout.italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
                     Spacer(minLength: 0)
@@ -204,7 +204,7 @@ struct JournalSheet: View {
                 Button("Start from this") {
                     text = prompt + "\n"
                 }
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.moss)
                 .buttonStyle(.plain)
                 .accessibilityHint("Inserts the prompt so you can write under it")
@@ -330,10 +330,10 @@ struct JournalPromptNotificationView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(notification.reason.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 Text(notification.reason.message)
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -399,7 +399,7 @@ struct JournalEntryEditorSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Edit journal")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     SheetField("Feeling") {
@@ -416,7 +416,7 @@ struct JournalEntryEditorSheet: View {
                     }
 
                     Text("\(text.count)/800")
-                        .font(.caption)
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                         .frame(maxWidth: .infinity, alignment: .trailing)
 
@@ -425,7 +425,7 @@ struct JournalEntryEditorSheet: View {
                         dismiss()
                     } label: {
                         Label("Delete journal entry", systemImage: "trash")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.terracotta)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(14)
@@ -525,7 +525,7 @@ struct JournalCalendarCard: View {
                     .buttonStyle(.plain)
 
                     Text(model.monthTitle)
-                        .font(.title3.weight(.semibold))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                         .frame(maxWidth: .infinity)
 
@@ -546,7 +546,7 @@ struct JournalCalendarCard: View {
 
                 LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
-                        Text(day).font(.caption2.weight(.semibold)).foregroundStyle(Color.slate)
+                        Text(day).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                     }
                     ForEach(model.cells) { cell in
                         JournalCalendarCell(cell: cell) {
@@ -566,7 +566,7 @@ struct JournalCalendarCard: View {
             ForEach(FeelingTag.allCases) { tag in
                 HStack(spacing: 4) {
                     Circle().fill(tag.color).frame(width: 8, height: 8)
-                    Text(tag.label).font(.caption2).foregroundStyle(Color.slate)
+                    Text(tag.label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
             }
         }
@@ -593,7 +593,8 @@ struct JournalCalendarCell: View {
                 if let day = cell.day {
                     VStack(spacing: 1) {
                         Text("\(day)")
-                            .font(.caption2.weight(cell.isToday ? .bold : .medium))
+                            .font(.fernlet(.stat))
+                            .fontWeight(cell.isToday ? .bold : .medium)
                             .foregroundStyle(
                                 cell.isFuture ? Color.bark.opacity(0.28)
                                     : cell.isToday ? Color.moss
@@ -703,33 +704,33 @@ struct JournalRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Circle().fill(entry.tag.color).frame(width: 10, height: 10)
-                Text(entry.tag.label).font(.caption).foregroundStyle(Color.slate)
+                Text(entry.tag.label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 if compact {
-                    Text(FernletDate.shortDate(for: entry.date)).font(.caption).foregroundStyle(Color.slate)
+                    Text(FernletDate.shortDate(for: entry.date)).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
             }
             if entry.text.isEmpty {
                 if entry.isQuickMood {
                     // Positively a tag-only mood check-in (one-tap mood): no text, just the feeling above.
                     Text("A quick mood check-in.")
-                        .font(.callout.italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                 } else {
                     // Empty text without the check-in marker: the words are sealed and unavailable in
                     // this state (locked, or synced from another device before the sealed narrative
                     // restored) — never claim the entry was "just a check-in".
                     Text("This entry is sealed.")
-                        .font(.callout.italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                 }
             } else {
                 Text(entry.text)
-                    .font(.callout)
+                    .font(.fernlet(.body))
                     .lineLimit(compact ? 3 : nil)
             }
             if !entry.emotions.isEmpty {
                 Text(entry.emotions.joined(separator: ", "))
-                    .font(.caption)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.moss)
             }
         }
@@ -860,7 +861,7 @@ struct DayDetailView: View {
                         Image(systemName: "pencil")
                         Text("Edit day")
                     }
-                    .font(.subheadline.weight(.medium))
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
@@ -891,12 +892,12 @@ struct DayDetailView: View {
                     SectionLabel("Micronutrients")
                     Spacer()
                     Text(micronutrientRows.isEmpty ? "No snapshots" : "\(micronutrientRows.count) tracked")
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                 }
                 if dayMicronutrients.completeness < 0.5 {
                     Text("Partial nutrition data — some meals were logged without micronutrients.")
-                        .font(.caption.italic())
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
@@ -917,10 +918,10 @@ struct DayDetailView: View {
         FernletCard {
             VStack(alignment: .leading, spacing: 10) {
                 Text(reviewTitle)
-                    .font(.system(size: 22, weight: .bold, design: .serif))
+                    .font(.fernlet(.header))
                     .foregroundStyle(Color.bark)
                 Text(reviewBlurb)
-                    .font(.callout)
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fixedSize(horizontal: false, vertical: true)
                 Divider()
@@ -928,13 +929,13 @@ struct DayDetailView: View {
                     .padding(.vertical, 2)
                 HStack {
                     Text("Daily score")
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                         .tracking(0.5)
                         .textCase(.uppercase)
                     Spacer()
                     Text("\(Int(dayScore * 100))%")
-                        .font(.caption.weight(.bold))
+                        .font(.fernlet(.stat))
                         .foregroundStyle(scoreState.color)
                 }
                 HealthBar(state: scoreState, value: dayScore)
@@ -951,15 +952,15 @@ struct DayDetailView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(meal.name)
-                                .font(.callout.weight(.medium))
+                                .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                             Text("P \(meal.macros.protein)g · C \(meal.macros.carbs)g · F \(meal.macros.fat)g")
-                                .font(.caption)
+                                .font(.fernlet(.stat))
                                 .foregroundStyle(Color.slate)
                         }
                         Spacer()
                         Text(meal.mealType.rawValue)
-                            .font(.caption2)
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(meal.mealType.color)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -980,10 +981,10 @@ struct DayDetailView: View {
                 ForEach(Array(day.workouts.enumerated()), id: \.element.id) { index, workout in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(workout.name)
-                            .font(.callout.weight(.medium))
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                         Text("\(workout.type.rawValue) · \(workout.intensity.rawValue.capitalized)")
-                            .font(.caption)
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                     }
                     .padding(.vertical, 4)
@@ -1004,11 +1005,11 @@ struct DayDetailView: View {
                         .foregroundStyle(day.bottleCount > 0 ? Color.slate : Color.slate.opacity(0.3))
                 }
                 Text(day.bottleCount == 0 ? "None logged" : "\(day.bottleCount) \(day.bottleCount == 1 ? "bottle" : "bottles")")
-                    .font(.callout)
+                    .font(.fernlet(.stat))
                     .foregroundStyle(day.bottleCount == 0 ? Color.slate.opacity(0.45) : Color.bark)
                 if day.bottleCount > 0 {
                     Text("\(day.bottleCount * store.settings.bottleOz) oz total")
-                        .font(.caption)
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                 }
             }
@@ -1027,17 +1028,17 @@ struct DayDetailView: View {
                 }
                 if let sleep = day.sleep {
                     Text(sleep.quality.label)
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                     if let hours = sleep.hours {
                         let h = hours.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(hours)) : String(hours)
                         Text("\(h)h")
-                            .font(.caption)
+                            .font(.fernlet(.stat))
                             .foregroundStyle(Color.slate)
                     }
                 } else {
                     Text("Not logged")
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate.opacity(0.45))
                 }
             }
@@ -1068,7 +1069,7 @@ struct DayDetailView: View {
                     SectionLabel("Care checklist")
                     Spacer()
                     Text("\(progress.completed)/\(progress.total)")
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.stat))
                         .foregroundStyle(progress.completed == progress.total ? Color.moss : Color.slate)
                 }
                 HStack(spacing: 3) {
@@ -1081,7 +1082,7 @@ struct DayDetailView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 6)], spacing: 6) {
                     ForEach(store.personalCareTasks) { task in
                         Label(task.label, systemImage: task.systemImage)
-                            .font(.caption2.weight(.medium))
+                            .font(.fernlet(.labelSmall))
                             .lineLimit(1)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
@@ -1144,11 +1145,11 @@ struct DayMicronutrientRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(row.name)
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.bark)
                 Spacer()
                 Text(row.displayValue)
-                    .font(.caption.weight(.bold))
+                    .font(.fernlet(.stat))
                     .foregroundStyle(row.statusColor)
             }
             HStack(spacing: 8) {
@@ -1163,7 +1164,7 @@ struct DayMicronutrientRow: View {
                 }
                 .frame(height: 7)
                 Text(row.targetText)
-                    .font(.caption2)
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
                     .frame(width: 82, alignment: .trailing)
             }
@@ -1226,7 +1227,7 @@ struct DayEditSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Edit \(formattedDate)")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     SheetField("Journal entry") {
@@ -1239,7 +1240,7 @@ struct DayEditSheet: View {
                             }
                             SheetTextEditor(text: limitedJournalText, placeholder: "Add a note about this day…", minHeight: 100)
                             Text("\(journalText.count)/800")
-                                .font(.caption)
+                                .font(.fernlet(.stat))
                                 .foregroundStyle(Color.slate)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                         }
@@ -1268,7 +1269,7 @@ struct DayEditSheet: View {
                                             .font(.caption)
                                             .foregroundStyle(Color.slate)
                                     }
-                                    .font(.subheadline)
+                                    .font(.fernlet(.label))
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 10)
                                     .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -1288,7 +1289,7 @@ struct DayEditSheet: View {
                                             .font(.caption)
                                             .foregroundStyle(Color.slate)
                                     }
-                                    .font(.subheadline)
+                                    .font(.fernlet(.label))
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 10)
                                     .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -1327,7 +1328,7 @@ struct DayEditSheet: View {
                             ForEach(store.personalCareTasks) { task in
                                 Button { togglePersonalCareTask(task) } label: {
                                     Label(task.label, systemImage: task.systemImage)
-                                        .font(.caption2.weight(.medium))
+                                        .font(.fernlet(.labelSmall))
                                         .lineLimit(1)
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 6)

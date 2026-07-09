@@ -45,7 +45,7 @@ struct MoveView: View {
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(Color.moss)
                             Text("Today's readiness: \(readiness.value)")
-                                .font(.subheadline.weight(.medium))
+                                .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                             Spacer(minLength: 0)
                         }
@@ -62,7 +62,7 @@ struct MoveView: View {
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(Color.moss)
                             Text("\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
-                                .font(.subheadline.weight(.medium))
+                                .font(.fernlet(.label))
                                 .foregroundStyle(Color.bark)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.82)
@@ -220,7 +220,7 @@ struct WorkoutSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Log workout")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     SheetField("Workout") {
@@ -443,7 +443,7 @@ struct QuickExerciseSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Quick exercise")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     WorkoutExerciseBuilder(
@@ -527,23 +527,23 @@ struct WorkoutSuggestionSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text(dayPlan == nil ? "Suggest workout" : "Today's session")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     if let dayPlan {
                         VStack(alignment: .leading, spacing: 14) {
                             Text("\(dayPlan.splitName) · \(dayPlan.dayTitle)")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.moss)
                             ForEach(dayPlan.sessions) { session in
                                 VStack(alignment: .leading, spacing: 10) {
                                     Text(session.suggestion.name)
-                                        .font(.title3.weight(.semibold))
+                                        .font(.fernlet(.headerMedium))
                                         .foregroundStyle(Color.bark)
                                     Text(session.suggestion.exercises)
                                         .foregroundStyle(Color.bark)
                                     Text(session.suggestion.notes)
-                                        .font(.caption.italic())
+                                        .font(.fernlet(.bubble))
                                         .foregroundStyle(Color.slate)
                                         .fernletWrappingText()
                                 }
@@ -566,7 +566,7 @@ struct WorkoutSuggestionSheet: View {
                                                 Image(systemName: "wand.and.stars")
                                                     .font(.caption.weight(.semibold))
                                                 Text(isAdjusting ? "Adjusting…" : "Adjust with AI")
-                                                    .font(.subheadline.weight(.semibold))
+                                                    .font(.fernlet(.label))
                                             }
                                             .foregroundStyle(Color.moss)
                                             .padding(.horizontal, 14)
@@ -584,7 +584,7 @@ struct WorkoutSuggestionSheet: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 if let rec = recommendedIntensity {
                                     Text("Today's readiness suggests \(rec.rawValue.lowercased()).")
-                                        .font(.caption)
+                                        .font(.fernlet(.bodySmall))
                                         .foregroundStyle(Color.slate)
                                 }
                                 FlowLayout(spacing: 8) {
@@ -620,7 +620,7 @@ struct WorkoutSuggestionSheet: View {
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(Color.moss)
                                 Text("Equipment & limits · \(store.settings.activeWorkoutLocation.name)")
-                                    .font(.subheadline.weight(.medium))
+                                    .font(.fernlet(.label))
                                     .foregroundStyle(Color.bark)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.82)
@@ -637,7 +637,7 @@ struct WorkoutSuggestionSheet: View {
                         .buttonStyle(.plain)
 
                         Text("Built from your \(store.settings.selectedGoal.displayName.lowercased()) split, your equipment, and anything you note here.")
-                            .font(.caption.italic())
+                            .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -696,11 +696,11 @@ struct WorkoutRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
-                Text(workout.name).font(.headline)
+                Text(workout.name).font(.fernlet(.headerMedium))
                 Spacer()
                 if let rpe = workout.rpe {
                     Text("RPE \(rpe, specifier: "%.1g")")
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.stat))
                         .foregroundStyle(rpe >= 8 ? Color.terracotta : Color.moss)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -713,7 +713,7 @@ struct WorkoutRow: View {
                 if let duration = workout.duration { Text("\(duration) min") }
                 Text(workout.intensity.rawValue)
             }
-            .font(.caption)
+            .font(.fernlet(.labelSmall))
             .foregroundStyle(Color.slate)
             if !workout.exerciseLines.isEmpty {
                 VStack(spacing: 8) {
@@ -724,12 +724,12 @@ struct WorkoutRow: View {
             }
             if !targetSummary.isEmpty {
                 Text("Targets: \(targetSummary)")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
             }
             if !workout.notes.isEmpty {
                 Text(workout.notes)
-                    .font(.caption.italic())
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
             }
         }
@@ -746,7 +746,7 @@ struct WorkoutExerciseRow: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.moss)
             Text(exercise)
-                .font(.callout.weight(.medium))
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -766,15 +766,15 @@ struct WorkoutCategoryPreview: View {
                 .frame(width: 10, height: 10)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Category")
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 Text(category.rawValue)
-                    .font(.callout.weight(.semibold))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
             }
             Spacer()
             Text("Auto")
-                .font(.caption2.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(category.color)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -825,7 +825,7 @@ struct MoveGoalSummaryLine: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.moss)
                 Text(summary)
-                    .font(.subheadline.weight(.medium))
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
@@ -962,7 +962,7 @@ struct WorkoutExerciseBuilder: View {
             if showAddButton {
                 Button(action: onAdd) {
                     Label(addLabel, systemImage: "plus.circle.fill")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(selectedExercise == nil ? Color.slate.opacity(0.45) : Color.moss)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(12)
@@ -1038,10 +1038,10 @@ struct ExerciseSearchResultRow: View {
                     .padding(.top, 5)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(exercise.name)
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                     Text("\(exercise.category.rawValue) - \(exercise.muscles.joined(separator: ", "))")
-                        .font(.caption2)
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
                 Spacer()
@@ -1065,13 +1065,13 @@ struct LoggedExerciseRow: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.exercise.name)
-                    .font(.body.weight(.medium))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 Text(entry.summary.replacingOccurrences(of: entry.exercise.name, with: "").trimmingCharacters(in: .whitespaces))
-                    .font(.caption)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 Text(entry.exercise.muscles.joined(separator: ", "))
-                    .font(.caption2)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(entry.exercise.category.color)
             }
             Spacer()
@@ -1098,10 +1098,10 @@ struct EditablePlannedExerciseRow: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.exercise.name)
-                        .font(.body.weight(.medium))
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                     Text(entry.exercise.muscles.joined(separator: ", "))
-                        .font(.caption2)
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(entry.exercise.category.color)
                 }
                 Spacer()
@@ -1143,7 +1143,7 @@ struct EditablePlannedExerciseRow: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.caption2.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             TextField(label, text: text)
                 .keyboardType(keyboard)
@@ -1197,7 +1197,7 @@ struct WorkoutCalendarCard: View {
                     .accessibilityLabel("Previous week")
 
                     Text(model.weekTitle)
-                        .font(.title3.weight(.semibold))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                         .frame(maxWidth: .infinity)
 
@@ -1231,7 +1231,7 @@ struct WorkoutCalendarCard: View {
             ForEach(legendSplits) { split in
                 HStack(spacing: 4) {
                     Circle().fill(split.color).frame(width: 8, height: 8)
-                    Text(split.title).font(.caption2).foregroundStyle(Color.slate)
+                    Text(split.title).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
             }
         }
@@ -1248,7 +1248,7 @@ struct WorkoutCalendarCell: View {
         Button(action: onTap) {
             VStack(spacing: 5) {
                 Text(cell.weekdayText)
-                    .font(.caption2.weight(.semibold))
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 RoundedRectangle(cornerRadius: 8)
                     .fill(cell.fill)
@@ -1259,7 +1259,7 @@ struct WorkoutCalendarCell: View {
                     .overlay {
                         VStack(spacing: 4) {
                             Text("\(cell.day)")
-                                .font(.caption.weight(cell.isToday ? .bold : .medium))
+                                .font(.fernlet(.stat))
                                 .foregroundStyle(
                                     cell.isFuture ? Color.bark.opacity(0.28)
                                         : cell.isToday ? Color.moss
@@ -1283,7 +1283,7 @@ struct WorkoutCalendarCell: View {
                     }
                     .frame(height: 46)
                 Text(cell.summaryText)
-                    .font(.caption2)
+                    .font(.fernlet(.labelSmall))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .foregroundStyle(cell.categories.isEmpty && cell.plannedCategories.isEmpty ? Color.slate.opacity(0.45) : Color.slate)
@@ -1467,7 +1467,7 @@ struct MoveDayDetailView: View {
                             Image(systemName: "calendar.badge.plus")
                             Text("Plan")
                         }
-                        .font(.subheadline.weight(.medium))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
@@ -1482,7 +1482,7 @@ struct MoveDayDetailView: View {
                                 Image(systemName: "plus")
                                 Text("Log")
                             }
-                            .font(.subheadline.weight(.medium))
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.bark)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
@@ -1557,7 +1557,7 @@ struct PlannedWorkoutRow: View {
             VStack(alignment: .leading, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(plannedWorkout.name)
-                        .font(.headline)
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                     HStack(spacing: 8) {
                         Text(plannedWorkout.split.title)
@@ -1568,7 +1568,7 @@ struct PlannedWorkoutRow: View {
                             Text("\(duration) min")
                         }
                     }
-                    .font(.caption)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 }
 
@@ -1576,7 +1576,7 @@ struct PlannedWorkoutRow: View {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(Array(stepLines.prefix(4).enumerated()), id: \.offset) { _, line in
                             Text(line)
-                                .font(.caption)
+                                .font(.fernlet(.bodySmall))
                                 .foregroundStyle(Color.bark.opacity(0.82))
                                 .lineLimit(2)
                         }
@@ -1585,17 +1585,17 @@ struct PlannedWorkoutRow: View {
 
                 if !plannedWorkout.notes.isEmpty {
                     Text(plannedWorkout.notes)
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
 
                 HStack(spacing: 10) {
                     Button("Edit", action: onEdit)
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.moss)
                     Button("Remove", role: .destructive, action: onDelete)
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.label))
                 }
             }
             Spacer(minLength: 0)
@@ -1690,14 +1690,14 @@ struct WorkoutPlanSheet: View {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(editingPlan == nil ? "Plan workout" : "Edit plan")
-                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .font(.fernlet(.displayMedium))
                             .foregroundStyle(Color.bark)
                         Text(targetDateTitle)
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.slate)
                         if showsPlanSourceTag {
                             Text("User plan")
-                                .font(.caption2.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.moss)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -1715,10 +1715,10 @@ struct WorkoutPlanSheet: View {
                                     .foregroundStyle(Color.moss)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Copy previous week")
-                                        .font(.subheadline.weight(.semibold))
+                                        .font(.fernlet(.label))
                                         .foregroundStyle(Color.bark)
                                     Text(previousWeekPlan.name)
-                                        .font(.caption)
+                                        .font(.fernlet(.labelSmall))
                                         .foregroundStyle(Color.slate)
                                         .lineLimit(1)
                                 }
@@ -1962,12 +1962,12 @@ struct GoalsCard: View {
                     SectionLabel("Goals")
                     Spacer()
                     Button(store.goals.isEmpty ? "Plan goals" : "Recraft") { activeSheet = .goals }
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.label))
                 }
                 if store.goals.isEmpty {
                     Button { activeSheet = .goals } label: {
                         Text("Tap to craft fitness goals")
-                            .font(.callout.italic())
+                            .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                             .frame(maxWidth: .infinity)
                             .padding()
@@ -1992,13 +1992,13 @@ struct GoalRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(goal.goal).font(.subheadline.weight(.semibold))
+            Text(goal.goal).font(.fernlet(.headerMedium))
             Text("\(goal.timeframe) - \(goal.metric)")
-                .font(.caption)
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             if !goal.milestones.isEmpty {
                 Text(goal.milestones.joined(separator: " - "))
-                    .font(.caption2)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.moss)
             }
         }

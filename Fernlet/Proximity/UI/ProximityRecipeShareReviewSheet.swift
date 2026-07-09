@@ -24,7 +24,7 @@ struct ProximityRecipeShareReviewSheet: View {
                         FernletCard {
                             VStack(alignment: .leading, spacing: 12) {
                                 Label(recipeKindLabel, systemImage: recipeKindIcon)
-                                    .font(.subheadline.weight(.semibold))
+                                    .font(.fernlet(.label))
                                     .foregroundStyle(Color.moss)
                                 HStack(spacing: 12) {
                                     NutritionPill(title: "Servings", value: "\(share.payload.recipe.servings)")
@@ -32,7 +32,7 @@ struct ProximityRecipeShareReviewSheet: View {
                                 }
                                 if let macrosText {
                                     Text(macrosText)
-                                        .font(.caption.weight(.medium))
+                                        .font(.fernlet(.stat))
                                         .foregroundStyle(Color.slate)
                                 }
                             }
@@ -40,7 +40,7 @@ struct ProximityRecipeShareReviewSheet: View {
 
                         if let duplicateWarning {
                             Text(duplicateWarning)
-                                .font(.caption.italic())
+                                .font(.fernlet(.bubble))
                                 .foregroundStyle(Color.slate)
                                 .fernletWrappingText()
                         }
@@ -48,7 +48,7 @@ struct ProximityRecipeShareReviewSheet: View {
                         if let notesText, !notesText.isEmpty {
                             SheetField("Notes") {
                                 Text(notesText)
-                                    .font(.subheadline)
+                                    .font(.fernlet(.body))
                                     .foregroundStyle(Color.bark)
                                     .fernletWrappingText()
                             }
@@ -58,7 +58,7 @@ struct ProximityRecipeShareReviewSheet: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 ForEach(Array(ingredientLines.enumerated()), id: \.offset) { _, line in
                                     Text("- \(line)")
-                                        .font(.subheadline)
+                                        .font(.fernlet(.body))
                                         .foregroundStyle(Color.bark)
                                         .fernletWrappingText()
                                 }
@@ -67,7 +67,7 @@ struct ProximityRecipeShareReviewSheet: View {
 
                         if let notice {
                             Text(notice)
-                                .font(.caption.italic())
+                                .font(.fernlet(.bubble))
                                 .foregroundStyle(Color.slate)
                                 .fernletWrappingText()
                         }

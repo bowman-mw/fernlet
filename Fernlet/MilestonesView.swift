@@ -69,17 +69,17 @@ struct MilestonesView: View {
         if isMostlyEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("The shelf is filling in")
-                    .font(.system(.title2, design: .serif).weight(.semibold))
+                    .font(.fernlet(.header))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
                 Text("These only ever grow, in their own time. There's nothing to keep up with here.")
-                    .font(.callout)
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
         } else {
             Text("Every bit of care you've logged, added up over all time. These numbers only ever grow — nothing here resets, expires, or asks you to keep a streak.")
-                .font(.callout)
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
@@ -90,7 +90,7 @@ struct MilestonesView: View {
                     Image(systemName: "seal")
                         .font(.footnote.weight(.semibold))
                     Text("See your keepsake shelf")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.label))
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.forward")
                         .font(.caption.weight(.semibold))
@@ -119,7 +119,7 @@ struct MilestonesView: View {
             HStack(spacing: 14) {
                 iconTile(row, dimmed: true)
                 Text(row.emptyPrompt)
-                    .font(.system(.subheadline, design: .serif).italic())
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                 Spacer(minLength: 0)
@@ -140,7 +140,7 @@ struct MilestonesView: View {
                 iconTile(row, dimmed: false)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(row.headline)
-                        .font(.system(.body, design: .serif))
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
                     if row.reachedCount > 0 {
@@ -149,7 +149,7 @@ struct MilestonesView: View {
                                 .font(.system(size: 10))
                                 .foregroundStyle(Color.goldenrod)
                             Text(row.reachedCount == 1 ? "1 milestone gift" : "\(row.reachedCount) milestone gifts")
-                                .font(.caption)
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.goldenrod)
                         }
                     }
@@ -182,7 +182,7 @@ struct MilestonesView: View {
             HStack(spacing: 15) {
                 CoinGlyph(diameter: 46)
                 Text("Milestone gifts have added \(totalMilestoneCoins) coins to your pouch.")
-                    .font(.system(.subheadline, design: .serif))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
                 Spacer(minLength: 0)
@@ -203,7 +203,7 @@ struct MilestonesView: View {
             HStack(spacing: 14) {
                 CoinGlyph(diameter: 40, muted: true)
                 Text("No milestone gifts yet — the first lands with your very first log. No rush.")
-                    .font(.system(.subheadline, design: .serif))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                 Spacer(minLength: 0)
@@ -249,15 +249,15 @@ private struct KeepsakeShelfView: View {
             VStack(alignment: .leading, spacing: 20) {
                 if earned.isEmpty {
                     Text("Your keepsake shelf")
-                        .font(.system(.title2, design: .serif).weight(.semibold))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Text("Nothing pressed onto the shelf just yet. Every bit of care will find a place here, in its own time.")
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 } else {
                     Text("Every bit of care, pressed into a keepsake. These only ever grow — nothing resets or expires.")
-                        .font(.system(.body, design: .serif))
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
@@ -271,7 +271,7 @@ private struct KeepsakeShelfView: View {
                         HStack(spacing: 15) {
                             CoinGlyph(diameter: 46)
                             Text("Milestone gifts have added \(totalMilestoneCoins) coins to your pouch.")
-                                .font(.system(.subheadline, design: .serif))
+                                .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                                 .fernletWrappingText()
                             Spacer(minLength: 0)
@@ -325,10 +325,10 @@ private struct KeepsakeShelfView: View {
             PressedMedallion(icon: row.icon, tint: row.tint, diameter: 88)
             VStack(spacing: 1) {
                 Text("\(row.count)")
-                    .font(.system(.title3, design: .serif).weight(.semibold))
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
                 Text(row.shelfLabel)
-                    .font(.caption2)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .multilineTextAlignment(.center)
             }
