@@ -140,10 +140,11 @@ struct FriendsView: View {
                                 NavigationLink {
                                     FriendShopView(store: store, manager: store.clothingShareManager)
                                 } label: {
-                                    headerButtonLabel("bag")
+                                    shopButtonLabel(coins: store.coinBalance)
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("friends.friendShops")
+                                .accessibilityLabel("Friend shops, \(store.coinBalance) coins")
                             }
                             NavigationLink {
                                 FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
@@ -188,6 +189,22 @@ struct FriendsView: View {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .stroke(Color.bark.opacity(0.08), lineWidth: 1)
             )
+    }
+
+    /// The shop bag with a live coin-count badge (mockup 4a "connected · coin badge") — one less
+    /// ambiguous icon: the bag itself carries the balance you'd spend inside.
+    private func shopButtonLabel(coins: Int) -> some View {
+        headerButtonLabel("bag")
+            .overlay(alignment: .topTrailing) {
+                Text("\(coins)")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.bark)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule(style: .continuous).fill(Color.goldenrod))
+                    .overlay(Capsule(style: .continuous).stroke(Color.parchment, lineWidth: 1.5))
+                    .offset(x: 6, y: -5)
+            }
     }
 
     // MARK: - Nearby status banner
