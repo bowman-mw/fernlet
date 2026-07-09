@@ -33,7 +33,7 @@ struct FirstAidView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: FernletMetrics.spaceLg) {
                     header
 
                     VStack(spacing: 12) {
@@ -62,7 +62,9 @@ struct FirstAidView: View {
 
                     supportRow
                 }
-                .padding(20)
+                .padding(.horizontal, FernletMetrics.spaceLg)
+                .padding(.top, FernletMetrics.spaceSm)
+                .padding(.bottom, FernletMetrics.spaceXl)
             }
             .background(Color.parchment)
             .navigationDestination(for: FirstAidTool.self) { tool in
@@ -84,7 +86,7 @@ struct FirstAidView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel("First aid")
                 Spacer()
@@ -93,8 +95,9 @@ struct FirstAidView: View {
                     .foregroundStyle(Color.moss)
             }
             Text("Small tools for a heavy moment. Pick whatever feels kind — or nothing at all.")
-                .font(.fernlet(.body))
+                .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
+                .lineSpacing(3)
                 .fernletWrappingText()
         }
     }
@@ -108,7 +111,7 @@ struct FirstAidView: View {
                     .font(.system(size: 21, weight: .regular))
                     .foregroundStyle(tint)
                     .frame(width: 46, height: 46)
-                    .background(tint.opacity(0.18), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .background(tint.opacity(0.20), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
                         .font(.fernlet(.headerMedium))
@@ -120,14 +123,14 @@ struct FirstAidView: View {
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Color.softTaupe)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 17)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: .bark.opacity(0.05), radius: 3, x: 0, y: 1)
+            .fernletSmallShadow()
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("firstAid.tool.\(tool.rawValue)")
@@ -136,7 +139,7 @@ struct FirstAidView: View {
     /// Static gentle-support row — always visible, never conditional, never tracking anything.
     /// Set apart from the tools with a warmer, goldenrod-tinted card.
     private var supportRow: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 10) {
                 Image(systemName: "heart")
                     .font(.system(size: 17, weight: .regular))
@@ -148,18 +151,19 @@ struct FirstAidView: View {
             Text("Some moments are bigger than any app. You deserve real support — the 988 line is free, kind, and there around the clock.")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
+                .lineSpacing(2)
                 .fernletWrappingText()
+                .padding(.bottom, FernletMetrics.spaceXs)
             HStack(spacing: 10) {
                 supportLink("Call 988", icon: "phone.fill", url: "tel:988", filled: true)
                 supportLink("Text 988", icon: "message.fill", url: "sms:988", filled: false)
             }
-            .padding(.top, 4)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
-                colors: [Color.goldenrod.opacity(0.16), Color.goldenrod.opacity(0.10)],
+                colors: [Color.goldenrod.opacity(0.18), Color.goldenrod.opacity(0.11)],
                 startPoint: .top,
                 endPoint: .bottom
             ),
