@@ -83,8 +83,10 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
     case macros
     case trends
     case ambient
+    case milestones
+    case firstAid
 
-    nonisolated public static let defaultWidgets: [HomeWidget] = [.companion, .todaySummary, .todayIntent, .ambient, .quickLog, .macros, .trends]
+    nonisolated public static let defaultWidgets: [HomeWidget] = [.companion, .todaySummary, .todayIntent, .ambient, .quickLog, .macros, .trends, .firstAid, .milestones]
 
     public var id: String { rawValue }
 
@@ -105,6 +107,8 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
         case .macros: "Macros"
         case .trends: "Trends"
         case .ambient: "Moments"
+        case .milestones: "Milestones"
+        case .firstAid: "First aid"
         }
     }
 
@@ -125,6 +129,8 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
         case .macros: "chart.pie"
         case .trends: "chart.line.uptrend.xyaxis"
         case .ambient: "sparkles"
+        case .milestones: "seal"
+        case .firstAid: "heart.circle"
         }
     }
 
@@ -132,7 +138,7 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
         switch self {
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .hygiene, .trends:
             true
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient:
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid:
             false
         }
     }

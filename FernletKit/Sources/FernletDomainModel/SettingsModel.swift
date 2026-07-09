@@ -54,6 +54,12 @@ public nonisolated struct FernletSettings: Codable {
     public var nutritionPreferences: UserNutritionPreferences = UserNutritionPreferences()
     public var quickLogItems: [FernletShortcut] = FernletShortcut.defaultQuickLog
     public var homeWidgets: [HomeWidget] = HomeWidget.defaultWidgets
+    /// One-time migration marker for the Milestones/First-aid home widgets. Milestones and First aid used
+    /// to be fixed, always-visible home elements; they became configurable `HomeWidget`s. Fresh installs
+    /// start `true` (they already get both via `defaultWidgets`). Legacy settings decode this as `false`
+    /// (the key is absent), which triggers a one-time append of `.milestones`/`.firstAid` in `init(from:)`
+    /// so existing users don't silently lose them, then flips to `true` so it runs at most once.
+    public var didMigrateMilestonesFirstAidWidgets: Bool = true
     public var personalCareTasks: [PersonalCareTask] = PersonalCareTask.defaultTasks
     public var proximityDisplayName: String = ""
     public var showProximityDebugTools: Bool = false
@@ -116,7 +122,17 @@ public nonisolated struct FernletSettings: Codable {
         nutritionPreferences = try container.decodeIfPresent(UserNutritionPreferences.self, forKey: .nutritionPreferences) ?? UserNutritionPreferences()
         let decodedQuickLogItems = try container.decodeIfPresent([FernletShortcut].self, forKey: .quickLogItems) ?? FernletShortcut.defaultQuickLog
         quickLogItems = FernletShortcut.normalizedQuickLog(decodedQuickLogItems)
-        let decodedHomeWidgets = try container.decodeIfPresent([HomeWidget].self, forKey: .homeWidgets) ?? HomeWidget.defaultWidgets
+        var decodedHomeWidgets = try container.decodeIfPresent([HomeWidget].self, forKey: .homeWidgets) ?? HomeWidget.defaultWidgets
+        // One-time migration: Milestones + First aid used to be fixed home elements. If this settings blob
+        // predates them becoming widgets (marker absent ⇒ false), append whichever aren't already present so
+        // existing users keep them on the home feed. Runs at most once; the marker then persists as true.
+        didMigrateMilestonesFirstAidWidgets = try container.decodeIfPresent(Bool.self, forKey: .didMigrateMilestonesFirstAidWidgets) ?? false
+        if !didMigrateMilestonesFirstAidWidgets {
+            for widget in [HomeWidget.firstAid, .milestones] where !decodedHomeWidgets.contains(widget) {
+                decodedHomeWidgets.append(widget)
+            }
+            didMigrateMilestonesFirstAidWidgets = true
+        }
         homeWidgets = HomeWidget.normalized(decodedHomeWidgets)
         let decodedCareTasks = try container.decodeIfPresent([PersonalCareTask].self, forKey: .personalCareTasks) ?? PersonalCareTask.defaultTasks
         personalCareTasks = PersonalCareTask.normalized(decodedCareTasks)

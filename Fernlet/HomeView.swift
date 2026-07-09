@@ -52,8 +52,6 @@ struct HomeView: View {
                     ForEach(store.settings.homeWidgets) { widget in
                         homeWidget(widget)
                     }
-                    firstAidAction
-                    milestonesCard
                 }
                 .padding(20)
             }
@@ -166,6 +164,10 @@ struct HomeView: View {
                 periodPrediction: homePeriodPrediction,
                 stressState: store.settings.stressAwarenessEnabled ? stressService?.assessment?.state : nil
             )
+        case .milestones:
+            milestonesCard
+        case .firstAid:
+            firstAidAction
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .trends:
             HomeActionWidget(widget: widget) {
                 handleHomeWidget(widget)
@@ -740,7 +742,7 @@ struct HomeView: View {
             activeSheet = .hygiene
         case .trends:
             activeSheet = .trends
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient:
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid:
             break
         }
     }
@@ -1569,7 +1571,7 @@ struct HomeActionWidget: View {
         case .water: "Update hydration."
         case .hygiene: "Open care tasks."
         case .trends: "Review local signals."
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient: ""
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid: ""
         }
     }
 }
