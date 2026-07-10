@@ -126,7 +126,7 @@ public nonisolated struct CompanionAppearance: Codable, Equatable {
     }
 }
 
-public nonisolated enum CompanionBodyStyle: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionBodyStyle: String, Codable, CaseIterable, Identifiable, Sendable {
     case circle
     case softBlob
     case pear
@@ -266,7 +266,7 @@ public nonisolated enum CompanionSideItem: String, Codable, CaseIterable, Identi
     }
 }
 
-public nonisolated enum CompanionState: String, Codable {
+public nonisolated enum CompanionState: String, Codable, Sendable {
     case thriving = "Thriving"
     case okay = "Okay"
     case tired = "Tired"

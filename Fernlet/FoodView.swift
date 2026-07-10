@@ -1968,7 +1968,7 @@ struct MealRow: View {
     }
 }
 
-struct MealComponentCorrectionInput: Identifiable {
+nonisolated struct MealComponentCorrectionInput: Identifiable {
     let id: UUID
     let foodItemId: UUID?
     let name: String
@@ -1978,7 +1978,7 @@ struct MealComponentCorrectionInput: Identifiable {
     let baseMacros: Macros
     let baseMicronutrients: Micronutrients
 
-    nonisolated init(snapshot: MealComponentSnapshot) {
+    init(snapshot: MealComponentSnapshot) {
         id = snapshot.id
         foodItemId = snapshot.foodItemId
         name = snapshot.name
@@ -2147,7 +2147,7 @@ struct MealComponentEditorRows: View {
 
 // MARK: - Pre-log review (low-confidence / fabricated resolutions)
 
-private struct EditableReviewMeal: Identifiable {
+private nonisolated struct EditableReviewMeal: Identifiable {
     let id: UUID
     var name: String
     var mealType: MealType
@@ -2157,7 +2157,7 @@ private struct EditableReviewMeal: Identifiable {
     var fat: Int
     let base: Meal
 
-    nonisolated init(base: Meal) {
+    init(base: Meal) {
         id = base.id
         name = base.name
         mealType = base.mealType
