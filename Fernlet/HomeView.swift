@@ -809,7 +809,6 @@ private struct CompanionCustomizationSheet: View {
                         accessoryRow
                         clothingRow
                         sideItemRow
-                        customRow
                     }
                     .padding(20)
                 }
@@ -883,7 +882,9 @@ private struct CompanionCustomizationSheet: View {
                 colorTitle: "Body color",
                 colorSelection: colorPresetBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
                 customColorHex: appearanceBinding(\.bodyCustomColorHex),
-                customColor: customColorBinding(\.bodyColor, customHex: \.bodyCustomColorHex)
+                customColor: customColorBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
+                isBuiltInEquipped: true,
+                customSlots: []
             ) { style in
                 Label(style.label, systemImage: "seal")
             }
@@ -911,15 +912,17 @@ private struct CompanionCustomizationSheet: View {
                 colorTitle: "Accessory color",
                 colorSelection: colorPresetBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
                 customColorHex: appearanceBinding(\.accessoryCustomColorHex),
-                customColor: customColorBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex)
+                customColor: customColorBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
+                isBuiltInEquipped: appearance.accessory != .none,
+                customSlots: [.hat, .face]
             ) { accessory in
                 Label(accessory.label, systemImage: accessoryIcon(accessory))
             }
         } label: {
             slotRowLabel(
                 slot: "Accessory",
-                value: appearance.accessory.label,
-                isEmpty: appearance.accessory == .none,
+                value: rowValue(builtInLabel: appearance.accessory.label, builtInEmpty: appearance.accessory == .none, customSlots: [.hat, .face]),
+                isEmpty: appearance.accessory == .none && equippedCustomItem(in: [.hat, .face]) == nil,
                 accent: false
             ) {
                 slotIcon(accessoryIcon(appearance.accessory))
@@ -938,15 +941,17 @@ private struct CompanionCustomizationSheet: View {
                 colorTitle: "Clothing color",
                 colorSelection: colorPresetBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
                 customColorHex: appearanceBinding(\.clothingCustomColorHex),
-                customColor: customColorBinding(\.clothingColor, customHex: \.clothingCustomColorHex)
+                customColor: customColorBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
+                isBuiltInEquipped: appearance.clothing != .none,
+                customSlots: [.body]
             ) { clothing in
                 Label(clothing.label, systemImage: clothingIcon(clothing))
             }
         } label: {
             slotRowLabel(
                 slot: "Clothing",
-                value: appearance.clothing.label,
-                isEmpty: appearance.clothing == .none,
+                value: rowValue(builtInLabel: appearance.clothing.label, builtInEmpty: appearance.clothing == .none, customSlots: [.body]),
+                isEmpty: appearance.clothing == .none && equippedCustomItem(in: [.body]) == nil,
                 accent: false
             ) {
                 slotIcon(clothingIcon(appearance.clothing))
@@ -965,15 +970,17 @@ private struct CompanionCustomizationSheet: View {
                 colorTitle: "Item color",
                 colorSelection: colorPresetBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
                 customColorHex: appearanceBinding(\.sideItemCustomColorHex),
-                customColor: customColorBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex)
+                customColor: customColorBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
+                isBuiltInEquipped: appearance.sideItem != .none,
+                customSlots: [.heldItem]
             ) { item in
                 Label(item.label, systemImage: item.systemImage)
             }
         } label: {
             slotRowLabel(
                 slot: "Side item",
-                value: appearance.sideItem.label,
-                isEmpty: appearance.sideItem == .none,
+                value: rowValue(builtInLabel: appearance.sideItem.label, builtInEmpty: appearance.sideItem == .none, customSlots: [.heldItem]),
+                isEmpty: appearance.sideItem == .none && equippedCustomItem(in: [.heldItem]) == nil,
                 accent: false
             ) {
                 slotIcon(appearance.sideItem.systemImage)
@@ -982,27 +989,19 @@ private struct CompanionCustomizationSheet: View {
         .buttonStyle(.plain)
     }
 
-    /// Custom items fold into the selector as a final slot that opens the Wardrobe — the recolor
-    /// and design "workshop" lives there now, keeping this sheet a calm picker.
-    private var customRow: some View {
-        let count = store.equippedCustomItems.count
-        let value = count == 0 ? "Make one" : "\(count) equipped · closet"
-        return NavigationLink {
-            WardrobeView(store: store)
-        } label: {
-            slotRowLabel(
-                slot: "Custom",
-                value: value,
-                isEmpty: count == 0,
-                accent: true
-            ) {
-                Image(systemName: "tshirt.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.moss)
-            }
+    /// The value shown on a slot row: the built-in label when a built-in is on; otherwise the name of
+    /// an equipped custom item folded into this slot; otherwise the built-in's "None" label.
+    private func rowValue(builtInLabel: String, builtInEmpty: Bool, customSlots: [ItemSlot]) -> String {
+        if !builtInEmpty { return builtInLabel }
+        if let item = equippedCustomItem(in: customSlots) {
+            return item.name.isEmpty ? item.slot.label : item.name
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("companion.wardrobe")
+        return builtInLabel
+    }
+
+    /// The first equipped custom item whose slot is folded into this row, if any.
+    private func equippedCustomItem(in slots: [ItemSlot]) -> CustomizationItem? {
+        store.equippedCustomItems.first { slots.contains($0.slot) }
     }
 
     /// The shared selector-row chrome: a small icon/swatch, an uppercase slot label, the current
@@ -1058,8 +1057,11 @@ private struct CompanionCustomizationSheet: View {
             .foregroundStyle(Color.slate.opacity(0.7))
     }
 
-    /// A full-screen picker for one slot: the item grid + recolor controls, reusing the existing
-    /// customization card so all pick / recolor / custom-color behavior is preserved verbatim.
+    /// A full-screen picker for one slot: a live companion preview, the built-in item grid + recolor
+    /// controls, and — folded into the same picker — the user's custom items for the slot(s) this row
+    /// covers. Built-ins keep the swatch/ColorPicker recolor; custom items carry their own painted
+    /// colors and so get no color control. Reuses the existing customization card verbatim so all
+    /// built-in pick / recolor / custom-color behavior is preserved.
     private func slotPicker<Item: Identifiable & Hashable, LabelContent: View>(
         title: String,
         items: [Item],
@@ -1068,25 +1070,149 @@ private struct CompanionCustomizationSheet: View {
         colorSelection: Binding<CompanionAssetColor>,
         customColorHex: Binding<String?>,
         customColor: Binding<Color>,
+        isBuiltInEquipped: Bool,
+        customSlots: [ItemSlot],
         @ViewBuilder label: @escaping (Item) -> LabelContent
     ) -> some View {
         ScrollView {
-            CompanionCustomizationCard(
-                title: title,
-                items: items,
-                selection: selection,
-                colorTitle: colorTitle,
-                colorSelection: colorSelection,
-                customColorHex: customColorHex,
-                customColor: customColor,
-                state: store.companionState,
-                label: label
-            )
+            VStack(spacing: 16) {
+                pickerPreview
+
+                CompanionCustomizationCard(
+                    title: title,
+                    items: items,
+                    selection: selection,
+                    colorTitle: colorTitle,
+                    colorSelection: colorSelection,
+                    customColorHex: customColorHex,
+                    customColor: customColor,
+                    state: store.companionState,
+                    // Recolor is a built-in-only control: hidden when no built-in is equipped in
+                    // this slot (custom items paint their own colors).
+                    showsColor: isBuiltInEquipped,
+                    label: label
+                )
+
+                customItemsSection(for: customSlots)
+            }
             .padding(20)
         }
         .background(Color.parchment)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// A live companion preview shown atop each slot picker, so recolor + equip changes are visible
+    /// without leaving the picker.
+    private var pickerPreview: some View {
+        CompanionView(
+            state: store.companionState,
+            appearance: store.settings.companionAppearance,
+            size: 96,
+            interactionLevel: petCount,
+            equippedItems: store.equippedCustomItems
+        )
+        .frame(width: 96, height: 96)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+    }
+
+    /// The custom-item section folded into a slot picker: the user's own items for the covered
+    /// slot(s), each tappable to equip/unequip, plus the standing route into the Wardrobe (which
+    /// still owns designing, editing, and recoloring custom items).
+    @ViewBuilder
+    private func customItemsSection(for slots: [ItemSlot]) -> some View {
+        let items = store.customItems.filter { slots.contains($0.slot) }
+        if slots.isEmpty {
+            EmptyView()
+        } else {
+            FernletCard {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionLabel("Your items")
+
+                if items.isEmpty {
+                    Text("Design one in the Wardrobe to fold it in here.")
+                        .font(.fernlet(.body))
+                        .italic()
+                        .foregroundStyle(Color.slate)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ForEach(items) { item in
+                        customItemButton(item)
+                    }
+                }
+
+                NavigationLink {
+                    WardrobeView(store: store)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "tshirt.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Color.moss)
+                            .frame(width: 34, height: 34)
+                            .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Design & recolor in Wardrobe")
+                                .font(.fernlet(.label))
+                                .foregroundStyle(Color.moss)
+                            Text("Open the closet")
+                                .font(.fernlet(.bodySmall))
+                                .italic()
+                                .foregroundStyle(Color.slate)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.moss)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("companion.wardrobe")
+            }
+            }
+        }
+    }
+
+    /// One custom-item row inside a slot picker. Tap to equip; tap the equipped item to unequip.
+    private func customItemButton(_ item: CustomizationItem) -> some View {
+        let isEquipped = store.equippedCustomItems.contains { $0.id == item.id }
+        return Button {
+            if isEquipped {
+                store.unequipCustomSlot(item.slot)
+            } else {
+                store.equipCustomItem(id: item.id, slot: item.slot)
+            }
+        } label: {
+            HStack(spacing: 12) {
+                CustomItemThumbnail(texture: item.texture, size: 40)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.name.isEmpty ? item.slot.label : item.name)
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.bark)
+                    Text(item.slot.label)
+                        .font(.fernlet(.bodySmall))
+                        .italic()
+                        .foregroundStyle(Color.slate)
+                }
+                Spacer(minLength: 8)
+                if isEquipped {
+                    Text("Equipped")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.moss)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.moss.opacity(0.12), in: Capsule())
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isEquipped ? Color.moss.opacity(0.10) : Color.bark.opacity(0.04))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(item.name.isEmpty ? item.slot.label : item.name), \(isEquipped ? "equipped" : "not equipped")")
     }
 
     private func appearanceBinding<Value>(_ keyPath: WritableKeyPath<CompanionAppearance, Value>) -> Binding<Value> {
@@ -1178,6 +1304,9 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
     @Binding var customColorHex: String?
     @Binding var customColor: Color
     var state: CompanionState
+    /// Whether the built-in recolor control is shown. Off when no built-in is equipped in this slot —
+    /// custom items carry their own painted colors and get no color control.
+    var showsColor: Bool = true
     @ViewBuilder var label: (Item) -> LabelContent
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
@@ -1205,17 +1334,19 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        SectionLabel(colorTitle)
-                        Spacer()
-                        ColorPicker("Custom color", selection: $customColor, supportsOpacity: false)
-                            .labelsHidden()
-                    }
+                if showsColor {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            SectionLabel(colorTitle)
+                            Spacer()
+                            ColorPicker("Custom color", selection: $customColor, supportsOpacity: false)
+                                .labelsHidden()
+                        }
 
-                    LazyVGrid(columns: colorColumns, spacing: 6) {
-                        ForEach(CompanionAssetColor.allCases) { color in
-                            colorButton(for: color)
+                        LazyVGrid(columns: colorColumns, spacing: 6) {
+                            ForEach(CompanionAssetColor.allCases) { color in
+                                colorButton(for: color)
+                            }
                         }
                     }
                 }
