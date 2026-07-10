@@ -11,6 +11,10 @@
 import SwiftUI
 import PrivateMemoryStore
 
+/// Fixed warm parchment for label ink on the moss CTAs — stays light in both modes
+/// (the adaptive Color.parchment flips dark), matching the mockup's #F5EFE0 on-accent.
+private let worryBoxOnMoss = Color(red: 0.961, green: 0.937, blue: 0.878)
+
 // MARK: - Entry (First Aid)
 
 /// Write a worry, then "let it go": the words tuck down into the box, a lid closes over
@@ -29,6 +33,7 @@ struct WorryEntryView: View {
     @FocusState private var isEditorFocused: Bool
 
     private static let characterLimit = 300
+    private static let onMoss = worryBoxOnMoss
 
     var body: some View {
         VStack(spacing: 20) {
@@ -42,9 +47,9 @@ struct WorryEntryView: View {
             }
         }
         .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: phase == .writing ? .top : .center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .background(Color.parchment)
-        .navigationTitle("Worry Box")
+        .navigationTitle("Worry box")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -62,11 +67,21 @@ struct WorryEntryView: View {
 
             TextEditor(text: $text)
                 .focused($isEditorFocused)
-                .frame(minHeight: 150, maxHeight: 220)
-                .padding(12)
+                .frame(minHeight: 180, maxHeight: .infinity)
                 .scrollContentBackground(.hidden)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .font(.fernlet(.body))
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text("It's alright. Just start typing…")
+                            .font(.custom(FernletFontName.instrumentSerifItalic, size: 17, relativeTo: .body))
+                            .foregroundStyle(Color.slate.opacity(0.7))
+                            .padding(.horizontal, 5)
+                            .padding(.top, 8)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .padding(12)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .onChange(of: text) { _, newValue in
                     if newValue.count > Self.characterLimit {
                         text = String(newValue.prefix(Self.characterLimit))
@@ -74,12 +89,19 @@ struct WorryEntryView: View {
                 }
                 .accessibilityLabel("Worry text")
 
+            if text.count > 260 {
+                Text("The box holds about 300 characters.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+
             HStack(spacing: 8) {
                 Image(systemName: "lock")
                     .font(.caption)
                     .foregroundStyle(Color.slate)
                 Text("Stays sealed on this device only — worries never sync anywhere.")
-                    .font(.fernlet(.bodySmall))
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -94,16 +116,17 @@ struct WorryEntryView: View {
             Button {
                 letGo()
             } label: {
+                let disabled = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 Text("Let it go")
                     .font(.fernlet(.label))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(disabled ? Color.moss.opacity(0.55) : Self.onMoss)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .background(disabled ? Color.moss.opacity(0.18) : Color.moss,
+                                in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
             .buttonStyle(.plain)
             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
             .accessibilityIdentifier("firstAid.worry.letGo")
         }
     }
@@ -132,7 +155,7 @@ struct WorryEntryView: View {
             } label: {
                 Text("Write another")
                     .font(.fernlet(.label))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Self.onMoss)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
                     .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
@@ -190,7 +213,7 @@ private struct TuckIntoBoxView: View {
     var body: some View {
         VStack(spacing: 0) {
             Text("Letting it go…")
-                .font(.fernlet(.bubble))
+                .font(.custom(FernletFontName.instrumentSerifItalic, size: 18, relativeTo: .body))
                 .foregroundStyle(Color.slate)
                 .padding(.bottom, 30)
 
@@ -205,7 +228,7 @@ private struct TuckIntoBoxView: View {
                     .padding(.vertical, 12)
                     .frame(maxWidth: 200)
                     .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .shadow(color: .bark.opacity(0.16), radius: 12, x: 0, y: 8)
+                    .shadow(color: Color.barkShadow.opacity(0.16), radius: 12, x: 0, y: 8)
                     .scaleEffect(tucked ? 0.32 : 1)
                     .offset(y: tucked ? 92 : -110)
                     .opacity(tucked ? 0 : 1)
@@ -332,9 +355,9 @@ struct WorryBoxView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                ScreenHeader(title: "Worry Box", subtitle: "SET DOWN, NOT CARRIED", subtitleFirst: true, identifier: "screen.worryBox")
+                ScreenHeader(title: "Worry box", subtitle: "", identifier: "screen.worryBox")
 
-                Text("Worries you've set down. They stay sealed on this device only — releasing one lets it go for good.")
+                Text("Worries you've set down. The box keeps them — releasing one lets it go for good.")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -374,7 +397,7 @@ struct WorryBoxView: View {
                         .font(.fernlet(.label))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(worryBoxOnMoss)
                         .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
@@ -420,7 +443,7 @@ struct WorryBoxView: View {
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
                 HStack {
-                    Text(worry.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    Text("Set down " + worry.createdAt.formatted(.relative(presentation: .named, unitsStyle: .wide)))
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                     Spacer(minLength: 12)
@@ -439,7 +462,7 @@ struct WorryBoxView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: .bark.opacity(0.05), radius: 3, x: 0, y: 1)
+        .fernletSmallShadow()
         // The row lifts away like an ember on release: its words dim under a soft veil while a
         // warm ember rises and fades. When the ember has lifted, the store removes the row and
         // the list closes the gap.

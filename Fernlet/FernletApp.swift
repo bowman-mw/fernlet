@@ -56,11 +56,17 @@ struct FernletApp: App {
     /// is consistent app-wide. Transparent background preserves the current look on the many screens
     /// that pair an empty nav title with an in-content `ScreenHeader`.
     private static func configureNavigationBarAppearance() {
-        let bark = UIColor(red: 0.239, green: 0.180, blue: 0.118, alpha: 1)
-        let inlineFont = UIFont(name: FernletFontName.dmSerifDisplay, size: 18)
+        // Mirror Color.bark so nav titles stay legible in dark mode instead of a fixed bark.
+        let bark = UIColor { trait in
+            FernletThemePalette.current(for: trait.userInterfaceStyle).primaryText
+        }
+        // Scale the serif faces with Dynamic Type via UIFontMetrics.
+        let baseInlineFont = UIFont(name: FernletFontName.dmSerifDisplay, size: 18)
             ?? .systemFont(ofSize: 18, weight: .semibold)
-        let largeFont = UIFont(name: FernletFontName.frauncesSemiBold, size: 30)
+        let inlineFont = UIFontMetrics(forTextStyle: .headline).scaledFont(for: baseInlineFont)
+        let baseLargeFont = UIFont(name: FernletFontName.frauncesSemiBold, size: 30)
             ?? .systemFont(ofSize: 30, weight: .bold)
+        let largeFont = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: baseLargeFont)
         let appearance = UINavigationBarAppearance()
         appearance.configureWithTransparentBackground()
         appearance.titleTextAttributes = [.font: inlineFont, .foregroundColor: bark]

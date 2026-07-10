@@ -30,6 +30,33 @@ struct FirstAidView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var path: [FirstAidTool] = []
 
+    // Menu geometry — mockup §1a runs off the shared 8pt/radius grid, so these live here as
+    // named surface-local constants rather than FernletMetrics tokens.
+    private let tileSize: CGFloat = 46
+    private let tileRadius: CGFloat = 15
+    private let rowRadius: CGFloat = 20
+    private let supportCardRadius: CGFloat = 22
+    private let pillRadius: CGFloat = 13
+
+    // Surface-local warm hues that override the app's cool secondary ink for this menu.
+    // Captions warm to taupe; the 988 card keeps every element in one amber-brown family.
+    private static let captionInk = Color(light: Color(red: 0.478, green: 0.416, blue: 0.333),
+                                          dark:  Color(red: 0.663, green: 0.612, blue: 0.522))
+    private static let groundingInk = Color(light: Color(red: 0.369, green: 0.486, blue: 0.549),
+                                            dark:  Color(red: 0.682, green: 0.776, blue: 0.831))
+    private static let supportHeadingInk = Color(light: Color(red: 0.353, green: 0.263, blue: 0.133),
+                                                 dark:  Color(red: 0.941, green: 0.875, blue: 0.706))
+    private static let supportProseInk = Color(light: Color(red: 0.416, green: 0.325, blue: 0.200),
+                                               dark:  Color(red: 0.796, green: 0.725, blue: 0.561))
+    private static let supportOutlineInk = Color(light: Color(red: 0.353, green: 0.263, blue: 0.133),
+                                                 dark:  Color(red: 0.878, green: 0.722, blue: 0.376))
+    /// Text-988 outline stroke — brown @0.35 in light, goldenrod @0.4 in dark (mockup §1a).
+    private static let supportOutlineStroke = Color(light: Color(red: 0.353, green: 0.263, blue: 0.133).opacity(0.35),
+                                                    dark:  Color(red: 0.878, green: 0.722, blue: 0.376).opacity(0.40))
+    /// On-accent ink for the filled Call button — parchment in light, near-black in dark.
+    private static let supportFilledInk = Color(light: Color(red: 0.961, green: 0.937, blue: 0.878),
+                                                dark:  Color(red: 0.102, green: 0.082, blue: 0.055))
+
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
@@ -40,21 +67,24 @@ struct FirstAidView: View {
                         toolCard(
                             .breathing,
                             icon: "wind",
-                            tint: .moss,
+                            tileFill: Color.fern.opacity(0.20),
+                            iconColor: .moss,
                             title: "Slow breathing",
                             caption: "A quiet minute or three with a slowly swelling circle."
                         )
                         toolCard(
                             .grounding,
-                            icon: "leaf",
-                            tint: .fern,
+                            icon: "target",
+                            tileFill: Color.journalQuiet.opacity(0.24),
+                            iconColor: Self.groundingInk,
                             title: "5·4·3·2·1 grounding",
                             caption: "Arrive back in the room, one gentle sense at a time."
                         )
                         toolCard(
                             .worryBox,
                             icon: "archivebox",
-                            tint: .goldenrod,
+                            tileFill: Color.goldenrod.opacity(0.20),
+                            iconColor: .goldenrod,
                             title: "Worry box",
                             caption: "Write a worry down and let the box hold it for a while."
                         )
@@ -95,41 +125,41 @@ struct FirstAidView: View {
                     .foregroundStyle(Color.moss)
             }
             Text("Small tools for a heavy moment. Pick whatever feels kind — or nothing at all.")
-                .font(.fernlet(.header))
+                .font(.custom(FernletFontName.instrumentSerif, size: 22, relativeTo: .title2))
                 .foregroundStyle(Color.bark)
-                .lineSpacing(3)
+                .lineSpacing(9)  // ~1.42 leading at 22pt
                 .fernletWrappingText()
         }
     }
 
-    private func toolCard(_ tool: FirstAidTool, icon: String, tint: Color, title: String, caption: String) -> some View {
+    private func toolCard(_ tool: FirstAidTool, icon: String, tileFill: Color, iconColor: Color, title: String, caption: String) -> some View {
         Button {
             path.append(tool)
         } label: {
             HStack(spacing: 15) {
                 Image(systemName: icon)
                     .font(.system(size: 21, weight: .regular))
-                    .foregroundStyle(tint)
-                    .frame(width: 46, height: 46)
-                    .background(tint.opacity(0.20), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .foregroundStyle(iconColor)
+                    .frame(width: tileSize, height: tileSize)
+                    .background(tileFill, in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
                         .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                     Text(caption)
                         .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(Self.captionInk)
                         .fernletWrappingText()
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(Color.softTaupe)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 17)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: rowRadius, style: .continuous))
             .fernletSmallShadow()
         }
         .buttonStyle(.plain)
@@ -146,17 +176,17 @@ struct FirstAidView: View {
                     .foregroundStyle(Color.goldenrod)
                 Text("If things feel heavy")
                     .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
+                    .foregroundStyle(Self.supportHeadingInk)
             }
             Text("Some moments are bigger than any app. You deserve real support — the 988 line is free, kind, and there around the clock.")
                 .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(Self.supportProseInk)
                 .lineSpacing(2)
                 .fernletWrappingText()
                 .padding(.bottom, FernletMetrics.spaceXs)
             HStack(spacing: 10) {
-                supportLink("Call 988", icon: "phone.fill", url: "tel:988", filled: true)
-                supportLink("Text 988", icon: "message.fill", url: "sms:988", filled: false)
+                supportLink("Call 988", icon: "phone", url: "tel:988", filled: true)
+                supportLink("Text 988", icon: "message", url: "sms:988", filled: false)
             }
         }
         .padding(20)
@@ -167,10 +197,10 @@ struct FirstAidView: View {
                 startPoint: .top,
                 endPoint: .bottom
             ),
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+            in: RoundedRectangle(cornerRadius: supportCardRadius, style: .continuous)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: supportCardRadius, style: .continuous)
                 .stroke(Color.goldenrod.opacity(0.32), lineWidth: 1)
         )
     }
@@ -187,14 +217,14 @@ struct FirstAidView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .foregroundStyle(filled ? Color.white : Color.moss)
+                .foregroundStyle(filled ? Self.supportFilledInk : Self.supportOutlineInk)
                 .background {
                     if filled {
-                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
                             .fill(Color.moss)
                     } else {
-                        RoundedRectangle(cornerRadius: 13, style: .continuous)
-                            .stroke(Color.moss.opacity(0.45), lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
+                            .stroke(Self.supportOutlineStroke, lineWidth: 1.5)
                     }
                 }
             }

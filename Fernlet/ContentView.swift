@@ -467,7 +467,7 @@ struct ContentView: View {
                 .uxScreenAnchor("sheet.firstAid")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .presentationCornerRadius(FernletMetrics.radiusLg)
                 .environment(storagePreferencesStore)
         case .logPeriod(let targetDate, let editingEntry):
             LogPeriodSheet(periodStore: periodStore, targetDate: targetDate, editingEntry: editingEntry)
