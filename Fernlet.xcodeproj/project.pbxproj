@@ -13,8 +13,6 @@
 		681899F32FECB144004E15E9 /* RemainingWork-2026-06-23.md in Resources */ = {isa = PBXBuildFile; fileRef = 681899F22FECB144004E15E9 /* RemainingWork-2026-06-23.md */; };
 		684018BA2FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 684018B92FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md */; };
 		684018CB2FBE9AD400EFC6D6 /* CryptoSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 684018CA2FBE9AD400EFC6D6 /* CryptoSwift */; };
-		FE41000000000000000000A3 /* FernletKit in Frameworks */ = {isa = PBXBuildFile; productRef = FE41000000000000000000A2 /* FernletKit */; };
-		FE41000000000000000000B3 /* FernletKit in Frameworks */ = {isa = PBXBuildFile; productRef = FE41000000000000000000B2 /* FernletKit */; };
 		684018E42FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md in Resources */ = {isa = PBXBuildFile; fileRef = 684018E32FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md */; };
 		684019122FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md in Resources */ = {isa = PBXBuildFile; fileRef = 684019112FC2011200EFC6D6 /* StartupAndBiometricFixPlan.md */; };
 		6861B7812FCA9EF000B26022 /* DisposableCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6861B7802FCA9EF000B26022 /* DisposableCameraView.swift */; };
@@ -29,6 +27,8 @@
 		68B9EE622FCA75B600AF8FB6 /* Life-Tab-Redesign-Implementation-Plan.md in Resources */ = {isa = PBXBuildFile; fileRef = 68B9EE612FCA75B600AF8FB6 /* Life-Tab-Redesign-Implementation-Plan.md */; };
 		68FE5E00000000000000A019 /* FernletShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 68FE5E00000000000000A011 /* FernletShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		68FE5E00000000000000B019 /* FernletWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 68FE5E00000000000000B011 /* FernletWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		FE41000000000000000000A3 /* FernletKit in Frameworks */ = {isa = PBXBuildFile; productRef = FE41000000000000000000A2 /* FernletKit */; };
+		FE41000000000000000000B3 /* FernletKit in Frameworks */ = {isa = PBXBuildFile; productRef = FE41000000000000000000B2 /* FernletKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1053,6 +1053,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		FE41000000000000000000A1 /* XCLocalSwiftPackageReference "FernletKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = FernletKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		684018C92FBE9AD400EFC6D6 /* XCRemoteSwiftPackageReference "CryptoSwift" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -1063,13 +1070,6 @@
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCLocalSwiftPackageReference section */
-		FE41000000000000000000A1 /* XCLocalSwiftPackageReference "FernletKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = FernletKit;
-		};
-/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		684018CA2FBE9AD400EFC6D6 /* CryptoSwift */ = {
