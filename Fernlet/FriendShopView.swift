@@ -150,7 +150,7 @@ struct FriendShopView: View {
             Button {
                 buy(item, from: catalog)
             } label: {
-                buyLabel(owned: owned, price: item.price)
+                buyLabel(owned: owned, price: item.price, affordable: affordable)
             }
             .buttonStyle(.plain)
             .disabled(owned || !affordable)
@@ -174,7 +174,7 @@ struct FriendShopView: View {
     /// already in the closet, and a dimmed chip when the balance can't cover it. Replaces the old system
     /// `.borderedProminent` button so the whole tile stays on-brand parchment.
     @ViewBuilder
-    private func buyLabel(owned: Bool, price: Int) -> some View {
+    private func buyLabel(owned: Bool, price: Int, affordable: Bool) -> some View {
         if owned {
             HStack(spacing: 5) {
                 Image(systemName: "checkmark")
@@ -189,7 +189,6 @@ struct FriendShopView: View {
                 Capsule(style: .continuous).fill(Color.parchment)
             )
         } else {
-            let affordable = store.coinBalance >= price
             HStack(spacing: 5) {
                 CoinDot(size: 11)
                 Text("\(price)")

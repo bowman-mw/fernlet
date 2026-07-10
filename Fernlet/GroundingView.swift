@@ -32,27 +32,35 @@ struct GroundingView: View {
                                        dark:  Color(red: 0.541, green: 0.678, blue: 0.494))
     private static let seeInk = Color(light: Color(red: 0.255, green: 0.384, blue: 0.227),
                                       dark:  Color(red: 0.682, green: 0.792, blue: 0.616))
-    private static let seeMid = Color(red: 0.369, green: 0.486, blue: 0.329)
+    // Each `mid` needs a lighter dark-mode variant (like `ink` above) or the kicker text and
+    // unfilled progress dots fall to ~2.7:1 / ~1.3:1 against the dark wash — the dark tones keep
+    // each sense's hue but lift luminance to stay legible.
+    private static let seeMid = Color(light: Color(red: 0.369, green: 0.486, blue: 0.329),
+                                      dark:  Color(red: 0.643, green: 0.749, blue: 0.588))
     // touchTint is the same hue as the shared okay-state token — one source of truth.
     private static let touchTint = Color.stateOkay
     private static let touchInk = Color(light: Color(red: 0.541, green: 0.384, blue: 0.141),
                                         dark:  Color(red: 0.831, green: 0.694, blue: 0.443))
-    private static let touchMid = Color(red: 0.627, green: 0.486, blue: 0.235)
+    private static let touchMid = Color(light: Color(red: 0.627, green: 0.486, blue: 0.235),
+                                        dark:  Color(red: 0.816, green: 0.678, blue: 0.427))
     private static let hearTint = Color(light: Color(red: 0.549, green: 0.651, blue: 0.714),
                                         dark:  Color(red: 0.549, green: 0.651, blue: 0.714))
     private static let hearInk = Color(light: Color(red: 0.298, green: 0.392, blue: 0.447),
                                        dark:  Color(red: 0.682, green: 0.776, blue: 0.831))
-    private static let hearMid = Color(red: 0.384, green: 0.475, blue: 0.541)
+    private static let hearMid = Color(light: Color(red: 0.384, green: 0.475, blue: 0.541),
+                                       dark:  Color(red: 0.667, green: 0.761, blue: 0.816))
     private static let smellTint = Color(light: Color(red: 0.663, green: 0.608, blue: 0.706),
                                          dark:  Color(red: 0.663, green: 0.608, blue: 0.706))
     private static let smellInk = Color(light: Color(red: 0.373, green: 0.329, blue: 0.439),
                                         dark:  Color(red: 0.749, green: 0.702, blue: 0.804))
-    private static let smellMid = Color(red: 0.471, green: 0.416, blue: 0.529)
+    private static let smellMid = Color(light: Color(red: 0.471, green: 0.416, blue: 0.529),
+                                        dark:  Color(red: 0.733, green: 0.686, blue: 0.788))
     private static let tasteTint = Color(light: Color(red: 0.753, green: 0.541, blue: 0.439),
                                          dark:  Color(red: 0.753, green: 0.541, blue: 0.439))
     private static let tasteInk = Color(light: Color(red: 0.478, green: 0.290, blue: 0.220),
                                         dark:  Color(red: 0.831, green: 0.639, blue: 0.549))
-    private static let tasteMid = Color(red: 0.596, green: 0.392, blue: 0.322)
+    private static let tasteMid = Color(light: Color(red: 0.596, green: 0.392, blue: 0.322),
+                                        dark:  Color(red: 0.816, green: 0.624, blue: 0.533))
 
     private static let steps: [GroundingStep] = [
         GroundingStep(count: 5, icon: "eye", prompt: "Notice five things you can see", hint: "Anything at all — a corner of the ceiling, the light on your hand.", tint: seeTint, ink: seeInk, mid: seeMid, washOpacity: 0.16),

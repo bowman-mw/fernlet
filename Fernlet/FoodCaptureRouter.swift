@@ -44,8 +44,9 @@ struct FoodCaptureRouter {
     var barcodeDetector: any BarcodePayloadDetecting = VisionBarcodeDetector()
 
     /// A label needs at least this many recognized fields to be routed confidently as a label rather
-    /// than dropped into the chooser. Mirrors `NutritionLabelCameraSheet`'s existing "< 3 fields = show
-    /// tips" weak-scan heuristic, so a stray "protein 8g" on a meal photo doesn't hijack the meal path.
+    /// than dropped into the chooser. Both this floor and `NutritionLabelCameraSheet`'s "< 3 fields =
+    /// show tips" weak-scan heuristic now read the SAME `NutritionLabelResult.recognizedFieldCount`
+    /// (calories included), so a stray "protein 8g" on a meal photo doesn't hijack the meal path.
     static let labelConfidenceFieldFloor = 3
 
     func route(for image: UIImage) async -> FoodCaptureRoute {
@@ -58,7 +59,7 @@ struct FoodCaptureRouter {
         // 2) Nutrition label — parse with the existing OCR scanner and gauge confidence by field count.
         let label = try? await NutritionLabelScanner.scanAll(image: image).primary
         if let label {
-            let fields = Self.recognizedFieldCount(in: label)
+            let fields = label.recognizedFieldCount
             if fields >= Self.labelConfidenceFieldFloor {
                 return .label(label)
             }
@@ -71,44 +72,6 @@ struct FoodCaptureRouter {
 
         // 3) Meal photo — the graceful default.
         return .meal
-    }
-
-    /// Counts the macro/label/micro fields the scanner actually read — the same signal
-    /// `NutritionLabelCameraSheet` uses to decide a scan was thin. Calories are intentionally excluded
-    /// here: a bare "Calories 190" with nothing else is not enough to call a photo a nutrition label.
-    static func recognizedFieldCount(in result: NutritionLabelResult) -> Int {
-        [
-            result.servingSize.map { _ in true },
-            result.servingsPerContainer.map { _ in true },
-            result.protein.map { _ in true },
-            result.carbs.map { _ in true },
-            result.fat.map { _ in true },
-            result.fiber.map { _ in true },
-            result.sugar.map { _ in true },
-            result.addedSugar.map { _ in true },
-            result.saturatedFat.map { _ in true },
-            result.transFat.map { _ in true },
-            result.cholesterol.map { _ in true },
-            result.sodium.map { _ in true },
-            result.vitaminA.map { _ in true },
-            result.vitaminC.map { _ in true },
-            result.vitaminD.map { _ in true },
-            result.vitaminE.map { _ in true },
-            result.vitaminB12.map { _ in true },
-            result.thiamin.map { _ in true },
-            result.riboflavin.map { _ in true },
-            result.niacin.map { _ in true },
-            result.folate.map { _ in true },
-            result.calcium.map { _ in true },
-            result.iron.map { _ in true },
-            result.magnesium.map { _ in true },
-            result.phosphorus.map { _ in true },
-            result.potassium.map { _ in true },
-            result.zinc.map { _ in true },
-            result.omega3.map { _ in true }
-        ]
-        .compactMap { $0 }
-        .count
     }
 }
 
@@ -282,8 +245,8 @@ struct CaptureChooserSheet: View {
                 }
             }
             .padding(16)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
+            .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusMd).stroke(Color.bark.opacity(0.08), lineWidth: 1))
             .opacity(disabled ? 0.5 : 1)
         }
         .buttonStyle(.plain)

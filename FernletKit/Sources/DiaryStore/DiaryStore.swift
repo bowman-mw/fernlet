@@ -479,6 +479,16 @@ public final class DiaryStore {
         )
     }
 
+    /// Logs a product whose macros came from a scanned nutrition label (the photo-capture label path)
+    /// as a single meal. Same shape as the barcode/saved-product paths — one serving of a known food —
+    /// but with truthful label-scan provenance instead of barcode-scan.
+    @discardableResult public func logLabelScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
+        logFoodItemMeal(
+            foodItem, mealType: mealType, date: date,
+            confidence: "Scanned label", note: "Logged from a nutrition label scan.", source: MealLogSource.labelScan
+        )
+    }
+
     /// Shared "one serving of this known food" meal construction for the product-shaped log paths.
     private func logFoodItemMeal(_ foodItem: FoodItem, mealType: MealType?, date: String?, confidence: String, note: String, source: String) -> Meal {
         let targetDate = date ?? todayKey

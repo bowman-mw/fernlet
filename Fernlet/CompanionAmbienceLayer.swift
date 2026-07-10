@@ -67,18 +67,21 @@ struct CompanionAmbienceLayer: View {
 
     /// A full-bleed feather: the wash reaches true strength through the middle band and
     /// dissolves to nothing at every edge, so it reads as "a sky felt more than seen"
-    /// rather than a contained card. Radial so all four sides + the corners melt into the
-    /// parchment/theme evenly, tuned a hair softer in dark mode.
+    /// rather than a contained card. Elliptical so it stretches to the wide strip and all
+    /// four sides + the corners melt into the parchment/theme evenly, softer in dark mode.
     private var edgeFeather: some ShapeStyle {
-        RadialGradient(
+        // EllipticalGradient — its radii are FRACTIONS of the masked rect (0…1), not the
+        // absolute points a RadialGradient uses, so this feathers across the whole slot at
+        // any strip width without threading the GeometryReader size into a ShapeStyle. The
+        // wash holds full strength through the middle band then dissolves to clear at every
+        // edge/corner, a hair softer in dark mode.
+        EllipticalGradient(
             gradient: Gradient(stops: [
                 .init(color: .black, location: 0),
                 .init(color: .black, location: colorScheme == .dark ? 0.60 : 0.66),
                 .init(color: .clear, location: 1)
             ]),
-            center: .center,
-            startRadius: 0,
-            endRadius: 1
+            center: .center
         )
     }
 
@@ -123,9 +126,12 @@ struct CompanionAmbienceLayer: View {
                     }
                 }
             }
-            // No rounded-rect clip: the wash is masked by a soft radial feather that scales
-            // with the slot, so the sky dissolves into the parchment on every edge instead
-            // of stopping at a card boundary.
+            // No rounded-rect clip: the wash is masked by a soft elliptical feather that
+            // scales with the slot, so the sky dissolves into the parchment on every edge
+            // instead of stopping at a card boundary. This has to be an alpha mask, not a
+            // clipShape + opaque feather overlay: the parchment/theme shows THROUGH the
+            // dissolved edges, so the fade must be in the layer's own alpha — an overlay
+            // would only work over an opaque backdrop.
             .mask {
                 Rectangle().fill(edgeFeather)
             }
@@ -149,12 +155,10 @@ struct CompanionAmbienceLayer: View {
         let reach = max(size.width, size.height) * 0.92
         switch phase {
         case .dawn:
-            // Warm radial rising from the top edge.
+            // Warm radial rising from the top edge. Endpoint colors sourced from
+            // `tintColors` so the tint palette has one authoritative definition.
             RadialGradient(
-                gradient: Gradient(colors: [
-                    AmbiencePalette.dawnTint.opacity(0.42),
-                    AmbiencePalette.dawnTint.opacity(0)
-                ]),
+                gradient: Gradient(colors: tintColors(for: .dawn)),
                 center: .top,
                 startRadius: 0,
                 endRadius: reach
@@ -162,10 +166,7 @@ struct CompanionAmbienceLayer: View {
         case .day:
             // Cool, clean radial from the top — the lightest of the four.
             RadialGradient(
-                gradient: Gradient(colors: [
-                    AmbiencePalette.dayTint.opacity(0.28),
-                    AmbiencePalette.dayTint.opacity(0)
-                ]),
+                gradient: Gradient(colors: tintColors(for: .day)),
                 center: .top,
                 startRadius: 0,
                 endRadius: reach
@@ -173,10 +174,7 @@ struct CompanionAmbienceLayer: View {
         case .dusk:
             // Amber radial welling up from the bottom edge.
             RadialGradient(
-                gradient: Gradient(colors: [
-                    AmbiencePalette.duskTint.opacity(0.40),
-                    AmbiencePalette.duskTint.opacity(0)
-                ]),
+                gradient: Gradient(colors: tintColors(for: .dusk)),
                 center: .bottom,
                 startRadius: 0,
                 endRadius: reach
@@ -190,8 +188,8 @@ struct CompanionAmbienceLayer: View {
             ZStack {
                 LinearGradient(
                     gradient: Gradient(colors: [
-                        AmbiencePalette.nightTop.opacity(0.44 + washBoost),
-                        AmbiencePalette.nightBottom.opacity(0.50 + washBoost)
+                        AmbiencePalette.nightTop.opacity(AmbiencePalette.nightTopOpacity + washBoost),
+                        AmbiencePalette.nightBottom.opacity(AmbiencePalette.nightBottomOpacity + washBoost)
                     ]),
                     startPoint: .top,
                     endPoint: .bottom
@@ -209,10 +207,10 @@ struct CompanionAmbienceLayer: View {
         }
     }
 
-    /// A two-stop tint sample per phase. Retained as a static, testable entry point (the
-    /// contract is "≥ 2 usable colors per phase"). `tintGradient(for:size:scheme:)` renders
-    /// the shipping wash — scheme-nudged for night — but the base endpoint colors here match
-    /// those gradients so this stays a faithful summary of each tint.
+    /// The authoritative two-stop endpoint colors per phase — the single source of truth for
+    /// the wash tints. `tintGradient(for:size:scheme:)` renders these into the shipping wash
+    /// (scheme-nudging night's opacity on top), and the tests assert the "≥ 2 usable colors
+    /// per phase" contract against this same entry point, so the two can never drift.
     static func tintColors(for phase: CompanionDayPhase) -> [Color] {
         switch phase {
         case .dawn:
@@ -222,7 +220,10 @@ struct CompanionAmbienceLayer: View {
         case .dusk:
             [AmbiencePalette.duskTint.opacity(0.40), AmbiencePalette.duskTint.opacity(0)]
         case .night:
-            [AmbiencePalette.nightTop.opacity(0.44), AmbiencePalette.nightBottom.opacity(0.50)]
+            [
+                AmbiencePalette.nightTop.opacity(AmbiencePalette.nightTopOpacity),
+                AmbiencePalette.nightBottom.opacity(AmbiencePalette.nightBottomOpacity)
+            ]
         }
     }
 
@@ -459,6 +460,10 @@ private enum AmbiencePalette {
     static let nightTop    = Color(red: 58 / 255, green: 68 / 255, blue: 112 / 255)  // rgba(58,68,112)
     static let nightBottom = Color(red: 44 / 255, green: 52 / 255, blue:  90 / 255)  // rgba(44,52,90)
     static let nightGlow   = Color(red: 196 / 255, green: 204 / 255, blue: 232 / 255) // rgba(196,204,232)
+    // Night wash base opacities — shared by `tintColors` (the source of truth) and the
+    // production night gradient, which adds a small dark-mode boost on top of these.
+    static let nightTopOpacity    = 0.44
+    static let nightBottomOpacity = 0.50
 
     // Celestial glows.
     static let dawnSunCore = Color(red: 251 / 255, green: 217 / 255, blue: 166 / 255) // #FBD9A6

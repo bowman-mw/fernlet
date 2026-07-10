@@ -811,7 +811,7 @@ struct MoveContextStrip: View {
             MoveContextSegment(
                 icon: "mappin.and.ellipse",
                 label: "Space",
-                value: store.settings.activeWorkoutLocation.name,
+                value: spaceValue,
                 emptyPrompt: "Set up your space",
                 action: onEditSpace
             )

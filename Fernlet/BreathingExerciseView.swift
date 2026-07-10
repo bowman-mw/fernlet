@@ -121,8 +121,11 @@ struct BreathingExerciseView: View {
 
                 VStack(spacing: 20) {
                     breathingCircle
-                        // Sway gently around the small resting scale so the first breath swells out of it.
-                        .scaleEffect(idleBreathing ? restingScale + 0.04 : restingScale - 0.02)
+                        // A gentle idle sway around 1.0 — `circleScale` (set to `restingScale` in
+                        // onAppear) already renders the circle at its 0.6 resting size, so this outer
+                        // factor must stay near 1.0 or the two scales compound and Begin pops the
+                        // circle back up to full resting size.
+                        .scaleEffect(idleBreathing ? 1.04 : 0.98)
                         .onAppear {
                             circleScale = restingScale
                             withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {

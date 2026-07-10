@@ -382,7 +382,6 @@ struct DisposableCameraView: View {
     @State private var renamingMesh = false
     @State private var newMeshName = ""
     @State private var leaveSessionConfirm = false
-    @State private var ledPulse = false
 
     // Housing / LED palette. The camera surface is a standalone "hardware housing" scene rather
     // than a parchment card, so a couple of colors are literal rather than design-system tokens:
@@ -590,6 +589,7 @@ struct DisposableCameraView: View {
         // the inset never swallows the housing while it's still island-sized.
         let shellInset: CGFloat = 13 * openness + 2
         let ledGap: CGFloat = 30 * openness + 4
+        let showsPermissionPrompt = camera.needsCameraPermissionPrompt && openness > 0.85
 
         return RoundedRectangle(cornerRadius: frame.cornerRadius, style: .continuous)
             .fill(Self.housingBlack)
@@ -601,9 +601,6 @@ struct DisposableCameraView: View {
                         .opacity(previewOpacity)
                     islandViewfinderReticle
                         .opacity(previewOpacity)
-                    if camera.needsCameraPermissionPrompt && openness > 0.85 {
-                        cameraPermissionPrompt
-                    }
                 }
                 .clipShape(
                     RoundedRectangle(cornerRadius: max(3, frame.cornerRadius - shellInset), style: .continuous)
@@ -615,58 +612,53 @@ struct DisposableCameraView: View {
                 islandCameraLED(openness: openness)
                     .padding(.top, ledGap * 0.4 + 3)
             }
-            .frame(width: frame.size.width, height: frame.size.height)
-            .position(x: metrics.centerX, y: frame.centerY)
-            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: openness)
+            // The housing, preview, and LED are decorative: flattened for VoiceOver and kept out
+            // of hit testing (the wind gesture lives on the thumbwheel control).
             .allowsHitTesting(false)
             .accessibilityElement()
             .accessibilityLabel(camera.isArmed ? "Viewfinder ready" : "Wind to open the viewfinder")
+            .accessibilityHidden(showsPermissionPrompt)
+            // The permission prompt is real UI, so it layers after the decorative flattening —
+            // its Open Settings button stays tappable and VoiceOver-reachable.
+            .overlay {
+                if showsPermissionPrompt {
+                    cameraPermissionPrompt
+                        .clipShape(
+                            RoundedRectangle(cornerRadius: max(3, frame.cornerRadius - shellInset), style: .continuous)
+                        )
+                        .padding(.top, ledGap)
+                        .padding([.horizontal, .bottom], shellInset)
+                }
+            }
+            .frame(width: frame.size.width, height: frame.size.height)
+            .position(x: metrics.centerX, y: frame.centerY)
+            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: openness)
     }
 
     /// The classic "camera on" green LED (#5EE06A) that rides at the top of the housing, breathing
     /// with a slow pulse once the viewfinder is open.
     private func islandCameraLED(openness: Double) -> some View {
         // Base visibility fades the LED in with the housing; once armed it breathes 0.8↔1.0. The
-        // pulse endpoints hang off `ledPulse` so repeatForever(autoreverses:) has something to
-        // interpolate between.
+        // breathe is clock-driven (TimelineView) rather than a repeatForever animation: disarming
+        // after a shot retargets the LED's opacity, which would kill a repeating animation for
+        // good, and the pulse must survive every disarm/re-arm cycle.
         let visible = camera.isArmed ? 1.0 : Double(openness)
-        let breathe = camera.isArmed ? (ledPulse ? 1.0 : 0.8) : 0.82
-        return Circle()
-            .fill(Self.ledGreen)
-            .frame(width: 7, height: 7)
-            .shadow(color: Self.ledGreen.opacity(0.75), radius: 5)
-            .opacity(visible * breathe)
-            .animation(
-                camera.isArmed
-                    ? .easeInOut(duration: 1.9).repeatForever(autoreverses: true)
-                    : .default,
-                value: ledPulse
-            )
-            .onAppear { ledPulse = true }
+        return TimelineView(.animation(paused: !camera.isArmed)) { context in
+            // 0.8 ↔ 1.0 cosine breathe with a 3.8s round trip (the old autoreversing 1.9s ease).
+            let phase = context.date.timeIntervalSinceReferenceDate / 3.8 * 2 * .pi
+            let breathe = camera.isArmed ? 0.9 - 0.1 * cos(phase) : 0.82
+            Circle()
+                .fill(Self.ledGreen)
+                .frame(width: 7, height: 7)
+                .shadow(color: Self.ledGreen.opacity(0.75), radius: 5)
+                .opacity(visible * breathe)
+        }
     }
 
     /// White reticle corner brackets framing the live preview, matching the mockup's armed frame.
     private var islandViewfinderReticle: some View {
-        GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            let len: CGFloat = 16, t: CGFloat = 2, m: CGFloat = 8
-            let c = Color.white.opacity(0.7)
-            ZStack {
-                // top-left
-                rect(c, w: len, h: t).position(x: m + len / 2, y: m + t / 2)
-                rect(c, w: t, h: len).position(x: m + t / 2, y: m + len / 2)
-                // top-right
-                rect(c, w: len, h: t).position(x: w - m - len / 2, y: m + t / 2)
-                rect(c, w: t, h: len).position(x: w - m - t / 2, y: m + len / 2)
-                // bottom-left
-                rect(c, w: len, h: t).position(x: m + len / 2, y: h - m - t / 2)
-                rect(c, w: t, h: len).position(x: m + t / 2, y: h - m - len / 2)
-                // bottom-right
-                rect(c, w: len, h: t).position(x: w - m - len / 2, y: h - m - t / 2)
-                rect(c, w: t, h: len).position(x: w - m - t / 2, y: h - m - len / 2)
-            }
-        }
-        .allowsHitTesting(false)
+        cornerBrackets(color: Color.white.opacity(0.7), length: 16, thickness: 2, margin: 8)
+            .allowsHitTesting(false)
     }
 
     private var viewfinderArea: some View {
@@ -719,23 +711,27 @@ struct DisposableCameraView: View {
     }
 
     private var viewfinderBrackets: some View {
+        cornerBrackets(color: Color.white.opacity(0.45), length: 18, thickness: 2, margin: 0)
+    }
+
+    /// Four corner brackets inset `margin` from each edge — the island reticle and the landscape
+    /// viewfinder frame differ only in size, inset, and brightness.
+    private func cornerBrackets(color c: Color, length len: CGFloat, thickness t: CGFloat, margin m: CGFloat) -> some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
-            let len: CGFloat = 18, t: CGFloat = 2
-            let c = Color.white.opacity(0.45)
             ZStack {
                 // top-left
-                rect(c, w: len, h: t).position(x: len / 2, y: t / 2)
-                rect(c, w: t, h: len).position(x: t / 2, y: len / 2)
+                rect(c, w: len, h: t).position(x: m + len / 2, y: m + t / 2)
+                rect(c, w: t, h: len).position(x: m + t / 2, y: m + len / 2)
                 // top-right
-                rect(c, w: len, h: t).position(x: w - len / 2, y: t / 2)
-                rect(c, w: t, h: len).position(x: w - t / 2, y: len / 2)
+                rect(c, w: len, h: t).position(x: w - m - len / 2, y: m + t / 2)
+                rect(c, w: t, h: len).position(x: w - m - t / 2, y: m + len / 2)
                 // bottom-left
-                rect(c, w: len, h: t).position(x: len / 2, y: h - t / 2)
-                rect(c, w: t, h: len).position(x: t / 2, y: h - len / 2)
+                rect(c, w: len, h: t).position(x: m + len / 2, y: h - m - t / 2)
+                rect(c, w: t, h: len).position(x: m + t / 2, y: h - m - len / 2)
                 // bottom-right
-                rect(c, w: len, h: t).position(x: w - len / 2, y: h - t / 2)
-                rect(c, w: t, h: len).position(x: w - t / 2, y: h - len / 2)
+                rect(c, w: len, h: t).position(x: w - m - len / 2, y: h - m - t / 2)
+                rect(c, w: t, h: len).position(x: w - m - t / 2, y: h - m - len / 2)
             }
         }
     }
@@ -833,9 +829,14 @@ struct DisposableCameraView: View {
     }
 
     private func windThumbwheel(active: Bool) -> some View {
-        let ridgeCount = 6
+        // The ridge texture repeats every two ridges (the active tint alternates), so the stack
+        // over-fills the 44pt window by one two-ridge loop and slides down through it across a
+        // full wind: the wheel reads as continuously turning — no blank band opens up, and the
+        // arm-time windProgress reset to 0 lands on an identical frame.
+        let ridgeCount = 9
         let rowHeight: CGFloat = 44
-        let scroll = camera.windProgress.truncatingRemainder(dividingBy: 1) * (rowHeight / CGFloat(ridgeCount) * 2)
+        let loopPeriod: CGFloat = (2.5 + 5) * 2  // (ridge height + spacing) × 2 ridges
+        let scroll = camera.windProgress * loopPeriod - loopPeriod
         return RoundedRectangle(cornerRadius: 12, style: .continuous)
             .fill(
                 LinearGradient(
@@ -879,9 +880,8 @@ struct DisposableCameraView: View {
                         .frame(width: geo.size.width * (camera.isArmed ? 1 : camera.windProgress))
                 }
             }
-            .frame(height: 5)
             .opacity(active || camera.isArmed ? 1 : 0.5)
-            .animation(.easeOut(duration: 0.15), value: camera.windProgress)
+            .animation(FernletMotion.fast, value: camera.windProgress)
     }
 
     // MARK: - Thumbwheel gesture

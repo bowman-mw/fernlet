@@ -132,11 +132,16 @@ struct FriendsView: View {
                         ScreenHeader(title: "Friends", subtitle: "", identifier: "screen.friends")
                         Spacer()
                         HStack(spacing: 10) {
-                            // Only surface the shop when a friend's shop is actually live nearby: a catalog
-                            // arrives only over a verified, sealed channel, so a non-empty peerCatalogs means
-                            // we're connected in a shop mesh. Interim gate pending the clothing/photo mesh
-                            // merge — once unified, gate on the single session's isInSession instead.
-                            if !store.clothingShareManager.peerCatalogs.isEmpty {
+                            // Surface the shop when a friend's shop is discoverable nearby. Gate on
+                            // `nearbyShopPeers` (set on peer discovery) rather than `peerCatalogs`: catalogs
+                            // are far more ephemeral — a momentary peer disconnect or any scene-phase dip
+                            // (Control Center, app switcher, Face ID) clears them, which would yank this link
+                            // out from under a pushed FriendShopView and force-pop the user mid-browse.
+                            // `nearbyShopPeers` is the steadier presence signal, and FriendShopView carries
+                            // its own "looking for shops nearby" recovery state for a catalog that comes and
+                            // goes while it's open. Interim gate pending the clothing/photo mesh merge — once
+                            // unified, gate on the single session's isInSession instead.
+                            if !store.clothingShareManager.nearbyShopPeers.isEmpty {
                                 NavigationLink {
                                     FriendShopView(store: store, manager: store.clothingShareManager)
                                 } label: {

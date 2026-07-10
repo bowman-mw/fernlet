@@ -70,6 +70,12 @@ struct BarcodeScanView: View {
     /// after the viewfinder presented) — flips us to the still-photo fallback so the user never
     /// stares at a frozen black viewfinder. Reset on foreground so enabling access in Settings retries.
     @State private var liveScannerUnavailable = false
+    /// Latches the moment we hand a payload (or an empty hand-entry) to `onCode`, so a barcode the
+    /// live scanner recognizes during/after the push can never fire a second `onCode` that would log an
+    /// unchosen meal or swap the pushed screen out from under the user. The live scanner's own
+    /// `delivered` guard resets when the viewfinder re-arms (`updateUIViewController`), so the guard has
+    /// to live here at the View that owns the single delivery.
+    @State private var handedOff = false
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -121,7 +127,10 @@ struct BarcodeScanView: View {
             Color.black.ignoresSafeArea()
 
             BarcodeDataScannerView(
-                onPayload: { payload in onCode(payload) },
+                // Once we've handed a code off (a real payload OR an empty hand-entry), pause the live
+                // scanner so it can't recognize a second barcode behind the pushed screen.
+                paused: handedOff,
+                onPayload: { payload in deliver(payload) },
                 onUnavailable: {
                     // Camera access was denied (or the scanner otherwise went unavailable) — drop
                     // to the still-photo fallback with a gentle hint instead of a dead viewfinder.
@@ -130,6 +139,9 @@ struct BarcodeScanView: View {
                 }
             )
             .ignoresSafeArea()
+            // Popping back into the scanner from the pushed name/lookup screen clears the hand-off
+            // latch (and re-arms the paused scanner), so the user can scan a different product.
+            .onAppear { handedOff = false }
 
             ScanFrameOverlay(caption: "Point the camera at the product's barcode.")
 
@@ -139,7 +151,7 @@ struct BarcodeScanView: View {
             VStack {
                 Spacer()
                 Button {
-                    onCode("")
+                    deliver("")
                 } label: {
                     Label("Add by hand", systemImage: "plus")
                         .font(.fernlet(.label))
@@ -219,7 +231,7 @@ struct BarcodeScanView: View {
                     // Secondary — enter the barcode's macros by hand (skips detection, opens the
                     // remember-a-food naming screen for this scan with no payload found).
                     Button {
-                        onCode("")
+                        deliver("")
                     } label: {
                         Text("Enter details by hand")
                             .font(.fernlet(.label))
@@ -284,6 +296,15 @@ struct BarcodeScanView: View {
         }
     }
 
+    /// The single guarded delivery point for every path that hands a code (or an empty hand-entry) to
+    /// `onCode`. The latch makes a second delivery impossible once the flow has left the live scanner —
+    /// a barcode recognized during/after the push can't log an unchosen meal or swap the pushed screen.
+    private func deliver(_ code: String) {
+        guard !handedOff else { return }
+        handedOff = true
+        onCode(code)
+    }
+
     private func handlePickedImage(_ image: UIImage) {
         stillImage = image
         detectionNotice = nil
@@ -292,7 +313,7 @@ struct BarcodeScanView: View {
             let payload = try? await detector.payload(in: image)
             isDetecting = false
             if let payload {
-                onCode(payload)
+                deliver(payload)
             } else {
                 detectionNotice = "Fernlet couldn't spot a barcode in that photo — try moving closer so the code fills the frame."
             }
@@ -432,6 +453,10 @@ private extension View {
 // MARK: - Live viewfinder (VisionKit)
 
 private struct BarcodeDataScannerView: UIViewControllerRepresentable {
+    /// The parent latches this true the moment it hands any code off, pausing the live scanner so a
+    /// second barcode can't be recognized behind the pushed screen. The parent clears it (re-arming
+    /// the scanner) when the viewfinder reappears on pop-back.
+    var paused: Bool = false
     var onPayload: (String) -> Void
     var onUnavailable: () -> Void
 
@@ -447,10 +472,15 @@ private struct BarcodeDataScannerView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ scanner: DataScannerViewController, context: Context) {
+        if paused {
+            // A code has been handed off — stop recognizing so nothing fires behind the pushed screen.
+            if scanner.isScanning { scanner.stopScanning() }
+            return
+        }
         guard !scanner.isScanning else { return }
-        // Re-arm after a pop back into the scanner (delivery stops scanning below). If arming throws
-        // (e.g. permission just denied), surface it so the parent drops to the still-photo fallback
-        // rather than leaving a frozen viewfinder.
+        // Re-arm after a pop back into the scanner (delivery/pause stops scanning above). If arming
+        // throws (e.g. permission just denied), surface it so the parent drops to the still-photo
+        // fallback rather than leaving a frozen viewfinder.
         context.coordinator.delivered = false
         do {
             try scanner.startScanning()

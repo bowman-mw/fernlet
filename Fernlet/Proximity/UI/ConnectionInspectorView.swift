@@ -87,7 +87,9 @@ struct ConnectionInspectorLogDetailView: View {
             let latest = log.ranging.samples.last?.meters
             HStack(alignment: .firstTextBaseline) {
                 Text(latest.map { "\(Int($0 * 100))" } ?? "--")
-                    .font(.fernlet(.display))
+                    // Tabular digits so the streaming readout doesn't jitter horizontally
+                    // as ranging samples update (Fraunces is proportional by default).
+                    .font(.fernlet(.display).monospacedDigit())
                     .foregroundStyle(distanceColor(latest))
                 Text("cm")
                     .font(.fernlet(.stat))

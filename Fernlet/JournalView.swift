@@ -593,8 +593,12 @@ struct JournalCalendarCell: View {
                 if let day = cell.day {
                     VStack(spacing: 1) {
                         Text("\(day)")
-                            .font(.fernlet(.stat))
-                            .fontWeight(cell.isToday ? .bold : .medium)
+                            // Today's numeral gets real weight via the heavier bundled Fraunces face
+                            // — `.fontWeight(.bold)` is a silent no-op on the single-weight DM Sans
+                            // Medium that `.stat` resolves to.
+                            .font(cell.isToday
+                                  ? .custom(FernletFontName.frauncesSemiBold, size: 14, relativeTo: .subheadline)
+                                  : .fernlet(.stat))
                             .foregroundStyle(
                                 cell.isFuture ? Color.bark.opacity(0.28)
                                     : cell.isToday ? Color.moss

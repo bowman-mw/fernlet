@@ -53,7 +53,15 @@ public nonisolated struct FernletSettings: Codable {
     public var userProfile: UserNutritionProfile = UserNutritionProfile()
     public var nutritionPreferences: UserNutritionPreferences = UserNutritionPreferences()
     public var quickLogItems: [FernletShortcut] = FernletShortcut.defaultQuickLog
+    /// Raw `quickLogItems` tokens this build's `FernletShortcut` doesn't know — shortcuts added by a
+    /// NEWER build on another device. Parked here (and re-encoded) instead of thrown on, so a newer
+    /// device's settings can't latch this one into decode-failure recovery, and instead of dropped,
+    /// so a save on this device can't strip them from the synced blob. A build that knows a parked
+    /// token re-adopts it into the typed array on decode (see `splitRawTokens`).
+    public var unknownQuickLogTokens: [String] = []
     public var homeWidgets: [HomeWidget] = HomeWidget.defaultWidgets
+    /// Unknown `homeWidgets` tokens from newer builds; same contract as `unknownQuickLogTokens`.
+    public var unknownHomeWidgetTokens: [String] = []
     /// One-time migration marker for the Milestones/First-aid home widgets. Milestones and First aid used
     /// to be fixed, always-visible home elements; they became configurable `HomeWidget`s. Fresh installs
     /// start `true` (they already get both via `defaultWidgets`). Legacy settings decode this as `false`
@@ -120,9 +128,28 @@ public nonisolated struct FernletSettings: Codable {
         stressAwarenessEnabled = try container.decodeIfPresent(Bool.self, forKey: .stressAwarenessEnabled) ?? false
         userProfile = try container.decodeIfPresent(UserNutritionProfile.self, forKey: .userProfile) ?? UserNutritionProfile()
         nutritionPreferences = try container.decodeIfPresent(UserNutritionPreferences.self, forKey: .nutritionPreferences) ?? UserNutritionPreferences()
-        let decodedQuickLogItems = try container.decodeIfPresent([FernletShortcut].self, forKey: .quickLogItems) ?? FernletShortcut.defaultQuickLog
-        quickLogItems = FernletShortcut.normalizedQuickLog(decodedQuickLogItems)
-        var decodedHomeWidgets = try container.decodeIfPresent([HomeWidget].self, forKey: .homeWidgets) ?? HomeWidget.defaultWidgets
+        // These enum arrays sync across devices, so decode them tolerantly: a strict `[FernletShortcut]`/
+        // `[HomeWidget]` decode throws on the first raw value only a NEWER build knows, and that error
+        // cascades into decode-failure recovery (empty read-only database) on this device. Known tokens
+        // become the typed arrays; unknown ones are parked in the side channels, and previously parked
+        // tokens this build now knows are re-adopted (appended — their original positions are gone).
+        let quickLogTokens = try container.decodeIfPresent([String].self, forKey: .quickLogItems)
+            ?? FernletShortcut.defaultQuickLog.map(\.rawValue)
+        let parkedQuickLogTokens = try container.decodeIfPresent([String].self, forKey: .unknownQuickLogTokens) ?? []
+        let quickLogSplit = Self.splitRawTokens(quickLogTokens + parkedQuickLogTokens, as: FernletShortcut.self)
+        unknownQuickLogTokens = quickLogSplit.unknown
+        // Only pad to six slots when nothing is parked: display pads transiently anyway
+        // (`visibleQuickLog`), and persisting the pad would let auto-filled defaults permanently claim
+        // the slots the parked (newer-build) shortcuts occupy once a newer device re-adopts them.
+        quickLogItems = quickLogSplit.unknown.isEmpty
+            ? FernletShortcut.normalizedQuickLog(quickLogSplit.known)
+            : Array(quickLogSplit.known.prefix(6))
+        let homeWidgetTokens = try container.decodeIfPresent([String].self, forKey: .homeWidgets)
+            ?? HomeWidget.defaultWidgets.map(\.rawValue)
+        let parkedHomeWidgetTokens = try container.decodeIfPresent([String].self, forKey: .unknownHomeWidgetTokens) ?? []
+        let homeWidgetSplit = Self.splitRawTokens(homeWidgetTokens + parkedHomeWidgetTokens, as: HomeWidget.self)
+        unknownHomeWidgetTokens = homeWidgetSplit.unknown
+        var decodedHomeWidgets = homeWidgetSplit.known
         // One-time migration: Milestones + First aid used to be fixed home elements. If this settings blob
         // predates them becoming widgets (marker absent ⇒ false), append whichever aren't already present so
         // existing users keep them on the home feed. Runs at most once; the marker then persists as true.
@@ -148,6 +175,32 @@ public nonisolated struct FernletSettings: Codable {
         workoutLocations = decodedLocations.isEmpty ? [WorkoutLocation.fullGym] : decodedLocations
         activeWorkoutLocationID = try container.decodeIfPresent(UUID.self, forKey: .activeWorkoutLocationID)
         workoutProgression = try container.decodeIfPresent([String: Int].self, forKey: .workoutProgression) ?? [:]
+    }
+
+    /// Defensive bounds for parked unknown tokens: real ones are enum raw values from a future build
+    /// (a handful, tens of characters), so anything past these is treated as corrupt and dropped.
+    private static let unknownTokenCountLimit = 16
+    private static let unknownTokenLengthLimit = 64
+
+    /// Splits a synced raw-token array into the enum cases this build knows and the (deduped, bounded)
+    /// tokens it doesn't. Both halves keep first-occurrence order.
+    private static func splitRawTokens<Case: RawRepresentable>(
+        _ tokens: [String],
+        as type: Case.Type
+    ) -> (known: [Case], unknown: [String]) where Case.RawValue == String {
+        var known: [Case] = []
+        var seenKnownTokens: Set<String> = []
+        var unknown: [String] = []
+        for token in tokens {
+            if let value = Case(rawValue: token) {
+                if seenKnownTokens.insert(token).inserted { known.append(value) }
+            } else if token.count <= unknownTokenLengthLimit,
+                      unknown.count < unknownTokenCountLimit,
+                      !unknown.contains(token) {
+                unknown.append(token)
+            }
+        }
+        return (known, unknown)
     }
 }
 

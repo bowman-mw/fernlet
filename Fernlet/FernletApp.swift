@@ -75,6 +75,27 @@ struct FernletApp: App {
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
         UINavigationBar.appearance().compactAppearance = appearance
     }
+
+    /// Re-apply the nav-bar appearance on a Dynamic Type change and push the fresh, re-scaled
+    /// fonts onto already-visible bars. The appearance proxy is baked once at launch (fixed-size
+    /// UIFonts), so without this titles stay frozen at the launch-time text size while the rest of
+    /// the UI rescales live via `Font.custom(relativeTo:)`. Proxy changes alone only affect bars
+    /// created *after* the change, so we also copy the new appearance onto every on-screen bar.
+    @MainActor
+    private static func refreshNavigationBarAppearanceForContentSizeChange() {
+        configureNavigationBarAppearance()
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows {
+                for bar in window.navigationBars() {
+                    bar.standardAppearance = UINavigationBar.appearance().standardAppearance
+                    bar.scrollEdgeAppearance = UINavigationBar.appearance().scrollEdgeAppearance
+                    bar.compactAppearance = UINavigationBar.appearance().compactAppearance
+                    bar.setNeedsLayout()
+                }
+            }
+        }
+    }
     #endif
 
     var body: some Scene {
@@ -103,6 +124,13 @@ struct FernletApp: App {
                 )
             ) { _ in
                 lockService.lock(reason: .protectedDataUnavailable)
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: UIContentSizeCategory.didChangeNotification
+                )
+            ) { _ in
+                Self.refreshNavigationBarAppearanceForContentSizeChange()
             }
             #endif
         }
@@ -219,6 +247,20 @@ struct FernletApp: App {
         }
     }
 }
+
+#if canImport(UIKit)
+private extension UIView {
+    /// Every `UINavigationBar` in this view's subtree — used to push a re-scaled appearance onto
+    /// bars that already exist (the appearance proxy only reaches bars created after it changes).
+    func navigationBars() -> [UINavigationBar] {
+        var found = subviews.compactMap { $0 as? UINavigationBar }
+        for subview in subviews {
+            found.append(contentsOf: subview.navigationBars())
+        }
+        return found
+    }
+}
+#endif
 
 private struct LaunchFailureView: View {
     let error: Error

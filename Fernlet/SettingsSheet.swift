@@ -247,7 +247,7 @@ struct SettingsSheet: View {
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
             Text(hex.uppercased())
-                .font(.fernlet(.stat).monospacedDigit())
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             Button("Reset", action: reset)
                 .buttonStyle(.plain)
@@ -1256,7 +1256,7 @@ struct SettingsSheet: View {
                     Label("Connection History", systemImage: "clock.arrow.circlepath")
                     Spacer()
                     Text("\(store.connectionInspector.historicalLogs.count)")
-                        .font(.fernlet(.stat).monospacedDigit())
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                 }
                 .font(.fernlet(.label))

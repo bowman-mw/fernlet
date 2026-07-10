@@ -102,6 +102,47 @@ public struct NutritionLabelResult: Equatable, Hashable {
         self.omega3 = omega3
     }
 
+    /// The single source of truth for "how many fields did the scan actually read" — the signal both
+    /// `FoodCaptureRouter`'s label-confidence floor and `NutritionLabelCameraSheet`'s "< 3 fields = show
+    /// tips" heuristic key off. Calories ARE counted (the user-facing sheet's long-standing precedent),
+    /// so both call sites agree to the field. Keep the two heuristics reading the same number; a
+    /// divergence here is what let a stray "protein 8g" on a meal photo route differently than it tipped.
+    public var recognizedFieldCount: Int {
+        [
+            servingSize.map { _ in true },
+            servingsPerContainer.map { _ in true },
+            calories.map { _ in true },
+            protein.map { _ in true },
+            carbs.map { _ in true },
+            fat.map { _ in true },
+            fiber.map { _ in true },
+            sugar.map { _ in true },
+            addedSugar.map { _ in true },
+            saturatedFat.map { _ in true },
+            transFat.map { _ in true },
+            cholesterol.map { _ in true },
+            vitaminA.map { _ in true },
+            vitaminC.map { _ in true },
+            vitaminD.map { _ in true },
+            vitaminE.map { _ in true },
+            vitaminB12.map { _ in true },
+            thiamin.map { _ in true },
+            riboflavin.map { _ in true },
+            niacin.map { _ in true },
+            folate.map { _ in true },
+            calcium.map { _ in true },
+            iron.map { _ in true },
+            magnesium.map { _ in true },
+            phosphorus.map { _ in true },
+            potassium.map { _ in true },
+            sodium.map { _ in true },
+            zinc.map { _ in true },
+            omega3.map { _ in true }
+        ]
+        .compactMap { $0 }
+        .count
+    }
+
     public func micronutrients() -> Micronutrients {
         Micronutrients(
             fiber: fiber,

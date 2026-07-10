@@ -120,11 +120,13 @@ extension FernletStore {
 
     private func seedMemories() {
         // Memories persist across days too — skip if a previous day already seeded them.
+        // The marker is appended LAST so the trailing suffix(300) cap evicts it last: if
+        // it survived, seeding ran, so gating on it never re-appends the trio on a later day.
         let marker = "Enjoys morning walks and steady routines."
         guard !memories.contains(where: { $0.text == marker }) else { return }
-        memories.append(MemoryNote(category: "good", text: marker))
         memories.append(MemoryNote(category: "bright", text: "Cooking at home felt rewarding this week."))
         memories.append(MemoryNote(category: "note", text: "Prefers gentle, consistent care over streaks."))
+        memories.append(MemoryNote(category: "good", text: marker))
         memories = Array(memories.suffix(300))
     }
 }

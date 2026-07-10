@@ -188,7 +188,7 @@ struct NutritionLabelCameraSheet: View {
     }
 
     private var shouldShowScanTips: Bool {
-        scanError != nil || scanResult.map { detectedFieldCount(in: $0) < 3 } == true
+        scanError != nil || scanResult.map { $0.recognizedFieldCount < 3 } == true
     }
 
     private var scanTips: some View {
@@ -348,42 +348,6 @@ struct NutritionLabelCameraSheet: View {
         result.calcium != nil || result.iron != nil || result.magnesium != nil ||
         result.phosphorus != nil || result.potassium != nil || result.zinc != nil ||
         result.omega3 != nil
-    }
-
-    private func detectedFieldCount(in result: NutritionLabelResult) -> Int {
-        [
-            result.servingSize.map { _ in true },
-            result.servingsPerContainer.map { _ in true },
-            result.calories.map { _ in true },
-            result.protein.map { _ in true },
-            result.carbs.map { _ in true },
-            result.fat.map { _ in true },
-            result.fiber.map { _ in true },
-            result.sugar.map { _ in true },
-            result.addedSugar.map { _ in true },
-            result.saturatedFat.map { _ in true },
-            result.transFat.map { _ in true },
-            result.cholesterol.map { _ in true },
-            result.vitaminA.map { _ in true },
-            result.vitaminC.map { _ in true },
-            result.vitaminD.map { _ in true },
-            result.vitaminE.map { _ in true },
-            result.vitaminB12.map { _ in true },
-            result.thiamin.map { _ in true },
-            result.riboflavin.map { _ in true },
-            result.niacin.map { _ in true },
-            result.folate.map { _ in true },
-            result.calcium.map { _ in true },
-            result.iron.map { _ in true },
-            result.magnesium.map { _ in true },
-            result.phosphorus.map { _ in true },
-            result.potassium.map { _ in true },
-            result.sodium.map { _ in true },
-            result.zinc.map { _ in true },
-            result.omega3.map { _ in true }
-        ]
-        .compactMap { $0 }
-        .count
     }
 
     private func formatted(_ value: Double, unit: String) -> String {

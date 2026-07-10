@@ -1056,6 +1056,11 @@ struct MealSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     var onLogged: ([Meal]) -> Void = { _ in }
+    #if canImport(UIKit)
+    /// One router owns the capture detectors, so the chooser branches reuse its injectable
+    /// `barcodeDetector` seam (fakes reach every path) rather than newing up their own detector.
+    var captureRouter = FoodCaptureRouter()
+    #endif
     @State private var description = ""
     @State private var mealType: MealType?
     @State private var notice: String?
@@ -1068,8 +1073,6 @@ struct MealSheet: View {
     @State private var selectedMealPhotoItem: PhotosPickerItem?
     @State private var isIdentifyingPhoto = false
     // Unified Capture auto-routing (Food Capture mockup §2b–2e).
-    /// The photo captured by the prominent Capture button, held while we auto-detect what it is.
-    @State private var captureImage: UIImage?
     /// Calm "analyzing…" state shown while the router runs barcode → label → meal detection.
     @State private var isAnalyzingCapture = false
     /// Presented when detection is ambiguous/low-confidence — a gentle Barcode · Label · Meal chooser.
@@ -1112,8 +1115,10 @@ struct MealSheet: View {
                     case .captureLabel(let result):
                         // The auto-router parsed a nutrition label — hand off to the existing
                         // name-it-&-remember screen with the macros pre-filled (no barcode, no rescan).
+                        // Log via the label-scan path so provenance is truthful: this meal came from a
+                        // scanned nutrition label, not a barcode.
                         BarcodeNotFoundView(store: store, barcode: "", prefilledScan: result) { foodItem in
-                            let meal = store.logBarcodeScannedFoodItem(foodItem, mealType: mealType)
+                            let meal = store.logLabelScannedFoodItem(foodItem, mealType: mealType)
                             onLogged([meal])
                             dismiss()
                         }
@@ -1194,7 +1199,7 @@ struct MealSheet: View {
                 onBarcode: {
                     captureChooser = nil
                     mealPhoto = context.image
-                    lookUpBarcode(in: context.image)
+                    lookUpBarcode(in: context.image, alreadyDetected: context.detectedBarcode)
                 },
                 onLabel: {
                     captureChooser = nil
@@ -1407,6 +1412,9 @@ struct MealSheet: View {
         let image: UIImage
         /// The best-effort label parse (may be nil) so "Read the label" can prefill instead of rescan.
         let parsedLabel: NutritionLabelResult?
+        /// The barcode the router already read from this image (nil when its scan found none). Carried
+        /// so "Look up the barcode" reuses that result instead of re-scanning the same photo.
+        let detectedBarcode: String?
     }
 
     /// The prominent Capture button's handler: run the auto-router over the still photo (barcode →
@@ -1416,7 +1424,7 @@ struct MealSheet: View {
         captureError = nil
         isAnalyzingCapture = true
         Task {
-            let route = await FoodCaptureRouter().route(for: image)
+            let route = await captureRouter.route(for: image)
             isAnalyzingCapture = false
             switch route {
             case .barcode(let payload):
@@ -1428,18 +1436,26 @@ struct MealSheet: View {
                 // Graceful default — land the photo in the meal composer (existing meal-photo path).
                 mealPhoto = image
             case .ambiguous(let label):
-                captureChooser = CaptureChooserContext(image: image, parsedLabel: label)
+                // The router reaches `.ambiguous` only after its barcode scan came up empty, so the
+                // chooser's "Look up the barcode" branch already knows there's nothing to find.
+                captureChooser = CaptureChooserContext(image: image, parsedLabel: label, detectedBarcode: nil)
             }
         }
     }
 
-    /// Chooser "Look up the barcode" branch — re-runs barcode detection on the held photo (via the
-    /// existing still-photo detector). If it still can't find one, a calm "couldn't read that" prompt.
-    private func lookUpBarcode(in image: UIImage) {
+    /// Chooser "Look up the barcode" branch — reuses the barcode the router already read from this
+    /// photo when it has one; otherwise runs detection once through the router's injectable seam (the
+    /// same detector the auto-route used, so fakes reach here). A calm "couldn't read that" prompt on a
+    /// miss — never a hard error.
+    private func lookUpBarcode(in image: UIImage, alreadyDetected: String?) {
+        if let alreadyDetected, alreadyDetected.isEmpty == false {
+            path.append(.captureBarcode(alreadyDetected))
+            return
+        }
         captureError = nil
         isAnalyzingCapture = true
         Task {
-            let payload = try? await VisionBarcodeDetector().payload(in: image)
+            let payload = try? await captureRouter.barcodeDetector.payload(in: image)
             isAnalyzingCapture = false
             if let payload, payload.isEmpty == false {
                 path.append(.captureBarcode(payload))
@@ -1452,7 +1468,7 @@ struct MealSheet: View {
     /// Chooser "Read the label" branch — use the parse the router already made if it read anything,
     /// otherwise re-run the OCR scanner on the held photo before handing off to the label flow.
     private func routeCapturedLabel(_ prefetched: NutritionLabelResult?, from image: UIImage) {
-        if let prefetched, FoodCaptureRouter.recognizedFieldCount(in: prefetched) > 0 {
+        if let prefetched, prefetched.recognizedFieldCount > 0 {
             path.append(.captureLabel(prefetched))
             return
         }
