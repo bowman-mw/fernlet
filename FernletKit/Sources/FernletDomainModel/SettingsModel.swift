@@ -7,7 +7,15 @@ public nonisolated struct FernletSettings: Codable {
     public var bottleOz: Int = 24
     public var hydrationTarget: Int = 4
     public var showDeveloperNotes = false
-    public var connectionInspectorMode: ConnectionInspectorMode = .live
+    public var connectionInspectorMode: ConnectionInspectorMode = .live {
+        didSet { unknownConnectionInspectorModeToken = nil }
+    }
+    /// Raw `connectionInspectorMode` token from a NEWER build, parked instead of thrown on (which
+    /// would latch this device into decode-failure recovery) and re-encoded so a save here can't
+    /// strip it from the synced blob. A build that knows it re-adopts it on decode; an explicit
+    /// local mode change clears it (`didSet`) so the last editor wins. Same contract for every
+    /// `unknown…Token` scalar side channel below and across the domain models (`EnumDecodeCompat`).
+    public var unknownConnectionInspectorModeToken: String? = nil
     public var companionAppearance: CompanionAppearance = .standard
     /// Which owned item is equipped in each slot, keyed by `ItemSlot.rawValue`. A slot absent from the
     /// map (or pointing at a deleted item) renders nothing. The items themselves live in their own
@@ -25,7 +33,11 @@ public nonisolated struct FernletSettings: Codable {
     /// Locally-learned `designerID → display name` map, populated when connecting with friends in person
     /// (Increment 3). Lets the closet resolve "designed by <friend>" without the item ever carrying a name.
     public var knownDesignerNames: [String: String] = [:]
-    public var selectedGoal: GoalType = .wellness
+    public var selectedGoal: GoalType = .wellness {
+        didSet { unknownSelectedGoalToken = nil }
+    }
+    /// Unknown `selectedGoal` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
+    public var unknownSelectedGoalToken: String? = nil
     /// Per-day sickness flags keyed by `yyyy-MM-dd`. Keyed by date so past-day scoring uses the
     /// flag that was set for *that* day, and "today" naturally resets when the date rolls over.
     public var sickDays: [String: Bool] = [:]
@@ -33,7 +45,11 @@ public nonisolated struct FernletSettings: Codable {
     public var intentDismissedDays: [String: Bool] = [:]
     /// Per-nutrient cooldown end dates for the preventive-care micronutrient nudge (2-week suppress).
     public var nutrientBubbleDismissedUntil: [String: Date] = [:]
-    public var aiStatus: AIStatus = .off
+    public var aiStatus: AIStatus = .off {
+        didSet { unknownAIStatusToken = nil }
+    }
+    /// Unknown `aiStatus` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
+    public var unknownAIStatusToken: String? = nil
     public var webNutritionLookupEnabled: Bool = false
     /// Opt-in: weather-aware gentle recovery prompts (requests coarse location only when enabled).
     public var weatherPromptsEnabled: Bool = false
@@ -106,17 +122,36 @@ public nonisolated struct FernletSettings: Codable {
         bottleOz = try container.decodeIfPresent(Int.self, forKey: .bottleOz) ?? 24
         hydrationTarget = try container.decodeIfPresent(Int.self, forKey: .hydrationTarget) ?? 4
         showDeveloperNotes = try container.decodeIfPresent(Bool.self, forKey: .showDeveloperNotes) ?? false
-        connectionInspectorMode = try container.decodeIfPresent(ConnectionInspectorMode.self, forKey: .connectionInspectorMode) ?? .live
+        // Scalar enum fields decode tolerantly (freeze-on-unknown + parked-token side channel):
+        // `decodeIfPresent(EnumType.self) ?? default` only defaults on an ABSENT key — a present
+        // raw value from a newer build throws and cascades into decode-failure recovery. See
+        // EnumDecodeCompat for the full contract.
+        let inspectorSplit = try container.decodeTolerantEnum(
+            ConnectionInspectorMode.self, forKey: .connectionInspectorMode,
+            parkedTokenKey: .unknownConnectionInspectorModeToken, default: .live)
+        connectionInspectorMode = inspectorSplit.value
+        unknownConnectionInspectorModeToken = inspectorSplit.parkedToken
         companionAppearance = try container.decodeIfPresent(CompanionAppearance.self, forKey: .companionAppearance) ?? .standard
         equippedItemIDsBySlot = try container.decodeIfPresent([String: UUID].self, forKey: .equippedItemIDsBySlot) ?? [:]
         localDesignerID = try container.decodeIfPresent(UUID.self, forKey: .localDesignerID)
         ownedDesignerIDs = try container.decodeIfPresent(Set<UUID>.self, forKey: .ownedDesignerIDs) ?? []
         knownDesignerNames = try container.decodeIfPresent([String: String].self, forKey: .knownDesignerNames) ?? [:]
-        selectedGoal = try container.decodeIfPresent(GoalType.self, forKey: .selectedGoal) ?? .wellness
+        // `GoalType.init(persistedToken:)` also maps the legacy aliases ("Wellness", "Short-term",
+        // …) that GoalType's own lenient Decodable init has always accepted.
+        let goalSplit = try container.decodeTolerantEnum(
+            GoalType.self, forKey: .selectedGoal,
+            parkedTokenKey: .unknownSelectedGoalToken, default: .wellness,
+            resolve: GoalType.init(persistedToken:))
+        selectedGoal = goalSplit.value
+        unknownSelectedGoalToken = goalSplit.parkedToken
         sickDays = try container.decodeIfPresent([String: Bool].self, forKey: .sickDays) ?? [:]
         intentDismissedDays = try container.decodeIfPresent([String: Bool].self, forKey: .intentDismissedDays) ?? [:]
         nutrientBubbleDismissedUntil = try container.decodeIfPresent([String: Date].self, forKey: .nutrientBubbleDismissedUntil) ?? [:]
-        aiStatus = try container.decodeIfPresent(AIStatus.self, forKey: .aiStatus) ?? .off
+        let aiStatusSplit = try container.decodeTolerantEnum(
+            AIStatus.self, forKey: .aiStatus,
+            parkedTokenKey: .unknownAIStatusToken, default: .off)
+        aiStatus = aiStatusSplit.value
+        unknownAIStatusToken = aiStatusSplit.parkedToken
         webNutritionLookupEnabled = try container.decodeIfPresent(Bool.self, forKey: .webNutritionLookupEnabled) ?? false
         weatherPromptsEnabled = try container.decodeIfPresent(Bool.self, forKey: .weatherPromptsEnabled) ?? false
         showCalories = try container.decodeIfPresent(Bool.self, forKey: .showCalories) ?? false
@@ -177,30 +212,14 @@ public nonisolated struct FernletSettings: Codable {
         workoutProgression = try container.decodeIfPresent([String: Int].self, forKey: .workoutProgression) ?? [:]
     }
 
-    /// Defensive bounds for parked unknown tokens: real ones are enum raw values from a future build
-    /// (a handful, tens of characters), so anything past these is treated as corrupt and dropped.
-    private static let unknownTokenCountLimit = 16
-    private static let unknownTokenLengthLimit = 64
-
-    /// Splits a synced raw-token array into the enum cases this build knows and the (deduped, bounded)
-    /// tokens it doesn't. Both halves keep first-occurrence order.
+    /// The split logic (and its defensive bounds) moved to `EnumDecodeCompat.splitRawTokens` when
+    /// the tolerant-decode pattern was generalized to the rest of the domain models; kept here as a
+    /// private shim so `init(from:)` reads unchanged.
     private static func splitRawTokens<Case: RawRepresentable>(
         _ tokens: [String],
         as type: Case.Type
     ) -> (known: [Case], unknown: [String]) where Case.RawValue == String {
-        var known: [Case] = []
-        var seenKnownTokens: Set<String> = []
-        var unknown: [String] = []
-        for token in tokens {
-            if let value = Case(rawValue: token) {
-                if seenKnownTokens.insert(token).inserted { known.append(value) }
-            } else if token.count <= unknownTokenLengthLimit,
-                      unknown.count < unknownTokenCountLimit,
-                      !unknown.contains(token) {
-                unknown.append(token)
-            }
-        }
-        return (known, unknown)
+        EnumDecodeCompat.splitRawTokens(tokens, as: type)
     }
 }
 

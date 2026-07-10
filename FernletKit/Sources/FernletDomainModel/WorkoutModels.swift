@@ -6,9 +6,23 @@ import Foundation
 public nonisolated struct Workout: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var name: String
-    public var type: WorkoutType
-    public var mode: WorkoutMode = .strengthTraining
-    public var activityType: WorkoutActivityType?
+    // The enum fields decode tolerantly (freeze-on-unknown + parked-token side channels): a raw
+    // value only a NEWER build knows would otherwise throw the whole Workout → the whole FernletDay
+    // → the blob decode (read-only recovery) or the day's row (silently dropped). Parked tokens are
+    // re-encoded, re-adopted by a build that knows them, and cleared on an explicit local edit via
+    // `didSet` (`EnumDecodeCompat`).
+    public var type: WorkoutType {
+        didSet { unknownTypeToken = nil }
+    }
+    public var unknownTypeToken: String? = nil
+    public var mode: WorkoutMode = .strengthTraining {
+        didSet { unknownModeToken = nil }
+    }
+    public var unknownModeToken: String? = nil
+    public var activityType: WorkoutActivityType? {
+        didSet { unknownActivityTypeToken = nil }
+    }
+    public var unknownActivityTypeToken: String? = nil
     public var exercises: String
     public var rpe: Double?
     public var notes: String
@@ -17,9 +31,13 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
     public var activeEnergyKcal: Double?
     public var effort: Int?
     public var muscleGroups: Set<MuscleGroup> = []
+    public var unknownMuscleGroupTokens: [String] = []
     public var healthKitUUID: UUID?
     public var plannedWorkoutID: UUID?
-    public var intensity: WorkoutIntensity
+    public var intensity: WorkoutIntensity {
+        didSet { unknownIntensityToken = nil }
+    }
+    public var unknownIntensityToken: String? = nil
     public var completedAt = Date()
     public var loggedAt = Date()
 
@@ -95,9 +113,18 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
-        type = try container.decode(WorkoutType.self, forKey: .type)
-        mode = try container.decodeIfPresent(WorkoutMode.self, forKey: .mode) ?? .strengthTraining
-        activityType = try container.decodeIfPresent(WorkoutActivityType.self, forKey: .activityType)
+        let typeSplit = try container.decodeTolerantEnum(
+            WorkoutType.self, forKey: .type, parkedTokenKey: .unknownTypeToken, default: .fullBody)
+        type = typeSplit.value
+        unknownTypeToken = typeSplit.parkedToken
+        let modeSplit = try container.decodeTolerantEnum(
+            WorkoutMode.self, forKey: .mode, parkedTokenKey: .unknownModeToken, default: .strengthTraining)
+        mode = modeSplit.value
+        unknownModeToken = modeSplit.parkedToken
+        let activitySplit = try container.decodeTolerantOptionalEnum(
+            WorkoutActivityType.self, forKey: .activityType, parkedTokenKey: .unknownActivityTypeToken)
+        activityType = activitySplit.value
+        unknownActivityTypeToken = activitySplit.parkedToken
         exercises = try container.decode(String.self, forKey: .exercises)
         rpe = try container.decodeIfPresent(Double.self, forKey: .rpe)
         notes = try container.decode(String.self, forKey: .notes)
@@ -105,10 +132,16 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         distanceMiles = try container.decodeIfPresent(Double.self, forKey: .distanceMiles)
         activeEnergyKcal = try container.decodeIfPresent(Double.self, forKey: .activeEnergyKcal)
         effort = try container.decodeIfPresent(Int.self, forKey: .effort)
-        muscleGroups = try container.decodeIfPresent(Set<MuscleGroup>.self, forKey: .muscleGroups) ?? []
+        let muscleSplit = try container.decodeTolerantEnumSet(
+            MuscleGroup.self, forKey: .muscleGroups, parkedTokensKey: .unknownMuscleGroupTokens)
+        muscleGroups = muscleSplit.known
+        unknownMuscleGroupTokens = muscleSplit.unknownTokens
         healthKitUUID = try container.decodeIfPresent(UUID.self, forKey: .healthKitUUID)
         plannedWorkoutID = try container.decodeIfPresent(UUID.self, forKey: .plannedWorkoutID)
-        intensity = try container.decode(WorkoutIntensity.self, forKey: .intensity)
+        let intensitySplit = try container.decodeTolerantEnum(
+            WorkoutIntensity.self, forKey: .intensity, parkedTokenKey: .unknownIntensityToken, default: .moderate)
+        intensity = intensitySplit.value
+        unknownIntensityToken = intensitySplit.parkedToken
         completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt) ?? Date()
         loggedAt = try container.decodeIfPresent(Date.self, forKey: .loggedAt) ?? completedAt
     }
@@ -118,8 +151,11 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
         try container.encode(type, forKey: .type)
+        try container.encodeIfPresent(unknownTypeToken, forKey: .unknownTypeToken)
         try container.encode(mode, forKey: .mode)
+        try container.encodeIfPresent(unknownModeToken, forKey: .unknownModeToken)
         try container.encodeIfPresent(activityType, forKey: .activityType)
+        try container.encodeIfPresent(unknownActivityTypeToken, forKey: .unknownActivityTypeToken)
         try container.encode(exercises, forKey: .exercises)
         try container.encodeIfPresent(rpe, forKey: .rpe)
         try container.encode(notes, forKey: .notes)
@@ -128,9 +164,11 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(activeEnergyKcal, forKey: .activeEnergyKcal)
         try container.encodeIfPresent(effort, forKey: .effort)
         try container.encode(muscleGroups, forKey: .muscleGroups)
+        try container.encode(unknownMuscleGroupTokens, forKey: .unknownMuscleGroupTokens)
         try container.encodeIfPresent(healthKitUUID, forKey: .healthKitUUID)
         try container.encodeIfPresent(plannedWorkoutID, forKey: .plannedWorkoutID)
         try container.encode(intensity, forKey: .intensity)
+        try container.encodeIfPresent(unknownIntensityToken, forKey: .unknownIntensityToken)
         try container.encode(completedAt, forKey: .completedAt)
         try container.encode(loggedAt, forKey: .loggedAt)
     }
@@ -139,18 +177,34 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         case id, name, type, mode, activityType, exercises, rpe, notes, duration
         case distanceMiles, activeEnergyKcal, effort, muscleGroups, healthKitUUID, plannedWorkoutID
         case intensity, completedAt, loggedAt
+        case unknownTypeToken, unknownModeToken, unknownActivityTypeToken
+        case unknownMuscleGroupTokens, unknownIntensityToken
     }
 }
 
 public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var name: String
-    public var split: WorkoutSplit
-    public var source: WorkoutPlanSource
-    public var mode: WorkoutMode
-    public var activityType: WorkoutActivityType?
+    // Tolerant enum decode + parked-token side channels, same contract as `Workout` (EnumDecodeCompat).
+    public var split: WorkoutSplit {
+        didSet { unknownSplitToken = nil }
+    }
+    public var unknownSplitToken: String? = nil
+    public var source: WorkoutPlanSource {
+        didSet { unknownSourceToken = nil }
+    }
+    public var unknownSourceToken: String? = nil
+    public var mode: WorkoutMode {
+        didSet { unknownModeToken = nil }
+    }
+    public var unknownModeToken: String? = nil
+    public var activityType: WorkoutActivityType? {
+        didSet { unknownActivityTypeToken = nil }
+    }
+    public var unknownActivityTypeToken: String? = nil
     public var exercises: String
     public var muscleGroups: Set<MuscleGroup>
+    public var unknownMuscleGroupTokens: [String] = []
     public var notes: String
     public var duration: Int?
     public var targetDistanceMiles: Double?
@@ -215,12 +269,27 @@ public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
-        split = try container.decode(WorkoutSplit.self, forKey: .split)
-        source = try container.decodeIfPresent(WorkoutPlanSource.self, forKey: .source) ?? .user
-        mode = try container.decodeIfPresent(WorkoutMode.self, forKey: .mode) ?? .strengthTraining
-        activityType = try container.decodeIfPresent(WorkoutActivityType.self, forKey: .activityType)
+        let splitSplit = try container.decodeTolerantEnum(
+            WorkoutSplit.self, forKey: .split, parkedTokenKey: .unknownSplitToken, default: .workout)
+        split = splitSplit.value
+        unknownSplitToken = splitSplit.parkedToken
+        let sourceSplit = try container.decodeTolerantEnum(
+            WorkoutPlanSource.self, forKey: .source, parkedTokenKey: .unknownSourceToken, default: .user)
+        source = sourceSplit.value
+        unknownSourceToken = sourceSplit.parkedToken
+        let modeSplit = try container.decodeTolerantEnum(
+            WorkoutMode.self, forKey: .mode, parkedTokenKey: .unknownModeToken, default: .strengthTraining)
+        mode = modeSplit.value
+        unknownModeToken = modeSplit.parkedToken
+        let activitySplit = try container.decodeTolerantOptionalEnum(
+            WorkoutActivityType.self, forKey: .activityType, parkedTokenKey: .unknownActivityTypeToken)
+        activityType = activitySplit.value
+        unknownActivityTypeToken = activitySplit.parkedToken
         exercises = try container.decodeIfPresent(String.self, forKey: .exercises) ?? ""
-        muscleGroups = try container.decodeIfPresent(Set<MuscleGroup>.self, forKey: .muscleGroups) ?? []
+        let muscleSplit = try container.decodeTolerantEnumSet(
+            MuscleGroup.self, forKey: .muscleGroups, parkedTokensKey: .unknownMuscleGroupTokens)
+        muscleGroups = muscleSplit.known
+        unknownMuscleGroupTokens = muscleSplit.unknownTokens
         notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
         duration = try container.decodeIfPresent(Int.self, forKey: .duration)
         targetDistanceMiles = try container.decodeIfPresent(Double.self, forKey: .targetDistanceMiles)
@@ -232,6 +301,8 @@ public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case id, name, split, source, mode, activityType, exercises, muscleGroups, notes, duration
         case targetDistanceMiles, targetEnergyKcal, targetEffort, createdAt
+        case unknownSplitToken, unknownSourceToken, unknownModeToken
+        case unknownActivityTypeToken, unknownMuscleGroupTokens
     }
 }
 

@@ -40,13 +40,24 @@ public nonisolated enum ExperienceLevel: String, Codable, CaseIterable, Identifi
 /// Durable workout context the suggestion engine reads: injuries (structured contraindications plus
 /// free-text nuance), interests, sport, weekly frequency, level, and the chosen split (nil = auto).
 public nonisolated struct WorkoutProfile: Codable, Equatable {
+    // The enum sets + `experience` decode tolerantly with parked-token side channels
+    // (EnumDecodeCompat): this struct lives in FernletSettings (top-level synced-blob field), so a
+    // strict `Set<MuscleGroup>`/`Set<MovementPattern>`/`ExperienceLevel` decode of a raw value only
+    // a newer build knows would brick the older device into read-only recovery — and a lossy
+    // re-save here would strip a newer device's avoided-muscle selections (a safety field: dropping
+    // one un-avoids it).
     public var avoidedMuscles: Set<MuscleGroup>
+    public var unknownAvoidedMuscleTokens: [String] = []
     public var avoidedMovements: Set<MovementPattern>
+    public var unknownAvoidedMovementTokens: [String] = []
     public var injuryNotes: String
     public var interests: [String]
     public var sport: String
     public var trainingDaysPerWeek: Int
-    public var experience: ExperienceLevel
+    public var experience: ExperienceLevel {
+        didSet { unknownExperienceToken = nil }
+    }
+    public var unknownExperienceToken: String? = nil
     /// nil → use the recommended split. Otherwise a `TrainingSplit.id`.
     public var selectedSplitID: String?
 
@@ -72,13 +83,22 @@ public nonisolated struct WorkoutProfile: Codable, Equatable {
 
     public nonisolated init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        avoidedMuscles = try c.decodeIfPresent(Set<MuscleGroup>.self, forKey: .avoidedMuscles) ?? []
-        avoidedMovements = try c.decodeIfPresent(Set<MovementPattern>.self, forKey: .avoidedMovements) ?? []
+        let muscleSplit = try c.decodeTolerantEnumSet(
+            MuscleGroup.self, forKey: .avoidedMuscles, parkedTokensKey: .unknownAvoidedMuscleTokens)
+        avoidedMuscles = muscleSplit.known
+        unknownAvoidedMuscleTokens = muscleSplit.unknownTokens
+        let movementSplit = try c.decodeTolerantEnumSet(
+            MovementPattern.self, forKey: .avoidedMovements, parkedTokensKey: .unknownAvoidedMovementTokens)
+        avoidedMovements = movementSplit.known
+        unknownAvoidedMovementTokens = movementSplit.unknownTokens
         injuryNotes = try c.decodeIfPresent(String.self, forKey: .injuryNotes) ?? ""
         interests = try c.decodeIfPresent([String].self, forKey: .interests) ?? []
         sport = try c.decodeIfPresent(String.self, forKey: .sport) ?? ""
         trainingDaysPerWeek = try c.decodeIfPresent(Int.self, forKey: .trainingDaysPerWeek) ?? 3
-        experience = try c.decodeIfPresent(ExperienceLevel.self, forKey: .experience) ?? .beginner
+        let experienceSplit = try c.decodeTolerantEnum(
+            ExperienceLevel.self, forKey: .experience, parkedTokenKey: .unknownExperienceToken, default: .beginner)
+        experience = experienceSplit.value
+        unknownExperienceToken = experienceSplit.parkedToken
         selectedSplitID = try c.decodeIfPresent(String.self, forKey: .selectedSplitID)
     }
 

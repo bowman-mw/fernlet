@@ -1,9 +1,12 @@
 // SettingsDecodeCompatTests.swift
-// Forward-compatibility of the synced FernletSettings enum arrays (`homeWidgets`, `quickLogItems`):
+// Forward-compatibility of the synced FernletSettings enum fields — the arrays (`homeWidgets`,
+// `quickLogItems`) and the scalars (`aiStatus`, `connectionInspectorMode`, `selectedGoal`):
 // raw values added by a NEWER build must decode without throwing on this one (a throw cascades into
 // decode-failure recovery and latches the device read-only), must survive a re-save round trip via
 // the unknown-token side channels, and known-only blobs must keep the legacy encoded shape so the
-// PREVIOUS build's strict decode still succeeds.
+// PREVIOUS build's strict decode still succeeds. Companion suites cover the other synced containers
+// (DayDecodeCompatTests, SnapshotModelsDecodeCompatTests, ProximityRecordDecodeCompatTests,
+// LogRecordsDecodeCompatTests).
 
 import Foundation
 import Testing
@@ -140,6 +143,96 @@ struct SettingsDecodeCompatTests {
         let reloaded = try decode(JSONEncoder().encode(edited))
         #expect(reloaded.homeWidgets == [.milestones, .companion])
         #expect(reloaded.didMigrateMilestonesFirstAidWidgets)
+    }
+
+    // MARK: - Scalar enum fields (freeze-on-unknown + parked-token side channels)
+
+    @Test func unknownScalarTokensFreezeToDefaultsAndPark() throws {
+        let settings = try decode("""
+        {
+          "didMigrateMilestonesFirstAidWidgets": true,
+          "aiStatus": "hibernating",
+          "connectionInspectorMode": "spectral",
+          "selectedGoal": "endurance",
+          "bottleOz": 40
+        }
+        """)
+
+        #expect(settings.aiStatus == .off)
+        #expect(settings.unknownAIStatusToken == "hibernating")
+        #expect(settings.connectionInspectorMode == .live)
+        #expect(settings.unknownConnectionInspectorModeToken == "spectral")
+        #expect(settings.selectedGoal == .wellness)
+        #expect(settings.unknownSelectedGoalToken == "endurance")
+        #expect(settings.bottleOz == 40)
+
+        // Re-save: the original keys carry values the previous build's strict decode accepts;
+        // the parked tokens ride along in the side channels for a newer build to re-adopt.
+        let object = try encodeToObject(settings)
+        #expect(AIStatus(rawValue: object["aiStatus"] as? String ?? "") == .off)
+        #expect(object["unknownAIStatusToken"] as? String == "hibernating")
+        #expect(ConnectionInspectorMode(rawValue: object["connectionInspectorMode"] as? String ?? "") == .live)
+        #expect(object["unknownConnectionInspectorModeToken"] as? String == "spectral")
+        #expect(GoalType(persistedToken: object["selectedGoal"] as? String ?? "") == .wellness)
+        #expect(object["unknownSelectedGoalToken"] as? String == "endurance")
+
+        let second = try decode(JSONEncoder().encode(settings))
+        #expect(second.aiStatus == .off)
+        #expect(second.unknownAIStatusToken == "hibernating")
+        #expect(second.unknownConnectionInspectorModeToken == "spectral")
+        #expect(second.unknownSelectedGoalToken == "endurance")
+    }
+
+    @Test func parkedScalarTokenThisBuildKnowsIsReadopted() throws {
+        // Upgrade path: an older build froze aiStatus to its default and parked "ready" (unknown
+        // to it); this build knows "ready", so it wins over the frozen main value and the channel
+        // clears.
+        let settings = try decode("""
+        {
+          "didMigrateMilestonesFirstAidWidgets": true,
+          "aiStatus": "off",
+          "unknownAIStatusToken": "ready",
+          "selectedGoal": "wellness",
+          "unknownSelectedGoalToken": "strength"
+        }
+        """)
+
+        #expect(settings.aiStatus == .ready)
+        #expect(settings.unknownAIStatusToken == nil)
+        #expect(settings.selectedGoal == .strength)
+        #expect(settings.unknownSelectedGoalToken == nil)
+    }
+
+    @Test func explicitLocalSetClearsTheScalarPark() throws {
+        var settings = try decode("""
+        {"didMigrateMilestonesFirstAidWidgets": true, "aiStatus": "hibernating"}
+        """)
+        #expect(settings.unknownAIStatusToken == "hibernating")
+
+        // The user flips the AI toggle on this device: last editor wins — the parked newer-build
+        // token must NOT resurrect on the newer device.
+        settings.aiStatus = .resting
+        #expect(settings.unknownAIStatusToken == nil)
+        let object = try encodeToObject(settings)
+        #expect(object["aiStatus"] as? String == "resting")
+        #expect(object["unknownAIStatusToken"] == nil)
+    }
+
+    @Test func legacyGoalAliasesDecodeWithoutParking() throws {
+        // "Short-term" is a legacy alias GoalType has always mapped to .wellness — it must keep
+        // resolving as a KNOWN token (not get parked as if it came from a newer build).
+        let settings = try decode("""
+        {"didMigrateMilestonesFirstAidWidgets": true, "selectedGoal": "Short-term"}
+        """)
+        #expect(settings.selectedGoal == .wellness)
+        #expect(settings.unknownSelectedGoalToken == nil)
+    }
+
+    @Test func knownScalarEncodeAddsNoSideKeys() throws {
+        let object = try encodeToObject(FernletSettings())
+        // Scalar side channels are Optional and omitted when empty, so a known-only settings blob
+        // keeps the legacy key set (plus the two always-present array side channels).
+        #expect(object.keys.filter { $0.hasPrefix("unknown") }.sorted() == ["unknownHomeWidgetTokens", "unknownQuickLogTokens"])
     }
 
     // MARK: - Side-channel bounds
