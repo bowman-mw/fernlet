@@ -11,10 +11,6 @@
 import SwiftUI
 import PrivateMemoryStore
 
-/// Fixed warm parchment for label ink on the moss CTAs — stays light in both modes
-/// (the adaptive Color.parchment flips dark), matching the mockup's #F5EFE0 on-accent.
-private let worryBoxOnMoss = Color(red: 0.961, green: 0.937, blue: 0.878)
-
 // MARK: - Entry (First Aid)
 
 /// Write a worry, then "let it go": the words tuck down into the box, a lid closes over
@@ -33,7 +29,6 @@ struct WorryEntryView: View {
     @FocusState private var isEditorFocused: Bool
 
     private static let characterLimit = 300
-    private static let onMoss = worryBoxOnMoss
 
     var body: some View {
         VStack(spacing: 20) {
@@ -119,7 +114,7 @@ struct WorryEntryView: View {
                 let disabled = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 Text("Let it go")
                     .font(.fernlet(.label))
-                    .foregroundStyle(disabled ? Color.moss.opacity(0.55) : Self.onMoss)
+                    .foregroundStyle(disabled ? Color.moss.opacity(0.55) : Color.parchmentInk)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(disabled ? Color.moss.opacity(0.18) : Color.moss,
@@ -155,7 +150,7 @@ struct WorryEntryView: View {
             } label: {
                 Text("Write another")
                     .font(.fernlet(.label))
-                    .foregroundStyle(Self.onMoss)
+                    .foregroundStyle(Color.parchmentInk)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
                     .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
@@ -397,7 +392,7 @@ struct WorryBoxView: View {
                         .font(.fernlet(.label))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .foregroundStyle(worryBoxOnMoss)
+                        .foregroundStyle(Color.parchmentInk)
                         .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)

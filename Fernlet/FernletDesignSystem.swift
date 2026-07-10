@@ -17,8 +17,8 @@ import SwiftUI
 /// The two-system type scale: **serif = the companion's world**, **sans = the interface layer**.
 /// Sizes mirror the design-system `--text-*` tokens; each role scales with Dynamic Type via the
 /// `relativeTo:` text style.
-enum FernletTextRole {
-    case wordmark        // Playfair Display Italic — app logo only
+enum FernletTextRole: CaseIterable {
+    case wordmark        // Playfair Display Italic — app logo only (reserved design-export role, no call site yet)
     case display         // Fraunces SemiBold 36 — avatar state / hero
     case displayMedium   // Fraunces SemiBold 28 — section display
     case header          // DM Serif Display 24 — section headers
@@ -57,7 +57,6 @@ enum FernletFontName {
     static let playfairItalic        = "PlayfairDisplayItalic-Italic"
     static let frauncesSemiBold      = "Fraunces-72ptSemiBoldNonWonky"
     static let dmSerifDisplay        = "DMSerifDisplay-Regular"
-    static let dmSerifDisplayItalic  = "DMSerifDisplay-Italic"
     static let instrumentSerif       = "InstrumentSerif-Regular"
     static let instrumentSerifItalic = "InstrumentSerif-Italic"
     static let dmSans                = "DMSans-14pt"
@@ -65,7 +64,7 @@ enum FernletFontName {
 
     /// Every bundled PostScript name — consumed by the registration self-check test.
     static let all = [
-        playfairItalic, frauncesSemiBold, dmSerifDisplay, dmSerifDisplayItalic,
+        playfairItalic, frauncesSemiBold, dmSerifDisplay,
         instrumentSerif, instrumentSerifItalic, dmSans, dmSansMedium,
     ]
 }
@@ -76,6 +75,11 @@ extension Color {
     // New tokens added by the redesign. (parchment / cream / bark / slate / moss / fern / goldenrod /
     // terracotta already live in FernletUIComponents; these extend the palette.) Each is built through
     // the app's single `UIColor(hex:)` parser so there is one hex source of truth.
+    //
+    // Design-export vocabulary (reserved): the `lichen`, `state*`, and `journal*` tokens below are the
+    // documented palette from the Claude-design export. Some are already consumed; the rest are the
+    // system's intended vocabulary for state/journal surfaces still being built out — keep them even if
+    // a given token has no current call site (they are reserved, not dead code — do not re-flag).
     static let lichen   = dsColor("#C8DBC2")   // muted fills, tinted backgrounds
     static let midnight = dsColor("#1A1F2E")   // dark-mode background
 
@@ -137,6 +141,9 @@ extension View {
 
 // MARK: - Motion tokens
 
+/// Design-export motion vocabulary (reserved). These mirror the export's `--ease-*` / duration
+/// tokens; not every one has a call site yet, but they are the system's documented animation
+/// vocabulary — keep them even when currently unused (reserved, not dead code — do not re-flag).
 enum FernletMotion {
     static let ui     = Animation.easeOut(duration: 0.25)   // UI transitions
     static let avatar = Animation.spring(response: 0.4, dampingFraction: 0.7)   // avatar reactions

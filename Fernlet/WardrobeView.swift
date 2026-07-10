@@ -290,7 +290,7 @@ struct WardrobeView: View {
             } label: {
                 Text("Design your first item")
                     .font(.fernlet(.label))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.parchmentInk)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 11)
                     .background(Color.moss, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

@@ -5,7 +5,6 @@ import FernletFoundation
 import SwiftUI
 import FernletScoring
 import PrivateHealthStore
-import PeriodContextBridge
 import HealthKitGateway
 import AppServices
 import StoreCore
@@ -97,17 +96,20 @@ struct HomeView: View {
     /// warm sentence and a soft coins aside, no streaks or percentages. Behaviour lives in
     /// MilestonesView; this is a warm doorway to it.
     private var milestonesCard: some View {
-        NavigationLink {
+        // Compute the ledger-scanning summary once per render — it feeds both the visible Text and the
+        // accessibilityHint below, and each evaluation runs full-ledger scans with Set allocations.
+        let summary = milestonesCardSummary
+        return NavigationLink {
             MilestonesView(store: store)
         } label: {
             FernletCard {
                 HStack(spacing: 12) {
-                    MilestoneKeepsakeGlyph(diameter: 40)
+                    PressedMedallion(icon: "seal", tint: .goldenrod, diameter: 40)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Milestones")
                             .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
-                        Text(milestonesCardSummary)
+                        Text(summary)
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
@@ -122,7 +124,7 @@ struct HomeView: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.milestones")
         .accessibilityLabel("Milestones")
-        .accessibilityHint(milestonesCardSummary)
+        .accessibilityHint(summary)
     }
 
     /// A warm, count-aware one-liner for the milestones card. Keeps the keepsake framing: kinds with
@@ -892,8 +894,7 @@ private struct CompanionCustomizationSheet: View {
             slotRowLabel(
                 slot: "Body",
                 value: appearance.bodyStyle.label,
-                isEmpty: false,
-                accent: false
+                isEmpty: false
             ) {
                 Circle()
                     .fill(appearance.bodyColor.color(for: store.companionState))
@@ -922,8 +923,7 @@ private struct CompanionCustomizationSheet: View {
             slotRowLabel(
                 slot: "Accessory",
                 value: rowValue(builtInLabel: appearance.accessory.label, builtInEmpty: appearance.accessory == .none, customSlots: [.hat, .face]),
-                isEmpty: appearance.accessory == .none && equippedCustomItem(in: [.hat, .face]) == nil,
-                accent: false
+                isEmpty: appearance.accessory == .none && equippedCustomItem(in: [.hat, .face]) == nil
             ) {
                 slotIcon(accessoryIcon(appearance.accessory))
             }
@@ -951,8 +951,7 @@ private struct CompanionCustomizationSheet: View {
             slotRowLabel(
                 slot: "Clothing",
                 value: rowValue(builtInLabel: appearance.clothing.label, builtInEmpty: appearance.clothing == .none, customSlots: [.body]),
-                isEmpty: appearance.clothing == .none && equippedCustomItem(in: [.body]) == nil,
-                accent: false
+                isEmpty: appearance.clothing == .none && equippedCustomItem(in: [.body]) == nil
             ) {
                 slotIcon(clothingIcon(appearance.clothing))
             }
@@ -980,8 +979,7 @@ private struct CompanionCustomizationSheet: View {
             slotRowLabel(
                 slot: "Side item",
                 value: rowValue(builtInLabel: appearance.sideItem.label, builtInEmpty: appearance.sideItem == .none, customSlots: [.heldItem]),
-                isEmpty: appearance.sideItem == .none && equippedCustomItem(in: [.heldItem]) == nil,
-                accent: false
+                isEmpty: appearance.sideItem == .none && equippedCustomItem(in: [.heldItem]) == nil
             ) {
                 slotIcon(appearance.sideItem.systemImage)
             }
@@ -1005,13 +1003,11 @@ private struct CompanionCustomizationSheet: View {
     }
 
     /// The shared selector-row chrome: a small icon/swatch, an uppercase slot label, the current
-    /// value right-aligned, and a chevron. `isEmpty` renders the value as a soft italic nudge;
-    /// `accent` tints the value + chevron moss for the Custom → Wardrobe route.
+    /// value right-aligned, and a chevron. `isEmpty` renders the value as a soft italic nudge.
     private func slotRowLabel<Icon: View>(
         slot: String,
         value: String,
         isEmpty: Bool,
-        accent: Bool,
         @ViewBuilder icon: () -> Icon
     ) -> some View {
         HStack(spacing: 12) {
@@ -1019,7 +1015,7 @@ private struct CompanionCustomizationSheet: View {
                 .frame(width: 30, height: 30)
                 .background(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(accent ? Color.moss.opacity(0.14) : Color.bark.opacity(0.06))
+                        .fill(Color.bark.opacity(0.06))
                 )
 
             Text(slot.uppercased())
@@ -1032,13 +1028,13 @@ private struct CompanionCustomizationSheet: View {
             Text(value)
                 .font(.fernlet(.body))
                 .italic(isEmpty)
-                .foregroundStyle(accent ? Color.moss : (isEmpty ? Color.slate : Color.bark))
+                .foregroundStyle(isEmpty ? Color.slate : Color.bark)
                 .multilineTextAlignment(.trailing)
                 .lineLimit(1)
 
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(accent ? Color.moss : Color.bark.opacity(0.4))
+                .foregroundStyle(Color.bark.opacity(0.4))
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1576,8 +1572,11 @@ struct FernletCard<Content: View>: View {
 
     var body: some View {
         content
-            .padding(16)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(FernletMetrics.spaceMd)   // 16
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd, style: .continuous))   // 18
+            // Kept as the current single-layer `bark`-tinted shadow (not `fernletCardShadow()`): the
+            // two-layer barkShadow token renders differently, and this card primitive is used across 13
+            // files — swapping its shadow is a deliberate visual change, not a cleanup.
             .shadow(color: .bark.opacity(0.08), radius: 12, x: 0, y: 5)
     }
 }
@@ -1897,39 +1896,6 @@ struct PhotowallTile: Identifiable {
 
     var id: String {
         photoID?.uuidString ?? caption
-    }
-}
-
-/// The small pressed-gold keepsake medallion for the home Milestones card. A radial-gold face with a
-/// soft top highlight and a thin inner ring — the same "struck keepsake" language as the medallions
-/// inside MilestonesView, shrunk to a doorway glyph. Purely decorative.
-private struct MilestoneKeepsakeGlyph: View {
-    var diameter: CGFloat = 40
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color.sun, Color.goldenrod, Color.goldenrod.opacity(0.85)],
-                        center: UnitPoint(x: 0.38, y: 0.32),
-                        startRadius: 1,
-                        endRadius: diameter * 0.7
-                    )
-                )
-                .overlay(
-                    Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1)
-                )
-            // Thin inner ring — the pressed-keepsake edge.
-            Circle()
-                .strokeBorder(Color.white.opacity(0.3), lineWidth: 1.2)
-                .padding(diameter * 0.16)
-            Image(systemName: "seal")
-                .font(.system(size: diameter * 0.42, weight: .regular))
-                .foregroundStyle(Color.bark.opacity(0.6))
-        }
-        .frame(width: diameter, height: diameter)
-        .shadow(color: Color.goldenrod.opacity(0.35), radius: 4, x: 0, y: 3)
     }
 }
 

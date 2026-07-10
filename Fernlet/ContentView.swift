@@ -467,7 +467,9 @@ struct ContentView: View {
                 .uxScreenAnchor("sheet.firstAid")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationCornerRadius(FernletMetrics.radiusLg)
+                // Match the ~35 sibling sheets (all 20); the outlier 28 read visibly rounder. The
+                // first-aid mockup's 30px is the inner content card, not the sheet presentation corner.
+                .presentationCornerRadius(20)
                 .environment(storagePreferencesStore)
         case .logPeriod(let targetDate, let editingEntry):
             LogPeriodSheet(periodStore: periodStore, targetDate: targetDate, editingEntry: editingEntry)

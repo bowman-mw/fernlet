@@ -220,7 +220,7 @@ struct FriendsView: View {
             VStack(spacing: 8) {
                 if manager.slots.isEmpty {
                     HStack(spacing: 10) {
-                        ProgressView().tint(Color.moss).scaleEffect(0.85)
+                        SearchingPulse(tint: Color.moss, size: 32, systemImage: "person.2")
                         Text("Looking for nearby friends…")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)

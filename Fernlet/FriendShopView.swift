@@ -55,7 +55,7 @@ struct FriendShopView: View {
     /// own coin chips so the whole surface reads in one currency.
     private var walletPill: some View {
         HStack(spacing: 6) {
-            CoinDot(size: 14)
+            CoinGlyph(diameter: 14)
             Text("\(store.coinBalance)")
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
@@ -190,7 +190,7 @@ struct FriendShopView: View {
             )
         } else {
             HStack(spacing: 5) {
-                CoinDot(size: 11)
+                CoinGlyph(diameter: 11)
                 Text("\(price)")
                     .font(.fernlet(.label))
             }
@@ -236,57 +236,3 @@ struct FriendShopView: View {
     }
 }
 
-// MARK: - Coin dot
-
-/// The small gilded coin used throughout the shop — a warm radial disc echoing the mockup's coin chips.
-private struct CoinDot: View {
-    var size: CGFloat
-
-    var body: some View {
-        Circle()
-            .fill(
-                RadialGradient(
-                    colors: [Color.sun, Color.goldenrod],
-                    center: UnitPoint(x: 0.4, y: 0.35),
-                    startRadius: 0,
-                    endRadius: size * 0.7
-                )
-            )
-            .frame(width: size, height: size)
-    }
-}
-
-// MARK: - Searching pulse
-
-/// A soft, moss-tinted pulsing bag icon for the shop's searching state — a calmer, on-brand stand-in for
-/// the old system `ProgressView`.
-private struct SearchingPulse: View {
-    @State private var animate = false
-
-    var body: some View {
-        ZStack {
-            ForEach(0..<2, id: \.self) { i in
-                Circle()
-                    .stroke(Color.moss.opacity(0.4), lineWidth: 2)
-                    .frame(width: 80, height: 80)
-                    .scaleEffect(animate ? 1.8 : 0.8)
-                    .opacity(animate ? 0 : 0.5)
-                    .animation(
-                        .easeOut(duration: 2.4).repeatForever(autoreverses: false).delay(Double(i) * 1.2),
-                        value: animate
-                    )
-            }
-            Circle()
-                .fill(Color.moss.opacity(0.14))
-                .frame(width: 44, height: 44)
-                .overlay(
-                    Image(systemName: "bag")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color.moss)
-                )
-        }
-        .frame(width: 80, height: 80)
-        .onAppear { animate = true }
-        .accessibilityHidden(true)
-    }
-}

@@ -80,10 +80,6 @@ struct BreathingExerciseView: View {
     private static let mintHighlight = Color(light: Color(red: 0.682, green: 0.800, blue: 0.624),
                                              dark:  Color(red: 0.616, green: 0.753, blue: 0.561))
 
-    /// Fixed warm parchment for label ink on the moss CTAs — stays light in both modes
-    /// (the adaptive Color.parchment flips dark), matching the mockup's #F5EFE0 on-accent.
-    private static let onMoss = Color(red: 0.961, green: 0.937, blue: 0.878)
-
     var body: some View {
         Group {
             if isFinished {
@@ -147,7 +143,7 @@ struct BreathingExerciseView: View {
                 } label: {
                     Text("Begin")
                         .font(.fernlet(.label))
-                        .foregroundStyle(Self.onMoss)
+                        .foregroundStyle(Color.parchmentInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
@@ -212,7 +208,7 @@ struct BreathingExerciseView: View {
             } label: {
                 Text("Once more")
                     .font(.fernlet(.label))
-                    .foregroundStyle(Self.onMoss)
+                    .foregroundStyle(Color.parchmentInk)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
                     .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))

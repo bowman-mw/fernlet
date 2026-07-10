@@ -21,17 +21,12 @@ struct FernletFontRegistrationTests {
     }
 
     @Test func everyTypeRoleProducesAFont() {
-        // Ideally this would iterate `FernletTextRole.allCases`, but the enum is not `CaseIterable`
-        // (it lives in FernletDesignSystem.swift). Until it conforms, this hand-written list is the
-        // source of truth — so instead of a tautological `count ==` assertion, prove each role
-        // resolves to a *real bundled face* rather than silently falling back to the system font.
-        let roles: [FernletTextRole] = [
-            .wordmark, .display, .displayMedium, .header, .headerMedium,
-            .body, .bodySmall, .bubble, .label, .labelSmall, .stat,
-        ]
+        // `FernletTextRole` is `CaseIterable`, so a new case is automatically covered here — no
+        // hand-maintained list to drift. Instead of a tautological `count ==` assertion, prove each
+        // role resolves to a *real bundled face* rather than silently falling back to the system font.
         // Every role must map to one of the registered PostScript names (verified resolvable in the
         // test above). A wrong or missing face would leave the role pointing at a non-bundled name.
-        for role in roles {
+        for role in FernletTextRole.allCases {
             _ = Font.fernlet(role) // smoke check: resolving the role must not trap
             let name = Self.postScriptName(for: role)
             #expect(FernletFontName.all.contains(name),
@@ -40,8 +35,8 @@ struct FernletFontRegistrationTests {
     }
 
     /// The bundled PostScript name each role resolves to — kept in lockstep with `Font.fernlet`.
-    /// A `switch` (no `default`) so adding a `FernletTextRole` case forces this to be updated,
-    /// giving the drift protection `FernletTextRole: CaseIterable` would otherwise provide.
+    /// A `switch` (no `default`) so adding a `FernletTextRole` case forces this to be updated; paired
+    /// with the `.allCases` loop above, a new role is both auto-covered and forced to name its face.
     private static func postScriptName(for role: FernletTextRole) -> String {
         switch role {
         case .wordmark:      return FernletFontName.playfairItalic

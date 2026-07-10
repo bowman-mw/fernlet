@@ -144,8 +144,7 @@ struct ProximityRecipeShareSheet: View {
 
     private var searchingView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProgressView()
-                .tint(Color.moss)
+            SearchingPulse(tint: Color.moss, size: 56, systemImage: "dot.radiowaves.left.and.right")
             Text("Looking for nearby people...")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
