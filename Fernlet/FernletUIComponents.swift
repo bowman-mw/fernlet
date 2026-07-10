@@ -640,9 +640,14 @@ struct CoinGlyph: View {
                     )
                 )
                 .overlay(
-                    Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
+                    // Border and shadow scale with diameter (1pt / r5 / y3 at the 46pt reference)
+                    // so the tiny 11-14pt shop coins don't carry a proportionally heavy outline/halo.
+                    Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: max(0.5, diameter / 46))
                 )
-                .shadow(color: Color.goldenrod.opacity(muted ? 0.2 : 0.4), radius: 5, x: 0, y: 3)
+                .shadow(
+                    color: Color.goldenrod.opacity(muted ? 0.2 : 0.4),
+                    radius: diameter * (5 / 46), x: 0, y: diameter * (3 / 46)
+                )
             Image(systemName: "leaf.fill")
                 .font(.system(size: diameter * 0.4, weight: .semibold))
                 .foregroundStyle(Color.bark.opacity(muted ? 0.4 : 0.55))
