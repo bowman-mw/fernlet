@@ -1226,48 +1226,58 @@ struct DisposableCameraView: View {
         }
     }
 
-    /// A quiet one-tap heart beside a connected friend. Enabled only while today's heart to them
-    /// is unsent AND they are reachable on a live heart connection; no counts shown anywhere.
-    /// A filled heart marks "already sent today" — a state, never a number.
+    /// A quiet one-tap heart beside a connected friend (mesh redesign Phase 4b — hearts ride the
+    /// presence radio). Enabled only while the 5-minute cooldown to them is clear AND they are
+    /// recognized nearby by presence and no send is in flight; no counts shown anywhere. A filled
+    /// check marks the cooldown — a state, never a number.
     private func sessionHeartButton(for friend: ProximityTrustedPeerRecord) -> some View {
-        let alreadySentToday = !store.heartLedger.canSendHeart(to: friend.fingerprint)
-        let reachable = store.heartShareManager.isReachable(fingerprint: friend.fingerprint)
-        let firstName = ProximityHeartManager.firstName(of: friend.displayName)
-        let state = SendGoodVibesLabel.state(alreadySentToday: alreadySentToday, reachable: reachable)
+        let onCooldown = !store.heartLedger.canSendHeart(to: friend.fingerprint)
+        let reachable = store.presenceManager.isReachable(fingerprint: friend.fingerprint)
+        let sending = sessionHeartSendInProgress
+        let firstName = PresenceManager.firstName(of: friend.displayName)
+        let state = SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending)
         return Button {
-            store.heartShareManager.sendHeart(to: friend)
+            store.presenceManager.sendHeart(to: friend)
         } label: {
             // Compact in-row form of the "Send good vibes" affordance (good-vibes 10c): a
-            // dusty-rose/terracotta heart when ready, a soft-filled check once sent, muted apart.
-            Image(systemName: state == .sent ? "checkmark" : "heart.fill")
+            // dusty-rose/terracotta heart when ready, a soft-filled check within the cooldown,
+            // muted apart.
+            Image(systemName: state == .cooldown ? "checkmark" : "heart.fill")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(sessionHeartForeground(for: state))
                 .frame(width: 30, height: 30)
                 .background(sessionHeartBackground(for: state), in: Circle())
         }
         .buttonStyle(.plain)
-        .disabled(alreadySentToday || !reachable)
+        .disabled(onCooldown || !reachable || sending)
         .accessibilityLabel(
-            alreadySentToday
-                ? "You've already sent \(firstName) some warmth today."
+            onCooldown
+                ? "You just sent \(firstName) some warmth — hearts settle for a few minutes."
                 : reachable
                     ? "Send good vibes to \(friend.displayName)"
                     : "Hearts travel in person for now."
         )
     }
 
+    private var sessionHeartSendInProgress: Bool {
+        switch store.presenceManager.heartSendState {
+        case .connecting, .verifying: return true
+        default: return false
+        }
+    }
+
     private func sessionHeartForeground(for state: SendGoodVibesLabel.SendState) -> Color {
         switch state {
-        case .ready: Color.terracotta
-        case .sent: Color.terracotta.opacity(0.7)
+        case .ready, .sending: Color.terracotta
+        case .cooldown: Color.terracotta.opacity(0.7)
         case .notNearby: Color.bark.opacity(0.35)
         }
     }
 
     private func sessionHeartBackground(for state: SendGoodVibesLabel.SendState) -> Color {
         switch state {
-        case .ready: Color.terracotta.opacity(0.14)
-        case .sent: Color.dustyRose.opacity(0.16)
+        case .ready, .sending: Color.terracotta.opacity(0.14)
+        case .cooldown: Color.dustyRose.opacity(0.16)
         case .notNearby: Color.bark.opacity(0.06)
         }
     }

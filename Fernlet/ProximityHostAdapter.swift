@@ -11,4 +11,7 @@ import FernletDomainModel
 /// app's concrete store.
 extension FernletStore: ProximityHost {
     var proximityDisplayName: String { settings.proximityDisplayName }
+    /// The live hearts opt-in — `PresenceManager` gates both the outbound send and the inbound
+    /// drop on this (mesh redesign Phase 4b). Overrides the protocol's `true` default.
+    var allowNearbyHearts: Bool { settings.allowNearbyHearts }
 }

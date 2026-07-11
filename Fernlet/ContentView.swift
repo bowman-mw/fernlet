@@ -192,6 +192,30 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: FernletNotificationDelegate.pendingSheetRequestNotification)) { _ in
                 consumePendingNotificationSheet()
             }
+            .onChange(of: store.settings.allowNearbyPresence) { _, _ in
+                // Enabling in Settings (or via the first-friend prompt) starts the radio right
+                // away; disabling is already stopped by the setter — this keeps both in sync
+                // with the scene/tab/lock gate.
+                updatePresenceListener()
+            }
+            // One-time "first kept friend" presence offer (Phase 4a). Attached to the stable
+            // root — not the Social-tab layout (which is destroyed in the same transaction as
+            // session teardown, the Phase-2 lesson) — and driven by observable store state.
+            .alert(
+                "Turn on Nearby Friends?",
+                isPresented: Binding(
+                    get: { store.presenceEnablePromptRequested },
+                    set: { if !$0 { store.presenceEnablePromptRequested = false } }
+                )
+            ) {
+                Button("Turn on") {
+                    store.setAllowNearbyPresence(true)
+                    updatePresenceListener()
+                }
+                Button("Not now", role: .cancel) {}
+            } message: {
+                Text("See when friends you've kept are nearby. Fernlet broadcasts only rotating tags that your friends' devices can recognize — never your name or a stable ID — and only while the app is open. You can change this anytime in Settings.")
+            }
     }
 
     /// Opens the sheet a notification tap asked for (daily check-in → journal). Skipped while
@@ -616,7 +640,9 @@ struct ContentView: View {
         } else {
             store.recipeShareManager.stop()
         }
-        updateHeartShareListener()
+        // Phase 4b: hearts ride the presence radio (the standalone heart listener is gone), so the
+        // recipe listener chain hands straight off to the presence gate.
+        updatePresenceListener()
     }
 
     private var shouldListenForRecipeShares: Bool {
@@ -638,21 +664,24 @@ struct ContentView: View {
     // shop's held catalogs: the post-session window outlives the session by design, and radio privacy
     // is the mesh lifecycle's job.
 
-    private func updateHeartShareListener() {
-        if shouldListenForHearts {
-            store.heartShareManager.start()
+    /// Presence radio gating (mesh redesign Phase 4a/4b): runs only while opted in, foregrounded,
+    /// unlocked, and on a main tab — driven from the same listener chain events as the recipe
+    /// and heart listeners (tab / scene / lock changes all funnel through
+    /// `updateRecipeShareListener`), plus a direct observation of the setting so toggling it ON
+    /// in Settings starts the radio without waiting for the next scene event.
+    private func updatePresenceListener() {
+        if shouldRunPresence {
+            store.presenceManager.start()
         } else {
-            store.heartShareManager.stop()
+            store.presenceManager.stop()
         }
     }
 
-    /// Hearts are in-person v1: listen on the recipe-share tabs (so a heart arrives while the
-    /// receiver is anywhere on the main surfaces) PLUS Social, where the send buttons live
-    /// (FriendListView + the session People list). Same privacy posture as the other two
-    /// listeners: never while backgrounded or locked, and the opt-out setter
-    /// (`FernletStore.setAllowNearbyHearts`) stops the manager immediately.
-    private var shouldListenForHearts: Bool {
-        guard store.settings.allowNearbyHearts else { return false }
+    /// Same tab set as hearts (Home/Food/Move/Social — everywhere but Private), same privacy
+    /// posture: never while backgrounded or locked, and the opt-out setter
+    /// (`FernletStore.setAllowNearbyPresence`) stops the radio immediately.
+    private var shouldRunPresence: Bool {
+        guard store.settings.allowNearbyPresence else { return false }
         guard scenePhase == .active else { return false }
         guard selectedTab == .home || selectedTab == .food || selectedTab == .move || selectedTab == .social else { return false }
         switch lockService.state {

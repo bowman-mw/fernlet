@@ -182,6 +182,26 @@ fact below was verified against source.
   disable non-target rows while connecting; cap-aware `refreshDiscovery`.
 
 ### Phase 4 — Presence + hearts (deletes 2 radios)
+- **SEALED-INTRODUCTION rule (Phase-4 capstone, HIGH — closes the tag-replay identity leak):**
+  pairwise-DH tags defeat tag *derivation* but NOT *replay* — tags are broadcast in cleartext with
+  no nonce, so a passive observer can re-advertise a friend's current-epoch tag and get a heart
+  connection accepted. The original mitigation ("invitation gating") is defeated by that same replay,
+  and the connection then emitted the local signed identity intro (stable signing+KA keys + display
+  name) before any friend-key proof — deanonymizing the identity the ephemeral presence radio exists
+  to hide. FIX: presence-originated heart connections must NOT send the identity introduction in the
+  clear. Presence recognition is mutual-by-construction (both friends hold each other's vault KA
+  public key — a one-sided friend never appears nearby), so both the initiating AND accepting side
+  always know the intended friend's KA public key from the matched vault record and SEAL the intro to
+  it (reuse `IdentityService.seal`). A replay-forger holds no matching KA private key → cannot
+  decrypt → learns nothing (keys or name) in either direction; the real friend decrypts and the
+  handshake proceeds. Implement as a coordinator mode: presence heart coordinators are created with
+  the expected friend's KA key, seal the outbound intro to it, and open inbound intros with the local
+  KA private key. Post-fix residual = only the accepted one: spoof "friend nearby" + bait a
+  connection that fails WITHOUT leaking identity.
+- **Hearts require presence (Phase-4 capstone, MEDIUM):** reachability = the presence nearby set, so
+  hearts-ON + presence-OFF renders every friend perpetually "Not nearby" with a misleading hint. The
+  hearts affordance must make presence a prerequisite (enable presence / "Turn on Nearby Friends to
+  send hearts"), never silently dead.
 - **Manager-Task lifetime rule (from the Phase-3 crash):** every escaping `Task` spawned by a
   proximity manager must capture `[weak self]` — a strong capture extends the manager's lifetime
   past its owning store and any store touch then aborts on the `unowned` reference

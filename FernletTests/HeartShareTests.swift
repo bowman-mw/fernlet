@@ -1,11 +1,15 @@
 // HeartShareTests.swift
 // Batch F — send-good-vibes hearts (proximity-only v1).
 //
-// Covers: payload codec + wire-boundary day-key validation, envelope kind classification and
-// the sealed-delivery requirement, the manager's receive path (trusted-friend happy path,
-// blocked/untrusted/unverified rejection, silent same-day duplicate drops), the persisted
-// per-friend-per-day rate limit across "relaunch" (new ledger on the same file) with an
-// injected clock, and the pure 24h glow-decay math.
+// Ported to the mesh-redesign Phase 4b flow: hearts ride the presence layer, so the receive path,
+// the friend gate, and the send gating now live on `PresenceManager` (the standalone
+// ProximityHeartManager is deleted). Covers: payload codec + wire-boundary day-key validation,
+// envelope kind classification and the sealed-delivery requirement, PresenceManager's receive path
+// (trusted-friend happy path, blocked/untrusted/unverified rejection, silent duplicate drops), the
+// per-connection trust gate (non-friend torn down, friend retained), the persisted per-friend
+// 5-MINUTE rate limit (Phase 4b owner decision — no daily limit in person) across "relaunch" with
+// an injected clock, and the pure 24h glow-decay math. Presence-specific gates (inbound invitation
+// gate, hearts-off send/receive drops) live in PresenceHeartsTests.
 
 @testable import ProximityKit
 import Foundation
@@ -178,7 +182,7 @@ struct HeartShareTests {
     /// Delivers a heart through the manager's real public receive path.
     private func deliver(
         _ payload: HeartPayload,
-        to manager: ProximityHeartManager,
+        to manager: PresenceManager,
         from peer: ProximityCoordinator.PeerIdentity?,
         senderDisplayName: String = "Aisha Bloom"
     ) throws {
@@ -191,7 +195,7 @@ struct HeartShareTests {
         let friend = makePeerIdentity(displayName: "Aisha Bloom")
         host.proximityTrustVault.trust(friend, mode: .friend)
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
-        let manager = ProximityHeartManager(store: host, ledger: ledger)
+        let manager = PresenceManager(store: host, ledger: ledger)
 
         try deliver(HeartPayload(sentAtDayKey: "2026-07-05"), to: manager, from: friend)
 
@@ -209,7 +213,7 @@ struct HeartShareTests {
         let friend = makePeerIdentity(displayName: hostileName)
         host.proximityTrustVault.trust(friend, mode: .friend)
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
-        let manager = ProximityHeartManager(store: host, ledger: ledger)
+        let manager = PresenceManager(store: host, ledger: ledger)
 
         try deliver(HeartPayload(sentAtDayKey: "2026-07-05"), to: manager, from: friend, senderDisplayName: hostileName)
 
@@ -225,7 +229,7 @@ struct HeartShareTests {
         host.proximityTrustVault.trust(friend, mode: .friend)
         host.proximityTrustVault.block(signingPublicKey: friend.signingPublicKey)
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
-        let manager = ProximityHeartManager(store: host, ledger: ledger)
+        let manager = PresenceManager(store: host, ledger: ledger)
 
         try deliver(HeartPayload(sentAtDayKey: "2026-07-05"), to: manager, from: friend)
 
@@ -236,7 +240,7 @@ struct HeartShareTests {
         let host = MockHeartProximityHost()
         let stranger = makePeerIdentity(displayName: "Stranger")  // never trusted
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
-        let manager = ProximityHeartManager(store: host, ledger: ledger)
+        let manager = PresenceManager(store: host, ledger: ledger)
 
         try deliver(HeartPayload(sentAtDayKey: "2026-07-05"), to: manager, from: stranger)
         #expect(ledger.receivedHearts.isEmpty)
@@ -251,7 +255,7 @@ struct HeartShareTests {
         let friend = makePeerIdentity(displayName: "Aisha Bloom")
         host.proximityTrustVault.trust(friend, mode: .friend)
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
-        let manager = ProximityHeartManager(store: host, ledger: ledger)
+        let manager = PresenceManager(store: host, ledger: ledger)
 
         try deliver(HeartPayload(format: "something.else", sentAtDayKey: "2026-07-05"), to: manager, from: friend)
         try deliver(HeartPayload(version: 2, sentAtDayKey: "2026-07-05"), to: manager, from: friend)
@@ -260,21 +264,21 @@ struct HeartShareTests {
         #expect(ledger.receivedHearts.isEmpty)
     }
 
-    @Test func duplicateHeartsFromSameFriendSameDayAreSilentlyDropped() throws {
+    @Test func duplicateHeartsFromSameFriendWithinRateWindowAreSilentlyDropped() throws {
         let host = MockHeartProximityHost()
         let friend = makePeerIdentity(displayName: "Aisha Bloom")
         host.proximityTrustVault.trust(friend, mode: .friend)
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
-        let manager = ProximityHeartManager(store: host, ledger: ledger)
+        let manager = PresenceManager(store: host, ledger: ledger)
 
         let first = HeartPayload(sentAtDayKey: "2026-07-05")
         try deliver(first, to: manager, from: friend)
         try deliver(first, to: manager, from: friend)                                // exact re-delivery
-        try deliver(HeartPayload(sentAtDayKey: "2026-07-05"), to: manager, from: friend)  // fresh id, same day
+        try deliver(HeartPayload(sentAtDayKey: "2026-07-05"), to: manager, from: friend)  // fresh id, same window
 
         #expect(ledger.receivedHearts.count == 1)
 
-        // A different friend's heart on the same day still lands.
+        // A different friend's heart in the same window still lands.
         let other = makePeerIdentity(displayName: "Robin Vale")
         host.proximityTrustVault.trust(other, mode: .friend)
         try deliver(HeartPayload(sentAtDayKey: "2026-07-05"), to: manager, from: other, senderDisplayName: "Robin Vale")
@@ -286,36 +290,37 @@ struct HeartShareTests {
     @Test func sendHeartFailsGentlyWhenFriendIsNotReachable() throws {
         let host = MockHeartProximityHost()
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
-        let manager = ProximityHeartManager(store: host, ledger: ledger)
+        let manager = PresenceManager(store: host, ledger: ledger)
         let friend = trustedRecord(displayName: "Aisha Bloom")
 
         manager.sendHeart(to: friend)
 
-        guard case .failed(let message) = manager.sendState else {
-            Issue.record("Expected a failed send state, got \(manager.sendState)")
+        guard case .failed(let message) = manager.heartSendState else {
+            Issue.record("Expected a failed send state, got \(manager.heartSendState)")
             return
         }
         #expect(message.contains("in person"))
-        #expect(ledger.canSendHeart(to: friend.fingerprint))  // the day's heart was NOT consumed
+        #expect(ledger.canSendHeart(to: friend.fingerprint))  // the rate window was NOT consumed
     }
 
-    @Test func sendHeartRefusesSecondHeartToSameFriendSameDay() throws {
+    @Test func sendHeartRefusesSecondHeartToSameFriendWithinRateWindow() throws {
         let host = MockHeartProximityHost()
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
-        let manager = ProximityHeartManager(store: host, ledger: ledger)
+        let manager = PresenceManager(store: host, ledger: ledger)
         let friend = trustedRecord(displayName: "Aisha Bloom")
 
         ledger.recordHeartSent(to: friend.fingerprint)
         manager.sendHeart(to: friend)
 
-        guard case .failed(let message) = manager.sendState else {
-            Issue.record("Expected a failed send state, got \(manager.sendState)")
+        guard case .failed(let message) = manager.heartSendState else {
+            Issue.record("Expected a failed send state, got \(manager.heartSendState)")
             return
         }
-        #expect(message.contains("already sent Aisha some warmth today"))
+        // Phase 4b: the copy is a 5-minute cooldown, not a daily limit.
+        #expect(message.contains("You just sent Aisha some warmth"))
     }
 
-    // MARK: - Auto-connect trust gate (findings [7]/[12]): non-friends torn down, friends stay
+    // MARK: - Per-connection trust gate (Phase 4b): non-friends torn down, friends retained
 
     /// Drives a real coordinator through the full handshake to `.connected`, so the peer identity's
     /// signing key equals `remote`'s (which the caller may or may not have trusted in the vault).
@@ -391,30 +396,31 @@ struct HeartShareTests {
         }
     }
 
-    @Test func verifiedNonFriendHeartPeerIsTornDownAndNotReachable() async throws {
+    @Test func verifiedNonFriendHeartPeerIsTornDown() async throws {
         let host = MockHeartProximityHost()
         let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
         let (stranger, strangerID) = try makeIdentity(); defer { cleanup(strangerID) }
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
-        let manager = ProximityHeartManager(store: host, ledger: ledger)
+        let manager = PresenceManager(store: host, ledger: ledger)
 
         // The stranger is NEVER trusted in the vault.
         let (coordinator, policy, peer) = try await connectedCoordinator(
             local: local, remote: stranger, vault: host.proximityTrustVault, peerName: "Stranger"
         )
-        let reachable = manager.evaluateConnectedCoordinatorForTesting(coordinator, peer: peer, trustPolicy: policy)
+        // An inbound-only heart connection (no intendedFriend) from a verified non-friend is
+        // torn down at once — the connection is dropped and never retained.
+        let accepted = manager.evaluateConnectedCoordinatorForTesting(coordinator, peer: peer, trustPolicy: policy)
 
-        #expect(!reachable)
-        #expect(!manager.isReachable(fingerprint: stranger.localFingerprint))
-        #expect(manager.reachableFingerprints.isEmpty)
+        #expect(!accepted)
+        #expect(manager.heartConnectionCountForTesting == 0)
     }
 
-    @Test func verifiedTrustedFriendBecomesReachable() async throws {
+    @Test func verifiedTrustedFriendConnectionIsRetained() async throws {
         let host = MockHeartProximityHost()
         let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
         let (friend, friendID) = try makeIdentity(); defer { cleanup(friendID) }
         let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
-        let manager = ProximityHeartManager(store: host, ledger: ledger)
+        let manager = PresenceManager(store: host, ledger: ledger)
 
         // Trust the friend's real signing key in the vault (mode .friend).
         host.proximityTrustVault.trust(
@@ -433,10 +439,11 @@ struct HeartShareTests {
         let (coordinator, policy, peer) = try await connectedCoordinator(
             local: local, remote: friend, vault: host.proximityTrustVault, peerName: "Aisha Bloom"
         )
-        let reachable = manager.evaluateConnectedCoordinatorForTesting(coordinator, peer: peer, trustPolicy: policy)
+        // A verified, still-trusted friend's inbound connection is retained so they can deliver.
+        let accepted = manager.evaluateConnectedCoordinatorForTesting(coordinator, peer: peer, trustPolicy: policy)
 
-        #expect(reachable)
-        #expect(manager.isReachable(fingerprint: friend.localFingerprint))
+        #expect(accepted)
+        #expect(manager.heartConnectionCountForTesting == 1)
     }
 
     @Test func blockedFriendHeartPeerIsNeverEligibleForTeardownGate() async throws {
@@ -458,11 +465,11 @@ struct HeartShareTests {
         )
         host.proximityTrustVault.trust(identity, mode: .friend)
         // Before block: the gate accepts them.
-        #expect(ProximityHeartManager.isHeartEligibleFriendForTesting(identity, in: host))
+        #expect(PresenceManager.isHeartEligibleFriendForTesting(identity, in: host))
 
         host.proximityTrustVault.block(signingPublicKey: peerIdentity.localSigningPublicKey)
         // After block: the gate rejects them (blocked signing key + blocked fingerprint).
-        #expect(!ProximityHeartManager.isHeartEligibleFriendForTesting(identity, in: host))
+        #expect(!PresenceManager.isHeartEligibleFriendForTesting(identity, in: host))
     }
 
     // MARK: - Retained trust policy enforces revoked/blocked keys at the envelope layer (finding [11])
@@ -549,7 +556,8 @@ struct HeartShareTests {
 
     // MARK: - Rate-limit persistence across relaunch (injected clock)
 
-    @Test func sendLimitPersistsAcrossRelaunchAndResetsNextDay() throws {
+    @Test func sendRateLimitPersistsAcrossRelaunchAndResetsAfterWindow() throws {
+        // Phase 4b: the send limit is a rolling 5-minute per-friend window, not a daily key.
         let url = tempLedgerURL()
         var clock = baseDate
 
@@ -559,18 +567,17 @@ struct HeartShareTests {
         #expect(!first.canSendHeart(to: "fp-aisha"))
         #expect(first.canSendHeart(to: "fp-robin"))  // per-friend, not global
 
-        // "Relaunch": a fresh ledger on the same file, same day → still spent.
+        // "Relaunch": a fresh ledger on the same file, still inside the window → still spent.
         let relaunched = ProximityHeartLedger(fileURL: url, now: { clock })
         #expect(!relaunched.canSendHeart(to: "fp-aisha"))
 
-        // Next local day → the heart is available again.
-        clock = baseDate.addingTimeInterval(26 * 60 * 60)
-        try #require(FernletDate.dayKey(for: clock) != FernletDate.dayKey(for: baseDate))
-        let nextDay = ProximityHeartLedger(fileURL: url, now: { clock })
-        #expect(nextDay.canSendHeart(to: "fp-aisha"))
+        // Past the 5-minute window → the heart is available again.
+        clock = baseDate.addingTimeInterval(ProximityHeartLedger.rateLimitInterval + 1)
+        let afterWindow = ProximityHeartLedger(fileURL: url, now: { clock })
+        #expect(afterWindow.canSendHeart(to: "fp-aisha"))
     }
 
-    @Test func receiveLimitAndRecordsPersistAcrossRelaunch() throws {
+    @Test func receiveRateLimitAndRecordsPersistAcrossRelaunch() throws {
         let url = tempLedgerURL()
         var clock = baseDate
 
@@ -578,18 +585,17 @@ struct HeartShareTests {
         #expect(first.recordReceivedHeart(id: UUID(), senderDisplayName: "Aisha", senderFingerprint: "fp-aisha"))
         #expect(!first.recordReceivedHeart(id: UUID(), senderDisplayName: "Aisha", senderFingerprint: "fp-aisha"))
 
-        // "Relaunch": the stored heart and the day's receive limit both survive.
+        // "Relaunch": the stored heart and the 5-minute receive window both survive.
         let relaunched = ProximityHeartLedger(fileURL: url, now: { clock })
         #expect(relaunched.receivedHearts.count == 1)
         #expect(relaunched.receivedHearts.first?.senderDisplayName == "Aisha")
         #expect(!relaunched.recordReceivedHeart(id: UUID(), senderDisplayName: "Aisha", senderFingerprint: "fp-aisha"))
 
-        // Next day: a fresh heart from the same friend lands again.
-        clock = baseDate.addingTimeInterval(26 * 60 * 60)
-        try #require(FernletDate.dayKey(for: clock) != FernletDate.dayKey(for: baseDate))
-        let nextDay = ProximityHeartLedger(fileURL: url, now: { clock })
-        #expect(nextDay.recordReceivedHeart(id: UUID(), senderDisplayName: "Aisha", senderFingerprint: "fp-aisha"))
-        #expect(nextDay.receivedHearts.count == 2)
+        // Past the window: a fresh heart from the same friend lands again.
+        clock = baseDate.addingTimeInterval(ProximityHeartLedger.rateLimitInterval + 1)
+        let afterWindow = ProximityHeartLedger(fileURL: url, now: { clock })
+        #expect(afterWindow.recordReceivedHeart(id: UUID(), senderDisplayName: "Aisha", senderFingerprint: "fp-aisha"))
+        #expect(afterWindow.receivedHearts.count == 2)
     }
 
     @Test func bubbleDismissalPersistsAndGlowKeepsDecaying() throws {
