@@ -72,11 +72,12 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         id = try c.decode(UUID.self, forKey: .id)
         startedAt = try c.decode(Date.self, forKey: .startedAt)
         endedAt = try c.decodeIfPresent(Date.self, forKey: .endedAt)
-        let roleSplit = try c.decodeTolerantEnum(
+        // Required keys (synthesized-strict pre-compat): absence is corruption, not a newer build.
+        let roleSplit = try c.decodeTolerantRequiredEnum(
             ProximityRole.self, forKey: .role, parkedTokenKey: .unknownRoleToken, default: .browser)
         role = roleSplit.value
         unknownRoleToken = roleSplit.parkedToken
-        let modeSplit = try c.decodeTolerantEnum(
+        let modeSplit = try c.decodeTolerantRequiredEnum(
             ProximityMode.self, forKey: .mode, parkedTokenKey: .unknownModeToken, default: .friend)
         mode = modeSplit.value
         unknownModeToken = modeSplit.parkedToken
@@ -139,7 +140,8 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            let modeSplit = try c.decodeTolerantEnum(
+            // Required key (synthesized-strict pre-compat): absence is corruption, not a newer build.
+            let modeSplit = try c.decodeTolerantRequiredEnum(
                 ProximityRangingMode.self, forKey: .mode, parkedTokenKey: .unknownModeToken, default: .none)
             mode = modeSplit.value
             unknownModeToken = modeSplit.parkedToken
@@ -223,7 +225,8 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
             let c = try decoder.container(keyedBy: CodingKeys.self)
             id = try c.decode(UUID.self, forKey: .id)
             timestamp = try c.decode(Date.self, forKey: .timestamp)
-            let kindSplit = try c.decodeTolerantEnum(
+            // Required key (synthesized-strict pre-compat): absence is corruption, not a newer build.
+            let kindSplit = try c.decodeTolerantRequiredEnum(
                 Kind.self, forKey: .kind, parkedTokenKey: .unknownKindToken, default: .stateTransition)
             kind = kindSplit.value
             unknownKindToken = kindSplit.parkedToken
@@ -296,7 +299,8 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
             let c = try decoder.container(keyedBy: CodingKeys.self)
             id = try c.decode(UUID.self, forKey: .id)
             envelopeID = try c.decode(UUID.self, forKey: .envelopeID)
-            let directionSplit = try c.decodeTolerantEnum(
+            // Required key (synthesized-strict pre-compat): absence is corruption, not a newer build.
+            let directionSplit = try c.decodeTolerantRequiredEnum(
                 Direction.self, forKey: .direction, parkedTokenKey: .unknownDirectionToken, default: .received)
             direction = directionSplit.value
             unknownDirectionToken = directionSplit.parkedToken

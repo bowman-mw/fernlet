@@ -16,10 +16,19 @@ public nonisolated struct ProximityTrustedPeerRecord: Codable, Equatable, Identi
     /// This is the PERSISTED trust vault copy in the synced blob, not the wire envelope. `mode`
     /// decodes tolerantly (EnumDecodeCompat): a peer-relationship mode minted by a NEWER build
     /// would otherwise throw and brick the older device — losing the whole trust vault, which is
-    /// security-relevant state. The unknown mode freezes to `.trainer` (the narrower-scope
-    /// relationship — no photo wall / hearts / shop) and the true token is parked so the newer
-    /// device's mode is preserved through this device's re-saves and re-adopted after an upgrade.
-    /// An explicit local re-trust in a known mode clears the park (`didSet`).
+    /// security-relevant state.
+    ///
+    /// The stored mode is informational/display-facing TODAY: no production code gates a privilege
+    /// on it. The hearts gate is mode-blind (`ProximityTrustVault.isTrustedProximityPeer` checks
+    /// the signing key), session flows hard-code their own mode, and the only read of the stored
+    /// field is a live-session capability string. The `.trainer` freeze default is therefore
+    /// privilege-NEUTRAL — it is NOT a safety downgrade, and any FUTURE code that starts deriving
+    /// privileges from the stored mode must NOT assume an unknown mode froze to something safe;
+    /// re-audit this default first.
+    ///
+    /// The true token is parked so the newer device's mode is preserved through this device's
+    /// re-saves and re-adopted after an upgrade. An explicit local re-trust in a known mode clears
+    /// the park (`didSet`).
     public var mode: ProximityMode {
         didSet { unknownModeToken = nil }
     }
@@ -62,7 +71,8 @@ public nonisolated struct ProximityTrustedPeerRecord: Codable, Equatable, Identi
         fingerprint = try c.decode(String.self, forKey: .fingerprint)
         signingPublicKey = try c.decode(Data.self, forKey: .signingPublicKey)
         keyAgreementPublicKey = try c.decode(Data.self, forKey: .keyAgreementPublicKey)
-        let modeSplit = try c.decodeTolerantEnum(
+        // Required key (synthesized-strict pre-compat): absence is corruption, not a newer build.
+        let modeSplit = try c.decodeTolerantRequiredEnum(
             ProximityMode.self, forKey: .mode, parkedTokenKey: .unknownModeToken, default: .trainer)
         mode = modeSplit.value
         unknownModeToken = modeSplit.parkedToken
@@ -127,7 +137,8 @@ public nonisolated struct TrainerAuditEvent: Codable, Equatable, Identifiable, S
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         timestamp = try c.decode(Date.self, forKey: .timestamp)
-        let kindSplit = try c.decodeTolerantEnum(
+        // Required key (synthesized-strict pre-compat): absence is corruption, not a newer build.
+        let kindSplit = try c.decodeTolerantRequiredEnum(
             Kind.self, forKey: .kind, parkedTokenKey: .unknownKindToken, default: .stateTransition)
         kind = kindSplit.value
         unknownKindToken = kindSplit.parkedToken

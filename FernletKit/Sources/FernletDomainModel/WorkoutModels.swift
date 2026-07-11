@@ -113,7 +113,8 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
-        let typeSplit = try container.decodeTolerantEnum(
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let typeSplit = try container.decodeTolerantRequiredEnum(
             WorkoutType.self, forKey: .type, parkedTokenKey: .unknownTypeToken, default: .fullBody)
         type = typeSplit.value
         unknownTypeToken = typeSplit.parkedToken
@@ -138,7 +139,8 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         unknownMuscleGroupTokens = muscleSplit.unknownTokens
         healthKitUUID = try container.decodeIfPresent(UUID.self, forKey: .healthKitUUID)
         plannedWorkoutID = try container.decodeIfPresent(UUID.self, forKey: .plannedWorkoutID)
-        let intensitySplit = try container.decodeTolerantEnum(
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let intensitySplit = try container.decodeTolerantRequiredEnum(
             WorkoutIntensity.self, forKey: .intensity, parkedTokenKey: .unknownIntensityToken, default: .moderate)
         intensity = intensitySplit.value
         unknownIntensityToken = intensitySplit.parkedToken
@@ -269,7 +271,8 @@ public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
-        let splitSplit = try container.decodeTolerantEnum(
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let splitSplit = try container.decodeTolerantRequiredEnum(
             WorkoutSplit.self, forKey: .split, parkedTokenKey: .unknownSplitToken, default: .workout)
         split = splitSplit.value
         unknownSplitToken = splitSplit.parkedToken

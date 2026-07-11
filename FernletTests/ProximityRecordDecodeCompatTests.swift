@@ -55,6 +55,31 @@ struct ProximityRecordDecodeCompatTests {
         #expect(edited.unknownModeToken == nil)
     }
 
+    @Test func missingTrustedPeerModeKeyStillThrows() throws {
+        // Missing KEY ≠ unknown VALUE: every build writes `mode`, so absence is a corrupt/truncated
+        // record and must keep failing decode like the historical synthesized-strict decode — only
+        // a present-but-unknown value freezes + parks.
+        let json = """
+        {
+          "id": "11111111-1111-1111-1111-111111111111",
+          "displayName": "Alex",
+          "fingerprint": "AB12",
+          "signingPublicKey": "",
+          "keyAgreementPublicKey": "",
+          "firstAcceptedAt": 700000000,
+          "lastSeenAt": 700000100
+        }
+        """
+        let error = #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(ProximityTrustedPeerRecord.self, from: Data(json.utf8))
+        }
+        if case .keyNotFound(let key, _)? = error {
+            #expect(key.stringValue == "mode")
+        } else {
+            Issue.record("expected keyNotFound(mode), got \(String(describing: error))")
+        }
+    }
+
     // MARK: - TrainerAuditEvent (audit log)
 
     @Test func unknownAuditKindAndPayloadTypeFreezeAndPark() throws {
@@ -173,6 +198,34 @@ struct ProximityRecordDecodeCompatTests {
         #expect(log.unknownRoleToken == nil)
         #expect(log.unknownModeToken == nil)
         #expect(log.endState == "ended")
+    }
+
+    @Test func missingSessionLogRoleKeyStillThrows() throws {
+        // Missing KEY ≠ unknown VALUE: `role` was synthesized-strict before the tolerant decode, so
+        // a log record without it is corruption and must keep surfacing as a decode failure.
+        let json = """
+        {
+          "id": "33333333-3333-3333-3333-333333333333",
+          "startedAt": 700000000,
+          "mode": "trainer",
+          "localFingerprint": "CD34",
+          "ranging": {"mode": "uwb", "samples": []},
+          "transport": {
+            "mcSessionState": "connected", "bytesSent": 0, "bytesReceived": 0,
+            "bluetoothActive": true, "wifiActive": true, "rttSamplesMs": []
+          },
+          "events": [], "envelopes": [], "errors": [],
+          "endState": "ended"
+        }
+        """
+        let error = #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(ConnectionSessionLog.self, from: Data(json.utf8))
+        }
+        if case .keyNotFound(let key, _)? = error {
+            #expect(key.stringValue == "role")
+        } else {
+            Issue.record("expected keyNotFound(role), got \(String(describing: error))")
+        }
     }
 
     // MARK: - Helpers

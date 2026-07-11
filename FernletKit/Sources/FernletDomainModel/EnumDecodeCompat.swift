@@ -106,7 +106,10 @@ public nonisolated enum EnumDecodeCompat {
 public extension KeyedDecodingContainer {
     /// Freeze-on-unknown scalar enum decode with a parked-token side channel (see
     /// `EnumDecodeCompat.resolveScalar`). Absent keys resolve to `defaultValue` — tolerant by
-    /// design, matching the house `decodeIfPresent ?? default` style.
+    /// design, matching the house `decodeIfPresent ?? default` style. ONLY for fields that were
+    /// historically `decodeIfPresent ?? default`; a field that was historically a strict
+    /// `try container.decode(...)` must use `decodeTolerantRequiredEnum` instead, so a missing key
+    /// keeps surfacing as the decode failure it always was.
     func decodeTolerantEnum<Case: RawRepresentable>(
         _ type: Case.Type,
         forKey key: Key,
@@ -116,6 +119,27 @@ public extension KeyedDecodingContainer {
     ) throws -> (value: Case, parkedToken: String?) where Case.RawValue == String {
         EnumDecodeCompat.resolveScalar(
             token: try decodeIfPresent(String.self, forKey: key),
+            parkedToken: try decodeIfPresent(String.self, forKey: parkedTokenKey),
+            default: defaultValue,
+            resolve: resolve
+        )
+    }
+
+    /// `decodeTolerantEnum` for a field that was historically strict-REQUIRED
+    /// (`try container.decode(...)`). A missing key and a present-but-unknown value are DIFFERENT
+    /// signals: no legitimate build (old or new) ever omits the key — absence means truncation or
+    /// corruption, so it throws `keyNotFound`/`valueNotFound` exactly like the old strict decode —
+    /// while an unknown VALUE is a legitimate newer build's raw value, so it still freezes to
+    /// `defaultValue` and parks in the side channel.
+    func decodeTolerantRequiredEnum<Case: RawRepresentable>(
+        _ type: Case.Type,
+        forKey key: Key,
+        parkedTokenKey: Key,
+        default defaultValue: Case,
+        resolve: (String) -> Case? = { Case(rawValue: $0) }
+    ) throws -> (value: Case, parkedToken: String?) where Case.RawValue == String {
+        EnumDecodeCompat.resolveScalar(
+            token: try decode(String.self, forKey: key),
             parkedToken: try decodeIfPresent(String.self, forKey: parkedTokenKey),
             default: defaultValue,
             resolve: resolve

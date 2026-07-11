@@ -1,9 +1,11 @@
 // LogRecordsDecodeCompatTests.swift
 // Forward-compatibility of the derived log-record DTOs persisted in the blob (dailyLogs/mealLogs/
 // workoutLogs/journalLogs). These are freeze-only (no parked-token side channels): an enum raw
-// value only a NEWER build knows resolves to the field default instead of throwing (a throw would
+// VALUE only a NEWER build knows resolves to the field default instead of throwing (a throw would
 // brick the whole blob decode), and nothing is lost because the tables are rebuilt from the source
-// days (`rebuildDerivedTables`).
+// days (`rebuildDerivedTables`). Key presence keeps its historical strictness: fields that were
+// required stay required (a MISSING key is corruption, not forward-compat, and still throws);
+// `sleepQuality` keeps its historical `decodeIfPresent` absent-tolerance.
 
 import Foundation
 import Testing
@@ -31,6 +33,13 @@ struct LogRecordsDecodeCompatTests {
          "proteinGrams": 0, "calories": 0}
         """)
         #expect(known.sleepQuality == .good)
+
+        // Absent key stays tolerated — sleepQuality was always `decodeIfPresent` (nights without a
+        // sleep log legitimately have no value).
+        let absent = try decode(DailyLogRecord.self, """
+        {"dateKey": "2026-07-10", "workoutCompleted": false, "proteinGrams": 0, "calories": 0}
+        """)
+        #expect(absent.sleepQuality == nil)
     }
 
     @Test func unknownMealTypeInMealLogFreezesToSnack() throws {
@@ -45,6 +54,28 @@ struct LogRecordsDecodeCompatTests {
         """)
         #expect(record.mealType == .snack)
         #expect(record.description == "Affogato")
+    }
+
+    @Test func missingMealTypeKeyInMealLogStillThrows() throws {
+        // Missing KEY ≠ unknown VALUE: `mealType` was strict-required before the tolerant decode,
+        // so a row without it is corruption/truncation and must keep failing decode (the row is
+        // then rebuilt from the source day).
+        let json = """
+        {
+          "dateKey": "2026-07-10",
+          "description": "Affogato",
+          "calories": 180, "protein": 4, "carbs": 20, "fat": 9,
+          "dailyCalorieTotal": 1800, "dailyProteinTotal": 90
+        }
+        """
+        let error = #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(MealLogRecord.self, from: Data(json.utf8))
+        }
+        if case .keyNotFound(let key, _)? = error {
+            #expect(key.stringValue == "mealType")
+        } else {
+            Issue.record("expected keyNotFound(mealType), got \(String(describing: error))")
+        }
     }
 
     @Test func unknownWorkoutTypeInWorkoutLogFreezesToFullBody() throws {

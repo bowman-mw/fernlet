@@ -32,14 +32,16 @@ public nonisolated struct UserNutritionProfile: Codable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        age = try c.decodeIfPresent(Int.self, forKey: .age) ?? 30
-        weightPounds = try c.decodeIfPresent(Double.self, forKey: .weightPounds) ?? 170
-        heightInches = try c.decodeIfPresent(Double.self, forKey: .heightInches) ?? 68
-        let sexSplit = try c.decodeTolerantEnum(
+        // Required keys (synthesized-strict pre-compat): absence is corruption, not a newer build.
+        // age/weight/height feed calorie targets — fabricating defaults would silently mis-guide.
+        age = try c.decode(Int.self, forKey: .age)
+        weightPounds = try c.decode(Double.self, forKey: .weightPounds)
+        heightInches = try c.decode(Double.self, forKey: .heightInches)
+        let sexSplit = try c.decodeTolerantRequiredEnum(
             BiologicalSex.self, forKey: .sex, parkedTokenKey: .unknownSexToken, default: .male)
         sex = sexSplit.value
         unknownSexToken = sexSplit.parkedToken
-        let activitySplit = try c.decodeTolerantEnum(
+        let activitySplit = try c.decodeTolerantRequiredEnum(
             ActivityLevel.self, forKey: .activityLevel, parkedTokenKey: .unknownActivityLevelToken, default: .moderate)
         activityLevel = activitySplit.value
         unknownActivityLevelToken = activitySplit.parkedToken
@@ -68,11 +70,12 @@ public nonisolated struct UserNutritionPreferences: Codable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        let patternSplit = try c.decodeTolerantEnum(
+        // Required keys (synthesized-strict pre-compat): absence is corruption, not a newer build.
+        let patternSplit = try c.decodeTolerantRequiredEnum(
             DietaryPattern.self, forKey: .dietaryPattern, parkedTokenKey: .unknownDietaryPatternToken, default: .balanced)
         dietaryPattern = patternSplit.value
         unknownDietaryPatternToken = patternSplit.parkedToken
-        let intensitySplit = try c.decodeTolerantEnum(
+        let intensitySplit = try c.decodeTolerantRequiredEnum(
             GuidanceIntensity.self, forKey: .guidanceIntensity, parkedTokenKey: .unknownGuidanceIntensityToken, default: .steady)
         guidanceIntensity = intensitySplit.value
         unknownGuidanceIntensityToken = intensitySplit.parkedToken
@@ -267,7 +270,8 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
-        let mealTypeSplit = try container.decodeTolerantEnum(
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let mealTypeSplit = try container.decodeTolerantRequiredEnum(
             MealType.self, forKey: .mealType, parkedTokenKey: .unknownMealTypeToken, default: .snack)
         mealType = mealTypeSplit.value
         unknownMealTypeToken = mealTypeSplit.parkedToken
@@ -281,7 +285,8 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
         mealSource = mealSourceSplit.value
         unknownMealSourceToken = mealSourceSplit.parkedToken
         isAIFallback = try container.decodeIfPresent(Bool.self, forKey: .isAIFallback) ?? true
-        let qualitySplit = try container.decodeTolerantEnum(
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let qualitySplit = try container.decodeTolerantRequiredEnum(
             MealQuality.self, forKey: .quality, parkedTokenKey: .unknownQualityToken, default: .ok)
         quality = qualitySplit.value
         unknownQualityToken = qualitySplit.parkedToken
@@ -855,7 +860,8 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         macros = try container.decode(Macros.self, forKey: .macros)
         micronutrients = try container.decodeIfPresent(Micronutrients.self, forKey: .micronutrients) ?? Micronutrients()
         category = try container.decode(String.self, forKey: .category)
-        let sourceSplit = try container.decodeTolerantEnum(
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let sourceSplit = try container.decodeTolerantRequiredEnum(
             FoodItemSource.self, forKey: .source, parkedTokenKey: .unknownSourceToken, default: .manual)
         source = sourceSplit.value
         unknownSourceToken = sourceSplit.parkedToken

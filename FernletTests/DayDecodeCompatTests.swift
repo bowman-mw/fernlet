@@ -193,6 +193,36 @@ struct DayDecodeCompatTests {
         #expect(reloaded.unknownMealTypeToken == "Dessert")
         #expect(reloaded.unknownMealSourceToken == "importedPlan")
         #expect(reloaded.unknownQualityToken == "amazing")
+
+        // Middle-build re-save contract: the re-encoded MAIN key must carry a token the previous
+        // build's strict raw-value decode resolves (the frozen default), never the future token.
+        let object = try encodeToObject(day)
+        let mealObjects = try #require(object["meals"] as? [[String: Any]])
+        let mainTypeToken = try #require(mealObjects.first?["mealType"] as? String)
+        #expect(MealType(rawValue: mainTypeToken) == .snack)
+        let mainQualityToken = try #require(mealObjects.first?["quality"] as? String)
+        #expect(MealQuality(rawValue: mainQualityToken) == .ok)
+    }
+
+    @Test func missingMealTypeKeyStillThrows() throws {
+        // Missing KEY ≠ unknown VALUE: no build (old or new) ever writes a meal without `mealType`,
+        // so absence is corruption/truncation and must keep failing decode exactly like the
+        // historical strict `container.decode` — only a present-but-unknown value freezes + parks.
+        let json = """
+        {
+          "name": "Affogato",
+          "macros": {"protein": 4, "carbs": 20, "fat": 9},
+          "quality": "ok", "confidence": "high", "note": "", "source": "manual"
+        }
+        """
+        let error = #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(Meal.self, from: Data(json.utf8))
+        }
+        if case .keyNotFound(let key, _)? = error {
+            #expect(key.stringValue == "mealType")
+        } else {
+            Issue.record("expected keyNotFound(mealType), got \(String(describing: error))")
+        }
     }
 
     @Test func explicitMealEditClearsThePark() throws {
@@ -251,6 +281,14 @@ struct DayDecodeCompatTests {
         #expect(stripped.text.isEmpty)
         #expect(stripped.tag == .neutral)
         #expect(stripped.unknownTagToken == "sparkly")  // the strip must not drop the newer tag
+
+        // Fail-closed allowlist (S3): the strip reconstructs memberwise, so its output carries
+        // ONLY the known non-sensitive fields plus the parked side channel — nothing else. If a
+        // new JournalEntry stored field makes this key set grow, strippedIfSealed must be
+        // consciously re-audited before this expectation is updated.
+        let object = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(stripped)) as? [String: Any])
+        #expect(object.keys.sorted() == ["date", "emotions", "id", "isQuickMood", "tag", "text", "unknownTagToken"])
     }
 
     // MARK: - Helpers

@@ -19,6 +19,15 @@
 
 import Foundation
 
+/// Forward-compat contract (deliberately NOT the freeze-and-park pattern used elsewhere): the
+/// ledger rows live in a per-row store, so a `kind` raw value only a NEWER build knows makes just
+/// that ONE row fail decode and be skipped (`CoinLedgerRepository.entry(from:)` is a per-row
+/// `try?`; `load()` compactMaps the failures away) — nothing cascades and nothing is deleted.
+/// Rows are append-only and union-merged by id across devices, so the newer device keeps its row
+/// and a re-sync restores it here after this build upgrades. The cost: while builds are mixed, the
+/// older build under-counts the balance by the rows it can't decode — any new kind must accept
+/// that until every device is updated. `MilestoneEventKind` documents the same contract for the
+/// milestone ledger.
 public nonisolated enum CoinLedgerKind: String, Codable, Sendable, CaseIterable {
     /// Coins granted for an active day (a day with logged content). One per calendar day, ever.
     case earn

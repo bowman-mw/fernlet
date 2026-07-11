@@ -243,7 +243,8 @@ public nonisolated struct DailyHealthScore: Identifiable, Codable, Equatable {
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         dateKey = try c.decode(String.self, forKey: .dateKey)
         score = try c.decode(Double.self, forKey: .score)
-        let stateSplit = try c.decodeTolerantEnum(
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let stateSplit = try c.decodeTolerantRequiredEnum(
             CompanionState.self, forKey: .companionState,
             parkedTokenKey: .unknownCompanionStateToken, default: .okay)
         companionState = stateSplit.value
@@ -287,7 +288,8 @@ public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         text = try c.decode(String.self, forKey: .text)
-        let tagSplit = try c.decodeTolerantEnum(
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let tagSplit = try c.decodeTolerantRequiredEnum(
             FeelingTag.self, forKey: .tag, parkedTokenKey: .unknownTagToken, default: .neutral)
         tag = tagSplit.value
         unknownTagToken = tagSplit.parkedToken
@@ -305,12 +307,21 @@ public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
     /// reach the synced store regardless of which save path runs (the S3 privacy wall).
     public func strippedIfSealed(in sealedIDs: Set<UUID>) -> JournalEntry {
         guard sealedIDs.contains(id) else { return self }
-        // Copy-and-clear (not reconstruct) so every non-sensitive field — isQuickMood (a check-in
-        // is never sealed, so this stays false), the parked unknownTagToken, and any future field —
-        // survives the strip; only the sensitive text/emotions are blanked.
-        var stripped = self
-        stripped.text = ""
-        stripped.emotions = []
+        // FAIL-CLOSED memberwise reconstruct (S3): the stripped copy is built from an explicit
+        // allowlist of non-sensitive fields, so any FUTURE stored field added to JournalEntry is
+        // dropped from the sealed strip BY CONSTRUCTION until someone consciously adds it here.
+        // Do NOT convert this to copy-and-clear (`var stripped = self`) — that inverts the posture
+        // to fail-open and would let a later sensitive field (e.g. an attachment ref) ride into the
+        // iCloud-synced blob in plaintext for sealed entries.
+        // isQuickMood is preserved (a check-in is never sealed, so this stays false — but keep it
+        // explicit so the discriminator survives any future path that seals a marked entry).
+        var stripped = JournalEntry(id: id, text: "", tag: tag, date: date, emotions: [], isQuickMood: isQuickMood)
+        // Carry the parked unknown-tag token (non-sensitive: a newer build's enum raw value)
+        // through the strip so a sealed re-save can't clobber the newer device's tag choice.
+        // Safe post-init: the memberwise init assigns `tag` during initialization (property
+        // observers don't fire there, so the park isn't cleared by `tag`'s didSet), and the side
+        // channel itself has no observer.
+        stripped.unknownTagToken = unknownTagToken
         return stripped
     }
 }
@@ -341,7 +352,8 @@ public nonisolated struct SleepLog: Codable, Equatable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         hours = try c.decodeIfPresent(Double.self, forKey: .hours)
-        let qualitySplit = try c.decodeTolerantEnum(
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let qualitySplit = try c.decodeTolerantRequiredEnum(
             SleepQuality.self, forKey: .quality, parkedTokenKey: .unknownQualityToken, default: .ok)
         quality = qualitySplit.value
         unknownQualityToken = qualitySplit.parkedToken
