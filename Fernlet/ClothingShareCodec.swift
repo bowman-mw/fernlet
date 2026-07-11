@@ -50,7 +50,7 @@ enum ClothingShareCodec {
     }
 
     /// Stable ordering by creation time then id, so two devices encode the same catalog to the same bytes.
-    private static func deterministicOrder(_ lhs: CustomizationItem, _ rhs: CustomizationItem) -> Bool {
+    private nonisolated static func deterministicOrder(_ lhs: CustomizationItem, _ rhs: CustomizationItem) -> Bool {
         if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
         return lhs.id.uuidString < rhs.id.uuidString
     }

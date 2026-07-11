@@ -42,31 +42,41 @@ struct WorryEntryView: View {
             }
         }
         .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: phase == .writing ? .top : .center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .background(Color.parchment)
-        .navigationTitle("Worry Box")
+        .navigationTitle("Worry box")
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("What's circling around?")
-                .font(.system(size: 23, weight: .regular, design: .serif))
+                .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
                 .fernletWrappingText()
 
             Text("Write it down — the box can hold it for a while, so you don't have to.")
-                .font(.system(size: 17, weight: .regular, design: .serif))
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
             TextEditor(text: $text)
                 .focused($isEditorFocused)
-                .frame(minHeight: 150, maxHeight: 220)
-                .padding(12)
+                .frame(minHeight: 180, maxHeight: .infinity)
                 .scrollContentBackground(.hidden)
+                .font(.fernlet(.body))
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text("It's alright. Just start typing…")
+                            .font(.custom(FernletFontName.instrumentSerifItalic, size: 17, relativeTo: .body))
+                            .foregroundStyle(Color.slate.opacity(0.7))
+                            .padding(.horizontal, 5)
+                            .padding(.top, 8)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .padding(12)
                 .background(Color.cream, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .font(.system(size: 17, weight: .regular, design: .serif))
                 .onChange(of: text) { _, newValue in
                     if newValue.count > Self.characterLimit {
                         text = String(newValue.prefix(Self.characterLimit))
@@ -74,19 +84,26 @@ struct WorryEntryView: View {
                 }
                 .accessibilityLabel("Worry text")
 
+            if text.count > 260 {
+                Text("The box holds about 300 characters.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+
             HStack(spacing: 8) {
                 Image(systemName: "lock")
                     .font(.caption)
                     .foregroundStyle(Color.slate)
                 Text("Stays sealed on this device only — worries never sync anywhere.")
-                    .font(.system(size: 13, weight: .regular, design: .serif).italic())
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
 
             if let gentleError {
                 Text(gentleError)
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.terracotta)
                     .fernletWrappingText()
             }
@@ -94,16 +111,17 @@ struct WorryEntryView: View {
             Button {
                 letGo()
             } label: {
+                let disabled = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 Text("Let it go")
-                    .font(.headline)
-                    .foregroundStyle(.white)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(disabled ? Color.moss.opacity(0.55) : Color.parchmentInk)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .background(disabled ? Color.moss.opacity(0.18) : Color.moss,
+                                in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
             .buttonStyle(.plain)
             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
             .accessibilityIdentifier("firstAid.worry.letGo")
         }
     }
@@ -114,12 +132,12 @@ struct WorryEntryView: View {
                 .padding(.bottom, 30)
 
             Text("Tucked away.")
-                .font(.system(size: 36, weight: .semibold, design: .serif))
+                .font(.fernlet(.display))
                 .foregroundStyle(Color.bark)
                 .padding(.bottom, 12)
 
             Text("You can set it down for now. It's kept safe in the Worry Box on your Personal tab, sealed on this device.")
-                .font(.system(size: 18, weight: .regular, design: .serif))
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
@@ -131,8 +149,8 @@ struct WorryEntryView: View {
                 withAnimation(.easeOut(duration: 0.3)) { phase = .writing }
             } label: {
                 Text("Write another")
-                    .font(.headline)
-                    .foregroundStyle(.white)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.parchmentInk)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
                     .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
@@ -142,7 +160,7 @@ struct WorryEntryView: View {
             .padding(.bottom, 10)
 
             Button("Done") { dismiss() }
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.slate)
         }
         .transition(.opacity)
@@ -190,14 +208,14 @@ private struct TuckIntoBoxView: View {
     var body: some View {
         VStack(spacing: 0) {
             Text("Letting it go…")
-                .font(.system(size: 18, weight: .regular, design: .serif).italic())
+                .font(.custom(FernletFontName.instrumentSerifItalic, size: 18, relativeTo: .body))
                 .foregroundStyle(Color.slate)
                 .padding(.bottom, 30)
 
             ZStack(alignment: .bottom) {
                 // The worry note, drifting down into the box and fading as it goes.
                 Text(worryText)
-                    .font(.system(size: 15, weight: .regular, design: .serif).italic())
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.bark)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
@@ -205,7 +223,7 @@ private struct TuckIntoBoxView: View {
                     .padding(.vertical, 12)
                     .frame(maxWidth: 200)
                     .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .shadow(color: .bark.opacity(0.16), radius: 12, x: 0, y: 8)
+                    .shadow(color: Color.barkShadow.opacity(0.16), radius: 12, x: 0, y: 8)
                     .scaleEffect(tucked ? 0.32 : 1)
                     .offset(y: tucked ? 92 : -110)
                     .opacity(tucked ? 0 : 1)
@@ -332,10 +350,10 @@ struct WorryBoxView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                ScreenHeader(title: "Worry Box", subtitle: "SET DOWN, NOT CARRIED", subtitleFirst: true, identifier: "screen.worryBox")
+                ScreenHeader(title: "Worry box", subtitle: "", identifier: "screen.worryBox")
 
-                Text("Worries you've set down. They stay sealed on this device only — releasing one lets it go for good.")
-                    .font(.system(size: 16, weight: .regular, design: .serif))
+                Text("Worries you've set down. The box keeps them — releasing one lets it go for good.")
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
@@ -364,17 +382,17 @@ struct WorryBoxView: View {
                 TextField("Something circling around?", text: $composeText, axis: .vertical)
                     .focused($isComposeFocused)
                     .lineLimit(1...4)
-                    .font(.body)
+                    .font(.fernlet(.body))
                 Button {
                     guard (try? worryBox.addWorry(composeText)) != nil else { return }
                     composeText = ""
                     isComposeFocused = false
                 } label: {
                     Label("Let it go", systemImage: "archivebox")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.label))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.parchmentInk)
                         .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
@@ -392,10 +410,10 @@ struct WorryBoxView: View {
                 .frame(width: 56)
             VStack(alignment: .leading, spacing: 5) {
                 Text("The box is empty right now.")
-                    .font(.system(size: 20, weight: .regular, design: .serif))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 Text("That's a good thing. When something feels heavy, First aid on the Home screen can tuck it in here.")
-                    .font(.system(size: 16, weight: .regular, design: .serif))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -416,19 +434,19 @@ struct WorryBoxView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 Text(worry.text)
-                    .font(.system(size: 16, weight: .regular, design: .serif))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
                 HStack {
-                    Text(worry.createdAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(.caption2)
+                    Text("Set down " + worry.createdAt.formatted(.relative(presentation: .named, unitsStyle: .wide)))
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                     Spacer(minLength: 12)
                     Button {
                         release(worry)
                     } label: {
                         Label("Release this worry", systemImage: "arrow.up")
-                            .font(.caption.weight(.medium))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.goldenrod)
                     }
                     .buttonStyle(.plain)
@@ -439,7 +457,7 @@ struct WorryBoxView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: .bark.opacity(0.05), radius: 3, x: 0, y: 1)
+        .fernletSmallShadow()
         // The row lifts away like an ember on release: its words dim under a soft veil while a
         // warm ember rises and fades. When the ember has lifted, the store removes the row and
         // the list closes the gap.
@@ -458,7 +476,7 @@ struct WorryBoxView: View {
                         .offset(y: emberLifted ? -66 : 6)
                         .opacity(emberLifted ? 0 : 1)
                     Text("letting it go…")
-                        .font(.system(size: 14, weight: .regular, design: .serif).italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.goldenrod)
                 }
             }

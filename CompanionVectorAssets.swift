@@ -94,14 +94,17 @@ struct CompanionView: View {
                 let facePetBounce = settled ? size * 0.05 : petBounce
 
                 if settled || showsCalmAccent {
-                    // Warm blush cheeks that ride with the settled/calm face.
-                    HStack(spacing: size * 0.18) {
+                    // Warm blush cheeks that ride with the settled/calm face. Settled sits deeper in
+                    // the content beat, so its blush is a touch wider and warmer than the calm accent's.
+                    let blushOpacity = settled ? 0.42 : 0.38
+                    let blushWidth = settled ? size * 0.15 : size * 0.135
+                    HStack(spacing: size * 0.17) {
                         Ellipse()
-                            .fill(Color.dustyRose.opacity(0.34))
-                            .frame(width: size * 0.13, height: size * 0.07)
+                            .fill(Color.dustyRose.opacity(blushOpacity))
+                            .frame(width: blushWidth, height: size * 0.072)
                         Ellipse()
-                            .fill(Color.dustyRose.opacity(0.34))
-                            .frame(width: size * 0.13, height: size * 0.07)
+                            .fill(Color.dustyRose.opacity(blushOpacity))
+                            .frame(width: blushWidth, height: size * 0.072)
                     }
                     .offset(y: size * 0.02 + facePetBounce)
                 }
@@ -328,14 +331,16 @@ struct CompanionBrowFurrow: View {
     var size: CGFloat
 
     var body: some View {
-        HStack(spacing: size * 0.16) {
+        // Two short bars tipped up at their inner ends. Matches the mockup furrow ratio
+        // (~15×3 on a 116 body) and its softly-set ink (bark @ ~0.55) — a set brow, not a scowl.
+        HStack(spacing: size * 0.17) {
             Capsule()
-                .fill(Color.bark.opacity(0.5))
-                .frame(width: size * 0.12, height: max(2, size * 0.022))
+                .fill(Color.bark.opacity(0.55))
+                .frame(width: size * 0.13, height: max(2, size * 0.024))
                 .rotationEffect(.degrees(11))
             Capsule()
-                .fill(Color.bark.opacity(0.5))
-                .frame(width: size * 0.12, height: max(2, size * 0.022))
+                .fill(Color.bark.opacity(0.55))
+                .frame(width: size * 0.13, height: max(2, size * 0.024))
                 .rotationEffect(.degrees(-11))
         }
     }
@@ -347,17 +352,23 @@ struct CompanionSteam: View {
     var elapsed: TimeInterval
 
     var body: some View {
-        // A ~2.6s loop: rise a little and fade in/out.
+        // A ~2.6s loop: rise a little and fade in/out. Three wisps of soft, warm-neutral steam —
+        // the middle one taller — kept low-opacity (the mockup tops out around 0.55) so it reads
+        // as a faint warmth off the body, never a plume.
         let t = (elapsed.truncatingRemainder(dividingBy: 2.6)) / 2.6
         let rise = -size * 0.10 * CGFloat(t)
-        let fade = sin(t * .pi) * 0.5
-        HStack(spacing: size * 0.05) {
+        let fade = sin(t * .pi) * 0.55
+        let line = StrokeStyle(lineWidth: max(1.4, size * 0.015), lineCap: .round)
+        HStack(alignment: .bottom, spacing: size * 0.045) {
             CompanionSquiggle()
-                .stroke(Color.softTaupe.opacity(0.9), style: StrokeStyle(lineWidth: max(1.4, size * 0.016), lineCap: .round))
+                .stroke(Color.softTaupe.opacity(0.7), style: line)
+                .frame(width: size * 0.06, height: size * 0.13)
+            CompanionSquiggle()
+                .stroke(Color.softTaupe.opacity(0.7), style: line)
                 .frame(width: size * 0.07, height: size * 0.16)
             CompanionSquiggle()
-                .stroke(Color.softTaupe.opacity(0.9), style: StrokeStyle(lineWidth: max(1.4, size * 0.016), lineCap: .round))
-                .frame(width: size * 0.07, height: size * 0.16)
+                .stroke(Color.softTaupe.opacity(0.7), style: line)
+                .frame(width: size * 0.055, height: size * 0.11)
         }
         .opacity(fade)
         .offset(y: rise)
@@ -396,9 +407,17 @@ struct CompanionSweatBead: View {
         // Fade in quickly, hold, fade out as it reaches the bottom of the slide.
         let fade: Double = t < 0.18 ? t / 0.18 : (t > 0.72 ? max(0, (1 - t) / 0.28) : 1)
         let slide = size * 0.12 * CGFloat(t)
+        // A cool droplet with a soft top-left glint so it reads as water catching the light —
+        // gentle and dewy, never an alarm.
         CompanionTeardrop()
             .fill(beadColor)
             .frame(width: size * 0.08, height: size * 0.10)
+            .overlay(alignment: .topLeading) {
+                Circle()
+                    .fill(.white.opacity(0.9))
+                    .frame(width: size * 0.02, height: size * 0.02)
+                    .offset(x: size * 0.015, y: size * 0.02)
+            }
             .opacity(fade * 0.95)
             .offset(y: slide)
     }
@@ -448,10 +467,15 @@ struct CompanionMotes: View {
     private func mote(period: TimeInterval, phase: TimeInterval, dx: CGFloat, tint: Color, diameter: CGFloat) -> some View {
         let t = ((elapsed + phase).truncatingRemainder(dividingBy: period)) / period
         let rise = -size * 0.16 * CGFloat(t)
-        let twinkle = 0.15 + 0.7 * sin(t * .pi)
+        // Twinkle both the opacity and the scale (per the mockup: 0.6→1) so each mote gently
+        // swells into view and settles back — a soft sparkle, not a blinking dot.
+        let pulse = sin(t * .pi)
+        let twinkle = 0.15 + 0.7 * pulse
+        let scale = 0.6 + 0.4 * pulse
         return Circle()
             .fill(tint)
             .frame(width: diameter, height: diameter)
+            .scaleEffect(scale)
             .opacity(max(0, twinkle))
             .offset(x: dx, y: rise)
     }

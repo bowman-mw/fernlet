@@ -33,13 +33,13 @@ struct ProximityRecipeShareSheet: View {
                         FernletCard {
                             VStack(alignment: .leading, spacing: 12) {
                                 Label("Fernlet nearby", systemImage: "dot.radiowaves.left.and.right")
-                                    .font(.headline.weight(.semibold))
+                                    .font(.fernlet(.header))
                                     .foregroundStyle(Color.bark)
 
                                 if draft.payload.hasShareNotes {
                                     Toggle(isOn: $includeNotes) {
                                         Text("Include notes")
-                                            .font(.subheadline.weight(.semibold))
+                                            .font(.fernlet(.label))
                                             .foregroundStyle(Color.bark)
                                     }
                                     .toggleStyle(.switch)
@@ -66,11 +66,11 @@ struct ProximityRecipeShareSheet: View {
                                                         .frame(width: 34, height: 34)
                                                     VStack(alignment: .leading, spacing: 3) {
                                                         Text(recipient.displayName)
-                                                            .font(.headline.weight(.semibold))
+                                                            .font(.fernlet(.headerMedium))
                                                             .foregroundStyle(Color.bark)
                                                             .lineLimit(1)
                                                         Text(recipient.fingerprint.map { String($0.prefix(8)) } ?? "Verifying…")
-                                                            .font(.caption)
+                                                            .font(.fernlet(.labelSmall))
                                                             .foregroundStyle(Color.slate)
                                                     }
                                                     Spacer()
@@ -89,7 +89,7 @@ struct ProximityRecipeShareSheet: View {
 
                         if let statusText {
                             Text(statusText)
-                                .font(.caption.italic())
+                                .font(.fernlet(.bubble))
                                 .foregroundStyle(Color.slate)
                                 .fernletWrappingText()
                         }
@@ -101,7 +101,7 @@ struct ProximityRecipeShareSheet: View {
                         FernletCard {
                             ShareLink(item: draft.shareText) {
                                 Label("Share outside Fernlet", systemImage: "square.and.arrow.up")
-                                    .font(.headline.weight(.semibold))
+                                    .font(.fernlet(.label))
                                     .foregroundStyle(Color.moss)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.vertical, 4)
@@ -144,13 +144,12 @@ struct ProximityRecipeShareSheet: View {
 
     private var searchingView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProgressView()
-                .tint(Color.moss)
+            SearchingPulse(tint: Color.moss, size: 56, systemImage: "dot.radiowaves.left.and.right")
             Text("Looking for nearby people...")
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
             Text("Open Fernlet on the other device and keep it nearby.")
-                .font(.caption)
+                .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
         }
@@ -160,10 +159,10 @@ struct ProximityRecipeShareSheet: View {
     private var noNearbyView: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("No nearby Fernlets found", systemImage: "person.crop.circle.badge.questionmark")
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
             Text("Ask the other person to open Fernlet on Home, Food, or Move while unlocked.")
-                .font(.caption)
+                .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
             Button {
@@ -173,7 +172,7 @@ struct ProximityRecipeShareSheet: View {
                 scheduleNoNearbyState()
             } label: {
                 Label("Search again", systemImage: "arrow.clockwise")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
             }
             .buttonStyle(.plain)
@@ -188,11 +187,11 @@ struct ProximityRecipeShareSheet: View {
                     ForEach(Array(manager.diagnosticEvents.suffix(8).reversed())) { event in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(event.timestamp.formatted(date: .omitted, time: .standard))
-                                .font(.caption2.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                                 .frame(width: 74, alignment: .leading)
                             Text(event.message)
-                                .font(.caption)
+                                .font(.fernlet(.bodySmall))
                                 .foregroundStyle(Color.bark)
                                 .fernletWrappingText()
                         }
@@ -201,7 +200,7 @@ struct ProximityRecipeShareSheet: View {
                 .padding(.top, 10)
             } label: {
                 Label("Connection details", systemImage: "list.bullet.rectangle")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
             }
             .tint(Color.moss)

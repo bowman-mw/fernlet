@@ -39,7 +39,13 @@ public struct DailyLogRecord: Identifiable, Codable, Equatable {
         dateKey = try container.decode(String.self, forKey: .dateKey)
         weight = try container.decodeIfPresent(Double.self, forKey: .weight)
         sleepHours = try container.decodeIfPresent(Double.self, forKey: .sleepHours)
-        sleepQuality = try container.decodeIfPresent(SleepQuality.self, forKey: .sleepQuality)
+        // Value-tolerant: a quality token only a newer build knows resolves to nil instead of
+        // throwing (a throw here bricks the whole blob decode into read-only recovery). No
+        // parked-token side channel — this derived table is rebuilt from the source days
+        // (`rebuildDerivedTables`), so a frozen value costs nothing. The key itself stays optional,
+        // matching the historical `decodeIfPresent`.
+        sleepQuality = try container.decodeIfPresent(String.self, forKey: .sleepQuality)
+            .flatMap(SleepQuality.init(rawValue:))
         workoutCompleted = try container.decode(Bool.self, forKey: .workoutCompleted)
         proteinGrams = try container.decode(Int.self, forKey: .proteinGrams)
         calories = try container.decode(Int.self, forKey: .calories)
@@ -83,7 +89,10 @@ public struct MealLogRecord: Identifiable, Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         dateKey = try container.decode(String.self, forKey: .dateKey)
-        mealType = try container.decode(MealType.self, forKey: .mealType)
+        // Value-tolerant freeze (no park): derived table, rebuilt from the source days — see
+        // DailyLogRecord.sleepQuality. The KEY stays required (historically strict `decode`):
+        // a missing key is corruption/truncation and must keep surfacing as a decode failure.
+        mealType = MealType(rawValue: try container.decode(String.self, forKey: .mealType)) ?? .snack
         description = try container.decode(String.self, forKey: .description)
         calories = try container.decode(Int.self, forKey: .calories)
         protein = try container.decode(Int.self, forKey: .protein)
@@ -113,6 +122,19 @@ public struct WorkoutLogRecord: Identifiable, Codable, Equatable {
         self.rpe = workout.rpe
         self.notes = workout.notes
     }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        dateKey = try container.decode(String.self, forKey: .dateKey)
+        // Value-tolerant freeze (no park): derived table, rebuilt from the source days — see
+        // DailyLogRecord.sleepQuality. The KEY stays required (historically synthesized-strict):
+        // a missing key is corruption/truncation and must keep surfacing as a decode failure.
+        type = WorkoutType(rawValue: try container.decode(String.self, forKey: .type)) ?? .fullBody
+        exercises = try container.decode(String.self, forKey: .exercises)
+        rpe = try container.decodeIfPresent(Double.self, forKey: .rpe)
+        notes = try container.decode(String.self, forKey: .notes)
+    }
 }
 
 public struct JournalLogRecord: Identifiable, Codable, Equatable {
@@ -129,6 +151,18 @@ public struct JournalLogRecord: Identifiable, Codable, Equatable {
         self.tag = journal.tag
         self.text = journal.text
         self.emotions = Array(journal.emotions.prefix(FernletLimits.maxEmotionKeys))
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        dateKey = try container.decode(String.self, forKey: .dateKey)
+        // Value-tolerant freeze (no park): derived table, rebuilt from the source days — see
+        // DailyLogRecord.sleepQuality. The KEY stays required (historically synthesized-strict):
+        // a missing key is corruption/truncation and must keep surfacing as a decode failure.
+        tag = FeelingTag(rawValue: try container.decode(String.self, forKey: .tag)) ?? .neutral
+        text = try container.decode(String.self, forKey: .text)
+        emotions = try container.decode([String].self, forKey: .emotions)
     }
 }
 

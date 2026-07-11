@@ -79,10 +79,10 @@ struct PeriodTrackerView: View {
             FernletCard {
                 VStack(alignment: .leading, spacing: 10) {
                     Label("Period-aware care", systemImage: "sparkles")
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Text("Once you've logged a few cycles, Fernlet can gently soften your daily score on the phases that tend to be harder for you, and show a cycle chip and outlook on Home. It's optional, stays on this device, and never leaves the app.")
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                     HStack(spacing: 10) {
@@ -91,7 +91,7 @@ struct PeriodTrackerView: View {
                             store.markPeriodContextPrimerSeen()
                         } label: {
                             Text("Turn on")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.fernlet(.label))
                                 .foregroundStyle(Color.cream)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
@@ -102,7 +102,7 @@ struct PeriodTrackerView: View {
                             store.markPeriodContextPrimerSeen()
                         } label: {
                             Text("Not now")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.fernlet(.label))
                                 .foregroundStyle(Color.slate)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
@@ -127,7 +127,7 @@ struct PeriodTrackerView: View {
                     SectionLabel("How your phases tend to go")
                     ForEach(Array(trends.enumerated()), id: \.offset) { index, trend in
                         Text(phaseTrendSentence(trend))
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                         if index < trends.count - 1 { FernletRowDivider() }
@@ -160,7 +160,7 @@ struct PeriodTrackerView: View {
 
     private var privacyBanner: some View {
         Text("Your period data stays on this device, behind your app lock.")
-            .font(.caption.italic())
+            .font(.fernlet(.bubble))
             .foregroundStyle(Color.slate)
             .fernletWrappingText()
     }
@@ -192,7 +192,7 @@ struct PeriodTrackerView: View {
                     ForEach(Array(events.enumerated()), id: \.element.id) { index, entry in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(entry.date.formatted(.dateTime.month(.abbreviated).day()))
-                                .font(.subheadline.weight(.semibold))
+                                .font(.fernlet(.label))
                                 .foregroundStyle(Color.bark)
                             HStack(spacing: 6) {
                                 Text(entry.flowLabel)
@@ -200,7 +200,7 @@ struct PeriodTrackerView: View {
                                     Text(symptom.title)
                                 }
                             }
-                            .font(.caption)
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                             .lineLimit(2)
                         }
@@ -246,15 +246,15 @@ private struct PredictionsCard: View {
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Likely next period")
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                             Text(formattedRange(prediction.likelyStartRange))
-                                .font(.title3.weight(.semibold))
+                                .font(.fernlet(.stat))
                                 .foregroundStyle(Color.bark)
                         }
                         Spacer(minLength: 8)
                         Text(confidenceLabel(for: prediction.confidence))
-                            .font(.caption2.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.bark)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
@@ -262,7 +262,7 @@ private struct PredictionsCard: View {
                     }
 
                     Text("Cycles tracked: \(prediction.cyclesObserved)")
-                        .font(.caption)
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                 }
             } else {
@@ -292,10 +292,10 @@ private struct TrendsCard: View {
         FernletCard {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Average cycle length: \(prediction.averageCycleLength) days")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
                 Text("Your cycles vary by about ±\(prediction.variationDays) days.")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -331,7 +331,7 @@ private struct PeriodCalendarCard: View {
                     .buttonStyle(.plain)
 
                     Text(model.monthTitle)
-                        .font(.title3.weight(.semibold))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                         .frame(maxWidth: .infinity)
 
@@ -352,7 +352,7 @@ private struct PeriodCalendarCard: View {
 
                 LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
-                        Text(day).font(.caption2.weight(.semibold)).foregroundStyle(Color.slate)
+                        Text(day).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                     }
                     ForEach(model.cells) { cell in
                         PeriodCalendarCell(cell: cell) {
@@ -379,7 +379,7 @@ private struct PeriodCalendarCard: View {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(color)
                         .frame(width: 10, height: 10)
-                    Text(label).font(.caption2).foregroundStyle(Color.slate)
+                    Text(label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
             }
         }
@@ -405,7 +405,12 @@ private struct PeriodCalendarCell: View {
                     )
                 if let day = cell.day {
                     Text("\(day)")
-                        .font(.caption2.weight(cell.isToday ? .bold : .medium))
+                        // Today's numeral gets real weight via the heavier bundled Fraunces face
+                        // — `.fontWeight(.bold)` is a silent no-op on the single-weight DM Sans
+                        // Medium that `.stat` resolves to.
+                        .font(cell.isToday
+                              ? .custom(FernletFontName.frauncesSemiBold, size: 14, relativeTo: .subheadline)
+                              : .fernlet(.stat))
                         .foregroundStyle(
                             cell.isFuture ? Color.bark.opacity(0.28)
                                 : cell.isToday ? Color.moss

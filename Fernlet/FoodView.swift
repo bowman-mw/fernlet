@@ -40,12 +40,12 @@ struct FoodView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
                                     Label("\(store.pendingRetryCount) pending", systemImage: "clock.arrow.circlepath")
-                                        .font(.headline)
+                                        .font(.fernlet(.header))
                                         .foregroundStyle(Color.bark)
                                     Spacer()
                                 }
                                 Text(FernletVoice.message(for: .retryAvailable))
-                                    .font(.callout.italic())
+                                    .font(.fernlet(.bubble))
                                     .foregroundStyle(Color.slate)
                                 Button("Retry oldest") {
                                     Task { await store.retryOldestMeal() }
@@ -79,7 +79,7 @@ struct FoodView: View {
                             SectionLabel("Recipes")
                             Spacer()
                             Button("Recipe book") { showingRecipeBook = true }
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.label))
                                 .foregroundStyle(Color.fern)
                         }
                         if recentRecipePreviews.isEmpty {
@@ -213,10 +213,10 @@ struct NutritionPill: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.caption2.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             Text(value)
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -237,14 +237,14 @@ struct RecipeImportSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Import recipe")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     Button {
                         importFromPasteboardURL()
                     } label: {
                         Label(isImportingURL ? "Importing URL" : "Paste URL", systemImage: isImportingURL ? "hourglass" : "link.badge.plus")
-                            .font(.headline)
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.cream)
                             .frame(maxWidth: .infinity)
                             .padding(14)
@@ -263,7 +263,8 @@ struct RecipeImportSheet: View {
 
                     if let notice {
                         Text(notice)
-                            .font(.caption.italic())
+                            .font(.fernlet(.bodySmall))
+                            .italic()
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -330,12 +331,12 @@ struct SavedRecipeRow: View {
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(recipe.name)
-                        .font(.headline)
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
                     if let sourceURL = webImport?.sourceURL {
                         Text(sourceURL.host() ?? sourceURL.absoluteString)
-                            .font(.caption)
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                             .lineLimit(1)
                     }
@@ -343,12 +344,12 @@ struct SavedRecipeRow: View {
             }
             if !recipe.notes.isEmpty {
                 Text(recipe.notes)
-                    .font(.callout)
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
             }
             Text((webImport?.ingredientLines ?? []).prefix(4).joined(separator: " | "))
-                .font(.caption)
+                .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
             if let macros = webImport?.macros, macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 {
@@ -360,7 +361,7 @@ struct SavedRecipeRow: View {
                         Text("· \(recipe.servings) servings")
                     }
                 }
-                .font(.caption.weight(.medium))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             }
         }
@@ -389,7 +390,7 @@ struct SavedRecipeNotesSheet: View {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(recipe.name)
-                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .font(.fernlet(.displayMedium))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                         if let sourceURL = webImport?.sourceURL {
@@ -400,7 +401,7 @@ struct SavedRecipeNotesSheet: View {
                                     Image(systemName: "safari")
                                         .font(.caption)
                                     Text(sourceURL.host() ?? sourceURL.absoluteString)
-                                        .font(.caption)
+                                        .font(.fernlet(.labelSmall))
                                         .underline()
                                 }
                                 .foregroundStyle(Color.fern)
@@ -412,7 +413,7 @@ struct SavedRecipeNotesSheet: View {
                     if let macros = webImport?.macros, macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(recipe.servings > 1 ? "PER SERVING" : "MACROS")
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                                 .tracking(0.8)
                             HStack(spacing: 14) {
@@ -422,11 +423,11 @@ struct SavedRecipeNotesSheet: View {
                                 Spacer()
                                 if recipe.servings > 1 {
                                     Text("\(recipe.servings) servings")
-                                        .font(.caption)
+                                        .font(.fernlet(.stat))
                                         .foregroundStyle(Color.slate)
                                 }
                             }
-                            .font(.headline)
+                            .font(.fernlet(.stat))
                             .foregroundStyle(Color.bark)
                         }
                         .padding(14)
@@ -443,7 +444,7 @@ struct SavedRecipeNotesSheet: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 ForEach(ingredientLines, id: \.self) { ingredient in
                                     Text("• \(ingredient)")
-                                        .font(.callout)
+                                        .font(.fernlet(.body))
                                         .foregroundStyle(Color.bark)
                                 }
                             }
@@ -458,7 +459,7 @@ struct SavedRecipeNotesSheet: View {
                         dismiss()
                     } label: {
                         Label("Delete recipe", systemImage: "trash")
-                            .font(.subheadline.weight(.medium))
+                            .font(.fernlet(.label))
                             .frame(maxWidth: .infinity)
                             .padding(14)
                     }
@@ -487,6 +488,11 @@ enum MealFlowDestination: Hashable {
     case recipeSearch
     case productPageImport
     case productSearch(String)
+    /// Auto-router landings for a captured photo (Food Capture mockup §2b–2c): a barcode the router
+    /// already read, and a nutrition label it already parsed. Both hand off to existing create/log
+    /// flows via `BarcodePayloadResolveView` / `BarcodeNotFoundView(prefilledScan:)`.
+    case captureBarcode(String)
+    case captureLabel(NutritionLabelResult)
 }
 
 struct RecipeSheet: View {
@@ -539,7 +545,7 @@ struct RecipeSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text(editingRecipe == nil ? "New recipe" : "Edit recipe")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     SheetField("Recipe name") {
@@ -582,7 +588,7 @@ struct RecipeSheet: View {
                                     expandedId = new.id
                                 } label: {
                                     Label("Add ingredient", systemImage: "plus")
-                                        .font(.subheadline.weight(.medium))
+                                        .font(.fernlet(.label))
                                         .foregroundStyle(Color.moss)
                                         .frame(maxWidth: .infinity)
                                         .padding(12)
@@ -596,7 +602,7 @@ struct RecipeSheet: View {
                                     showingBarcodeScanner = true
                                 } label: {
                                     Label("Scan barcode", systemImage: "barcode.viewfinder")
-                                        .font(.subheadline.weight(.medium))
+                                        .font(.fernlet(.label))
                                         .foregroundStyle(Color.moss)
                                         .frame(maxWidth: .infinity)
                                         .padding(12)
@@ -611,18 +617,18 @@ struct RecipeSheet: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("PER SERVING")
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                             .tracking(0.8)
                         HStack {
                             Text("P \(perServingTotals.protein)g · C \(perServingTotals.carbs)g · F \(perServingTotals.fat)g")
-                                .font(.headline)
+                                .font(.fernlet(.stat))
                                 .foregroundStyle(Color.bark)
                             Spacer()
                             // Macros-first: calories render only behind the explicit opt-in.
                             if store.settings.showCalories {
                                 Text("\(perServingTotals.calories) cal")
-                                    .font(.caption)
+                                    .font(.fernlet(.stat))
                                     .foregroundStyle(Color.slate)
                             }
                         }
@@ -643,7 +649,7 @@ struct RecipeSheet: View {
                             dismiss()
                         } label: {
                             Label("Delete recipe", systemImage: "trash")
-                                .font(.subheadline.weight(.medium))
+                                .font(.fernlet(.label))
                                 .frame(maxWidth: .infinity)
                                 .padding(14)
                         }
@@ -660,7 +666,7 @@ struct RecipeSheet: View {
                         dismiss()
                     }
                     .buttonStyle(.plain)
-                    .font(.headline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -675,7 +681,7 @@ struct RecipeSheet: View {
                         dismiss()
                     }
                     .buttonStyle(.plain)
-                    .font(.headline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -845,11 +851,11 @@ struct CollapsedIngredientRow: View {
             Button(action: onExpand) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(ingredient.name)
-                        .font(.body.weight(.medium))
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Text(summaryLine)
-                        .font(.caption)
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                 }
             }
@@ -881,7 +887,7 @@ struct RecipeIngredientEditor: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(Color.slate)
                     TextField("Search ingredient", text: $ingredient.name)
-                        .font(.body.weight(.medium))
+                        .font(.fernlet(.body))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
                         .textContentType(.none)
@@ -889,7 +895,7 @@ struct RecipeIngredientEditor: View {
                 if let onCollapse, !ingredient.trimmedName.isEmpty {
                     Button("Done", action: onCollapse)
                         .buttonStyle(.plain)
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.moss)
                 }
                 Button(action: onRemove) {
@@ -908,17 +914,17 @@ struct RecipeIngredientEditor: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack(spacing: 6) {
                                         Text(foodItem.name)
-                                            .font(.subheadline.weight(.medium))
+                                            .font(.fernlet(.body))
                                             .foregroundStyle(Color.bark)
                                         Text(foodItem.dataSourceLabel)
-                                            .font(.caption2.weight(.semibold))
+                                            .font(.fernlet(.labelSmall))
                                             .foregroundStyle(Color.slate)
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 1)
                                             .background(Color.parchment, in: Capsule())
                                     }
                                     Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
-                                        .font(.caption)
+                                        .font(.fernlet(.stat))
                                         .foregroundStyle(Color.slate)
                                 }
                                 Spacer()
@@ -939,7 +945,7 @@ struct RecipeIngredientEditor: View {
                     }
                 } label: {
                     Label("Save custom ingredient", systemImage: "plus.circle")
-                        .font(.subheadline.weight(.medium))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.moss)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
@@ -1026,19 +1032,19 @@ struct LockedMacroSummary: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(foodItem.source == .manual ? "Saved macros" : "USDA macros", systemImage: foodItem.source == .manual ? "checkmark.circle.fill" : "lock.fill")
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.moss)
                 Spacer()
                 Button("Manual", action: onUseManual)
                     .buttonStyle(.plain)
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.slate)
             }
             Text("P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g")
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
             Text("\(foodItem.category) · \(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) reference")
-                .font(.caption)
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
         }
         .padding(12)
@@ -1050,6 +1056,11 @@ struct MealSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     var onLogged: ([Meal]) -> Void = { _ in }
+    #if canImport(UIKit)
+    /// One router owns the capture detectors, so the chooser branches reuse its injectable
+    /// `barcodeDetector` seam (fakes reach every path) rather than newing up their own detector.
+    var captureRouter = FoodCaptureRouter()
+    #endif
     @State private var description = ""
     @State private var mealType: MealType?
     @State private var notice: String?
@@ -1061,6 +1072,14 @@ struct MealSheet: View {
     @State private var showingCamera = false
     @State private var selectedMealPhotoItem: PhotosPickerItem?
     @State private var isIdentifyingPhoto = false
+    // Unified Capture auto-routing (Food Capture mockup §2b–2e).
+    /// Calm "analyzing…" state shown while the router runs barcode → label → meal detection.
+    @State private var isAnalyzingCapture = false
+    /// Presented when detection is ambiguous/low-confidence — a gentle Barcode · Label · Meal chooser.
+    @State private var captureChooser: CaptureChooserContext?
+    /// Set when the router (or a chooser branch) couldn't read the photo — a calm retry prompt, never
+    /// a hard error.
+    @State private var captureError: String?
     #endif
 
     var body: some View {
@@ -1084,6 +1103,29 @@ struct MealSheet: View {
                         #endif
                     case .reviewScan:
                         EmptyView()
+                    #if canImport(UIKit)
+                    case .captureBarcode(let payload):
+                        // The auto-router already read this barcode from the captured photo — resolve
+                        // it through the same catalog-hit / name-&-remember path as a live scan.
+                        BarcodePayloadResolveView(store: store, payload: payload) { foodItem in
+                            let meal = store.logBarcodeScannedFoodItem(foodItem, mealType: mealType)
+                            onLogged([meal])
+                            dismiss()
+                        }
+                    case .captureLabel(let result):
+                        // The auto-router parsed a nutrition label — hand off to the existing
+                        // name-it-&-remember screen with the macros pre-filled (no barcode, no rescan).
+                        // Log via the label-scan path so provenance is truthful: this meal came from a
+                        // scanned nutrition label, not a barcode.
+                        BarcodeNotFoundView(store: store, barcode: "", prefilledScan: result) { foodItem in
+                            let meal = store.logLabelScannedFoodItem(foodItem, mealType: mealType)
+                            onLogged([meal])
+                            dismiss()
+                        }
+                    #else
+                    case .captureBarcode, .captureLabel:
+                        EmptyView()
+                    #endif
                     case .productPageImport:
                         FoodProductPageImportView(store: store) { product in
                             description = product.name
@@ -1100,6 +1142,15 @@ struct MealSheet: View {
                 }
         }
         .background(Color.parchment)
+        #if canImport(UIKit)
+        .overlay {
+            if isAnalyzingCapture {
+                CaptureAnalyzingOverlay()
+                    .transition(.opacity)
+            }
+        }
+        .animation(FernletMotion.ui, value: isAnalyzingCapture)
+        #endif
         .onAppear {
             store.markLaunchScreenDismissed()
             store.ensureBundledFoodItemsSeeded()
@@ -1137,9 +1188,34 @@ struct MealSheet: View {
         #if canImport(UIKit)
         .fullScreenCover(isPresented: $showingCamera) {
             ImagePickerView(sourceType: .camera) { image in
-                mealPhoto = image
+                // The unified front door: auto-detect what was captured and route it.
+                handleCapturedPhoto(image)
             }
             .ignoresSafeArea()
+        }
+        .sheet(item: $captureChooser) { context in
+            CaptureChooserSheet(
+                aiEnabled: store.settings.aiStatus != .off,
+                onBarcode: {
+                    captureChooser = nil
+                    mealPhoto = context.image
+                    lookUpBarcode(in: context.image, alreadyDetected: context.detectedBarcode)
+                },
+                onLabel: {
+                    captureChooser = nil
+                    routeCapturedLabel(context.parsedLabel, from: context.image)
+                },
+                onMeal: {
+                    captureChooser = nil
+                    mealPhoto = context.image
+                },
+                onTypeInstead: {
+                    captureChooser = nil
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
         }
         .onChange(of: selectedMealPhotoItem) { _, newItem in
             guard let newItem else { return }
@@ -1159,7 +1235,7 @@ struct MealSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Log meal")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     #if canImport(UIKit)
@@ -1182,31 +1258,40 @@ struct MealSheet: View {
                         SheetTextEditor(text: $description, placeholder: "scrambled eggs and toast", minHeight: 100)
                     }
 
-                    HStack(spacing: 8) {
+                    // One primary, quiet helpers. "Capture" opens the camera as the delightful
+                    // default; barcode Scan, Recent history, and Import stay reachable but demoted.
+                    VStack(spacing: 10) {
                         #if canImport(UIKit)
-                        mealSecondaryButton("Photo", icon: "camera") {
+                        mealCapturePrimaryButton {
                             showingCamera = true
                         }
-                        mealSecondaryButton("Scan", icon: "barcode.viewfinder") {
-                            path.append(.scanBarcode)
-                        }
-                        if !store.recentMeals.isEmpty {
-                            Menu {
-                                ForEach(store.recentMeals.prefix(8)) { meal in
-                                    Button(meal.name) {
-                                        let copiedMeal = store.copyMeal(meal)
-                                        onLogged([copiedMeal])
-                                        dismiss()
+
+                        HStack(spacing: 8) {
+                            mealSecondaryButton("Scan", icon: "barcode.viewfinder") {
+                                path.append(.scanBarcode)
+                            }
+                            if !store.recentMeals.isEmpty {
+                                Menu {
+                                    ForEach(store.recentMeals.prefix(8)) { meal in
+                                        Button(meal.name) {
+                                            let copiedMeal = store.copyMeal(meal)
+                                            onLogged([copiedMeal])
+                                            dismiss()
+                                        }
                                     }
+                                } label: {
+                                    mealSecondaryLabel("Recent", icon: "clock.arrow.circlepath")
                                 }
-                            } label: {
-                                mealSecondaryLabel("Recent", icon: "clock.arrow.circlepath")
+                            }
+                            mealSecondaryButton("Import", icon: "link.badge.plus") {
+                                path.append(.productPageImport)
                             }
                         }
-                        #endif
+                        #else
                         mealSecondaryButton("Import", icon: "link.badge.plus") {
                             path.append(.productPageImport)
                         }
+                        #endif
                     }
 
                     SheetField("Meal type") {
@@ -1222,10 +1307,17 @@ struct MealSheet: View {
 
                     if let notice {
                         Text(notice)
-                            .font(.caption.italic())
+                            .font(.fernlet(.bodySmall))
+                            .italic()
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
+
+                    #if canImport(UIKit)
+                    if let captureError {
+                        captureCouldntReadBanner(captureError)
+                    }
+                    #endif
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -1312,6 +1404,115 @@ struct MealSheet: View {
             }
         }
     }
+
+    // MARK: - Unified Capture auto-routing (Food Capture mockup §2b–2e)
+
+    struct CaptureChooserContext: Identifiable {
+        let id = UUID()
+        let image: UIImage
+        /// The best-effort label parse (may be nil) so "Read the label" can prefill instead of rescan.
+        let parsedLabel: NutritionLabelResult?
+        /// The barcode the router already read from this image (nil when its scan found none). Carried
+        /// so "Look up the barcode" reuses that result instead of re-scanning the same photo.
+        let detectedBarcode: String?
+    }
+
+    /// The prominent Capture button's handler: run the auto-router over the still photo (barcode →
+    /// label → meal), showing a calm "analyzing…" state, then route to the matching EXISTING flow. On
+    /// an ambiguous/weak reading, offer the gentle chooser; the meal branch is the graceful default.
+    private func handleCapturedPhoto(_ image: UIImage) {
+        captureError = nil
+        isAnalyzingCapture = true
+        Task {
+            let route = await captureRouter.route(for: image)
+            isAnalyzingCapture = false
+            switch route {
+            case .barcode(let payload):
+                mealPhoto = image
+                path.append(.captureBarcode(payload))
+            case .label(let result):
+                path.append(.captureLabel(result))
+            case .meal:
+                // Graceful default — land the photo in the meal composer (existing meal-photo path).
+                mealPhoto = image
+            case .ambiguous(let label):
+                // The router reaches `.ambiguous` only after its barcode scan came up empty, so the
+                // chooser's "Look up the barcode" branch already knows there's nothing to find.
+                captureChooser = CaptureChooserContext(image: image, parsedLabel: label, detectedBarcode: nil)
+            }
+        }
+    }
+
+    /// Chooser "Look up the barcode" branch — reuses the barcode the router already read from this
+    /// photo when it has one; otherwise runs detection once through the router's injectable seam (the
+    /// same detector the auto-route used, so fakes reach here). A calm "couldn't read that" prompt on a
+    /// miss — never a hard error.
+    private func lookUpBarcode(in image: UIImage, alreadyDetected: String?) {
+        if let alreadyDetected, alreadyDetected.isEmpty == false {
+            path.append(.captureBarcode(alreadyDetected))
+            return
+        }
+        captureError = nil
+        isAnalyzingCapture = true
+        Task {
+            let payload = try? await captureRouter.barcodeDetector.payload(in: image)
+            isAnalyzingCapture = false
+            if let payload, payload.isEmpty == false {
+                path.append(.captureBarcode(payload))
+            } else {
+                captureError = "Fernlet couldn't spot a barcode in that photo. Steady hands and a little more light usually does it — or type it instead."
+            }
+        }
+    }
+
+    /// Chooser "Read the label" branch — use the parse the router already made if it read anything,
+    /// otherwise re-run the OCR scanner on the held photo before handing off to the label flow.
+    private func routeCapturedLabel(_ prefetched: NutritionLabelResult?, from image: UIImage) {
+        if let prefetched, prefetched.recognizedFieldCount > 0 {
+            path.append(.captureLabel(prefetched))
+            return
+        }
+        captureError = nil
+        isAnalyzingCapture = true
+        Task {
+            let parsed = try? await NutritionLabelScanner.scanAll(image: image).primary
+            isAnalyzingCapture = false
+            if let parsed {
+                path.append(.captureLabel(parsed))
+            } else {
+                captureError = "Fernlet couldn't read that label. Steady hands and a little more light usually does it — or type it instead."
+            }
+        }
+    }
+
+    /// Calm "couldn't read that one" banner (mockup §2e) — never a red hard error; every dead-end
+    /// offers a way forward (retake, or just type it in the field above).
+    private func captureCouldntReadBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "camera.metering.none")
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(Color.goldenrod)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(message)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                Button {
+                    captureError = nil
+                    showingCamera = true
+                } label: {
+                    Label("Try again", systemImage: "arrow.clockwise")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color.goldenrod.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityIdentifier("captureCouldntReadBanner")
+    }
     #endif
 
     private var webNutritionLookupDisabledMessage: String {
@@ -1331,6 +1532,28 @@ struct MealSheet: View {
         }
     }
 
+    #if canImport(UIKit)
+    /// The single prominent capture affordance — "one button points at food." It opens the camera
+    /// (the delightful default). Barcode/scan/import remain as quiet helpers beneath it.
+    private func mealCapturePrimaryButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                Text("Capture")
+                    .font(.fernlet(.label))
+            }
+            .foregroundStyle(Color.cream)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
+            .fernletSmallShadow()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Capture food")
+    }
+    #endif
+
     private func mealSecondaryButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             mealSecondaryLabel(title, icon: icon)
@@ -1340,7 +1563,7 @@ struct MealSheet: View {
 
     private func mealSecondaryLabel(_ title: String, icon: String) -> some View {
         Label(title, systemImage: icon)
-            .font(.subheadline.weight(.medium))
+            .font(.fernlet(.label))
             .foregroundStyle(Color.moss)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
@@ -1395,7 +1618,7 @@ struct FoodProductPageImportView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Import product")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     urlEntry
@@ -1405,7 +1628,8 @@ struct FoodProductPageImportView: View {
                             ProgressView()
                                 .tint(Color.moss)
                             Text(importedProduct == nil && preview != nil ? "Reading nutrition label..." : "Finding product page...")
-                                .font(.callout.italic())
+                                .font(.fernlet(.body))
+                                .italic()
                                 .foregroundStyle(Color.slate)
                         }
                         .padding(14)
@@ -1416,7 +1640,8 @@ struct FoodProductPageImportView: View {
 
                     if let notice {
                         Text(notice)
-                            .font(.caption.italic())
+                            .font(.fernlet(.bodySmall))
+                            .italic()
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -1456,7 +1681,8 @@ struct FoodProductPageImportView: View {
                     .sheetTextInput()
             }
             Text("Search for a specific packaged food or paste its product page. Fernlet will read the nutrition label and show the source and extracted values together before saving.")
-                .font(.caption.italic())
+                .font(.fernlet(.bodySmall))
+                .italic()
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
             actionButton(label: isLoading ? "Finding page" : "Find product page", systemImage: "magnifyingglass") {
@@ -1486,7 +1712,7 @@ struct FoodProductPageImportView: View {
     private func actionButton(label: String, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(label, systemImage: systemImage)
-                .font(.headline)
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.cream)
                 .frame(maxWidth: .infinity)
                 .padding(14)
@@ -1563,7 +1789,7 @@ struct FoodProductReviewSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Confirm product")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     VStack(alignment: .leading, spacing: 12) {
@@ -1618,11 +1844,11 @@ struct FoodProductReviewSheet: View {
     private func detail(label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label.uppercased())
-                .font(.caption2.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
                 .tracking(0.8)
             Text(value)
-                .font(label == "Product" ? .body.weight(.semibold) : .caption)
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .fernletWrappingText()
         }
@@ -1632,11 +1858,11 @@ struct FoodProductReviewSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("SERVING SIZE")
-                    .font(.caption2.weight(.semibold))
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .tracking(0.8)
                 Text(product.servingSize)
-                    .font(.headline)
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
             }
             .padding(14)
@@ -1656,7 +1882,8 @@ struct FoodProductReviewSheet: View {
             }
 
             Text("Check the serving size and nutrition values before saving. Fernlet will add this product to your local food catalog only after confirmation.")
-                .font(.caption.italic())
+                .font(.fernlet(.bodySmall))
+                .italic()
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
         }
@@ -1685,29 +1912,34 @@ struct MealRow: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(meal.name).font(.headline)
+                            Text(meal.name).font(.fernlet(.header))
                             Text(meal.mealType.rawValue)
-                                .font(.caption2.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
                                 .background(meal.mealType.color.opacity(0.25), in: Capsule())
                         }
                         Text(displayNote)
-                            .font(.caption.italic())
+                            .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                     }
                     Spacer()
                     VStack(alignment: .trailing) {
                         if showCalories {
-                            Text("\(meal.calories) cal").font(.subheadline.weight(.semibold))
+                            Text("\(meal.calories) cal").font(.fernlet(.stat))
                         }
-                        Button(role: .destructive, action: onDelete) { Image(systemName: "xmark") }
-                            .buttonStyle(.plain)
+                        Button(role: .destructive, action: onDelete) {
+                            Image(systemName: "xmark")
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Delete meal")
                     }
                 }
                 if let breakdownText {
                     Text(breakdownText)
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1722,10 +1954,10 @@ struct MealRow: View {
                     Spacer(minLength: 0)
                     Button("Looks off?", action: onCorrect)
                         .buttonStyle(.plain)
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.fern)
                 }
-                .font(.caption.weight(.medium))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             }
         }
@@ -1752,7 +1984,7 @@ struct MealRow: View {
     }
 }
 
-struct MealComponentCorrectionInput: Identifiable {
+nonisolated struct MealComponentCorrectionInput: Identifiable {
     let id: UUID
     let foodItemId: UUID?
     let name: String
@@ -1762,7 +1994,7 @@ struct MealComponentCorrectionInput: Identifiable {
     let baseMacros: Macros
     let baseMicronutrients: Micronutrients
 
-    nonisolated init(snapshot: MealComponentSnapshot) {
+    init(snapshot: MealComponentSnapshot) {
         id = snapshot.id
         foodItemId = snapshot.foodItemId
         name = snapshot.name
@@ -1814,7 +2046,7 @@ struct MealCorrectionSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Adjust meal")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     SheetField("Meal name") {
@@ -1892,18 +2124,18 @@ struct MealComponentEditorRows: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(component.name)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                         Spacer()
                         Text("\(component.quantity.formatted(.number.precision(.fractionLength(0...1)))) \(component.unit)")
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.stat))
                             .foregroundStyle(Color.moss)
                     }
                     Stepper("", value: $component.quantity, in: 0...2000, step: component.unit == RecipeUnit.gram.rawValue ? 5 : 0.25)
                         .labelsHidden()
                     let macros = component.snapshot.macros
                     Text("P \(macros.protein)g  C \(macros.carbs)g  F \(macros.fat)g")
-                        .font(.caption)
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                 }
                 .padding(12)
@@ -1916,7 +2148,7 @@ struct MealComponentEditorRows: View {
                 Text("F \(componentMacros.fat)g")
                 Spacer(minLength: 0)
             }
-            .font(.caption.weight(.semibold))
+            .font(.fernlet(.stat))
             .foregroundStyle(Color.slate)
         }
         .padding(14)
@@ -1931,7 +2163,7 @@ struct MealComponentEditorRows: View {
 
 // MARK: - Pre-log review (low-confidence / fabricated resolutions)
 
-private struct EditableReviewMeal: Identifiable {
+private nonisolated struct EditableReviewMeal: Identifiable {
     let id: UUID
     var name: String
     var mealType: MealType
@@ -1941,7 +2173,7 @@ private struct EditableReviewMeal: Identifiable {
     var fat: Int
     let base: Meal
 
-    nonisolated init(base: Meal) {
+    init(base: Meal) {
         id = base.id
         name = base.name
         mealType = base.mealType
@@ -2015,17 +2247,17 @@ struct MealReviewSheet: View {
                 VStack(alignment: .leading, spacing: 20) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Check this meal")
-                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .font(.fernlet(.displayMedium))
                             .foregroundStyle(Color.bark)
                         Spacer()
                         Button("Discard", action: onDiscard)
                             .buttonStyle(.plain)
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.slate)
                     }
 
                     Text(reviewMessage)
-                        .font(.caption.italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
@@ -2116,18 +2348,18 @@ struct RecipeRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(recipe.name)
-                    .font(.headline)
+                    .font(.fernlet(.header))
                 Spacer()
                 Text("\(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")")
-                    .font(.caption)
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
             Text("\(recipe.ingredients.count) ingredient\(recipe.ingredients.count == 1 ? "" : "s")")
-                .font(.caption)
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             if !recipe.notes.isEmpty {
                 Text(recipe.notes)
-                    .font(.caption.italic())
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .lineLimit(2)
             }
@@ -2139,7 +2371,7 @@ struct RecipeRow: View {
                     Text("\(perServing.calories) cal").foregroundStyle(Color.goldenrod)
                 }
             }
-            .font(.caption.weight(.medium))
+            .font(.fernlet(.stat))
             .foregroundStyle(Color.slate)
         }
         .padding(.vertical, 4)
@@ -2167,7 +2399,7 @@ struct MacroInputRow: View {
     var body: some View {
         HStack {
             Text(label)
-                .font(.body)
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
             Spacer()
             if isEditing {
@@ -2191,7 +2423,7 @@ struct MacroInputRow: View {
                     isEditing = true
                 } label: {
                     Text("\(value)\(unit)")
-                        .font(.body.weight(.medium))
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.moss)
                         .underline()
                 }
@@ -2281,10 +2513,10 @@ struct RecipeCreationOptionRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.headline.weight(.semibold))
+                    .font(.fernlet(.header))
                     .foregroundStyle(Color.bark)
                 Text(subtitle)
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -2308,7 +2540,8 @@ private struct RecipeShareButton: View {
             Image(systemName: "square.and.arrow.up")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Color.moss)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Share recipe")
@@ -2329,7 +2562,8 @@ private struct RecipeMealTypeMenu: View {
             Image(systemName: "fork.knife")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Color.moss)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Log recipe as meal")
@@ -2348,18 +2582,18 @@ private struct WebImportedFoodRow: View {
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(foodItem.name)
-                        .font(.headline)
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
                     Text(foodItem.brandSource ?? foodItem.sourceURL?.host() ?? "Saved web product")
-                        .font(.caption)
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                         .lineLimit(1)
                 }
             }
             if let servingDescription = foodItem.servingDescription, !servingDescription.isEmpty {
                 Text("Serving: \(servingDescription)")
-                    .font(.caption)
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
             HStack(spacing: 14) {
@@ -2367,7 +2601,7 @@ private struct WebImportedFoodRow: View {
                 Text("C \(foodItem.macros.carbs)g")
                 Text("F \(foodItem.macros.fat)g")
             }
-            .font(.caption.weight(.medium))
+            .font(.fernlet(.stat))
             .foregroundStyle(Color.slate)
         }
         .padding(.vertical, 6)
@@ -2393,7 +2627,7 @@ struct RecipeBookSheet: View {
                         RecipeCreationOptionsView(store: store)
                     } label: {
                         Label("Create recipe", systemImage: "plus")
-                            .font(.headline)
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.cream)
                             .frame(maxWidth: .infinity)
                             .padding(14)
@@ -2460,7 +2694,7 @@ struct RecipeBookSheet: View {
                     let allProducts = filteredWebImportedProducts
                     if !allProducts.isEmpty {
                         Text("Imported products")
-                            .font(.headline)
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
                         FernletCard {
                             VStack(spacing: 0) {

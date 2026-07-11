@@ -76,7 +76,7 @@ struct ActivityPickerSection: View {
             select(type)
         } label: {
             Label(type.displayName, systemImage: type.systemImage)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.label))
                 .foregroundStyle(selectedActivityType == type ? Color.cream : Color.bark)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
@@ -96,7 +96,7 @@ struct ActivityPickerSection: View {
                     .foregroundStyle(selectedActivityType == type ? Color.moss : Color.slate)
                     .frame(width: 26)
                 Text(type.displayName)
-                    .font(.callout.weight(.semibold))
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                 Spacer()
                 if selectedActivityType == type {
@@ -146,11 +146,11 @@ struct ActivityPickerSection: View {
                         Text("Easy")
                         Spacer()
                         Text(effort.isEmpty ? "5" : effort)
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.stat))
                         Spacer()
                         Text("All-out")
                     }
-                    .font(.caption)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 }
             }

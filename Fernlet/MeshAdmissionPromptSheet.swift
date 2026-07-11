@@ -13,13 +13,13 @@ struct MeshAdmissionPromptSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Someone wants to join")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     if let request = requests.first {
                         VStack(alignment: .leading, spacing: 16) {
                             Text("\(Text(request.requesterDisplayName).bold()) wants to join \(Text(meshName).bold())")
-                                .font(.body)
+                                .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                                 .fernletWrappingText()
 
@@ -31,7 +31,7 @@ struct MeshAdmissionPromptSheet: View {
 
                             if requests.count > 1 {
                                 Text("\(requests.count - 1) more waiting")
-                                    .font(.caption.weight(.medium))
+                                    .font(.fernlet(.labelSmall))
                                     .foregroundStyle(Color.slate)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)

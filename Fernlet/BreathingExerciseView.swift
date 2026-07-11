@@ -65,12 +65,20 @@ struct BreathingExerciseView: View {
     @State private var isRunning = false
     @State private var isFinished = false
     @State private var phaseLabel = "Ready when you are"
-    @State private var circleScale: CGFloat = 0.55
+    @State private var circleScale: CGFloat = 0.6
     @State private var idleBreathing = false
-    @State private var sessionStart: Date?
     @State private var sessionTask: Task<Void, Never>?
 
     @Environment(\.scenePhase) private var scenePhase
+
+    /// The circle's small resting scale — it sways gently around this so the first
+    /// "Breathe in" visibly swells out of it (mockup rests ~168px against a 280px full).
+    private let restingScale: CGFloat = 0.6
+
+    /// Top highlight stop of the core sphere gradient (mockup #AECC9F / #9DC08F) — a surface-local
+    /// hue, so it's a plain constant rather than a shared token, per the GroundingView pattern.
+    private static let mintHighlight = Color(light: Color(red: 0.682, green: 0.800, blue: 0.624),
+                                             dark:  Color(red: 0.616, green: 0.753, blue: 0.561))
 
     var body: some View {
         Group {
@@ -101,65 +109,74 @@ struct BreathingExerciseView: View {
     // MARK: - Setup
 
     private var setupScreen: some View {
-        VStack(spacing: 20) {
-            Spacer(minLength: 8)
-
+        // A ScrollView keeps Begin reachable at the largest Dynamic Type sizes, where a plain
+        // VStack would push it off-screen; `.basedOnSize` leaves default sizes looking unchanged.
+        ScrollView {
             VStack(spacing: 20) {
-                breathingCircle
-                    .scaleEffect(idleBreathing ? 1.0 : 0.94)
-                    .onAppear {
-                        // A gentle resting sway so the circle feels alive before Begin.
-                        circleScale = 0.94
-                        withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
-                            idleBreathing = true
+                Spacer(minLength: 8)
+
+                VStack(spacing: 20) {
+                    breathingCircle
+                        // A gentle idle sway around 1.0 — `circleScale` (set to `restingScale` in
+                        // onAppear) already renders the circle at its 0.6 resting size, so this outer
+                        // factor must stay near 1.0 or the two scales compound and Begin pops the
+                        // circle back up to full resting size.
+                        .scaleEffect(idleBreathing ? 1.04 : 0.98)
+                        .onAppear {
+                            circleScale = restingScale
+                            withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
+                                idleBreathing = true
+                            }
                         }
-                    }
-                    .onDisappear { idleBreathing = false }
-                Text("Ready when you are.")
-                    .font(.system(size: 19, weight: .regular, design: .serif).italic())
-                    .foregroundStyle(Color.slate)
+                        .onDisappear { idleBreathing = false }
+                    Text("Ready when you are.")
+                        .font(.custom(FernletFontName.instrumentSerifItalic, size: 19, relativeTo: .body))
+                        .foregroundStyle(Color.slate)
+                }
+
+                Spacer(minLength: 8)
+
+                setupControls
+
+                Button {
+                    startSession()
+                } label: {
+                    Text("Begin")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.parchmentInk)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("firstAid.breathing.begin")
             }
-
-            Spacer(minLength: 8)
-
-            setupControls
-
-            Button {
-                startSession()
-            } label: {
-                Text("Begin")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("firstAid.breathing.begin")
+            .padding(20)
         }
-        .padding(20)
+        .scrollBounceBehavior(.basedOnSize)
     }
 
     // MARK: - Running
 
     private var runningScreen: some View {
-        VStack(spacing: 24) {
-            Spacer(minLength: 8)
-
+        // The phase word sits high (fixed top padding), the circle floats in the space below it,
+        // and "End early" rests at the bottom — matching the mockup's running frame.
+        VStack(spacing: 0) {
             Text(phaseLabel)
-                .font(.system(size: 30, weight: .medium, design: .serif))
+                .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.moss)
                 .animation(.easeInOut(duration: 0.3), value: phaseLabel)
+                .padding(.top, 90)
 
             breathingCircle
-
-            Spacer(minLength: 8)
+                .frame(maxHeight: .infinity)
 
             Button("End early") { stopSession() }
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.softTaupe)
+                .padding(.bottom, 20)
         }
-        .padding(20)
+        .padding(.horizontal, 20)
     }
 
     // MARK: - Finished
@@ -172,12 +189,14 @@ struct BreathingExerciseView: View {
                 .padding(.bottom, 30)
 
             Text("All done")
-                .font(.system(size: 36, weight: .semibold, design: .serif))
+                .font(.fernlet(.display))
                 .foregroundStyle(Color.bark)
                 .padding(.bottom, 12)
 
-            Text("That was a whole \(minutes == 1 ? "minute" : "\(minutes) minutes") of care. Nicely done.")
-                .font(.system(size: 19, weight: .regular, design: .serif))
+            Text(minutes == 1
+                 ? "That was a whole minute of care. Nicely done."
+                 : "That was \(minutes) whole minutes of care. Nicely done.")
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
@@ -188,8 +207,8 @@ struct BreathingExerciseView: View {
                 startSession()
             } label: {
                 Text("Once more")
-                    .font(.headline)
-                    .foregroundStyle(.white)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.parchmentInk)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
                     .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
@@ -199,32 +218,47 @@ struct BreathingExerciseView: View {
             .padding(.bottom, 10)
 
             Button("Done for now") { finishToSetup() }
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.slate)
 
             Spacer()
         }
         .padding(.horizontal, 34)
         .padding(.vertical, 40)
-        .transition(.opacity)
+        .transition(.opacity.combined(with: .offset(y: 14)))
     }
 
     /// Nested translucent moss circles with a soft highlight — the "breath" made visible.
     /// In setup it eases idly (a calm resting scale); in running it swells with `circleScale`.
     private var breathingCircle: some View {
         ZStack {
+            // Feathered outer rings — fern fading to clear, so the halo has no hard edge.
             Circle()
-                .fill(Color.moss.opacity(0.12))
+                .fill(
+                    RadialGradient(
+                        colors: [Color.fern.opacity(0.14), Color.fern.opacity(0)],
+                        center: .center,
+                        startRadius: 59,
+                        endRadius: 101
+                    )
+                )
                 .frame(width: 280, height: 280)
                 .scaleEffect(circleScale)
             Circle()
-                .fill(Color.moss.opacity(0.20))
+                .fill(
+                    RadialGradient(
+                        colors: [Color.fern.opacity(0.22), Color.fern.opacity(0)],
+                        center: .center,
+                        startRadius: 49,
+                        endRadius: 84
+                    )
+                )
                 .frame(width: 216, height: 216)
                 .scaleEffect(circleScale)
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color.fern, Color.moss],
+                        colors: [Self.mintHighlight, Color.fern, Color.moss],
                         center: UnitPoint(x: 0.42, y: 0.36),
                         startRadius: 4,
                         endRadius: 100
@@ -254,13 +288,21 @@ struct BreathingExerciseView: View {
     /// A soft moss medallion with a gentle amber halo, cradling a check — the finish reward.
     private var checkMedallion: some View {
         ZStack {
+            // Feathered amber halo — goldenrod fading to clear, no hard disc edge.
             Circle()
-                .fill(Color.goldenrod.opacity(0.14))
+                .fill(
+                    RadialGradient(
+                        colors: [Color.goldenrod.opacity(0.14), Color.goldenrod.opacity(0)],
+                        center: .center,
+                        startRadius: 32,
+                        endRadius: 56
+                    )
+                )
                 .frame(width: 150, height: 150)
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color.fern, Color.moss],
+                        colors: [Self.mintHighlight, Color.fern, Color.moss],
                         center: UnitPoint(x: 0.42, y: 0.36),
                         startRadius: 4,
                         endRadius: 70
@@ -298,10 +340,10 @@ struct BreathingExerciseView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Haptics")
-                        .font(.subheadline.weight(.medium))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                     Text("a soft tap on each turn")
-                        .font(.system(size: 13, weight: .regular, design: .serif).italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                 }
                 Spacer()
@@ -313,7 +355,7 @@ struct BreathingExerciseView: View {
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: .bark.opacity(0.05), radius: 3, x: 0, y: 1)
+        .fernletSmallShadow()
     }
 
     private func patternTile(_ candidate: BreathingPreset) -> some View {
@@ -323,10 +365,10 @@ struct BreathingExerciseView: View {
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(candidate.name)
-                    .font(.system(size: 17, weight: .regular, design: .serif))
+                    .font(.custom(FernletFontName.dmSerifDisplay, size: 17, relativeTo: .body))
                     .foregroundStyle(Color.bark)
                 Text(candidate.caption)
-                    .font(.caption)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -334,6 +376,7 @@ struct BreathingExerciseView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 13)
             .background(Color.parchment, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .background(Color.moss.opacity(selected ? 0.10 : 0), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 15, style: .continuous)
                     .stroke(Color.moss.opacity(selected ? 1 : 0), lineWidth: 2)
@@ -356,11 +399,12 @@ struct BreathingExerciseView: View {
             minutes = candidate
         } label: {
             Text("\(candidate) min")
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
                 .background(Color.parchment, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Color.moss.opacity(selected ? 0.10 : 0), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(Color.moss.opacity(selected ? 1 : 0), lineWidth: 2)
@@ -374,7 +418,7 @@ struct BreathingExerciseView: View {
         isFinished = false
         isRunning = false
         phaseLabel = "Ready when you are"
-        circleScale = 0.55
+        circleScale = restingScale
     }
 
     // MARK: - Session
@@ -383,8 +427,9 @@ struct BreathingExerciseView: View {
         guard !isRunning else { return }
         isRunning = true
         isFinished = false
+        // Start from the small resting scale so the first "Breathe in" visibly swells outward.
+        circleScale = restingScale
         let start = Date()
-        sessionStart = start
         let duration = TimeInterval(minutes * 60)
         let phases = preset.phases
 
@@ -408,10 +453,13 @@ struct BreathingExerciseView: View {
     }
 
     private func completeSession(start: Date) {
-        isRunning = false
-        isFinished = true
         phaseLabel = "All done"
-        withAnimation(.easeInOut(duration: 1.2)) { circleScale = 0.55 }
+        withAnimation(.easeInOut(duration: 1.2)) { circleScale = restingScale }
+        // Cross-fade into the finished screen (matching the mockup's fade-and-rise) rather than snapping.
+        withAnimation(.easeOut(duration: 0.6)) {
+            isRunning = false
+            isFinished = true
+        }
         onSessionComplete(start, Date())
     }
 
@@ -421,9 +469,8 @@ struct BreathingExerciseView: View {
         sessionTask?.cancel()
         sessionTask = nil
         isRunning = false
-        sessionStart = nil
         phaseLabel = "Ready when you are"
-        withAnimation(.easeInOut(duration: 0.8)) { circleScale = 0.55 }
+        withAnimation(.easeInOut(duration: 0.8)) { circleScale = restingScale }
     }
 
     private func tickHaptic() {

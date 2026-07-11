@@ -159,10 +159,11 @@ struct FernletLockGateModifier: ViewModifier {
 
                 VStack(spacing: 8) {
                     Text("Set up app lock")
-                        .font(.system(size: 22, weight: .bold, design: .serif))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Text("Protect your journal, period, and intimacy history with a private passcode.")
-                        .font(.callout.italic())
+                        .font(.fernlet(.bodySmall))
+                        .italic()
                         .foregroundStyle(Color.slate)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
@@ -171,7 +172,7 @@ struct FernletLockGateModifier: ViewModifier {
 
                 Button("Set up app lock") { showSetup = true }
                     .buttonStyle(.plain)
-                    .font(.headline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 36)
                     .padding(.vertical, 16)

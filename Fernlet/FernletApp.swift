@@ -47,8 +47,56 @@ struct FernletApp: App {
         #if canImport(UIKit)
         UIScrollView.appearance().isDirectionalLockEnabled = true
         UIWindow.appearance().backgroundColor = UIColor(red: 0.961, green: 0.937, blue: 0.878, alpha: 1)
+        Self.configureNavigationBarAppearance()
         #endif
     }
+
+    #if canImport(UIKit)
+    /// Route pushed/sheet navigation titles through the design-system serif faces so title typography
+    /// is consistent app-wide. Transparent background preserves the current look on the many screens
+    /// that pair an empty nav title with an in-content `ScreenHeader`.
+    private static func configureNavigationBarAppearance() {
+        // Mirror Color.bark so nav titles stay legible in dark mode instead of a fixed bark.
+        let bark = UIColor { trait in
+            FernletThemePalette.current(for: trait.userInterfaceStyle).primaryText
+        }
+        // Scale the serif faces with Dynamic Type via UIFontMetrics.
+        let baseInlineFont = UIFont(name: FernletFontName.dmSerifDisplay, size: 18)
+            ?? .systemFont(ofSize: 18, weight: .semibold)
+        let inlineFont = UIFontMetrics(forTextStyle: .headline).scaledFont(for: baseInlineFont)
+        let baseLargeFont = UIFont(name: FernletFontName.frauncesSemiBold, size: 30)
+            ?? .systemFont(ofSize: 30, weight: .bold)
+        let largeFont = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: baseLargeFont)
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithTransparentBackground()
+        appearance.titleTextAttributes = [.font: inlineFont, .foregroundColor: bark]
+        appearance.largeTitleTextAttributes = [.font: largeFont, .foregroundColor: bark]
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().compactAppearance = appearance
+    }
+
+    /// Re-apply the nav-bar appearance on a Dynamic Type change and push the fresh, re-scaled
+    /// fonts onto already-visible bars. The appearance proxy is baked once at launch (fixed-size
+    /// UIFonts), so without this titles stay frozen at the launch-time text size while the rest of
+    /// the UI rescales live via `Font.custom(relativeTo:)`. Proxy changes alone only affect bars
+    /// created *after* the change, so we also copy the new appearance onto every on-screen bar.
+    @MainActor
+    private static func refreshNavigationBarAppearanceForContentSizeChange() {
+        configureNavigationBarAppearance()
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows {
+                for bar in window.navigationBars() {
+                    bar.standardAppearance = UINavigationBar.appearance().standardAppearance
+                    bar.scrollEdgeAppearance = UINavigationBar.appearance().scrollEdgeAppearance
+                    bar.compactAppearance = UINavigationBar.appearance().compactAppearance
+                    bar.setNeedsLayout()
+                }
+            }
+        }
+    }
+    #endif
 
     var body: some Scene {
         WindowGroup {
@@ -76,6 +124,13 @@ struct FernletApp: App {
                 )
             ) { _ in
                 lockService.lock(reason: .protectedDataUnavailable)
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: UIContentSizeCategory.didChangeNotification
+                )
+            ) { _ in
+                Self.refreshNavigationBarAppearanceForContentSizeChange()
             }
             #endif
         }
@@ -193,6 +248,20 @@ struct FernletApp: App {
     }
 }
 
+#if canImport(UIKit)
+private extension UIView {
+    /// Every `UINavigationBar` in this view's subtree — used to push a re-scaled appearance onto
+    /// bars that already exist (the appearance proxy only reaches bars created after it changes).
+    func navigationBars() -> [UINavigationBar] {
+        var found = subviews.compactMap { $0 as? UINavigationBar }
+        for subview in subviews {
+            found.append(contentsOf: subview.navigationBars())
+        }
+        return found
+    }
+}
+#endif
+
 private struct LaunchFailureView: View {
     let error: Error
     let retry: () -> Void
@@ -205,11 +274,11 @@ private struct LaunchFailureView: View {
 
             VStack(spacing: 8) {
                 Text("Fernlet couldn't open")
-                    .font(.system(size: 25, weight: .bold, design: .serif))
+                    .font(.fernlet(.header))
                     .foregroundStyle(Color.bark)
                     .multilineTextAlignment(.center)
                 Text(error.localizedDescription)
-                    .font(.callout)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .multilineTextAlignment(.center)
                     .fernletWrappingText()
@@ -217,7 +286,7 @@ private struct LaunchFailureView: View {
 
             Button("Try again", action: retry)
                 .buttonStyle(.plain)
-                .font(.headline)
+                .font(.fernlet(.label))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 14)

@@ -27,7 +27,7 @@ struct OnboardingStorageChoiceView: View {
                     HStack(spacing: 10) {
                         ProgressView()
                         Text("Checking iCloud for Fernlet data")
-                            .font(.caption.weight(.medium))
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                     }
                     .padding(14)
@@ -79,7 +79,7 @@ struct OnboardingStorageChoiceView: View {
                 .font(.footnote.weight(.bold))
                 .foregroundStyle(Color.sun)
             Text("Heads up: this iCloud account already has Fernlet data. Choosing “Just on this device” won’t bring it in, and anything you log here won’t reach your other devices.")
-                .font(.caption.weight(.medium))
+                .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.bark)
                 .fernletWrappingText()
         }
@@ -114,10 +114,10 @@ struct OnboardingStorageChoiceView: View {
                     .background(Color.moss.opacity(selectedStorage == choice ? 0.12 : 0.06), in: Circle())
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Text(copy)
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }

@@ -70,6 +70,12 @@ struct BarcodeScanView: View {
     /// after the viewfinder presented) — flips us to the still-photo fallback so the user never
     /// stares at a frozen black viewfinder. Reset on foreground so enabling access in Settings retries.
     @State private var liveScannerUnavailable = false
+    /// Latches the moment we hand a payload (or an empty hand-entry) to `onCode`, so a barcode the
+    /// live scanner recognizes during/after the push can never fire a second `onCode` that would log an
+    /// unchosen meal or swap the pushed screen out from under the user. The live scanner's own
+    /// `delivered` guard resets when the viewfinder re-arms (`updateUIViewController`), so the guard has
+    /// to live here at the View that owns the single delivery.
+    @State private var handedOff = false
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -121,7 +127,10 @@ struct BarcodeScanView: View {
             Color.black.ignoresSafeArea()
 
             BarcodeDataScannerView(
-                onPayload: { payload in onCode(payload) },
+                // Once we've handed a code off (a real payload OR an empty hand-entry), pause the live
+                // scanner so it can't recognize a second barcode behind the pushed screen.
+                paused: handedOff,
+                onPayload: { payload in deliver(payload) },
                 onUnavailable: {
                     // Camera access was denied (or the scanner otherwise went unavailable) — drop
                     // to the still-photo fallback with a gentle hint instead of a dead viewfinder.
@@ -130,8 +139,33 @@ struct BarcodeScanView: View {
                 }
             )
             .ignoresSafeArea()
+            // Popping back into the scanner from the pushed name/lookup screen clears the hand-off
+            // latch (and re-arms the paused scanner), so the user can scan a different product.
+            .onAppear { handedOff = false }
 
             ScanFrameOverlay(caption: "Point the camera at the product's barcode.")
+
+            // A kind way out, right on the frame (mockup 11a): a translucent "Add by hand" pill
+            // pinned to the bottom, wired to the same hand-entry path as the camera-off fallback so
+            // the user is never trapped waiting for a scan.
+            VStack {
+                Spacer()
+                Button {
+                    deliver("")
+                } label: {
+                    Label("Add by hand", systemImage: "plus")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.cream)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Color.cream.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 44)
+                .accessibilityIdentifier("barcodeAddByHand")
+            }
+            .ignoresSafeArea(edges: .bottom)
         }
     }
 
@@ -155,12 +189,12 @@ struct BarcodeScanView: View {
 
                 VStack(spacing: 12) {
                     Text("Camera access is off")
-                        .font(.system(size: 25, weight: .semibold, design: .serif))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                         .multilineTextAlignment(.center)
 
                     Text("No worries — you can add a photo of the barcode, or just enter it by hand.")
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
@@ -184,7 +218,7 @@ struct BarcodeScanView: View {
                         }
                     } label: {
                         Label("Add a photo instead", systemImage: "camera.fill")
-                            .font(.headline)
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.cream)
                             .frame(maxWidth: .infinity)
                             .padding(15)
@@ -197,10 +231,10 @@ struct BarcodeScanView: View {
                     // Secondary — enter the barcode's macros by hand (skips detection, opens the
                     // remember-a-food naming screen for this scan with no payload found).
                     Button {
-                        onCode("")
+                        deliver("")
                     } label: {
                         Text("Enter details by hand")
-                            .font(.headline)
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.goldenrod)
                             .frame(maxWidth: .infinity)
                             .padding(14)
@@ -219,7 +253,7 @@ struct BarcodeScanView: View {
                     }
                 } label: {
                     Text("Turn on camera in Settings")
-                        .font(.subheadline.weight(.medium))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.slate)
                         .underline()
                 }
@@ -242,14 +276,14 @@ struct BarcodeScanView: View {
                     HStack(spacing: 8) {
                         ProgressView()
                         Text("Looking for a barcode...")
-                            .font(.callout.italic())
+                            .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                     }
                 }
 
                 if let detectionNotice {
                     Text(detectionNotice)
-                        .font(.caption.italic())
+                        .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
@@ -262,6 +296,15 @@ struct BarcodeScanView: View {
         }
     }
 
+    /// The single guarded delivery point for every path that hands a code (or an empty hand-entry) to
+    /// `onCode`. The latch makes a second delivery impossible once the flow has left the live scanner —
+    /// a barcode recognized during/after the push can't log an unchosen meal or swap the pushed screen.
+    private func deliver(_ code: String) {
+        guard !handedOff else { return }
+        handedOff = true
+        onCode(code)
+    }
+
     private func handlePickedImage(_ image: UIImage) {
         stillImage = image
         detectionNotice = nil
@@ -270,7 +313,7 @@ struct BarcodeScanView: View {
             let payload = try? await detector.payload(in: image)
             isDetecting = false
             if let payload {
-                onCode(payload)
+                deliver(payload)
             } else {
                 detectionNotice = "Fernlet couldn't spot a barcode in that photo — try moving closer so the code fills the frame."
             }
@@ -335,7 +378,7 @@ private struct ScanFrameOverlay: View {
 
                 // Caption below the window.
                 Text(caption)
-                    .font(.system(size: 19, design: .serif))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.cream)
                     .multilineTextAlignment(.center)
                     .shadow(color: .black.opacity(0.4), radius: 6)
@@ -410,6 +453,10 @@ private extension View {
 // MARK: - Live viewfinder (VisionKit)
 
 private struct BarcodeDataScannerView: UIViewControllerRepresentable {
+    /// The parent latches this true the moment it hands any code off, pausing the live scanner so a
+    /// second barcode can't be recognized behind the pushed screen. The parent clears it (re-arming
+    /// the scanner) when the viewfinder reappears on pop-back.
+    var paused: Bool = false
     var onPayload: (String) -> Void
     var onUnavailable: () -> Void
 
@@ -425,10 +472,15 @@ private struct BarcodeDataScannerView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ scanner: DataScannerViewController, context: Context) {
+        if paused {
+            // A code has been handed off — stop recognizing so nothing fires behind the pushed screen.
+            if scanner.isScanning { scanner.stopScanning() }
+            return
+        }
         guard !scanner.isScanning else { return }
-        // Re-arm after a pop back into the scanner (delivery stops scanning below). If arming throws
-        // (e.g. permission just denied), surface it so the parent drops to the still-photo fallback
-        // rather than leaving a frozen viewfinder.
+        // Re-arm after a pop back into the scanner (delivery/pause stops scanning above). If arming
+        // throws (e.g. permission just denied), surface it so the parent drops to the still-photo
+        // fallback rather than leaving a frozen viewfinder.
         context.coordinator.delivered = false
         do {
             try scanner.startScanning()
@@ -493,6 +545,10 @@ private struct BarcodeDataScannerView: UIViewControllerRepresentable {
 struct BarcodeNotFoundView: View {
     var store: FernletStore
     let barcode: String
+    /// When the auto-router already parsed a nutrition label from the captured photo, the macros
+    /// arrive pre-filled here so the naming screen opens with the rings populated (no rescan needed).
+    /// nil for the ordinary barcode not-found handoff.
+    var prefilledScan: NutritionLabelResult? = nil
     var onCreated: (FoodItem) -> Void
 
     @State private var name = ""
@@ -515,6 +571,15 @@ struct BarcodeNotFoundView: View {
         }
         .background(Color.parchment)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // Seed the macros the auto-router already read (once — don't clobber a rescan).
+            if scanResult == nil, let prefilledScan {
+                scanResult = prefilledScan
+                if trimmedName.isEmpty, let servingSize = prefilledScan.servingSize, servingSize.isEmpty == false {
+                    name = "Scanned item (\(servingSize))"
+                }
+            }
+        }
     }
 
     // MARK: Naming screen (11b)
@@ -523,25 +588,34 @@ struct BarcodeNotFoundView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    // Friendly "New to Fernlet" header with a little companion face.
-                    HStack(spacing: 12) {
-                        CompanionFace()
-                            .frame(width: 52, height: 52)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("New to Fernlet")
-                                .font(.caption.weight(.semibold))
-                                .tracking(1.2)
-                                .textCase(.uppercase)
-                                .foregroundStyle(Color.goldenrod)
-                            Text("We haven't met this one")
-                                .font(.system(size: 25, weight: .semibold, design: .serif))
-                                .foregroundStyle(Color.bark)
-                                .fernletWrappingText()
+                    VStack(alignment: .leading, spacing: 18) {
+                        // Quiet "ADD A FOOD" eyebrow above the friendly header (mockup 11b).
+                        Text("Add a food")
+                            .font(.fernlet(.labelSmall))
+                            .tracking(1.4)
+                            .textCase(.uppercase)
+                            .foregroundStyle(Color.softTaupe)
+
+                        // Friendly "New to Fernlet" header with a little companion face.
+                        HStack(spacing: 12) {
+                            CompanionFace()
+                                .frame(width: 52, height: 52)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("New to Fernlet")
+                                    .font(.fernlet(.labelSmall))
+                                    .tracking(1.2)
+                                    .textCase(.uppercase)
+                                    .foregroundStyle(Color.goldenrod)
+                                Text("We haven't met this one")
+                                    .font(.fernlet(.header))
+                                    .foregroundStyle(Color.bark)
+                                    .fernletWrappingText()
+                            }
                         }
                     }
 
                     Text("Give it a name and it'll be here next time you scan.")
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
@@ -566,10 +640,10 @@ struct BarcodeNotFoundView: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(scanResult == nil ? "Scan the nutrition label" : "Rescan the nutrition label")
-                                    .font(.system(size: 17, weight: .regular, design: .serif))
+                                    .font(.fernlet(.body))
                                     .foregroundStyle(Color.bark)
                                 Text("optional — we'll read the macros for you")
-                                    .font(.footnote)
+                                    .font(.fernlet(.bodySmall))
                                     .foregroundStyle(Color.slate)
                                     .fernletWrappingText()
                             }
@@ -592,11 +666,11 @@ struct BarcodeNotFoundView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack(alignment: .firstTextBaseline) {
                             Text("Macros, per serving")
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                             Spacer()
                             Text("grams — no calories here")
-                                .font(.caption.italic())
+                                .font(.fernlet(.bubble))
                                 .foregroundStyle(Color.softTaupe)
                         }
 
@@ -608,12 +682,12 @@ struct BarcodeNotFoundView: View {
 
                         if scanResult == nil {
                             Text("Scanning the label fills in the macros — you can also add them later.")
-                                .font(.caption.italic())
+                                .font(.fernlet(.bubble))
                                 .foregroundStyle(Color.slate)
                                 .fernletWrappingText()
                         } else if let servingSize = scanResult?.servingSize, servingSize.isEmpty == false {
                             Text("Per serving: \(servingSize)")
-                                .font(.caption)
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                         }
                     }
@@ -698,11 +772,11 @@ private struct RememberedConfirmationView: View {
 
                 VStack(spacing: 12) {
                     Text("Remembered")
-                        .font(.system(size: 32, weight: .semibold, design: .serif))
+                        .font(.fernlet(.display))
                         .foregroundStyle(Color.bark)
 
                     Text("\(item.name) is in your foods now — scan it again and it'll log in a tap.")
-                        .font(.system(size: 18, design: .serif))
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
@@ -722,7 +796,7 @@ private struct RememberedConfirmationView: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(item.name)
-                            .font(.system(size: 16, weight: .regular, design: .serif))
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .lineLimit(1)
                         HStack(spacing: 10) {
@@ -733,7 +807,7 @@ private struct RememberedConfirmationView: View {
                             Text("F \(item.macros.fat)")
                                 .foregroundStyle(Color.terracotta)
                         }
-                        .font(.caption.weight(.medium))
+                        .font(.fernlet(.stat))
                     }
                     Spacer(minLength: 0)
                 }
@@ -749,7 +823,7 @@ private struct RememberedConfirmationView: View {
 
             Button(action: onDone) {
                 Text("Done")
-                    .font(.headline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.cream)
                     .frame(maxWidth: .infinity)
                     .padding(16)
@@ -791,13 +865,13 @@ private struct MacroRingTile: View {
                     .stroke(tint, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Text("\(grams)g")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
             }
             .frame(width: 56, height: 56)
 
             Text(label)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(tint)
         }
         .frame(maxWidth: .infinity)

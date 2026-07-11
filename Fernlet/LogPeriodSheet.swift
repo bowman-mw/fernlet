@@ -54,12 +54,12 @@ struct LogPeriodSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text(editingEntry != nil ? "Edit period" : "Log period")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     if lockService.state == .notConfigured && hasNarrative {
                         Text("Notes are only saved when app lock is on. Set up app lock in Settings to keep them with this cycle.")
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.terracotta)
                             .fernletWrappingText()
                     }
@@ -167,13 +167,13 @@ struct LogPeriodSheet: View {
                     }
 
                     Text("\(note.count)/1000")
-                        .font(.caption)
+                        .font(.fernlet(.stat))
                         .foregroundStyle(Color.slate)
                         .frame(maxWidth: .infinity, alignment: .trailing)
 
                     if let statusMessage {
                         Text(statusMessage)
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.moss)
                             .fernletWrappingText()
                     }

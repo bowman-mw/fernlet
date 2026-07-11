@@ -7,7 +7,15 @@ public nonisolated struct FernletSettings: Codable {
     public var bottleOz: Int = 24
     public var hydrationTarget: Int = 4
     public var showDeveloperNotes = false
-    public var connectionInspectorMode: ConnectionInspectorMode = .live
+    public var connectionInspectorMode: ConnectionInspectorMode = .live {
+        didSet { unknownConnectionInspectorModeToken = nil }
+    }
+    /// Raw `connectionInspectorMode` token from a NEWER build, parked instead of thrown on (which
+    /// would latch this device into decode-failure recovery) and re-encoded so a save here can't
+    /// strip it from the synced blob. A build that knows it re-adopts it on decode; an explicit
+    /// local mode change clears it (`didSet`) so the last editor wins. Same contract for every
+    /// `unknown…Token` scalar side channel below and across the domain models (`EnumDecodeCompat`).
+    public var unknownConnectionInspectorModeToken: String? = nil
     public var companionAppearance: CompanionAppearance = .standard
     /// Which owned item is equipped in each slot, keyed by `ItemSlot.rawValue`. A slot absent from the
     /// map (or pointing at a deleted item) renders nothing. The items themselves live in their own
@@ -25,7 +33,11 @@ public nonisolated struct FernletSettings: Codable {
     /// Locally-learned `designerID → display name` map, populated when connecting with friends in person
     /// (Increment 3). Lets the closet resolve "designed by <friend>" without the item ever carrying a name.
     public var knownDesignerNames: [String: String] = [:]
-    public var selectedGoal: GoalType = .wellness
+    public var selectedGoal: GoalType = .wellness {
+        didSet { unknownSelectedGoalToken = nil }
+    }
+    /// Unknown `selectedGoal` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
+    public var unknownSelectedGoalToken: String? = nil
     /// Per-day sickness flags keyed by `yyyy-MM-dd`. Keyed by date so past-day scoring uses the
     /// flag that was set for *that* day, and "today" naturally resets when the date rolls over.
     public var sickDays: [String: Bool] = [:]
@@ -33,7 +45,11 @@ public nonisolated struct FernletSettings: Codable {
     public var intentDismissedDays: [String: Bool] = [:]
     /// Per-nutrient cooldown end dates for the preventive-care micronutrient nudge (2-week suppress).
     public var nutrientBubbleDismissedUntil: [String: Date] = [:]
-    public var aiStatus: AIStatus = .off
+    public var aiStatus: AIStatus = .off {
+        didSet { unknownAIStatusToken = nil }
+    }
+    /// Unknown `aiStatus` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
+    public var unknownAIStatusToken: String? = nil
     public var webNutritionLookupEnabled: Bool = false
     /// Opt-in: weather-aware gentle recovery prompts (requests coarse location only when enabled).
     public var weatherPromptsEnabled: Bool = false
@@ -53,7 +69,21 @@ public nonisolated struct FernletSettings: Codable {
     public var userProfile: UserNutritionProfile = UserNutritionProfile()
     public var nutritionPreferences: UserNutritionPreferences = UserNutritionPreferences()
     public var quickLogItems: [FernletShortcut] = FernletShortcut.defaultQuickLog
+    /// Raw `quickLogItems` tokens this build's `FernletShortcut` doesn't know — shortcuts added by a
+    /// NEWER build on another device. Parked here (and re-encoded) instead of thrown on, so a newer
+    /// device's settings can't latch this one into decode-failure recovery, and instead of dropped,
+    /// so a save on this device can't strip them from the synced blob. A build that knows a parked
+    /// token re-adopts it into the typed array on decode (see `splitRawTokens`).
+    public var unknownQuickLogTokens: [String] = []
     public var homeWidgets: [HomeWidget] = HomeWidget.defaultWidgets
+    /// Unknown `homeWidgets` tokens from newer builds; same contract as `unknownQuickLogTokens`.
+    public var unknownHomeWidgetTokens: [String] = []
+    /// One-time migration marker for the Milestones/First-aid home widgets. Milestones and First aid used
+    /// to be fixed, always-visible home elements; they became configurable `HomeWidget`s. Fresh installs
+    /// start `true` (they already get both via `defaultWidgets`). Legacy settings decode this as `false`
+    /// (the key is absent), which triggers a one-time append of `.milestones`/`.firstAid` in `init(from:)`
+    /// so existing users don't silently lose them, then flips to `true` so it runs at most once.
+    public var didMigrateMilestonesFirstAidWidgets: Bool = true
     public var personalCareTasks: [PersonalCareTask] = PersonalCareTask.defaultTasks
     public var proximityDisplayName: String = ""
     public var showProximityDebugTools: Bool = false
@@ -92,17 +122,36 @@ public nonisolated struct FernletSettings: Codable {
         bottleOz = try container.decodeIfPresent(Int.self, forKey: .bottleOz) ?? 24
         hydrationTarget = try container.decodeIfPresent(Int.self, forKey: .hydrationTarget) ?? 4
         showDeveloperNotes = try container.decodeIfPresent(Bool.self, forKey: .showDeveloperNotes) ?? false
-        connectionInspectorMode = try container.decodeIfPresent(ConnectionInspectorMode.self, forKey: .connectionInspectorMode) ?? .live
+        // Scalar enum fields decode tolerantly (freeze-on-unknown + parked-token side channel):
+        // `decodeIfPresent(EnumType.self) ?? default` only defaults on an ABSENT key — a present
+        // raw value from a newer build throws and cascades into decode-failure recovery. See
+        // EnumDecodeCompat for the full contract.
+        let inspectorSplit = try container.decodeTolerantEnum(
+            ConnectionInspectorMode.self, forKey: .connectionInspectorMode,
+            parkedTokenKey: .unknownConnectionInspectorModeToken, default: .live)
+        connectionInspectorMode = inspectorSplit.value
+        unknownConnectionInspectorModeToken = inspectorSplit.parkedToken
         companionAppearance = try container.decodeIfPresent(CompanionAppearance.self, forKey: .companionAppearance) ?? .standard
         equippedItemIDsBySlot = try container.decodeIfPresent([String: UUID].self, forKey: .equippedItemIDsBySlot) ?? [:]
         localDesignerID = try container.decodeIfPresent(UUID.self, forKey: .localDesignerID)
         ownedDesignerIDs = try container.decodeIfPresent(Set<UUID>.self, forKey: .ownedDesignerIDs) ?? []
         knownDesignerNames = try container.decodeIfPresent([String: String].self, forKey: .knownDesignerNames) ?? [:]
-        selectedGoal = try container.decodeIfPresent(GoalType.self, forKey: .selectedGoal) ?? .wellness
+        // `GoalType.init(persistedToken:)` also maps the legacy aliases ("Wellness", "Short-term",
+        // …) that GoalType's own lenient Decodable init has always accepted.
+        let goalSplit = try container.decodeTolerantEnum(
+            GoalType.self, forKey: .selectedGoal,
+            parkedTokenKey: .unknownSelectedGoalToken, default: .wellness,
+            resolve: GoalType.init(persistedToken:))
+        selectedGoal = goalSplit.value
+        unknownSelectedGoalToken = goalSplit.parkedToken
         sickDays = try container.decodeIfPresent([String: Bool].self, forKey: .sickDays) ?? [:]
         intentDismissedDays = try container.decodeIfPresent([String: Bool].self, forKey: .intentDismissedDays) ?? [:]
         nutrientBubbleDismissedUntil = try container.decodeIfPresent([String: Date].self, forKey: .nutrientBubbleDismissedUntil) ?? [:]
-        aiStatus = try container.decodeIfPresent(AIStatus.self, forKey: .aiStatus) ?? .off
+        let aiStatusSplit = try container.decodeTolerantEnum(
+            AIStatus.self, forKey: .aiStatus,
+            parkedTokenKey: .unknownAIStatusToken, default: .off)
+        aiStatus = aiStatusSplit.value
+        unknownAIStatusToken = aiStatusSplit.parkedToken
         webNutritionLookupEnabled = try container.decodeIfPresent(Bool.self, forKey: .webNutritionLookupEnabled) ?? false
         weatherPromptsEnabled = try container.decodeIfPresent(Bool.self, forKey: .weatherPromptsEnabled) ?? false
         showCalories = try container.decodeIfPresent(Bool.self, forKey: .showCalories) ?? false
@@ -114,9 +163,38 @@ public nonisolated struct FernletSettings: Codable {
         stressAwarenessEnabled = try container.decodeIfPresent(Bool.self, forKey: .stressAwarenessEnabled) ?? false
         userProfile = try container.decodeIfPresent(UserNutritionProfile.self, forKey: .userProfile) ?? UserNutritionProfile()
         nutritionPreferences = try container.decodeIfPresent(UserNutritionPreferences.self, forKey: .nutritionPreferences) ?? UserNutritionPreferences()
-        let decodedQuickLogItems = try container.decodeIfPresent([FernletShortcut].self, forKey: .quickLogItems) ?? FernletShortcut.defaultQuickLog
-        quickLogItems = FernletShortcut.normalizedQuickLog(decodedQuickLogItems)
-        let decodedHomeWidgets = try container.decodeIfPresent([HomeWidget].self, forKey: .homeWidgets) ?? HomeWidget.defaultWidgets
+        // These enum arrays sync across devices, so decode them tolerantly: a strict `[FernletShortcut]`/
+        // `[HomeWidget]` decode throws on the first raw value only a NEWER build knows, and that error
+        // cascades into decode-failure recovery (empty read-only database) on this device. Known tokens
+        // become the typed arrays; unknown ones are parked in the side channels, and previously parked
+        // tokens this build now knows are re-adopted (appended — their original positions are gone).
+        let quickLogTokens = try container.decodeIfPresent([String].self, forKey: .quickLogItems)
+            ?? FernletShortcut.defaultQuickLog.map(\.rawValue)
+        let parkedQuickLogTokens = try container.decodeIfPresent([String].self, forKey: .unknownQuickLogTokens) ?? []
+        let quickLogSplit = Self.splitRawTokens(quickLogTokens + parkedQuickLogTokens, as: FernletShortcut.self)
+        unknownQuickLogTokens = quickLogSplit.unknown
+        // Only pad to six slots when nothing is parked: display pads transiently anyway
+        // (`visibleQuickLog`), and persisting the pad would let auto-filled defaults permanently claim
+        // the slots the parked (newer-build) shortcuts occupy once a newer device re-adopts them.
+        quickLogItems = quickLogSplit.unknown.isEmpty
+            ? FernletShortcut.normalizedQuickLog(quickLogSplit.known)
+            : Array(quickLogSplit.known.prefix(6))
+        let homeWidgetTokens = try container.decodeIfPresent([String].self, forKey: .homeWidgets)
+            ?? HomeWidget.defaultWidgets.map(\.rawValue)
+        let parkedHomeWidgetTokens = try container.decodeIfPresent([String].self, forKey: .unknownHomeWidgetTokens) ?? []
+        let homeWidgetSplit = Self.splitRawTokens(homeWidgetTokens + parkedHomeWidgetTokens, as: HomeWidget.self)
+        unknownHomeWidgetTokens = homeWidgetSplit.unknown
+        var decodedHomeWidgets = homeWidgetSplit.known
+        // One-time migration: Milestones + First aid used to be fixed home elements. If this settings blob
+        // predates them becoming widgets (marker absent ⇒ false), append whichever aren't already present so
+        // existing users keep them on the home feed. Runs at most once; the marker then persists as true.
+        didMigrateMilestonesFirstAidWidgets = try container.decodeIfPresent(Bool.self, forKey: .didMigrateMilestonesFirstAidWidgets) ?? false
+        if !didMigrateMilestonesFirstAidWidgets {
+            for widget in [HomeWidget.firstAid, .milestones] where !decodedHomeWidgets.contains(widget) {
+                decodedHomeWidgets.append(widget)
+            }
+            didMigrateMilestonesFirstAidWidgets = true
+        }
         homeWidgets = HomeWidget.normalized(decodedHomeWidgets)
         let decodedCareTasks = try container.decodeIfPresent([PersonalCareTask].self, forKey: .personalCareTasks) ?? PersonalCareTask.defaultTasks
         personalCareTasks = PersonalCareTask.normalized(decodedCareTasks)
@@ -132,6 +210,16 @@ public nonisolated struct FernletSettings: Codable {
         workoutLocations = decodedLocations.isEmpty ? [WorkoutLocation.fullGym] : decodedLocations
         activeWorkoutLocationID = try container.decodeIfPresent(UUID.self, forKey: .activeWorkoutLocationID)
         workoutProgression = try container.decodeIfPresent([String: Int].self, forKey: .workoutProgression) ?? [:]
+    }
+
+    /// The split logic (and its defensive bounds) moved to `EnumDecodeCompat.splitRawTokens` when
+    /// the tolerant-decode pattern was generalized to the rest of the domain models; kept here as a
+    /// private shim so `init(from:)` reads unchanged.
+    private static func splitRawTokens<Case: RawRepresentable>(
+        _ tokens: [String],
+        as type: Case.Type
+    ) -> (known: [Case], unknown: [String]) where Case.RawValue == String {
+        EnumDecodeCompat.splitRawTokens(tokens, as: type)
     }
 }
 

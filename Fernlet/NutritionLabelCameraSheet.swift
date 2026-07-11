@@ -28,7 +28,7 @@ struct NutritionLabelCameraSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Take a photo of a nutrition facts label and Fernlet will fill in the values it can read.")
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
@@ -37,7 +37,7 @@ struct NutritionLabelCameraSheet: View {
                             showingCamera = true
                         } label: {
                             Label("Camera", systemImage: "camera.fill")
-                                .font(.headline)
+                                .font(.fernlet(.label))
                                 .foregroundStyle(Color.cream)
                                 .frame(maxWidth: .infinity)
                                 .padding(14)
@@ -48,7 +48,7 @@ struct NutritionLabelCameraSheet: View {
 
                         PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                             Label("Library", systemImage: "photo.on.rectangle")
-                                .font(.headline)
+                                .font(.fernlet(.label))
                                 .foregroundStyle(Color.bark)
                                 .frame(maxWidth: .infinity)
                                 .padding(14)
@@ -85,7 +85,7 @@ struct NutritionLabelCameraSheet: View {
                                 HStack(spacing: 8) {
                                     ProgressView()
                                     Text("Reading label...")
-                                        .font(.callout.italic())
+                                        .font(.fernlet(.bubble))
                                         .foregroundStyle(Color.slate)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -100,7 +100,7 @@ struct NutritionLabelCameraSheet: View {
                     if let dual = dualColumnResult {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("TWO-COLUMN LABEL DETECTED")
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                                 .tracking(0.8)
 
@@ -113,7 +113,7 @@ struct NutritionLabelCameraSheet: View {
                                         scanResult = index == 0 ? dual.col1 : dual.col2
                                     } label: {
                                         Text(label)
-                                            .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                                            .font(.fernlet(.label))
                                             .foregroundStyle(isSelected ? Color.bark : Color.slate)
                                             .frame(maxWidth: .infinity)
                                             .padding(.vertical, 10)
@@ -130,7 +130,7 @@ struct NutritionLabelCameraSheet: View {
                     if let scanResult {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("DETECTED VALUES")
-                                .font(.caption.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                                 .tracking(0.8)
 
@@ -145,8 +145,8 @@ struct NutritionLabelCameraSheet: View {
 
                     if let scanError {
                         Text(scanError)
-                            .font(.caption.italic())
-                            .foregroundStyle(Color.red.opacity(0.8))
+                            .font(.fernlet(.bubble))
+                            .foregroundStyle(Color.terracotta)
                             .fernletWrappingText()
                     }
                 }
@@ -188,7 +188,7 @@ struct NutritionLabelCameraSheet: View {
     }
 
     private var shouldShowScanTips: Bool {
-        scanError != nil || scanResult.map { detectedFieldCount(in: $0) < 3 } == true
+        scanError != nil || scanResult.map { $0.recognizedFieldCount < 3 } == true
     }
 
     private var scanTips: some View {
@@ -197,7 +197,7 @@ struct NutritionLabelCameraSheet: View {
             Text("Move closer so the label fills the frame.")
             Text("Use the flashlight in dim lighting.")
         }
-        .font(.caption.italic())
+        .font(.fernlet(.bubble))
         .foregroundStyle(Color.slate)
         .fernletWrappingText()
     }
@@ -310,7 +310,7 @@ struct NutritionLabelCameraSheet: View {
     private func detectedGroup<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             content()
         }
@@ -320,11 +320,11 @@ struct NutritionLabelCameraSheet: View {
     private func detectedRow(_ label: String, _ value: String) -> some View {
         HStack {
             Text(label)
-                .font(.subheadline)
+                .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
             Spacer()
             Text(value)
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.moss)
         }
     }
@@ -348,42 +348,6 @@ struct NutritionLabelCameraSheet: View {
         result.calcium != nil || result.iron != nil || result.magnesium != nil ||
         result.phosphorus != nil || result.potassium != nil || result.zinc != nil ||
         result.omega3 != nil
-    }
-
-    private func detectedFieldCount(in result: NutritionLabelResult) -> Int {
-        [
-            result.servingSize.map { _ in true },
-            result.servingsPerContainer.map { _ in true },
-            result.calories.map { _ in true },
-            result.protein.map { _ in true },
-            result.carbs.map { _ in true },
-            result.fat.map { _ in true },
-            result.fiber.map { _ in true },
-            result.sugar.map { _ in true },
-            result.addedSugar.map { _ in true },
-            result.saturatedFat.map { _ in true },
-            result.transFat.map { _ in true },
-            result.cholesterol.map { _ in true },
-            result.vitaminA.map { _ in true },
-            result.vitaminC.map { _ in true },
-            result.vitaminD.map { _ in true },
-            result.vitaminE.map { _ in true },
-            result.vitaminB12.map { _ in true },
-            result.thiamin.map { _ in true },
-            result.riboflavin.map { _ in true },
-            result.niacin.map { _ in true },
-            result.folate.map { _ in true },
-            result.calcium.map { _ in true },
-            result.iron.map { _ in true },
-            result.magnesium.map { _ in true },
-            result.phosphorus.map { _ in true },
-            result.potassium.map { _ in true },
-            result.sodium.map { _ in true },
-            result.zinc.map { _ in true },
-            result.omega3.map { _ in true }
-        ]
-        .compactMap { $0 }
-        .count
     }
 
     private func formatted(_ value: Double, unit: String) -> String {

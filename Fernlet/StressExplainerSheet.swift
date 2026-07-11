@@ -23,31 +23,31 @@ struct StressExplainerSheet: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
                     Text("Body signals")
-                        .font(.title2.weight(.semibold))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Spacer()
                     Button("Done") { dismiss() }
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.moss)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(currentReadingTitle)
-                        .font(.headline)
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Text(currentReadingBody)
-                        .font(.subheadline)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                     if let annotationLine {
                         Text(annotationLine)
-                            .font(.subheadline)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
                     if let confidenceLine {
                         Text(confidenceLine)
-                            .font(.caption.italic())
+                            .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -61,11 +61,11 @@ struct StressExplainerSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel("How Fernlet estimates this")
                     Text("Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week.")
-                        .font(.subheadline)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                     Text("Everything is estimated and stored on this device only.")
-                        .font(.caption.italic())
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
@@ -73,7 +73,7 @@ struct StressExplainerSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel("A gentle note")
                     Text("This is a wellbeing reflection, not a medical measurement, diagnosis, or advice. If you're worried about how you feel, please talk to a health professional you trust.")
-                        .font(.subheadline)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
@@ -98,10 +98,10 @@ struct StressExplainerSheet: View {
                         .background(Color.moss.opacity(0.14), in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Something for right now?")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.fernlet(.label))
                             .foregroundStyle(Color.bark)
                         Text("First aid has slow breathing, grounding, and a worry box — only if it sounds nice.")
-                            .font(.caption)
+                            .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }

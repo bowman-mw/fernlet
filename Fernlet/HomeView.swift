@@ -5,9 +5,9 @@ import FernletFoundation
 import SwiftUI
 import FernletScoring
 import PrivateHealthStore
-import PeriodContextBridge
 import HealthKitGateway
 import AppServices
+import StoreCore
 
 #if canImport(UIKit)
 import UIKit
@@ -21,9 +21,8 @@ struct HomeView: View {
     @Binding var privateHubSection: PrivateHubSection
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
-    /// Shared period store + abstract bridge, threaded from ContentView for the (opt-in) cycle surfaces.
+    /// Shared period store, threaded from ContentView for the (opt-in) cycle surfaces.
     var periodStore: PeriodTrackerStore? = nil
-    var periodContext: PeriodContextBridge? = nil
     /// Shared body-signals service, threaded from ContentView for the (opt-in) stress surfaces.
     var stressService: StressService? = nil
     @State private var hasRecentPeriodEvent = false
@@ -90,6 +89,61 @@ struct HomeView: View {
         }
     }
 
+    // MARK: - Milestones entry card
+
+    /// A compact keepsake-shelf preview that always shows on the home feed — even when it's mostly
+    /// empty — and taps through to `MilestonesView`. Cumulative-only, never a scoreboard: it shows a
+    /// warm sentence and a soft coins aside, no streaks or percentages. Behaviour lives in
+    /// MilestonesView; this is a warm doorway to it.
+    private var milestonesCard: some View {
+        // Compute the ledger-scanning summary once per render — it feeds both the visible Text and the
+        // accessibilityHint below, and each evaluation runs full-ledger scans with Set allocations.
+        let summary = milestonesCardSummary
+        return NavigationLink {
+            MilestonesView(store: store)
+        } label: {
+            FernletCard {
+                HStack(spacing: 12) {
+                    PressedMedallion(icon: "seal", tint: .goldenrod, diameter: 40)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Milestones")
+                            .font(.fernlet(.header))
+                            .foregroundStyle(Color.bark)
+                        Text(summary)
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.slate.opacity(0.65))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.milestones")
+        .accessibilityLabel("Milestones")
+        .accessibilityHint(summary)
+    }
+
+    /// A warm, count-aware one-liner for the milestones card. Keeps the keepsake framing: kinds with
+    /// keepsakes are "kept", coins are a soft aside, and the empty case is gentle — never a to-do.
+    private var milestonesCardSummary: String {
+        let keptKinds = store.milestoneCounts.values.filter { $0 > 0 }.count
+            + (store.lifetimeWorriesLetGo > 0 ? 1 : 0)
+        let coins = CoinEconomy.milestoneAwardCoins(in: store.coinLedgerService.entries)
+
+        if keptKinds == 0 {
+            return "Your keepsake shelf is waiting — every bit of care will find a place here."
+        }
+        let kindsPhrase = keptKinds == 1 ? "One kind of care" : "\(keptKinds) kinds of care"
+        if coins > 0 {
+            return "\(kindsPhrase) kept so far · \(coins) coins gifted."
+        }
+        return "\(kindsPhrase) kept so far, added up over all time."
+    }
+
     @ViewBuilder
     private func homeWidget(_ widget: HomeWidget) -> some View {
         switch widget {
@@ -112,6 +166,10 @@ struct HomeView: View {
                 periodPrediction: homePeriodPrediction,
                 stressState: store.settings.stressAwarenessEnabled ? stressService?.assessment?.state : nil
             )
+        case .milestones:
+            milestonesCard
+        case .firstAid:
+            firstAidAction
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .trends:
             HomeActionWidget(widget: widget) {
                 handleHomeWidget(widget)
@@ -224,112 +282,94 @@ struct HomeView: View {
                 // Home-only environment layer (time tint + optional sky accents).
                 // Composes beneath the companion; decorative only (no hit testing, no
                 // accessibility), so petting and the appearance probes are untouched.
+                // Full-bleed per the mockup: the wash feathers its own edges, so let it
+                // extend a little past the companion's tight bounds to dissolve into the
+                // parchment strip rather than stop at the frame.
                 CompanionAmbienceLayer(
                     phase: .current(),
                     ambient: store.settings.weatherPromptsEnabled ? companionAmbient : nil
                 )
+                .padding(.horizontal, -FernletMetrics.spaceMd)
+                .padding(.vertical, -FernletMetrics.spaceSm)
             }
 
-            HStack(spacing: 8) {
-                Text(store.companionState.rawValue)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(store.companionState.color)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(store.companionState.color.opacity(0.13), in: Capsule())
-
-                firstAidPill
+            if store.settings.stressAwarenessEnabled {
+                bodySignalsLink
             }
-
-            signalsCard
-
-            stressLineView
         }
         .frame(maxWidth: .infinity)
     }
 
-    /// Small persistent First Aid affordance beside the companion state chip (quick-log-chip
-    /// styling): always reachable, quietly present, never demanding attention.
-    private var firstAidPill: some View {
+    /// Quiet door to the body-signals explainer (its App Store 1.4.1 not-medical disclaimer + First Aid
+    /// invite). Home is chip-free now, so this is a subtle link — shown only when stress awareness is on —
+    /// rather than the old status line, and it stays the sole production entry to `StressExplainerSheet`
+    /// (setting the top-level `activeSheet` so the sheet's dismiss-then-First-Aid chain keeps working).
+    private var bodySignalsLink: some View {
+        Button {
+            activeSheet = .stressExplainer
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.caption)
+                Text("Body signals")
+                    .font(.fernlet(.labelSmall))
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .opacity(0.6)
+            }
+            .foregroundStyle(Color.slate)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.stressLine")
+        .accessibilityLabel("Body signals — how Fernlet reads this")
+        .accessibilityHint("Explains how body signals are estimated")
+    }
+
+    /// First Aid as its own calm, standalone action (not a status chip): a soft moss-tinted row
+    /// with an icon tile, a title, a gentle italic subtitle, and a chevron — always reachable,
+    /// quietly present, never demanding attention. Sits below quick-log per the mockup.
+    private var firstAidAction: some View {
         Button {
             activeSheet = .firstAid(nil)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 12) {
                 Image(systemName: "heart.circle")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(Color.moss)
+                    .frame(width: 34, height: 34)
+                    .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("First aid")
+                        .font(.fernlet(.header))
+                        .foregroundStyle(Color.bark)
+                    Text("A quiet minute, whenever")
+                        .font(.fernlet(.bodySmall))
+                        .italic()
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                Text("First aid")
-                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.moss.opacity(0.7))
             }
-            .foregroundStyle(Color.moss)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
-            .background(Color.moss.opacity(0.13), in: Capsule())
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.moss.opacity(0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.moss.opacity(0.22), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.firstAid")
+        .accessibilityLabel("First aid")
         .accessibilityHint("Opens calm tools: breathing, grounding, and the worry box")
-    }
-
-    /// Gentle opt-in body-signals line under the companion — offered, never alarming.
-    /// Tapping opens the small explainer sheet, which also links on to First Aid. On tense /
-    /// needs-care days it reads as a soft warm cream bubble with an italic serif line (per the
-    /// companion-moments "feeling a bit fizzy" bubble); quieter days stay low-key and slate.
-    @ViewBuilder
-    private var stressLineView: some View {
-        if let line = stressLine {
-            let warm = stressTintActive
-            Button {
-                activeSheet = .stressExplainer
-            } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "wind")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(warm ? Color.goldenrod : Color.slate)
-                    Text(line)
-                        .font(warm ? .callout.italic() : .caption)
-                        .multilineTextAlignment(.leading)
-                        .foregroundStyle(warm ? Color.bark : Color.slate)
-                        .fernletWrappingText()
-                }
-                .padding(.horizontal, warm ? 16 : 12)
-                .padding(.vertical, warm ? 12 : 8)
-                .background(
-                    warm ? Color.cream : Color.slate.opacity(0.08),
-                    in: RoundedRectangle(cornerRadius: warm ? 18 : 12, style: .continuous)
-                )
-                .shadow(color: warm ? Color.bark.opacity(0.08) : .clear, radius: warm ? 6 : 0, y: warm ? 2 : 0)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("home.stressLine")
-            .accessibilityHint("Opens how Fernlet estimates this")
-        }
-    }
-
-    /// The body-signals copy. Shown on EVERY day the user has opted in — including calm/okay days and
-    /// the ~week-long cold start — so the reading (and the explainer it opens, whose "still getting to
-    /// know you" / "settled" / "about your usual" copy would otherwise be unreachable) is always
-    /// available, and opting in never looks like it silently did nothing. Tense/needs-care days get the
-    /// gentle "be kind to yourself" wording; quieter states get a soft, low-key line.
-    private var stressLine: String? {
-        guard store.settings.stressAwarenessEnabled else { return nil }
-        guard let assessment = stressService?.assessment else {
-            // Cold start: not enough baseline yet. Reassure the opted-in user the feature is on.
-            return "Body signals: still getting to know your usual rhythm."
-        }
-        switch (assessment.state, assessment.annotation) {
-        case (.tense, .workedOut):
-            return "Your body is working a bit harder than your usual — probably that good kind of tired from moving."
-        case (.tense, .possiblyUnwell):
-            return "Your body seems a bit more tense than your usual — it might just be fighting something off. Rest counts."
-        case (.tense, _):
-            return "Your body seems a bit more tense than your usual — be extra kind to yourself today."
-        case (.needsCare, _):
-            return "Your body has seemed extra tense for a couple of days. Going gently today is more than enough."
-        case (.calm, _):
-            return "Your body seems calm and settled today."
-        case (.okay, _):
-            return "Body signals: about your usual today."
-        }
     }
 
     /// Presentation-only frazzle flag for the companion. Never overrides the sick/resting
@@ -350,94 +390,10 @@ struct HomeView: View {
         return store.companionState != .sick && store.companionState != .resting
     }
 
-    /// A compact mood/energy/readiness chip row (plus a "resting today" sickness chip) that taps
-    /// through to the Trends modal. Reads the already-built derived signals.
-    @ViewBuilder
-    private var signalsCard: some View {
-        let chips = signalChips(from: store.derivedSignals)
-        let resting = store.isSick(on: store.todayKey)
-        let phaseChip = periodPhaseChip
-        if !chips.isEmpty || resting || phaseChip != nil {
-            Button {
-                activeSheet = .trends
-            } label: {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        if resting {
-                            signalChip(text: "Resting today", color: .terracotta, icon: "thermometer.medium")
-                        }
-                        if let phaseChip {
-                            signalChip(text: phaseChip.label, color: phaseChip.color, icon: phaseChip.icon)
-                        }
-                        ForEach(chips) { chip in
-                            signalChip(text: chip.label, color: chip.color, icon: chip.icon)
-                        }
-                    }
-                    .padding(.horizontal, 2)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Wellbeing signals")
-            .accessibilityHint("Opens trends")
-        }
-    }
-
-    /// Abstract cycle-phase chip, shown only when the user has opted into period-aware care and isn't
-    /// hiding predictions. Reads the bridge's abstract phase (never raw cycle data) so a glance at Home
-    /// surfaces the phase without exposing dates or symptoms.
-    private var periodPhaseChip: HomeSignalChip? {
-        guard store.settings.periodAwareScoringEnabled, !store.settings.hidePredictions,
-              let phase = periodContext?.currentPhaseSignal(), phase != .unknown else { return nil }
-        return HomeSignalChip(label: "Cycle: \(phase.rawValue.capitalized)", color: .dustyRose, icon: "drop")
-    }
-
     /// The next-period outlook for the Home ambient bubble, gated by the same opt-in + hide-predictions.
     private var homePeriodPrediction: CyclePrediction? {
         guard store.settings.periodAwareScoringEnabled, !store.settings.hidePredictions else { return nil }
         return periodStore?.prediction
-    }
-
-    private struct HomeSignalChip: Identifiable {
-        let id = UUID()
-        let label: String
-        let color: Color
-        let icon: String
-    }
-
-    private func signalChips(from signals: [DerivedSignalRecord]) -> [HomeSignalChip] {
-        var chips: [HomeSignalChip] = []
-        if let mood = signals.first(where: { $0.signalName == "moodTrend" }) {
-            chips.append(HomeSignalChip(label: "Mood: \(compactSignalValue(mood.value))", color: .dustyRose, icon: "heart"))
-        }
-        if let energy = signals.first(where: { $0.signalName == "energyTrend" }) {
-            chips.append(HomeSignalChip(label: "Energy: \(compactSignalValue(energy.value))", color: .goldenrod, icon: "bolt"))
-        }
-        if let readiness = signals.first(where: { $0.signalName == "intensityReadiness" }) {
-            chips.append(HomeSignalChip(label: "Readiness: \(compactSignalValue(readiness.value))", color: .moss, icon: "figure.run"))
-        }
-        return chips
-    }
-
-    private func compactSignalValue(_ value: String) -> String {
-        switch value {
-        case "needs gentleness": return "gentle"
-        case "ready for hard": return "hard"
-        case "ready for light": return "light"
-        case "ready for moderate": return "moderate"
-        case "improving", "rising": return "up"
-        default: return value
-        }
-    }
-
-    private func signalChip(text: String, color: Color, icon: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon).font(.caption2.weight(.semibold))
-            Text(text).font(.caption2.weight(.semibold))
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
-        .background(color.opacity(0.13), in: Capsule())
     }
 
     private var ambientThought: String {
@@ -607,13 +563,13 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("Today")
-                        .font(.title3.weight(.semibold))
+                        .font(.fernlet(.header))
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(FernletDate.niceDate().components(separatedBy: ",").first ?? "Today")
-                            .font(.caption)
+                            .font(.fernlet(.labelSmall))
                         Text(store.settings.selectedGoal.displayName)
-                            .font(.caption2.weight(.semibold))
+                            .font(.fernlet(.labelSmall))
                     }
                     .foregroundStyle(Color.slate)
                 }
@@ -634,10 +590,10 @@ struct HomeView: View {
                         .background(Color.goldenrod.opacity(0.14), in: Circle())
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Today's intent")
-                            .font(.headline.weight(.semibold))
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
                         Text("One small care note is still a real note.")
-                            .font(.callout)
+                            .font(.fernlet(.body))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -738,7 +694,7 @@ struct HomeView: View {
             "Journal"
         case .care:
             "Care"
-        case .logPeriod, .periodTracking, .intimacyTracking, .friends:
+        case .logPeriod, .periodTracking, .intimacyTracking, .friends, .breathing, .grounding, .worryBox:
             item.title
         }
     }
@@ -765,6 +721,8 @@ struct HomeView: View {
             store.day.healthContext?.intimate != nil
         case .friends:
             store.memories.contains { $0.category.localizedCaseInsensitiveContains("friend") }
+        case .breathing, .grounding, .worryBox:
+            false
         }
     }
 
@@ -788,7 +746,7 @@ struct HomeView: View {
             activeSheet = .hygiene
         case .trends:
             activeSheet = .trends
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient:
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid:
             break
         }
     }
@@ -818,6 +776,12 @@ struct HomeView: View {
             selectedTab = .personal
         case .friends:
             selectedTab = .social
+        case .breathing:
+            activeSheet = .firstAid(.breathing)
+        case .grounding:
+            activeSheet = .firstAid(.grounding)
+        case .worryBox:
+            activeSheet = .firstAid(.worryBox)
         }
     }
 
@@ -832,39 +796,27 @@ struct HomeView: View {
 }
 
 private struct CompanionCustomizationSheet: View {
-    enum Section: String, CaseIterable, Identifiable {
-        case style = "Style"
-        case slots = "Customization"
-
-        var id: String { rawValue }
-    }
-
     var store: FernletStore
     @Binding var petCount: Int
     @Environment(\.dismiss) private var dismiss
-    @State private var section: Section = .style
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                companionPreview
+                companionHeader
 
                 ScrollView {
-                    VStack(spacing: 16) {
-                        walletBadge
-                        milestonesLink
-                        wardrobeLink
-                        switch section {
-                        case .style:
-                            styleControls
-                        case .slots:
-                            slotControls
-                        }
+                    VStack(spacing: 9) {
+                        bodyRow
+                        accessoryRow
+                        clothingRow
+                        sideItemRow
                     }
                     .padding(20)
                 }
             }
             .background(Color.parchment)
+            .tint(Color.moss)
             .navigationTitle("Fernlet")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -876,23 +828,29 @@ private struct CompanionCustomizationSheet: View {
         }
     }
 
-    private var companionPreview: some View {
-        VStack(spacing: 14) {
+    /// A live preview of the companion next to a calm "Customize" title. Replaces the old
+    /// segmented Style/Customization control — the selector rows below carry the structure now.
+    private var companionHeader: some View {
+        HStack(spacing: 14) {
             CompanionView(
                 state: store.companionState,
                 appearance: store.settings.companionAppearance,
-                size: 150,
+                size: 84,
                 interactionLevel: petCount,
                 equippedItems: store.equippedCustomItems
             )
-            .frame(maxWidth: .infinity)
+            .frame(width: 84, height: 84)
 
-            Picker("Companion options", selection: $section) {
-                ForEach(Section.allCases) { section in
-                    Text(section.rawValue).tag(section)
-                }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Customize")
+                    .font(.fernlet(.header))
+                    .foregroundStyle(Color.bark)
+                Text(hasAnythingOn ? "Tap a slot to change it" : "Nothing on yet — pick a slot")
+                    .font(.fernlet(.body))
+                    .italic()
+                    .foregroundStyle(Color.slate)
             }
-            .pickerStyle(.segmented)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)
@@ -905,25 +863,178 @@ private struct CompanionCustomizationSheet: View {
         }
     }
 
-    private var walletBadge: some View {
-        // Read `store.coinBalance` directly (not a snapshot): it is a cheap derived read over the
-        // warm-cached day history, so it stays correct from the first frame and refreshes with the
-        // observable store instead of going stale or flashing 0 → N on appear.
-        let balance = store.coinBalance
-        return HStack(spacing: 12) {
-            Image(systemName: "circlebadge.2.fill")
-                .font(.system(size: 18))
-                .foregroundStyle(Color.sun)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(balance) coins")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.bark)
-                    .contentTransition(.numericText())
-                Text("earned from days you showed up")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    // Is anything at all equipped (beyond the default body)? Drives the header's first-run nudge.
+    private var hasAnythingOn: Bool {
+        let appearance = store.settings.companionAppearance
+        return appearance.accessory != .none
+            || appearance.clothing != .none
+            || appearance.sideItem != .none
+            || !store.equippedCustomItems.isEmpty
+    }
+
+    // MARK: Selector rows — one per slot, each showing what's equipped and pushing its picker.
+
+    private var bodyRow: some View {
+        let appearance = store.settings.companionAppearance
+        return NavigationLink {
+            slotPicker(
+                title: "Body",
+                items: CompanionBodyStyle.allCases,
+                selection: appearanceBinding(\.bodyStyle),
+                colorTitle: "Body color",
+                colorSelection: colorPresetBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
+                customColorHex: appearanceBinding(\.bodyCustomColorHex),
+                customColor: customColorBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
+                isBuiltInEquipped: true,
+                customSlots: []
+            ) { style in
+                Label(style.label, systemImage: "seal")
             }
-            Spacer()
+        } label: {
+            slotRowLabel(
+                slot: "Body",
+                value: appearance.bodyStyle.label,
+                isEmpty: false
+            ) {
+                Circle()
+                    .fill(appearance.bodyColor.color(for: store.companionState))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var accessoryRow: some View {
+        let appearance = store.settings.companionAppearance
+        return NavigationLink {
+            slotPicker(
+                title: "Accessory",
+                items: CompanionAccessory.allCases,
+                selection: appearanceBinding(\.accessory),
+                colorTitle: "Accessory color",
+                colorSelection: colorPresetBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
+                customColorHex: appearanceBinding(\.accessoryCustomColorHex),
+                customColor: customColorBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
+                isBuiltInEquipped: appearance.accessory != .none,
+                customSlots: [.hat, .face]
+            ) { accessory in
+                Label(accessory.label, systemImage: accessoryIcon(accessory))
+            }
+        } label: {
+            slotRowLabel(
+                slot: "Accessory",
+                value: rowValue(builtInLabel: appearance.accessory.label, builtInEmpty: appearance.accessory == .none, customSlots: [.hat, .face]),
+                isEmpty: appearance.accessory == .none && equippedCustomItem(in: [.hat, .face]) == nil
+            ) {
+                slotIcon(accessoryIcon(appearance.accessory))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var clothingRow: some View {
+        let appearance = store.settings.companionAppearance
+        return NavigationLink {
+            slotPicker(
+                title: "Clothing",
+                items: CompanionClothing.allCases,
+                selection: appearanceBinding(\.clothing),
+                colorTitle: "Clothing color",
+                colorSelection: colorPresetBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
+                customColorHex: appearanceBinding(\.clothingCustomColorHex),
+                customColor: customColorBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
+                isBuiltInEquipped: appearance.clothing != .none,
+                customSlots: [.body]
+            ) { clothing in
+                Label(clothing.label, systemImage: clothingIcon(clothing))
+            }
+        } label: {
+            slotRowLabel(
+                slot: "Clothing",
+                value: rowValue(builtInLabel: appearance.clothing.label, builtInEmpty: appearance.clothing == .none, customSlots: [.body]),
+                isEmpty: appearance.clothing == .none && equippedCustomItem(in: [.body]) == nil
+            ) {
+                slotIcon(clothingIcon(appearance.clothing))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sideItemRow: some View {
+        let appearance = store.settings.companionAppearance
+        return NavigationLink {
+            slotPicker(
+                title: "Side item",
+                items: CompanionSideItem.allCases,
+                selection: appearanceBinding(\.sideItem),
+                colorTitle: "Item color",
+                colorSelection: colorPresetBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
+                customColorHex: appearanceBinding(\.sideItemCustomColorHex),
+                customColor: customColorBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
+                isBuiltInEquipped: appearance.sideItem != .none,
+                customSlots: [.heldItem]
+            ) { item in
+                Label(item.label, systemImage: item.systemImage)
+            }
+        } label: {
+            slotRowLabel(
+                slot: "Side item",
+                value: rowValue(builtInLabel: appearance.sideItem.label, builtInEmpty: appearance.sideItem == .none, customSlots: [.heldItem]),
+                isEmpty: appearance.sideItem == .none && equippedCustomItem(in: [.heldItem]) == nil
+            ) {
+                slotIcon(appearance.sideItem.systemImage)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The value shown on a slot row: the built-in label when a built-in is on; otherwise the name of
+    /// an equipped custom item folded into this slot; otherwise the built-in's "None" label.
+    private func rowValue(builtInLabel: String, builtInEmpty: Bool, customSlots: [ItemSlot]) -> String {
+        if !builtInEmpty { return builtInLabel }
+        if let item = equippedCustomItem(in: customSlots) {
+            return item.name.isEmpty ? item.slot.label : item.name
+        }
+        return builtInLabel
+    }
+
+    /// The first equipped custom item whose slot is folded into this row, if any.
+    private func equippedCustomItem(in slots: [ItemSlot]) -> CustomizationItem? {
+        store.equippedCustomItems.first { slots.contains($0.slot) }
+    }
+
+    /// The shared selector-row chrome: a small icon/swatch, an uppercase slot label, the current
+    /// value right-aligned, and a chevron. `isEmpty` renders the value as a soft italic nudge.
+    private func slotRowLabel<Icon: View>(
+        slot: String,
+        value: String,
+        isEmpty: Bool,
+        @ViewBuilder icon: () -> Icon
+    ) -> some View {
+        HStack(spacing: 12) {
+            icon()
+                .frame(width: 30, height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Color.bark.opacity(0.06))
+                )
+
+            Text(slot.uppercased())
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .frame(width: 66, alignment: .leading)
+
+            Spacer(minLength: 8)
+
+            Text(value)
+                .font(.fernlet(.body))
+                .italic(isEmpty)
+                .foregroundStyle(isEmpty ? Color.slate : Color.bark)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(1)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.bark.opacity(0.4))
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -932,132 +1043,172 @@ private struct CompanionCustomizationSheet: View {
                 .fill(Color.cream)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(balance) coins, earned from days you showed up")
+        .accessibilityLabel("\(slot): \(value)")
     }
 
-    /// Entry to the Milestones sheet, placed right under the coin balance — milestone gifts are
-    /// where coins and lifetime counts meet, so this is where people will look for them.
-    private var milestonesLink: some View {
-        NavigationLink {
-            MilestonesView(store: store)
+    /// A slot swatch built from an SF Symbol, tinted to read as a quiet placeholder.
+    private func slotIcon(_ systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 15))
+            .foregroundStyle(Color.slate.opacity(0.7))
+    }
+
+    /// A full-screen picker for one slot: a live companion preview, the built-in item grid + recolor
+    /// controls, and — folded into the same picker — the user's custom items for the slot(s) this row
+    /// covers. Built-ins keep the swatch/ColorPicker recolor; custom items carry their own painted
+    /// colors and so get no color control. Reuses the existing customization card verbatim so all
+    /// built-in pick / recolor / custom-color behavior is preserved.
+    private func slotPicker<Item: Identifiable & Hashable, LabelContent: View>(
+        title: String,
+        items: [Item],
+        selection: Binding<Item>,
+        colorTitle: String,
+        colorSelection: Binding<CompanionAssetColor>,
+        customColorHex: Binding<String?>,
+        customColor: Binding<Color>,
+        isBuiltInEquipped: Bool,
+        customSlots: [ItemSlot],
+        @ViewBuilder label: @escaping (Item) -> LabelContent
+    ) -> some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                pickerPreview
+
+                CompanionCustomizationCard(
+                    title: title,
+                    items: items,
+                    selection: selection,
+                    colorTitle: colorTitle,
+                    colorSelection: colorSelection,
+                    customColorHex: customColorHex,
+                    customColor: customColor,
+                    state: store.companionState,
+                    // Recolor is a built-in-only control: hidden when no built-in is equipped in
+                    // this slot (custom items paint their own colors).
+                    showsColor: isBuiltInEquipped,
+                    label: label
+                )
+
+                customItemsSection(for: customSlots)
+            }
+            .padding(20)
+        }
+        .background(Color.parchment)
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// A live companion preview shown atop each slot picker, so recolor + equip changes are visible
+    /// without leaving the picker.
+    private var pickerPreview: some View {
+        CompanionView(
+            state: store.companionState,
+            appearance: store.settings.companionAppearance,
+            size: 96,
+            interactionLevel: petCount,
+            equippedItems: store.equippedCustomItems
+        )
+        .frame(width: 96, height: 96)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+    }
+
+    /// The custom-item section folded into a slot picker: the user's own items for the covered
+    /// slot(s), each tappable to equip/unequip, plus the standing route into the Wardrobe (which
+    /// still owns designing, editing, and recoloring custom items).
+    @ViewBuilder
+    private func customItemsSection(for slots: [ItemSlot]) -> some View {
+        let items = store.customItems.filter { slots.contains($0.slot) }
+        if slots.isEmpty {
+            EmptyView()
+        } else {
+            FernletCard {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionLabel("Your items")
+
+                if items.isEmpty {
+                    Text("Design one in the Wardrobe to fold it in here.")
+                        .font(.fernlet(.body))
+                        .italic()
+                        .foregroundStyle(Color.slate)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ForEach(items) { item in
+                        customItemButton(item)
+                    }
+                }
+
+                NavigationLink {
+                    WardrobeView(store: store)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "tshirt.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Color.moss)
+                            .frame(width: 34, height: 34)
+                            .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Design & recolor in Wardrobe")
+                                .font(.fernlet(.label))
+                                .foregroundStyle(Color.moss)
+                            Text("Open the closet")
+                                .font(.fernlet(.bodySmall))
+                                .italic()
+                                .foregroundStyle(Color.slate)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.moss)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("companion.wardrobe")
+            }
+            }
+        }
+    }
+
+    /// One custom-item row inside a slot picker. Tap to equip; tap the equipped item to unequip.
+    private func customItemButton(_ item: CustomizationItem) -> some View {
+        let isEquipped = store.equippedCustomItems.contains { $0.id == item.id }
+        return Button {
+            if isEquipped {
+                store.unequipCustomSlot(item.slot)
+            } else {
+                store.equipCustomItem(id: item.id, slot: item.slot)
+            }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: "leaf.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(Color.fern)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Milestones")
-                        .font(.subheadline.weight(.semibold))
+                CustomItemThumbnail(texture: item.texture, size: 40)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.name.isEmpty ? item.slot.label : item.name)
+                        .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
-                    Text("All the care you've logged, added up over all time")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(item.slot.label)
+                        .font(.fernlet(.bodySmall))
+                        .italic()
+                        .foregroundStyle(Color.slate)
                 }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.bark.opacity(0.4))
+                Spacer(minLength: 8)
+                if isEquipped {
+                    Text("Equipped")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.moss)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.moss.opacity(0.12), in: Capsule())
+                }
             }
-            .padding(14)
+            .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.cream)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isEquipped ? Color.moss.opacity(0.10) : Color.bark.opacity(0.04))
             )
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("companion.milestones")
-    }
-
-    private var wardrobeLink: some View {
-        NavigationLink {
-            WardrobeView(store: store)
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "tshirt.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(Color.moss)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Custom items & wardrobe")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.bark)
-                    Text("Design your own clothes in the grid editor")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.bark.opacity(0.4))
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.cream)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var styleControls: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            CompanionCustomizationCard(
-                title: "Blob",
-                items: CompanionBodyStyle.allCases,
-                selection: appearanceBinding(\.bodyStyle),
-                colorTitle: "Body color",
-                colorSelection: colorPresetBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
-                customColorHex: appearanceBinding(\.bodyCustomColorHex),
-                customColor: customColorBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
-                state: store.companionState
-            ) { style in
-                Label(style.label, systemImage: "seal")
-            }
-
-            CompanionCustomizationCard(
-                title: "Accessory",
-                items: CompanionAccessory.allCases,
-                selection: appearanceBinding(\.accessory),
-                colorTitle: "Accessory color",
-                colorSelection: colorPresetBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
-                customColorHex: appearanceBinding(\.accessoryCustomColorHex),
-                customColor: customColorBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
-                state: store.companionState
-            ) { accessory in
-                Label(accessory.label, systemImage: accessoryIcon(accessory))
-            }
-        }
-    }
-
-    private var slotControls: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            CompanionCustomizationCard(
-                title: "Clothing",
-                items: CompanionClothing.allCases,
-                selection: appearanceBinding(\.clothing),
-                colorTitle: "Clothing color",
-                colorSelection: colorPresetBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
-                customColorHex: appearanceBinding(\.clothingCustomColorHex),
-                customColor: customColorBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
-                state: store.companionState
-            ) { clothing in
-                Label(clothing.label, systemImage: clothingIcon(clothing))
-            }
-
-            CompanionCustomizationCard(
-                title: "Side item",
-                items: CompanionSideItem.allCases,
-                selection: appearanceBinding(\.sideItem),
-                colorTitle: "Item color",
-                colorSelection: colorPresetBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
-                customColorHex: appearanceBinding(\.sideItemCustomColorHex),
-                customColor: customColorBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
-                state: store.companionState
-            ) { item in
-                Label(item.label, systemImage: item.systemImage)
-            }
-        }
+        .accessibilityLabel("\(item.name.isEmpty ? item.slot.label : item.name), \(isEquipped ? "equipped" : "not equipped")")
     }
 
     private func appearanceBinding<Value>(_ keyPath: WritableKeyPath<CompanionAppearance, Value>) -> Binding<Value> {
@@ -1123,14 +1274,6 @@ private struct CompanionCustomizationSheet: View {
         }
     }
 
-    private func colorLabel(_ color: CompanionAssetColor) -> some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(color.color(for: store.companionState))
-                .frame(width: 12, height: 12)
-            Text(color.label)
-        }
-    }
 }
 
 private extension Color {
@@ -1157,6 +1300,9 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
     @Binding var customColorHex: String?
     @Binding var customColor: Color
     var state: CompanionState
+    /// Whether the built-in recolor control is shown. Off when no built-in is equipped in this slot —
+    /// custom items carry their own painted colors and get no color control.
+    var showsColor: Bool = true
     @ViewBuilder var label: (Item) -> LabelContent
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
@@ -1172,7 +1318,7 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
                             selection = item
                         } label: {
                             label(item)
-                                .font(.subheadline.weight(.semibold))
+                                .font(.fernlet(.label))
                                 .foregroundStyle(selection.id == item.id ? Color.cream : Color.bark)
                                 .frame(maxWidth: .infinity, minHeight: 42)
                                 .background(
@@ -1184,17 +1330,19 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        SectionLabel(colorTitle)
-                        Spacer()
-                        ColorPicker("Custom color", selection: $customColor, supportsOpacity: false)
-                            .labelsHidden()
-                    }
+                if showsColor {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            SectionLabel(colorTitle)
+                            Spacer()
+                            ColorPicker("Custom color", selection: $customColor, supportsOpacity: false)
+                                .labelsHidden()
+                        }
 
-                    LazyVGrid(columns: colorColumns, spacing: 6) {
-                        ForEach(CompanionAssetColor.allCases) { color in
-                            colorButton(for: color)
+                        LazyVGrid(columns: colorColumns, spacing: 6) {
+                            ForEach(CompanionAssetColor.allCases) { color in
+                                colorButton(for: color)
+                            }
                         }
                     }
                 }
@@ -1213,7 +1361,7 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
                     .fill(color.color(for: state))
                     .frame(width: 11, height: 11)
                 Text(color.label)
-                    .font(.caption2.weight(.semibold))
+                    .font(.fernlet(.label))
                     .lineLimit(1)
             }
             .foregroundStyle(isSelected ? Color.cream : Color.bark)
@@ -1241,13 +1389,13 @@ struct SignalDetailRow: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(SignalPresentation.title(for: signal.signalName))
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Text(signal.value.capitalized)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(SignalPresentation.color(for: signal.value))
                     Text(SignalPresentation.explanation(for: signal))
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
@@ -1259,7 +1407,7 @@ struct SignalDetailRow: View {
             FlowLayout(spacing: 6) {
                 ForEach(signal.sourceFields, id: \.self) { field in
                     Text(field)
-                        .font(.caption2.weight(.medium))
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
@@ -1272,11 +1420,11 @@ struct SignalDetailRow: View {
                     ForEach(signal.nutrientGaps.prefix(4)) { gap in
                         HStack {
                             Text(gap.nutrientName)
-                                .font(.caption.weight(.medium))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.bark)
                             Spacer()
                             Text(gap.status == .gap ? "gap" : "covered")
-                                .font(.caption2.weight(.semibold))
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(gap.status == .gap ? Color.terracotta : Color.moss)
                         }
                     }
@@ -1407,7 +1555,7 @@ struct TrendsModal: View {
             Spacer()
             Button("Done") { dismiss() }
                 .buttonStyle(.plain)
-                .font(.headline)
+                .font(.fernlet(.label))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
@@ -1424,8 +1572,11 @@ struct FernletCard<Content: View>: View {
 
     var body: some View {
         content
-            .padding(16)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(FernletMetrics.spaceMd)   // 16
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd, style: .continuous))   // 18
+            // Kept as the current single-layer `bark`-tinted shadow (not `fernletCardShadow()`): the
+            // two-layer barkShadow token renders differently, and this card primitive is used across 13
+            // files — swapping its shadow is a deliberate visual change, not a cleanup.
             .shadow(color: .bark.opacity(0.08), radius: 12, x: 0, y: 5)
     }
 }
@@ -1439,7 +1590,7 @@ struct SectionLabel: View {
 
     var body: some View {
         Text(text.uppercased())
-            .font(.caption2.weight(.semibold))
+            .font(.fernlet(.labelSmall))
             .tracking(0.8)
             .foregroundStyle(Color.slate)
     }
@@ -1450,7 +1601,7 @@ struct ThoughtBubble: View {
 
     var body: some View {
         Text(text)
-            .font(.callout.italic())
+            .font(.fernlet(.bubble))
             .foregroundStyle(Color.bark)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 18)
@@ -1530,10 +1681,10 @@ struct HomeActionWidget: View {
                         .background(Color.moss.opacity(0.12), in: Circle())
                     VStack(alignment: .leading, spacing: 3) {
                         Text(widget.title)
-                            .font(.headline.weight(.semibold))
+                            .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
                         Text(actionSubtitle)
-                            .font(.caption)
+                            .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
@@ -1558,7 +1709,7 @@ struct HomeActionWidget: View {
         case .water: "Update hydration."
         case .hygiene: "Open care tasks."
         case .trends: "Review local signals."
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient: ""
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid: ""
         }
     }
 }
@@ -1575,7 +1726,7 @@ struct QuickLogButton: View {
                 Image(systemName: systemImage)
                     .font(.title3)
                 Text(title)
-                    .font(.caption2.weight(.semibold))
+                    .font(.fernlet(.label))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -1608,7 +1759,7 @@ struct MacroCard: View {
                     }
                     Label("Fiber \(targets.fiber)g", systemImage: "leaf")
                 }
-                .font(.caption.weight(.medium))
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             }
         }
@@ -1632,13 +1783,13 @@ struct MacroRing: View {
                     .stroke(color, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Text("\(current)g")
-                    .font(.caption.weight(.medium))
+                    .font(.fernlet(.stat))
             }
             .frame(width: 68, height: 68)
             Text(label)
-                .font(.caption.weight(.medium))
+                .font(.fernlet(.labelSmall))
             Text("of \(goal)g")
-                .font(.caption2)
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
         }
         .frame(maxWidth: .infinity)
@@ -1658,7 +1809,7 @@ struct HygieneCard: View {
                         SectionLabel("Hygiene")
                         Spacer()
                         Text("\(progress.completed)/\(progress.total)")
-                            .font(.caption.weight(.semibold))
+                            .font(.fernlet(.stat))
                             .foregroundStyle(progress.completed == progress.total ? Color.moss : Color.slate)
                     }
                     HStack(spacing: 3) {
@@ -1672,7 +1823,7 @@ struct HygieneCard: View {
                         ForEach(store.personalCareTasks) { task in
                             Button { store.togglePersonalCareTask(task) } label: {
                                 Label(task.label, systemImage: task.systemImage)
-                                    .font(.caption2.weight(.medium))
+                                    .font(.fernlet(.label))
                                     .lineLimit(1)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 6)
@@ -1695,7 +1846,7 @@ struct EmptyState: View {
 
     var body: some View {
         Text(text)
-            .font(.callout.italic())
+            .font(.fernlet(.bubble))
             .foregroundStyle(Color.slate)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.vertical, 18)

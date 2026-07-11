@@ -27,11 +27,14 @@ extension FernletStore {
     /// Populate today's diary with representative demo content. Invoked from
     /// ContentView's launch task when `UITestSupport.shouldSeedDemoContent` is set.
     ///
-    /// Idempotent for a launch: bails if today's meals/workouts/journals already exist
-    /// so repeated launches against the same simulator don't stack duplicates.
+    /// Idempotent per DAY: bails if today's meals/workouts already exist so repeated
+    /// launches don't stack duplicates. The guard must stay day-scoped — journals and
+    /// memories persist across days, so gating on them left any simulator that had
+    /// seeded on a previous calendar day permanently unseedable (empty Food/Move tabs);
+    /// those two seeders carry their own cross-day duplicate checks instead.
     @MainActor
     func seedDemoContent() {
-        guard day.meals.isEmpty, day.workouts.isEmpty, previousJournals.isEmpty else { return }
+        guard day.meals.isEmpty, day.workouts.isEmpty else { return }
 
         // Ensure the (age-gated) Intimacy section is reachable for appearance review.
         if settings.userProfile.age < 18 { settings.userProfile.age = 30 }
@@ -87,6 +90,9 @@ extension FernletStore {
     // MARK: - Private / Journal (sealed via the no-lock device key)
 
     private func seedJournals() {
+        // Journals persist across days — a simulator seeded on a previous day
+        // already has these; adding more each day would stack duplicates.
+        guard previousJournals.isEmpty else { return }
         addJournal(text: "Felt steady and focused today. A calm, good kind of day.", tag: .good)
         addJournal(text: "Quiet evening, grateful for the small wins this week.", tag: .bright)
     }
@@ -113,9 +119,14 @@ extension FernletStore {
     // MARK: - Memories (plain synced notes; companion context)
 
     private func seedMemories() {
-        memories.append(MemoryNote(category: "good", text: "Enjoys morning walks and steady routines."))
+        // Memories persist across days too — skip if a previous day already seeded them.
+        // The marker is appended LAST so the trailing suffix(300) cap evicts it last: if
+        // it survived, seeding ran, so gating on it never re-appends the trio on a later day.
+        let marker = "Enjoys morning walks and steady routines."
+        guard !memories.contains(where: { $0.text == marker }) else { return }
         memories.append(MemoryNote(category: "bright", text: "Cooking at home felt rewarding this week."))
         memories.append(MemoryNote(category: "note", text: "Prefers gentle, consistent care over streaks."))
+        memories.append(MemoryNote(category: "good", text: marker))
         memories = Array(memories.suffix(300))
     }
 }

@@ -27,7 +27,7 @@ struct QuickMoodRow: View {
         VStack(alignment: .leading, spacing: 8) {
             if showsLabel {
                 Text("How's today feeling?")
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
             ScrollView(.horizontal, showsIndicators: false) {
@@ -43,7 +43,7 @@ struct QuickMoodRow: View {
                                     .fill(tag.color)
                                     .frame(width: 8, height: 8)
                                 Text(tag.label)
-                                    .font(.caption.weight(.semibold))
+                                    .font(.fernlet(.label))
                             }
                             .foregroundStyle(currentTag == tag ? Color.parchment : Color.bark)
                             .padding(.horizontal, 12)

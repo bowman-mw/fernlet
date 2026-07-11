@@ -25,6 +25,7 @@ struct MilestonesView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                eyebrow
                 header
 
                 VStack(spacing: 11) {
@@ -40,6 +41,18 @@ struct MilestonesView: View {
         .background(Color.parchment)
         .navigationTitle("Milestones")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Eyebrow
+
+    /// A small, spaced "MILESTONES" label sitting above the title — the keepsake-shelf eyebrow from
+    /// the mockup, so the screen opens like a quiet page in a memento book rather than a stat panel.
+    private var eyebrow: some View {
+        Text("MILESTONES")
+            .font(.fernlet(.labelSmall))
+            .tracking(1.6)
+            .foregroundStyle(Color.slate)
+            .frame(maxWidth: .infinity)
     }
 
     // MARK: - Data
@@ -69,17 +82,22 @@ struct MilestonesView: View {
         if isMostlyEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("The shelf is filling in")
-                    .font(.system(.title2, design: .serif).weight(.semibold))
+                    .font(.fernlet(.header))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
                 Text("These only ever grow, in their own time. There's nothing to keep up with here.")
-                    .font(.callout)
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
         } else {
+            Text("All of it, added up")
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+
             Text("Every bit of care you've logged, added up over all time. These numbers only ever grow — nothing here resets, expires, or asks you to keep a streak.")
-                .font(.callout)
+                .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
@@ -90,7 +108,7 @@ struct MilestonesView: View {
                     Image(systemName: "seal")
                         .font(.footnote.weight(.semibold))
                     Text("See your keepsake shelf")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.label))
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.forward")
                         .font(.caption.weight(.semibold))
@@ -119,7 +137,7 @@ struct MilestonesView: View {
             HStack(spacing: 14) {
                 iconTile(row, dimmed: true)
                 Text(row.emptyPrompt)
-                    .font(.system(.subheadline, design: .serif).italic())
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                 Spacer(minLength: 0)
@@ -140,7 +158,7 @@ struct MilestonesView: View {
                 iconTile(row, dimmed: false)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(row.headline)
-                        .font(.system(.body, design: .serif))
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
                     if row.reachedCount > 0 {
@@ -149,7 +167,7 @@ struct MilestonesView: View {
                                 .font(.system(size: 10))
                                 .foregroundStyle(Color.goldenrod)
                             Text(row.reachedCount == 1 ? "1 milestone gift" : "\(row.reachedCount) milestone gifts")
-                                .font(.caption)
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.goldenrod)
                         }
                     }
@@ -182,7 +200,7 @@ struct MilestonesView: View {
             HStack(spacing: 15) {
                 CoinGlyph(diameter: 46)
                 Text("Milestone gifts have added \(totalMilestoneCoins) coins to your pouch.")
-                    .font(.system(.subheadline, design: .serif))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
                 Spacer(minLength: 0)
@@ -203,7 +221,7 @@ struct MilestonesView: View {
             HStack(spacing: 14) {
                 CoinGlyph(diameter: 40, muted: true)
                 Text("No milestone gifts yet — the first lands with your very first log. No rush.")
-                    .font(.system(.subheadline, design: .serif))
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                 Spacer(minLength: 0)
@@ -249,15 +267,15 @@ private struct KeepsakeShelfView: View {
             VStack(alignment: .leading, spacing: 20) {
                 if earned.isEmpty {
                     Text("Your keepsake shelf")
-                        .font(.system(.title2, design: .serif).weight(.semibold))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Text("Nothing pressed onto the shelf just yet. Every bit of care will find a place here, in its own time.")
-                        .font(.callout)
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 } else {
                     Text("Every bit of care, pressed into a keepsake. These only ever grow — nothing resets or expires.")
-                        .font(.system(.body, design: .serif))
+                        .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
 
@@ -271,7 +289,7 @@ private struct KeepsakeShelfView: View {
                         HStack(spacing: 15) {
                             CoinGlyph(diameter: 46)
                             Text("Milestone gifts have added \(totalMilestoneCoins) coins to your pouch.")
-                                .font(.system(.subheadline, design: .serif))
+                                .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                                 .fernletWrappingText()
                             Spacer(minLength: 0)
@@ -325,111 +343,16 @@ private struct KeepsakeShelfView: View {
             PressedMedallion(icon: row.icon, tint: row.tint, diameter: 88)
             VStack(spacing: 1) {
                 Text("\(row.count)")
-                    .font(.system(.title3, design: .serif).weight(.semibold))
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
                 Text(row.shelfLabel)
-                    .font(.caption2)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .multilineTextAlignment(.center)
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(row.headline)
-    }
-}
-
-// MARK: - Pressed-metal medallion
-
-/// A circular "pressed metal" keepsake: a radial-gradient face, an inset highlight/shadow ring for
-/// the struck-coin look, and a thin inner ring. Purely decorative — reads as a memento, not a token.
-private struct PressedMedallion: View {
-    let icon: String
-    let tint: Color
-    var diameter: CGFloat = 88
-
-    var body: some View {
-        ZStack {
-            // Metal face: light catch top-left, deepening to a darker rim.
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [tint.opacity(0.55), tint.opacity(0.85), tint],
-                        center: UnitPoint(x: 0.38, y: 0.32),
-                        startRadius: 2,
-                        endRadius: diameter * 0.72
-                    )
-                )
-            // Top highlight — the "pressed" catch of light.
-            Circle()
-                .stroke(Color.white.opacity(0.35), lineWidth: diameter * 0.045)
-                .blur(radius: diameter * 0.03)
-                .mask(
-                    Circle().fill(
-                        LinearGradient(
-                            colors: [.white, .clear],
-                            startPoint: .top,
-                            endPoint: .center
-                        )
-                    )
-                )
-            // Bottom inset shadow — the struck-coin depth.
-            Circle()
-                .stroke(Color.black.opacity(0.22), lineWidth: diameter * 0.06)
-                .blur(radius: diameter * 0.04)
-                .mask(
-                    Circle().fill(
-                        LinearGradient(
-                            colors: [.clear, .black],
-                            startPoint: .center,
-                            endPoint: .bottom
-                        )
-                    )
-                )
-            // Thin inner ring.
-            Circle()
-                .strokeBorder(Color.white.opacity(0.3), lineWidth: 1.5)
-                .padding(diameter * 0.09)
-            // Engraved icon.
-            Image(systemName: icon)
-                .font(.system(size: diameter * 0.38, weight: .regular))
-                .foregroundStyle(Color.bark.opacity(0.72))
-        }
-        .frame(width: diameter, height: diameter)
-        .shadow(color: tint.opacity(0.32), radius: 9, x: 0, y: 7)
-    }
-}
-
-// MARK: - Coin glyph
-
-/// The small pressed-gold coin used in the coins-summary cards. Radial gold gradient with a soft
-/// inner highlight; the "coin" mark is a gentle swirl. Muted variant for the not-yet state.
-private struct CoinGlyph: View {
-    var diameter: CGFloat = 46
-    var muted: Bool = false
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: muted
-                            ? [Color.coinHighlight.opacity(0.7), Color.goldenrod.opacity(0.6), Color.goldenrod.opacity(0.7)]
-                            : [Color.coinHighlight, Color.sun, Color.goldenrod],
-                        center: UnitPoint(x: 0.38, y: 0.32),
-                        startRadius: 1,
-                        endRadius: diameter * 0.7
-                    )
-                )
-                .overlay(
-                    Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
-                )
-                .shadow(color: Color.goldenrod.opacity(muted ? 0.2 : 0.4), radius: 5, x: 0, y: 3)
-            Image(systemName: "leaf.fill")
-                .font(.system(size: diameter * 0.4, weight: .semibold))
-                .foregroundStyle(Color.bark.opacity(muted ? 0.4 : 0.55))
-        }
-        .frame(width: diameter, height: diameter)
-        .opacity(muted ? 0.85 : 1)
     }
 }
 
@@ -546,11 +469,5 @@ private extension Color {
     static let shelfLedgeBottom = Color(
         light: Color(red: 0.765, green: 0.686, blue: 0.533),
         dark:  Color(red: 0.220, green: 0.180, blue: 0.125)
-    )
-
-    // Coin highlight (the light catch on the pressed-gold coin).
-    static let coinHighlight = Color(
-        light: Color(red: 0.965, green: 0.839, blue: 0.537),
-        dark:  Color(red: 0.965, green: 0.839, blue: 0.537)
     )
 }

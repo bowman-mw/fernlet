@@ -38,10 +38,10 @@ struct OnboardingPermissionsView: View {
             rowIcon("bell.badge.fill")
             VStack(alignment: .leading, spacing: 4) {
                 Text("Notifications")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 Text("A gentle daily check-in reminder, only if you want one.")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
@@ -59,16 +59,16 @@ struct OnboardingPermissionsView: View {
         case .on:
             Label("On", systemImage: "checkmark.circle.fill")
                 .labelStyle(.titleAndIcon)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.moss)
         case .off:
             Text("Off in Settings")
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
         case .undecided:
             Button { requestNotifications() } label: {
                 Text(requestingNotifications ? "…" : "Turn on")
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -103,10 +103,10 @@ struct OnboardingPermissionsView: View {
             rowIcon(systemImage)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 Text(body)
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }

@@ -113,6 +113,12 @@ struct PastDayJournalSealingTests {
         #expect(strippedSealed.emotions.isEmpty)
         #expect(strippedSealed.tag == .good)   // non-sensitive metadata preserved
         #expect(strippedSealed.id == sealedID)
+        // Fail-closed allowlist (S3): Equatable spans EVERY stored field, so this proves the strip
+        // result is exactly the memberwise reconstruct — text/emotions blanked, the allowlisted
+        // id/tag/date/isQuickMood carried, and nothing else riding through. A future stored field
+        // must be consciously added to strippedIfSealed (and to this expected value) to survive.
+        #expect(strippedSealed == JournalEntry(
+            id: sealedID, text: "", tag: .good, date: sealed.date, emotions: [], isQuickMood: false))
 
         let untouched = open.strippedIfSealed(in: ids)
         #expect(untouched.text == "public")    // unsealed entry keeps its text (no data loss)

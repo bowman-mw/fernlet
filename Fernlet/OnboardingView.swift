@@ -60,7 +60,7 @@ struct ProfileEditor: View {
     private func labeledPicker<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             content()
                 .pickerStyle(.menu)

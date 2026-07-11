@@ -23,24 +23,24 @@ struct ConnectionInspectorHistoryView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text(log.peer?.displayName ?? "Unknown peer")
-                                    .font(.headline)
+                                    .font(.fernlet(.headerMedium))
                                     .foregroundStyle(Color.bark)
                                 Spacer()
                                 if !log.errors.isEmpty {
                                     Label("\(log.errors.count)", systemImage: "exclamationmark.triangle.fill")
-                                        .font(.caption.weight(.semibold))
+                                        .font(.fernlet(.stat))
                                         .foregroundStyle(Color.terracotta)
                                 }
                             }
                             Text(log.startedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
-                                .font(.caption)
+                                .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                             HStack(spacing: 10) {
                                 Text(log.endState)
                                 Text(duration(log))
                                 Text("\(log.envelopes.count) envelopes")
                             }
-                            .font(.caption2.monospacedDigit())
+                            .font(.fernlet(.stat))
                             .foregroundStyle(Color.slate)
                         }
                         .padding(.vertical, 4)

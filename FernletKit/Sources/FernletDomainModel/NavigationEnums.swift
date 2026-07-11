@@ -83,8 +83,10 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
     case macros
     case trends
     case ambient
+    case milestones
+    case firstAid
 
-    nonisolated public static let defaultWidgets: [HomeWidget] = [.companion, .todaySummary, .todayIntent, .ambient, .quickLog, .macros, .trends]
+    nonisolated public static let defaultWidgets: [HomeWidget] = [.companion, .todaySummary, .todayIntent, .ambient, .quickLog, .macros, .trends, .firstAid, .milestones]
 
     public var id: String { rawValue }
 
@@ -105,6 +107,8 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
         case .macros: "Macros"
         case .trends: "Trends"
         case .ambient: "Moments"
+        case .milestones: "Milestones"
+        case .firstAid: "First aid"
         }
     }
 
@@ -125,6 +129,8 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
         case .macros: "chart.pie"
         case .trends: "chart.line.uptrend.xyaxis"
         case .ambient: "sparkles"
+        case .milestones: "seal"
+        case .firstAid: "heart.circle"
         }
     }
 
@@ -132,7 +138,7 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
         switch self {
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .hygiene, .trends:
             true
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient:
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid:
             false
         }
     }
@@ -158,6 +164,9 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
     case periodTracking
     case intimacyTracking
     case friends
+    case breathing
+    case grounding
+    case worryBox
 
     nonisolated public static let defaultQuickLog: [FernletShortcut] = [.meal, .water, .move, .sleep, .journal, .care]
 
@@ -175,6 +184,9 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         case .periodTracking: "Period"
         case .intimacyTracking: "Intimacy"
         case .friends: "Friends"
+        case .breathing: "Slow breathing"
+        case .grounding: "Grounding"
+        case .worryBox: "Worry box"
         }
     }
 
@@ -190,6 +202,9 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         case .periodTracking: "calendar.badge.clock"
         case .intimacyTracking: "lock.shield"
         case .friends: "person.2"
+        case .breathing: "wind"
+        case .grounding: "leaf"
+        case .worryBox: "archivebox"
         }
     }
 
@@ -200,7 +215,7 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         case .periodTracking: .periodTracking
         case .intimacyTracking: .intimacyTracking
         case .friends: .friends
-        case .meal, .water, .sleep, .care, .logPeriod:
+        case .meal, .water, .sleep, .care, .logPeriod, .breathing, .grounding, .worryBox:
             nil
         }
     }

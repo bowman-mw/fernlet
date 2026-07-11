@@ -25,7 +25,7 @@ struct FriendListView: View {
         List {
             HStack(spacing: 10) {
                 Text("You appear as")
-                    .font(.subheadline)
+                    .font(.fernlet(.label))
                     .foregroundStyle(Color.slate)
                 Spacer()
                 TextField("Your name", text: $displayName)
@@ -158,7 +158,7 @@ struct FriendListView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(peer.displayName)
-                    .font(.body.weight(.semibold))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
 
                 Text(peer.fingerprint)
@@ -168,7 +168,7 @@ struct FriendListView: View {
                     .truncationMode(.middle)
 
                 Text("Last seen \(peer.lastSeenAt.relativeFormatted)")
-                    .font(.caption)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
 
@@ -184,7 +184,7 @@ struct FriendListView: View {
     private func statusBadge(for peer: ProximityTrustedPeerRecord) -> some View {
         if peer.blockedAt != nil {
             Text("Blocked")
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .foregroundStyle(Color.terracotta)
@@ -192,7 +192,7 @@ struct FriendListView: View {
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.20), lineWidth: 1))
         } else if peer.revokedAt != nil {
             Text("Removed")
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .foregroundStyle(Color.slate)
@@ -200,7 +200,7 @@ struct FriendListView: View {
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
         } else {
             Text("Friend")
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .foregroundStyle(Color.parchment)
@@ -270,7 +270,18 @@ struct FriendListView: View {
         let reachable = store.heartShareManager.isReachable(fingerprint: peer.fingerprint)
         let firstName = ProximityHeartManager.firstName(of: peer.displayName)
 
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            // Presence line: a soft moss dot means you're actually together (good-vibes 10c);
+            // otherwise a muted taupe dot — warmth is a thing you do side by side.
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(reachable ? Color.moss : Color.softTaupe)
+                    .frame(width: 7, height: 7)
+                Text(reachable ? "Nearby now" : "Not nearby")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(reachable ? Color.moss : Color.slate)
+            }
+
             Button {
                 store.heartShareManager.sendHeart(to: peer)
             } label: {
@@ -282,20 +293,25 @@ struct FriendListView: View {
 
             if alreadySentToday {
                 Text("You've already sent \(firstName) some warmth today.")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
                     .fernletWrappingText()
             } else if !reachable {
                 Text("Hearts travel in person for now — they can be sent when you're together.")
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
                     .fernletWrappingText()
             }
 
             if let status = heartStatusText {
                 Text(status)
-                    .font(.caption.italic())
+                    .font(.fernlet(.bubble))
                     .foregroundStyle(Color.moss)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .fernletWrappingText()
             }
         }
@@ -317,7 +333,7 @@ struct FriendListView: View {
     private func detailRow(_ label: String, value: String, monospaced: Bool = false) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label)
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             Spacer(minLength: 12)
             Text(value)
@@ -373,21 +389,21 @@ struct SendGoodVibesLabel: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 9) {
             Image(systemName: state == .sent ? "checkmark" : "heart.fill")
                 .font(.subheadline.weight(.semibold))
             Text(state == .sent ? "Sent for today" : "Send good vibes")
-                .font(.subheadline.weight(.semibold))
+                .font(.fernlet(.label))
         }
         .foregroundStyle(foreground)
         .padding(.horizontal, 16)
-        .padding(.vertical, 11)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
         .background(background, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         .shadow(
-            color: state == .ready ? Color.terracotta.opacity(0.30) : .clear,
-            radius: state == .ready ? 8 : 0,
-            y: state == .ready ? 3 : 0
+            color: state == .ready ? Color.terracotta.opacity(0.32) : .clear,
+            radius: state == .ready ? 10 : 0,
+            y: state == .ready ? 4 : 0
         )
     }
 

@@ -132,13 +132,25 @@ struct FriendsView: View {
                         ScreenHeader(title: "Friends", subtitle: "", identifier: "screen.friends")
                         Spacer()
                         HStack(spacing: 10) {
-                            NavigationLink {
-                                FriendShopView(store: store, manager: store.clothingShareManager)
-                            } label: {
-                                headerButtonLabel("bag")
+                            // Surface the shop when a friend's shop is discoverable nearby. Gate on
+                            // `nearbyShopPeers` (set on peer discovery) rather than `peerCatalogs`: catalogs
+                            // are far more ephemeral — a momentary peer disconnect or any scene-phase dip
+                            // (Control Center, app switcher, Face ID) clears them, which would yank this link
+                            // out from under a pushed FriendShopView and force-pop the user mid-browse.
+                            // `nearbyShopPeers` is the steadier presence signal, and FriendShopView carries
+                            // its own "looking for shops nearby" recovery state for a catalog that comes and
+                            // goes while it's open. Interim gate pending the clothing/photo mesh merge — once
+                            // unified, gate on the single session's isInSession instead.
+                            if !store.clothingShareManager.nearbyShopPeers.isEmpty {
+                                NavigationLink {
+                                    FriendShopView(store: store, manager: store.clothingShareManager)
+                                } label: {
+                                    shopButtonLabel(coins: store.coinBalance)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("friends.friendShops")
+                                .accessibilityLabel("Friend shops, \(store.coinBalance) coins")
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("friends.friendShops")
                             NavigationLink {
                                 FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                             } label: {
@@ -184,6 +196,22 @@ struct FriendsView: View {
             )
     }
 
+    /// The shop bag with a live coin-count badge (mockup 4a "connected · coin badge") — one less
+    /// ambiguous icon: the bag itself carries the balance you'd spend inside.
+    private func shopButtonLabel(coins: Int) -> some View {
+        headerButtonLabel("bag")
+            .overlay(alignment: .topTrailing) {
+                Text("\(coins)")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.bark)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule(style: .continuous).fill(Color.goldenrod))
+                    .overlay(Capsule(style: .continuous).stroke(Color.parchment, lineWidth: 1.5))
+                    .offset(x: 6, y: -5)
+            }
+    }
+
     // MARK: - Nearby status banner
 
     @ViewBuilder
@@ -192,9 +220,9 @@ struct FriendsView: View {
             VStack(spacing: 8) {
                 if manager.slots.isEmpty {
                     HStack(spacing: 10) {
-                        ProgressView().tint(Color.moss).scaleEffect(0.85)
+                        SearchingPulse(tint: Color.moss, size: 32, systemImage: "person.2")
                         Text("Looking for nearby friends…")
-                            .font(.footnote)
+                            .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                         Spacer()
                     }
@@ -226,10 +254,10 @@ struct FriendsView: View {
                     .foregroundStyle(Color.goldenrod)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Your photo shelf is nearly full")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                     Text("You're keeping \(manager.meshPhotos.count) of \(PrivateMediaStore.maxCachedPhotos) shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep.")
-                        .font(.caption)
+                        .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -323,7 +351,7 @@ struct FriendsView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(Color.bark.opacity(0.18))
             Text("Photos from your hangouts\nwill appear here")
-                .font(.callout.italic())
+                .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
         }
@@ -441,7 +469,7 @@ private struct FriendPhotoCarouselPostView: View {
             .overlay(alignment: .topTrailing) {
                 if chromeVisible, post.photos.count > 1 {
                     Text("\(selectedIndex + 1) / \(post.photos.count)")
-                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .font(.fernlet(.stat))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -517,10 +545,10 @@ private struct FriendPhotoCarouselPostView: View {
             FriendProfilePlaceholder()
             VStack(alignment: .leading, spacing: 2) {
                 Text(selectedPhoto.senderName)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 Text(selectedPhoto.addedAt, style: .date)
-                    .font(.caption)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
             Spacer()
@@ -690,10 +718,10 @@ private struct NearbySlotRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(peerName)
-                    .font(.subheadline.weight(.medium))
+                    .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 Text(stateLabel)
-                    .font(.caption)
+                    .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
             }
             Spacer()
@@ -715,11 +743,11 @@ private struct NearbySlotRow: View {
             if showDebugOverride {
                 Button("Force", action: onForceConnect)
                     .buttonStyle(ChipButtonStyle(selected: true))
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.label))
                     .accessibilityIdentifier("friends.forceConnect.\(slot.id)")
             } else if let d = distanceMeters {
                 Text(String(format: "%.0f cm", d * 100))
-                    .font(.caption.monospacedDigit())
+                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
         case .awaitingManualCommit:
@@ -817,12 +845,12 @@ struct ConnectionSuccessOverlay: View {
 
                 VStack(spacing: 6) {
                     Text(peerName)
-                        .font(.system(size: 30, weight: .bold, design: .serif))
+                        .font(.fernlet(.display))
                         .foregroundStyle(Color.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     Text("Connected")
-                        .font(.footnote.weight(.semibold))
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.moss)
                         .textCase(.uppercase)
                         .tracking(1.4)

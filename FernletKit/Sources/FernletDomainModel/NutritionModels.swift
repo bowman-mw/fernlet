@@ -15,8 +15,37 @@ public nonisolated struct UserNutritionProfile: Codable, Equatable {
     public var age: Int = 30
     public var weightPounds: Double = 170
     public var heightInches: Double = 68
-    public var sex: BiologicalSex = .male
-    public var activityLevel: ActivityLevel = .moderate
+    // Tolerant enum decode + parked-token side channels (EnumDecodeCompat): this struct lives in
+    // FernletSettings (a top-level synced-blob field), so a synthesized strict decode of a raw
+    // value only a newer build knows would brick the older device into read-only recovery.
+    // NOTE: the HealthKit body-profile auto-import assigns `sex` once per launch when Health has
+    // it, which clears the park via `didSet` — deliberate, since Health is treated as the local
+    // authority for this field on every device (known cases are overwritten the same way).
+    public var sex: BiologicalSex = .male {
+        didSet { unknownSexToken = nil }
+    }
+    public var unknownSexToken: String? = nil
+    public var activityLevel: ActivityLevel = .moderate {
+        didSet { unknownActivityLevelToken = nil }
+    }
+    public var unknownActivityLevelToken: String? = nil
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Required keys (synthesized-strict pre-compat): absence is corruption, not a newer build.
+        // age/weight/height feed calorie targets — fabricating defaults would silently mis-guide.
+        age = try c.decode(Int.self, forKey: .age)
+        weightPounds = try c.decode(Double.self, forKey: .weightPounds)
+        heightInches = try c.decode(Double.self, forKey: .heightInches)
+        let sexSplit = try c.decodeTolerantRequiredEnum(
+            BiologicalSex.self, forKey: .sex, parkedTokenKey: .unknownSexToken, default: .male)
+        sex = sexSplit.value
+        unknownSexToken = sexSplit.parkedToken
+        let activitySplit = try c.decodeTolerantRequiredEnum(
+            ActivityLevel.self, forKey: .activityLevel, parkedTokenKey: .unknownActivityLevelToken, default: .moderate)
+        activityLevel = activitySplit.value
+        unknownActivityLevelToken = activitySplit.parkedToken
+    }
 
     public var weightKilograms: Double { weightPounds / 2.20462 }
     public var heightCentimeters: Double { heightInches * 2.54 }
@@ -28,8 +57,29 @@ public nonisolated struct UserNutritionPreferences: Codable, Equatable {
         self.dietaryPattern = dietaryPattern
         self.guidanceIntensity = guidanceIntensity
     }
-    public var dietaryPattern: DietaryPattern = .balanced
-    public var guidanceIntensity: GuidanceIntensity = .steady
+    // Tolerant enum decode + parked-token side channels; same synced-settings contract as
+    // `UserNutritionProfile` (EnumDecodeCompat).
+    public var dietaryPattern: DietaryPattern = .balanced {
+        didSet { unknownDietaryPatternToken = nil }
+    }
+    public var unknownDietaryPatternToken: String? = nil
+    public var guidanceIntensity: GuidanceIntensity = .steady {
+        didSet { unknownGuidanceIntensityToken = nil }
+    }
+    public var unknownGuidanceIntensityToken: String? = nil
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Required keys (synthesized-strict pre-compat): absence is corruption, not a newer build.
+        let patternSplit = try c.decodeTolerantRequiredEnum(
+            DietaryPattern.self, forKey: .dietaryPattern, parkedTokenKey: .unknownDietaryPatternToken, default: .balanced)
+        dietaryPattern = patternSplit.value
+        unknownDietaryPatternToken = patternSplit.parkedToken
+        let intensitySplit = try c.decodeTolerantRequiredEnum(
+            GuidanceIntensity.self, forKey: .guidanceIntensity, parkedTokenKey: .unknownGuidanceIntensityToken, default: .steady)
+        guidanceIntensity = intensitySplit.value
+        unknownGuidanceIntensityToken = intensitySplit.parkedToken
+    }
 }
 
 public nonisolated enum BiologicalSex: String, Codable, CaseIterable, Identifiable {
@@ -141,15 +191,27 @@ public nonisolated struct MealComponentSnapshot: Identifiable, Codable, Equatabl
 public nonisolated struct Meal: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var name: String
-    public var mealType: MealType
+    // Tolerant enum decode + parked-token side channels (EnumDecodeCompat): a Meal lives in the
+    // blob's top-level `recentMeals` AND inside days, so a strict decode of a raw value only a
+    // newer build knows would brick the older device (or drop the day's row).
+    public var mealType: MealType {
+        didSet { unknownMealTypeToken = nil }
+    }
+    public var unknownMealTypeToken: String? = nil
     public var macros: Macros
     public var macroSnapshot: Macros
     public var calorieSnapshot: Int
     public var micronutrientSnapshot: Micronutrients
     public var componentSnapshots: [MealComponentSnapshot]
-    public var mealSource: MealSource = .manual
+    public var mealSource: MealSource = .manual {
+        didSet { unknownMealSourceToken = nil }
+    }
+    public var unknownMealSourceToken: String? = nil
     public var isAIFallback: Bool = true
-    public var quality: MealQuality
+    public var quality: MealQuality {
+        didSet { unknownQualityToken = nil }
+    }
+    public var unknownQualityToken: String? = nil
     public var confidence: String
     public var note: String
     public var source: String
@@ -208,15 +270,26 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
-        mealType = try container.decode(MealType.self, forKey: .mealType)
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let mealTypeSplit = try container.decodeTolerantRequiredEnum(
+            MealType.self, forKey: .mealType, parkedTokenKey: .unknownMealTypeToken, default: .snack)
+        mealType = mealTypeSplit.value
+        unknownMealTypeToken = mealTypeSplit.parkedToken
         macros = try container.decode(Macros.self, forKey: .macros)
         macroSnapshot = try container.decodeIfPresent(Macros.self, forKey: .macroSnapshot) ?? macros
         calorieSnapshot = try container.decodeIfPresent(Int.self, forKey: .calorieSnapshot) ?? Self.calories(for: macroSnapshot)
         micronutrientSnapshot = try container.decodeIfPresent(Micronutrients.self, forKey: .micronutrientSnapshot) ?? Micronutrients()
         componentSnapshots = try container.decodeIfPresent([MealComponentSnapshot].self, forKey: .componentSnapshots) ?? []
-        mealSource = try container.decodeIfPresent(MealSource.self, forKey: .mealSource) ?? .manual
+        let mealSourceSplit = try container.decodeTolerantEnum(
+            MealSource.self, forKey: .mealSource, parkedTokenKey: .unknownMealSourceToken, default: .manual)
+        mealSource = mealSourceSplit.value
+        unknownMealSourceToken = mealSourceSplit.parkedToken
         isAIFallback = try container.decodeIfPresent(Bool.self, forKey: .isAIFallback) ?? true
-        quality = try container.decode(MealQuality.self, forKey: .quality)
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let qualitySplit = try container.decodeTolerantRequiredEnum(
+            MealQuality.self, forKey: .quality, parkedTokenKey: .unknownQualityToken, default: .ok)
+        quality = qualitySplit.value
+        unknownQualityToken = qualitySplit.parkedToken
         confidence = try container.decode(String.self, forKey: .confidence)
         note = try container.decode(String.self, forKey: .note)
         source = try container.decodeIfPresent(String.self, forKey: .source) ?? MealLogSource.manual
@@ -689,8 +762,18 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
     public var macros: Macros
     public var micronutrients: Micronutrients
     public var category: String
-    public var source: FoodItemSource
-    public var dataType: FoodDataType = .srLegacy
+    // Tolerant enum decode + parked-token side channels (EnumDecodeCompat): foodItems is a
+    // top-level synced-blob field, and `source`/`dataType` are exactly the taxonomy a future data
+    // pipeline extends. Unknown `source` freezes to `.manual` (never falsely claims USDA or AI
+    // provenance); unknown `dataType` freezes to the long-standing `.srLegacy` default.
+    public var source: FoodItemSource {
+        didSet { unknownSourceToken = nil }
+    }
+    public var unknownSourceToken: String? = nil
+    public var dataType: FoodDataType = .srLegacy {
+        didSet { unknownDataTypeToken = nil }
+    }
+    public var unknownDataTypeToken: String? = nil
     public var sourceURL: URL?
     public var servingDescription: String?
     public var verificationPolicyDays: Int = 180
@@ -777,8 +860,15 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         macros = try container.decode(Macros.self, forKey: .macros)
         micronutrients = try container.decodeIfPresent(Micronutrients.self, forKey: .micronutrients) ?? Micronutrients()
         category = try container.decode(String.self, forKey: .category)
-        source = try container.decode(FoodItemSource.self, forKey: .source)
-        dataType = try container.decodeIfPresent(FoodDataType.self, forKey: .dataType) ?? .srLegacy
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let sourceSplit = try container.decodeTolerantRequiredEnum(
+            FoodItemSource.self, forKey: .source, parkedTokenKey: .unknownSourceToken, default: .manual)
+        source = sourceSplit.value
+        unknownSourceToken = sourceSplit.parkedToken
+        let dataTypeSplit = try container.decodeTolerantEnum(
+            FoodDataType.self, forKey: .dataType, parkedTokenKey: .unknownDataTypeToken, default: .srLegacy)
+        dataType = dataTypeSplit.value
+        unknownDataTypeToken = dataTypeSplit.parkedToken
         sourceURL = try container.decodeIfPresent(URL.self, forKey: .sourceURL)
         servingDescription = try container.decodeIfPresent(String.self, forKey: .servingDescription)
         verificationPolicyDays = try container.decodeIfPresent(Int.self, forKey: .verificationPolicyDays) ?? 180

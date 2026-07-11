@@ -11,18 +11,18 @@ struct WaterSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Water")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     VStack(spacing: 4) {
                         Text("\(store.day.bottleCount)")
-                            .font(.system(size: 72, weight: .semibold, design: .serif))
+                            .font(.fernlet(.display))
                             .foregroundStyle(Color.bark)
                         Text("\(store.day.bottleCount == 1 ? "bottle" : "bottles") - \(store.day.bottleCount * store.settings.bottleOz) oz total")
-                            .font(.callout.italic())
+                            .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                         Text("\(store.settings.bottleOz) oz each · target \(store.settings.hydrationTarget)")
-                            .font(.caption)
+                            .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
                     }
                     .frame(maxWidth: .infinity)
@@ -67,7 +67,7 @@ struct SleepSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Sleep")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     SheetField("Quality") {
@@ -79,10 +79,10 @@ struct SleepSheet: View {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(option.label)
-                                                .font(.body.weight(.medium))
+                                                .font(.fernlet(.label))
                                                 .foregroundStyle(Color.bark)
                                             Text(option.description)
-                                                .font(.caption)
+                                                .font(.fernlet(.bodySmall))
                                                 .foregroundStyle(Color.slate)
                                         }
                                         Spacer()
@@ -147,7 +147,7 @@ struct GoalsSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text(proposed.isEmpty ? "Plan goals" : "Review goals")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     if proposed.isEmpty {
@@ -171,7 +171,7 @@ struct GoalsSheet: View {
                         }
 
                         Text("Goals are generated locally for now. They mirror the website's structure without sending health data to an external service.")
-                            .font(.caption.italic())
+                            .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     } else {
@@ -210,7 +210,7 @@ struct HygieneSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Personal care")
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
                     ForEach(PersonalCareTask.groups, id: \.self) { group in

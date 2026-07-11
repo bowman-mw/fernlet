@@ -38,6 +38,10 @@ public nonisolated struct TextureEntry: Identifiable, Codable, Equatable {
     public var title: String = FernletDate.shortDate(for: .now) + " observation"
     public var body: String
     public var tags: Set<TextureTag>
+    /// Unknown `tags` tokens from a newer build, parked instead of thrown on (a throw in the
+    /// blob's `workshop` bricks the store) and re-encoded so a save here can't strip them
+    /// (`EnumDecodeCompat`).
+    public var unknownTagTokens: [String] = []
     public var createdAt = Date()
 
     public init(id: UUID = UUID(), title: String = FernletDate.shortDate(for: .now) + " observation", body: String, tags: Set<TextureTag> = [], createdAt: Date = Date()) {
@@ -49,7 +53,10 @@ public nonisolated struct TextureEntry: Identifiable, Codable, Equatable {
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         title = try c.decodeIfPresent(String.self, forKey: .title) ?? (FernletDate.shortDate(for: .now) + " observation")
         body = try c.decode(String.self, forKey: .body)
-        tags = try c.decodeIfPresent(Set<TextureTag>.self, forKey: .tags) ?? []
+        let tagSplit = try c.decodeTolerantEnumSet(
+            TextureTag.self, forKey: .tags, parkedTokensKey: .unknownTagTokens)
+        tags = tagSplit.known
+        unknownTagTokens = tagSplit.unknownTokens
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
     }
 }
@@ -60,18 +67,53 @@ public nonisolated enum TextureTag: String, Codable, CaseIterable, Identifiable 
 }
 
 public nonisolated struct CompanionAppearance: Codable, Equatable {
-    public var bodyStyle: CompanionBodyStyle = .circle
-    public var palette: CompanionPalette = .state
-    public var bodyColor: CompanionAssetColor = .state
+    // Every enum field decodes tolerantly (freeze-on-unknown + parked-token side channel): these
+    // are the closet/customization enums, exactly the surface a newer build extends with new
+    // cosmetics, and a present-but-unknown raw value in the synced settings blob would otherwise
+    // throw and brick the older device into read-only recovery. The parked token is re-encoded
+    // (so a save here can't clobber the newer device's choice), re-adopted by a build that knows
+    // it, and cleared on an explicit local edit via `didSet` (`EnumDecodeCompat`). The wardrobe
+    // bindings write through `WritableKeyPath` subscripts, which go through the property setters,
+    // so the observers fire on every user edit.
+    public var bodyStyle: CompanionBodyStyle = .circle {
+        didSet { unknownBodyStyleToken = nil }
+    }
+    public var unknownBodyStyleToken: String? = nil
+    public var palette: CompanionPalette = .state {
+        didSet { unknownPaletteToken = nil }
+    }
+    public var unknownPaletteToken: String? = nil
+    public var bodyColor: CompanionAssetColor = .state {
+        didSet { unknownBodyColorToken = nil }
+    }
+    public var unknownBodyColorToken: String? = nil
     public var bodyCustomColorHex: String?
-    public var accessory: CompanionAccessory = .sprout
-    public var accessoryColor: CompanionAssetColor = .fern
+    public var accessory: CompanionAccessory = .sprout {
+        didSet { unknownAccessoryToken = nil }
+    }
+    public var unknownAccessoryToken: String? = nil
+    public var accessoryColor: CompanionAssetColor = .fern {
+        didSet { unknownAccessoryColorToken = nil }
+    }
+    public var unknownAccessoryColorToken: String? = nil
     public var accessoryCustomColorHex: String?
-    public var clothing: CompanionClothing = .none
-    public var clothingColor: CompanionAssetColor = .terracotta
+    public var clothing: CompanionClothing = .none {
+        didSet { unknownClothingToken = nil }
+    }
+    public var unknownClothingToken: String? = nil
+    public var clothingColor: CompanionAssetColor = .terracotta {
+        didSet { unknownClothingColorToken = nil }
+    }
+    public var unknownClothingColorToken: String? = nil
     public var clothingCustomColorHex: String?
-    public var sideItem: CompanionSideItem = .none
-    public var sideItemColor: CompanionAssetColor = .bark
+    public var sideItem: CompanionSideItem = .none {
+        didSet { unknownSideItemToken = nil }
+    }
+    public var unknownSideItemToken: String? = nil
+    public var sideItemColor: CompanionAssetColor = .bark {
+        didSet { unknownSideItemColorToken = nil }
+    }
+    public var unknownSideItemColorToken: String? = nil
     public var sideItemCustomColorHex: String?
 
     // Immutable default appearance. `nonisolated(unsafe)` (rather than making the whole
@@ -110,23 +152,51 @@ public nonisolated struct CompanionAppearance: Codable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        bodyStyle = try container.decodeIfPresent(CompanionBodyStyle.self, forKey: .bodyStyle) ?? .circle
-        palette = try container.decodeIfPresent(CompanionPalette.self, forKey: .palette) ?? .state
-        bodyColor = try container.decodeIfPresent(CompanionAssetColor.self, forKey: .bodyColor) ?? CompanionAssetColor(palette: palette)
+        let bodyStyleSplit = try container.decodeTolerantEnum(
+            CompanionBodyStyle.self, forKey: .bodyStyle, parkedTokenKey: .unknownBodyStyleToken, default: .circle)
+        bodyStyle = bodyStyleSplit.value
+        unknownBodyStyleToken = bodyStyleSplit.parkedToken
+        let paletteSplit = try container.decodeTolerantEnum(
+            CompanionPalette.self, forKey: .palette, parkedTokenKey: .unknownPaletteToken, default: .state)
+        palette = paletteSplit.value
+        unknownPaletteToken = paletteSplit.parkedToken
+        let bodyColorSplit = try container.decodeTolerantEnum(
+            CompanionAssetColor.self, forKey: .bodyColor, parkedTokenKey: .unknownBodyColorToken,
+            default: CompanionAssetColor(palette: palette))
+        bodyColor = bodyColorSplit.value
+        unknownBodyColorToken = bodyColorSplit.parkedToken
         bodyCustomColorHex = try container.decodeIfPresent(String.self, forKey: .bodyCustomColorHex)
-        accessory = try container.decodeIfPresent(CompanionAccessory.self, forKey: .accessory) ?? .sprout
-        accessoryColor = try container.decodeIfPresent(CompanionAssetColor.self, forKey: .accessoryColor) ?? .fern
+        let accessorySplit = try container.decodeTolerantEnum(
+            CompanionAccessory.self, forKey: .accessory, parkedTokenKey: .unknownAccessoryToken, default: .sprout)
+        accessory = accessorySplit.value
+        unknownAccessoryToken = accessorySplit.parkedToken
+        let accessoryColorSplit = try container.decodeTolerantEnum(
+            CompanionAssetColor.self, forKey: .accessoryColor, parkedTokenKey: .unknownAccessoryColorToken, default: .fern)
+        accessoryColor = accessoryColorSplit.value
+        unknownAccessoryColorToken = accessoryColorSplit.parkedToken
         accessoryCustomColorHex = try container.decodeIfPresent(String.self, forKey: .accessoryCustomColorHex)
-        clothing = try container.decodeIfPresent(CompanionClothing.self, forKey: .clothing) ?? .none
-        clothingColor = try container.decodeIfPresent(CompanionAssetColor.self, forKey: .clothingColor) ?? .terracotta
+        let clothingSplit = try container.decodeTolerantEnum(
+            CompanionClothing.self, forKey: .clothing, parkedTokenKey: .unknownClothingToken, default: .none)
+        clothing = clothingSplit.value
+        unknownClothingToken = clothingSplit.parkedToken
+        let clothingColorSplit = try container.decodeTolerantEnum(
+            CompanionAssetColor.self, forKey: .clothingColor, parkedTokenKey: .unknownClothingColorToken, default: .terracotta)
+        clothingColor = clothingColorSplit.value
+        unknownClothingColorToken = clothingColorSplit.parkedToken
         clothingCustomColorHex = try container.decodeIfPresent(String.self, forKey: .clothingCustomColorHex)
-        sideItem = try container.decodeIfPresent(CompanionSideItem.self, forKey: .sideItem) ?? .none
-        sideItemColor = try container.decodeIfPresent(CompanionAssetColor.self, forKey: .sideItemColor) ?? .bark
+        let sideItemSplit = try container.decodeTolerantEnum(
+            CompanionSideItem.self, forKey: .sideItem, parkedTokenKey: .unknownSideItemToken, default: .none)
+        sideItem = sideItemSplit.value
+        unknownSideItemToken = sideItemSplit.parkedToken
+        let sideItemColorSplit = try container.decodeTolerantEnum(
+            CompanionAssetColor.self, forKey: .sideItemColor, parkedTokenKey: .unknownSideItemColorToken, default: .bark)
+        sideItemColor = sideItemColorSplit.value
+        unknownSideItemColorToken = sideItemColorSplit.parkedToken
         sideItemCustomColorHex = try container.decodeIfPresent(String.self, forKey: .sideItemCustomColorHex)
     }
 }
 
-public nonisolated enum CompanionBodyStyle: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum CompanionBodyStyle: String, Codable, CaseIterable, Identifiable, Sendable {
     case circle
     case softBlob
     case pear
@@ -266,7 +336,7 @@ public nonisolated enum CompanionSideItem: String, Codable, CaseIterable, Identi
     }
 }
 
-public nonisolated enum CompanionState: String, Codable {
+public nonisolated enum CompanionState: String, Codable, Sendable {
     case thriving = "Thriving"
     case okay = "Okay"
     case tired = "Tired"

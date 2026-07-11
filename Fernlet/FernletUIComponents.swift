@@ -50,6 +50,10 @@ extension Color {
         light: Color(red: 0.922, green: 0.710, blue: 0.318),
         dark:  Color(red: 0.949, green: 0.761, blue: 0.408)
     )
+    /// Fixed parchment-cream ink (#F5EFE0) for text/icons sitting on filled-moss backgrounds, where
+    /// the adaptive `parchment` would flip too dark in dark mode. Non-adaptive by design — the moss
+    /// fill it sits on is itself a fixed deep green in both appearances.
+    static let parchmentInk = Color(red: 0.961, green: 0.937, blue: 0.878)
 }
 
 extension Color {
@@ -177,7 +181,7 @@ struct ScreenHeader: View {
         VStack(alignment: .leading, spacing: 4) {
             if subtitleFirst { subtitleView }
             Text(title)
-                .font(.system(size: 36, weight: .bold, design: .serif))
+                .font(.fernlet(.display))
                 .foregroundStyle(Color.bark)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
@@ -190,7 +194,8 @@ struct ScreenHeader: View {
 
     private var subtitleView: some View {
         Text(subtitle)
-            .font(.system(size: subtitleFirst ? 13 : 17, weight: .medium, design: .serif).italic())
+            .font(.fernlet(.bodySmall))
+            .italic()
             .foregroundStyle(Color.slate)
             .lineLimit(2)
             .minimumScaleFactor(0.82)
@@ -218,7 +223,7 @@ struct HeaderActionButton: View {
                 }
                 if let title {
                     Text(title)
-                        .font(.headline.weight(.semibold))
+                        .font(.fernlet(.label))
                 }
             }
             .foregroundStyle(Color.bark)
@@ -257,7 +262,7 @@ struct PolaroidTile: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 3))
             Text(caption)
-                .font(.system(size: 11, design: .serif).italic())
+                .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate.opacity(0.58))
                 .lineLimit(1)
         }
@@ -350,7 +355,7 @@ struct SheetField<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label.uppercased())
-                .font(.caption.weight(.semibold))
+                .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
                 .tracking(0.8)
             content
@@ -363,7 +368,7 @@ struct ChipButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.subheadline.weight(.medium))
+            .font(.fernlet(.label))
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .foregroundStyle(selected ? Color.parchment : Color.bark)
@@ -392,7 +397,7 @@ struct SheetTextEditor: View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(placeholder)
-                    .font(.body)
+                    .font(.fernlet(.body))
                     .foregroundStyle(Color.slate.opacity(0.45))
                     .padding(14)
                     .allowsHitTesting(false)
@@ -427,7 +432,7 @@ struct HubSectionPicker<Section: Hashable>: View {
                     }
                 } label: {
                     Text(label(section))
-                        .font(.subheadline.weight(isSelected ? .semibold : .medium))
+                        .font(.fernlet(.label))
                         .foregroundStyle(isSelected ? Color.bark : Color.slate)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
@@ -490,7 +495,7 @@ struct SheetSaveBar: View {
             Spacer()
             Button(label, action: action)
                 .buttonStyle(.plain)
-                .font(.headline)
+                .font(.fernlet(.label))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
@@ -499,5 +504,155 @@ struct SheetSaveBar: View {
         }
         .padding(20)
         .background(Color.parchment)
+    }
+}
+
+// MARK: - Searching pulse
+
+/// A soft, tinted pulsing icon for "searching for nearby peers" states — a calmer, on-brand
+/// stand-in for the system `ProgressView`. Two expanding rings behind a filled disc with an icon.
+/// Ported from the shop's private `SearchingPulse`; parameterized (tint / size / icon) so the
+/// friend-shop, connect, and recipe-share surfaces can share one component.
+struct SearchingPulse: View {
+    var tint: Color = .moss
+    /// Outer frame edge; the ring and inner disc scale from it (defaults reproduce the shop's 80pt look).
+    var size: CGFloat = 80
+    var systemImage: String = "bag"
+    @State private var animate = false
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<2, id: \.self) { i in
+                Circle()
+                    .stroke(tint.opacity(0.4), lineWidth: 2)
+                    .frame(width: size, height: size)
+                    .scaleEffect(animate ? 1.8 : 0.8)
+                    .opacity(animate ? 0 : 0.5)
+                    .animation(
+                        .easeOut(duration: 2.4).repeatForever(autoreverses: false).delay(Double(i) * 1.2),
+                        value: animate
+                    )
+            }
+            Circle()
+                .fill(tint.opacity(0.14))
+                .frame(width: size * 0.55, height: size * 0.55)
+                .overlay(
+                    Image(systemName: systemImage)
+                        .font(.system(size: size * 0.25))
+                        .foregroundStyle(tint)
+                )
+        }
+        .frame(width: size, height: size)
+        .onAppear { animate = true }
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Pressed-metal keepsake medallion
+
+/// A circular "pressed metal" keepsake: a radial-gradient face, an inset highlight/shadow ring for
+/// the struck-coin look, and a thin inner ring. Purely decorative — reads as a memento, not a token.
+/// Shared by the Milestones keepsake shelf and the Home milestones doorway card.
+struct PressedMedallion: View {
+    let icon: String
+    let tint: Color
+    var diameter: CGFloat = 88
+
+    var body: some View {
+        ZStack {
+            // Metal face: light catch top-left, deepening to a darker rim.
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [tint.opacity(0.55), tint.opacity(0.85), tint],
+                        center: UnitPoint(x: 0.38, y: 0.32),
+                        startRadius: 2,
+                        endRadius: diameter * 0.72
+                    )
+                )
+            // Top highlight — the "pressed" catch of light.
+            Circle()
+                .stroke(Color.white.opacity(0.35), lineWidth: diameter * 0.045)
+                .blur(radius: diameter * 0.03)
+                .mask(
+                    Circle().fill(
+                        LinearGradient(
+                            colors: [.white, .clear],
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                    )
+                )
+            // Bottom inset shadow — the struck-coin depth.
+            Circle()
+                .stroke(Color.black.opacity(0.22), lineWidth: diameter * 0.06)
+                .blur(radius: diameter * 0.04)
+                .mask(
+                    Circle().fill(
+                        LinearGradient(
+                            colors: [.clear, .black],
+                            startPoint: .center,
+                            endPoint: .bottom
+                        )
+                    )
+                )
+            // Thin inner ring.
+            Circle()
+                .strokeBorder(Color.white.opacity(0.3), lineWidth: 1.5)
+                .padding(diameter * 0.09)
+            // Engraved icon.
+            Image(systemName: icon)
+                .font(.system(size: diameter * 0.38, weight: .regular))
+                .foregroundStyle(Color.bark.opacity(0.72))
+        }
+        .frame(width: diameter, height: diameter)
+        .shadow(color: tint.opacity(0.32), radius: 9, x: 0, y: 7)
+    }
+}
+
+// MARK: - Coin glyph
+
+private extension Color {
+    // Coin highlight (the light catch on the pressed-gold coin).
+    static let coinHighlight = Color(
+        light: Color(red: 0.965, green: 0.839, blue: 0.537),
+        dark:  Color(red: 0.965, green: 0.839, blue: 0.537)
+    )
+}
+
+/// The small pressed-gold coin used in the coins-summary cards. Radial gold gradient with a soft
+/// inner highlight; the "coin" mark is a gentle leaf. Muted variant for the not-yet state.
+struct CoinGlyph: View {
+    var diameter: CGFloat = 46
+    var muted: Bool = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: muted
+                            ? [Color.coinHighlight.opacity(0.7), Color.goldenrod.opacity(0.6), Color.goldenrod.opacity(0.7)]
+                            : [Color.coinHighlight, Color.sun, Color.goldenrod],
+                        center: UnitPoint(x: 0.38, y: 0.32),
+                        startRadius: 1,
+                        endRadius: diameter * 0.7
+                    )
+                )
+                .overlay(
+                    // Border and shadow scale with diameter (1pt / r5 / y3 at the 46pt reference)
+                    // so the tiny 11-14pt shop coins don't carry a proportionally heavy outline/halo.
+                    Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: max(0.5, diameter / 46))
+                )
+                .shadow(
+                    color: Color.goldenrod.opacity(muted ? 0.2 : 0.4),
+                    radius: diameter * (5 / 46), x: 0, y: diameter * (3 / 46)
+                )
+            Image(systemName: "leaf.fill")
+                .font(.system(size: diameter * 0.4, weight: .semibold))
+                .foregroundStyle(Color.bark.opacity(muted ? 0.4 : 0.55))
+        }
+        .frame(width: diameter, height: diameter)
+        .opacity(muted ? 0.85 : 1)
     }
 }

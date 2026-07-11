@@ -44,10 +44,10 @@ struct WorkoutLocationSetupView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 7) {
                         Text("Where will you train?")
-                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .font(.fernlet(.displayMedium))
                             .foregroundStyle(Color.bark)
                         Text("So I can plan around what's actually there.")
-                            .font(.callout.italic())
+                            .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                     }
 
@@ -117,10 +117,10 @@ struct WorkoutLocationSetupView: View {
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(location.name)
-                        .font(.system(size: 17, weight: .semibold, design: .serif))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                     Text("\(location.ownedEquipment.count) items\(isActive ? " · active" : "")")
-                        .font(.caption2)
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(isActive ? Color.moss : Color.slate)
                 }
             }
@@ -149,10 +149,10 @@ struct WorkoutLocationSetupView: View {
                     .foregroundStyle(Color.moss)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(template.name)
-                        .font(.system(size: 17, weight: .semibold, design: .serif))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                     Text(template.subtitle)
-                        .font(.caption2)
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
             }
@@ -174,10 +174,10 @@ struct WorkoutLocationSetupView: View {
                     .background(Color.moss.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Add location")
-                        .font(.system(size: 17, weight: .semibold, design: .serif))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                     Text("A new place you visit")
-                        .font(.caption2)
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
             }
@@ -211,7 +211,7 @@ struct WorkoutLocationSetupView: View {
                         Image(systemName: "mappin.and.ellipse")
                             .font(.caption2)
                         Text(editingLocation?.name ?? "Location")
-                            .font(.caption.weight(.medium))
+                            .font(.fernlet(.labelSmall))
                     }
                     .foregroundStyle(Color.bark)
                     .padding(.horizontal, 12)
@@ -221,10 +221,10 @@ struct WorkoutLocationSetupView: View {
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("What's available?")
-                        .font(.system(size: 25, weight: .bold, design: .serif))
+                        .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                     Text("\(editingLocation?.ownedEquipment.count ?? 0) selected")
-                        .font(.caption.weight(.semibold))
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.moss)
                 }
             }
@@ -255,12 +255,12 @@ struct WorkoutLocationSetupView: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text(category.label.uppercased())
-                    .font(.caption.weight(.semibold))
+                    .font(.fernlet(.labelSmall))
                     .tracking(0.6)
                     .foregroundStyle(Color.slate)
                 Spacer()
                 Text("\(selected) of \(items.count)")
-                    .font(.caption2)
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
             LazyVGrid(columns: threeColumns, spacing: 10) {
@@ -279,7 +279,7 @@ struct WorkoutLocationSetupView: View {
                     .foregroundStyle(Color.bark)
                     .frame(height: 28)
                 Text(item.displayName)
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.bark)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -320,7 +320,7 @@ struct WorkoutLocationSetupView: View {
 
     private func sectionHeader(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(.caption.weight(.semibold))
+            .font(.fernlet(.labelSmall))
             .tracking(0.6)
             .foregroundStyle(Color.slate)
     }

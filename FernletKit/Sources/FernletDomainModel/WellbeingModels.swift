@@ -12,6 +12,12 @@ public nonisolated struct FernletDay: Codable {
     public var sleep: SleepLog?
     public var bottleCount: Int
     public var hygiene: Set<HygieneItem>
+    /// Raw `hygiene` tokens this build's `HygieneItem` doesn't know — items added by a NEWER build
+    /// on another device. Parked (and re-encoded) instead of thrown on, so a newer device's day
+    /// can't latch this one into decode-failure recovery via the blob (or silently vanish as a
+    /// dropped DayRecord row), and so a save here can't strip them from the synced day. A build
+    /// that knows a parked token re-adopts it on decode (`EnumDecodeCompat`).
+    public var unknownHygieneTokens: [String] = []
     public var completedPersonalCareTaskIDs: Set<String>
     public var healthContext: HealthDailyContext?
 
@@ -48,8 +54,17 @@ public nonisolated struct FernletDay: Codable {
         journals = try container.decodeIfPresent([JournalEntry].self, forKey: .journals) ?? []
         sleep = try container.decodeIfPresent(SleepLog.self, forKey: .sleep)
         bottleCount = try container.decodeIfPresent(Int.self, forKey: .bottleCount) ?? 0
-        hygiene = try container.decodeIfPresent(Set<HygieneItem>.self, forKey: .hygiene) ?? []
-        completedPersonalCareTaskIDs = try container.decodeIfPresent(Set<String>.self, forKey: .completedPersonalCareTaskIDs) ?? Set(hygiene.map(\.rawValue))
+        // Tolerant set decode: a strict `Set<HygieneItem>` throws on the first member only a NEWER
+        // build knows (decodeIfPresent defaults only on an absent KEY), bricking the store via the
+        // blob or dropping this day's row. Known members become the typed set; unknown ones park.
+        let hygieneSplit = try container.decodeTolerantEnumSet(
+            HygieneItem.self, forKey: .hygiene, parkedTokensKey: .unknownHygieneTokens)
+        hygiene = hygieneSplit.known
+        unknownHygieneTokens = hygieneSplit.unknownTokens
+        // The legacy fallback derives task ids from the hygiene raw values; include parked tokens so
+        // a newer build's item keeps its completion mark through a legacy-shaped day.
+        completedPersonalCareTaskIDs = try container.decodeIfPresent(Set<String>.self, forKey: .completedPersonalCareTaskIDs)
+            ?? Set(hygiene.map(\.rawValue)).union(unknownHygieneTokens)
         healthContext = try container.decodeIfPresent(HealthDailyContext.self, forKey: .healthContext)
     }
 
@@ -65,7 +80,8 @@ public nonisolated struct FernletDay: Codable {
     /// Requiring `healthContext.hasContent` keeps "active day" meaning a day with real data on it.
     public var hasLoggedContent: Bool {
         !(meals.isEmpty && workouts.isEmpty && plannedWorkouts.isEmpty && journals.isEmpty
-          && sleep == nil && hygiene.isEmpty && completedPersonalCareTaskIDs.isEmpty
+          && sleep == nil && hygiene.isEmpty && unknownHygieneTokens.isEmpty
+          && completedPersonalCareTaskIDs.isEmpty
           && bottleCount == 0 && !(healthContext?.hasContent ?? false))
     }
 }
@@ -192,7 +208,13 @@ public nonisolated struct DailyHealthScore: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var dateKey: String
     public var score: Double
-    public var companionState: CompanionState
+    public var companionState: CompanionState {
+        didSet { unknownCompanionStateToken = nil }
+    }
+    /// Unknown `companionState` token from a newer build, parked instead of thrown on (a throw in
+    /// the blob's `dailyScores` bricks the whole store into read-only recovery). Recomputing the
+    /// score on this device constructs a fresh record, which naturally drops the token.
+    public var unknownCompanionStateToken: String? = nil
     public var daySummaryText: String?
     public var computedAt: Date
     /// Per-component sub-scores (journal/meal/workout/sleep/hydration/hygiene) that produced `score`.
@@ -221,7 +243,12 @@ public nonisolated struct DailyHealthScore: Identifiable, Codable, Equatable {
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         dateKey = try c.decode(String.self, forKey: .dateKey)
         score = try c.decode(Double.self, forKey: .score)
-        companionState = try c.decode(CompanionState.self, forKey: .companionState)
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let stateSplit = try c.decodeTolerantRequiredEnum(
+            CompanionState.self, forKey: .companionState,
+            parkedTokenKey: .unknownCompanionStateToken, default: .okay)
+        companionState = stateSplit.value
+        unknownCompanionStateToken = stateSplit.parkedToken
         daySummaryText = try c.decodeIfPresent(String.self, forKey: .daySummaryText)
         computedAt = try c.decodeIfPresent(Date.self, forKey: .computedAt) ?? Date()
         componentScores = try c.decodeIfPresent([String: Double].self, forKey: .componentScores)
@@ -236,7 +263,13 @@ public nonisolated struct DailyHealthScore: Identifiable, Codable, Equatable {
 public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var text: String
-    public var tag: FeelingTag
+    public var tag: FeelingTag {
+        didSet { unknownTagToken = nil }
+    }
+    /// Unknown `tag` token from a newer build (a throw in the blob's `previousJournals` bricks the
+    /// store; in a day it drops the DayRecord row). Frozen to `.neutral`, parked, re-adopted by a
+    /// build that knows it; an explicit local tag edit clears it (`EnumDecodeCompat`).
+    public var unknownTagToken: String? = nil
     public var date = Date()
     public var emotions: [String] = []
     /// True only for one-tap tag-only mood check-ins (created by `FernletStore.logQuickMood`). This is
@@ -255,7 +288,11 @@ public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         text = try c.decode(String.self, forKey: .text)
-        tag = try c.decode(FeelingTag.self, forKey: .tag)
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let tagSplit = try c.decodeTolerantRequiredEnum(
+            FeelingTag.self, forKey: .tag, parkedTokenKey: .unknownTagToken, default: .neutral)
+        tag = tagSplit.value
+        unknownTagToken = tagSplit.parkedToken
         date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
         emotions = try c.decodeIfPresent([String].self, forKey: .emotions) ?? []
         isQuickMood = try c.decodeIfPresent(Bool.self, forKey: .isQuickMood) ?? false
@@ -270,9 +307,22 @@ public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
     /// reach the synced store regardless of which save path runs (the S3 privacy wall).
     public func strippedIfSealed(in sealedIDs: Set<UUID>) -> JournalEntry {
         guard sealedIDs.contains(id) else { return self }
-        // isQuickMood preserved (a check-in is never sealed, so this stays false — but keep it explicit
-        // so the discriminator survives any future path that seals a marked entry).
-        return JournalEntry(id: id, text: "", tag: tag, date: date, emotions: [], isQuickMood: isQuickMood)
+        // FAIL-CLOSED memberwise reconstruct (S3): the stripped copy is built from an explicit
+        // allowlist of non-sensitive fields, so any FUTURE stored field added to JournalEntry is
+        // dropped from the sealed strip BY CONSTRUCTION until someone consciously adds it here.
+        // Do NOT convert this to copy-and-clear (`var stripped = self`) — that inverts the posture
+        // to fail-open and would let a later sensitive field (e.g. an attachment ref) ride into the
+        // iCloud-synced blob in plaintext for sealed entries.
+        // isQuickMood is preserved (a check-in is never sealed, so this stays false — but keep it
+        // explicit so the discriminator survives any future path that seals a marked entry).
+        var stripped = JournalEntry(id: id, text: "", tag: tag, date: date, emotions: [], isQuickMood: isQuickMood)
+        // Carry the parked unknown-tag token (non-sensitive: a newer build's enum raw value)
+        // through the strip so a sealed re-save can't clobber the newer device's tag choice.
+        // Safe post-init: the memberwise init assigns `tag` during initialization (property
+        // observers don't fire there, so the park isn't cleared by `tag`'s didSet), and the side
+        // channel itself has no observer.
+        stripped.unknownTagToken = unknownTagToken
+        return stripped
     }
 }
 
@@ -286,7 +336,12 @@ public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable 
 
 public nonisolated struct SleepLog: Codable, Equatable {
     public var hours: Double?
-    public var quality: SleepQuality
+    public var quality: SleepQuality {
+        didSet { unknownQualityToken = nil }
+    }
+    /// Unknown `quality` token from a newer build; frozen to `.ok`, parked, re-adopted on upgrade
+    /// (`EnumDecodeCompat`). Re-logging sleep constructs a fresh log, which drops the token.
+    public var unknownQualityToken: String? = nil
     public var note: String
     public var loggedAt = Date()
 
@@ -297,7 +352,11 @@ public nonisolated struct SleepLog: Codable, Equatable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         hours = try c.decodeIfPresent(Double.self, forKey: .hours)
-        quality = try c.decode(SleepQuality.self, forKey: .quality)
+        // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
+        let qualitySplit = try c.decodeTolerantRequiredEnum(
+            SleepQuality.self, forKey: .quality, parkedTokenKey: .unknownQualityToken, default: .ok)
+        quality = qualitySplit.value
+        unknownQualityToken = qualitySplit.parkedToken
         note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
         loggedAt = try c.decodeIfPresent(Date.self, forKey: .loggedAt) ?? Date()
     }
@@ -516,10 +575,12 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let value = try container.decode(String.self)
-        switch value {
+    /// Maps a persisted goal token — including the legacy aliases early builds wrote — to a case;
+    /// nil for a token no case or alias matches (i.e. one minted by a newer build). The decode
+    /// below freezes those to `.wellness`; `FernletSettings.selectedGoal` additionally parks them
+    /// in a side channel so a re-save can't clobber a newer device's choice.
+    public init?(persistedToken: String) {
+        switch persistedToken {
         case Self.wellness.rawValue, "Wellness", "Short-term":
             self = .wellness
         case Self.strength.rawValue, "Strength", "Long-term":
@@ -535,7 +596,13 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable {
         case Self.sportsPrep.rawValue, "Sports Prep", "Sport", "Sports":
             self = .sportsPrep
         default:
-            self = .wellness
+            return nil
         }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        self = GoalType(persistedToken: value) ?? .wellness
     }
 }

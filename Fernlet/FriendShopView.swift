@@ -13,9 +13,7 @@ struct FriendShopView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                walletBadge
-
+            VStack(alignment: .leading, spacing: FernletMetrics.spaceLg) {
                 if manager.peerCatalogs.isEmpty {
                     emptyState
                 } else {
@@ -29,6 +27,11 @@ struct FriendShopView: View {
         .background(Color.parchment)
         .navigationTitle("Friend shops")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                walletPill
+            }
+        }
         .onAppear {
             // Respect the nearby-sharing opt-out: ContentView owns the manager's full lifecycle (setting +
             // scene phase + lock + tab), so starting it unconditionally here would begin Multipeer discovery
@@ -48,52 +51,72 @@ struct FriendShopView: View {
 
     // MARK: - Sections
 
-    private var walletBadge: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "circlebadge.2.fill")
-                .font(.system(size: 18))
-                .foregroundStyle(Color.sun)
-            Text("\(store.coinBalance) coins")
-                .font(.subheadline.weight(.semibold))
+    /// Coin wallet — a compact parchment pill carrying the live spendable balance, echoing the shop's
+    /// own coin chips so the whole surface reads in one currency.
+    private var walletPill: some View {
+        HStack(spacing: 6) {
+            CoinGlyph(diameter: 14)
+            Text("\(store.coinBalance)")
+                .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
                 .contentTransition(.numericText())
-            Spacer()
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.cream))
+        .padding(.horizontal, 11)
+        .padding(.vertical, 5)
+        .background(
+            Capsule(style: .continuous).fill(Color.cream)
+        )
+        .overlay(Capsule(style: .continuous).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        .fernletSmallShadow()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(store.coinBalance) coins")
     }
 
+    /// Searching state — a soft pulsing bag rather than a bare system spinner, so the wait reads as the
+    /// shop looking for a friend nearby (never a forever-spinner with no way out shown to the user).
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            ProgressView().tint(Color.moss)
-            Text("Looking for friends' shops nearby…")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        VStack(spacing: FernletMetrics.spaceMd) {
+            SearchingPulse()
+            Text("Looking for shops nearby")
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
             Text("Connect with a friend in person and their shop appears here. It vanishes again when you part.")
-                .font(.caption)
+                .font(.fernlet(.bodySmall))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.slate)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.horizontal, FernletMetrics.spaceLg)
+        .padding(.vertical, 56)
     }
 
     private func shopSection(_ catalog: ProximityClothingCatalog) -> some View {
         let items = ClothingShareCodec.sanitizedItems(from: catalog.payload)
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("\(sellerName(catalog))’s shop")
-                .font(.headline)
-                .foregroundStyle(Color.bark)
+        return VStack(alignment: .leading, spacing: FernletMetrics.spaceMd) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(sellerName(catalog))’s shop")
+                    .font(.fernlet(.header))
+                    .foregroundStyle(Color.bark)
+                Text("Made by \(sellerName(catalog)), for your companion.")
+                    .font(.fernlet(.bodySmall))
+                    .italic()
+                    .foregroundStyle(Color.slate)
+            }
 
             if items.isEmpty {
                 Text("Nothing for sale right now.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(FernletMetrics.spaceMd)
+                    .background(
+                        RoundedRectangle(cornerRadius: FernletMetrics.radiusMd, style: .continuous)
+                            .fill(Color.cream)
+                    )
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: FernletMetrics.spaceMd)],
+                          spacing: FernletMetrics.spaceMd) {
                     ForEach(items) { item in
                         itemTile(item, catalog: catalog)
                     }
@@ -105,38 +128,80 @@ struct FriendShopView: View {
     private func itemTile(_ item: CustomizationItem, catalog: ProximityClothingCatalog) -> some View {
         let owned = store.customItems.contains { $0.id == item.id }
         let affordable = store.coinBalance >= item.price
-        return VStack(spacing: 8) {
-            CustomItemThumbnail(texture: item.texture, size: 72)
+        return VStack(alignment: .leading, spacing: FernletMetrics.spaceSm) {
+            CustomItemThumbnail(texture: item.texture, size: 74)
+                .frame(maxWidth: .infinity)
+                .frame(height: 74)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: FernletMetrics.radiusSm, style: .continuous)
+                        .fill(Color.parchment)
+                )
+
             Text(item.name.isEmpty ? item.slot.label : item.name)
-                .font(.subheadline.weight(.medium))
+                .font(.fernlet(.headerMedium))
+                .foregroundStyle(Color.bark)
                 .lineLimit(1)
             Text("designed by \(sellerName(catalog))")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .lineLimit(1)
 
             Button {
                 buy(item, from: catalog)
             } label: {
-                if owned {
-                    Label("Owned", systemImage: "checkmark.circle.fill")
-                        .font(.caption.weight(.semibold))
-                } else {
-                    Label("\(item.price) coins", systemImage: "bag")
-                        .font(.caption.weight(.semibold))
-                }
+                buyLabel(owned: owned, price: item.price, affordable: affordable)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(owned ? Color.slate : Color.moss)
+            .buttonStyle(.plain)
             .disabled(owned || !affordable)
+
             if !owned && !affordable {
                 Text("Not enough coins yet")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.cream))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(FernletMetrics.spaceMd - 4)
+        .background(
+            RoundedRectangle(cornerRadius: FernletMetrics.radiusMd, style: .continuous)
+                .fill(Color.cream)
+        )
+        .fernletSmallShadow()
+    }
+
+    /// Themed buy affordance — a moss coin chip when purchasable, a muted "Owned" checkmark chip when
+    /// already in the closet, and a dimmed chip when the balance can't cover it. Replaces the old system
+    /// `.borderedProminent` button so the whole tile stays on-brand parchment.
+    @ViewBuilder
+    private func buyLabel(owned: Bool, price: Int, affordable: Bool) -> some View {
+        if owned {
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .bold))
+                Text("Owned")
+                    .font(.fernlet(.label))
+            }
+            .foregroundStyle(Color.slate)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous).fill(Color.parchment)
+            )
+        } else {
+            HStack(spacing: 5) {
+                CoinGlyph(diameter: 11)
+                Text("\(price)")
+                    .font(.fernlet(.label))
+            }
+            .foregroundStyle(Color.cream)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous).fill(Color.moss)
+            )
+            .opacity(affordable ? 1 : 0.5)
+        }
     }
 
     // MARK: - Behavior
@@ -170,3 +235,4 @@ struct FriendShopView: View {
         }
     }
 }
+
