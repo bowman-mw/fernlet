@@ -124,15 +124,17 @@ struct ClothingShareCodecTests {
     // rejection + audit calls all no-op'd against nil. The fix retains the policy on ClothingShareConnection.
     // This drives a connection the manager actually built (and retains in its `connections` array); after
     // the seam returns the local policy is gone, so the coordinator's weak ref survives ONLY because the
-    // connection holds it. A revoked-key envelope is then dropped (`.failed("revokedKey")`) and audited —
-    // enforcement that silently no-op'd before the fix. Mirrors
-    // HeartShareTests.retainedTrustPolicyDropsEnvelopeFromRevokedKey.
+    // connection holds it. A BLOCKED-key envelope is then dropped (`.failed("revokedKey")`) and audited —
+    // enforcement that silently no-op'd before the fix. (Phase-2 friend lifecycle semantics moved the
+    // friend-mode transport ban to blocked keys only — a revoked-only "Removed" peer may handshake
+    // again — so this test blocks rather than revokes; block() sets both timestamps and fires the same
+    // coordinator gate.) Mirrors HeartShareTests.retainedTrustPolicyDropsEnvelopeFromBlockedKey.
     @MainActor
-    @Test func retainedTrustPolicyDropsEnvelopeFromRevokedKey() async throws {
+    @Test func retainedTrustPolicyDropsEnvelopeFromBlockedKey() async throws {
         let host = ClothingRevokedKeyTestHost()
         let (remote, remoteID) = try makeProvisionedIdentity(); defer { KeychainItem.deleteAll(service: remoteID) }
 
-        // Trust then revoke the remote's signing key in the host's vault (the manager's policy reads it).
+        // Trust then BLOCK the remote's signing key in the host's vault (the manager's policy reads it).
         let remotePeer = ProximityCoordinator.PeerIdentity(
             id: UUID(),
             displayName: "Revoked",
@@ -143,7 +145,7 @@ struct ClothingShareCodecTests {
             firstSeenAt: base
         )
         host.proximityTrustVault.trust(remotePeer, mode: .friend)
-        host.proximityTrustVault.revoke(signingPublicKey: remote.localSigningPublicKey)
+        host.proximityTrustVault.block(signingPublicKey: remote.localSigningPublicKey)
 
         let manager = ProximityClothingShareManager(store: host)
         let transport = MockMultipeerTransport()
@@ -168,7 +170,7 @@ struct ClothingShareCodecTests {
             payload: Data()
         )
         // Trainer harness reaches handleInbound with the simplest deterministic path (tapToConfirm); the
-        // revoked-key gate there runs before any mode-specific identity handling, so it exercises the same
+        // banned-key gate there runs before any mode-specific identity handling, so it exercises the same
         // enforcement the friend-mode production session relies on.
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
@@ -178,7 +180,7 @@ struct ClothingShareCodecTests {
         await waitUntil { if case .failed = coordinator.state { return true }; return false }
 
         guard case .failed(let reason) = coordinator.state else {
-            Issue.record("Expected .failed from revoked-key drop, got \(coordinator.state)")
+            Issue.record("Expected .failed from blocked-key drop, got \(coordinator.state)")
             return
         }
         #expect(reason.contains("revokedKey"))

@@ -796,6 +796,36 @@ final class FernletStore {
         proximityTrustVault.trust(peer, mode: mode)
     }
 
+    /// Phase 2 friend minting (Docs/Proximity-Mesh-Redesign-2026-07-10.md): writes vault records
+    /// for the session-roster entries the user chose to keep at session end. One-sided and
+    /// local-only — no wire message is sent and the peer never learns whether they were kept.
+    /// Display names are peer-supplied wire input; sanitize before they are persisted
+    /// (control/zero-width/bidi scalars out, length-capped), per the heart-manager precedent.
+    /// The vault's `onChange` (wired to `snapshotSaveCoordinator.schedule()`) persists the mint.
+    func keepProximityFriends(from candidates: [MeshSessionRosterEntry], keptFingerprints: Set<String>) {
+        for entry in candidates where keptFingerprints.contains(entry.fingerprint) {
+            guard !entry.signingPublicKey.isEmpty, !entry.keyAgreementPublicKey.isEmpty else { continue }
+            // Re-check the vault at finalize time: eligibility was computed at presentation, and
+            // trust() revives (clears blockedAt/revokedAt) — a peer blocked mid-prompt must stay
+            // blocked. Blocked ONLY: block() sets both timestamps, so this covers blocked-mid-prompt,
+            // while a revoked-only ("Removed") record passing through trust() and being revived IS
+            // the desired in-person re-friend path (Phase-2 friend lifecycle semantics).
+            guard !proximityTrustVault.isBlockedProximitySigningKey(entry.signingPublicKey) else { continue }
+            var name = ItemNameModeration.sanitizedName(entry.displayName)
+            if name.isEmpty { name = "A friend" }
+            let peer = ProximityCoordinator.PeerIdentity(
+                id: UUID(),
+                displayName: name,
+                signingPublicKey: entry.signingPublicKey,
+                keyAgreementPublicKey: entry.keyAgreementPublicKey,
+                fingerprint: entry.fingerprint,
+                rangingMode: .none,
+                firstSeenAt: Date()
+            )
+            trustProximityPeer(peer, mode: .friend)
+        }
+    }
+
     func revokeTrustedProximityPeer(signingPublicKey: Data) {
         proximityTrustVault.revoke(signingPublicKey: signingPublicKey)
     }

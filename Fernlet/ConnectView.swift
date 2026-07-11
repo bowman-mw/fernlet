@@ -17,6 +17,12 @@ struct FriendsView: View {
     @State private var sessionReady = false
     @State private var disconnectReviewPresented = false
     @State private var selectedForSave: Set<UUID> = []
+    // Phase 2 friend minting: the promoted batch this instance is presenting (consumed via
+    // completeFriendReview on finalize), candidates snapshotted at presentation time, and keeps.
+    @State private var reviewBatch: MeshFriendReviewBatch?
+    @State private var friendCandidates: [MeshSessionRosterEntry] = []
+    @State private var keptFriendFingerprints: Set<String> = []
+    @State private var keepFriendsPromptPresented = false
     @State private var photoSaveError: String? = nil
     @State private var selectedAlbumPostID: UUID?
     @State private var sessionSearchText = ""
@@ -49,12 +55,33 @@ struct FriendsView: View {
         .onAppear {
             // Already in session when returning to the tab — skip animation.
             if manager.isInSession { sessionReady = true }
+            // A freshly created FriendsView instance must present a review that predates it:
+            // ContentView's Social-tab layout swap destroys the previous instance in the same
+            // transaction as the isInSession flip, so its onChange never fires. The review is
+            // model-state (pendingFriendReview / post-teardown sessionPhotos), not a view-event.
+            presentDisconnectReviewIfNeeded()
+        }
+        .onChange(of: manager.pendingFriendReview) { _, _ in
+            presentDisconnectReviewIfNeeded()
         }
         .onChange(of: manager.isInSession) { wasInSession, nowInSession in
             if !wasInSession && nowInSession {
-                connectionPeerName = connectedPeerName()
-                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                withAnimation { showConnectionAnimation = true }
+                if keepFriendsPromptPresented {
+                    // A new session became ready while the compact keep prompt was up: dismiss
+                    // WITHOUT consuming — the batch persists and re-presents (merged) at the
+                    // next teardown. Clearing reviewBatch first turns the sheet's onDismiss
+                    // finalize into a no-op, and skipping the fullScreenCover avoids presenting
+                    // it in the same transaction as a sheet dismissal (one of the two would drop).
+                    reviewBatch = nil
+                    friendCandidates = []
+                    keptFriendFingerprints = []
+                    keepFriendsPromptPresented = false
+                    sessionReady = true
+                } else {
+                    connectionPeerName = connectedPeerName()
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    withAnimation { showConnectionAnimation = true }
+                }
             } else if wasInSession && !nowInSession {
                 sessionReady = false
                 showConnectionAnimation = false
@@ -65,6 +92,8 @@ struct FriendsView: View {
             FriendPhotoReviewSheet(
                 photos: manager.sessionPhotos,
                 selectedIDs: $selectedForSave,
+                friendCandidates: friendCandidates,
+                keptFriendFingerprints: $keptFriendFingerprints,
                 saveSelected: {
                     // Session photos are stored metadata-only to bound memory; rehydrate the
                     // selected ones from the disk cache before saving to the photo library.
@@ -72,6 +101,7 @@ struct FriendsView: View {
                     do {
                         try await FriendPhotoLibrarySaver.save(toSave)
                         manager.finishSessionPhotos(keeping: selectedForSave)
+                        finalizeFriendKeeps()
                         await manager.leaveSessionAfterNotifyingPeers()
                         disconnectReviewPresented = false
                     } catch CocoaError.userCancelled {
@@ -82,6 +112,7 @@ struct FriendsView: View {
                 },
                 discardAll: {
                     manager.deleteAllSessionPhotos()
+                    finalizeFriendKeeps()
                     Task {
                         await manager.leaveSessionAfterNotifyingPeers()
                         disconnectReviewPresented = false
@@ -106,6 +137,18 @@ struct FriendsView: View {
             } message: {
                 Text(photoSaveError ?? "")
             }
+        }
+        // Sessions with no photos but eligible new-friend candidates get the compact prompt.
+        // Dismissing without choosing = skip all: onDismiss mints only the toggled keeps and
+        // consumes the presented batch either way (unless a new session abandoned the prompt,
+        // in which case the batch survives and re-presents merged at the next teardown).
+        .sheet(isPresented: $keepFriendsPromptPresented, onDismiss: finalizeFriendKeeps) {
+            KeepFriendsPromptSheet(
+                candidates: friendCandidates,
+                keptFingerprints: $keptFriendFingerprints,
+                done: { keepFriendsPromptPresented = false }
+            )
+            .presentationDetents([.medium, .large])
         }
         .fullScreenCover(
             isPresented: Binding(
@@ -374,10 +417,53 @@ struct FriendsView: View {
         return manager.slots.first?.peer.displayName ?? "Friend"
     }
 
+    /// Session-end review, driven off OBSERVABLE MODEL STATE (Phase 2, "Session-end review is
+    /// model-state, not view-events"): presents whenever a promoted `pendingFriendReview` batch
+    /// or post-teardown session photos exist, checked from both `.onChange` and `.onAppear`.
+    /// Friend candidates come from the BATCH entries; eligibility is computed here — at
+    /// presentation time, against the live trust vault — so peers trusted or blocked mid-session
+    /// never reach the prompt.
     private func presentDisconnectReviewIfNeeded() {
-        guard !manager.sessionPhotos.isEmpty else { return }
-        selectedForSave = Set(manager.sessionPhotos.map(\.id))
-        disconnectReviewPresented = true
+        guard !manager.isInSession else { return }
+        guard !disconnectReviewPresented, !keepFriendsPromptPresented else { return }
+        let batch = manager.pendingFriendReview
+        let hasPhotos = !manager.sessionPhotos.isEmpty
+        guard batch != nil || hasPhotos else { return }
+        reviewBatch = batch
+        friendCandidates = FriendMintingReview.eligibleCandidates(
+            roster: batch?.entries ?? [],
+            trustedPeers: store.trustedProximityPeers
+        )
+        keptFriendFingerprints = []
+        switch FriendMintingReview.sessionEndReview(
+            hasPhotos: hasPhotos,
+            eligibleCandidateCount: friendCandidates.count
+        ) {
+        case .photoReview:
+            selectedForSave = Set(manager.sessionPhotos.map(\.id))
+            disconnectReviewPresented = true
+        case .friendPromptOnly:
+            keepFriendsPromptPresented = true
+        case .none:
+            // Nothing to review — consume the batch immediately so it can't re-present.
+            if let batch { manager.completeFriendReview(batch.id) }
+            reviewBatch = nil
+            friendCandidates = []
+        }
+    }
+
+    /// Completes the keep-as-friend flow: mints the kept candidates (one-sided, local-only) and
+    /// consumes the PRESENTED batch via completeFriendReview — never clearSessionRoster(), which
+    /// clobbered live-roster entries belonging to the next session. Skipped/untoggled candidates
+    /// are simply dropped. A no-op when the prompt was abandoned for a new session (batch nil).
+    private func finalizeFriendKeeps() {
+        if let batch = reviewBatch {
+            store.keepProximityFriends(from: friendCandidates, keptFingerprints: keptFriendFingerprints)
+            manager.completeFriendReview(batch.id)
+        }
+        reviewBatch = nil
+        friendCandidates = []
+        keptFriendFingerprints = []
     }
 
 }

@@ -376,6 +376,9 @@ struct DisposableCameraView: View {
     @State private var showInfo = false
     @State private var reviewPresented = false
     @State private var selectedForSave: Set<UUID> = []
+    // Phase 2 friend minting: candidates snapshotted when the review presents + the user's keeps.
+    @State private var friendCandidates: [MeshSessionRosterEntry] = []
+    @State private var keptFriendFingerprints: Set<String> = []
     @State private var photoSaveError: String? = nil
     @State private var activeRemovalProposal: MeshRemovalProposalPayload?
     @State private var previousWindTranslation: CGFloat = 0
@@ -940,11 +943,35 @@ struct DisposableCameraView: View {
     private func beginDevelop() {
         camera.stopSession()
         if manager.sessionPhotos.isEmpty {
+            // No photos to review here. The keep-as-friend prompt for a photo-less session is
+            // presented by FriendsView off the manager's pendingFriendReview batch — teardown
+            // promotes the roster into it, so nothing is lost by deferring past leaveSession.
             Task { await manager.leaveSessionAfterNotifyingPeers() }
         } else {
+            // Phase 2: friend eligibility is computed at presentation time, against the live
+            // trust vault, so peers trusted or blocked mid-session never reach the sheet.
+            friendCandidates = FriendMintingReview.eligibleCandidates(
+                roster: manager.sessionRoster,
+                trustedPeers: store.trustedProximityPeers
+            )
+            keptFriendFingerprints = []
             selectedForSave = Set(manager.sessionPhotos.map(\.id))
             reviewPresented = true
         }
+    }
+
+    /// Completes the keep-as-friend flow: mints the kept candidates (one-sided, local-only) and
+    /// consumes ONLY the roster entries this review presented (`consumeRosterEntries`, scoped) —
+    /// never clearSessionRoster(): a peer who commits mid-review stays in the live roster and is
+    /// offered at true session end via the manager's pendingFriendReview batch. The embedded
+    /// friend section keeps its presentation-time snapshot for display. Only called on the paths
+    /// that actually end the session — a cancelled review resumes the camera and keeps the
+    /// roster for the real session end.
+    private func finalizeFriendKeeps() {
+        store.keepProximityFriends(from: friendCandidates, keptFingerprints: keptFriendFingerprints)
+        manager.consumeRosterEntries(fingerprints: Set(friendCandidates.map(\.fingerprint)))
+        friendCandidates = []
+        keptFriendFingerprints = []
     }
 
     private func resumeCameraAfterCancelledReview() {
@@ -959,11 +986,14 @@ struct DisposableCameraView: View {
         FriendPhotoReviewSheet(
             photos: manager.sessionPhotos,
             selectedIDs: $selectedForSave,
+            friendCandidates: friendCandidates,
+            keptFriendFingerprints: $keptFriendFingerprints,
             saveSelected: {
                 let toSave = manager.sessionPhotos.filter { selectedForSave.contains($0.id) }
                 do {
                     try await FriendPhotoLibrarySaver.save(toSave)
                     manager.finishSessionPhotos(keeping: selectedForSave)
+                    finalizeFriendKeeps()
                     await manager.leaveSessionAfterNotifyingPeers()
                     reviewPresented = false
                 } catch CocoaError.userCancelled {
@@ -974,6 +1004,7 @@ struct DisposableCameraView: View {
             },
             discardAll: {
                 manager.deleteAllSessionPhotos()
+                finalizeFriendKeeps()
                 Task {
                     await manager.leaveSessionAfterNotifyingPeers()
                     reviewPresented = false

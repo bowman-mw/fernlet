@@ -116,6 +116,18 @@ fact below was verified against source.
 - **Disable the vouch-list broadcast** (`sendVouchList`) until a feature consumes it — Phase 2 is what
   would otherwise switch it on.
 - Presence/heart rosters must filter `blockedAt`/`revokedAt`/empty-KA stub records.
+- **Friend lifecycle semantics (settled by the Phase-2 capstone review):** *Remove* (revoke) =
+  unfriend — reversible in person: a revoked-only peer may handshake again (friend-mode transport
+  ban applies to BLOCKED keys only) and is re-offered by the keep prompt after a fresh verified
+  session; *Block* = ban — silent drop at transport, never re-offered, and the keep flow must never
+  revive it (`trust()` clears both timestamps, so the finalize-time guard checks blocked only).
+  *Unblock* demotes a ban to "removed" (re-friendable in person, not silently restored).
+- **Session-end review is model-state, not view-events:** the manager promotes the roster into a
+  `pendingFriendReview` batch whenever the last committed slot disappears (merging into any
+  unconsumed batch); views present off that observable state (`onChange` + `onAppear`), because the
+  Social-tab layout swap destroys the presenting view in the same transaction as the `isInSession`
+  flip (this also silently broke the pre-existing remote-goodbye photo review on the Social tab).
+  Consume is scoped: finalize clears only the batch/entries it presented, never the live roster.
 
 ### Phase 3 — Shop onto the mesh + recipe cap (parallelizable)
 **3a. Shop:**

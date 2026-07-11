@@ -79,9 +79,12 @@ struct ProximityTrustVaultTests {
     /// WI-8 (Docs/Security-Hardening-Plan-2026-06-27.md): `FriendSessionTrustPolicy.isTrustedProximityPeer`
     /// returns `true` BY DESIGN — friend sessions authorize through the proximity gate, not remembered
     /// trust. This pins the safety boundary so a future refactor can't silently turn that into unbounded
-    /// trust: even with blanket trust, a REVOKED key and a BLOCKED key are still rejected because the
-    /// policy forwards those checks to the vault.
-    @Test func friendSessionTrustPolicyStillRejectsRevokedAndBlockedKeys() {
+    /// trust: even with blanket trust, a BLOCKED key is still rejected through BOTH policy checks.
+    /// (Phase-2 friend lifecycle semantics — Docs/Proximity-Mesh-Redesign-2026-07-10.md — narrowed
+    /// the friend-mode transport ban to blocked keys only: a revoked-only "Removed" peer may
+    /// handshake again in person, so this test's earlier "revoked key rejected" pin changed with
+    /// the spec.)
+    @Test func friendSessionTrustPolicyStillRejectsBlockedKeys() {
         let revokedKey = Data([10, 20, 30])
         let blockedKey = Data([40, 50, 60])
         let vault = ProximityTrustVault()
@@ -94,12 +97,16 @@ struct ProximityTrustVaultTests {
         // Blanket trust by design — even an unknown key is "trusted" for a friend session...
         #expect(policy.isTrustedProximityPeer(signingPublicKey: Data([99])))
         #expect(policy.isTrustedProximityPeer(signingPublicKey: revokedKey))
-        // ...but the revoked key and the blocked key are still rejected (forwarded to the vault).
-        #expect(policy.isRevokedProximitySigningKey(revokedKey))
-        #expect(policy.isBlockedProximitySigningKey(blockedKey))
-        // block() sets both blocked + revoked; the revoked-only key is not also blocked.
+        // ...but the blocked key is rejected through both checks (the coordinator's hard-fail
+        // gate consults isRevokedProximitySigningKey, which the friend policy backs with the
+        // vault's BLOCKED check).
         #expect(policy.isRevokedProximitySigningKey(blockedKey))
+        #expect(policy.isBlockedProximitySigningKey(blockedKey))
+        // A revoked-only ("Removed") key carries NO friend-mode transport ban — re-friendable in person.
+        #expect(!policy.isRevokedProximitySigningKey(revokedKey))
         #expect(!policy.isBlockedProximitySigningKey(revokedKey))
+        // The vault itself still reports true revocation state (lists, presence/heart rosters).
+        #expect(vault.isRevokedProximitySigningKey(revokedKey))
     }
 
     @Test func auditEventRingBufferCappedAt500() {

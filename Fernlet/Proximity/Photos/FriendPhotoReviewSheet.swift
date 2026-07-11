@@ -2,6 +2,7 @@ import SwiftUI
 import Photos
 import UIKit
 import FernletDomainModel
+import ProximityKit
 
 struct FriendPhotoTile: View {
     let photo: FriendPhotoPayload
@@ -46,6 +47,10 @@ struct FriendPhotoTile: View {
 struct FriendPhotoReviewSheet: View {
     let photos: [FriendPhotoPayload]
     @Binding var selectedIDs: Set<UUID>
+    /// Phase 2 friend minting: session participants eligible to be kept as friends
+    /// (empty = hide the section). The host mints the kept set when the review completes.
+    var friendCandidates: [MeshSessionRosterEntry] = []
+    var keptFriendFingerprints: Binding<Set<String>> = .constant([])
     let saveSelected: () async -> Void
     let discardAll: () -> Void
     /// Rehydrates a photo's bytes on demand (from the disk cache) for tiles whose in-memory
@@ -79,6 +84,14 @@ struct FriendPhotoReviewSheet: View {
                             }
                             .buttonStyle(.plain)
                         }
+                    }
+
+                    if !friendCandidates.isEmpty {
+                        Divider().overlay(Color.bark.opacity(0.08))
+                        KeepFriendsSection(
+                            candidates: friendCandidates,
+                            keptFingerprints: keptFriendFingerprints
+                        )
                     }
                 }
                 .padding(20)

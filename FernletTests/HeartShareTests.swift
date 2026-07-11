@@ -442,7 +442,7 @@ struct HeartShareTests {
     @Test func blockedFriendHeartPeerIsNeverEligibleForTeardownGate() async throws {
         // A once-trusted friend who is now blocked is treated as NOT a trusted friend by the gate.
         // (`vault.block` also revokes, so the live coordinator additionally rejects their envelopes at
-        // the wire layer — see retainedTrustPolicyDropsEnvelopeFromRevokedKey; this test isolates the
+        // the wire layer — see retainedTrustPolicyDropsEnvelopeFromBlockedKey; this test isolates the
         // manager-side gate decision so it doesn't depend on the handshake reaching .connected.)
         let host = MockHeartProximityHost()
         let (peerIdentity, peerID) = try makeIdentity(); defer { cleanup(peerID) }
@@ -467,15 +467,18 @@ struct HeartShareTests {
 
     // MARK: - Retained trust policy enforces revoked/blocked keys at the envelope layer (finding [11])
 
-    @Test func retainedTrustPolicyDropsEnvelopeFromRevokedKey() async throws {
-        // With the trust policy RETAINED (as the connection now does), an envelope from a revoked
+    @Test func retainedTrustPolicyDropsEnvelopeFromBlockedKey() async throws {
+        // With the trust policy RETAINED (as the connection now does), an envelope from a BLOCKED
         // signing key is rejected inside the coordinator (state → .failed), and the manager never
         // sees the payload. This is the enforcement that silently no-oped when the policy deallocated.
+        // (Phase-2 friend lifecycle semantics moved the friend-mode transport ban to blocked keys
+        // only — a revoked-only "Removed" peer may handshake again — so this test blocks rather
+        // than revokes; block() sets both timestamps and fires the same coordinator gate.)
         let vault = ProximityTrustVault()
         let (local, localID) = try makeIdentity(); defer { cleanup(localID) }
         let (remote, remoteID) = try makeIdentity(); defer { cleanup(remoteID) }
 
-        // Trust then revoke the remote's signing key.
+        // Trust then BLOCK the remote's signing key.
         let remotePeer = ProximityCoordinator.PeerIdentity(
             id: UUID(),
             displayName: "Revoked",
@@ -486,7 +489,7 @@ struct HeartShareTests {
             firstSeenAt: baseDate
         )
         vault.trust(remotePeer, mode: .friend)
-        vault.revoke(signingPublicKey: remote.localSigningPublicKey)
+        vault.block(signingPublicKey: remote.localSigningPublicKey)
 
         let transport = MockMultipeerTransport()
         let trustPolicy = FriendSessionTrustPolicy(vault: vault)   // held for the test's lifetime
@@ -523,9 +526,9 @@ struct HeartShareTests {
         transport.simulateInboundData(try JSONEncoder().encode(intro), from: peer)
         await waitUntil { if case .failed = coordinator.state { return true }; return false }
 
-        // The revoked-key check fired: the coordinator failed instead of processing the envelope.
+        // The banned-key check fired: the coordinator failed instead of processing the envelope.
         guard case .failed(let reason) = coordinator.state else {
-            Issue.record("Expected .failed from revoked-key drop, got \(coordinator.state)")
+            Issue.record("Expected .failed from blocked-key drop, got \(coordinator.state)")
             return
         }
         #expect(reason.contains("revokedKey"))
