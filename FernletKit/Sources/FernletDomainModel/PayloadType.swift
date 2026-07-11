@@ -37,6 +37,12 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// A "good vibes" heart sent to a trusted friend in person (`HeartPayload` — id + day key only,
     /// no note, no numbers, no sender state). Always sealed to the recipient like a recipe share.
     case friendHeart           = "fernlet.friend.heart.v1"
+    /// A live-session temporary chat message (`TempMessagePayload`, mesh redesign Phase 5). Exchanged
+    /// ONLY while a friend session is active and VANISHES at session end — nothing retained on device,
+    /// nothing synced, no dead-drop, no offline queue (owner decision). Always sealed to the recipient
+    /// (in `sealingRequiredTypes`) — messages are private. Registered on the mesh via the Phase-1
+    /// payload registry + the `messages` capability; additive-safe post-Phase-1 (older clients park it).
+    case tempMessage           = "fernlet.message.temp.v1"
     // Mesh
     case meshDescriptor        = "fernlet.mesh.descriptor.v1"
     case meshAdmissionGrant    = "fernlet.mesh.admission.grant.v1"

@@ -374,6 +374,7 @@ struct DisposableCameraView: View {
     @State private var camera = CameraCaptureController()
     @State private var flashOpacity: Double = 0
     @State private var showInfo = false
+    @State private var showChat = false
     @State private var reviewPresented = false
     @State private var selectedForSave: Set<UUID> = []
     // Phase 2 friend minting: candidates snapshotted when the review presents + the user's keeps.
@@ -425,9 +426,7 @@ struct DisposableCameraView: View {
                         .padding(.vertical, 18)
                 }
 
-                infoButton
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(20)
+                topControls
 
                 if isLandscape {
                     landscapeControls
@@ -456,6 +455,9 @@ struct DisposableCameraView: View {
         }
         .sheet(isPresented: $reviewPresented, onDismiss: resumeCameraAfterCancelledReview) { reviewSheet }
         .sheet(isPresented: $showInfo) { infoSheet }
+        .sheet(isPresented: $showChat) {
+            SessionChatPanel(manager: manager, onDone: { showChat = false })
+        }
         .sheet(isPresented: Binding(
             get: { !manager.pendingAdmissionRequests.isEmpty && manager.currentMesh != nil },
             set: { isPresented in
@@ -512,6 +514,18 @@ struct DisposableCameraView: View {
         }
     }
 
+    /// The two top-corner controls (info + in-session chat), extracted into a single overlay so the
+    /// main body ZStack stays inside the Swift type-checker's budget.
+    private var topControls: some View {
+        ZStack {
+            infoButton
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            chatButton
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        }
+        .padding(20)
+    }
+
     private var infoButton: some View {
         Button { showInfo = true } label: {
             Image(systemName: "info.circle")
@@ -519,6 +533,17 @@ struct DisposableCameraView: View {
                 .foregroundStyle(Color.white.opacity(0.5))
         }
         .accessibilityIdentifier("camera.info")
+    }
+
+    /// In-session chat entry point (Phase 5). Messages are live-session only and vanish at session end.
+    private var chatButton: some View {
+        Button { showChat = true } label: {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 18))
+                .foregroundStyle(Color.white.opacity(0.5))
+        }
+        .accessibilityLabel("Session messages")
+        .accessibilityIdentifier("camera.chat")
     }
 
     private var portraitControls: some View {

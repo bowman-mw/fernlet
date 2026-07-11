@@ -295,6 +295,27 @@ struct FernletIdentityEnvelopeTests {
         }
     }
 
+    /// Phase 5: temp messages are private — `.tempMessage` is in `sealingRequiredTypes`, so an unsealed
+    /// message is fail-closed at the receiver even over an already-encrypted transport.
+    @Test func tempMessageEnvelopeRejectsUnsealedPayload() throws {
+        let (alice, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (bob, bid) = try makeIdentity()
+        defer { cleanup(bid) }
+
+        let env = try signedEnvelope(
+            sender: alice,
+            payload: Data("hi there".utf8),
+            payloadType: .tempMessage,
+            payloadEncryption: .none,
+            recipientFingerprint: bob.localFingerprint
+        )
+
+        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+            try env.verify(identityService: bob, replayCache: ReplayCache())
+        }
+    }
+
     // MARK: - Canonical bytes
 
     @Test func canonicalBytesAreDeterministic() throws {
