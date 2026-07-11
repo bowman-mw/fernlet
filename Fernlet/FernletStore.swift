@@ -100,6 +100,10 @@ final class FernletStore {
     }
     var photowallSeeds: [PhotowallSeed] = []
     var lockState: FernletLockState = .notConfigured
+    /// One-shot request to show the "Turn on Nearby Friends?" prompt (set when the user keeps
+    /// their FIRST friend and presence was never offered before). Observable, memory-only —
+    /// the persistent never-re-prompt marker is `settings.hasPromptedForPresence`.
+    var presenceEnablePromptRequested = false
 
     var todayKey: String { diary.todayKey }
     private var repository: FernletRepository { diary.repository }
@@ -109,19 +113,33 @@ final class FernletStore {
     @ObservationIgnored let milestoneLedgerService: MilestoneLedgerService
     @ObservationIgnored let proximityTrustVault: ProximityTrustVault
     @ObservationIgnored let aiRetryQueueService: AIRetryQueueService
-    @ObservationIgnored private(set) lazy var meshNetworkManager: MeshNetworkManager = MeshNetworkManager(store: self)
-    @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
-    @ObservationIgnored private(set) lazy var clothingShareManager: ProximityClothingShareManager = {
-        let manager = ProximityClothingShareManager(store: self)
-        // Auto-broadcast this device's current shop to each peer on connect.
-        manager.localCatalogProvider = { [weak self] in self?.buildShopCatalog() }
+    @ObservationIgnored private(set) lazy var meshNetworkManager: MeshNetworkManager = {
+        let manager = MeshNetworkManager(store: self)
+        // Clothing shop (Phase 3a): catalogs ride the friend mesh; the opt-out is payload-layer, wired
+        // here as app-side closures so `ProximityHost` stays settings-free. While the setting is off the
+        // provider returns nil (nothing sent), inbound catalogs drop, and the `shop` capability is not
+        // advertised; `setAllowNearbyClothingShares(false)` also clears held state immediately.
+        manager.clothingShop.isSharingEnabledProvider = { [weak self] in
+            self?.settings.allowNearbyClothingShares ?? false
+        }
+        manager.clothingShop.localCatalogProvider = { [weak self] in
+            guard let self, self.settings.allowNearbyClothingShares else { return nil }
+            return self.buildShopCatalog()
+        }
         return manager
     }()
+    @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
     /// Device-local hearts state (received hearts + per-friend-per-day rate limit). Deliberately
     /// outside the snapshot: heart activity never enters any synced store.
     @ObservationIgnored private(set) lazy var heartLedger = ProximityHeartLedger()
-    @ObservationIgnored private(set) lazy var heartShareManager: ProximityHeartManager =
-        ProximityHeartManager(store: self, ledger: heartLedger)
+    /// The standing presence radio (mesh redesign Phase 4a/4b): broadcasts rotating pairwise-DH
+    /// tags so KEPT friends recognize each other nearby, and — Phase 4b — carries in-person hearts
+    /// over on-demand short-lived pairwise connections (the standalone heart radio is deleted).
+    /// Lifecycle is owned by ContentView (opt-in `allowNearbyPresence` + scene + tab + lock),
+    /// mirroring the other proximity listeners; the opt-out setter stops it immediately. Hearts are
+    /// gated by the separate `allowNearbyHearts` setting (send + receive), consulted via the host.
+    @ObservationIgnored private(set) lazy var presenceManager: PresenceManager =
+        PresenceManager(store: self, ledger: heartLedger)
     @ObservationIgnored let derivedSignalsService = DerivedSignalsService()
     @ObservationIgnored private let healthKitService: (any HealthKitServicing)?
     @ObservationIgnored private lazy var healthSyncCoordinator = HealthSyncCoordinator(host: self, healthKitService: healthKitService)
@@ -601,12 +619,15 @@ final class FernletStore {
         coinLedgerService.grantEarns(awards)
     }
 
-    // MARK: - Clothing shop (in-person friend shop, Increment 3)
-    // The catalog exchange runs over `clothingShareManager` (its own per-row mesh session). Buying is
-    // local: spend coins + copy the already-received item into the closet, preserving its provenance.
+    // MARK: - Clothing shop (in-person friend shop)
+    // The catalog exchange rides the friend mesh (`meshNetworkManager.clothingShop`, Phase 3a):
+    // catalogs are sent pairwise-sealed to committed peers during the session, and the shop opens as a
+    // 1-hour post-session window on the Friends tab. Buying is local: spend coins + copy the
+    // already-received item into the closet, preserving its provenance.
 
     /// This device's broadcast shop catalog, built from the user's own shareable designs (capped,
-    /// deterministically ordered). Supplied to `clothingShareManager` and sent to each peer on connect.
+    /// deterministically ordered). Supplied to the mesh's `clothingShop` provider (nil when the sharing
+    /// opt-out is off) and sent to each committed peer that advertises the `shop` capability.
     func buildShopCatalog() -> ClothingCatalogPayload {
         ClothingShareCodec.catalog(
             forShareable: customItems,
@@ -744,23 +765,35 @@ final class FernletStore {
         snapshotSaveCoordinator.schedule()
     }
 
-    /// Toggle the in-person clothing-shop broadcast/browse opt-out (mirrors `setAllowNearbyRecipeShares`).
-    /// Turning it OFF stops the manager immediately (ending Multipeer discovery + the shop broadcast) so the
-    /// opt-out takes effect without waiting for the next lock / tab / scene-phase event.
+    /// Toggle the clothing-shop sharing opt-out. Payload-layer since Phase 3a (the shop rides the
+    /// friend mesh — there is no clothing radio to stop): the providers wired in `meshNetworkManager`'s
+    /// initializer gate outbound catalogs, inbound catalogs, and the `shop` capability on this setting,
+    /// and turning it OFF additionally drops every held peer catalog and closes any open shop window
+    /// immediately — WITHOUT touching the friend-mesh radio (photos keep working).
     func setAllowNearbyClothingShares(_ value: Bool) {
         settings.allowNearbyClothingShares = value
         if !value {
-            clothingShareManager.stop()
+            meshNetworkManager.clothingShop.clearAll()
         }
         snapshotSaveCoordinator.schedule()
     }
 
-    /// Toggle in-person hearts (mirrors `setAllowNearbyRecipeShares`). Turning it OFF stops the
-    /// heart manager immediately so the opt-out takes effect without waiting for a scene event.
+    /// Toggle in-person hearts (mesh redesign Phase 4b). Hearts now ride the presence radio, so
+    /// this setter no longer stops a dedicated radio — it only flips the setting. Enforcement is
+    /// at the payload layer: `PresenceManager` blocks an outbound heart and drops an inbound one
+    /// when this is off (the presence radio itself keeps running under `allowNearbyPresence`).
     func setAllowNearbyHearts(_ value: Bool) {
         settings.allowNearbyHearts = value
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// Toggle the nearby-friends presence layer (mirrors `setAllowNearbyRecipeShares`). Turning
+    /// it OFF stops the presence radio immediately; turning it ON is picked up by ContentView's
+    /// listener chain (scene/tab/lock gated), which also observes this setting directly.
+    func setAllowNearbyPresence(_ value: Bool) {
+        settings.allowNearbyPresence = value
         if !value {
-            heartShareManager.stop()
+            presenceManager.stop()
         }
         snapshotSaveCoordinator.schedule()
     }
@@ -796,8 +829,61 @@ final class FernletStore {
         proximityTrustVault.trust(peer, mode: mode)
     }
 
+    /// Phase 2 friend minting (Docs/Proximity-Mesh-Redesign-2026-07-10.md): writes vault records
+    /// for the session-roster entries the user chose to keep at session end. One-sided and
+    /// local-only — no wire message is sent and the peer never learns whether they were kept.
+    /// Display names are peer-supplied wire input; sanitize before they are persisted
+    /// (control/zero-width/bidi scalars out, length-capped), per the heart-manager precedent.
+    /// The vault's `onChange` (wired to `snapshotSaveCoordinator.schedule()`) persists the mint.
+    func keepProximityFriends(from candidates: [MeshSessionRosterEntry], keptFingerprints: Set<String>) {
+        // First-kept-friend presence prompt (Phase 4a): captured BEFORE minting — the prompt
+        // fires only on the 0 → 1 transition of unrevoked-unblocked friends.
+        let hadEligibleFriendBefore = proximityTrustVault.trustedPeers.contains {
+            $0.revokedAt == nil && $0.blockedAt == nil
+        }
+        var mintedAny = false
+        for entry in candidates where keptFingerprints.contains(entry.fingerprint) {
+            guard !entry.signingPublicKey.isEmpty, !entry.keyAgreementPublicKey.isEmpty else { continue }
+            // Re-check the vault at finalize time: eligibility was computed at presentation, and
+            // trust() revives (clears blockedAt/revokedAt) — a peer blocked mid-prompt must stay
+            // blocked. Blocked ONLY: block() sets both timestamps, so this covers blocked-mid-prompt,
+            // while a revoked-only ("Removed") record passing through trust() and being revived IS
+            // the desired in-person re-friend path (Phase-2 friend lifecycle semantics).
+            guard !proximityTrustVault.isBlockedProximitySigningKey(entry.signingPublicKey) else { continue }
+            var name = ItemNameModeration.sanitizedName(entry.displayName)
+            if name.isEmpty { name = "A friend" }
+            let peer = ProximityCoordinator.PeerIdentity(
+                id: UUID(),
+                displayName: name,
+                signingPublicKey: entry.signingPublicKey,
+                keyAgreementPublicKey: entry.keyAgreementPublicKey,
+                fingerprint: entry.fingerprint,
+                rangingMode: .none,
+                firstSeenAt: Date()
+            )
+            trustProximityPeer(peer, mode: .friend)
+            mintedAny = true
+        }
+        guard mintedAny else { return }
+        // The presence roster derives from the vault — pick up the new friend immediately
+        // (no-op while the presence radio isn't running).
+        presenceManager.refreshRoster()
+        // ONE-TIME enable prompt at the first kept friend (owner decision: presence defaults
+        // off, prompted once). `hasPromptedForPresence` flips the moment the prompt is
+        // requested, so it can never fire twice — even if the alert is dismissed by a
+        // navigation swap before the user answers.
+        if !hadEligibleFriendBefore,
+           !settings.hasPromptedForPresence,
+           !settings.allowNearbyPresence {
+            settings.hasPromptedForPresence = true
+            presenceEnablePromptRequested = true
+            snapshotSaveCoordinator.schedule()
+        }
+    }
+
     func revokeTrustedProximityPeer(signingPublicKey: Data) {
         proximityTrustVault.revoke(signingPublicKey: signingPublicKey)
+        presenceManager.refreshRoster()
     }
 
     func isRevokedProximitySigningKey(_ publicKey: Data) -> Bool {
@@ -814,11 +900,15 @@ final class FernletStore {
 
     func blockProximityPeer(signingPublicKey: Data) {
         proximityTrustVault.block(signingPublicKey: signingPublicKey)
+        // Pairwise-DH tags mean a blocked friend's tag disappears from our broadcast (and their
+        // ads stop matching) at the next roster rebuild — do that rebuild NOW.
+        presenceManager.refreshRoster()
         snapshotSaveCoordinator.schedule()
     }
 
     func unblockProximityPeer(signingPublicKey: Data) {
         proximityTrustVault.unblock(signingPublicKey: signingPublicKey)
+        presenceManager.refreshRoster()
         snapshotSaveCoordinator.schedule()
     }
 

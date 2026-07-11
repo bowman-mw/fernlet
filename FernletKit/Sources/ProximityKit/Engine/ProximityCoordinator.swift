@@ -55,6 +55,11 @@ public final class ProximityInspectorEventRecorder: ProximityInspectorRecording 
 private nonisolated struct IdentityRangingPayload: Codable, Sendable {
     let rangingMode: String
     let discoveryToken: Data?
+    /// Phase 1 capability advertisement — an ADDITIVE JSON key: old clients' decoders ignore it,
+    /// and an old client's intro decodes here as `nil` (legacy = photos-only, see
+    /// `PeerIdentity.supports(_:)`). Raw `ProximityCapability` tokens, kept as strings so a newer
+    /// build's capability names survive the round-trip.
+    let capabilities: [String]?
 }
 
 private nonisolated struct SessionHeartbeatPayload: Codable, Sendable {
@@ -90,6 +95,15 @@ public final class ProximityCoordinator {
     @ObservationIgnored private let replayCache: ReplayCache
     @ObservationIgnored private let foregroundAnchor: any ProximityForegroundAnchoring
     @ObservationIgnored private let displayName: String
+    // Capability tokens advertised in this radio's identity intro/ack (Phase 1). Empty = this
+    // radio offers none of the mesh feature payloads (e.g. the recipe radio).
+    @ObservationIgnored private let localCapabilities: [String]
+    // SEALED-INTRODUCTION rule (Phase 4b): non-nil ONLY for a presence-originated heart connection.
+    // It is the intended friend's vault KA public key. When set, this coordinator SEALS its outbound
+    // identity intro/ack to that key (never emits identity in the clear) and OPENS an inbound sealed
+    // intro/ack with the local KA private key — closing the tag-replay identity leak. Every other
+    // radio (mesh photo/shop/recipe/admission, trainer) leaves this nil and its handshake unchanged.
+    @ObservationIgnored private let sealedIntroductionPeerKey: Data?
     @ObservationIgnored private let timeoutSeconds: TimeInterval
     @ObservationIgnored private let now: () -> Date
 
@@ -127,6 +141,8 @@ public final class ProximityCoordinator {
         replayCache: ReplayCache,
         foregroundAnchor: (any ProximityForegroundAnchoring)? = nil,
         displayName: String = "Fernlet",
+        capabilities: [String] = [],
+        sealedIntroductionPeerKeyAgreementKey: Data? = nil,
         timeoutSeconds: TimeInterval = 30,
         now: @escaping () -> Date = Date.init
     ) {
@@ -147,6 +163,8 @@ public final class ProximityCoordinator {
             #endif
         }
         self.displayName = displayName
+        self.localCapabilities = capabilities
+        self.sealedIntroductionPeerKey = sealedIntroductionPeerKeyAgreementKey
         self.timeoutSeconds = timeoutSeconds
         self.now = now
         self.tapDetector = ProximityCommitDetector(proximityThreshold: 0.05, dwellSeconds: 1.0, minimumSamples: 3)
@@ -302,13 +320,13 @@ public final class ProximityCoordinator {
         recordEnvelope(envelope, direction: .sent, byteCount: data.count, signatureVerified: true)
         bytesSent += data.count
         await foregroundAnchor.update(bytesSent: bytesSent, bytesReceived: bytesReceived)
-        inspector?.recordCoordinatorEvent("envelope sent \(envelope.payloadType.rawValue)")
+        inspector?.recordCoordinatorEvent("envelope sent \(envelope.payloadTypeToken)")
         trustPolicy?.recordTrainerAudit(TrainerAuditEvent(
             kind: .envelopeSent,
             peerFingerprint: identity.fingerprint,
             peerDisplayName: identity.displayName,
             payloadType: envelope.payloadType,
-            message: "Sent \(envelope.payloadType.rawValue)"
+            message: "Sent \(envelope.payloadTypeToken)"
         ))
         lastTransferCompletedAt = now()
         transition(to: .connected(peer: identity))
@@ -558,6 +576,49 @@ public final class ProximityCoordinator {
         await sendIdentityIntroduction(to: peer)
     }
 
+    /// True ONLY for a presence-originated heart connection (SEALED-INTRODUCTION rule, Phase 4b):
+    /// identity intro/ack are sealed to the intended friend's KA key and never emitted in the clear.
+    private var usesSealedIntroduction: Bool { sealedIntroductionPeerKey != nil }
+
+    /// Encodes an identity intro/ack for the wire. On an ordinary radio this is the plain signed
+    /// envelope. On a presence-heart connection it is SEALED to the intended friend's KA key and
+    /// wrapped so the wire carries no cleartext identity — fail-closed: a missing/empty expected KA
+    /// key throws (never falls back to unsealed), which fails the connection at the call site.
+    private func encodeIdentityEnvelopeForTransport(_ envelope: FernletIdentityEnvelope) throws -> Data {
+        guard usesSealedIntroduction else {
+            return try JSONEncoder().encode(envelope)
+        }
+        guard let key = sealedIntroductionPeerKey, !key.isEmpty else {
+            throw CoordinatorError.sealedIntroductionKeyMissing
+        }
+        let inner = try JSONEncoder().encode(envelope)
+        let ciphertext = try identity.seal(inner, to: key)
+        return try JSONEncoder().encode(SealedIntroductionEnvelope(sealedIntroduction: ciphertext))
+    }
+
+    private enum SealedIntroUnwrap {
+        case notWrapped          // a plain envelope (e.g. a post-commit heartbeat) — process as-is
+        case opened(Data)        // a sealed wrapper opened with the local KA private key
+        case failed              // a wrapper we could NOT open (a tag-replay forger) — fail-closed
+    }
+
+    /// On a sealed-introduction coordinator, an inbound identity intro/ack arrives as a
+    /// `SealedIntroductionEnvelope`. Open it with the local KA private key, expecting the friend's
+    /// KA key the coordinator was created with (that expectation is what a forger cannot satisfy —
+    /// `open` is cryptographically bound to the sender's KA key via the HKDF sharedInfo). A plain
+    /// envelope (no `sealedIntroduction` key) returns `.notWrapped`; a wrapper we cannot decrypt
+    /// returns `.failed`.
+    private func unwrapSealedIntroduction(_ data: Data) -> SealedIntroUnwrap {
+        guard let wrapper = try? JSONDecoder().decode(SealedIntroductionEnvelope.self, from: data) else {
+            return .notWrapped
+        }
+        guard let key = sealedIntroductionPeerKey, !key.isEmpty,
+              let inner = try? identity.open(wrapper.sealedIntroduction, from: key) else {
+            return .failed
+        }
+        return .opened(inner)
+    }
+
     private func sendIdentityIntroduction(to peer: MultipeerPeer) async {
         do {
             let sentAt = now()
@@ -571,7 +632,7 @@ public final class ProximityCoordinator {
                 createdAt: sentAt,
                 expiresAt: sentAt.addingTimeInterval(5 * 60)
             )
-            let data = try JSONEncoder().encode(envelope)
+            let data = try encodeIdentityEnvelopeForTransport(envelope)
             try await transport.send(data, to: peer, mode: .reliable)
             recordEnvelope(envelope, direction: .sent, byteCount: data.count, signatureVerified: true)
             inspector?.recordCoordinatorEvent("identity introduction sent")
@@ -582,8 +643,41 @@ public final class ProximityCoordinator {
 
     private func handleInbound(_ message: MultipeerInboundMessage) async {
         currentTransportPeer = message.peer
+
+        // SEALED-INTRODUCTION rule (Phase 4b): on a presence-heart connection the identity
+        // intro/ack arrives sealed to us. Open it first; a wrapper we cannot decrypt is a
+        // tag-replay forger (no matching KA private key) — fail with NO identity emitted and no
+        // further intro. A plain envelope (a post-commit heartbeat) passes straight through.
+        var envelopeData = message.data
+        var cameFromSealedWrapper = false
+        if usesSealedIntroduction {
+            switch unwrapSealedIntroduction(message.data) {
+            case .notWrapped:
+                break
+            case .opened(let inner):
+                envelopeData = inner
+                cameFromSealedWrapper = true
+            case .failed:
+                inspector?.recordCoordinatorEvent("sealed introduction could not be opened — failing")
+                fail("sealed introduction open failed")
+                return
+            }
+        }
+
         do {
-            let envelope = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: message.data)
+            let envelope = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: envelopeData)
+
+            // On a sealed-introduction connection an identity intro/ack MUST arrive sealed. A PLAIN
+            // identity envelope (a forger sending their own intro to bait a cleartext ack) is
+            // rejected outright — the sealed wrapper is the only channel for identity here.
+            if usesSealedIntroduction, !cameFromSealedWrapper,
+               let plainType = envelope.payloadType,
+               plainType == .identityIntroduction || plainType == .identityAcknowledge {
+                inspector?.recordCoordinatorEvent("rejected unsealed identity envelope on a sealed connection")
+                fail("unsealed identity envelope on a sealed-introduction connection")
+                return
+            }
+
             if trustPolicy?.isRevokedProximitySigningKey(envelope.senderSigningPublicKey) == true {
                 let fingerprint = IdentityService.fingerprint(of: envelope.senderSigningPublicKey)
                 trustPolicy?.recordTrainerAudit(TrainerAuditEvent(
@@ -603,22 +697,31 @@ public final class ProximityCoordinator {
             recordEnvelope(envelope, direction: .received, byteCount: message.bytesReceived, signatureVerified: true)
             bytesReceived += message.bytesReceived
             await foregroundAnchor.update(bytesSent: bytesSent, bytesReceived: bytesReceived)
-            inspector?.recordCoordinatorEvent("envelope received \(envelope.payloadType.rawValue)")
+            inspector?.recordCoordinatorEvent("envelope received \(envelope.payloadTypeToken)")
             trustPolicy?.recordTrainerAudit(TrainerAuditEvent(
                 kind: .envelopeReceived,
                 peerFingerprint: IdentityService.fingerprint(of: envelope.senderSigningPublicKey),
                 peerDisplayName: envelope.senderDisplayName,
                 payloadType: envelope.payloadType,
-                message: "Received \(envelope.payloadType.rawValue)"
+                message: "Received \(envelope.payloadTypeToken)"
             ))
 
-            switch envelope.payloadType {
+            // Phase 1 forward tolerance: a payload type only a NEWER build knows arrived on a live
+            // session. The envelope authenticated (schema/expiry/signature/replay were all enforced
+            // by `verify` above), so this is a well-behaved future peer, not an attack — park it
+            // and keep the session alive. Never dispatched to the payload handler, never `fail()`.
+            guard let payloadType = envelope.payloadType else {
+                inspector?.recordCoordinatorEvent("parked unknown payload type \(envelope.payloadTypeToken)")
+                return
+            }
+
+            switch payloadType {
             case .identityIntroduction, .identityAcknowledge:
                 try await handleIdentityEnvelope(envelope, plaintext: plaintext, from: message.peer)
             case .sessionHeartbeat:
                 await handleHeartbeat(envelope, plaintext: plaintext, from: message.peer)
             default:
-                inspector?.recordCoordinatorEvent("envelope verified \(envelope.payloadType.rawValue)")
+                inspector?.recordCoordinatorEvent("envelope verified \(envelope.payloadTypeToken)")
                 payloadHandler?.proximityCoordinator(self, didReceive: envelope, plaintext: plaintext, from: connectedIdentity ?? pendingPeerIdentity)
             }
         } catch {
@@ -642,7 +745,8 @@ public final class ProximityCoordinator {
         }
         let payload = IdentityRangingPayload(
             rangingMode: ranging.isHardwareSupported ? RangingMode.uwb.rawValue : RangingMode.rssi.rawValue,
-            discoveryToken: token
+            discoveryToken: token,
+            capabilities: localCapabilities
         )
         return try JSONEncoder().encode(payload)
     }
@@ -660,12 +764,19 @@ public final class ProximityCoordinator {
                 createdAt: sentAt,
                 expiresAt: sentAt.addingTimeInterval(5 * 60)
             )
-            let data = try JSONEncoder().encode(envelope)
+            let data = try encodeIdentityEnvelopeForTransport(envelope)
             try await transport.send(data, to: peer, mode: .reliable)
             recordEnvelope(envelope, direction: .sent, byteCount: data.count, signatureVerified: true)
             inspector?.recordCoordinatorEvent("identity acknowledge sent")
         } catch {
-            inspector?.recordCoordinatorEvent("identity acknowledge failed")
+            // A sealed-introduction connection must NEVER continue past a failed seal — a silent
+            // continue could otherwise proceed toward commit without the acknowledgement the peer
+            // needs. Fail-closed; ordinary radios keep the best-effort log-and-continue behavior.
+            if usesSealedIntroduction {
+                fail("sealed identity acknowledgement failed: \(error.localizedDescription)")
+            } else {
+                inspector?.recordCoordinatorEvent("identity acknowledge failed")
+            }
         }
     }
 
@@ -674,6 +785,16 @@ public final class ProximityCoordinator {
         plaintext: Data,
         from peer: MultipeerPeer
     ) async {
+        // SEALED-INTRODUCTION rule (Phase 4b): never respond to a heartbeat before the peer's
+        // identity has been verified via the sealed intro. `sendHeartbeatAcknowledgement` emits our
+        // signing/KA keys + display name in the CLEAR, and a connected tag-replay forger (who can't
+        // complete the sealed handshake) could otherwise ping us in `awaitingIdentityIntroduction`
+        // and read that ack — deanonymizing us. Once `pendingPeerIdentity`/`connectedPeerIdentity`
+        // is set, the peer is provably the real friend (only a valid sealed intro sets it).
+        if usesSealedIntroduction, pendingPeerIdentity == nil, connectedPeerIdentity == nil {
+            inspector?.recordCoordinatorEvent("dropped a heartbeat before sealed identity verification")
+            return
+        }
         lastInboundHeartbeatAt = now()
         inspector?.recordCoordinatorEvent("heartbeat received")
 
@@ -753,12 +874,12 @@ public final class ProximityCoordinator {
         inspector?.recordEnvelope(ConnectionSessionLog.EnvelopeRecord(
             envelopeID: envelope.envelopeID,
             direction: direction,
-            payloadType: envelope.payloadType.rawValue,
+            payloadType: envelope.payloadTypeToken,
             payloadByteCount: byteCount,
             timestamp: now(),
             signatureVerified: signatureVerified,
             encrypted: encrypted,
-            summary: encrypted ? envelope.payloadType.rawValue : envelope.payloadSummary.title
+            summary: encrypted ? envelope.payloadTypeToken : envelope.payloadSummary.title
         ))
     }
 
@@ -809,7 +930,8 @@ public final class ProximityCoordinator {
             keyAgreementPublicKey: envelope.senderKeyAgreementPublicKey,
             fingerprint: fingerprint,
             rangingMode: rangingMode,
-            firstSeenAt: now()
+            firstSeenAt: now(),
+            capabilities: rangingPayload?.capabilities
         )
         updateInspectorPeer(identity: peerIdentity, transportPeer: peer)
 
@@ -1138,6 +1260,9 @@ extension ProximityCoordinator {
         public let fingerprint: String
         public let rangingMode: RangingMode
         public let firstSeenAt: Date
+        /// Raw capability tokens the peer advertised in its identity intro/ack (Phase 1).
+        /// `nil` = a legacy peer whose intro predates capability advertisement.
+        public let capabilities: [String]?
 
         public init(
             id: UUID,
@@ -1146,7 +1271,8 @@ extension ProximityCoordinator {
             keyAgreementPublicKey: Data,
             fingerprint: String,
             rangingMode: RangingMode,
-            firstSeenAt: Date
+            firstSeenAt: Date,
+            capabilities: [String]? = nil
         ) {
             self.id = id
             self.displayName = displayName
@@ -1155,6 +1281,15 @@ extension ProximityCoordinator {
             self.fingerprint = fingerprint
             self.rangingMode = rangingMode
             self.firstSeenAt = firstSeenAt
+            self.capabilities = capabilities
+        }
+
+        /// Phase 1 capability gate: senders skip payload kinds the peer can't use. `nil`
+        /// capabilities = a legacy peer — every pre-capability friend radio could only exchange
+        /// photos, so legacy is treated as photos-only.
+        public func supports(_ capability: ProximityCapability) -> Bool {
+            guard let capabilities else { return capability == .photos }
+            return capabilities.contains(capability.rawValue)
         }
     }
 
@@ -1172,5 +1307,8 @@ extension ProximityCoordinator {
     public enum CoordinatorError: Error, Equatable {
         case notConnected
         case fingerprintMismatch
+        /// A sealed-introduction connection was asked to emit an identity envelope but the expected
+        /// friend KA key is missing/empty — fail-closed, never send the intro unsealed.
+        case sealedIntroductionKeyMissing
     }
 }

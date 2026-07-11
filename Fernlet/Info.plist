@@ -18,6 +18,8 @@
 			<string>_fernlet-friend._udp</string>
 			<string>_fernlet-recipe._tcp</string>
 			<string>_fernlet-recipe._udp</string>
+			<string>_fernlet-near._tcp</string>
+			<string>_fernlet-near._udp</string>
 		</array>
 		<key>NSNearbyInteractionUsageDescription</key>
 		<string>Fernlet uses Ultra Wideband to precisely measure distance when connecting with a nearby trainer or friend.</string>

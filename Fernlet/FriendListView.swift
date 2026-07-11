@@ -261,68 +261,129 @@ struct FriendListView: View {
 
     // MARK: - Send good vibes
 
-    /// One heart per friend per day, in person only. The button lights up only while the friend
-    /// is on a live, identity-verified heart connection; otherwise a gentle hint explains why.
-    /// No counts of sent or received hearts appear anywhere.
+    /// In-person hearts, delivered over the presence radio (mesh redesign Phase 4b). The button
+    /// lights up only while the friend is recognized nearby by presence and the 5-minute per-friend
+    /// cooldown is clear; sending runs a multi-second connect → verify → send pipeline surfaced
+    /// below. No counts of sent or received hearts appear anywhere.
     @ViewBuilder
     private func heartRow(_ peer: ProximityTrustedPeerRecord) -> some View {
-        let alreadySentToday = !store.heartLedger.canSendHeart(to: peer.fingerprint)
-        let reachable = store.heartShareManager.isReachable(fingerprint: peer.fingerprint)
-        let firstName = ProximityHeartManager.firstName(of: peer.displayName)
+        // Hearts require presence (Group 2). When hearts are on but the presence layer is off,
+        // every friend would otherwise read a dead "Not nearby" — surface an actionable
+        // enable-presence state instead. Reachability is only meaningful once presence is on.
+        let affordance = PresenceManager.heartAffordance(
+            heartsEnabled: store.settings.allowNearbyHearts,
+            presenceEnabled: store.settings.allowNearbyPresence,
+            reachable: store.presenceManager.isReachable(fingerprint: peer.fingerprint))
 
         VStack(alignment: .leading, spacing: 10) {
-            // Presence line: a soft moss dot means you're actually together (good-vibes 10c);
-            // otherwise a muted taupe dot — warmth is a thing you do side by side.
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(reachable ? Color.moss : Color.softTaupe)
-                    .frame(width: 7, height: 7)
-                Text(reachable ? "Nearby now" : "Not nearby")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(reachable ? Color.moss : Color.slate)
-            }
-
-            Button {
-                store.heartShareManager.sendHeart(to: peer)
-            } label: {
-                SendGoodVibesLabel(state: SendGoodVibesLabel.state(alreadySentToday: alreadySentToday, reachable: reachable))
-            }
-            .buttonStyle(.plain)
-            .disabled(alreadySentToday || !reachable)
-            .accessibilityIdentifier("friends.sendHeart")
-
-            if alreadySentToday {
-                Text("You've already sent \(firstName) some warmth today.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .fernletWrappingText()
-            } else if !reachable {
-                Text("Hearts travel in person for now — they can be sent when you're together.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .fernletWrappingText()
-            }
-
-            if let status = heartStatusText {
-                Text(status)
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.moss)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .fernletWrappingText()
+            if affordance == .needsPresence {
+                needsPresenceHeartBlock()
+            } else {
+                sendHeartBlock(peer, reachable: affordance == .reachable)
             }
         }
     }
 
+    /// Hearts-on + presence-off: hearts can't function without the presence layer, so offer to
+    /// turn it on rather than leaving a perpetually-dead "Not nearby" (Group 2).
+    @ViewBuilder
+    private func needsPresenceHeartBlock() -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(Color.softTaupe)
+                .frame(width: 7, height: 7)
+            Text("Nearby Friends is off")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+        }
+
+        Button {
+            store.setAllowNearbyPresence(true)
+        } label: {
+            Text("Turn on Nearby Friends to send hearts")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.parchment)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("friends.enablePresence")
+
+        Text("Hearts are sent in person over Nearby Friends — turn it on to see when this friend is close by.")
+            .font(.fernlet(.bodySmall))
+            .foregroundStyle(Color.slate)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .fernletWrappingText()
+    }
+
+    @ViewBuilder
+    private func sendHeartBlock(_ peer: ProximityTrustedPeerRecord, reachable: Bool) -> some View {
+        let onCooldown = !store.heartLedger.canSendHeart(to: peer.fingerprint)
+        let sending = heartSendInProgress
+        let firstName = PresenceManager.firstName(of: peer.displayName)
+
+        // Presence line: a soft moss dot means you're actually together (good-vibes 10c);
+        // otherwise a muted taupe dot — warmth is a thing you do side by side.
+        HStack(spacing: 6) {
+            Circle()
+                .fill(reachable ? Color.moss : Color.softTaupe)
+                .frame(width: 7, height: 7)
+            Text(reachable ? "Nearby now" : "Not nearby")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(reachable ? Color.moss : Color.slate)
+        }
+
+        Button {
+            store.presenceManager.sendHeart(to: peer)
+        } label: {
+            SendGoodVibesLabel(state: SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending))
+        }
+        .buttonStyle(.plain)
+        .disabled(onCooldown || !reachable || sending)
+        .accessibilityIdentifier("friends.sendHeart")
+
+        if onCooldown {
+            Text("You just sent \(firstName) some warmth — hearts settle for a few minutes.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .fernletWrappingText()
+        } else if !reachable {
+            Text("Hearts travel in person for now — they can be sent when you're together.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .fernletWrappingText()
+        }
+
+        if let status = heartStatusText {
+            Text(status)
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.moss)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .fernletWrappingText()
+        }
+    }
+
+    private var heartSendInProgress: Bool {
+        switch store.presenceManager.heartSendState {
+        case .connecting, .verifying: return true
+        default: return false
+        }
+    }
+
     private var heartStatusText: String? {
-        switch store.heartShareManager.sendState {
+        switch store.presenceManager.heartSendState {
         case .idle:
             nil
-        case .sending(let recipientName):
-            "Sending to \(recipientName)..."
+        case .connecting(let recipientName):
+            "Connecting to \(recipientName)..."
+        case .verifying(let recipientName):
+            "Saying hello to \(recipientName)..."
         case .sent(let recipientName):
             "Sent \(recipientName) some good vibes."
         case .failed(let message):
@@ -374,25 +435,32 @@ struct FriendListView: View {
     }
 }
 
-/// The "Send good vibes" affordance label in its three presentation states (good-vibes 10c):
-/// a filled dusty-rose/terracotta button when ready, a soft filled "Sent for today" state once
-/// today's heart has gone, and a muted state when the friend isn't nearby. Presentation only —
-/// the enabling/disabling and the send action stay with the caller.
+/// The "Send good vibes" affordance label in its presentation states (good-vibes 10c): a filled
+/// terracotta button when ready, a spinner while the multi-second send pipeline runs, a soft
+/// filled "cooldown" state within the 5-minute window, and a muted state when the friend isn't
+/// nearby. Presentation only — the enabling/disabling and the send action stay with the caller.
 struct SendGoodVibesLabel: View {
-    enum SendState { case ready, sent, notNearby }
+    enum SendState { case ready, sending, cooldown, notNearby }
 
     var state: SendState
 
-    static func state(alreadySentToday: Bool, reachable: Bool) -> SendState {
-        if alreadySentToday { return .sent }
+    static func state(onCooldown: Bool, reachable: Bool, sending: Bool) -> SendState {
+        if sending { return .sending }
+        if onCooldown { return .cooldown }
         return reachable ? .ready : .notNearby
     }
 
     var body: some View {
         HStack(spacing: 9) {
-            Image(systemName: state == .sent ? "checkmark" : "heart.fill")
-                .font(.subheadline.weight(.semibold))
-            Text(state == .sent ? "Sent for today" : "Send good vibes")
+            if state == .sending {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Color.parchment)
+            } else {
+                Image(systemName: state == .cooldown ? "checkmark" : "heart.fill")
+                    .font(.subheadline.weight(.semibold))
+            }
+            Text(label)
                 .font(.fernlet(.label))
         }
         .foregroundStyle(foreground)
@@ -407,18 +475,26 @@ struct SendGoodVibesLabel: View {
         )
     }
 
+    private var label: String {
+        switch state {
+        case .ready, .notNearby: "Send good vibes"
+        case .sending: "Sending..."
+        case .cooldown: "Sent just now"
+        }
+    }
+
     private var foreground: Color {
         switch state {
-        case .ready: Color.parchment
-        case .sent: Color.terracotta.opacity(0.7)
+        case .ready, .sending: Color.parchment
+        case .cooldown: Color.terracotta.opacity(0.7)
         case .notNearby: Color.bark.opacity(0.35)
         }
     }
 
     private var background: Color {
         switch state {
-        case .ready: Color.terracotta
-        case .sent: Color.dustyRose.opacity(0.16)
+        case .ready, .sending: Color.terracotta
+        case .cooldown: Color.dustyRose.opacity(0.16)
         case .notNearby: Color.bark.opacity(0.06)
         }
     }

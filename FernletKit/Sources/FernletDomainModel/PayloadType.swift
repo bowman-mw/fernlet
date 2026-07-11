@@ -27,9 +27,22 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// held in memory only while connected. Buying is local (spend coins + copy the already-received item),
     /// so there is no separate item-transfer payload type.
     case clothingCatalog       = "fernlet.clothing.catalog.v1"
+    /// Asks a committed peer to (re)send its `clothingCatalog` (mesh redesign Phase 3a, "Catalog
+    /// delivery must not assume commit symmetry"): each side sends this at ITS OWN slot commit, so a
+    /// peer whose commit landed later — whose registry gate dropped the early catalog — still receives
+    /// one. Carries no payload body; signed like other control payloads but never sealed (nothing to
+    /// protect) and deliberately NOT in `sealingRequiredTypes`. Additive-safe post-Phase-1: older
+    /// clients park unknown types without dropping the session.
+    case clothingCatalogRequest = "fernlet.clothing.catalog.request.v1"
     /// A "good vibes" heart sent to a trusted friend in person (`HeartPayload` — id + day key only,
     /// no note, no numbers, no sender state). Always sealed to the recipient like a recipe share.
     case friendHeart           = "fernlet.friend.heart.v1"
+    /// A live-session temporary chat message (`TempMessagePayload`, mesh redesign Phase 5). Exchanged
+    /// ONLY while a friend session is active and VANISHES at session end — nothing retained on device,
+    /// nothing synced, no dead-drop, no offline queue (owner decision). Always sealed to the recipient
+    /// (in `sealingRequiredTypes`) — messages are private. Registered on the mesh via the Phase-1
+    /// payload registry + the `messages` capability; additive-safe post-Phase-1 (older clients park it).
+    case tempMessage           = "fernlet.message.temp.v1"
     // Mesh
     case meshDescriptor        = "fernlet.mesh.descriptor.v1"
     case meshAdmissionGrant    = "fernlet.mesh.admission.grant.v1"
@@ -47,6 +60,23 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     case meshCoordinatorBeacon = "fernlet.mesh.coordinator.beacon.v1"
     // Diagnostic
     case inspectorEcho         = "fernlet.diagnostic.echo.v1"
+}
+
+/// Feature capabilities a device advertises in the identity handshake (Proximity Mesh Redesign
+/// Phase 1). Carried on the wire as raw-string arrays (`[String]`), never as this enum, so a
+/// capability token minted by a NEWER build survives decode on an older client (the same
+/// forward-tolerance stance as the parked `payloadTypeToken` on the envelope). Senders skip
+/// payload kinds the peer hasn't advertised — see `ProximityCoordinator.PeerIdentity.supports(_:)`.
+public nonisolated enum ProximityCapability: String, Codable, CaseIterable, Sendable {
+    /// Friend-mesh photo sharing (the original friend-mesh feature; also what a legacy peer
+    /// whose intro predates capability advertisement is assumed to support).
+    case photos
+    /// Clothing-shop catalog exchange (registers on the mesh in Phase 3).
+    case shop
+    /// In-person friend hearts (moves onto the presence layer in Phase 4).
+    case hearts
+    /// Session-scoped temporary messages (Phase 5).
+    case messages
 }
 
 public nonisolated enum PayloadEncryption: Codable, Equatable, Sendable {

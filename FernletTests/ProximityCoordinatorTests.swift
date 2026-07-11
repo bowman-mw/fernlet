@@ -275,7 +275,7 @@ struct ProximityCoordinatorTests {
         #expect(ranging.lastPeerTokenData == Data([9, 8, 7]))
         #expect(inspector.liveLog?.ranging.mode == .uwb)
         #expect(transport.sentData.contains { sent in
-            (try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: sent.0).payloadType) == .identityAcknowledge
+            (try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: sent.0))?.payloadType == .identityAcknowledge
         } == true)
     }
 
@@ -746,6 +746,174 @@ struct ProximityCoordinatorTests {
             return
         }
         #expect(reason.contains("replayDetected"))
+    }
+
+    // MARK: - Phase 1: unknown payload types are parked, never session-fatal
+
+    /// Mints a signed envelope whose payload type only a FUTURE build knows (raw-token fixture).
+    private func signedUnknownTypeEnvelope(
+        from identity: IdentityService,
+        token: String = "fernlet.future.sparkle.v1"
+    ) throws -> FernletIdentityEnvelope {
+        var env = FernletIdentityEnvelope(
+            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+            envelopeID: UUID(),
+            senderSigningPublicKey: identity.localSigningPublicKey,
+            senderKeyAgreementPublicKey: identity.localKeyAgreementPublicKey,
+            senderDisplayName: "Future Remote",
+            recipientFingerprint: nil,
+            payloadTypeToken: token,
+            payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: "Future"),
+            payload: Data("future payload".utf8),
+            createdAt: Date(),
+            expiresAt: nil,
+            signature: Data()
+        )
+        env.signature = try identity.sign(canonicalBytes(for: env))
+        return env
+    }
+
+    /// The pre-Phase-1 brick: an unknown payload type threw inside handleInbound's decode and the
+    /// catch `fail()`ed the whole session. Now the verified envelope is parked (diagnostic event,
+    /// no dispatch) and the session stays connected — and its envelopeID still lands in the replay
+    /// cache, so a replay of it is rejected exactly like a known type's.
+    @Test func phase1_unknownPayloadTypeIsParkedWithoutFailingSession() async throws {
+        let (local, localServiceID) = try makeIdentity()
+        defer { cleanup(localServiceID) }
+        let (remote, remoteServiceID) = try makeIdentity()
+        defer { cleanup(remoteServiceID) }
+        let transport = MockMultipeerTransport()
+        let inspector = ProximityInspectorEventRecorder()
+        let coordinator = makeCoordinator(identity: local, transport: transport, inspector: inspector)
+
+        let peer = try await connectCoordinator(coordinator, transport: transport, local: local, remote: remote)
+        guard case .connected = coordinator.state else {
+            Issue.record("Harness failure: expected connected state, got \(coordinator.state)")
+            return
+        }
+
+        let unknown = try signedUnknownTypeEnvelope(from: remote)
+        let data = try JSONEncoder().encode(unknown)
+        transport.simulateInboundData(data, from: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        guard case .connected = coordinator.state else {
+            Issue.record("Unknown payload type must not fail the session, got \(coordinator.state)")
+            return
+        }
+        #expect(inspector.events.contains("parked unknown payload type fernlet.future.sparkle.v1"))
+
+        // Replay protection recorded the parked envelope: the same bytes again are a replay,
+        // handled exactly like a replayed known-type envelope.
+        transport.simulateInboundData(data, from: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        guard case .failed(let reason) = coordinator.state else {
+            Issue.record("Expected replay rejection, got \(coordinator.state)")
+            return
+        }
+        #expect(reason.contains("replayDetected"))
+    }
+
+    // MARK: - Phase 1: capability advertisement in the identity handshake
+
+    private struct CapableRangingPayload: Codable {
+        let rangingMode: String
+        let discoveryToken: Data?
+        let capabilities: [String]?
+    }
+
+    @Test func phase1_identityIntroductionCarriesCapabilitiesOntoPeerIdentity() async throws {
+        let (local, localServiceID) = try makeIdentity()
+        defer { cleanup(localServiceID) }
+        let (remote, remoteServiceID) = try makeIdentity()
+        defer { cleanup(remoteServiceID) }
+        let transport = MockMultipeerTransport()
+        let coordinator = makeCoordinator(identity: local, transport: transport)
+        let peer = makePeer(name: "Remote", fingerprint: remote.localFingerprint)
+        let payload = try JSONEncoder().encode(CapableRangingPayload(
+            rangingMode: "rssi",
+            discoveryToken: nil,
+            capabilities: [ProximityCapability.photos.rawValue, ProximityCapability.shop.rawValue]
+        ))
+        let envelope = try FernletIdentityEnvelope.signed(
+            identityService: remote,
+            senderDisplayName: "Remote Device",
+            payloadType: .identityIntroduction,
+            payloadSummary: PayloadSummary(title: "Hello from Remote Device"),
+            payload: payload
+        )
+
+        await coordinator.begin(role: .browser, mode: .trainer)
+        transport.simulateConnected(peer: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        await coordinator.tapToConfirm()
+        transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        guard case .awaitingUserConfirmation(let peerIdentity) = coordinator.state else {
+            Issue.record("Expected awaiting user confirmation, got \(coordinator.state)")
+            return
+        }
+        #expect(peerIdentity.capabilities == ["photos", "shop"])
+        #expect(peerIdentity.supports(.photos))
+        #expect(peerIdentity.supports(.shop))
+        #expect(!peerIdentity.supports(.hearts))
+        #expect(!peerIdentity.supports(.messages))
+    }
+
+    /// An intro without the additive `capabilities` key (a pre-Phase-1 client) decodes to nil and
+    /// is treated as a legacy photos-only peer.
+    @Test func phase1_legacyIntroductionWithoutCapabilitiesIsPhotosOnly() async throws {
+        let (local, localServiceID) = try makeIdentity()
+        defer { cleanup(localServiceID) }
+        let (remote, remoteServiceID) = try makeIdentity()
+        defer { cleanup(remoteServiceID) }
+        let transport = MockMultipeerTransport()
+        let coordinator = makeCoordinator(identity: local, transport: transport)
+        let peer = makePeer(name: "Remote", fingerprint: remote.localFingerprint)
+        let envelope = try signedIntroduction(from: remote)
+
+        await coordinator.begin(role: .browser, mode: .trainer)
+        transport.simulateConnected(peer: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        await coordinator.tapToConfirm()
+        transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        guard case .awaitingUserConfirmation(let peerIdentity) = coordinator.state else {
+            Issue.record("Expected awaiting user confirmation, got \(coordinator.state)")
+            return
+        }
+        #expect(peerIdentity.capabilities == nil)
+        #expect(peerIdentity.supports(.photos))
+        #expect(!peerIdentity.supports(.shop))
+        #expect(!peerIdentity.supports(.hearts))
+    }
+
+    /// The sender side threads its configured capability set into the intro payload.
+    @Test func phase1_coordinatorAdvertisesConfiguredCapabilitiesInIntroduction() async throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { cleanup(serviceID) }
+        let transport = MockMultipeerTransport()
+        let coordinator = ProximityCoordinator(
+            identity: identity,
+            transport: transport,
+            ranging: MockRangingProvider(isHardwareSupported: false),
+            replayCache: ReplayCache(),
+            displayName: "Local Device",
+            capabilities: [ProximityCapability.photos.rawValue],
+            timeoutSeconds: 0
+        )
+        await coordinator.beginFriendJoin()
+        transport.simulateInvite(from: makePeer(name: "Friend"))
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        #expect(transport.sentData.count == 1)
+        let sentEnvelope = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: transport.sentData[0].0)
+        #expect(sentEnvelope.payloadType == .identityIntroduction)
+        let payload = try JSONDecoder().decode(CapableRangingPayload.self, from: sentEnvelope.payload)
+        #expect(payload.capabilities == ["photos"])
     }
 
     @Test func coordinatorEmitsConnectionInspectorEvents() async throws {

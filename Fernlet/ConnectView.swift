@@ -17,6 +17,12 @@ struct FriendsView: View {
     @State private var sessionReady = false
     @State private var disconnectReviewPresented = false
     @State private var selectedForSave: Set<UUID> = []
+    // Phase 2 friend minting: the promoted batch this instance is presenting (consumed via
+    // completeFriendReview on finalize), candidates snapshotted at presentation time, and keeps.
+    @State private var reviewBatch: MeshFriendReviewBatch?
+    @State private var friendCandidates: [MeshSessionRosterEntry] = []
+    @State private var keptFriendFingerprints: Set<String> = []
+    @State private var keepFriendsPromptPresented = false
     @State private var photoSaveError: String? = nil
     @State private var selectedAlbumPostID: UUID?
     @State private var sessionSearchText = ""
@@ -49,12 +55,33 @@ struct FriendsView: View {
         .onAppear {
             // Already in session when returning to the tab — skip animation.
             if manager.isInSession { sessionReady = true }
+            // A freshly created FriendsView instance must present a review that predates it:
+            // ContentView's Social-tab layout swap destroys the previous instance in the same
+            // transaction as the isInSession flip, so its onChange never fires. The review is
+            // model-state (pendingFriendReview / post-teardown sessionPhotos), not a view-event.
+            presentDisconnectReviewIfNeeded()
+        }
+        .onChange(of: manager.pendingFriendReview) { _, _ in
+            presentDisconnectReviewIfNeeded()
         }
         .onChange(of: manager.isInSession) { wasInSession, nowInSession in
             if !wasInSession && nowInSession {
-                connectionPeerName = connectedPeerName()
-                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                withAnimation { showConnectionAnimation = true }
+                if keepFriendsPromptPresented {
+                    // A new session became ready while the compact keep prompt was up: dismiss
+                    // WITHOUT consuming — the batch persists and re-presents (merged) at the
+                    // next teardown. Clearing reviewBatch first turns the sheet's onDismiss
+                    // finalize into a no-op, and skipping the fullScreenCover avoids presenting
+                    // it in the same transaction as a sheet dismissal (one of the two would drop).
+                    reviewBatch = nil
+                    friendCandidates = []
+                    keptFriendFingerprints = []
+                    keepFriendsPromptPresented = false
+                    sessionReady = true
+                } else {
+                    connectionPeerName = connectedPeerName()
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    withAnimation { showConnectionAnimation = true }
+                }
             } else if wasInSession && !nowInSession {
                 sessionReady = false
                 showConnectionAnimation = false
@@ -65,6 +92,8 @@ struct FriendsView: View {
             FriendPhotoReviewSheet(
                 photos: manager.sessionPhotos,
                 selectedIDs: $selectedForSave,
+                friendCandidates: friendCandidates,
+                keptFriendFingerprints: $keptFriendFingerprints,
                 saveSelected: {
                     // Session photos are stored metadata-only to bound memory; rehydrate the
                     // selected ones from the disk cache before saving to the photo library.
@@ -72,6 +101,7 @@ struct FriendsView: View {
                     do {
                         try await FriendPhotoLibrarySaver.save(toSave)
                         manager.finishSessionPhotos(keeping: selectedForSave)
+                        finalizeFriendKeeps()
                         await manager.leaveSessionAfterNotifyingPeers()
                         disconnectReviewPresented = false
                     } catch CocoaError.userCancelled {
@@ -82,6 +112,7 @@ struct FriendsView: View {
                 },
                 discardAll: {
                     manager.deleteAllSessionPhotos()
+                    finalizeFriendKeeps()
                     Task {
                         await manager.leaveSessionAfterNotifyingPeers()
                         disconnectReviewPresented = false
@@ -107,6 +138,18 @@ struct FriendsView: View {
                 Text(photoSaveError ?? "")
             }
         }
+        // Sessions with no photos but eligible new-friend candidates get the compact prompt.
+        // Dismissing without choosing = skip all: onDismiss mints only the toggled keeps and
+        // consumes the presented batch either way (unless a new session abandoned the prompt,
+        // in which case the batch survives and re-presents merged at the next teardown).
+        .sheet(isPresented: $keepFriendsPromptPresented, onDismiss: finalizeFriendKeeps) {
+            KeepFriendsPromptSheet(
+                candidates: friendCandidates,
+                keptFingerprints: $keptFriendFingerprints,
+                done: { keepFriendsPromptPresented = false }
+            )
+            .presentationDetents([.medium, .large])
+        }
         .fullScreenCover(
             isPresented: Binding(
                 get: { selectedAlbumPostID != nil },
@@ -131,36 +174,17 @@ struct FriendsView: View {
                     HStack(alignment: .top) {
                         ScreenHeader(title: "Friends", subtitle: "", identifier: "screen.friends")
                         Spacer()
-                        HStack(spacing: 10) {
-                            // Surface the shop when a friend's shop is discoverable nearby. Gate on
-                            // `nearbyShopPeers` (set on peer discovery) rather than `peerCatalogs`: catalogs
-                            // are far more ephemeral — a momentary peer disconnect or any scene-phase dip
-                            // (Control Center, app switcher, Face ID) clears them, which would yank this link
-                            // out from under a pushed FriendShopView and force-pop the user mid-browse.
-                            // `nearbyShopPeers` is the steadier presence signal, and FriendShopView carries
-                            // its own "looking for shops nearby" recovery state for a catalog that comes and
-                            // goes while it's open. Interim gate pending the clothing/photo mesh merge — once
-                            // unified, gate on the single session's isInSession instead.
-                            if !store.clothingShareManager.nearbyShopPeers.isEmpty {
-                                NavigationLink {
-                                    FriendShopView(store: store, manager: store.clothingShareManager)
-                                } label: {
-                                    shopButtonLabel(coins: store.coinBalance)
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("friends.friendShops")
-                                .accessibilityLabel("Friend shops, \(store.coinBalance) coins")
-                            }
-                            NavigationLink {
-                                FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
-                            } label: {
-                                headerButtonLabel("person.2")
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("friends.manageFriends")
+                        NavigationLink {
+                            FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
+                        } label: {
+                            headerButtonLabel("person.2")
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("friends.manageFriends")
                     }
                     .padding(.top, 4)
+
+                    shopWindowCard
 
                     nearbyStatusBanner
                         .animation(.easeInOut(duration: 0.3), value: manager.isSearching)
@@ -196,20 +220,49 @@ struct FriendsView: View {
             )
     }
 
-    /// The shop bag with a live coin-count badge (mockup 4a "connected · coin badge") — one less
-    /// ambiguous icon: the bag itself carries the balance you'd spend inside.
-    private func shopButtonLabel(coins: Int) -> some View {
-        headerButtonLabel("bag")
-            .overlay(alignment: .topTrailing) {
-                Text("\(coins)")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.bark)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule(style: .continuous).fill(Color.goldenrod))
-                    .overlay(Capsule(style: .continuous).stroke(Color.parchment, lineWidth: 1.5))
-                    .offset(x: 6, y: -5)
+    // MARK: - Post-session shop window (Phase 3a)
+
+    /// After a friends session ends, any shop catalogs exchanged during it stay browsable for one hour
+    /// (`MeshClothingShop.windowDuration`) — this card is the window's only entry point, visible on the
+    /// normal (post-session) Friends layout while the window is open and sharing isn't opted out. The
+    /// minute-tick TimelineView is all the "timer" the window needs: expiry itself is lazy
+    /// (`remainingWindowMinutes` returns nil once lapsed, hiding the card), and each tick refreshes the
+    /// countdown. Closes early on the next session start or app quit (memory-only state).
+    @ViewBuilder
+    private var shopWindowCard: some View {
+        if store.settings.allowNearbyClothingShares {
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                if let minutesLeft = manager.clothingShop.remainingWindowMinutes(at: context.date) {
+                    NavigationLink {
+                        FriendShopView(store: store, shop: manager.clothingShop)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bag")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(Color.moss)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Friend shops are open")
+                                    .font(.fernlet(.headerMedium))
+                                    .foregroundStyle(Color.bark)
+                                Text("Shop open — \(minutesLeft) min")
+                                    .font(.fernlet(.bodySmall))
+                                    .foregroundStyle(Color.slate)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(Color.slate)
+                        }
+                        .padding(14)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.moss.opacity(0.25), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("friends.friendShops")
+                    .accessibilityLabel("Friend shops open, \(minutesLeft) minutes left")
+                }
             }
+        }
     }
 
     // MARK: - Nearby status banner
@@ -374,10 +427,53 @@ struct FriendsView: View {
         return manager.slots.first?.peer.displayName ?? "Friend"
     }
 
+    /// Session-end review, driven off OBSERVABLE MODEL STATE (Phase 2, "Session-end review is
+    /// model-state, not view-events"): presents whenever a promoted `pendingFriendReview` batch
+    /// or post-teardown session photos exist, checked from both `.onChange` and `.onAppear`.
+    /// Friend candidates come from the BATCH entries; eligibility is computed here — at
+    /// presentation time, against the live trust vault — so peers trusted or blocked mid-session
+    /// never reach the prompt.
     private func presentDisconnectReviewIfNeeded() {
-        guard !manager.sessionPhotos.isEmpty else { return }
-        selectedForSave = Set(manager.sessionPhotos.map(\.id))
-        disconnectReviewPresented = true
+        guard !manager.isInSession else { return }
+        guard !disconnectReviewPresented, !keepFriendsPromptPresented else { return }
+        let batch = manager.pendingFriendReview
+        let hasPhotos = !manager.sessionPhotos.isEmpty
+        guard batch != nil || hasPhotos else { return }
+        reviewBatch = batch
+        friendCandidates = FriendMintingReview.eligibleCandidates(
+            roster: batch?.entries ?? [],
+            trustedPeers: store.trustedProximityPeers
+        )
+        keptFriendFingerprints = []
+        switch FriendMintingReview.sessionEndReview(
+            hasPhotos: hasPhotos,
+            eligibleCandidateCount: friendCandidates.count
+        ) {
+        case .photoReview:
+            selectedForSave = Set(manager.sessionPhotos.map(\.id))
+            disconnectReviewPresented = true
+        case .friendPromptOnly:
+            keepFriendsPromptPresented = true
+        case .none:
+            // Nothing to review — consume the batch immediately so it can't re-present.
+            if let batch { manager.completeFriendReview(batch.id) }
+            reviewBatch = nil
+            friendCandidates = []
+        }
+    }
+
+    /// Completes the keep-as-friend flow: mints the kept candidates (one-sided, local-only) and
+    /// consumes the PRESENTED batch via completeFriendReview — never clearSessionRoster(), which
+    /// clobbered live-roster entries belonging to the next session. Skipped/untoggled candidates
+    /// are simply dropped. A no-op when the prompt was abandoned for a new session (batch nil).
+    private func finalizeFriendKeeps() {
+        if let batch = reviewBatch {
+            store.keepProximityFriends(from: friendCandidates, keptFingerprints: keptFriendFingerprints)
+            manager.completeFriendReview(batch.id)
+        }
+        reviewBatch = nil
+        friendCandidates = []
+        keptFriendFingerprints = []
     }
 
 }

@@ -165,7 +165,7 @@ struct FoodView: View {
                 .presentationCornerRadius(20)
         }
         .sheet(item: $recipeShareDraft) { draft in
-            ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager)
+            ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
@@ -2724,7 +2724,7 @@ struct RecipeBookSheet: View {
         }
         .background(Color.parchment)
         .sheet(item: $recipeShareDraft) { draft in
-            ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager)
+            ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)

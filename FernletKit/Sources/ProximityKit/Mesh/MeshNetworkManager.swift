@@ -68,6 +68,34 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     public var meshPhotos: [FriendPhotoPayload] = []
     /// Photos taken/received during the current proximity-join session (cleared on leaveSession).
     public private(set) var sessionPhotos: [FriendPhotoPayload] = []
+    /// Every peer whose handshake COMMITTED during the current session, for the post-session
+    /// keep-as-friend prompt (Phase 2, Docs/Proximity-Mesh-Redesign-2026-07-10.md). Unlike
+    /// `slots`, entries survive slot teardown — the review fires after the slots are gone: when
+    /// the last committed slot disappears the roster PROMOTES into `pendingFriendReview` (see
+    /// promoteRosterToPendingReviewIfSessionEnded). Reset when a NEW session begins
+    /// (startJoin/startNewMesh via resetSessionRosterForNewSession) or consumed scoped by the
+    /// in-session camera review (consumeRosterEntries). Memory-only key material; never
+    /// persisted/synced.
+    public private(set) var sessionRoster: [MeshSessionRosterEntry] = []
+    /// The promoted, unconsumed session-end friend review. Set by
+    /// `promoteRosterToPendingReviewIfSessionEnded()` when the last committed slot disappears;
+    /// cleared only by `completeFriendReview(_:)`. Views present off this observable state
+    /// (`onChange` + `onAppear`) — never off `isInSession` view-events. Survives
+    /// startJoin/startNewMesh by design.
+    public private(set) var pendingFriendReview: MeshFriendReviewBatch?
+    /// The friend-mesh clothing shop (Phase 3a): catalogs exchanged during the session + the 1-hour
+    /// post-session browse window. Registered on the payload registry in `init`; lifecycle hooks fire
+    /// from the same moments that drive the friend-review batch — but the two deliberately diverge on
+    /// session FORMATION (the first slot commit, via `noteSlotCommittedForShop`): the review batch
+    /// survives it, the shop window closes. Search starts (startJoin/startNewMesh — which fire on every
+    /// Social-tab entry and scene reactivation) touch NEITHER.
+    public let clothingShop = MeshClothingShop()
+    /// The live-session temporary-message store (Phase 5): the current session's chat transcript.
+    /// Registered on the payload registry in `init`. Memory-only and deliberately NOT Codable — it can
+    /// never enter a snapshot. Cleared at EVERY session-end path (the same last-committed-slot-gone
+    /// moment that promotes `pendingFriendReview` / opens the shop window) and on the next session
+    /// formation. Unlike the shop's 1-hour window, messages do NOT outlive the session — they vanish.
+    public let sessionMessages = SessionMessageStore()
     public var isSearching = false
     public var meshError: String?
 
@@ -95,6 +123,35 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     @ObservationIgnored private var vouchCache: [String: MeshFriendVouchListPayload] = [:]
     // Retry counts for failed proximity-join MC connections (peer.id → attempts)
     @ObservationIgnored private var peerRetryCount: [UUID: Int] = [:]
+    /// Slots the local shop catalog was already sent to (belt-and-braces once-per-slot guard — the
+    /// commit transition in checkCoordinatorStates fires once per fingerprint change already). Pruned
+    /// per-slot on eviction (removeSlot/disconnectSlot) so a rejoining friend re-exchanges — the
+    /// transport's peerMap persists across a remote teardown, so a returning peer reuses its old slot
+    /// UUID. `clothingCatalogRequest` responses deliberately BYPASS this set (idempotent — the receiver
+    /// replaces by fingerprint).
+    @ObservationIgnored private var sentShopCatalogSlotIDs: Set<UUID> = []
+    /// Per-slot rate limit for `clothingCatalogRequest` responses (request-spam amplification guard:
+    /// each response is a full catalog send). Pruned with `sentShopCatalogSlotIDs`.
+    @ObservationIgnored private var shopCatalogRequestResponseAt: [UUID: Date] = [:]
+    /// True from the first slot COMMIT of a session (formation) until the session ends (no committed
+    /// slot and no mesh — the same `!isInSession` condition the review promotion keys on). Gates the
+    /// Phase-3a formation hook in `noteSlotCommittedForShop` so `clothingShop.beginNewSession()` fires
+    /// exactly once per formation — later commits, promoteToMesh's committed loop, and a re-handshake
+    /// of the only committed slot must not re-fire it mid-session.
+    @ObservationIgnored private var hasFormedShopSession = false
+    /// Test seam: fires with the slot ID whenever a shop-catalog send is initiated (commit offer or
+    /// request response) and the provider produced a catalog — unit tests can't observe the real
+    /// channel (no live MCSession behind the test slots).
+    @ObservationIgnored var onShopCatalogSendForTesting: ((UUID) -> Void)?
+    /// Test seam: fires AFTER a `clothingCatalogRequest` send completes — i.e. after the commit
+    /// task's last touch of manager state. Tests that drive commits await this so the async send
+    /// task drains inside the test's lifetime (the manager's `unowned store` must not be reached
+    /// after the test's store deallocates).
+    @ObservationIgnored var onShopCatalogRequestSendForTesting: ((UUID) -> Void)?
+    /// Test seam: fires with the slot ID whenever a temp message is dispatched to a slot (Phase 5) —
+    /// unit tests can't observe the real sealed channel. Lets the capability-gated-send test assert a
+    /// legacy peer was skipped.
+    @ObservationIgnored var onTempMessageSendForTesting: ((UUID) -> Void)?
     @ObservationIgnored private var removedMemberFingerprints: Set<String> = []
     @ObservationIgnored private var approvedRemovalProposalIDs: Set<UUID> = []
     @ObservationIgnored private var sessionID = UUID().uuidString
@@ -155,6 +212,65 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         self.photoWallPreferences = preferencesStore.load()
         meshPhotos = photoCacheStore.load()
         setupMeshSession()
+        registerClothingShopHandler()
+        registerSessionMessageHandler()
+    }
+
+    /// Phase 3a: the shop rides the friend mesh as registered feature payloads. The dispatch default's
+    /// committed-slot gate has already run by the time these fire; the remaining guards mirror
+    /// `.friendPhoto`: a transport-VERIFIED fingerprint is required (catalogs are keyed by it
+    /// exclusively — never a display name) and blocked fingerprints drop silently.
+    private func registerClothingShopHandler() {
+        registerPayloadHandler(for: .clothingCatalog) { [weak self] envelope, plaintext, peer in
+            guard let self else { return }
+            guard let fingerprint = peer?.fingerprint else {
+                FernletAuditLog.log("mesh.clothingCatalog.droppedUnverifiedSender")
+                return
+            }
+            guard !self.store.isBlockedFingerprint(fingerprint) else { return }
+            self.clothingShop.receiveCatalog(envelope, plaintext: plaintext, verifiedFingerprint: fingerprint)
+        }
+        // Commit-symmetry request (spec: "Catalog delivery must not assume commit symmetry"): a
+        // committed peer is asking for our catalog because ITS commit landed after OUR once-per-slot
+        // send. The payload carries nothing — the verified sender identity is the whole message.
+        registerPayloadHandler(for: .clothingCatalogRequest) { [weak self] _, _, peer in
+            guard let self else { return }
+            guard let fingerprint = peer?.fingerprint else {
+                FernletAuditLog.log("mesh.clothingCatalogRequest.droppedUnverifiedSender")
+                return
+            }
+            guard !self.store.isBlockedFingerprint(fingerprint) else { return }
+            self.respondToShopCatalogRequest(fromVerifiedFingerprint: fingerprint, identity: peer)
+        }
+    }
+
+    /// Phase 5: live-session temporary messages ride the friend mesh as registered feature payloads.
+    /// The dispatch default's committed-slot gate has already run; the remaining guards mirror
+    /// `.friendPhoto`/`.clothingCatalog`: a transport-VERIFIED fingerprint is required and blocked
+    /// fingerprints drop silently. `.tempMessage` is in `sealingRequiredTypes`, so an unsealed message
+    /// was already rejected at `verify()` — this handler only ever sees a decrypted, sealed payload.
+    /// Dedup / per-sender rate limit / sanitize + cap all live in `SessionMessageStore.receiveIncoming`.
+    private func registerSessionMessageHandler() {
+        registerPayloadHandler(for: .tempMessage) { [weak self] envelope, plaintext, peer in
+            guard let self else { return }
+            guard let peerIdentity = peer else {
+                FernletAuditLog.log("mesh.tempMessage.droppedUnverifiedSender")
+                return
+            }
+            let fingerprint = peerIdentity.fingerprint
+            guard !self.store.isBlockedFingerprint(fingerprint) else { return }
+            guard let payload = try? JSONDecoder().decode(TempMessagePayload.self, from: plaintext) else { return }
+            // Display name comes from the handshake-verified identity (peerIdentity.displayName),
+            // NOT envelope.senderDisplayName — the latter is a per-message wire claim a committed
+            // member could set to another member's name to impersonate them in the transcript.
+            self.sessionMessages.receiveIncoming(
+                id: payload.id,
+                senderFingerprint: fingerprint,
+                senderDisplayName: peerIdentity.displayName,
+                text: payload.text,
+                sentAt: payload.sentAt
+            )
+        }
     }
 
     // MARK: - Proximity-join state
@@ -214,6 +330,91 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             }
     }
 
+    // MARK: - Session roster (Phase 2 friend minting)
+
+    /// Records a committed peer into the session roster. Dedupe is by fingerprint; the display
+    /// name is last-write-wins across re-commits. Internal so tests can drive the roster without
+    /// a full handshake.
+    func recordSessionParticipant(
+        displayName: String,
+        fingerprint: String,
+        signingPublicKey: Data,
+        keyAgreementPublicKey: Data
+    ) {
+        // Belt-and-braces: a peer the session voted out (or the user asked to remove) is never
+        // re-recorded, so it can never be offered by the keep-as-friend prompt.
+        guard !removedMemberFingerprints.contains(fingerprint) else { return }
+        if let index = sessionRoster.firstIndex(where: { $0.fingerprint == fingerprint }) {
+            sessionRoster[index].displayName = displayName
+        } else {
+            sessionRoster.append(MeshSessionRosterEntry(
+                displayName: displayName,
+                fingerprint: fingerprint,
+                signingPublicKey: signingPublicKey,
+                keyAgreementPublicKey: keyAgreementPublicKey
+            ))
+        }
+    }
+
+    /// Drops the whole live roster. Internal/test seam only — UI finalize paths must NOT call
+    /// this (it clobbered entries belonging to the NEXT session's review): the scoped consumers
+    /// are `completeFriendReview(_:)` for a promoted batch and `consumeRosterEntries(fingerprints:)`
+    /// for the in-session camera review.
+    public func clearSessionRoster() {
+        sessionRoster.removeAll()
+    }
+
+    /// Internal seam: the new-session roster reset, called by startJoin/startNewMesh and driven
+    /// directly by unit tests so they never start real Bonjour radios. Deliberately does NOT
+    /// touch `pendingFriendReview` — an unreviewed batch from the previous session survives into
+    /// the next search cycle and re-presents (merged) at its teardown. The clothing-shop window and
+    /// held catalogs are equally deliberately untouched (spec: "'Next session start' = first slot
+    /// COMMIT, not search start"): startJoin fires automatically on every Social-tab entry and scene
+    /// reactivation, so closing the window here would destroy it before the user could ever reach
+    /// its only entry point. The shop resets at actual session FORMATION — the first committed slot
+    /// (`noteSlotCommittedForShop`).
+    func resetSessionRosterForNewSession() {
+        sessionRoster.removeAll()
+    }
+
+    /// Scoped roster consume for the in-session camera review flow: removes ONLY the presented
+    /// entries from the live roster, so a peer who commits mid-review stays in the roster and is
+    /// offered at true session end via the promoted batch.
+    public func consumeRosterEntries(fingerprints: Set<String>) {
+        sessionRoster.removeAll { fingerprints.contains($0.fingerprint) }
+    }
+
+    /// Consumes the promoted friend-review batch iff `id` matches the outstanding one. The UI
+    /// calls this once its review flow completes (kept, skipped, dismissed = skip all, or
+    /// auto-consumed when nothing was eligible).
+    public func completeFriendReview(_ id: UUID) {
+        guard pendingFriendReview?.id == id else { return }
+        pendingFriendReview = nil
+    }
+
+    /// Phase 2 ("Session-end review is model-state, not view-events"): when NO committed slot
+    /// remains (the same condition `isInSession` derives from) and the live roster is non-empty,
+    /// move the roster into `pendingFriendReview`, merging by fingerprint into any existing
+    /// unconsumed batch — candidates are never dropped. Idempotent and cheap; called after every
+    /// slot-removal path (removeSlot, disconnectSlot — which the checkCoordinatorStates stale
+    /// eviction funnels through) and on leaveSession/stopSearching teardown.
+    private func promoteRosterToPendingReviewIfSessionEnded() {
+        guard !isInSession, !sessionRoster.isEmpty else { return }
+        if var batch = pendingFriendReview {
+            for entry in sessionRoster {
+                if let index = batch.entries.firstIndex(where: { $0.fingerprint == entry.fingerprint }) {
+                    batch.entries[index] = entry   // last-write-wins, matching the roster's dedupe rule
+                } else {
+                    batch.entries.append(entry)
+                }
+            }
+            pendingFriendReview = batch
+        } else {
+            pendingFriendReview = MeshFriendReviewBatch(entries: sessionRoster)
+        }
+        sessionRoster.removeAll()
+    }
+
     /// End the current session (pairwise or mesh) and clear session photos.
     /// Call this after the develop/review flow completes.
     public func leaveSession() {
@@ -271,6 +472,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     // MARK: - Public API
 
     public func startNewMesh(name: String? = nil) {
+        resetSessionRosterForNewSession()   // live roster only — pendingFriendReview survives
         let meshName = name ?? MeshNameGenerator.generate()
         let now = Date()
         let localFP = identity.localFingerprint
@@ -306,6 +508,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         receivedPhotoIDsByFingerprint.removeAll()
         receiveQuotaMeshID = nil
         sessionPhotos.removeAll()
+        // Live-roster reset only (new session). pendingFriendReview is deliberately untouched:
+        // an unreviewed batch from the previous session survives into this search cycle.
+        resetSessionRosterForNewSession()
         pendingRemovalProposals.removeAll()
         removedMemberFingerprints.removeAll()
         approvedRemovalProposalIDs.removeAll()
@@ -338,6 +543,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         guard !participant.isLocal else { return }
         let otherParticipants = sessionParticipants.filter { !$0.isLocal }
         if otherParticipants.count == 1, otherParticipants[0].fingerprint == participant.fingerprint {
+            // Pairwise shortcut: asking to remove the only other peer just ends the session —
+            // and a peer the user asked to remove must never be offered by the keep prompt, so
+            // drop them from the roster before the teardown promotes it into the review batch.
+            sessionRoster.removeAll { $0.fingerprint == participant.fingerprint }
             leaveSession()
             return
         }
@@ -527,6 +736,26 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         pendingAdmissionRequests.removeAll { $0.requesterSigningPublicKey == request.requesterSigningPublicKey }
     }
 
+    // MARK: - Payload handler registry (Phase 1)
+
+    /// A feature-module inbound handler. Receives exactly what the core switch cases consume: the
+    /// verified envelope, the decrypted plaintext, and the transport-verified peer identity.
+    public typealias MeshPayloadHandler = @MainActor (
+        _ envelope: FernletIdentityEnvelope,
+        _ plaintext: Data,
+        _ peer: ProximityCoordinator.PeerIdentity?
+    ) -> Void
+
+    @ObservationIgnored private var registeredPayloadHandlers: [PayloadType: MeshPayloadHandler] = [:]
+
+    /// Registration seam for feature payloads carried on the friend mesh (shop registers in
+    /// Phase 3, temp messages in Phase 5). Dispatch order: the core mesh switch runs first, so a
+    /// registration can never shadow mesh-control handling; the registry is consulted only for
+    /// types the switch leaves unhandled; unregistered known types keep today's silent drop.
+    public func registerPayloadHandler(for type: PayloadType, handler: @escaping MeshPayloadHandler) {
+        registeredPayloadHandlers[type] = handler
+    }
+
     // MARK: - ProximityPayloadHandling
 
     public func proximityCoordinator(
@@ -535,10 +764,13 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         plaintext: Data,
         from peer: ProximityCoordinator.PeerIdentity?
     ) {
+        // Unknown (newer-build) payload types are parked by the coordinator and never dispatched
+        // here; the guard is belt-and-braces for any future direct caller.
+        guard let payloadType = envelope.payloadType else { return }
         let slot = slots.first { $0.coordinator === coordinator }
         let decoder = JSONDecoder()
 
-        switch envelope.payloadType {
+        switch payloadType {
         case .meshDescriptor:
             if let payload = try? decoder.decode(MeshStateChangePayload.self, from: plaintext) {
                 handleMeshDescriptor(payload.descriptor, from: peer?.fingerprint)
@@ -577,10 +809,8 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
                 sendRequestedPhotos(payload.missingPhotoIDs, to: slot)
             }
         case .meshFriendVouchList:
-            if let payload = try? decoder.decode(MeshFriendVouchListPayload.self, from: plaintext),
-               payload.expiresAt > Date(),
-               payload.voucherFingerprint == peer?.fingerprint {
-                vouchCache[payload.voucherFingerprint] = payload
+            if let payload = try? decoder.decode(MeshFriendVouchListPayload.self, from: plaintext) {
+                receiveVouchList(payload, senderFingerprint: peer?.fingerprint)
             }
         case .meshRemovalProposal:
             if let payload = try? decoder.decode(MeshRemovalProposalPayload.self, from: plaintext) {
@@ -616,7 +846,22 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         case .sessionGoodbye:
             if let slot { removeSlot(slot) }
         default:
-            break
+            // Known type outside the core mesh set: give a registered feature module a chance
+            // (Phase 1 registry); otherwise keep the pre-registry silent drop.
+            //
+            // COMMITTED SLOTS ONLY (Phase 3a hardening; a Phase-1 review fact makes this the security
+            // boundary): the coordinator dispatches known non-core payloads with
+            // `connectedIdentity ?? pendingPeerIdentity` and no state gate, so a pre-dwell (uncommitted)
+            // peer — or a coordinator that never became a slot — could otherwise reach feature handlers
+            // with a merely-pending identity. Feature payloads are for session members, not candidates.
+            guard slot?.fingerprint != nil else {
+                FernletAuditLog.log(
+                    "mesh.registryPayload.droppedUncommittedSlot",
+                    context: ["type": payloadType.rawValue]
+                )
+                return
+            }
+            registeredPayloadHandlers[payloadType]?(envelope, plaintext, peer)
         }
     }
 
@@ -640,17 +885,60 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         store.blockProximityPeer(signingPublicKey: signingPublicKey)
     }
 
-    private func sendVouchList(to slot: PeerSlot) async {
+    /// Phase 2 gate (Docs/Proximity-Mesh-Redesign-2026-07-10.md, "Phase 2 — Friend minting"):
+    /// the vouch-list broadcast disclosed every unblocked trusted fingerprint to all session
+    /// peers, and was dormant only because the trust vault had no production writers. Friend
+    /// minting (Phase 2) is exactly what would have switched it on, so it is gated OFF here.
+    /// Re-enable only with an explicit consent design for sharing the friend graph.
+    @ObservationIgnored var isVouchListBroadcastEnabled = false
+
+    /// The payload `sendVouchList` would broadcast, or nil while the broadcast is disabled.
+    /// Internal seam so tests can pin both the gate (default off ⇒ nil) and the machinery
+    /// (forced on ⇒ correct fingerprint filtering) without a live transport.
+    func vouchListPayloadForBroadcast() -> MeshFriendVouchListPayload? {
+        guard isVouchListBroadcastEnabled else { return nil }
         let trusted = store.trustedProximityPeers
             .filter { $0.blockedAt == nil && $0.revokedAt == nil }
             .map { $0.fingerprint }
-        let payload = MeshFriendVouchListPayload(
+        return MeshFriendVouchListPayload(
             voucherFingerprint: identity.localFingerprint,
             voucherDisplayName: displayName,
             trustedFingerprints: trusted,
             expiresAt: Date().addingTimeInterval(2 * 3600)
         )
+    }
+
+    private func sendVouchList(to slot: PeerSlot) async {
+        guard let payload = vouchListPayloadForBroadcast() else { return }
         await sendEnvelope(.meshFriendVouchList, encodable: payload, via: slot)
+    }
+
+    /// Inbound counterpart of the Phase-2 vouch gate. While `isVouchListBroadcastEnabled` is
+    /// off, inbound vouch lists are dropped wholesale — no cache write, no "Friend of …" label:
+    /// the gate exists because vouch lists disclose a peer's friend graph without a consent
+    /// design, and accepting/rendering them would keep that disclosure live on the receive side
+    /// even with our own broadcast off. When enabled, the cached entry is hygiened: expiry is
+    /// capped at the protocol's 2 h TTL (the wire value is sender-controlled) and the
+    /// peer-supplied display name is sanitized before it is stored or rendered.
+    /// Internal seam so tests can drive it without a live transport.
+    func receiveVouchList(_ payload: MeshFriendVouchListPayload, senderFingerprint: String?) {
+        guard isVouchListBroadcastEnabled else { return }
+        guard payload.expiresAt > Date(),
+              payload.voucherFingerprint == senderFingerprint else { return }
+        let cappedExpiry = min(payload.expiresAt, Date().addingTimeInterval(2 * 3600))
+        var name = ItemNameModeration.sanitizedName(payload.voucherDisplayName)
+        if name.isEmpty { name = "A friend" }
+        vouchCache[payload.voucherFingerprint] = MeshFriendVouchListPayload(
+            voucherFingerprint: payload.voucherFingerprint,
+            voucherDisplayName: name,
+            trustedFingerprints: payload.trustedFingerprints,
+            expiresAt: cappedExpiry
+        )
+    }
+
+    /// Test seam: the cached (gated, capped, sanitized) vouch payload for a voucher, if any.
+    func cachedVouchList(from voucherFingerprint: String) -> MeshFriendVouchListPayload? {
+        vouchCache[voucherFingerprint]
     }
 
     // MARK: - Private helpers
@@ -662,6 +950,32 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
 
     private var activeSlots: [PeerSlot] {
         slots.filter { $0.kind == .active }
+    }
+
+    /// The capability tokens advertised in this device's identity introduction. Photos always (the
+    /// mesh's founding feature); `shop` only while clothing-shop sharing is enabled — the opt-out is
+    /// payload-layer (Phase 3a), so an opted-out device neither advertises nor is sent catalogs.
+    /// Snapshot at coordinator creation (capabilities ride the handshake intro); a mid-session toggle
+    /// affects the NEXT session's advertisement, while its send/receive effect is immediate via the
+    /// provider gates. Internal seam so tests can pin the gate without a live channel.
+    func localCapabilities() -> [String] {
+        var capabilities = [ProximityCapability.photos.rawValue]
+        if clothingShop.isSharingEnabled {
+            capabilities.append(ProximityCapability.shop.rawValue)
+        }
+        // Phase 5: temporary messages are a core in-session feature with no separate v1 opt-out —
+        // session membership (the UWB dwell + admission) IS the consent gate, so `messages` is
+        // advertised whenever we join a friend session. (Owner may override with a `messages` setting
+        // later, mirroring the `shop` gate above; see design_choices.)
+        capabilities.append(ProximityCapability.messages.rawValue)
+        return capabilities
+    }
+
+    /// Phase 3a outbound gate: send our catalog only to peers advertising the `shop` capability (a
+    /// legacy client would park-and-drop it anyway — skip the bytes), and only while sharing is
+    /// enabled locally. Internal seam so tests can pin the gate without a transport.
+    func shouldOfferShopCatalog(to peerIdentity: ProximityCoordinator.PeerIdentity) -> Bool {
+        clothingShop.isSharingEnabled && peerIdentity.supports(.shop)
     }
 
     private func setupMeshSession() {
@@ -705,6 +1019,11 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             if self.slots.count < Self.maxTotalSlots { return true }
             return self.canEvaluateOverflowCandidate(peer)
         }
+        meshSession.onTransportError = { [weak self] message in
+            // Discovery failed to start (e.g. a service type missing from NSBonjourServices) —
+            // surface it instead of searching forever in silence.
+            self?.meshError = message
+        }
     }
 
     private func startSearching() {
@@ -719,10 +1038,18 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         isSearching = false
         isProximityJoin = false
         peerRetryCount.removeAll()
+        sentShopCatalogSlotIDs.removeAll()
+        shopCatalogRequestResponseAt.removeAll()
         meshSession.stop()
         for slot in slots { Task { await slot.coordinator.cancel() } }
         slots.removeAll()
         slotTrustPolicies.removeAll()
+        // Teardown path (leaveSession/leaveMesh/stopJoin funnel through here): the last committed
+        // slot is gone, so any unreviewed roster promotes into the pending friend-review batch and
+        // any held shop catalogs open the post-session shop window (Phase 3a).
+        promoteRosterToPendingReviewIfSessionEnded()
+        openShopWindowIfSessionEnded()
+        clearSessionMessagesIfSessionEnded()
     }
 
     public func currentDiscoveryInfo() -> [String: String] {
@@ -787,6 +1114,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             trustPolicy: trustPolicy,
             replayCache: replayCache,
             displayName: displayName,
+            capabilities: localCapabilities(),
             timeoutSeconds: isProximityJoin ? 25 : 60
         )
 
@@ -812,7 +1140,11 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         Task { await slot.coordinator.cancel() }
         slots.removeAll { $0.id == slot.id }
         slotTrustPolicies.removeValue(forKey: slot.id)
+        pruneShopSendTracking(for: slot.id)
         rerankSlots()
+        promoteRosterToPendingReviewIfSessionEnded()
+        openShopWindowIfSessionEnded()
+        clearSessionMessagesIfSessionEnded()
     }
 
     private func disconnectSlot(_ slot: PeerSlot) {
@@ -822,11 +1154,36 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         }
         slots.removeAll { $0.id == slot.id }
         slotTrustPolicies.removeValue(forKey: slot.id)
+        pruneShopSendTracking(for: slot.id)
         rerankSlots()
+        promoteRosterToPendingReviewIfSessionEnded()
+        openShopWindowIfSessionEnded()
+        clearSessionMessagesIfSessionEnded()
+    }
+
+    /// Slot eviction prunes the shop send-tracking so a REJOINING friend re-exchanges catalogs: the
+    /// transport's peerMap persists across a remote teardown, so a returning peer reuses its old slot
+    /// UUID — without this, the once-per-slot guard would silently skip its re-commit send forever.
+    private func pruneShopSendTracking(for slotID: UUID) {
+        sentShopCatalogSlotIDs.remove(slotID)
+        shopCatalogRequestResponseAt.removeValue(forKey: slotID)
     }
 
     private func onSlotConnected(at index: Int, identity peerIdentity: ProximityCoordinator.PeerIdentity) {
         let slot = slots[index]
+
+        // Phase 2: capture the handshake-verified identity into the session roster at slot
+        // commit, so the post-session keep-as-friend prompt still has it after slot teardown.
+        recordSessionParticipant(
+            displayName: peerIdentity.displayName,
+            fingerprint: peerIdentity.fingerprint,
+            signingPublicKey: peerIdentity.signingPublicKey,
+            keyAgreementPublicKey: peerIdentity.keyAgreementPublicKey
+        )
+
+        // Phase 3a: session formation + the per-slot catalog exchange. Before the shape branches
+        // below so every commit path (pairwise, promote-to-mesh, joiner) runs it.
+        noteSlotCommittedForShop(slot: slot, identity: peerIdentity)
 
         // Proximity-join shape decision: pairwise (1 committed) → mesh (≥ 2 committed).
         // `slot.fingerprint` was set by checkCoordinatorStates before calling here, so
@@ -896,6 +1253,21 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         sessionQuotaMeshID = currentMesh?.meshID
         updateDiscoveryInfo()
         let committed = slots.filter { $0.fingerprint != nil }
+        // Phase 2 belt-and-braces: every committed slot already passed through onSlotConnected
+        // (which recorded its verified identity), so this is insert-only — `slot.peer.displayName`
+        // is the MC transport name and must not overwrite the identity display name.
+        for slot in committed {
+            guard let fingerprint = slot.fingerprint,
+                  !sessionRoster.contains(where: { $0.fingerprint == fingerprint }),
+                  let signingKey = slot.verifiedSigningPublicKey,
+                  let kaKey = slot.verifiedKeyAgreementPublicKey else { continue }
+            recordSessionParticipant(
+                displayName: slot.peer.displayName,
+                fingerprint: fingerprint,
+                signingPublicKey: signingKey,
+                keyAgreementPublicKey: kaKey
+            )
+        }
         Task { [weak self] in
             guard let self else { return }
             for slot in committed {
@@ -1103,6 +1475,14 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     private func applyApprovedRemoval(_ proposal: MeshRemovalProposalPayload) {
         pendingRemovalProposals.removeAll { $0.id == proposal.id }
         removedMemberFingerprints.insert(proposal.targetFingerprint)
+        // A voted-out peer must never be offered by the keep-as-friend prompt: purge them from
+        // the live roster and from any unconsumed promoted batch (belt-and-braces — promotion
+        // normally happens after this purge).
+        sessionRoster.removeAll { $0.fingerprint == proposal.targetFingerprint }
+        if var batch = pendingFriendReview {
+            batch.entries.removeAll { $0.fingerprint == proposal.targetFingerprint }
+            pendingFriendReview = batch.entries.isEmpty ? nil : batch
+        }
 
         if proposal.targetFingerprint == identity.localFingerprint {
             leaveSession()
@@ -1372,6 +1752,127 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         for photo in requested {
             Task { [weak self] in await self?.sendEnvelope(.friendPhoto, encodable: photo, via: slot, sealed: true) }
         }
+    }
+
+    // MARK: - Clothing shop (Phase 3a)
+
+    /// The per-commit shop hook, called from `onSlotConnected` for every slot commit. Two jobs:
+    ///
+    /// 1. **Session formation** (spec: "'Next session start' = first slot COMMIT, not search start"):
+    ///    the FIRST commit after a no-session state is when the previous post-session window closes
+    ///    and its catalogs drop — startJoin/startNewMesh must never do this (they fire on every
+    ///    Social-tab entry / scene dip). `hasFormedShopSession` makes the reset once-per-formation:
+    ///    later commits (including promoteToMesh's, which re-enter via onSlotConnected's fingerprint
+    ///    transition) and a mid-session re-handshake of the sole committed slot can't wipe catalogs.
+    ///    This also covers the transient-drop case: last slot lost mid-outing opens the window; a
+    ///    re-commit lands here, closes it, clears catalogs, and the exchange re-runs.
+    /// 2. **Catalog offer** — send our catalog once per slot, pairwise sealed (the same sendEnvelope
+    ///    path photos use; `slot.verifiedKeyAgreementPublicKey` was set just before onSlotConnected),
+    ///    capability-gated, nil provider (sharing off) sends nothing — PLUS a
+    ///    `clothingCatalogRequest` for the peer's catalog: our send fires at OUR commit, but the
+    ///    peer's registry gate requires the PEER's commit, so a slightly-later committer would drop
+    ///    our catalog forever under once-per-slot tracking. The request, sent at its own commit,
+    ///    makes the exchange commit-order-independent (spec: "Catalog delivery must not assume
+    ///    commit symmetry").
+    ///
+    /// Internal seam so unit tests can drive a slot commit without a live handshake.
+    func noteSlotCommittedForShop(slot: PeerSlot, identity peerIdentity: ProximityCoordinator.PeerIdentity) {
+        if !hasFormedShopSession {
+            hasFormedShopSession = true
+            clothingShop.beginNewSession()
+            // Phase 5: a NEW session forms with an empty transcript. Messages already cleared at the
+            // prior session end; this is belt-and-braces and covers the transient-drop → re-commit case.
+            sessionMessages.clear()
+            sentShopCatalogSlotIDs.removeAll()
+            shopCatalogRequestResponseAt.removeAll()
+        }
+        if shouldOfferShopCatalog(to: peerIdentity), sentShopCatalogSlotIDs.insert(slot.id).inserted {
+            Task { [weak self] in
+                await self?.sendShopCatalog(to: slot)
+                await self?.sendShopCatalogRequest(to: slot)
+            }
+        }
+    }
+
+    /// Answers a verified `clothingCatalogRequest` from a committed, unblocked peer (the registry gate
+    /// + handler already enforced both): re-send our catalog to that slot, BYPASSING the once-per-slot
+    /// guard — idempotent, the receiver replaces by fingerprint. Rate-limited per slot so a hostile
+    /// peer can't use requests as a send-amplification lever, and gated on the same sharing-enabled +
+    /// capability checks as the commit-time offer.
+    private func respondToShopCatalogRequest(
+        fromVerifiedFingerprint fingerprint: String,
+        identity peerIdentity: ProximityCoordinator.PeerIdentity?
+    ) {
+        guard let peerIdentity, shouldOfferShopCatalog(to: peerIdentity) else { return }
+        guard let slot = slots.first(where: { $0.fingerprint == fingerprint }) else { return }
+        let now = Date()
+        if let last = shopCatalogRequestResponseAt[slot.id],
+           now.timeIntervalSince(last) < MeshClothingShop.perSenderRateLimitSeconds {
+            return
+        }
+        shopCatalogRequestResponseAt[slot.id] = now
+        Task { [weak self] in await self?.sendShopCatalog(to: slot) }
+    }
+
+    /// Sends this device's current catalog to a committed slot, pairwise sealed. A nil provider
+    /// result (sharing disabled, or the app never wired it) sends nothing — the payload-layer opt-out.
+    private func sendShopCatalog(to slot: PeerSlot) async {
+        guard let payload = clothingShop.localCatalogProvider?() else { return }
+        onShopCatalogSendForTesting?(slot.id)
+        await sendEnvelope(.clothingCatalog, encodable: payload, via: slot, sealed: true)
+    }
+
+    /// Asks a just-committed peer for its catalog (commit symmetry — see `noteSlotCommittedForShop`).
+    /// Signed like every control payload but not sealed: it carries nothing (the summary is the whole
+    /// body, mirroring `.sessionGoodbye`), and it is deliberately NOT in `sealingRequiredTypes`.
+    private func sendShopCatalogRequest(to slot: PeerSlot) async {
+        await sendEnvelope(.clothingCatalogRequest, encodable: PayloadSummary(title: "Clothing catalog request"), via: slot)
+        onShopCatalogRequestSendForTesting?(slot.id)
+    }
+
+    /// Phase 3a: the shop window opens at the same last-committed-slot-gone moment that promotes
+    /// `pendingFriendReview` — call sites mirror `promoteRosterToPendingReviewIfSessionEnded()` exactly.
+    /// The same moment ends the formed-session epoch: the NEXT slot commit is a new formation.
+    private func openShopWindowIfSessionEnded() {
+        guard !isInSession else { return }
+        hasFormedShopSession = false
+        clothingShop.openWindowAtSessionEnd()
+    }
+
+    // MARK: - Temporary messages (Phase 5)
+
+    /// Send a live-session chat message to everyone in the room. Sanitizes + length-caps the text
+    /// (`SessionMessageStore.sanitize`, 500-char cap), appends the local echo, then room-broadcasts it
+    /// SEALED per slot to every ACTIVE committed slot advertising the `messages` capability — legacy /
+    /// opted-out peers are skipped (they'd park-and-drop it anyway). No offline queue: a message only
+    /// reaches peers currently in the session, and it vanishes at session end (`sessionMessages.clear`).
+    public func sendTempMessage(_ rawText: String) {
+        let text = SessionMessageStore.sanitize(rawText)
+        guard !text.isEmpty else { return }
+        let id = UUID()
+        let now = Date()
+        sessionMessages.appendOutgoing(
+            id: id,
+            senderFingerprint: identity.localFingerprint,
+            senderDisplayName: displayName,
+            text: text,
+            sentAt: now
+        )
+        let payload = TempMessagePayload(id: id, text: text, sentAt: now)
+        for slot in activeSlots where slot.fingerprint != nil && slot.supports(.messages) {
+            onTempMessageSendForTesting?(slot.id)
+            Task { [weak self] in
+                await self?.sendEnvelope(.tempMessage, encodable: payload, via: slot, sealed: true)
+            }
+        }
+    }
+
+    /// Phase 5: messages VANISH at session end. Called at the same last-committed-slot-gone moment that
+    /// promotes `pendingFriendReview` / opens the shop window — but where the shop KEEPS catalogs through
+    /// a 1-hour window, the transcript is dropped immediately. Nothing to retain, nothing to sync.
+    private func clearSessionMessagesIfSessionEnded() {
+        guard !isInSession else { return }
+        sessionMessages.clear()
     }
 
     // MARK: - Envelope sending
@@ -1758,6 +2259,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
                     slots[index].verifiedSigningPublicKey = peerIdentity.signingPublicKey
                     // Store the handshake-verified KA key; used for group key wrapping (Phase 3).
                     slots[index].verifiedKeyAgreementPublicKey = peerIdentity.keyAgreementPublicKey
+                    // Phase 5: capture advertised capabilities so a room broadcast (temp messages) can
+                    // skip peers that can't use the payload without re-plumbing the PeerIdentity.
+                    slots[index].peerCapabilities = peerIdentity.capabilities
                     onSlotConnected(at: index, identity: peerIdentity)
                 }
             }
@@ -1770,6 +2274,79 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             }
         }
         for slot in stale { removeSlot(slot) }
+    }
+
+    // MARK: - Test seams
+
+    /// Appends a slot for the given coordinator so unit tests can drive the registry dispatch path —
+    /// the production slot path is driven by a live `MCSession` a unit test cannot fake. A non-nil
+    /// `fingerprint` models a COMMITTED slot (post-dwell); nil models a pre-commit candidate, which the
+    /// Phase-3a registry gate must drop. `internal` for `@testable` unit tests only.
+    func addSlotForTesting(
+        coordinator: ProximityCoordinator,
+        peer: MultipeerPeer,
+        fingerprint: String?,
+        verifiedKeyAgreementPublicKey: Data? = nil,
+        peerCapabilities: [String]? = nil
+    ) {
+        var slot = PeerSlot(
+            id: peer.id,
+            peer: peer,
+            channel: PeerChannelTransport(peer: peer, session: meshSession),
+            coordinator: coordinator,
+            kind: .active,
+            fingerprint: fingerprint
+        )
+        slot.verifiedKeyAgreementPublicKey = verifiedKeyAgreementPublicKey
+        slot.peerCapabilities = peerCapabilities
+        slots.append(slot)
+    }
+
+    /// Evicts a slot through the production removal funnel (`removeSlot` — the path
+    /// `onPeerDisconnected` and the stale-coordinator sweep share), so unit tests can drive
+    /// transient-drop teardown + shop send-tracking pruning without the private MC callbacks.
+    /// `internal` for `@testable` unit tests only.
+    func evictSlotForTesting(peerID: UUID) {
+        guard let slot = slots.first(where: { $0.id == peerID }) else { return }
+        removeSlot(slot)
+    }
+
+    /// Builds AND retains a slot coordinator exactly as `handleChannelReady` does — creating the
+    /// FriendSessionTrustPolicy from the store's vault and holding it in `slotTrustPolicies` so the
+    /// coordinator's `weak` trustPolicy stays alive — but over an injected transport so a unit test can
+    /// drive a blocked-key envelope through the coordinator (ported from the deleted
+    /// `ProximityClothingShareManager.makeRetainedConnectionCoordinatorForTesting`, whose regression
+    /// this retention pattern originally fixed; mirrors the heart manager's seam). If the retention
+    /// regresses (`slotTrustPolicies` no longer populated), the coordinator's weak ref goes nil once
+    /// this returns and the revoked/blocked-key drop this drives silently stops firing.
+    func makeRetainedSlotCoordinatorForTesting(
+        peer: MultipeerPeer,
+        transport: any MultipeerTransport,
+        ranging: any RangingProvider
+    ) -> ProximityCoordinator {
+        let trustPolicy = FriendSessionTrustPolicy(vault: store.proximityTrustVault)
+        let coordinator = ProximityCoordinator(
+            identity: identity,
+            transport: transport,
+            ranging: ranging,
+            payloadHandler: self,
+            trustPolicy: trustPolicy,
+            replayCache: replayCache,
+            foregroundAnchor: NoopProximityForegroundAnchor(),
+            displayName: displayName,
+            timeoutSeconds: 0
+        )
+        let slot = PeerSlot(
+            id: peer.id,
+            peer: peer,
+            channel: PeerChannelTransport(peer: peer, session: meshSession),
+            coordinator: coordinator,
+            kind: .active,
+            fingerprint: nil
+        )
+        slotTrustPolicies[slot.id] = trustPolicy
+        slots.append(slot)
+        return coordinator
     }
 
     // MARK: - UI test injection

@@ -374,8 +374,12 @@ struct DisposableCameraView: View {
     @State private var camera = CameraCaptureController()
     @State private var flashOpacity: Double = 0
     @State private var showInfo = false
+    @State private var showChat = false
     @State private var reviewPresented = false
     @State private var selectedForSave: Set<UUID> = []
+    // Phase 2 friend minting: candidates snapshotted when the review presents + the user's keeps.
+    @State private var friendCandidates: [MeshSessionRosterEntry] = []
+    @State private var keptFriendFingerprints: Set<String> = []
     @State private var photoSaveError: String? = nil
     @State private var activeRemovalProposal: MeshRemovalProposalPayload?
     @State private var previousWindTranslation: CGFloat = 0
@@ -422,9 +426,7 @@ struct DisposableCameraView: View {
                         .padding(.vertical, 18)
                 }
 
-                infoButton
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(20)
+                topControls
 
                 if isLandscape {
                     landscapeControls
@@ -453,6 +455,9 @@ struct DisposableCameraView: View {
         }
         .sheet(isPresented: $reviewPresented, onDismiss: resumeCameraAfterCancelledReview) { reviewSheet }
         .sheet(isPresented: $showInfo) { infoSheet }
+        .sheet(isPresented: $showChat) {
+            SessionChatPanel(manager: manager, onDone: { showChat = false })
+        }
         .sheet(isPresented: Binding(
             get: { !manager.pendingAdmissionRequests.isEmpty && manager.currentMesh != nil },
             set: { isPresented in
@@ -509,6 +514,18 @@ struct DisposableCameraView: View {
         }
     }
 
+    /// The two top-corner controls (info + in-session chat), extracted into a single overlay so the
+    /// main body ZStack stays inside the Swift type-checker's budget.
+    private var topControls: some View {
+        ZStack {
+            infoButton
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            chatButton
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        }
+        .padding(20)
+    }
+
     private var infoButton: some View {
         Button { showInfo = true } label: {
             Image(systemName: "info.circle")
@@ -516,6 +533,17 @@ struct DisposableCameraView: View {
                 .foregroundStyle(Color.white.opacity(0.5))
         }
         .accessibilityIdentifier("camera.info")
+    }
+
+    /// In-session chat entry point (Phase 5). Messages are live-session only and vanish at session end.
+    private var chatButton: some View {
+        Button { showChat = true } label: {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 18))
+                .foregroundStyle(Color.white.opacity(0.5))
+        }
+        .accessibilityLabel("Session messages")
+        .accessibilityIdentifier("camera.chat")
     }
 
     private var portraitControls: some View {
@@ -940,11 +968,35 @@ struct DisposableCameraView: View {
     private func beginDevelop() {
         camera.stopSession()
         if manager.sessionPhotos.isEmpty {
+            // No photos to review here. The keep-as-friend prompt for a photo-less session is
+            // presented by FriendsView off the manager's pendingFriendReview batch — teardown
+            // promotes the roster into it, so nothing is lost by deferring past leaveSession.
             Task { await manager.leaveSessionAfterNotifyingPeers() }
         } else {
+            // Phase 2: friend eligibility is computed at presentation time, against the live
+            // trust vault, so peers trusted or blocked mid-session never reach the sheet.
+            friendCandidates = FriendMintingReview.eligibleCandidates(
+                roster: manager.sessionRoster,
+                trustedPeers: store.trustedProximityPeers
+            )
+            keptFriendFingerprints = []
             selectedForSave = Set(manager.sessionPhotos.map(\.id))
             reviewPresented = true
         }
+    }
+
+    /// Completes the keep-as-friend flow: mints the kept candidates (one-sided, local-only) and
+    /// consumes ONLY the roster entries this review presented (`consumeRosterEntries`, scoped) —
+    /// never clearSessionRoster(): a peer who commits mid-review stays in the live roster and is
+    /// offered at true session end via the manager's pendingFriendReview batch. The embedded
+    /// friend section keeps its presentation-time snapshot for display. Only called on the paths
+    /// that actually end the session — a cancelled review resumes the camera and keeps the
+    /// roster for the real session end.
+    private func finalizeFriendKeeps() {
+        store.keepProximityFriends(from: friendCandidates, keptFingerprints: keptFriendFingerprints)
+        manager.consumeRosterEntries(fingerprints: Set(friendCandidates.map(\.fingerprint)))
+        friendCandidates = []
+        keptFriendFingerprints = []
     }
 
     private func resumeCameraAfterCancelledReview() {
@@ -959,11 +1011,14 @@ struct DisposableCameraView: View {
         FriendPhotoReviewSheet(
             photos: manager.sessionPhotos,
             selectedIDs: $selectedForSave,
+            friendCandidates: friendCandidates,
+            keptFriendFingerprints: $keptFriendFingerprints,
             saveSelected: {
                 let toSave = manager.sessionPhotos.filter { selectedForSave.contains($0.id) }
                 do {
                     try await FriendPhotoLibrarySaver.save(toSave)
                     manager.finishSessionPhotos(keeping: selectedForSave)
+                    finalizeFriendKeeps()
                     await manager.leaveSessionAfterNotifyingPeers()
                     reviewPresented = false
                 } catch CocoaError.userCancelled {
@@ -974,6 +1029,7 @@ struct DisposableCameraView: View {
             },
             discardAll: {
                 manager.deleteAllSessionPhotos()
+                finalizeFriendKeeps()
                 Task {
                     await manager.leaveSessionAfterNotifyingPeers()
                     reviewPresented = false
@@ -1195,48 +1251,58 @@ struct DisposableCameraView: View {
         }
     }
 
-    /// A quiet one-tap heart beside a connected friend. Enabled only while today's heart to them
-    /// is unsent AND they are reachable on a live heart connection; no counts shown anywhere.
-    /// A filled heart marks "already sent today" — a state, never a number.
+    /// A quiet one-tap heart beside a connected friend (mesh redesign Phase 4b — hearts ride the
+    /// presence radio). Enabled only while the 5-minute cooldown to them is clear AND they are
+    /// recognized nearby by presence and no send is in flight; no counts shown anywhere. A filled
+    /// check marks the cooldown — a state, never a number.
     private func sessionHeartButton(for friend: ProximityTrustedPeerRecord) -> some View {
-        let alreadySentToday = !store.heartLedger.canSendHeart(to: friend.fingerprint)
-        let reachable = store.heartShareManager.isReachable(fingerprint: friend.fingerprint)
-        let firstName = ProximityHeartManager.firstName(of: friend.displayName)
-        let state = SendGoodVibesLabel.state(alreadySentToday: alreadySentToday, reachable: reachable)
+        let onCooldown = !store.heartLedger.canSendHeart(to: friend.fingerprint)
+        let reachable = store.presenceManager.isReachable(fingerprint: friend.fingerprint)
+        let sending = sessionHeartSendInProgress
+        let firstName = PresenceManager.firstName(of: friend.displayName)
+        let state = SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending)
         return Button {
-            store.heartShareManager.sendHeart(to: friend)
+            store.presenceManager.sendHeart(to: friend)
         } label: {
             // Compact in-row form of the "Send good vibes" affordance (good-vibes 10c): a
-            // dusty-rose/terracotta heart when ready, a soft-filled check once sent, muted apart.
-            Image(systemName: state == .sent ? "checkmark" : "heart.fill")
+            // dusty-rose/terracotta heart when ready, a soft-filled check within the cooldown,
+            // muted apart.
+            Image(systemName: state == .cooldown ? "checkmark" : "heart.fill")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(sessionHeartForeground(for: state))
                 .frame(width: 30, height: 30)
                 .background(sessionHeartBackground(for: state), in: Circle())
         }
         .buttonStyle(.plain)
-        .disabled(alreadySentToday || !reachable)
+        .disabled(onCooldown || !reachable || sending)
         .accessibilityLabel(
-            alreadySentToday
-                ? "You've already sent \(firstName) some warmth today."
+            onCooldown
+                ? "You just sent \(firstName) some warmth — hearts settle for a few minutes."
                 : reachable
                     ? "Send good vibes to \(friend.displayName)"
                     : "Hearts travel in person for now."
         )
     }
 
+    private var sessionHeartSendInProgress: Bool {
+        switch store.presenceManager.heartSendState {
+        case .connecting, .verifying: return true
+        default: return false
+        }
+    }
+
     private func sessionHeartForeground(for state: SendGoodVibesLabel.SendState) -> Color {
         switch state {
-        case .ready: Color.terracotta
-        case .sent: Color.terracotta.opacity(0.7)
+        case .ready, .sending: Color.terracotta
+        case .cooldown: Color.terracotta.opacity(0.7)
         case .notNearby: Color.bark.opacity(0.35)
         }
     }
 
     private func sessionHeartBackground(for state: SendGoodVibesLabel.SendState) -> Color {
         switch state {
-        case .ready: Color.terracotta.opacity(0.14)
-        case .sent: Color.dustyRose.opacity(0.16)
+        case .ready, .sending: Color.terracotta.opacity(0.14)
+        case .cooldown: Color.dustyRose.opacity(0.16)
         case .notNearby: Color.bark.opacity(0.06)
         }
     }

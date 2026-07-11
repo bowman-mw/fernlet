@@ -171,38 +171,11 @@ struct FriendShopTests {
         #expect(!catalog.items.contains { $0.id == friendItem.id })                  // bought (non-self) never broadcast
     }
 
-    // MARK: - Ephemeral catalog (manager)
-
-    @Test func receivedCatalogIsHeldThenClearedOnDisconnect() throws {
-        let store = makeShopStore()
-        let manager = ProximityClothingShareManager(store: store)
-        let sellerID = UUID()
-        let item = sellerItem(price: 7, designer: sellerID)
-        let payload = ClothingCatalogPayload(designerID: sellerID, displayName: "Robin", items: [item])
-        let plaintext = try JSONEncoder().encode(payload)
-        let envelope = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
-            envelopeID: UUID(),
-            senderSigningPublicKey: Data(),
-            senderKeyAgreementPublicKey: Data(),
-            senderDisplayName: "Robin",
-            recipientFingerprint: nil,
-            payloadType: .clothingCatalog,
-            payloadEncryption: .none,
-            payloadSummary: PayloadSummary(title: "Clothing shop"),
-            payload: plaintext,
-            createdAt: day,
-            expiresAt: nil,
-            signature: Data()
-        )
-
-        manager.proximityCoordinator(throwawayCoordinator(), didReceive: envelope, plaintext: plaintext, from: nil)
-        #expect(manager.peerCatalogs.count == 1)
-        #expect(manager.peerCatalogs.first?.payload.items.first?.id == item.id)
-
-        manager.stop()                                                               // leaving proximity
-        #expect(manager.peerCatalogs.isEmpty)                                        // catalog gone (§2.3)
-    }
+    // NOTE (Phase 3a): the delivery half of this suite (catalog held while connected, cleared on
+    // disconnect) drove the deleted standalone-radio `ProximityClothingShareManager`. The mesh-owned
+    // replacement lifecycle — in-session accumulation, the 1-hour post-session window, early close on
+    // the next session / opt-out — is covered by `MeshClothingShopTests`. The buy flow below is
+    // untouched by the port: buying was always fully local.
 
     // MARK: - Helpers
 
@@ -223,21 +196,6 @@ struct FriendShopTests {
             slot: .hat,
             texture: ItemGridTexture.blank(for: .hat, palette: ItemDesignPalette.hexes),
             designer: ItemDesigner(id: store.localDesignerID)
-        )
-    }
-
-    private func throwawayCoordinator() -> ProximityCoordinator {
-        let identity = IdentityService(keychainService: "test.clothing.\(UUID().uuidString)")
-        try? identity.ensureProvisioned()
-        return ProximityCoordinator(
-            identity: identity,
-            transport: MockMultipeerTransport(),
-            ranging: MockRangingProvider(),
-            inspector: nil,
-            replayCache: ReplayCache(),
-            foregroundAnchor: nil,
-            displayName: "Local",
-            timeoutSeconds: 0
         )
     }
 

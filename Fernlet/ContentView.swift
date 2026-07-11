@@ -192,6 +192,30 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: FernletNotificationDelegate.pendingSheetRequestNotification)) { _ in
                 consumePendingNotificationSheet()
             }
+            .onChange(of: store.settings.allowNearbyPresence) { _, _ in
+                // Enabling in Settings (or via the first-friend prompt) starts the radio right
+                // away; disabling is already stopped by the setter — this keeps both in sync
+                // with the scene/tab/lock gate.
+                updatePresenceListener()
+            }
+            // One-time "first kept friend" presence offer (Phase 4a). Attached to the stable
+            // root — not the Social-tab layout (which is destroyed in the same transaction as
+            // session teardown, the Phase-2 lesson) — and driven by observable store state.
+            .alert(
+                "Turn on Nearby Friends?",
+                isPresented: Binding(
+                    get: { store.presenceEnablePromptRequested },
+                    set: { if !$0 { store.presenceEnablePromptRequested = false } }
+                )
+            ) {
+                Button("Turn on") {
+                    store.setAllowNearbyPresence(true)
+                    updatePresenceListener()
+                }
+                Button("Not now", role: .cancel) {}
+            } message: {
+                Text("See when friends you've kept are nearby. Fernlet broadcasts only rotating tags that your friends' devices can recognize — never your name or a stable ID — and only while the app is open. You can change this anytime in Settings.")
+            }
     }
 
     /// Opens the sheet a notification tap asked for (daily check-in → journal). Skipped while
@@ -616,8 +640,9 @@ struct ContentView: View {
         } else {
             store.recipeShareManager.stop()
         }
-        updateClothingShareListener()
-        updateHeartShareListener()
+        // Phase 4b: hearts ride the presence radio (the standalone heart listener is gone), so the
+        // recipe listener chain hands straight off to the presence gate.
+        updatePresenceListener()
     }
 
     private var shouldListenForRecipeShares: Bool {
@@ -632,54 +657,31 @@ struct ContentView: View {
         }
     }
 
-    private func updateClothingShareListener() {
-        if shouldListenForClothingShares {
-            store.clothingShareManager.start()
+    // Phase 3a: the clothing-shop listener chain that lived here is gone — the shop rides the friend
+    // mesh (`MeshNetworkManager.clothingShop`), whose radio lifecycle is user-driven
+    // (startJoin/leaveSession), and the `allowNearbyClothingShares` opt-out is payload-layer (providers
+    // wired in FernletStore.meshNetworkManager). There is deliberately NO scene-dip clearing of the
+    // shop's held catalogs: the post-session window outlives the session by design, and radio privacy
+    // is the mesh lifecycle's job.
+
+    /// Presence radio gating (mesh redesign Phase 4a/4b): runs only while opted in, foregrounded,
+    /// unlocked, and on a main tab — driven from the same listener chain events as the recipe
+    /// and heart listeners (tab / scene / lock changes all funnel through
+    /// `updateRecipeShareListener`), plus a direct observation of the setting so toggling it ON
+    /// in Settings starts the radio without waiting for the next scene event.
+    private func updatePresenceListener() {
+        if shouldRunPresence {
+            store.presenceManager.start()
         } else {
-            store.clothingShareManager.stop()
+            store.presenceManager.stop()
         }
     }
 
-    /// The clothing shop is in-person + social-only: discover/broadcast while on the Friends tab so the
-    /// FriendShopView can browse nearby shops. Cleared (and the ephemeral peer catalogs dropped) otherwise.
-    ///
-    /// PRIVACY (deliberate — do NOT loosen): every guard here tears the manager down the moment its
-    /// condition fails, and `stop()` both ends the Multipeer session (so the display name / designer id /
-    /// shop catalog stop being advertised) AND drops the ephemeral peer catalogs — the session-only
-    /// guarantee. The `scenePhase == .active` gate is intentional: a privacy-first app must NOT keep
-    /// broadcasting its shop while inactive/backgrounded (notification shade, call banner, app switcher,
-    /// lock). Collapsing an in-progress shop session on a transient dip is the accepted cost of never
-    /// advertising in the background — favour not-broadcasting over shop-session convenience. The opt-out
-    /// (`allowNearbyClothingShares`) and lock (`.locked`) are enforced here too, and the opt-out setter
-    /// (`FernletStore.setAllowNearbyClothingShares`) calls `stop()` directly so turning it OFF takes effect
-    /// immediately without waiting for a scene / tab / lock event.
-    private var shouldListenForClothingShares: Bool {
-        guard store.settings.allowNearbyClothingShares else { return false }
-        guard scenePhase == .active else { return false }
-        guard selectedTab == .social else { return false }
-        switch lockService.state {
-        case .notConfigured, .unlocked:
-            return true
-        case .locked:
-            return false
-        }
-    }
-
-    private func updateHeartShareListener() {
-        if shouldListenForHearts {
-            store.heartShareManager.start()
-        } else {
-            store.heartShareManager.stop()
-        }
-    }
-
-    /// Hearts are in-person v1: listen on the recipe-share tabs (so a heart arrives while the
-    /// receiver is anywhere on the main surfaces) PLUS Social, where the send buttons live
-    /// (FriendListView + the session People list). Same privacy posture as the other two
-    /// listeners: never while backgrounded or locked, and the opt-out setter
-    /// (`FernletStore.setAllowNearbyHearts`) stops the manager immediately.
-    private var shouldListenForHearts: Bool {
-        guard store.settings.allowNearbyHearts else { return false }
+    /// Same tab set as hearts (Home/Food/Move/Social — everywhere but Private), same privacy
+    /// posture: never while backgrounded or locked, and the opt-out setter
+    /// (`FernletStore.setAllowNearbyPresence`) stops the radio immediately.
+    private var shouldRunPresence: Bool {
+        guard store.settings.allowNearbyPresence else { return false }
         guard scenePhase == .active else { return false }
         guard selectedTab == .home || selectedTab == .food || selectedTab == .move || selectedTab == .social else { return false }
         switch lockService.state {

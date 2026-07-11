@@ -1,6 +1,7 @@
-import ProximityKit
+@testable import ProximityKit
 import Testing
 import UIKit
+import MultipeerConnectivity
 import FernletDomainModel
 @testable import Fernlet
 
@@ -232,6 +233,160 @@ struct MeshNetworkManagerTests {
         #expect(manager.meshPhotos.contains(where: { $0.id == discardedID }) == false)
         #expect(Set(manager.meshPhotos.map(\.id)).isSubset(of: existingAlbumIDs.union([keptID])))
         #expect(manager.sessionPhotos.isEmpty)
+    }
+
+    // MARK: - Phase 1: payload handler registry
+
+    /// A coordinator the dispatch tests can hand to `proximityCoordinator(_:didReceive:...)` —
+    /// the manager only identity-compares it against its slots (mirrors FriendShopTests).
+    /// Deliberately NOT provisioned: the coordinator's init never touches the keychain, and
+    /// provisioning here would orphan keys under a never-reused UUID service on every run.
+    private func throwawayCoordinator() -> ProximityCoordinator {
+        let identity = IdentityService(keychainService: "test.mesh.registry.\(UUID().uuidString)")
+        return ProximityCoordinator(
+            identity: identity,
+            transport: MockMultipeerTransport(),
+            ranging: MockRangingProvider(),
+            inspector: nil,
+            replayCache: ReplayCache(),
+            foregroundAnchor: nil,
+            displayName: "Local",
+            timeoutSeconds: 0
+        )
+    }
+
+    /// A transport peer for `addSlotForTesting` — a non-nil fingerprint on the slot models a
+    /// COMMITTED (post-dwell) session member, nil a pre-commit candidate.
+    private func makePeer(name: String) -> MultipeerPeer {
+        MultipeerPeer(
+            id: UUID(),
+            displayName: name,
+            discoveryInfo: nil,
+            advertisedFingerprint: nil,
+            underlying: MCPeerID(displayName: name)
+        )
+    }
+
+    /// An inbound envelope shell — `proximityCoordinator(_:didReceive:...)` receives
+    /// post-verification envelopes, so dummy keys/signature are fine here.
+    private func inboundEnvelope(payloadType: PayloadType, plaintext: Data) -> FernletIdentityEnvelope {
+        FernletIdentityEnvelope(
+            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+            envelopeID: UUID(),
+            senderSigningPublicKey: Data(),
+            senderKeyAgreementPublicKey: Data(),
+            senderDisplayName: "Peer",
+            recipientFingerprint: nil,
+            payloadType: payloadType,
+            payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: "Test"),
+            payload: plaintext,
+            createdAt: Date(),
+            expiresAt: nil,
+            signature: Data()
+        )
+    }
+
+    /// A known type outside the core mesh switch dispatches to its registered handler with the
+    /// same (envelope, plaintext, peer) the core cases consume — from a COMMITTED slot (the
+    /// Phase-3a registry commit gate; feature payloads are for session members only).
+    @Test func registry_registeredHandlerReceivesNonCorePayload() {
+        let manager = MeshNetworkManager(store: store)
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Peer"), fingerprint: "fp-peer")
+        let plaintext = Data("feature payload".utf8)
+        let envelope = inboundEnvelope(payloadType: .trainerPlan, plaintext: plaintext)
+        var received: (PayloadType?, Data)?
+        manager.registerPayloadHandler(for: .trainerPlan) { envelope, plaintext, _ in
+            received = (envelope.payloadType, plaintext)
+        }
+
+        manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: nil)
+
+        #expect(received?.0 == .trainerPlan)
+        #expect(received?.1 == plaintext)
+    }
+
+    /// Phase 3a hardening — the registry commit gate is the security boundary: the coordinator
+    /// dispatches known non-core payloads with `connectedIdentity ?? pendingPeerIdentity` and no
+    /// state gate, so a pre-dwell (uncommitted) slot and a coordinator that never became a slot
+    /// must both be dropped before any registered handler runs.
+    @Test func registry_uncommittedSlotAndSlotlessCoordinatorNeverReachHandlers() {
+        let manager = MeshNetworkManager(store: store)
+        var handlerCalled = false
+        manager.registerPayloadHandler(for: .trainerPlan) { _, _, _ in handlerCalled = true }
+        let envelope = inboundEnvelope(payloadType: .trainerPlan, plaintext: Data())
+
+        // No slot for this coordinator at all.
+        manager.proximityCoordinator(throwawayCoordinator(), didReceive: envelope, plaintext: Data(), from: nil)
+        #expect(handlerCalled == false, "A slotless coordinator must never reach a feature handler")
+
+        // A slot exists but is UNCOMMITTED (pre-dwell: fingerprint nil).
+        let pending = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: pending, peer: makePeer(name: "Pending"), fingerprint: nil)
+        manager.proximityCoordinator(pending, didReceive: envelope, plaintext: Data(), from: nil)
+        #expect(handlerCalled == false, "An uncommitted slot must never reach a feature handler")
+    }
+
+    /// An unregistered non-core type keeps the pre-registry silent drop — a handler registered
+    /// for a DIFFERENT type is not consulted.
+    @Test func registry_unregisteredKnownTypeStillDropsSilently() {
+        let manager = MeshNetworkManager(store: store)
+        var handlerCalled = false
+        manager.registerPayloadHandler(for: .trainerPlan) { _, _, _ in handlerCalled = true }
+
+        // Committed slot so the drop is a registry miss, not the Phase-3a commit gate.
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Peer"), fingerprint: "fp-peer")
+        let envelope = inboundEnvelope(payloadType: .trainerPlanDelta, plaintext: Data())
+        manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: Data(), from: nil)
+
+        #expect(handlerCalled == false)
+    }
+
+    /// Core mesh-control types dispatch through the switch FIRST — a registration for a core type
+    /// can never shadow (or double-handle) mesh-control processing.
+    @Test func registry_coreMeshTypeIsNotRoutedToRegisteredHandler() {
+        let manager = MeshNetworkManager(store: store)
+        var handlerCalled = false
+        manager.registerPayloadHandler(for: .meshDescriptor) { _, _, _ in handlerCalled = true }
+
+        // Committed slot so the non-dispatch is core-switch precedence, not the commit gate.
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Peer"), fingerprint: "fp-peer")
+        let envelope = inboundEnvelope(payloadType: .meshDescriptor, plaintext: Data("not json".utf8))
+        manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: Data("not json".utf8), from: nil)
+
+        #expect(handlerCalled == false)
+    }
+
+    /// Belt-and-braces: an unknown-token envelope handed straight to the manager (the coordinator
+    /// parks these upstream) is dropped before the switch — no handler runs, no state changes.
+    @Test func registry_unknownPayloadTypeNeverDispatches() {
+        let manager = MeshNetworkManager(store: store)
+        var handlerCalled = false
+        manager.registerPayloadHandler(for: .trainerPlan) { _, _, _ in handlerCalled = true }
+
+        let unknown = FernletIdentityEnvelope(
+            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+            envelopeID: UUID(),
+            senderSigningPublicKey: Data(),
+            senderKeyAgreementPublicKey: Data(),
+            senderDisplayName: "Peer",
+            recipientFingerprint: nil,
+            payloadTypeToken: "fernlet.future.sparkle.v1",
+            payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: "Future"),
+            payload: Data(),
+            createdAt: Date(),
+            expiresAt: nil,
+            signature: Data()
+        )
+        manager.proximityCoordinator(throwawayCoordinator(), didReceive: unknown, plaintext: Data(), from: nil)
+
+        #expect(handlerCalled == false)
+        #expect(manager.currentMesh == nil)
+        #expect(manager.meshError == nil)
     }
 }
 

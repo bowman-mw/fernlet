@@ -35,6 +35,9 @@ struct SettingsSheet: View {
     @State private var dailyCheckInTime = Calendar.current.date(bySettingHour: 19, minute: 0, second: 0, of: Date()) ?? Date()
     @State private var didLoadDailyCheckIn = false
     @State private var dailyCheckInAuthDenied = false
+    /// Hearts require presence (Group 2): when the user turns hearts ON while Nearby Friends is
+    /// off, offer to enable presence too — hearts are dead without it.
+    @State private var offerPresenceForHearts = false
 
     var body: some View {
         NavigationStack {
@@ -107,7 +110,7 @@ struct SettingsSheet: View {
                 }
                 .listRowBackground(Color.cream)
 
-                Section("Privacy") {
+                Section {
                     NavigationLink("Privacy & Data") {
                         PrivacyDataSettingsView(store: store)
                             .environment(lockService)
@@ -125,20 +128,54 @@ struct SettingsSheet: View {
                             set: { store.setAllowNearbyRecipeShares($0) }
                         )
                     )
+                    // Phase 3a: payload-layer control — the shop rides the friend session (no
+                    // standalone radio), so this governs whether shop catalogs are shared at all.
                     Toggle(
-                        "Allow nearby clothing shops",
+                        "Share clothing shops with friends",
                         isOn: Binding(
                             get: { store.settings.allowNearbyClothingShares },
                             set: { store.setAllowNearbyClothingShares($0) }
                         )
                     )
+                    // Phase 4b: hearts ride the presence radio (no standalone radio). This governs
+                    // whether hearts are sent AND received; the presence toggle below still runs.
+                    // Hearts require presence (Group 2): enabling hearts while Nearby Friends is off
+                    // offers to enable presence, since hearts cannot function without it.
                     Toggle(
                         "Allow nearby hearts",
                         isOn: Binding(
                             get: { store.settings.allowNearbyHearts },
-                            set: { store.setAllowNearbyHearts($0) }
+                            set: { newValue in
+                                store.setAllowNearbyHearts(newValue)
+                                if newValue && !store.settings.allowNearbyPresence {
+                                    offerPresenceForHearts = true
+                                }
+                            }
                         )
                     )
+                    if store.settings.allowNearbyHearts && !store.settings.allowNearbyPresence {
+                        Text("Hearts need Nearby Friends turned on to work — turn it on below.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                    }
+                    // Phase 4a: the standing presence radio — rotating pairwise tags only.
+                    Toggle(
+                        "Nearby friends presence",
+                        isOn: Binding(
+                            get: { store.settings.allowNearbyPresence },
+                            set: { store.setAllowNearbyPresence($0) }
+                        )
+                    )
+                } header: {
+                    Text("Privacy")
+                } footer: {
+                    Text("Nearby friends presence lets friends you've kept see when you're close by. Fernlet broadcasts only rotating tags that your friends' devices can recognize — never your name or a stable identifier — and only while the app is open and unlocked. Nearby hearts uses that same presence connection to send a friend a heart in person, so it needs Nearby Friends turned on. If you keep presence on but turn hearts off, friends can still see you're nearby, but any heart sent to you is quietly dropped.")
+                }
+                .alert("Turn on Nearby Friends?", isPresented: $offerPresenceForHearts) {
+                    Button("Turn on") { store.setAllowNearbyPresence(true) }
+                    Button("Not now", role: .cancel) {}
+                } message: {
+                    Text("Hearts are sent in person over Nearby Friends. Turn it on so you can see when friends are close by and send them a heart. Fernlet broadcasts only rotating tags your friends can recognize — never your name.")
                 }
                 .listRowBackground(Color.cream)
 
