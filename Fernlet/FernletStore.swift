@@ -109,14 +109,22 @@ final class FernletStore {
     @ObservationIgnored let milestoneLedgerService: MilestoneLedgerService
     @ObservationIgnored let proximityTrustVault: ProximityTrustVault
     @ObservationIgnored let aiRetryQueueService: AIRetryQueueService
-    @ObservationIgnored private(set) lazy var meshNetworkManager: MeshNetworkManager = MeshNetworkManager(store: self)
-    @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
-    @ObservationIgnored private(set) lazy var clothingShareManager: ProximityClothingShareManager = {
-        let manager = ProximityClothingShareManager(store: self)
-        // Auto-broadcast this device's current shop to each peer on connect.
-        manager.localCatalogProvider = { [weak self] in self?.buildShopCatalog() }
+    @ObservationIgnored private(set) lazy var meshNetworkManager: MeshNetworkManager = {
+        let manager = MeshNetworkManager(store: self)
+        // Clothing shop (Phase 3a): catalogs ride the friend mesh; the opt-out is payload-layer, wired
+        // here as app-side closures so `ProximityHost` stays settings-free. While the setting is off the
+        // provider returns nil (nothing sent), inbound catalogs drop, and the `shop` capability is not
+        // advertised; `setAllowNearbyClothingShares(false)` also clears held state immediately.
+        manager.clothingShop.isSharingEnabledProvider = { [weak self] in
+            self?.settings.allowNearbyClothingShares ?? false
+        }
+        manager.clothingShop.localCatalogProvider = { [weak self] in
+            guard let self, self.settings.allowNearbyClothingShares else { return nil }
+            return self.buildShopCatalog()
+        }
         return manager
     }()
+    @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
     /// Device-local hearts state (received hearts + per-friend-per-day rate limit). Deliberately
     /// outside the snapshot: heart activity never enters any synced store.
     @ObservationIgnored private(set) lazy var heartLedger = ProximityHeartLedger()
@@ -601,12 +609,15 @@ final class FernletStore {
         coinLedgerService.grantEarns(awards)
     }
 
-    // MARK: - Clothing shop (in-person friend shop, Increment 3)
-    // The catalog exchange runs over `clothingShareManager` (its own per-row mesh session). Buying is
-    // local: spend coins + copy the already-received item into the closet, preserving its provenance.
+    // MARK: - Clothing shop (in-person friend shop)
+    // The catalog exchange rides the friend mesh (`meshNetworkManager.clothingShop`, Phase 3a):
+    // catalogs are sent pairwise-sealed to committed peers during the session, and the shop opens as a
+    // 1-hour post-session window on the Friends tab. Buying is local: spend coins + copy the
+    // already-received item into the closet, preserving its provenance.
 
     /// This device's broadcast shop catalog, built from the user's own shareable designs (capped,
-    /// deterministically ordered). Supplied to `clothingShareManager` and sent to each peer on connect.
+    /// deterministically ordered). Supplied to the mesh's `clothingShop` provider (nil when the sharing
+    /// opt-out is off) and sent to each committed peer that advertises the `shop` capability.
     func buildShopCatalog() -> ClothingCatalogPayload {
         ClothingShareCodec.catalog(
             forShareable: customItems,
@@ -744,13 +755,15 @@ final class FernletStore {
         snapshotSaveCoordinator.schedule()
     }
 
-    /// Toggle the in-person clothing-shop broadcast/browse opt-out (mirrors `setAllowNearbyRecipeShares`).
-    /// Turning it OFF stops the manager immediately (ending Multipeer discovery + the shop broadcast) so the
-    /// opt-out takes effect without waiting for the next lock / tab / scene-phase event.
+    /// Toggle the clothing-shop sharing opt-out. Payload-layer since Phase 3a (the shop rides the
+    /// friend mesh — there is no clothing radio to stop): the providers wired in `meshNetworkManager`'s
+    /// initializer gate outbound catalogs, inbound catalogs, and the `shop` capability on this setting,
+    /// and turning it OFF additionally drops every held peer catalog and closes any open shop window
+    /// immediately — WITHOUT touching the friend-mesh radio (photos keep working).
     func setAllowNearbyClothingShares(_ value: Bool) {
         settings.allowNearbyClothingShares = value
         if !value {
-            clothingShareManager.stop()
+            meshNetworkManager.clothingShop.clearAll()
         }
         snapshotSaveCoordinator.schedule()
     }

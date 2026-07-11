@@ -27,6 +27,13 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// held in memory only while connected. Buying is local (spend coins + copy the already-received item),
     /// so there is no separate item-transfer payload type.
     case clothingCatalog       = "fernlet.clothing.catalog.v1"
+    /// Asks a committed peer to (re)send its `clothingCatalog` (mesh redesign Phase 3a, "Catalog
+    /// delivery must not assume commit symmetry"): each side sends this at ITS OWN slot commit, so a
+    /// peer whose commit landed later — whose registry gate dropped the early catalog — still receives
+    /// one. Carries no payload body; signed like other control payloads but never sealed (nothing to
+    /// protect) and deliberately NOT in `sealingRequiredTypes`. Additive-safe post-Phase-1: older
+    /// clients park unknown types without dropping the session.
+    case clothingCatalogRequest = "fernlet.clothing.catalog.request.v1"
     /// A "good vibes" heart sent to a trusted friend in person (`HeartPayload` — id + day key only,
     /// no note, no numbers, no sender state). Always sealed to the recipient like a recipe share.
     case friendHeart           = "fernlet.friend.heart.v1"

@@ -1,6 +1,7 @@
 import ProximityKit
 import SwiftUI
 import FernletDomainModel
+import FernletLock
 
 struct ProximityRecipeShareDraft: Identifiable, Equatable {
     let id = UUID()
@@ -12,8 +13,11 @@ struct ProximityRecipeShareDraft: Identifiable, Equatable {
 struct ProximityRecipeShareSheet: View {
     var draft: ProximityRecipeShareDraft
     var manager: ProximityRecipeShareManager
+    var store: FernletStore
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(FernletLockService.self) private var lockService
     @State private var includeNotes = true
     @State private var hasFinishedInitialSearch = false
     @State private var searchDelayTask: Task<Void, Never>?
@@ -55,6 +59,12 @@ struct ProximityRecipeShareSheet: View {
                                 } else {
                                     VStack(spacing: 0) {
                                         ForEach(Array(manager.nearbyRecipients.enumerated()), id: \.element.id) { index, recipient in
+                                            // Hard 2-device cap UX: while connecting to / paired
+                                            // with one recipient, every OTHER row is disabled —
+                                            // a tap there would only hit the manager's visible
+                                            // outbound-cap refusal anyway.
+                                            let isLockedOut = manager.engagedRecipientID != nil
+                                                && manager.engagedRecipientID != recipient.id
                                             if index > 0 { FernletRowDivider() }
                                             Button {
                                                 manager.sendRecipeShare(outgoingPayload, to: recipient)
@@ -81,6 +91,8 @@ struct ProximityRecipeShareSheet: View {
                                                 .padding(.vertical, 10)
                                             }
                                             .buttonStyle(.plain)
+                                            .disabled(isLockedOut)
+                                            .opacity(isLockedOut ? 0.4 : 1)
                                         }
                                     }
                                 }
@@ -127,6 +139,22 @@ struct ProximityRecipeShareSheet: View {
                 searchDelayTask?.cancel()
                 dismissAfterSendTask?.cancel()
                 manager.stop()
+                // Go-dark-after-share fix (mesh redesign Phase 3b): stop() tears the recipe
+                // radio down, and historically nothing restarted passive listening until the
+                // next tab/scene/lock event — after one share the device silently stopped
+                // being discoverable for inbound recipes. Restart it here behind the same
+                // opt-in + scene + lock gates ContentView enforces. The scene check is NOT
+                // implicit: the post-send auto-dismiss can race a backgrounding (onDisappear
+                // then fires with the scene inactive), and restarting there would broadcast
+                // while backgrounded — the privacy line every listener holds. No unit seam
+                // reaches this view closure; ContentView's updateRecipeShareListener chain
+                // remains the authoritative gate — any later scene/tab/lock/opt-out change
+                // re-evaluates and stops the manager again (an inactive-scene dismissal is
+                // then restarted by the next scene-active event, not left dark). Tab is
+                // implicitly satisfied (the sheet only presents over recipe-share tabs).
+                if scenePhase == .active, store.settings.allowNearbyRecipeShares, isUnlockedForListening {
+                    manager.start()
+                }
             }
             .onChange(of: manager.sendState) { _, state in
                 scheduleDismissAfterSendIfNeeded(state)
@@ -225,6 +253,13 @@ struct ProximityRecipeShareSheet: View {
             try? await Task.sleep(for: .seconds(1.4))
             guard !Task.isCancelled else { return }
             dismiss()
+        }
+    }
+
+    private var isUnlockedForListening: Bool {
+        switch lockService.state {
+        case .notConfigured, .unlocked: true
+        case .locked: false
         }
     }
 

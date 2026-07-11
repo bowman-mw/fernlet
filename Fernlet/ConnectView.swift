@@ -174,36 +174,17 @@ struct FriendsView: View {
                     HStack(alignment: .top) {
                         ScreenHeader(title: "Friends", subtitle: "", identifier: "screen.friends")
                         Spacer()
-                        HStack(spacing: 10) {
-                            // Surface the shop when a friend's shop is discoverable nearby. Gate on
-                            // `nearbyShopPeers` (set on peer discovery) rather than `peerCatalogs`: catalogs
-                            // are far more ephemeral — a momentary peer disconnect or any scene-phase dip
-                            // (Control Center, app switcher, Face ID) clears them, which would yank this link
-                            // out from under a pushed FriendShopView and force-pop the user mid-browse.
-                            // `nearbyShopPeers` is the steadier presence signal, and FriendShopView carries
-                            // its own "looking for shops nearby" recovery state for a catalog that comes and
-                            // goes while it's open. Interim gate pending the clothing/photo mesh merge — once
-                            // unified, gate on the single session's isInSession instead.
-                            if !store.clothingShareManager.nearbyShopPeers.isEmpty {
-                                NavigationLink {
-                                    FriendShopView(store: store, manager: store.clothingShareManager)
-                                } label: {
-                                    shopButtonLabel(coins: store.coinBalance)
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("friends.friendShops")
-                                .accessibilityLabel("Friend shops, \(store.coinBalance) coins")
-                            }
-                            NavigationLink {
-                                FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
-                            } label: {
-                                headerButtonLabel("person.2")
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("friends.manageFriends")
+                        NavigationLink {
+                            FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
+                        } label: {
+                            headerButtonLabel("person.2")
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("friends.manageFriends")
                     }
                     .padding(.top, 4)
+
+                    shopWindowCard
 
                     nearbyStatusBanner
                         .animation(.easeInOut(duration: 0.3), value: manager.isSearching)
@@ -239,20 +220,49 @@ struct FriendsView: View {
             )
     }
 
-    /// The shop bag with a live coin-count badge (mockup 4a "connected · coin badge") — one less
-    /// ambiguous icon: the bag itself carries the balance you'd spend inside.
-    private func shopButtonLabel(coins: Int) -> some View {
-        headerButtonLabel("bag")
-            .overlay(alignment: .topTrailing) {
-                Text("\(coins)")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.bark)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule(style: .continuous).fill(Color.goldenrod))
-                    .overlay(Capsule(style: .continuous).stroke(Color.parchment, lineWidth: 1.5))
-                    .offset(x: 6, y: -5)
+    // MARK: - Post-session shop window (Phase 3a)
+
+    /// After a friends session ends, any shop catalogs exchanged during it stay browsable for one hour
+    /// (`MeshClothingShop.windowDuration`) — this card is the window's only entry point, visible on the
+    /// normal (post-session) Friends layout while the window is open and sharing isn't opted out. The
+    /// minute-tick TimelineView is all the "timer" the window needs: expiry itself is lazy
+    /// (`remainingWindowMinutes` returns nil once lapsed, hiding the card), and each tick refreshes the
+    /// countdown. Closes early on the next session start or app quit (memory-only state).
+    @ViewBuilder
+    private var shopWindowCard: some View {
+        if store.settings.allowNearbyClothingShares {
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                if let minutesLeft = manager.clothingShop.remainingWindowMinutes(at: context.date) {
+                    NavigationLink {
+                        FriendShopView(store: store, shop: manager.clothingShop)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bag")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(Color.moss)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Friend shops are open")
+                                    .font(.fernlet(.headerMedium))
+                                    .foregroundStyle(Color.bark)
+                                Text("Shop open — \(minutesLeft) min")
+                                    .font(.fernlet(.bodySmall))
+                                    .foregroundStyle(Color.slate)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(Color.slate)
+                        }
+                        .padding(14)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.moss.opacity(0.25), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("friends.friendShops")
+                    .accessibilityLabel("Friend shops open, \(minutesLeft) minutes left")
+                }
             }
+        }
     }
 
     // MARK: - Nearby status banner

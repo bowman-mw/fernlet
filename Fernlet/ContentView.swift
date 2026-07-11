@@ -616,7 +616,6 @@ struct ContentView: View {
         } else {
             store.recipeShareManager.stop()
         }
-        updateClothingShareListener()
         updateHeartShareListener()
     }
 
@@ -632,38 +631,12 @@ struct ContentView: View {
         }
     }
 
-    private func updateClothingShareListener() {
-        if shouldListenForClothingShares {
-            store.clothingShareManager.start()
-        } else {
-            store.clothingShareManager.stop()
-        }
-    }
-
-    /// The clothing shop is in-person + social-only: discover/broadcast while on the Friends tab so the
-    /// FriendShopView can browse nearby shops. Cleared (and the ephemeral peer catalogs dropped) otherwise.
-    ///
-    /// PRIVACY (deliberate — do NOT loosen): every guard here tears the manager down the moment its
-    /// condition fails, and `stop()` both ends the Multipeer session (so the display name / designer id /
-    /// shop catalog stop being advertised) AND drops the ephemeral peer catalogs — the session-only
-    /// guarantee. The `scenePhase == .active` gate is intentional: a privacy-first app must NOT keep
-    /// broadcasting its shop while inactive/backgrounded (notification shade, call banner, app switcher,
-    /// lock). Collapsing an in-progress shop session on a transient dip is the accepted cost of never
-    /// advertising in the background — favour not-broadcasting over shop-session convenience. The opt-out
-    /// (`allowNearbyClothingShares`) and lock (`.locked`) are enforced here too, and the opt-out setter
-    /// (`FernletStore.setAllowNearbyClothingShares`) calls `stop()` directly so turning it OFF takes effect
-    /// immediately without waiting for a scene / tab / lock event.
-    private var shouldListenForClothingShares: Bool {
-        guard store.settings.allowNearbyClothingShares else { return false }
-        guard scenePhase == .active else { return false }
-        guard selectedTab == .social else { return false }
-        switch lockService.state {
-        case .notConfigured, .unlocked:
-            return true
-        case .locked:
-            return false
-        }
-    }
+    // Phase 3a: the clothing-shop listener chain that lived here is gone — the shop rides the friend
+    // mesh (`MeshNetworkManager.clothingShop`), whose radio lifecycle is user-driven
+    // (startJoin/leaveSession), and the `allowNearbyClothingShares` opt-out is payload-layer (providers
+    // wired in FernletStore.meshNetworkManager). There is deliberately NO scene-dip clearing of the
+    // shop's held catalogs: the post-session window outlives the session by design, and radio privacy
+    // is the mesh lifecycle's job.
 
     private func updateHeartShareListener() {
         if shouldListenForHearts {

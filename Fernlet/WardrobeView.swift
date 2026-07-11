@@ -87,6 +87,14 @@ struct WardrobeView: View {
         .tint(Color.moss)
         .navigationTitle("Wardrobe")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // The always-reachable coin-balance surface (Phase 3a): the friend shop is now a
+            // post-session window, so the wallet lives here too, not only inside the shop.
+            ToolbarItem(placement: .topBarTrailing) {
+                CoinBalancePill(balance: store.coinBalance)
+                    .accessibilityIdentifier("wardrobe.coinBalance")
+            }
+        }
         .alert(item: $shopAlert) { alert in
             switch alert {
             case .nameFlagged:

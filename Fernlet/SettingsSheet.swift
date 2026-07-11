@@ -125,8 +125,10 @@ struct SettingsSheet: View {
                             set: { store.setAllowNearbyRecipeShares($0) }
                         )
                     )
+                    // Phase 3a: payload-layer control — the shop rides the friend session (no
+                    // standalone radio), so this governs whether shop catalogs are shared at all.
                     Toggle(
-                        "Allow nearby clothing shops",
+                        "Share clothing shops with friends",
                         isOn: Binding(
                             get: { store.settings.allowNearbyClothingShares },
                             set: { store.setAllowNearbyClothingShares($0) }

@@ -148,6 +148,19 @@ fact below was verified against source.
   surface on the Friends tab (normal layout is back after the session) with a window countdown;
   keep a coin-balance surface reachable outside the window (the old header badge dies with the
   clothes radio).
+- **"Next session start" = first slot COMMIT, not search start** (Phase-3 capstone correction):
+  `startJoin` fires automatically on every Social-tab entry and scene reactivation, so closing the
+  window there destroys it before the user can ever see its only entry point. The window (and held
+  catalogs) reset when a session actually FORMS — the first committed slot — mirroring why
+  `pendingFriendReview` deliberately survives `startJoin`. This also makes the transient-drop case
+  coherent: last slot lost mid-outing opens the window; a re-commit closes it, clears catalogs, and
+  the exchange re-runs.
+- **Catalog delivery must not assume commit symmetry:** the sender transmits at ITS commit but the
+  receiver's registry gate requires the RECEIVER's commit — a slightly-later receiver drops the
+  catalog forever under once-per-slot send tracking. Fix: a `clothingCatalogRequest` payload
+  (additive-safe post-Phase-1) sent at own commit; a committed peer answers with its catalog,
+  bypassing the once-per-slot guard (idempotent — receiver replaces by fingerprint). Send-tracking
+  is pruned on slot eviction so a rejoining friend re-exchanges.
 - Opt-out (`allowNearbyClothingShares`) becomes payload-layer: provider returns nil when off, inbound
   case drops when off, setter clears held catalogs; Settings copy updated (it no longer stops a
   radio); shop entry hidden when off.
@@ -169,6 +182,12 @@ fact below was verified against source.
   disable non-target rows while connecting; cap-aware `refreshDiscovery`.
 
 ### Phase 4 — Presence + hearts (deletes 2 radios)
+- **Manager-Task lifetime rule (from the Phase-3 crash):** every escaping `Task` spawned by a
+  proximity manager must capture `[weak self]` — a strong capture extends the manager's lifetime
+  past its owning store and any store touch then aborts on the `unowned` reference
+  (`swift_abortRetainUnowned`, seen in the test host). PresenceManager inherits this rule from day
+  one; `noteSlotCommittedForShop` is the canonical session-formation detector for any
+  formation-keyed feature (e.g. the presence-enable prompt).
 - `PresenceManager` on `fernlet-near` (+ NSBonjourServices entries). Advertises `{v, tags}` only.
 - **Pairwise static-static X25519 DH tags** (NOT public-key-hash tags — anyone who ever completed a
   handshake holds your public keys and could compute those forever; pairwise-DH is the only

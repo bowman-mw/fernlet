@@ -656,3 +656,29 @@ struct CoinGlyph: View {
         .opacity(muted ? 0.85 : 1)
     }
 }
+
+/// Coin wallet — a compact parchment pill carrying the live spendable balance, echoing the shop's coin
+/// chips so every coin surface reads in one currency. Shared by the friend shop's toolbar and the
+/// Wardrobe header (the always-reachable balance surface now that the shop is a post-session window).
+struct CoinBalancePill: View {
+    var balance: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            CoinGlyph(diameter: 14)
+            Text("\(balance)")
+                .font(.fernlet(.stat))
+                .foregroundStyle(Color.bark)
+                .contentTransition(.numericText())
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 5)
+        .background(
+            Capsule(style: .continuous).fill(Color.cream)
+        )
+        .overlay(Capsule(style: .continuous).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        .fernletSmallShadow()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(balance) coins")
+    }
+}

@@ -2,22 +2,23 @@ import SwiftUI
 import FernletDomainModel
 import ProximityKit
 
-/// Browse the shops of friends you're connected with in person and buy items with coins. The catalog is
-/// ephemeral — it lives only while you're near the friend and disappears when you part; only items you
-/// actually buy persist (stamped "designed by <friend>"). Pushed from the Friends header.
+/// Browse the shops of friends from your last session and buy items with coins. Catalogs are exchanged
+/// over the friend mesh while you're together; the shop OPENS when the session ends and stays browsable
+/// for one hour (Phase 3a post-session window — the entry card on the Friends tab carries the
+/// countdown). Only items you actually buy persist (stamped "designed by <friend>").
 struct FriendShopView: View {
     var store: FernletStore
-    var manager: ProximityClothingShareManager
+    var shop: MeshClothingShop
 
     @State private var feedback: String?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: FernletMetrics.spaceLg) {
-                if manager.peerCatalogs.isEmpty {
+                if shop.peerCatalogs.isEmpty {
                     emptyState
                 } else {
-                    ForEach(manager.peerCatalogs) { catalog in
+                    ForEach(shop.peerCatalogs) { catalog in
                         shopSection(catalog)
                     }
                 }
@@ -29,19 +30,17 @@ struct FriendShopView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                walletPill
+                CoinBalancePill(balance: store.coinBalance)
+                    .accessibilityIdentifier("friendShop.coinBalance")
             }
         }
         .onAppear {
-            // Respect the nearby-sharing opt-out: ContentView owns the manager's full lifecycle (setting +
-            // scene phase + lock + tab), so starting it unconditionally here would begin Multipeer discovery
-            // and broadcast this device's shop catalog even when `allowNearbyClothingShares` is off.
-            if store.settings.allowNearbyClothingShares {
-                manager.start()
-            }
+            // Lazy window expiry: entering the shop is a natural moment to drop a lapsed window's
+            // catalogs (no background timers — the entry card already hides itself on expiry).
+            shop.cleanupIfExpired()
             learnDesignerNames()
         }
-        .onChange(of: manager.peerCatalogs.count) { _, _ in learnDesignerNames() }
+        .onChange(of: shop.peerCatalogs.count) { _, _ in learnDesignerNames() }
         .alert("Shop", isPresented: Binding(get: { feedback != nil }, set: { if !$0 { feedback = nil } })) {
             Button("OK", role: .cancel) { feedback = nil }
         } message: {
@@ -51,36 +50,17 @@ struct FriendShopView: View {
 
     // MARK: - Sections
 
-    /// Coin wallet — a compact parchment pill carrying the live spendable balance, echoing the shop's
-    /// own coin chips so the whole surface reads in one currency.
-    private var walletPill: some View {
-        HStack(spacing: 6) {
-            CoinGlyph(diameter: 14)
-            Text("\(store.coinBalance)")
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.bark)
-                .contentTransition(.numericText())
-        }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 5)
-        .background(
-            Capsule(style: .continuous).fill(Color.cream)
-        )
-        .overlay(Capsule(style: .continuous).stroke(Color.bark.opacity(0.08), lineWidth: 1))
-        .fernletSmallShadow()
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(store.coinBalance) coins")
-    }
-
-    /// Searching state — a soft pulsing bag rather than a bare system spinner, so the wait reads as the
-    /// shop looking for a friend nearby (never a forever-spinner with no way out shown to the user).
+    /// Shown when no catalogs are held (the window closed mid-browse, or the entry was reached with
+    /// nothing exchanged): explains the post-session model rather than spinning forever.
     private var emptyState: some View {
         VStack(spacing: FernletMetrics.spaceMd) {
-            SearchingPulse()
-            Text("Looking for shops nearby")
+            Image(systemName: "bag")
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundStyle(Color.moss)
+            Text("No shops right now")
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
-            Text("Connect with a friend in person and their shop appears here. It vanishes again when you part.")
+            Text("Spend time with a friend and their shop opens here for an hour after you part.")
                 .font(.fernlet(.bodySmall))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Color.slate)
@@ -228,9 +208,9 @@ struct FriendShopView: View {
         }
     }
 
-    /// Learn each connected seller's name so bought items resolve "designed by <friend>" in the closet.
+    /// Learn each seller's name so bought items resolve "designed by <friend>" in the closet.
     private func learnDesignerNames() {
-        for catalog in manager.peerCatalogs {
+        for catalog in shop.peerCatalogs {
             store.learnDesignerName(id: catalog.payload.designerID, name: sellerName(catalog))
         }
     }
