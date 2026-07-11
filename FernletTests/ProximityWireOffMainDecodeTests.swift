@@ -117,7 +117,7 @@ struct ProximityWireOffMainDecodeTests {
             senderKeyAgreementPublicKey: env.senderKeyAgreementPublicKey,
             senderDisplayName: env.senderDisplayName + "!",
             recipientFingerprint: env.recipientFingerprint,
-            payloadType: env.payloadType,
+            payloadTypeToken: env.payloadTypeToken,
             payloadEncryption: env.payloadEncryption,
             payloadSummary: env.payloadSummary,
             payload: env.payload,

@@ -121,7 +121,13 @@ fact below was verified against source.
 **3a. Shop:**
 - New `.clothingCatalog` handling registered via the Phase-1 registry; guard: accept only from
   committed slots (`slot.fingerprint != nil`), key catalogs by verified fingerprint only, mirror
-  friendPhoto's blocked-fingerprint drop.
+  friendPhoto's blocked-fingerprint drop. Two Phase-1 review facts that make these guards
+  load-bearing: (a) the registry can fire for uncommitted (pre-dwell) peers — the coordinator
+  dispatches known non-core payloads with `connectedIdentity ?? pendingPeerIdentity` and no state
+  gate, so the committed-slot check IS the security boundary; (b) the registry is consulted only on
+  the plain-envelope dispatch path — the closed-mode encrypted-metadata inner switch
+  (`handleEncryptedMetadata`) does NOT consult it, so if catalogs ever ride encrypted-metadata in
+  closed mode, that inner dispatch needs extending too.
 - Send own catalog once per slot on commit, pairwise sealed; advertise `shop` capability; skip peers
   without it.
 - **Post-session shop window:** catalogs live from receipt until 1 h after session end / app quit /

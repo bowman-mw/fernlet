@@ -49,6 +49,23 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     case inspectorEcho         = "fernlet.diagnostic.echo.v1"
 }
 
+/// Feature capabilities a device advertises in the identity handshake (Proximity Mesh Redesign
+/// Phase 1). Carried on the wire as raw-string arrays (`[String]`), never as this enum, so a
+/// capability token minted by a NEWER build survives decode on an older client (the same
+/// forward-tolerance stance as the parked `payloadTypeToken` on the envelope). Senders skip
+/// payload kinds the peer hasn't advertised — see `ProximityCoordinator.PeerIdentity.supports(_:)`.
+public nonisolated enum ProximityCapability: String, Codable, CaseIterable, Sendable {
+    /// Friend-mesh photo sharing (the original friend-mesh feature; also what a legacy peer
+    /// whose intro predates capability advertisement is assumed to support).
+    case photos
+    /// Clothing-shop catalog exchange (registers on the mesh in Phase 3).
+    case shop
+    /// In-person friend hearts (moves onto the presence layer in Phase 4).
+    case hearts
+    /// Session-scoped temporary messages (Phase 5).
+    case messages
+}
+
 public nonisolated enum PayloadEncryption: Codable, Equatable, Sendable {
     case none
     case sealedTo(recipientKeyAgreementPublicKey: Data)

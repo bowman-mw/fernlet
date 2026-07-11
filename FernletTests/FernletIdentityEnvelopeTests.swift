@@ -62,7 +62,7 @@ struct FernletIdentityEnvelopeTests {
             senderKeyAgreementPublicKey: env.senderKeyAgreementPublicKey,
             senderDisplayName:           env.senderDisplayName,
             recipientFingerprint:        env.recipientFingerprint,
-            payloadType:                 env.payloadType,
+            payloadTypeToken:            env.payloadTypeToken,
             payloadEncryption:           env.payloadEncryption,
             payloadSummary:              payloadSummary ?? env.payloadSummary,
             payload:                     payload ?? env.payload,
@@ -718,6 +718,163 @@ struct FernletIdentityEnvelopeTests {
         }
     }
 
+    // MARK: - Phase 1: forward-tolerant payload types (unknown token parked, never dispatched)
+
+    /// Mints a signed envelope whose payload type is a token only a FUTURE build knows — exactly
+    /// what a newer client puts on the wire (the Ed25519 signature covers the raw token).
+    private func signedUnknownTypeEnvelope(
+        sender: IdentityService,
+        token: String = "fernlet.future.sparkle.v1",
+        payloadEncryption: PayloadEncryption = .none,
+        payload: Data = Data("future payload".utf8),
+        recipientFingerprint: String? = nil,
+        envelopeID: UUID = UUID()
+    ) throws -> FernletIdentityEnvelope {
+        var env = FernletIdentityEnvelope(
+            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+            envelopeID: envelopeID,
+            senderSigningPublicKey: sender.localSigningPublicKey,
+            senderKeyAgreementPublicKey: sender.localKeyAgreementPublicKey,
+            senderDisplayName: "Future Sender",
+            recipientFingerprint: recipientFingerprint,
+            payloadTypeToken: token,
+            payloadEncryption: payloadEncryption,
+            payloadSummary: PayloadSummary(title: "Future"),
+            payload: payload,
+            createdAt: Date(),
+            expiresAt: nil,
+            signature: Data()
+        )
+        env.signature = try sender.sign(canonicalBytes(for: env))
+        return env
+    }
+
+    /// An unknown payload type must never throw out of decode (the pre-Phase-1 brick) — it decodes
+    /// parked, round-trips byte-preserving, and re-encodes the raw token under the original key.
+    @Test func phase1_unknownPayloadTypeDecodesParkedAndRoundTrips() throws {
+        let (sender, sid) = try makeIdentity()
+        defer { cleanup(sid) }
+
+        let env = try signedUnknownTypeEnvelope(sender: sender)
+        let wireData = try JSONEncoder().encode(env)
+        let decoded = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: wireData)
+
+        #expect(decoded.isUnknownPayloadType)
+        #expect(decoded.payloadType == nil)
+        #expect(decoded.payloadTypeToken == "fernlet.future.sparkle.v1")
+        #expect(decoded == env)
+
+        // Re-encode parks the token back under the original wire key, unchanged.
+        let reencoded = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: JSONEncoder().encode(decoded))
+        #expect(reencoded.payloadTypeToken == "fernlet.future.sparkle.v1")
+    }
+
+    /// Known types keep the exact wire shape: the JSON key is still `payloadType` and the value is
+    /// still the bare rawValue string (byte-identical to the pre-Phase-1 enum encoding).
+    @Test func phase1_knownTypeWireKeyAndValueUnchanged() throws {
+        let (sender, sid) = try makeIdentity()
+        defer { cleanup(sid) }
+
+        let env = try signedEnvelope(sender: sender, payloadType: .recipeShare)
+        let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(env)) as? [String: Any]
+
+        #expect(object?["payloadType"] as? String == PayloadType.recipeShare.rawValue)
+        #expect(object?["payloadTypeToken"] == nil)
+        #expect(env.payloadType == .recipeShare)
+        #expect(env.isUnknownPayloadType == false)
+    }
+
+    /// An unknown-type envelope still verifies (schema/expiry/signature) and RECORDS the replay —
+    /// unknown-type spam must not bypass replay protection. The payload itself is parked: verify
+    /// returns empty bytes, never the (potentially sealed) payload.
+    @Test func phase1_unknownTypeVerifiesRecordsReplayAndParksPayload() throws {
+        let (alice, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (bob, bid) = try makeIdentity()
+        defer { cleanup(bid) }
+
+        let env = try signedUnknownTypeEnvelope(sender: alice)
+        let replayCache = ReplayCache()
+
+        let recovered = try env.verify(identityService: bob, replayCache: replayCache)
+        #expect(recovered == Data(), "Unknown-type payload must be parked, not returned")
+
+        #expect(throws: FernletIdentityEnvelope.VerifyError.replayDetected) {
+            try env.verify(identityService: bob, replayCache: replayCache)
+        }
+    }
+
+    /// The sealing gate and payload decryption are SKIPPED for unknown types (this build has no
+    /// sealing semantics for them; fail-closed by non-dispatch) — a sealed unknown envelope with
+    /// undecryptable bytes must still verify rather than evict the session.
+    @Test func phase1_unknownTypeSkipsSealingGateAndDecryption() throws {
+        let (alice, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (bob, bid) = try makeIdentity()
+        defer { cleanup(bid) }
+
+        let sealed = try signedUnknownTypeEnvelope(
+            sender: alice,
+            payloadEncryption: .sealedTo(recipientKeyAgreementPublicKey: Data([0x01])),
+            payload: Data("not real ciphertext".utf8)
+        )
+        #expect(try sealed.verify(identityService: bob, replayCache: ReplayCache()) == Data())
+
+        let unsealed = try signedUnknownTypeEnvelope(sender: alice, payloadEncryption: .none)
+        #expect(try unsealed.verify(identityService: bob, replayCache: ReplayCache()) == Data())
+    }
+
+    /// Forward tolerance must not weaken authentication: a tampered unknown-type envelope still
+    /// fails the signature check, and the signature covers the raw token itself.
+    @Test func phase1_unknownTypeSignatureStillEnforced() throws {
+        let (alice, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (bob, bid) = try makeIdentity()
+        defer { cleanup(bid) }
+
+        let env = try signedUnknownTypeEnvelope(sender: alice)
+        let bad = tamper(env, payload: Data("tampered".utf8))
+        #expect(throws: FernletIdentityEnvelope.VerifyError.signatureInvalid) {
+            try bad.verify(identityService: bob, replayCache: ReplayCache())
+        }
+
+        // Same signature presented under a DIFFERENT unknown token must also fail.
+        var retyped = try signedUnknownTypeEnvelope(sender: alice, token: "fernlet.future.other.v1")
+        retyped.signature = env.signature
+        #expect(throws: FernletIdentityEnvelope.VerifyError.signatureInvalid) {
+            try retyped.verify(identityService: bob, replayCache: ReplayCache())
+        }
+    }
+
+    /// A legacy (schema v1) peer... can't mint unknown types itself, but a v1-SIGNED envelope whose
+    /// token this build doesn't know must also verify: the legacy canonical bytes re-encode the
+    /// envelope, and the custom Codable emits the raw token exactly as the old enum encoding did.
+    @Test func phase1_legacySchemaUnknownTypeEnvelopeVerifies() throws {
+        let (alice, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (bob, bid) = try makeIdentity()
+        defer { cleanup(bid) }
+
+        var env = FernletIdentityEnvelope(
+            schemaVersion: FernletIdentityEnvelope.legacySchemaVersion,
+            envelopeID: UUID(),
+            senderSigningPublicKey: alice.localSigningPublicKey,
+            senderKeyAgreementPublicKey: alice.localKeyAgreementPublicKey,
+            senderDisplayName: "Future Legacy Sender",
+            recipientFingerprint: nil,
+            payloadTypeToken: "fernlet.future.sparkle.v1",
+            payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: "Future"),
+            payload: Data("payload".utf8),
+            createdAt: Date(),
+            expiresAt: nil,
+            signature: Data()
+        )
+        env.signature = try alice.sign(legacyCanonicalBytes(for: env))
+
+        #expect(try env.verify(identityService: bob, replayCache: ReplayCache()) == Data())
+    }
+
     private func tamperDisplayName(_ env: FernletIdentityEnvelope, to name: String) -> FernletIdentityEnvelope {
         FernletIdentityEnvelope(
             schemaVersion: env.schemaVersion,
@@ -726,7 +883,7 @@ struct FernletIdentityEnvelopeTests {
             senderKeyAgreementPublicKey: env.senderKeyAgreementPublicKey,
             senderDisplayName: name,
             recipientFingerprint: env.recipientFingerprint,
-            payloadType: env.payloadType,
+            payloadTypeToken: env.payloadTypeToken,
             payloadEncryption: env.payloadEncryption,
             payloadSummary: env.payloadSummary,
             payload: env.payload,

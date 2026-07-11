@@ -87,7 +87,7 @@ struct HeartShareTests {
             payloadSummary: PayloadSummary(title: "Good vibes"),
             payload: sealed
         )
-        #expect(envelope.payloadType.rawValue == "fernlet.friend.heart.v1")
+        #expect(envelope.payloadTypeToken == "fernlet.friend.heart.v1")
 
         let opened = try envelope.verify(identityService: recipient, replayCache: ReplayCache())
         let decoded = try JSONDecoder().decode(HeartPayload.self, from: opened)
