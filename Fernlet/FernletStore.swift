@@ -2011,6 +2011,9 @@ final class FernletStore {
         friendStateCache.clearAll()
         // Closeness signal (in-person interaction counts + close-slot assignment) — device-local; clear it.
         closenessLedger.clearAll()
+        // Group activities (hosted/joined rosters + join tokens) — device-local social data, never synced;
+        // clear the sidecar too (the manager owns it, mirroring the clothing-shop clearAll seam).
+        meshNetworkManager.activities.clearAll()
     }
 
     private func rebuildDerivedSignals() {

@@ -53,6 +53,23 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// an in-person friend session so friends see "vibes, never numbers." Always sealed. Gated on the
     /// `friendState` capability + the `allowNearbyFriendState` opt-in; additive-safe (older clients park).
     case friendState           = "fernlet.friend.state.v1"
+    // Group Activities (Phase 6). Small-group, proximity-only. Ride the friend mesh (no new radio /
+    // Bonjour service); gated on the `activities` capability; additive-safe (older clients park them).
+    /// A host advertises an activity it is running to a committed friend (`ActivityOfferPayload`). Sealed.
+    case activityOffer         = "fernlet.activity.offer.v1"
+    /// A committed peer asks to join an offered activity (`ActivityJoinRequestPayload`). UNSEALED (mirror
+    /// `clothingCatalogRequest`) — it carries only public keys, and the host re-validates the claimed
+    /// identity against the transport-verified slot before minting, so nothing here is confidential.
+    case activityJoinRequest   = "fernlet.activity.join.request.v1"
+    /// The host's signed grant: an invitee-key-bound `ActivityJoinToken` + the current roster snapshot
+    /// (`ActivityJoinGrantPayload`). Sealed to the joiner.
+    case activityJoinGrant     = "fernlet.activity.join.grant.v1"
+    /// A host-signed roster snapshot, gossiped opportunistically to keep members consistent
+    /// (`ActivityRosterSnapshotPayload`). Sealed.
+    case activityRosterSnapshot = "fernlet.activity.roster.v1"
+    /// A version digest exchanged between committed members so the highest verified snapshot propagates
+    /// (`ActivitySyncPayload`). Sealed.
+    case activitySync          = "fernlet.activity.sync.v1"
     // Mesh
     case meshDescriptor        = "fernlet.mesh.descriptor.v1"
     case meshAdmissionGrant    = "fernlet.mesh.admission.grant.v1"
@@ -91,6 +108,8 @@ public nonisolated enum ProximityCapability: String, Codable, CaseIterable, Send
     case moderation
     /// Fuzzy wellbeing state + cached appearance exchange (Phase 4).
     case friendState
+    /// Small-group Group Activities: signed roster + invitee-key-bound join tokens (Phase 6).
+    case activities
 }
 
 public nonisolated enum PayloadEncryption: Codable, Equatable, Sendable {

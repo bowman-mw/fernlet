@@ -175,6 +175,13 @@ struct FriendsView: View {
                         ScreenHeader(title: "Friends", subtitle: "", identifier: "screen.friends")
                         Spacer()
                         NavigationLink {
+                            ActivitiesView(store: store)
+                        } label: {
+                            headerButtonLabel("figure.2.arms.open")
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("friends.activities")
+                        NavigationLink {
                             FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                         } label: {
                             headerButtonLabel("person.2")
