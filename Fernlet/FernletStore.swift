@@ -132,6 +132,10 @@ final class FernletStore {
     /// Device-local hearts state (received hearts + per-friend-per-day rate limit). Deliberately
     /// outside the snapshot: heart activity never enters any synced store.
     @ObservationIgnored private(set) lazy var heartLedger = ProximityHeartLedger()
+    /// Device-local moderation reports (never synced). Feeds item-hiding + the escalation/ban.
+    @ObservationIgnored private(set) lazy var moderationLedger = ModerationLedger()
+    /// Tamper-resistant store bans (Keychain-backed; survives app delete+reinstall and clock changes).
+    @ObservationIgnored private(set) lazy var moderationBanStore = ModerationBanStore()
     /// The standing presence radio (mesh redesign Phase 4a/4b): broadcasts rotating pairwise-DH
     /// tags so KEPT friends recognize each other nearby, and — Phase 4b — carries in-person hearts
     /// over on-demand short-lived pairwise connections (the standalone heart radio is deleted).
@@ -629,8 +633,10 @@ final class FernletStore {
     /// deterministically ordered). Supplied to the mesh's `clothingShop` provider (nil when the sharing
     /// opt-out is off) and sent to each committed peer that advertises the `shop` capability.
     func buildShopCatalog() -> ClothingCatalogPayload {
-        ClothingShareCodec.catalog(
-            forShareable: customItems,
+        // A banned store broadcasts nothing, even if local items are still flagged shareable.
+        let shareable = moderationBanStore.isSelfBanned ? [] : customItems
+        return ClothingShareCodec.catalog(
+            forShareable: shareable,
             designerID: localDesignerID,
             displayName: shopDisplayName,
             // Filter by the whole owned designer-id set (matches `isSelfDesigned` / the listing predicate),
@@ -717,6 +723,8 @@ final class FernletStore {
         /// The item isn't listable — not found, or not one of your own designs. Distinct from `capReached`
         /// so the UI never shows a misleading "shop is full" message for the wrong reason.
         case notAllowed
+        /// This device's store is banned (repeatedly-reported content) — nothing can be listed.
+        case storeBanned
     }
 
     /// The user's own designs currently listed for sale.
@@ -734,6 +742,7 @@ final class FernletStore {
     /// item unlisted with a notice; an over-cap attempt is refused). Records today for the gentle throttle.
     @discardableResult
     func listCustomItemForSale(id: UUID, price: Int) -> ShopListingResult {
+        if moderationBanStore.isSelfBanned { return .storeBanned }
         guard let item = customItems.first(where: { $0.id == id }), isSelfDesigned(item) else { return .notAllowed }
         if !item.isShareable && !canListMoreShopItems { return .capReached }
         let name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -914,6 +923,55 @@ final class FernletStore {
 
     func isTrustedProximityPeer(signingPublicKey: Data) -> Bool {
         proximityTrustVault.isTrustedProximityPeer(signingPublicKey: signingPublicKey)
+    }
+
+    // MARK: - Content moderation (report + block + on-device log)
+
+    /// Reports a peer (from the friend list or in-session roster) for objectionable content: blocks the
+    /// peer and records the report locally.
+    func reportProximityPeer(signingPublicKey: Data, reason: ReportReason) {
+        proximityTrustVault.report(signingPublicKey: signingPublicKey, reason: reason.rawValue, blockAlso: true)
+        presenceManager.refreshRoster()
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// True when this device has locally reported this artwork — the shop hides it from the grid + buy path.
+    func isClothingItemLocallyReported(_ item: CustomizationItem) -> Bool {
+        moderationLedger.isLocallyReported(
+            contentHash: ModerationContentHash.of(item),
+            reporterFingerprint: meshNetworkManager.localFingerprint)
+    }
+
+    /// Reports a shared shop item: records a local report keyed to the artwork's content hash + the
+    /// seller's verified signing key (resolved from the vault), hides the item locally, and — when the
+    /// seller resolves to a known key — blocks them.
+    func reportClothingItem(_ item: CustomizationItem, sellerFingerprint: String?, reason: ReportReason) {
+        let sellerKey = sellerFingerprint
+            .flatMap { proximityTrustVault.peer(fingerprint: $0)?.signingPublicKey } ?? Data()
+        moderationLedger.recordLocalReport(
+            reporterSigningPublicKey: meshNetworkManager.localSigningPublicKey,
+            reporterFingerprint: meshNetworkManager.localFingerprint,
+            subjectSigningPublicKey: sellerKey,
+            itemID: item.id,
+            contentHash: ModerationContentHash.of(item),
+            reason: reason.rawValue)
+        if !sellerKey.isEmpty {
+            proximityTrustVault.report(signingPublicKey: sellerKey, reason: reason.rawValue, blockAlso: true)
+            presenceManager.refreshRoster()
+        }
+        reconcileModerationBans()
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// Whether this device's own shop is currently banned for repeatedly-reported content.
+    var isStoreBanned: Bool { moderationBanStore.isSelfBanned }
+
+    /// Re-evaluates escalation from the local report ledger and applies any warranted self/peer bans.
+    /// Inert until peers' verified reports arrive (Phase 3b) — a device only holds its own reports today.
+    func reconcileModerationBans() {
+        moderationBanStore.reconcile(
+            rows: moderationLedger.rows,
+            localSigningKey: meshNetworkManager.localSigningPublicKey)
     }
 
     func recordTrainerAudit(_ event: TrainerAuditEvent) {
@@ -1863,6 +1921,9 @@ final class FernletStore {
         // Received-heart records (friend names, fingerprints, glow, rate-limit keys) outlive the
         // trust-vault wipe otherwise; clear the device-local sidecar too.
         heartLedger.clearAll()
+        // Moderation reports (who reported whom, and the reported artwork hashes) are device-local
+        // social data — clear them on "Reset everything" like the heart ledger.
+        moderationLedger.clearAll()
     }
 
     private func rebuildDerivedSignals() {

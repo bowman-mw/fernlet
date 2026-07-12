@@ -37,6 +37,11 @@ public nonisolated struct ProximityTrustedPeerRecord: Codable, Equatable, Identi
     public var lastSeenAt: Date
     public var revokedAt: Date?
     public var blockedAt: Date?
+    /// When the local user reported this peer (content moderation). Local block/report state, synced
+    /// alongside `blockedAt` — it is the user's own moderation action, not another peer's data.
+    public var reportedAt: Date?
+    /// Raw `ReportReason` token for the report, kept forward-tolerant. Nil when not reported.
+    public var reportReason: String?
 
     public init(
         id: UUID = UUID(),
@@ -48,7 +53,9 @@ public nonisolated struct ProximityTrustedPeerRecord: Codable, Equatable, Identi
         firstAcceptedAt: Date = Date(),
         lastSeenAt: Date = Date(),
         revokedAt: Date? = nil,
-        blockedAt: Date? = nil
+        blockedAt: Date? = nil,
+        reportedAt: Date? = nil,
+        reportReason: String? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -60,6 +67,8 @@ public nonisolated struct ProximityTrustedPeerRecord: Codable, Equatable, Identi
         self.lastSeenAt = lastSeenAt
         self.revokedAt = revokedAt
         self.blockedAt = blockedAt
+        self.reportedAt = reportedAt
+        self.reportReason = reportReason
     }
 
     public init(from decoder: Decoder) throws {
@@ -80,6 +89,8 @@ public nonisolated struct ProximityTrustedPeerRecord: Codable, Equatable, Identi
         lastSeenAt = try c.decode(Date.self, forKey: .lastSeenAt)
         revokedAt = try c.decodeIfPresent(Date.self, forKey: .revokedAt)
         blockedAt = try c.decodeIfPresent(Date.self, forKey: .blockedAt)
+        reportedAt = try c.decodeIfPresent(Date.self, forKey: .reportedAt)
+        reportReason = try c.decodeIfPresent(String.self, forKey: .reportReason)
     }
 }
 
@@ -95,6 +106,7 @@ public nonisolated struct TrainerAuditEvent: Codable, Equatable, Identifiable, S
         case envelopeSent
         case envelopeRejected
         case revokedPeerBlocked
+        case peerReported
         case trainerRevoked
         case sessionEnded
         case error

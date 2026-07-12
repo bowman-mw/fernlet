@@ -115,6 +115,12 @@ struct SettingsSheet: View {
                         PrivacyDataSettingsView(store: store)
                             .environment(lockService)
                     }
+                    NavigationLink("Privacy Policy") {
+                        PrivacyPolicyView()
+                    }
+                    NavigationLink("Safety & reporting") {
+                        SafetyReportingView()
+                    }
                     NavigationLink("App lock") {
                         AppLockSettingsView()
                             .environment(lockService)

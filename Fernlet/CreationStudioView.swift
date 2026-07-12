@@ -45,7 +45,14 @@ struct CreationStudioView: View {
     private enum ShopAlert: Identifiable {
         case nameFlagged
         case capReached
-        var id: Int { self == .nameFlagged ? 0 : 1 }
+        case storeBanned
+        var id: Int {
+            switch self {
+            case .nameFlagged: 0
+            case .capReached: 1
+            case .storeBanned: 2
+            }
+        }
     }
 
     var body: some View {
@@ -81,6 +88,12 @@ struct CreationStudioView: View {
                 return Alert(
                     title: Text("Your shop is full"),
                     message: Text("You can list up to \(ClothingShopLimits.maxListedItems) items at once. Unlist one to make room. Your item is saved and ready whenever you are."),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .storeBanned:
+                return Alert(
+                    title: Text("Your shop is closed"),
+                    message: Text("Your shop is paused because items you shared were reported. It reopens automatically after a while — your items are still saved."),
                     dismissButton: .default(Text("OK"))
                 )
             }
@@ -411,6 +424,8 @@ struct CreationStudioView: View {
             shopAlert = .capReached
         case .notAllowed:
             dismiss()                  // not your design (unreachable — `canSell` guards); item saved, just unlisted
+        case .storeBanned:
+            shopAlert = .storeBanned
         }
     }
 

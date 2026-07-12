@@ -20,6 +20,7 @@ struct FriendListView: View {
     @State private var selected: ProximityTrustedPeerRecord?
     @State private var peerToBlock: ProximityTrustedPeerRecord?
     @State private var blockConfirmShown = false
+    @State private var peerToReport: ProximityTrustedPeerRecord?
 
     var body: some View {
         List {
@@ -123,6 +124,13 @@ struct FriendListView: View {
                             }
                             .tint(Color.moss)
                         }
+
+                        Button {
+                            peerToReport = peer
+                        } label: {
+                            Label("Report", systemImage: "flag")
+                        }
+                        .tint(Color.goldenrod)
                     }
                 }
             }
@@ -133,6 +141,22 @@ struct FriendListView: View {
         .background(Color.parchment)
         .navigationTitle("Friends & Blocks")
         .navigationBarTitleDisplayMode(.large)
+        .confirmationDialog(
+            "Report this person?",
+            isPresented: Binding(get: { peerToReport != nil }, set: { if !$0 { peerToReport = nil } }),
+            presenting: peerToReport
+        ) { peer in
+            ForEach(ReportReason.allCases) { reason in
+                Button(reason.label, role: .destructive) {
+                    store.reportProximityPeer(signingPublicKey: peer.signingPublicKey, reason: reason)
+                    if selected?.id == peer.id { selected = nil }
+                    peerToReport = nil
+                }
+            }
+            Button("Cancel", role: .cancel) { peerToReport = nil }
+        } message: { peer in
+            Text("Reporting \(peer.displayName) blocks them and flags their shared content on your device.")
+        }
         .onAppear { displayName = store.settings.proximityDisplayName }
         .alert("Block peer?", isPresented: $blockConfirmShown) {
             Button("Block", role: .destructive) {
@@ -223,6 +247,9 @@ struct FriendListView: View {
                 if let blockedAt = peer.blockedAt {
                     detailRow("Blocked since", value: blockedAt.formatted(date: .abbreviated, time: .omitted))
                 }
+                if let reportedAt = peer.reportedAt {
+                    detailRow("Reported", value: reportedAt.formatted(date: .abbreviated, time: .omitted))
+                }
             }
 
             if peer.blockedAt == nil && peer.revokedAt == nil && store.settings.allowNearbyHearts {
@@ -252,6 +279,11 @@ struct FriendListView: View {
                     if selected?.id == peer.id { selected = nil }
                 }
                 .buttonStyle(ChipButtonStyle(selected: false))
+
+                if peer.reportedAt == nil {
+                    Button("Report") { peerToReport = peer }
+                        .buttonStyle(ChipButtonStyle(selected: false))
+                }
             }
         }
         .padding(16)

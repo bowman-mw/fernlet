@@ -11,6 +11,13 @@ struct FriendShopView: View {
     var shop: MeshClothingShop
 
     @State private var feedback: String?
+    @State private var reportTarget: ReportTarget?
+
+    private struct ReportTarget: Identifiable {
+        let id = UUID()
+        let item: CustomizationItem
+        let sellerFingerprint: String?
+    }
 
     var body: some View {
         ScrollView {
@@ -46,6 +53,22 @@ struct FriendShopView: View {
         } message: {
             Text(feedback ?? "")
         }
+        .confirmationDialog(
+            "Report this item?",
+            isPresented: Binding(get: { reportTarget != nil }, set: { if !$0 { reportTarget = nil } }),
+            presenting: reportTarget
+        ) { target in
+            ForEach(ReportReason.allCases) { reason in
+                Button(reason.label, role: .destructive) {
+                    store.reportClothingItem(target.item, sellerFingerprint: target.sellerFingerprint, reason: reason)
+                    reportTarget = nil
+                    feedback = "Thanks for letting us know. We've hidden this item and blocked its sender on your device."
+                }
+            }
+            Button("Cancel", role: .cancel) { reportTarget = nil }
+        } message: { _ in
+            Text("Reporting hides this item and blocks the sender on your device.")
+        }
     }
 
     // MARK: - Sections
@@ -73,6 +96,7 @@ struct FriendShopView: View {
 
     private func shopSection(_ catalog: ProximityClothingCatalog) -> some View {
         let items = ClothingShareCodec.sanitizedItems(from: catalog.payload)
+            .filter { !store.isClothingItemLocallyReported($0) }
         return VStack(alignment: .leading, spacing: FernletMetrics.spaceMd) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(sellerName(catalog))’s shop")
@@ -147,6 +171,22 @@ struct FriendShopView: View {
             RoundedRectangle(cornerRadius: FernletMetrics.radiusMd, style: .continuous)
                 .fill(Color.cream)
         )
+        .overlay(alignment: .topTrailing) {
+            Menu {
+                Button(role: .destructive) {
+                    reportTarget = ReportTarget(item: item, sellerFingerprint: catalog.senderFingerprint)
+                } label: {
+                    Label("Report item…", systemImage: "flag")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.slate)
+                    .padding(7)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityIdentifier("friendShop.report")
+        }
         .fernletSmallShadow()
     }
 

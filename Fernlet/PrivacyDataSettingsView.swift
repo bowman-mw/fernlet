@@ -3,6 +3,7 @@ import CloudKitSync
 import FernletFoundation
 import FernletLock
 import SwiftUI
+import UIKit
 import FernletDomainModel
 import HealthKitGateway
 
@@ -60,6 +61,8 @@ struct PrivacyDataSettingsView: View {
     /// instead of mutating directly, so the warning (and only-on-confirm mutation) is guaranteed (WS-5).
     @State private var pendingDestructiveAction: DestructiveConfirmation?
     @State private var isResolvingEscrowConflict = false
+    @State private var exportPayload: DataExportPayload?
+    @State private var isBuildingExport = false
 
     private let cloudDataService: any PrivacyCloudDataManaging
     private let persistenceController: any PrivacyPersistenceReloading
@@ -116,6 +119,9 @@ struct PrivacyDataSettingsView: View {
             Text(sealedBackupDisclosure(for: pendingSealedBackupEnable))
         }
         .destructiveConfirmation($pendingDestructiveAction)
+        .sheet(item: $exportPayload) { payload in
+            ActivityShareView(items: [payload.url])
+        }
         .task {
             #if DEBUG
             seedUITestPreferencesIfNeeded()
@@ -205,6 +211,7 @@ struct PrivacyDataSettingsView: View {
             sealedBackupStatusBanner
             healthKitCard
             localBackupCard
+            if store != nil { exportDataCard }
             lockDataCard
 
             if let operationError {
@@ -216,6 +223,62 @@ struct PrivacyDataSettingsView: View {
             }
         }
         .accessibilityIdentifier("privacy.controls")
+    }
+
+    private var exportDataCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel("Your data")
+            Text("Export a readable copy of your own Fernlet data as a JSON file. It leaves out your "
+                 + "sealed period, intimate, and sensitive-memory data, and your photos.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+
+            Button {
+                runExport()
+            } label: {
+                Label(isBuildingExport ? "Preparing…" : "Export my data",
+                      systemImage: "square.and.arrow.up")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .font(.fernlet(.label))
+            .foregroundStyle(.white)
+            .padding(.vertical, 11)
+            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            .disabled(isBuildingExport)
+            .accessibilityIdentifier("privacy.export")
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func runExport() {
+        guard let store else { return }
+        isBuildingExport = true
+        operationError = nil
+        do {
+            let url = try store.writeDataExportFile()
+            exportPayload = DataExportPayload(url: url)
+        } catch {
+            operationError = "Couldn't prepare your export. Please try again."
+        }
+        isBuildingExport = false
+    }
+
+    /// Identifiable wrapper so the share sheet can present the freshly-written export file.
+    fileprivate struct DataExportPayload: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
+
+    /// Wraps the system share sheet so the export file can be saved/shared.
+    private struct ActivityShareView: UIViewControllerRepresentable {
+        let items: [Any]
+        func makeUIViewController(context: Context) -> UIActivityViewController {
+            UIActivityViewController(activityItems: items, applicationActivities: nil)
+        }
+        func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
     }
 
     private var iCloudCard: some View {

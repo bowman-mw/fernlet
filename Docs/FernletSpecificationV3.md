@@ -517,8 +517,29 @@ Shared data should be explicit and reviewable before transfer. Candidate export 
 Open product decision: this can be implemented either as another authenticated view inside Fernlet or as a separate companion app. Default recommendation for v1 is an in-app `Trainer/Nutritionist Export` view because it avoids a second app, keeps consent screens close to the data, and can still transfer files locally over Bluetooth/proximity. A separate app should be considered only if the professional workflow needs its own long-lived dashboard, client roster, or App Store positioning.
 
 Friend limits:
-- 8 core friend slots.
-- 4 close friend slots based on trailing 30-day closeness.
+- Up to **12 friends total**: 8 core friend slots plus 4 additional close friend slots.
+- Close friends are not added as a separate relationship. They are the 4 friends with the highest
+  closeness, promoted automatically; the remaining friends occupy the core slots.
+
+Closeness score (deterministic, no AI, trailing 30 days, computed and kept on-device):
+- Derived from in-person interaction signals recorded over the last 30 days: in-person friend
+  sessions (weighted most heavily, since friend primitives require physical co-location), photos taken
+  together, recipes/clothing shared and accepted, and hearts sent and received. More recent days count
+  for more than older days (linear decay across the 30-day window).
+- Hearts count at most once per direction per day toward closeness, so sending many hearts can never
+  outweigh real in-person time.
+- Closeness is a private, per-device view. A friend never sees their closeness value or whether they
+  occupy one of your close slots. Closeness never leaves the device and is never synced to iCloud.
+
+Close-friend promotion (evaluated once per day at local midnight, with hysteresis to avoid churn):
+- The 4 highest-closeness friends hold the close slots. An empty close slot fills freely with the
+  next-highest friend.
+- To keep the close circle stable, a challenger displaces the lowest-scoring close friend only when it
+  leads by a clear margin, and a newly promoted close friend keeps its slot for a short minimum period
+  before it can be challenged. At most one close slot changes per day.
+- Blocking, removing, or revoking a friend frees their slot immediately.
+- When you already have 12 friends, adding another drops the lowest-closeness core friend to make
+  room (or declines the new friend) — a close friend is never dropped to admit a new acquaintance.
 
 Friends see:
 - Fuzzy state only: thriving, okay, struggling.
@@ -780,13 +801,18 @@ App privacy labels:
 Note: CloudKit private database sync means health and journal data is associated with the user's Apple ID in Apple's infrastructure, changing the "Not Linked to You" classification for those types. Encrypted sealed backup (period data, sensitive memory) may be considered separately — review with legal before shipping.
 
 Usage descriptions required:
-- `NSBluetoothAlwaysUsageDescription`.
 - `NSNearbyInteractionUsageDescription`.
 - `NSCameraUsageDescription`.
 - `NSPhotoLibraryAddUsageDescription`.
 - `NSHealthShareUsageDescription`.
 - `NSHealthUpdateUsageDescription`.
 - `NSLocationWhenInUseUsageDescription`.
+- `NSLocalNetworkUsageDescription` + `NSBonjourServices` (the `_fernlet-*` service families).
+
+> **Reconciled 2026-07-11:** `NSBluetoothAlwaysUsageDescription` is intentionally **not** declared.
+> The proximity transport is MultipeerConnectivity over the **Local Network** permission (Bonjour) plus
+> NearbyInteraction/UWB — there is no direct `CoreBluetooth`/`CBCentralManager` use, so no Bluetooth
+> usage string is required or appropriate. Declare only permissions the app actually exercises.
 
 ## 19. iCloud Sync and Encrypted Backup
 
