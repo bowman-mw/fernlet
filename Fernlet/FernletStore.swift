@@ -1173,6 +1173,11 @@ final class FernletStore {
     /// Commits a resolved meal set to the diary: registers any created recipes, appends each meal,
     /// and queues a background AI retry for fabricated fallback meals.
     @discardableResult func commitResolution(_ resolution: MealResolution, date: String? = nil) -> [Meal] {
+        // Day-rollover safety: if the app has stayed resident across local midnight, advance the store's
+        // notion of "today" BEFORE resolving the default date, so a meal committed just after midnight
+        // files on the new day rather than yesterday. Only when the caller relies on "today" (`date == nil`);
+        // an explicit date is honored as-is. No-op unless the day actually rolled over.
+        if date == nil { refreshCurrentDayIfNeeded() }
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "meal date required")
         for newRecipe in resolution.createdRecipes { diary.recipes.insert(newRecipe, at: 0) }
@@ -2088,6 +2093,34 @@ final class FernletStore {
             widgetSnapshotMirror = WidgetSnapshotMirror()
         }
         processPendingWidgetActions()
+    }
+
+    /// Advances the store to the current wall-clock day when the app has crossed local midnight while
+    /// resident. `FernletStore` is built once at launch and its `todayKey` is otherwise pinned forever
+    /// (see `processPendingWidgetActions`), so a meal/edit made after midnight on a still-resident app
+    /// would file under the launch day — showing during the session but vanishing from "Today" after the
+    /// next cold launch re-keys. This re-keys the diary IN PLACE instead: it flushes the outgoing day
+    /// under its OWN (old) key first (so nothing logged just before the rollover is lost), swaps the
+    /// in-memory `day` to the new day's persisted content, then refreshes the derived signals, coin
+    /// ledger, and widget mirror for the new day. No-op (returns false) when still on the same day.
+    ///
+    /// Called on foreground (`scenePhase == .active`) and defensively at the start of the interactive
+    /// meal-commit path so a meal typed just after midnight is filed on the correct new day.
+    @discardableResult
+    func refreshCurrentDayIfNeeded(now: Date = Date()) -> Bool {
+        let currentDayKey = FernletDate.dayKey(for: now)
+        guard currentDayKey != todayKey else { return false }
+        // Persist the outgoing in-memory state (day + recentMeals + …) under the OLD key BEFORE it
+        // advances, so a log made just before this rollover isn't lost. `flushPending` is a no-op when no
+        // save is pending (the outgoing day's row is then already durable). `currentSnapshot()` reads
+        // `todayKey`, which is still the old key here, so the flush is correctly keyed to the old day.
+        snapshotSaveCoordinator.flushPending()
+        diary.advanceCurrentDay(to: currentDayKey)
+        // Re-derive the new day's signals/score and refresh the coin ledger + widget mirror for it.
+        rebuildDerivedSignals()
+        reconcileCoinLedger()
+        publishWidgetSnapshot()
+        return true
     }
 
     /// Drains the widget's pending-action queue (mirrors `processSharedRecipeImportQueue`'s two

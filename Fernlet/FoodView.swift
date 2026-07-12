@@ -59,16 +59,22 @@ struct FoodView: View {
                         if store.day.meals.isEmpty {
                             EmptyState(text: "Nothing yet. Describe a meal when you are ready.")
                         } else {
-                            ForEach(Array(store.day.meals.enumerated()), id: \.element.id) { index, meal in
-                                MealRow(
-                                meal: meal,
-                                showCalories: store.settings.showCalories,
-                                onDelete: { store.deleteMeal(meal) },
-                                onCorrect: { correctingMeal = meal },
-                                loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } }
-                            )
-                                if index < store.day.meals.count - 1 {
-                                    FernletRowDivider()
+                            ForEach(Array(mealsByType.enumerated()), id: \.element.id) { groupIndex, group in
+                                mealTypeSectionHeader(group.type, meals: group.meals)
+                                    .padding(.top, groupIndex == 0 ? 0 : 14)
+                                    .padding(.bottom, 2)
+                                ForEach(Array(group.meals.enumerated()), id: \.element.id) { rowIndex, meal in
+                                    MealRow(
+                                        meal: meal,
+                                        showCalories: store.settings.showCalories,
+                                        onDelete: { store.deleteMeal(meal) },
+                                        onCorrect: { correctingMeal = meal },
+                                        loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } },
+                                        showsMealTypeBadge: false
+                                    )
+                                    if rowIndex < group.meals.count - 1 {
+                                        FernletRowDivider()
+                                    }
                                 }
                             }
                         }
@@ -181,6 +187,48 @@ struct FoodView: View {
         let savedPreviews = store.savedRecipes.map(RecentRecipePreview.saved)
         return Array((localPreviews + savedPreviews).sorted { $0.addedAt > $1.addedAt }.prefix(5))
     }
+
+    /// Today's meals grouped into meal-type sub-sections in a fixed display order, dropping any type
+    /// with no meals so the "Today" card never shows an empty "Lunch" header. Meal order within each
+    /// type mirrors the underlying `store.day.meals` order (filter preserves it — no reordering).
+    private var mealsByType: [MealTypeGroup] {
+        let order: [MealType] = [.breakfast, .lunch, .dinner, .snack, .preWorkout, .postWorkout]
+        return order.compactMap { type in
+            let meals = store.day.meals.filter { $0.mealType == type }
+            return meals.isEmpty ? nil : MealTypeGroup(type: type, meals: meals)
+        }
+    }
+
+    /// Small sub-header for a meal-type group inside the "Today" card: the type name plus a quiet
+    /// per-group protein (and, behind the calorie opt-in, calorie) subtotal, using the same macro
+    /// styling as `MealRow`'s footer line.
+    private func mealTypeSectionHeader(_ type: MealType, meals: [Meal]) -> some View {
+        let protein = meals.reduce(0) { $0 + $1.macros.protein }
+        let calories = meals.reduce(0) { $0 + $1.calories }
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(type.rawValue)
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+            Spacer(minLength: 8)
+            Text("P \(protein)g")
+                .font(.fernlet(.stat))
+                .foregroundStyle(Color.moss)
+            if store.settings.showCalories {
+                Text("\(calories) cal")
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.slate)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// One meal-type group in the "Today" card. Identifiable by its `MealType` so `ForEach` can key on
+/// it without an index (each type appears at most once in `mealsByType`).
+private struct MealTypeGroup: Identifiable {
+    let type: MealType
+    let meals: [Meal]
+    var id: MealType { type }
 }
 
 private enum RecentRecipePreview: Identifiable {
@@ -1071,6 +1119,10 @@ struct MealSheet: View {
     @State private var mealPhoto: UIImage?
     @State private var showingCamera = false
     @State private var selectedMealPhotoItem: PhotosPickerItem?
+    /// Drives the library fallback when the camera is unavailable (Simulator, or a camera-less /
+    /// access-denied device): present a `PhotosPicker` bound to `selectedMealPhotoItem` instead of a
+    /// dead black camera modal. Completes the already-present `selectedMealPhotoItem` onChange plumbing.
+    @State private var isMealPhotoLibraryPickerActive = false
     @State private var isIdentifyingPhoto = false
     // Unified Capture auto-routing (Food Capture mockup §2b–2e).
     /// Calm "analyzing…" state shown while the router runs barcode → label → meal detection.
@@ -1133,7 +1185,16 @@ struct MealSheet: View {
                             path.removeLast()
                         }
                     case .productSearch(let query):
-                        FoodProductPageImportView(store: store, initialLookup: query) { product in
+                        FoodProductPageImportView(
+                            store: store,
+                            initialLookup: query,
+                            onLogAsTyped: {
+                                // Web lookup dead-end escape: pop back to the composer and log what the
+                                // user originally typed through the normal resolve cascade.
+                                if path.isEmpty == false { path.removeLast() }
+                                resolveTypedMeal(query, type: mealType)
+                            }
+                        ) { product in
                             description = product.name
                             notice = "\(product.name) was saved. Review the meal description, then save your meal."
                             path.removeLast()
@@ -1142,6 +1203,12 @@ struct MealSheet: View {
                 }
         }
         .background(Color.parchment)
+        // While a resolve is in flight, keep the sheet from being swiped away: the unstructured resolve
+        // Task isn't cancelled on dismiss, so an interactive dismiss mid-"Matching" could commit a meal
+        // the user meant to cancel or set reviewContext on a torn-down sheet. Once resolve finishes,
+        // the commit / reviewContext handoff runs synchronously (no suspension point), so re-enabling
+        // dismissal here can't reopen the window.
+        .interactiveDismissDisabled(isResolvingMeal)
         #if canImport(UIKit)
         .overlay {
             if isAnalyzingCapture {
@@ -1263,8 +1330,16 @@ struct MealSheet: View {
                     VStack(spacing: 10) {
                         #if canImport(UIKit)
                         mealCapturePrimaryButton {
-                            showingCamera = true
+                            // No camera on the Simulator (the documented test target) and on camera-less
+                            // or access-denied devices — fall back to the photo library rather than
+                            // presenting a dead black camera modal.
+                            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                                showingCamera = true
+                            } else {
+                                isMealPhotoLibraryPickerActive = true
+                            }
                         }
+                        .photosPicker(isPresented: $isMealPhotoLibraryPickerActive, selection: $selectedMealPhotoItem, matching: .images)
 
                         HStack(spacing: 8) {
                             mealSecondaryButton("Scan", icon: "barcode.viewfinder") {
@@ -1326,9 +1401,6 @@ struct MealSheet: View {
             SheetSaveBar(label: isResolvingMeal ? "Matching" : "Save", disabled: description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isResolvingMeal) {
                 let mealDescription = description
                 let selectedMealType = mealType
-                #if canImport(UIKit)
-                let capturedPhoto = mealPhoto
-                #endif
                 if FoodProductWebSearch.shouldSearch(for: mealDescription, foodItems: store.foodItems) {
                     if let cachedProduct = store.cachedWebImportedFoodProduct(for: mealDescription) {
                         let meal = store.logWebImportedFoodProduct(cachedProduct, mealType: selectedMealType)
@@ -1342,29 +1414,40 @@ struct MealSheet: View {
                         return
                     }
                 }
-                isResolvingMeal = true
-                Task {
-                    let resolution = await store.resolveMeals(from: mealDescription, type: selectedMealType)
-                    isResolvingMeal = false
-                    if resolution.needsReview {
-                        // Pause for a pre-log review instead of silently committing a low-confidence guess.
-                        #if canImport(UIKit)
-                        reviewContext = MealReviewContext(resolution: resolution, photo: capturedPhoto)
-                        #else
-                        reviewContext = MealReviewContext(resolution: resolution)
-                        #endif
-                        return
-                    }
-                    let meals = store.commitResolution(resolution)
-                    #if canImport(UIKit)
-                    attachPhoto(capturedPhoto, to: meals)
-                    #endif
-                    onLogged(meals)
-                    dismiss()
-                }
+                resolveTypedMeal(mealDescription, type: selectedMealType)
             }
         }
         .background(Color.parchment)
+    }
+
+    /// Runs the normal free-text resolve cascade for a typed description: a low-confidence result
+    /// pauses at the pre-log review sheet, otherwise it commits and dismisses. Shared by the Save
+    /// button and the web-import "log what you typed instead" escape hatch, so the web path is never a
+    /// one-way street.
+    private func resolveTypedMeal(_ mealDescription: String, type: MealType?) {
+        #if canImport(UIKit)
+        let capturedPhoto = mealPhoto
+        #endif
+        isResolvingMeal = true
+        Task {
+            let resolution = await store.resolveMeals(from: mealDescription, type: type)
+            isResolvingMeal = false
+            if resolution.needsReview {
+                // Pause for a pre-log review instead of silently committing a low-confidence guess.
+                #if canImport(UIKit)
+                reviewContext = MealReviewContext(resolution: resolution, photo: capturedPhoto)
+                #else
+                reviewContext = MealReviewContext(resolution: resolution)
+                #endif
+                return
+            }
+            let meals = store.commitResolution(resolution)
+            #if canImport(UIKit)
+            attachPhoto(capturedPhoto, to: meals)
+            #endif
+            onLogged(meals)
+            dismiss()
+        }
     }
 
     struct MealReviewContext: Identifiable {
@@ -1597,6 +1680,10 @@ struct MealSheet: View {
 struct FoodProductPageImportView: View {
     var store: FernletStore
     var onSaved: (ImportedFoodProduct) -> Void
+    /// Optional escape hatch offered when the web lookup fails or is disabled: log what the user typed
+    /// through the normal meal resolve path instead of stranding them on the import screen. Nil when
+    /// there's no typed-meal flow to fall back to (e.g. the explicit "Import" entry point).
+    private var onLogAsTyped: (() -> Void)?
     private var initialLookup: String
     @State private var lookupText: String
     @State private var preview: ProductPagePreview?
@@ -1606,9 +1693,10 @@ struct FoodProductPageImportView: View {
     @State private var showingProductReview = false
     @State private var didStartInitialLookup = false
 
-    init(store: FernletStore, initialLookup: String = "", onSaved: @escaping (ImportedFoodProduct) -> Void) {
+    init(store: FernletStore, initialLookup: String = "", onLogAsTyped: (() -> Void)? = nil, onSaved: @escaping (ImportedFoodProduct) -> Void) {
         self.store = store
         self.onSaved = onSaved
+        self.onLogAsTyped = onLogAsTyped
         self.initialLookup = initialLookup
         _lookupText = State(initialValue: initialLookup)
     }
@@ -1639,11 +1727,29 @@ struct FoodProductPageImportView: View {
                     }
 
                     if let notice {
-                        Text(notice)
-                            .font(.fernlet(.bodySmall))
-                            .italic()
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(notice)
+                                .font(.fernlet(.bodySmall))
+                                .italic()
+                                .foregroundStyle(Color.slate)
+                                .fernletWrappingText()
+                            // When the web lookup can't help, don't strand the user here — let them log
+                            // what they typed through the normal meal flow instead.
+                            if let onLogAsTyped {
+                                Button {
+                                    onLogAsTyped()
+                                } label: {
+                                    Label("Log what you typed instead", systemImage: "square.and.pencil")
+                                        .font(.fernlet(.label))
+                                        .foregroundStyle(Color.moss)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(12)
+                                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
                 }
                 .padding(20)
@@ -1900,6 +2006,9 @@ struct MealRow: View {
     var onDelete: () -> Void
     var onCorrect: () -> Void
     var loadPhotoData: (() -> Data?)? = nil
+    /// The row's own meal-type capsule. Suppressed when the row already sits under a meal-type section
+    /// header (the "Today" card) so the type isn't labelled twice; defaults to shown for any other use.
+    var showsMealTypeBadge: Bool = true
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -1913,11 +2022,13 @@ struct MealRow: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(meal.name).font(.fernlet(.header))
-                            Text(meal.mealType.rawValue)
-                                .font(.fernlet(.labelSmall))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(meal.mealType.color.opacity(0.25), in: Capsule())
+                            if showsMealTypeBadge {
+                                Text(meal.mealType.rawValue)
+                                    .font(.fernlet(.labelSmall))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(meal.mealType.color.opacity(0.25), in: Capsule())
+                            }
                         }
                         Text(displayNote)
                             .font(.fernlet(.bubble))
@@ -2227,6 +2338,9 @@ struct MealReviewSheet: View {
     var onConfirm: ([Meal]) -> Void
     var onDiscard: () -> Void
     @State private var meals: [EditableReviewMeal]
+    /// One-shot guard so a fast double-tap on "Log meal" can't fire onConfirm twice — which would
+    /// append the same meal id twice and double its macros.
+    @State private var isLogging = false
 
     init(
         resolution: MealResolution,
@@ -2293,7 +2407,9 @@ struct MealReviewSheet: View {
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(label: "Log meal", disabled: false) {
+            SheetSaveBar(label: "Log meal", disabled: isLogging) {
+                guard !isLogging else { return }
+                isLogging = true
                 onConfirm(meals.map(\.applied))
             }
         }

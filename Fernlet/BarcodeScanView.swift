@@ -554,6 +554,10 @@ struct BarcodeNotFoundView: View {
     @State private var name = ""
     @State private var scanResult: NutritionLabelResult?
     @State private var showingLabelScanner = false
+    /// A gentle nudge shown when "Remember this food" is tapped with no macros yet — a 0g food logs a
+    /// meal that counts for nothing. We offer to scan the label first, but never hard-block: the user
+    /// can still choose "Remember it anyway".
+    @State private var showingEmptyMacroNudge = false
     /// Once the food is saved we show the "Remembered" (11c) confirmation and hold the item; the
     /// user's "Done" tap fires `onCreated`, so the create logic itself is unchanged — we only give
     /// the confirmation its moment before the flow dismisses.
@@ -697,22 +701,27 @@ struct BarcodeNotFoundView: View {
             }
 
             SheetSaveBar(label: "Remember this food", disabled: trimmedName.isEmpty) {
-                let micros = scanResult?.micronutrients()
-                let input = ManualRecipeIngredientInput(
-                    name: trimmedName,
-                    quantity: 1,
-                    unit: RecipeUnit.serving.rawValue,
-                    protein: scanResult?.protein ?? 0,
-                    carbs: scanResult?.carbs ?? 0,
-                    fat: scanResult?.fat ?? 0,
-                    scannedMicronutrients: micros?.hasAnyValue == true ? micros : nil,
-                    barcode: barcode
-                )
-                guard let item = store.saveCustomIngredient(input) else { return }
-                rememberedItem = item
+                // Saving here also logs the meal (via `onCreated`), so an all-zero food would quietly
+                // log a meal that counts for nothing. Nudge to add macros first — softly, not a wall.
+                if macrosAreEmpty {
+                    showingEmptyMacroNudge = true
+                } else {
+                    rememberFood()
+                }
             }
         }
         .navigationTitle("Remember product")
+        .confirmationDialog(
+            "No macros yet",
+            isPresented: $showingEmptyMacroNudge,
+            titleVisibility: .visible
+        ) {
+            Button("Scan the nutrition label") { showingLabelScanner = true }
+            Button("Remember it anyway") { rememberFood() }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Without macros this logs as 0g, so it won't count toward your day. Scan the label to add them — or remember it now and fill them in later.")
+        }
         .navigationDestination(isPresented: $showingLabelScanner) {
             NutritionLabelCameraSheet(showCalories: store.settings.showCalories) { result in
                 scanResult = result
@@ -725,6 +734,31 @@ struct BarcodeNotFoundView: View {
 
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// True when nothing has filled in the macros yet (no label scanned, or a scan that read all
+    /// zeros) — the case where remembering-and-logging would contribute nothing to the day.
+    private var macrosAreEmpty: Bool {
+        (scanResult?.protein ?? 0) == 0 && (scanResult?.carbs ?? 0) == 0 && (scanResult?.fat ?? 0) == 0
+    }
+
+    /// Persist the named product as a user `FoodItem` and hand off to the "Remembered" confirmation
+    /// (whose "Done" fires `onCreated`, logging the meal). Shared by the save bar and the empty-macro
+    /// "Remember it anyway" path so the create logic stays in one place.
+    private func rememberFood() {
+        let micros = scanResult?.micronutrients()
+        let input = ManualRecipeIngredientInput(
+            name: trimmedName,
+            quantity: 1,
+            unit: RecipeUnit.serving.rawValue,
+            protein: scanResult?.protein ?? 0,
+            carbs: scanResult?.carbs ?? 0,
+            fat: scanResult?.fat ?? 0,
+            scannedMicronutrients: micros?.hasAnyValue == true ? micros : nil,
+            barcode: barcode
+        )
+        guard let item = store.saveCustomIngredient(input) else { return }
+        rememberedItem = item
     }
 }
 

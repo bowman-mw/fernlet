@@ -3,6 +3,7 @@ import SwiftUI
 
 #if canImport(UIKit)
 import UIKit
+import Vision
 import FernletDomainModel
 import AppServices
 import FoodCatalog
@@ -50,14 +51,25 @@ struct FoodCaptureRouter {
     static let labelConfidenceFieldFloor = 3
 
     func route(for image: UIImage) async -> FoodCaptureRoute {
-        // 1) Barcode first — unambiguous when present.
+        // 1) Barcode first — unambiguous when present. Run on the ORIGINAL full-resolution image:
+        //    retail barcodes decode off fine bar spacing that downscaling would smear.
         if let payload = try? await barcodeDetector.payload(in: image),
            payload.isEmpty == false {
             return .barcode(payload: payload)
         }
 
         // 2) Nutrition label — parse with the existing OCR scanner and gauge confidence by field count.
-        let label = try? await NutritionLabelScanner.scanAll(image: image).primary
+        //    The scanner's pipeline (document segmentation + perspective correction + noise reduction +
+        //    `.accurate` recognition) is legible far below a 12MP camera frame, so feed it a downscaled
+        //    copy. And before paying for that heavy pipeline at all, run a cheap `.fast` text-presence
+        //    probe: an ordinary meal photo carries no text, so route it straight to `.meal` rather than
+        //    OCR the whole plate only to discover there's no label (the perceived sluggishness fixed here).
+        let scanImage = Self.downscaledForOCR(image)
+        guard await Self.imageProbablyContainsText(scanImage) else {
+            return .meal
+        }
+
+        let label = try? await NutritionLabelScanner.scanAll(image: scanImage).primary
         if let label {
             let fields = label.recognizedFieldCount
             if fields >= Self.labelConfidenceFieldFloor {
@@ -72,6 +84,64 @@ struct FoodCaptureRouter {
 
         // 3) Meal photo — the graceful default.
         return .meal
+    }
+}
+
+// MARK: - Cheap image prep for the label OCR stage
+
+private extension FoodCaptureRouter {
+    /// Longest edge (in pixels) we hand the label OCR pipeline. Nutrition-facts text stays legible far
+    /// below a full 12MP camera frame, and capping the long edge keeps document segmentation +
+    /// perspective correction + `.accurate` recognition off the full-resolution image — the sluggish
+    /// part on the iPhone-11 floor.
+    static let ocrMaxDimension: CGFloat = 1600
+
+    /// A downscaled, orientation-normalized copy of `image` for the label OCR stage. Never upscales — an
+    /// image already within the cap is returned unchanged. `UIGraphicsImageRenderer` (scale 1) bakes the
+    /// display orientation into the pixels so text is upright for Vision, which reads `cgImage` directly
+    /// and would otherwise ignore `UIImage.imageOrientation`.
+    static func downscaledForOCR(_ image: UIImage) -> UIImage {
+        let pixelWidth = image.size.width * image.scale
+        let pixelHeight = image.size.height * image.scale
+        let longEdge = max(pixelWidth, pixelHeight)
+        guard longEdge > ocrMaxDimension else { return image }  // never upscale
+
+        let ratio = ocrMaxDimension / longEdge
+        let target = CGSize(width: (pixelWidth * ratio).rounded(),
+                            height: (pixelHeight * ratio).rounded())
+        guard target.width >= 1, target.height >= 1 else { return image }
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1        // output pixels == `target`; the default screen scale would re-inflate it
+        format.opaque = true    // camera captures have no alpha; skip it
+        let renderer = UIGraphicsImageRenderer(size: target, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+    }
+
+    /// A fast, low-accuracy "is there any text here at all?" probe. An ordinary meal photo has none, so
+    /// the caller can skip the full accurate label pipeline and route straight to `.meal`. Uses only the
+    /// cheap `.fast` recognition level with no language correction and no image preprocessing — a small
+    /// fraction of `NutritionLabelScanner.scanAll`'s cost. Fails OPEN: any Vision error (or a missing
+    /// `cgImage`) returns `true`, so a real label is never dropped on a probe failure — it falls through
+    /// to the accurate scan exactly as before. Only a genuine zero-text reading short-circuits, which is
+    /// the same route (`.meal`) the accurate scan would reach when it finds nothing.
+    static func imageProbablyContainsText(_ image: UIImage) async -> Bool {
+        guard let cgImage = image.cgImage else { return true }
+        return await Task.detached(priority: .userInitiated) {
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .fast
+            request.usesLanguageCorrection = false
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            do {
+                try handler.perform([request])
+                let observations = request.results as? [VNRecognizedTextObservation] ?? []
+                return observations.contains { $0.topCandidates(1).first?.string.isEmpty == false }
+            } catch {
+                return true  // Unsure → let the accurate scan decide (preserves prior routing).
+            }
+        }.value
     }
 }
 

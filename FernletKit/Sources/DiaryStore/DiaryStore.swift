@@ -40,7 +40,12 @@ public final class DiaryStore {
     public var dailyScores: [DailyHealthScore]
     public var companionThought: String?
 
-    @ObservationIgnored public let todayKey: String
+    /// The store's notion of "today". Pinned at construction, but ADVANCEABLE via `advanceCurrentDay`
+    /// so a process that stays resident across local midnight can roll over in place instead of filing
+    /// new logs under the launch day. `private(set)` keeps every external reader read-only (the mutation
+    /// only happens through the guarded rollover seam); still `@ObservationIgnored` because the rollover
+    /// reassigns `day` (which IS observed) in the same breath, so dependent views re-render off that.
+    @ObservationIgnored public private(set) var todayKey: String
     @ObservationIgnored public let repository: FernletRepository
     @ObservationIgnored public let foodCatalog: FoodCatalog
     @ObservationIgnored private var scheduleSnapshotSaveHook: () -> Void
@@ -911,6 +916,30 @@ public final class DiaryStore {
     public func loadDay(for dateKey: String) -> FernletDay {
         if dateKey == todayKey { return day }
         return repository.loadDay(for: dateKey, todayKey: todayKey)
+    }
+
+    // MARK: - Day rollover
+
+    /// Advances the store's notion of "today" to `newKey` and swaps the in-memory `day` to that day's
+    /// persisted content (an existing row — e.g. the widget or another device already wrote one — else a
+    /// fresh empty `FernletDay(date: newKey)`). The store is built once at launch with `todayKey` pinned,
+    /// so without this a process that stays resident across local midnight keeps filing "today" under the
+    /// launch day.
+    ///
+    /// The caller MUST persist the outgoing in-memory state first — the app-side facade flushes its
+    /// pending snapshot save so the outgoing `day` (plus `recentMeals`, etc.) is written under the OLD key
+    /// before it advances. This method performs NO save itself; it only re-keys + reloads. No-op (returns
+    /// false) when already on `newKey`.
+    @discardableResult
+    public func advanceCurrentDay(to newKey: String) -> Bool {
+        assert(!newKey.isEmpty, "day key required")
+        guard newKey != todayKey else { return false }
+        // Load the new day's persisted content keyed as its own today (a brand-new day resolves to an
+        // empty FernletDay). Read it BEFORE re-keying so `day.date` stays consistent with `todayKey`.
+        let freshDay = repository.loadDay(for: newKey, todayKey: newKey)
+        todayKey = newKey
+        day = freshDay
+        return true
     }
 
     // MARK: - WorkoutSync (pure)

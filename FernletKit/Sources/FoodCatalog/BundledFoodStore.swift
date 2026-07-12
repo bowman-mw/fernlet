@@ -35,10 +35,13 @@ public nonisolated enum FoodCatalogSchema {
     public static let resourceName = "FoodCatalog"
     public static let resourceExtension = "sqlite"
 
-    /// Caps how many FTS candidates are hydrated for a single query before the in-memory scorer
-    /// ranks them. Far above any realistic gate-passing set (the broadest single tokens match a few
-    /// hundred rows), so ranking parity with the old all-items scorer is preserved in practice.
-    public static let candidateFetchLimit = 6000
+    /// Caps how many FTS candidates are hydrated for a single query before the in-memory scorer ranks
+    /// them. Broad single 3-char prefixes actually match ~7k–8.2k rows (not "a few hundred"), so this
+    /// sits just above the broadest realistic single-token set — realistic queries truncate nothing.
+    /// Beyond that (e.g. a 2-char token), the `ORDER BY` in `candidates` guarantees the truncation
+    /// still keeps the highest-priority (`survey`/`foundation`, then `srLegacy`) rows the scorer wants,
+    /// so ranking parity with the old all-items scorer is preserved for the rows that matter.
+    public static let candidateFetchLimit = 10000
 
     /// Columns selected (in this order) when hydrating a `FoodItem` from a v1 file. Index positions
     /// are mirrored in `SQLiteBundledFoodSource.hydrate` — this list, `hydrate`, and
@@ -156,14 +159,32 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     public func candidates(forQuery query: String) -> [FoodItem] {
         let tokens = FoodItemSearch.searchTokens(in: query)
         guard !tokens.isEmpty else { return [] }
-        // Prefix-AND across all FTS columns mirrors the scorer's hard gate exactly. Tokens are
-        // already normalized to letters/digits, so none collide with FTS operator syntax.
-        let match = tokens.map { "\($0)*" }.joined(separator: " ")
+        // Prefix-AND across all FTS columns mirrors the scorer's hard gate exactly. Each token expands
+        // to its singular/plural match variants (`FoodItemSearch.matchVariants`) so the FTS surfaces
+        // the same rows the scorer will accept — a plural query reaches the singular canonical food.
+        // The variants are OR'd (a token passes on any form) and the tokens AND'd, matching the gate's
+        // "every query token must match" semantics. FTS5 requires an explicit `AND` between grouped
+        // terms. Tokens/variants are normalized to letters/digits, so none collide with FTS syntax.
+        let match = tokens
+            .map { token -> String in
+                let terms = FoodItemSearch.matchVariants(for: token).map { "\($0)*" }
+                return terms.count == 1 ? terms[0] : "(" + terms.joined(separator: " OR ") + ")"
+            }
+            .joined(separator: " AND ")
         // Canonical FTS5 form: match against the virtual table directly (its rowid is the food_id),
         // then resolve the rows. More portable than a JOIN+MATCH across SQLite versions.
+        // ORDER BY de-biases the LIMIT truncation: without it SQLite returns the lowest food_ids, and
+        // the top-priority `survey`/`foundation` foods carry the HIGHEST ids, so 100% of them were
+        // silently dropped for broad prefixes ("chi"/"che"/"cho") that overflow the cap. The CASE
+        // mirrors `FoodItemSearch.dataTypePriority(_, brandQuery: false)` — truncation only bites broad
+        // *generic* prefixes (brand queries match too few rows to overflow), so the non-brand ordering
+        // is the correct de-bias; the scorer still applies the final, brand-aware ranking.
         let sql = """
         SELECT \(selectColumns) FROM food \
         WHERE food_id IN (SELECT rowid FROM food_fts WHERE food_fts MATCH ?) \
+        ORDER BY CASE data_type \
+        WHEN 'foundation' THEN 5 WHEN 'survey' THEN 4 WHEN 'srLegacy' THEN 3 \
+        WHEN 'branded' THEN 2 WHEN 'restaurant' THEN 1 ELSE 0 END DESC, food_id ASC \
         LIMIT \(FoodCatalogSchema.candidateFetchLimit);
         """
         return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, match) }

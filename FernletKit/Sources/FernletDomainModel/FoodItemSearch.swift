@@ -147,8 +147,11 @@ public nonisolated enum FoodItemSearch {
 
     private static func score(_ entry: Index.Entry, queryTokens: [String], normalizedQuery: String) -> Int? {
         guard queryTokens.allSatisfy({ queryToken in
-            entry.searchableTokens.contains { foodToken in
-                foodToken == queryToken || foodToken.hasPrefix(queryToken)
+            let variants = matchVariants(for: queryToken)
+            return entry.searchableTokens.contains { foodToken in
+                variants.contains { variant in
+                    foodToken == variant || foodToken.hasPrefix(variant)
+                }
             }
         }) else {
             return nil
@@ -291,5 +294,39 @@ public nonisolated enum FoodItemSearch {
     /// row passes FTS iff every token matches some indexed token by equality or prefix.
     nonisolated public static func searchTokens(in text: String) -> [String] {
         tokens(in: text)
+    }
+
+    /// Minimum token length before we attempt singular/plural normalization. Keeps short tokens
+    /// ("as", "is", "gas") from being stemmed into over-broad 2-letter prefixes; the derived stem is
+    /// always ≥ 3 characters.
+    nonisolated private static let minimumStemTokenLength = 4
+
+    /// The acceptable match forms for a single query token, used by BOTH the in-memory scorer gate
+    /// (above) and the SQLite FTS5 candidate query (`BundledFoodStore.candidates`). Returns the token
+    /// itself plus, when it looks like a regular English plural, its singular stem — so a plural query
+    /// ("eggs", "oats", "grapes", "berries") can reach the singular canonical food ("egg", "oat",
+    /// "grape", "berry") that the one-directional prefix gate would otherwise miss (`egg*` matches but
+    /// `eggs*` doesn't). Each form is applied as an equality-or-prefix match by the scorer and as a
+    /// `form*` prefix term by FTS, so the two paths stay in lockstep: a food token passes iff some
+    /// variant is a prefix of it, exactly what `form*` matches in the index.
+    nonisolated public static func matchVariants(for token: String) -> [String] {
+        guard let stem = singularStem(token), stem != token else { return [token] }
+        return [token, stem]
+    }
+
+    /// Conservative singular stem for a regular English plural. Only the two suffixes needed to reach
+    /// the canonical singular foods are handled — `ies → y` (berries → berry) and a trailing `s`
+    /// (eggs → egg, oats → oat, grapes → grape). We deliberately do NOT strip `es` wholesale (that
+    /// would mangle non-plurals) since the trailing-`s` rule already recovers `grape`/`apple`/`banana`
+    /// via the scorer's / FTS's prefix match. Possessive/mass `ss` endings ("grass") are left alone.
+    nonisolated private static func singularStem(_ token: String) -> String? {
+        guard token.count >= minimumStemTokenLength else { return nil }
+        if token.hasSuffix("ies"), token.count >= 5 {
+            return String(token.dropLast(3)) + "y"
+        }
+        if token.hasSuffix("s"), !token.hasSuffix("ss") {
+            return String(token.dropLast(1))
+        }
+        return nil
     }
 }

@@ -174,6 +174,10 @@ struct ContentView: View {
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
+                    // If the app stayed resident across local midnight, roll the store over to the new
+                    // day FIRST (flushes yesterday under its own key, re-keys "today") so the widget/
+                    // coin refreshers below and any subsequent logging operate on the correct day.
+                    store.refreshCurrentDayIfNeeded()
                     Task { await store.processSharedRecipeImportQueue() }
                     // Apply widget "+1 water" taps that arrived while backgrounded (also refreshes
                     // the mirrored snapshot across day rollovers).

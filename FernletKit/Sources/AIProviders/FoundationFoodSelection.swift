@@ -98,28 +98,61 @@ public enum FoundationFoodSelectionModel {
                 return .each
             }
         }
+        // A unit the person spelled out ("100 g", "2 cups", "3 slices") wins over the food's preferred
+        // unit so their weight / volume / count is applied verbatim.
+        if let explicitUnit = explicitUnit(in: itemName) {
+            return explicitUnit
+        }
         return foodItem.preferredRecipeUnit
     }
 
     private static func defaultQuantity(for foodItem: FoodItem, itemName: String, unit: RecipeUnit) -> Double {
-        if let explicitQuantity = explicitQuantity(in: itemName) {
-            return explicitQuantity
-        }
         let normalizedItem = FoodItemSearch.normalized(itemName)
         let normalizedFood = FoodItemSearch.normalized(foodItem.name)
+        let count = explicitCount(in: itemName)
         if normalizedItem.contains("sandwich") || normalizedItem.contains("grilled cheese") {
             if unit == .each || normalizedFood.contains("slice") || normalizedFood.contains("bread") || normalizedFood.contains("cheese") {
-                return 2
+                return count ?? 2
             }
         }
-        return foodItem.defaultRecipeQuantity(for: unit)
+        guard let count else {
+            return foodItem.defaultRecipeQuantity(for: unit)
+        }
+        // An explicit unit ("100 g", "2 cups") or a count-like unit (each / serving) uses the number as
+        // the quantity in that unit. But a bare count with a weight / volume unit ("2 eggs", whose
+        // preferred unit is grams) is a number of *servings*, not a number of grams — applying it as
+        // grams scales macros by count / servingSize (~0.04 for two eggs) and silently loses ~99% of
+        // the calories, so scale the count up by one serving's worth in the resolved unit instead.
+        if explicitUnit(in: itemName) != nil || unit == .each || unit == .serving {
+            return count
+        }
+        return count * foodItem.defaultRecipeQuantity(for: unit)
     }
 
-    private static func explicitQuantity(in itemName: String) -> Double? {
+    private static func explicitCount(in itemName: String) -> Double? {
         FoodItemSearch.normalized(itemName)
             .split(separator: " ")
             .compactMap { Double($0) }
             .first
+    }
+
+    /// The first measurement unit the person spelled out ("100 g", "2 cups", "3 slices"), mapped to a
+    /// `RecipeUnit`, or nil when the text carries no unit token (a bare count like "2 eggs", or no
+    /// number at all). `piece` / `slice` map to `.each`; every other token defers to
+    /// `RecipeUnit.normalized`.
+    private static func explicitUnit(in itemName: String) -> RecipeUnit? {
+        for token in FoodItemSearch.normalized(itemName).split(separator: " ") {
+            let word = String(token)
+            switch word {
+            case "piece", "pieces", "slice", "slices":
+                return .each
+            default:
+                if let unit = RecipeUnit.normalized(word) {
+                    return unit
+                }
+            }
+        }
+        return nil
     }
 }
 

@@ -161,6 +161,85 @@ struct MealBuilderTests {
         #expect(meal.note.contains("2 serving Sandwich Bros Chicken Melts"))
     }
 
+    // MARK: - Bare-count vs explicit-unit quantity resolution (deterministic tier-2 path)
+
+    @Test func bareCountOfGramServingFoodLogsServingsNotGrams() throws {
+        // "2 eggs" must resolve to two servings (~two eggs of macros), not 2 grams. The pre-fix bug
+        // stamped quantity=2 in grams → scale ≈ 2/50 ≈ 0.04 → ~0 macros committed silently at .high.
+        let eggs = gramFood(name: "Eggs", servingSize: 50, macros: Macros(protein: 6, carbs: 0, fat: 5))
+        let (quantity, unit) = try resolveSingleIngredient(description: "2 eggs", food: eggs)
+
+        #expect(unit == RecipeUnit.gram.rawValue)
+        #expect(quantity == 100) // 2 servings × 50 g
+        let macros = RecipeIngredient(foodItemId: eggs.id, quantity: quantity, unit: unit).scaledMacros(using: eggs)
+        #expect(macros == Macros(protein: 12, carbs: 0, fat: 10))
+        #expect(macros.calories > 100) // guards against the ~3 kcal undercount regression
+    }
+
+    @Test func explicitGramWeightStaysInGrams() throws {
+        // "100 g chicken" must stay 100 g (one serving here), not be re-read as 100 servings.
+        let chicken = gramFood(name: "Chicken", servingSize: 100, macros: Macros(protein: 30, carbs: 0, fat: 3))
+        let (quantity, unit) = try resolveSingleIngredient(description: "100 g chicken", food: chicken)
+
+        #expect(unit == RecipeUnit.gram.rawValue)
+        #expect(quantity == 100)
+        let macros = RecipeIngredient(foodItemId: chicken.id, quantity: quantity, unit: unit).scaledMacros(using: chicken)
+        #expect(macros == Macros(protein: 30, carbs: 0, fat: 3))
+    }
+
+    @Test func bareFoodWithNoNumberLogsOneServing() throws {
+        // Plain "eggs" (no count) is one serving.
+        let eggs = gramFood(name: "Eggs", servingSize: 50, macros: Macros(protein: 6, carbs: 0, fat: 5))
+        let (quantity, unit) = try resolveSingleIngredient(description: "eggs", food: eggs)
+
+        #expect(unit == RecipeUnit.gram.rawValue)
+        #expect(quantity == 50) // one serving
+        let macros = RecipeIngredient(foodItemId: eggs.id, quantity: quantity, unit: unit).scaledMacros(using: eggs)
+        #expect(macros == Macros(protein: 6, carbs: 0, fat: 5))
+    }
+
+    @Test func explicitCupUnitScalesByVolume() throws {
+        // "2 cups rice" uses the typed cup unit (1 cup = 240 g = one serving here → two servings).
+        let rice = gramFood(name: "Rice", servingSize: 240, macros: Macros(protein: 4, carbs: 45, fat: 0))
+        let (quantity, unit) = try resolveSingleIngredient(description: "2 cups rice", food: rice)
+
+        #expect(unit == RecipeUnit.cup.rawValue)
+        #expect(quantity == 2)
+        let macros = RecipeIngredient(foodItemId: rice.id, quantity: quantity, unit: unit).scaledMacros(using: rice)
+        #expect(macros == Macros(protein: 8, carbs: 90, fat: 0)) // 480 g / 240 g = 2 servings
+    }
+
+    /// Runs the deterministic tier-2 planner end to end for a single-food description and returns the
+    /// lone resolved ingredient plus its quantity/unit for macro assertions.
+    private func resolveSingleIngredient(
+        description: String,
+        food: FoodItem
+    ) throws -> (quantity: Double, unit: String) {
+        let candidates = [FoodSelectionCandidate(id: 1, foodItem: food)]
+        let plan = try #require(FoundationFoodSelectionModel.deterministicPlan(
+            description: description,
+            candidates: candidates,
+            fallbackType: .lunch
+        ))
+        let item = try #require(plan.items.first)
+        let ingredient = try #require(item.ingredients.first)
+        return (ingredient.quantity, ingredient.unit)
+    }
+
+    private func gramFood(name: String, servingSize: Double, macros: Macros) -> FoodItem {
+        FoodItem(
+            name: name,
+            brandSource: nil,
+            servingSize: servingSize,
+            servingUnit: RecipeUnit.gram.rawValue,
+            macros: macros,
+            micronutrients: Micronutrients(),
+            category: "test",
+            source: .usda,
+            tags: []
+        )
+    }
+
     @Test func sandwichAcceptsBreadOrCheeseIngredientsAsRelevant() throws {
         let bread = foodItem(name: "Sourdough bread", source: .manual, macros: Macros(protein: 4, carbs: 22, fat: 1), category: "bread")
         let cheese = foodItem(name: "Cheddar cheese", source: .manual, macros: Macros(protein: 7, carbs: 1, fat: 9), category: "cheese")
