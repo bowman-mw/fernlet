@@ -56,6 +56,7 @@ struct PrivacyDataSettingsView: View {
     @State private var isDetectingCloudData = false
     @State private var operationError: String?
     @State private var didSeedUITestPreferences = false
+    @State private var showTrainerShare = false
     @State private var pendingSealedBackupEnable: SealedBackupPayloadType?
     /// Drives the shared destructive-confirmation alert. Any OFF/destructive toggle assigns to this
     /// instead of mutating directly, so the warning (and only-on-confirm mutation) is guaranteed (WS-5).
@@ -212,6 +213,7 @@ struct PrivacyDataSettingsView: View {
             healthKitCard
             localBackupCard
             if store != nil { exportDataCard }
+            if let store { trainerShareCard(store) }
             lockDataCard
 
             if let operationError {
@@ -251,6 +253,36 @@ struct PrivacyDataSettingsView: View {
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func trainerShareCard(_ store: FernletStore) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel("Share with a trainer")
+            Text("Send a curated summary of your workouts and nutrition to a trainer or nutritionist "
+                 + "you're with in person. You choose exactly what to include; your journal, period, "
+                 + "intimate, photo, and friend data are never shared.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+
+            Button {
+                showTrainerShare = true
+            } label: {
+                Label("Share with a trainer…", systemImage: "figure.strengthtraining.traditional")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .font(.fernlet(.label))
+            .foregroundStyle(.white)
+            .padding(.vertical, 11)
+            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityIdentifier("privacy.trainerShare")
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .sheet(isPresented: $showTrainerShare) {
+            TrainerExportView(store: store)
+        }
     }
 
     private func runExport() {

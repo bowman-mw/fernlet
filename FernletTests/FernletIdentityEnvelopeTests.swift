@@ -316,6 +316,28 @@ struct FernletIdentityEnvelopeTests {
         }
     }
 
+    /// Phase 7: a trainer/nutritionist export carries health data — `.workoutCompletion` is in
+    /// `sealingRequiredTypes`, so an unsealed bundle is fail-closed at the receiver even over an
+    /// already-encrypted transport.
+    @Test func trainerExportEnvelopeRejectsUnsealedPayload() throws {
+        let (alice, aid) = try makeIdentity()
+        defer { cleanup(aid) }
+        let (bob, bid) = try makeIdentity()
+        defer { cleanup(bid) }
+
+        let env = try signedEnvelope(
+            sender: alice,
+            payload: Data("training bundle".utf8),
+            payloadType: .workoutCompletion,
+            payloadEncryption: .none,
+            recipientFingerprint: bob.localFingerprint
+        )
+
+        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+            try env.verify(identityService: bob, replayCache: ReplayCache())
+        }
+    }
+
     // MARK: - Canonical bytes
 
     @Test func canonicalBytesAreDeterministic() throws {
