@@ -45,6 +45,23 @@ final class ClosenessTests: XCTestCase {
         XCTAssertEqual(Set(s.closeFingerprints), ["a", "b", "c", "d"])
     }
 
+    func testZeroClosenessFriendsDoNotFillSlotsAndDoNotDwellLock() {
+        // No one has any interaction yet → no slots fill (an empty slot must not be handed to a
+        // zero-closeness friend whose 3-day dwell would then lock out a genuinely-close friend).
+        let none = ["a": 0.0, "b": 0.0, "c": 0.0, "d": 0.0, "e": 0.0]
+        let empty = CloseSlotAssignment.evaluate(
+            eligible: none, firstAcceptedAt: firstAccepted(Array(none.keys)),
+            state: CloseSlotState(), now: now, todayKey: "d0")
+        XCTAssertTrue(empty.closeFingerprints.isEmpty, "zero-closeness friends never fill a close slot")
+
+        // The next day one friend is actually met → they take a slot immediately (no incumbent to dwell-block).
+        let met = ["a": 5.0, "b": 0.0, "c": 0.0, "d": 0.0, "e": 0.0]
+        let filled = CloseSlotAssignment.evaluate(
+            eligible: met, firstAcceptedAt: firstAccepted(Array(met.keys)),
+            state: empty, now: now.addingTimeInterval(86_400), todayKey: "d1")
+        XCTAssertEqual(filled.closeFingerprints, ["a"], "the genuinely-close friend takes the slot")
+    }
+
     func testChallengerBelowMarginDoesNotEvictIncumbent() {
         var state = CloseSlotState()
         state.closeFingerprints = ["a", "b", "c", "d"]

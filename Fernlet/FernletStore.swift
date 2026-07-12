@@ -142,6 +142,10 @@ final class FernletStore {
         manager.onFriendSessionCommitted = { [weak self] fingerprint in
             self?.closenessLedger.recordSession(fingerprint: fingerprint)
         }
+        // A photo exchanged with a friend this session feeds the closeness photo signal.
+        manager.onFriendPhotoSession = { [weak self] fingerprint in
+            self?.closenessLedger.recordPhotoSession(fingerprint: fingerprint)
+        }
         return manager
     }()
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
@@ -163,8 +167,13 @@ final class FernletStore {
     /// Lifecycle is owned by ContentView (opt-in `allowNearbyPresence` + scene + tab + lock),
     /// mirroring the other proximity listeners; the opt-out setter stops it immediately. Hearts are
     /// gated by the separate `allowNearbyHearts` setting (send + receive), consulted via the host.
-    @ObservationIgnored private(set) lazy var presenceManager: PresenceManager =
-        PresenceManager(store: self, ledger: heartLedger)
+    @ObservationIgnored private(set) lazy var presenceManager: PresenceManager = {
+        let manager = PresenceManager(store: self, ledger: heartLedger)
+        // Hearts sent/received in person feed the closeness signal (day-capped downstream).
+        manager.onHeartSent = { [weak self] fingerprint in self?.closenessLedger.recordHeartSent(fingerprint: fingerprint) }
+        manager.onHeartReceived = { [weak self] fingerprint in self?.closenessLedger.recordHeartReceived(fingerprint: fingerprint) }
+        return manager
+    }()
     @ObservationIgnored let derivedSignalsService = DerivedSignalsService()
     @ObservationIgnored private let healthKitService: (any HealthKitServicing)?
     @ObservationIgnored private lazy var healthSyncCoordinator = HealthSyncCoordinator(host: self, healthKitService: healthKitService)
@@ -685,6 +694,9 @@ final class FernletStore {
         case bought
         case alreadyOwned
         case insufficientCoins
+        /// The item was reported/hidden or the seller is peer-banned — refused at the store boundary even
+        /// if the tap raced a mid-session report/ban that hadn't re-rendered the grid yet.
+        case unavailable
     }
 
     /// Buy an item from a friend's shop. Reloads the per-row stores first so another device's spends and
@@ -693,13 +705,23 @@ final class FernletStore {
     /// preserved (provenance — it shows "designed by <friend>", never "You"). The bought copy is unlisted
     /// and not auto-equipped.
     @discardableResult
-    func buyClothingItem(_ rawItem: CustomizationItem, fromDesignerID designerID: UUID, sellerName: String) -> ClothingPurchaseResult {
+    func buyClothingItem(_ rawItem: CustomizationItem, fromDesignerID designerID: UUID, sellerName: String,
+                         sellerFingerprint: String? = nil) -> ClothingPurchaseResult {
         // See another device's spends / synced-in purchases before guarding (multi-device reconciliation).
         coinLedgerService.reloadFromStore()
         customItemService.reloadFromStore()
         reconcileCoinLedger()
 
         let item = ClothingShopLimits.sanitizedForShop(rawItem)
+
+        // Moderation gate at the STORE boundary, not just the shop's render-time filter: a verified report
+        // or peer-ban can arrive over the mesh mid-session, and an in-flight buy tap can fire against a row
+        // the grid hasn't dropped yet. Any future buy surface is covered here too.
+        if isProximitySellerBanned(fingerprint: sellerFingerprint)
+            || isClothingItemHidden(item, sellerFingerprint: sellerFingerprint) {
+            return .unavailable
+        }
+
         learnDesignerName(id: designerID, name: sellerName)
 
         if customItems.contains(where: { $0.id == item.id }) {
@@ -915,9 +937,12 @@ final class FernletStore {
             guard !proximityTrustVault.isBlockedProximitySigningKey(entry.signingPublicKey) else { continue }
             // ≤12 friends (spec §10): re-friending / reviving an existing record is always allowed, but a
             // brand-new friend is declined once you're at the cap — existing friends are never auto-dropped.
+            // Blocked records were already skipped above, so a non-nil `existing` here is an active OR a
+            // revoked ("Removed") record we're reviving — both must pass the cap. Only a genuinely NEW
+            // fingerprint (`existing == nil`) is capped; testing active-only wrongly blocked reviving a
+            // previously-removed friend once 12 active friends existed.
             let existing = proximityTrustVault.peer(signingPublicKey: entry.signingPublicKey)
-            let isExistingActive = existing.map { $0.revokedAt == nil && $0.blockedAt == nil } ?? false
-            if !isExistingActive,
+            if existing == nil,
                proximityTrustVault.trustedPeers.filter({ $0.blockedAt == nil && $0.revokedAt == nil }).count >= CloseSlotAssignment.maxFriends {
                 continue
             }
@@ -952,8 +977,18 @@ final class FernletStore {
         }
     }
 
+    /// Drops every device-local trace of a removed friend — their cached fuzzy vibe + appearance and
+    /// their closeness interaction history — so a blocked/revoked/reported friend leaves nothing behind
+    /// (the privacy invariant the cache `remove` methods were written for). Idempotent; no-op if absent.
+    private func forgetProximityFriendCaches(signingPublicKey: Data) {
+        let fingerprint = IdentityService.fingerprint(of: signingPublicKey)
+        friendStateCache.remove(fingerprint: fingerprint)
+        closenessLedger.remove(fingerprint: fingerprint)
+    }
+
     func revokeTrustedProximityPeer(signingPublicKey: Data) {
         proximityTrustVault.revoke(signingPublicKey: signingPublicKey)
+        forgetProximityFriendCaches(signingPublicKey: signingPublicKey)
         presenceManager.refreshRoster()
     }
 
@@ -971,6 +1006,7 @@ final class FernletStore {
 
     func blockProximityPeer(signingPublicKey: Data) {
         proximityTrustVault.block(signingPublicKey: signingPublicKey)
+        forgetProximityFriendCaches(signingPublicKey: signingPublicKey)
         // Pairwise-DH tags mean a blocked friend's tag disappears from our broadcast (and their
         // ads stop matching) at the next roster rebuild — do that rebuild NOW.
         presenceManager.refreshRoster()
@@ -993,6 +1029,7 @@ final class FernletStore {
     /// peer and records the report locally.
     func reportProximityPeer(signingPublicKey: Data, reason: ReportReason) {
         proximityTrustVault.report(signingPublicKey: signingPublicKey, reason: reason.rawValue, blockAlso: true)
+        forgetProximityFriendCaches(signingPublicKey: signingPublicKey)
         presenceManager.refreshRoster()
         snapshotSaveCoordinator.schedule()
     }
@@ -1005,11 +1042,15 @@ final class FernletStore {
     }
 
     /// Reports a shared shop item: records a local report keyed to the artwork's content hash + the
-    /// seller's verified signing key (resolved from the vault), hides the item locally, and — when the
-    /// seller resolves to a known key — blocks them.
-    func reportClothingItem(_ item: CustomizationItem, sellerFingerprint: String?, reason: ReportReason) {
-        let sellerKey = sellerFingerprint
-            .flatMap { proximityTrustVault.peer(fingerprint: $0)?.signingPublicKey } ?? Data()
+    /// seller's transport-verified signing key, hides the item locally, and — when the seller resolves to
+    /// a known key — blocks them. The key is taken from the catalog (captured at receipt, so it works for
+    /// a committed-but-not-kept seller), falling back to the vault; without a real key the report can't
+    /// escalate to a cross-device designer ban, so we prefer the catalog's verified key.
+    func reportClothingItem(_ item: CustomizationItem, sellerFingerprint: String?,
+                            sellerSigningPublicKey: Data?, reason: ReportReason) {
+        let sellerKey = sellerSigningPublicKey.flatMap { $0.isEmpty ? nil : $0 }
+            ?? sellerFingerprint.flatMap { proximityTrustVault.peer(fingerprint: $0)?.signingPublicKey }
+            ?? Data()
         moderationLedger.recordLocalReport(
             reporterSigningPublicKey: meshNetworkManager.localSigningPublicKey,
             reporterFingerprint: meshNetworkManager.localFingerprint,
@@ -1019,6 +1060,7 @@ final class FernletStore {
             reason: reason.rawValue)
         if !sellerKey.isEmpty {
             proximityTrustVault.report(signingPublicKey: sellerKey, reason: reason.rawValue, blockAlso: true)
+            forgetProximityFriendCaches(signingPublicKey: sellerKey)
             presenceManager.refreshRoster()
         }
         reconcileModerationBans()
@@ -1838,17 +1880,19 @@ final class FernletStore {
         RecipeShareCodec.proximityPayload(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
-    @discardableResult func importProximityRecipeShare(_ payload: ProximityRecipeSharePayload) throws -> String {
+    @discardableResult func importProximityRecipeShare(_ payload: ProximityRecipeSharePayload,
+                                                       fromFingerprint fingerprint: String? = nil) throws -> String {
         guard payload.format == "fernlet.proximity.recipe", payload.version == 1 else {
             throw RecipeImportError.unsupportedFormat
         }
 
+        let importedName: String
         switch payload.recipe.kind {
         case .local:
             guard let localPayload = payload.recipe.local else { throw RecipeImportError.invalidPayload }
             let data = try JSONEncoder().encode(localPayload)
             guard let text = String(data: data, encoding: .utf8) else { throw RecipeImportError.invalidPayload }
-            return try importRecipe(from: text).name
+            importedName = try importRecipe(from: text).name
         case .saved:
             guard let savedPayload = payload.recipe.saved,
                   URL(string: savedPayload.sourceURLString) != nil else {
@@ -1877,8 +1921,11 @@ final class FernletStore {
                 )
             )
             addSavedRecipe(recipe)
-            return recipe.name
+            importedName = recipe.name
         }
+        // Accepting a friend's shared recipe feeds the closeness "share accepted" signal (day-capped).
+        if let fingerprint { closenessLedger.recordShareAccepted(fingerprint: fingerprint) }
+        return importedName
     }
 
     @discardableResult func importRecipe(from text: String) throws -> RecipeDefinition {

@@ -37,10 +37,17 @@ public nonisolated struct ProximityTrustedPeerRecord: Codable, Equatable, Identi
     public var lastSeenAt: Date
     public var revokedAt: Date?
     public var blockedAt: Date?
-    /// When the local user reported this peer (content moderation). Local block/report state, synced
-    /// alongside `blockedAt` — it is the user's own moderation action, not another peer's data.
+    /// When the local user reported this peer, and why. Deliberately SYNCED alongside `blockedAt`/
+    /// `revokedAt` (this record rides the CloudKit blob) — a considered choice, not the same stance as
+    /// `ModerationLedger`. The ledger keeps report data device-local because it holds OTHER peers' relayed
+    /// reports about third parties (sensitive social evidence that must not follow the user into iCloud).
+    /// These two fields are the user's OWN moderation action about a peer they chose to block: the block
+    /// itself must apply on every one of the user's devices, so its timestamp and reason travel with it.
+    /// `reportReason` is a bounded `ReportReason` token (never free text), kept forward-tolerant. If any
+    /// future code makes this record carry richer or free-text report detail, revisit whether it should
+    /// still sync.
     public var reportedAt: Date?
-    /// Raw `ReportReason` token for the report, kept forward-tolerant. Nil when not reported.
+    /// Raw `ReportReason` token for the report, kept forward-tolerant. Nil when not reported. See `reportedAt`.
     public var reportReason: String?
 
     public init(

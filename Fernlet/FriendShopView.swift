@@ -17,6 +17,7 @@ struct FriendShopView: View {
         let id = UUID()
         let item: CustomizationItem
         let sellerFingerprint: String?
+        let sellerSigningPublicKey: Data?
     }
 
     var body: some View {
@@ -60,7 +61,8 @@ struct FriendShopView: View {
         ) { target in
             ForEach(ReportReason.allCases) { reason in
                 Button(reason.label, role: .destructive) {
-                    store.reportClothingItem(target.item, sellerFingerprint: target.sellerFingerprint, reason: reason)
+                    store.reportClothingItem(target.item, sellerFingerprint: target.sellerFingerprint,
+                                             sellerSigningPublicKey: target.sellerSigningPublicKey, reason: reason)
                     reportTarget = nil
                     feedback = "Thanks for letting us know. We've hidden this item and blocked its sender on your device."
                 }
@@ -174,7 +176,8 @@ struct FriendShopView: View {
         .overlay(alignment: .topTrailing) {
             Menu {
                 Button(role: .destructive) {
-                    reportTarget = ReportTarget(item: item, sellerFingerprint: catalog.senderFingerprint)
+                    reportTarget = ReportTarget(item: item, sellerFingerprint: catalog.senderFingerprint,
+                                                sellerSigningPublicKey: catalog.senderSigningPublicKey)
                 } label: {
                     Label("Report item…", systemImage: "flag")
                 }
@@ -235,7 +238,8 @@ struct FriendShopView: View {
         let result = store.buyClothingItem(
             item,
             fromDesignerID: catalog.payload.designerID,
-            sellerName: sellerName(catalog)
+            sellerName: sellerName(catalog),
+            sellerFingerprint: catalog.senderFingerprint
         )
         let label = item.name.isEmpty ? item.slot.label : item.name
         switch result {
@@ -245,6 +249,8 @@ struct FriendShopView: View {
             feedback = "You already own “\(label)”."
         case .insufficientCoins:
             feedback = "Not enough coins for “\(label)” yet — keep showing up!"
+        case .unavailable:
+            feedback = "“\(label)” is no longer available."
         }
     }
 

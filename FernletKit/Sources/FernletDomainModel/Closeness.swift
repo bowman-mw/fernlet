@@ -92,9 +92,12 @@ public nonisolated enum CloseSlotAssignment {
             }
         }
 
-        // Fill empty close slots freely with the highest-ranked non-close friends.
+        // Fill empty close slots with the highest-ranked non-close friends who have ANY closeness. A
+        // zero-interaction friend must never be promoted: doing so would stamp a 3-day dwell immunity on
+        // a friend you haven't actually met, locking out someone you later genuinely grow close to. Empty
+        // slots stay empty until there's real closeness to honor.
         while newState.closeFingerprints.count < closeSlots {
-            let candidates = ranked(eligible.keys.filter { !newState.closeFingerprints.contains($0) })
+            let candidates = ranked(eligible.keys.filter { !newState.closeFingerprints.contains($0) && (eligible[$0] ?? 0) > 0 })
             guard let next = candidates.first else { break }
             newState.closeFingerprints.append(next)
             newState.enteredAt[next] = now

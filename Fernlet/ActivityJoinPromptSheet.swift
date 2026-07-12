@@ -9,6 +9,11 @@ import FernletDomainModel
 struct ActivityJoinPromptSheet: View {
     let requests: [ProximityActivityManager.PendingActivityJoin]
     let activityTitle: String
+    /// An admit-time error (e.g. "This activity is full.") to show INLINE here. A root-level `.alert`
+    /// can't present over this sheet while other requests keep it open, so the host would never see it;
+    /// rendering it in the sheet — and clearing it via `dismissError` — is what actually surfaces it.
+    let errorMessage: String?
+    let dismissError: () -> Void
     let allow: (ProximityActivityManager.PendingActivityJoin) -> Void
     let decline: (ProximityActivityManager.PendingActivityJoin) -> Void
 
@@ -19,6 +24,28 @@ struct ActivityJoinPromptSheet: View {
                     Text("Someone wants to join")
                         .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
+
+                    if let errorMessage {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Color.orange)
+                            Text(errorMessage)
+                                .font(.fernlet(.body))
+                                .foregroundStyle(Color.bark)
+                                .fernletWrappingText()
+                            Spacer(minLength: 0)
+                            Button("Dismiss") { dismissError() }
+                                .font(.fernlet(.labelSmall))
+                                .foregroundStyle(Color.slate)
+                                .accessibilityIdentifier("activity.join.error.dismiss")
+                        }
+                        .padding(14)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.35), lineWidth: 1)
+                        )
+                        .accessibilityIdentifier("activity.join.error")
+                    }
 
                     if let request = requests.first {
                         VStack(alignment: .leading, spacing: 16) {

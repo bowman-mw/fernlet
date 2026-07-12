@@ -1,5 +1,6 @@
 import XCTest
 import FernletFoundation
+import FernletDomainModel
 @testable import ProximityKit
 
 /// Test double: a monotonic clock whose value the test drives directly.
@@ -86,6 +87,47 @@ final class ModerationBanTests: XCTestCase {
         XCTAssertTrue(store.isPeerBanned(fingerprint: "abcd1234"))
         XCTAssertFalse(store.isPeerBanned(fingerprint: "ffff0000"))
         XCTAssertFalse(store.isSelfBanned)
+        store.clearAllForTesting()
+    }
+
+    /// A served 30-day ban must NOT re-mint from the same still-non-decayed reports (reports live 180d).
+    /// Only a genuinely new offending artwork re-arms it. Regression for the ~210-day runaway ban.
+    func testServedBanDoesNotReMintFromSameEvidenceButNewArtworkReArms() {
+        let service = uniqueService()
+        let clock = MockMonotonicClock(100)
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = ModerationBanStore(service: service, clock: clock, date: { now })
+        let localKey = Data([0])
+        let subject = Data([5])
+        let fingerprint = IdentityService.fingerprint(of: subject)
+        func report(_ reporter: UInt8, _ hash: UInt8) -> ModerationLedgerEntry {
+            ModerationLedgerEntry(
+                id: "report:\(reporter):\(hash)", kind: .report,
+                reporterSigningPublicKey: Data([reporter]), subjectSigningPublicKey: subject,
+                itemID: UUID(), contentHash: Data([hash]), reasonToken: "offensive",
+                reporterSeq: 1, createdAt: now)
+        }
+        // 3 items, each with 2 distinct reporters spread within the per-reporter cap → designer ban warranted.
+        let rows = [report(1, 1), report(2, 1), report(1, 2), report(3, 2), report(2, 3), report(3, 3)]
+
+        store.reconcile(rows: rows, localSigningKey: localKey)
+        XCTAssertTrue(store.isPeerBanned(fingerprint: fingerprint), "spread reports ban the designer")
+
+        // Serve the 30-day ban (monotonic time, counting sleep, advances past the duration).
+        clock.value += 30 * 86_400 + 1
+        now = now.addingTimeInterval(30 * 86_400 + 1)
+        XCTAssertFalse(store.isPeerBanned(fingerprint: fingerprint), "the 30-day ban serves out")
+
+        // Same reports, still inside their 180-day window: reconcile must NOT re-mint the ban.
+        store.reconcile(rows: rows, localSigningKey: localKey)
+        XCTAssertFalse(store.isPeerBanned(fingerprint: fingerprint),
+                       "a served ban must not re-mint from unchanged evidence")
+
+        // A brand-new offending artwork (new content hash, fresh reporters) re-arms the ban.
+        let withNewItem = rows + [report(6, 4), report(7, 4)]
+        store.reconcile(rows: withNewItem, localSigningKey: localKey)
+        XCTAssertTrue(store.isPeerBanned(fingerprint: fingerprint),
+                      "a genuinely new offending item re-arms the ban")
         store.clearAllForTesting()
     }
 }

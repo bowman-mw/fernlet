@@ -315,6 +315,46 @@ final class ActivityTests: XCTestCase {
         XCTAssertTrue(joiner.offeredActivities.isEmpty)  // consumed
     }
 
+    /// A member who LEFT can re-join: the host still lists them, so their re-request gets the grant
+    /// RE-ISSUED (not silently dropped). Also covers the failed-grant orphan recovery path.
+    func testReJoinAfterLeaveReIssuesGrantWithoutDuplicatingRoster() async throws {
+        let hostId = try makeIdentity()
+        let joinerId = try makeIdentity()
+        let hostHost = MockActivityHost(name: "Ada")
+        let joinerHost = MockActivityHost(name: "Bo")
+        let host = ProximityActivityManager(store: hostHost, identity: hostId, fileURL: tempURL(), now: { self.fixedNow })
+        let joiner = ProximityActivityManager(store: joinerHost, identity: joinerId, fileURL: tempURL(), now: { self.fixedNow })
+        connect(host: host, hostId: hostId, joiner: joiner, joinerId: joinerId)
+
+        let desc = host.host(title: "Coffee", activityTypeToken: "coffee", coarseLocation: "Blue Bottle",
+                             expiresAt: fixedNow.addingTimeInterval(3600))
+        await drain()
+        joiner.requestJoin(joiner.offeredActivities[0])
+        await drain()
+        host.admitJoin(host.pendingJoinRequests[0])
+        await drain()
+        XCTAssertEqual(joiner.joinedActivities.count, 1)
+        let activityID = try XCTUnwrap(desc?.activityID)
+
+        // Joiner leaves — local membership gone; the host still lists them (v1 leave sends no revocation).
+        joiner.leaveJoined(activityID: activityID)
+        await drain()
+        XCTAssertTrue(joiner.joinedActivities.isEmpty)
+        XCTAssertEqual(host.hostedActivities.first?.participants.count, 2, "host still lists the departed member")
+
+        // Host re-offers on the next commit; the joiner re-requests. Because they're already a roster
+        // member, the host re-issues the grant rather than dropping the request → they re-join.
+        host.onPeerCommitted(fingerprint: joinerId.localFingerprint)
+        await drain()
+        XCTAssertEqual(joiner.offeredActivities.count, 1, "the activity is re-offered")
+        joiner.requestJoin(joiner.offeredActivities[0])
+        await drain()
+
+        XCTAssertEqual(joiner.joinedActivities.count, 1, "the re-joining member gets a fresh grant")
+        XCTAssertEqual(host.hostedActivities.first?.participants.count, 2, "no duplicate roster entry")
+        XCTAssertTrue(host.pendingJoinRequests.isEmpty, "an existing member's re-request is not queued for confirm")
+    }
+
     func testGrantForUnofferedActivityRefused() async throws {
         let hostId = try makeIdentity()
         let joinerId = try makeIdentity()

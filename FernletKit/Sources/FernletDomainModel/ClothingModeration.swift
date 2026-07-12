@@ -113,23 +113,11 @@ public nonisolated struct ModerationLedgerEntry: Codable, Equatable, Identifiabl
         "\(kind.rawValue):\(reporterFingerprint):\(hex(contentHash))"
     }
 
-    /// Deterministic bytes a reporter signs (and a receiver re-derives to verify) — pure, no crypto.
-    /// Order-stable; both devices produce identical bytes for the same row. `createdAt` is included at
-    /// whole-second resolution so a hostile future date is bound into the signature (the receiver may
-    /// then clamp the STORED createdAt to receipt time for decay without touching verification).
-    public static func canonicalSignedBytes(_ e: ModerationLedgerEntry) -> Data {
-        let fields = [
-            e.kind.rawValue,
-            hex(e.reporterSigningPublicKey),
-            hex(e.subjectSigningPublicKey),
-            e.itemID.uuidString,
-            hex(e.contentHash),
-            e.reasonToken,
-            String(e.reporterSeq),
-            String(Int(e.createdAt.timeIntervalSinceReferenceDate.rounded())),
-        ]
-        return Data(fields.joined(separator: "\n").utf8)
-    }
+    // NOTE: the deterministic bytes a reporter signs live in ProximityKit as
+    // `canonicalBytes(for: ModerationLedgerEntry)` (CanonicalSignatureSerializer.swift), alongside every
+    // other signed type. It reuses the length-prefixed, domain-tagged, saturating `CanonicalByteWriter`
+    // so (a) an out-of-range wire `createdAt` clamps instead of trapping, and (b) field boundaries can
+    // never be forged by a delimiter inside a value. This type stays wall-safe (no crypto here).
 }
 
 /// Escalation thresholds for the clothing shop (proposed 2026-07-11; tunable). Pure constants.

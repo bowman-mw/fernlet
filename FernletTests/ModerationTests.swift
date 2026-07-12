@@ -108,7 +108,7 @@ final class ModerationTests: XCTestCase {
             reporterSigningPublicKey: senderKey, subjectSigningPublicKey: Data([5]),
             itemID: UUID(), contentHash: hash, reasonToken: "offensive", reporterSeq: 1,
             createdAt: fixedNow)
-        let sig = try! priv.signature(for: ModerationLedgerEntry.canonicalSignedBytes(row))
+        let sig = try! priv.signature(for: canonicalBytes(for: row))
         let payload = ModerationReportPayload(reports: [SignedModerationReport(entry: row, signature: sig)])
         let later = fixedNow.addingTimeInterval(3600)
 

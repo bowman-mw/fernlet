@@ -17,6 +17,7 @@
 
 import Foundation
 import FernletDomainModel
+import FoodCatalog
 
 // MARK: - Export DTO (curated, human-readable projections)
 
@@ -180,9 +181,13 @@ extension FernletStore {
         }
 
         let recipeExports = recipes.map { r in
-            FernletDataExport.RecipeExport(
+            // Resolve each ingredient's food name from the catalog so a manually-built recipe exports
+            // "Flour (2 cup)" rather than a nameless "2 cup" (RecipeIngredient stores only a foodItemId).
+            let nameByFoodID = Dictionary(
+                foodCatalog.items(forRecipe: r).map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+            return FernletDataExport.RecipeExport(
                 name: r.name, servings: r.servings,
-                ingredients: Self.recipeIngredientLines(r),
+                ingredients: Self.recipeIngredientLines(r, nameByFoodID: nameByFoodID),
                 notes: r.notes.isEmpty ? nil : r.notes,
                 createdAt: r.createdAt)
         }
@@ -307,16 +312,25 @@ extension FernletStore {
         return health
     }
 
-    private static func recipeIngredientLines(_ recipe: RecipeDefinition) -> [String]? {
+    private static func recipeIngredientLines(_ recipe: RecipeDefinition, nameByFoodID: [UUID: String] = [:]) -> [String]? {
         if let webImport = recipe.webImport, !webImport.ingredientLines.isEmpty {
             return webImport.ingredientLines
         }
         let lines = recipe.ingredients.map { ing -> String in
-            let qty = ing.quantity == ing.quantity.rounded()
-                ? String(Int(ing.quantity)) : String(ing.quantity)
-            return "\(qty) \(ing.unit)".trimmingCharacters(in: .whitespaces)
+            let measure = "\(formatQuantity(ing.quantity)) \(ing.unit)".trimmingCharacters(in: .whitespaces)
+            if let name = nameByFoodID[ing.foodItemId], !name.isEmpty {
+                return measure.isEmpty ? name : "\(name) (\(measure))"
+            }
+            return measure   // food not resolvable → measure only (still better than a trap)
         }
         return lines.isEmpty ? nil : lines
+    }
+
+    /// Whole numbers render without a trailing decimal; a non-finite / out-of-Int-range quantity falls
+    /// back to the raw Double string instead of trapping on the unchecked `Int(...)` initializer.
+    private static func formatQuantity(_ q: Double) -> String {
+        guard q.isFinite, q == q.rounded(), abs(q) < 1e15 else { return String(q) }
+        return String(Int(q))
     }
 
     private static func friendStatus(_ peer: ProximityTrustedPeerRecord) -> String {

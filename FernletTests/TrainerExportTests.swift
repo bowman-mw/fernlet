@@ -83,6 +83,39 @@ final class TrainerExportTests: XCTestCase {
         XCTAssertTrue(optedJSON.contains("\"sleep\""), "opted-in sleep should appear")
     }
 
+    /// Regression: sharing wellbeing must NOT disclose sick days unless the sickness category is also
+    /// shared. `companionState` is `.sick` on a sick day regardless of score, so emitting it verbatim
+    /// leaked sickness through the wellbeing channel with `includeSickness` off.
+    func testWellbeingStateDoesNotLeakSicknessUnlessSicknessShared() throws {
+        let (seedStore, repository, narratives) = makeTestStoreWithRepositories()
+        let dayKey = seedStore.todayKey
+        let meal = seedStore.addMeal(from: "oatmeal", type: .breakfast)
+        var day = FernletDay(date: dayKey)
+        day.meals = [meal]
+        repository.updateDay(day, for: dayKey, todayKey: dayKey)
+        let store = makeStoreSharingStores(repository: repository, narratives: narratives)
+        // A sick day's score: `companionState` is `.sick` regardless of the numeric score.
+        store.dailyScores = [DailyHealthScore(
+            dateKey: dayKey, score: 0.7, companionState: .sick, computedAt: Date(), sicknessOverride: true)]
+
+        // Wellbeing ON, sickness OFF → the wellbeing state must not reveal the sick day.
+        var noSick = TrainerExportOptions()
+        noSick.includeWellbeing = true
+        noSick.includeSickness = false
+        let noSickDay = store.buildTrainerExport(options: noSick).days.first { $0.day == dayKey }
+        XCTAssertNil(noSickDay?.wasSick, "wasSick must be nil when sickness isn't shared")
+        XCTAssertNotEqual(noSickDay?.wellbeing?.state, CompanionState.sick.rawValue,
+                          "wellbeing state must not disclose sickness when includeSickness is off")
+
+        // Sharing sickness IS the only path by which the sick state reaches the trainer.
+        var withSick = noSick
+        withSick.includeSickness = true
+        let withSickDay = store.buildTrainerExport(options: withSick).days.first { $0.day == dayKey }
+        XCTAssertEqual(withSickDay?.wellbeing?.state, CompanionState.sick.rawValue,
+                       "with sickness shared, the sick state is disclosed (consented)")
+        XCTAssertEqual(withSickDay?.wasSick, true)
+    }
+
     /// The wire payload round-trips and rejects an empty / oversized bundle.
     func testTrainerExportPayloadRoundTripAndBounds() throws {
         let bundle = Data("{\"days\":[]}".utf8)

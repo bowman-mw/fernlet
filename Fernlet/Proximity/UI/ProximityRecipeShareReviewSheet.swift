@@ -162,7 +162,7 @@ struct ProximityRecipeShareReviewSheet: View {
 
     private func importShare() {
         do {
-            let importedName = try store.importProximityRecipeShare(share.payload)
+            let importedName = try store.importProximityRecipeShare(share.payload, fromFingerprint: share.senderFingerprint)
             manager.dismissRecipeShare(share)
             notice = "\(importedName) imported."
             dismiss()

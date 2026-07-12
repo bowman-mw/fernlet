@@ -17,6 +17,7 @@
 
 import Foundation
 import FernletDomainModel
+import FernletScoring
 
 // MARK: - What the user chose to include
 
@@ -228,8 +229,13 @@ extension FernletStore {
             .init(hours: $0.hours, quality: $0.quality.rawValue, note: $0.note.isEmpty ? nil : $0.note)
         } : nil
         let wasSick: Bool? = (options.includeSickness && score?.sicknessOverride == true) ? true : nil
-        let wellbeing: TrainerExportBundle.DayExport.Wellbeing? = (options.includeWellbeing) ? score.map {
-            .init(score: ($0.score * 100).rounded() / 100, state: $0.companionState.rawValue)   // NO periodPhase / components
+        let wellbeing: TrainerExportBundle.DayExport.Wellbeing? = (options.includeWellbeing) ? score.map { s in
+            // Don't leak sickness through the wellbeing channel: `companionState` is `.sick` on any sick
+            // day regardless of score, so emitting it verbatim would disclose sick days even when the
+            // dedicated `includeSickness` toggle is OFF. When sickness isn't shared, report the score-based
+            // state (recomputed with isSick:false, so never `.sick`). NO periodPhase / components either.
+            let state = options.includeSickness ? s.companionState : FernletScoring.state(for: s.score, isSick: false)
+            return .init(score: (s.score * 100).rounded() / 100, state: state.rawValue)
         } : nil
 
         // Drop days with nothing a trainer would see.

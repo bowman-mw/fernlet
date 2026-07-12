@@ -48,6 +48,8 @@ struct ActivitiesView: View {
                 ActivityJoinPromptSheet(
                     requests: manager.pendingJoinRequests,
                     activityTitle: titleForActivity(first.activityID),
+                    errorMessage: manager.activityError,
+                    dismissError: { manager.activityError = nil },
                     allow: { manager.admitJoin($0) },
                     decline: { manager.declineJoin($0) }
                 )
@@ -358,7 +360,11 @@ struct ActivitiesView: View {
     }
 
     private var errorBinding: Binding<Bool> {
-        Binding(get: { manager.activityError != nil }, set: { if !$0 { manager.activityError = nil } })
+        // Only present the root alert when the join-prompt sheet is NOT up: while it is, the error is an
+        // admit-time failure the sheet shows inline (a root alert can't present over the sheet anyway).
+        Binding(
+            get: { manager.activityError != nil && manager.pendingJoinRequests.isEmpty },
+            set: { if !$0 { manager.activityError = nil } })
     }
 
     private var endBinding: Binding<Bool> {
