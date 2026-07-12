@@ -43,6 +43,12 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// (in `sealingRequiredTypes`) — messages are private. Registered on the mesh via the Phase-1
     /// payload registry + the `messages` capability; additive-safe post-Phase-1 (older clients park it).
     case tempMessage           = "fernlet.message.temp.v1"
+    /// A one-hop content-moderation report bundle (`ModerationReportPayload`): the sender's OWN
+    /// Ed25519-signed report rows about shop items, handed to a vault-trusted friend in person so the
+    /// friend's device can tally reports it has personally verified (2026-07-11 ban memo). Always
+    /// sealed to the recipient. Additive-safe post-Phase-1 (older clients park it); gated on the
+    /// `moderation` capability so a peer that can't handle it is never sent one.
+    case itemReport            = "fernlet.item.report.v1"
     // Mesh
     case meshDescriptor        = "fernlet.mesh.descriptor.v1"
     case meshAdmissionGrant    = "fernlet.mesh.admission.grant.v1"
@@ -77,6 +83,8 @@ public nonisolated enum ProximityCapability: String, Codable, CaseIterable, Send
     case hearts
     /// Session-scoped temporary messages (Phase 5).
     case messages
+    /// One-hop content-moderation report relay (Phase 3b).
+    case moderation
 }
 
 public nonisolated enum PayloadEncryption: Codable, Equatable, Sendable {

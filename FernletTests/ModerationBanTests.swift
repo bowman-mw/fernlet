@@ -63,6 +63,22 @@ final class ModerationBanTests: XCTestCase {
         store.clearAllForTesting()
     }
 
+    func testForwardJumpPlusRebootCannotInstantServeTheBan() {
+        let service = uniqueService()
+        let clock = MockMonotonicClock(100_000)
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = ModerationBanStore(service: service, clock: clock, date: { now })
+        store.applySelfBan(durationDays: 30)
+        XCTAssertTrue(store.isSelfBanned)
+
+        // Attack: set the clock 40 days ahead and reboot (mach_continuous_time resets → the reboot
+        // branch runs). The per-reboot wall-credit cap (2 days) must keep the 30-day ban active.
+        clock.value = 5
+        now = now.addingTimeInterval(40 * 86_400)
+        XCTAssertTrue(store.isSelfBanned, "a single forward-jump + reboot must not serve the ban")
+        store.clearAllForTesting()
+    }
+
     func testPeerBanIsIndependentOfSelfBan() {
         let service = uniqueService()
         let store = ModerationBanStore(service: service, clock: MockMonotonicClock(100))

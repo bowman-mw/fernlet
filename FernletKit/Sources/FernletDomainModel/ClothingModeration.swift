@@ -112,6 +112,24 @@ public nonisolated struct ModerationLedgerEntry: Codable, Equatable, Identifiabl
     public static func rowID(kind: ModerationEntryKind, reporterFingerprint: String, contentHash: Data) -> String {
         "\(kind.rawValue):\(reporterFingerprint):\(hex(contentHash))"
     }
+
+    /// Deterministic bytes a reporter signs (and a receiver re-derives to verify) — pure, no crypto.
+    /// Order-stable; both devices produce identical bytes for the same row. `createdAt` is included at
+    /// whole-second resolution so a hostile future date is bound into the signature (the receiver may
+    /// then clamp the STORED createdAt to receipt time for decay without touching verification).
+    public static func canonicalSignedBytes(_ e: ModerationLedgerEntry) -> Data {
+        let fields = [
+            e.kind.rawValue,
+            hex(e.reporterSigningPublicKey),
+            hex(e.subjectSigningPublicKey),
+            e.itemID.uuidString,
+            hex(e.contentHash),
+            e.reasonToken,
+            String(e.reporterSeq),
+            String(Int(e.createdAt.timeIntervalSinceReferenceDate.rounded())),
+        ]
+        return Data(fields.joined(separator: "\n").utf8)
+    }
 }
 
 /// Escalation thresholds for the clothing shop (proposed 2026-07-11; tunable). Pure constants.
@@ -167,10 +185,13 @@ public nonisolated enum ModerationEconomy {
         let live = liveReports(rows, now: now).filter { $0.subjectSigningPublicKey == subjectKey }
         let byHash = Dictionary(grouping: live, by: { $0.contentHash })
 
-        // Per-reporter cap: count each reporter toward at most `perReporterItemCap` of this designer's items.
+        // Per-reporter cap: count each reporter toward at most `perReporterItemCap` of this designer's
+        // items. Iterate in a DETERMINISTIC order (sorted by content hash) — the greedy cap assignment
+        // mutates as it goes, so unsorted `Dictionary` order would let the same evidence ban on one
+        // device and spare on another (a Phase-3b convergence + fairness bug).
         var reporterItemCount: [String: Int] = [:]
         var qualifyingHashes = 0
-        for (_, reports) in byHash {
+        for (_, reports) in byHash.sorted(by: { hex($0.key) < hex($1.key) }) {
             let reporters = Set(reports.map { hex($0.reporterSigningPublicKey) })
             guard reporters.count >= ClothingModerationLimits.itemUnlistableReporters else { continue }
             // A qualifying item only counts reporters who haven't already hit their per-designer cap.

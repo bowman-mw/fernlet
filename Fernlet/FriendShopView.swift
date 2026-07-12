@@ -25,7 +25,7 @@ struct FriendShopView: View {
                 if shop.peerCatalogs.isEmpty {
                     emptyState
                 } else {
-                    ForEach(shop.peerCatalogs) { catalog in
+                    ForEach(shop.peerCatalogs.filter { !store.isProximitySellerBanned(fingerprint: $0.senderFingerprint) }) { catalog in
                         shopSection(catalog)
                     }
                 }
@@ -96,7 +96,7 @@ struct FriendShopView: View {
 
     private func shopSection(_ catalog: ProximityClothingCatalog) -> some View {
         let items = ClothingShareCodec.sanitizedItems(from: catalog.payload)
-            .filter { !store.isClothingItemLocallyReported($0) }
+            .filter { !store.isClothingItemHidden($0, sellerFingerprint: catalog.senderFingerprint) }
         return VStack(alignment: .leading, spacing: FernletMetrics.spaceMd) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(sellerName(catalog))’s shop")

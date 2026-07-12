@@ -1,4 +1,5 @@
 import XCTest
+import CryptoKit
 import FernletDomainModel
 @testable import ProximityKit
 
@@ -94,6 +95,43 @@ final class ModerationTests: XCTestCase {
             report(reporter: 2, subject: 5, hash: 3), report(reporter: 3, subject: 5, hash: 3),
         ]
         XCTAssertTrue(ModerationEconomy.shouldBanDesigner(subjectKey: Data([5]), in: threeReporters, now: fixedNow))
+    }
+
+    // MARK: - One-hop report relay (Phase 3b)
+
+    func testRelayAcceptsSenderSignedRejectsSpoofedReporterAndForgedSignature() {
+        let priv = Curve25519.Signing.PrivateKey()
+        let senderKey = priv.publicKey.rawRepresentation
+        let hash = Data([0xAB, 0xCD])
+        let row = ModerationLedgerEntry(
+            id: "report:x:abcd", kind: .report,
+            reporterSigningPublicKey: senderKey, subjectSigningPublicKey: Data([5]),
+            itemID: UUID(), contentHash: hash, reasonToken: "offensive", reporterSeq: 1,
+            createdAt: fixedNow)
+        let sig = try! priv.signature(for: ModerationLedgerEntry.canonicalSignedBytes(row))
+        let payload = ModerationReportPayload(reports: [SignedModerationReport(entry: row, signature: sig)])
+        let later = fixedNow.addingTimeInterval(3600)
+
+        // Valid: signed by the sender, reporter == sender.
+        XCTAssertEqual(ModerationReportRelay.verifiedRows(from: payload, senderSigningKey: senderKey, now: later).count, 1)
+        // One-hop: the same bundle delivered by a DIFFERENT sender is rejected (you may only relay your own).
+        XCTAssertTrue(ModerationReportRelay.verifiedRows(from: payload, senderSigningKey: Data([9, 9, 9]), now: later).isEmpty)
+        // Forged signature is rejected.
+        let forged = ModerationReportPayload(reports: [SignedModerationReport(entry: row, signature: Data(repeating: 0, count: 64))])
+        XCTAssertTrue(ModerationReportRelay.verifiedRows(from: forged, senderSigningKey: senderKey, now: later).isEmpty)
+    }
+
+    func testLedgerIngestForeignStoresPeerRows() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+        let ledger = ModerationLedger(fileURL: url, now: { self.fixedNow })
+        let foreign = ModerationLedgerEntry(
+            id: "report:peer:99", kind: .report, reporterSigningPublicKey: Data([2]),
+            subjectSigningPublicKey: Data([5]), itemID: UUID(), contentHash: Data([0x99]),
+            reasonToken: "offensive", reporterSeq: 1, createdAt: fixedNow)
+        ledger.ingestForeign([foreign])
+        XCTAssertEqual(ledger.rows.count, 1)
+        XCTAssertEqual(ModerationEconomy.distinctReporters(ofContentHash: Data([0x99]), in: ledger.rows, now: fixedNow), 1)
+        try? FileManager.default.removeItem(at: url)
     }
 
     // MARK: - Trust vault

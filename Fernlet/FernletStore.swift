@@ -126,6 +126,9 @@ final class FernletStore {
             guard let self, self.settings.allowNearbyClothingShares else { return nil }
             return self.buildShopCatalog()
         }
+        // Phase 3b: one-hop moderation relay — supply our own reports to sign + send; ingest peers' verified rows.
+        manager.ownModerationReportsProvider = { [weak self] in self?.moderationLedger.rows ?? [] }
+        manager.onModerationRowsReceived = { [weak self] rows in self?.ingestModerationRows(rows) }
         return manager
     }()
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
@@ -972,6 +975,27 @@ final class FernletStore {
         moderationBanStore.reconcile(
             rows: moderationLedger.rows,
             localSigningKey: meshNetworkManager.localSigningPublicKey)
+    }
+
+    /// Stores peers' verified moderation reports (from the one-hop relay) and re-evaluates bans.
+    func ingestModerationRows(_ rows: [ModerationLedgerEntry]) {
+        moderationLedger.ingestForeign(rows)
+        reconcileModerationBans()
+    }
+
+    /// True when a shop item should be hidden on this device: locally reported, or enough distinct
+    /// verified reporters (across the one-hop ledger) have flagged the same artwork.
+    func isClothingItemHidden(_ item: CustomizationItem, sellerFingerprint: String?) -> Bool {
+        if isClothingItemLocallyReported(item) { return true }
+        let hash = ModerationContentHash.of(item)
+        return ModerationEconomy.distinctReporters(ofContentHash: hash, in: moderationLedger.rows, now: Date())
+            >= ClothingModerationLimits.itemUnlistableReporters
+    }
+
+    /// True when a nearby seller's whole shop is locally peer-banned (repeatedly-reported designer).
+    func isProximitySellerBanned(fingerprint: String?) -> Bool {
+        guard let fingerprint else { return false }
+        return moderationBanStore.isPeerBanned(fingerprint: fingerprint)
     }
 
     func recordTrainerAudit(_ event: TrainerAuditEvent) {
