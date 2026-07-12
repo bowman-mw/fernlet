@@ -138,6 +138,10 @@ final class FernletStore {
         manager.onFriendStateReceived = { [weak self] fingerprint, payload in
             self?.receiveFriendState(fingerprint: fingerprint, payload: payload)
         }
+        // Phase 5: an in-person friend session feeds the closeness signal.
+        manager.onFriendSessionCommitted = { [weak self] fingerprint in
+            self?.closenessLedger.recordSession(fingerprint: fingerprint)
+        }
         return manager
     }()
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
@@ -150,6 +154,9 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var moderationBanStore = ModerationBanStore()
     /// Device-local cache of friends' shared fuzzy state + appearance (Phase 4). Never synced.
     @ObservationIgnored private(set) lazy var friendStateCache = FriendStateCache()
+    /// Device-local closeness signal (in-person interaction counts) + close-slot assignment (Phase 5).
+    /// Never synced — closeness is a private, per-device view.
+    @ObservationIgnored private(set) lazy var closenessLedger = ClosenessLedger()
     /// The standing presence radio (mesh redesign Phase 4a/4b): broadcasts rotating pairwise-DH
     /// tags so KEPT friends recognize each other nearby, and — Phase 4b — carries in-person hearts
     /// over on-demand short-lived pairwise connections (the standalone heart radio is deleted).
@@ -840,6 +847,20 @@ final class FernletStore {
         friendStateCache.state(for: fingerprint)
     }
 
+    // MARK: - Closeness + close friends (Phase 5)
+
+    /// Re-assigns the 4 close slots at most once per day (hysteresis lives in the slot assignment).
+    func recomputeCloseFriendsIfNeeded() {
+        guard closenessLedger.needsDailyEvaluation else { return }
+        let active = proximityTrustVault.trustedPeers.filter { $0.blockedAt == nil && $0.revokedAt == nil }
+        closenessLedger.evaluateSlots(
+            eligibleFingerprints: active.map(\.fingerprint),
+            firstAcceptedAt: Dictionary(active.map { ($0.fingerprint, $0.firstAcceptedAt) }, uniquingKeysWith: { a, _ in a }))
+    }
+
+    /// Whether a friend currently holds one of the 4 close-friend slots.
+    func isCloseFriend(fingerprint: String) -> Bool { closenessLedger.isClose(fingerprint: fingerprint) }
+
     // MARK: - Received hearts (presentation-only surfacing)
 
     /// Golden warmth for the Home health bar from hearts received in the last 24h — a display
@@ -892,6 +913,14 @@ final class FernletStore {
             // while a revoked-only ("Removed") record passing through trust() and being revived IS
             // the desired in-person re-friend path (Phase-2 friend lifecycle semantics).
             guard !proximityTrustVault.isBlockedProximitySigningKey(entry.signingPublicKey) else { continue }
+            // ≤12 friends (spec §10): re-friending / reviving an existing record is always allowed, but a
+            // brand-new friend is declined once you're at the cap — existing friends are never auto-dropped.
+            let existing = proximityTrustVault.peer(signingPublicKey: entry.signingPublicKey)
+            let isExistingActive = existing.map { $0.revokedAt == nil && $0.blockedAt == nil } ?? false
+            if !isExistingActive,
+               proximityTrustVault.trustedPeers.filter({ $0.blockedAt == nil && $0.revokedAt == nil }).count >= CloseSlotAssignment.maxFriends {
+                continue
+            }
             var name = ItemNameModeration.sanitizedName(entry.displayName)
             if name.isEmpty { name = "A friend" }
             let peer = ProximityCoordinator.PeerIdentity(
@@ -1980,6 +2009,8 @@ final class FernletStore {
         moderationLedger.clearAll()
         // Friends' cached fuzzy state + appearance is device-local social data — clear it too.
         friendStateCache.clearAll()
+        // Closeness signal (in-person interaction counts + close-slot assignment) — device-local; clear it.
+        closenessLedger.clearAll()
     }
 
     private func rebuildDerivedSignals() {

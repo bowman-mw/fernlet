@@ -157,7 +157,10 @@ struct FriendListView: View {
         } message: { peer in
             Text("Reporting \(peer.displayName) blocks them and flags their shared content on your device.")
         }
-        .onAppear { displayName = store.settings.proximityDisplayName }
+        .onAppear {
+            displayName = store.settings.proximityDisplayName
+            store.recomputeCloseFriendsIfNeeded()
+        }
         .alert("Block peer?", isPresented: $blockConfirmShown) {
             Button("Block", role: .destructive) {
                 if let peer = peerToBlock {
@@ -199,6 +202,14 @@ struct FriendListView: View {
             Spacer()
 
             if peer.blockedAt == nil && peer.revokedAt == nil {
+                if store.isCloseFriend(fingerprint: peer.fingerprint) {
+                    Text("Close")
+                        .font(.fernlet(.labelSmall))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .foregroundStyle(Color.parchment)
+                        .background(Color.fern, in: Capsule())
+                }
                 fuzzyStateChip(for: peer)
             }
             statusBadge(for: peer)
