@@ -198,10 +198,42 @@ struct FriendListView: View {
 
             Spacer()
 
+            if peer.blockedAt == nil && peer.revokedAt == nil {
+                fuzzyStateChip(for: peer)
+            }
             statusBadge(for: peer)
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 20)
+    }
+
+    /// A friend's fuzzy vibe (thriving/okay/struggling) from the last time you met — never a number.
+    /// Shows an "as of …" qualifier once it's more than a couple of days old; nothing at all past 30 days.
+    @ViewBuilder
+    private func fuzzyStateChip(for peer: ProximityTrustedPeerRecord) -> some View {
+        if let cached = store.cachedFriendState(fingerprint: peer.fingerprint) {
+            VStack(alignment: .trailing, spacing: 2) {
+                HStack(spacing: 5) {
+                    Circle().fill(fuzzyColor(cached.fuzzyState)).frame(width: 7, height: 7)
+                    Text(cached.fuzzyState.label)
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.bark)
+                }
+                if Date().timeIntervalSince(cached.capturedAt) > 48 * 3600 {
+                    Text("as of \(cached.capturedAt.relativeFormatted)")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                }
+            }
+        }
+    }
+
+    private func fuzzyColor(_ state: FriendFuzzyState) -> Color {
+        switch state {
+        case .thriving: Color.moss
+        case .okay: Color.goldenrod
+        case .struggling: Color.terracotta
+        }
     }
 
     @ViewBuilder

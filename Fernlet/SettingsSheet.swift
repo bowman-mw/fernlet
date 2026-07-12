@@ -172,6 +172,15 @@ struct SettingsSheet: View {
                             set: { store.setAllowNearbyPresence($0) }
                         )
                     )
+                    // Phase 4: share a fuzzy vibe (thriving/okay/struggling) + your avatar with kept
+                    // friends when you meet in person. Never a number, goal, or cycle. Default off.
+                    Toggle(
+                        "Share your vibe with friends",
+                        isOn: Binding(
+                            get: { store.settings.allowNearbyFriendState },
+                            set: { store.setAllowNearbyFriendState($0) }
+                        )
+                    )
                 } header: {
                     Text("Privacy")
                 } footer: {

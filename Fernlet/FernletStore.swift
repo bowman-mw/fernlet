@@ -129,6 +129,15 @@ final class FernletStore {
         // Phase 3b: one-hop moderation relay — supply our own reports to sign + send; ingest peers' verified rows.
         manager.ownModerationReportsProvider = { [weak self] in self?.moderationLedger.rows ?? [] }
         manager.onModerationRowsReceived = { [weak self] rows in self?.ingestModerationRows(rows) }
+        // Phase 4: fuzzy state exchange — advertise/send only when opted in; cache friends' received state.
+        manager.friendStateEnabledProvider = { [weak self] in self?.settings.allowNearbyFriendState ?? false }
+        manager.friendStatePayloadProvider = { [weak self] in
+            guard let self, self.settings.allowNearbyFriendState else { return nil }
+            return FriendStatePayload(state: self.companionState.fuzzy, appearance: self.settings.companionAppearance)
+        }
+        manager.onFriendStateReceived = { [weak self] fingerprint, payload in
+            self?.receiveFriendState(fingerprint: fingerprint, payload: payload)
+        }
         return manager
     }()
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
@@ -139,6 +148,8 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var moderationLedger = ModerationLedger()
     /// Tamper-resistant store bans (Keychain-backed; survives app delete+reinstall and clock changes).
     @ObservationIgnored private(set) lazy var moderationBanStore = ModerationBanStore()
+    /// Device-local cache of friends' shared fuzzy state + appearance (Phase 4). Never synced.
+    @ObservationIgnored private(set) lazy var friendStateCache = FriendStateCache()
     /// The standing presence radio (mesh redesign Phase 4a/4b): broadcasts rotating pairwise-DH
     /// tags so KEPT friends recognize each other nearby, and — Phase 4b — carries in-person hearts
     /// over on-demand short-lived pairwise connections (the standalone heart radio is deleted).
@@ -808,6 +819,25 @@ final class FernletStore {
             presenceManager.stop()
         }
         snapshotSaveCoordinator.schedule()
+    }
+
+    /// Toggle sharing a fuzzy wellbeing vibe + avatar with kept friends in person (Phase 4). Turning it
+    /// off drops the cached states received from others too — nothing kept about a signal we no longer share.
+    func setAllowNearbyFriendState(_ value: Bool) {
+        settings.allowNearbyFriendState = value
+        if !value { friendStateCache.clearAll() }
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// Caches a friend's shared fuzzy state (dropped when we've opted out), sanitizing the appearance.
+    func receiveFriendState(fingerprint: String, payload: FriendStatePayload) {
+        guard settings.allowNearbyFriendState, let fuzzy = payload.fuzzyState else { return }
+        friendStateCache.record(fingerprint: fingerprint, fuzzyState: fuzzy, appearance: payload.sanitizedAppearance)
+    }
+
+    /// A friend's cached fuzzy state + appearance if still fresh (≤30 days), for the friend list.
+    func cachedFriendState(fingerprint: String) -> CachedFriendState? {
+        friendStateCache.state(for: fingerprint)
     }
 
     // MARK: - Received hearts (presentation-only surfacing)
@@ -1948,6 +1978,8 @@ final class FernletStore {
         // Moderation reports (who reported whom, and the reported artwork hashes) are device-local
         // social data — clear them on "Reset everything" like the heart ledger.
         moderationLedger.clearAll()
+        // Friends' cached fuzzy state + appearance is device-local social data — clear it too.
+        friendStateCache.clearAll()
     }
 
     private func rebuildDerivedSignals() {

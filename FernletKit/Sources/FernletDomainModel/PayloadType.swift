@@ -49,6 +49,10 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// sealed to the recipient. Additive-safe post-Phase-1 (older clients park it); gated on the
     /// `moderation` capability so a peer that can't handle it is never sent one.
     case itemReport            = "fernlet.item.report.v1"
+    /// A friend's current fuzzy wellbeing vibe + avatar appearance (`FriendStatePayload`), exchanged at
+    /// an in-person friend session so friends see "vibes, never numbers." Always sealed. Gated on the
+    /// `friendState` capability + the `allowNearbyFriendState` opt-in; additive-safe (older clients park).
+    case friendState           = "fernlet.friend.state.v1"
     // Mesh
     case meshDescriptor        = "fernlet.mesh.descriptor.v1"
     case meshAdmissionGrant    = "fernlet.mesh.admission.grant.v1"
@@ -85,6 +89,8 @@ public nonisolated enum ProximityCapability: String, Codable, CaseIterable, Send
     case messages
     /// One-hop content-moderation report relay (Phase 3b).
     case moderation
+    /// Fuzzy wellbeing state + cached appearance exchange (Phase 4).
+    case friendState
 }
 
 public nonisolated enum PayloadEncryption: Codable, Equatable, Sendable {

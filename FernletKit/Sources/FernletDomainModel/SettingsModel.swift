@@ -102,6 +102,10 @@ public nonisolated struct FernletSettings: Codable {
     /// nearby. Default OFF (privacy-first); a one-time enable prompt is offered at the first kept
     /// friend. Turning it off stops the presence radio immediately.
     public var allowNearbyPresence: Bool = false
+    /// Opt-IN (Phase 4): share a fuzzy wellbeing vibe (thriving/okay/struggling) + your avatar with
+    /// kept friends when you meet in person — never a number, goal, or cycle. Default OFF; separate
+    /// from hearts/presence.
+    public var allowNearbyFriendState: Bool = false
     /// One-time marker for the "Turn on Nearby Friends?" prompt offered when the user keeps their
     /// FIRST friend. Once true the prompt never fires again (regardless of the answer).
     public var hasPromptedForPresence: Bool = false
@@ -213,6 +217,7 @@ public nonisolated struct FernletSettings: Codable {
         allowNearbyClothingShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyClothingShares) ?? true
         allowNearbyHearts = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyHearts) ?? false
         allowNearbyPresence = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyPresence) ?? false
+        allowNearbyFriendState = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyFriendState) ?? false
         hasPromptedForPresence = try container.decodeIfPresent(Bool.self, forKey: .hasPromptedForPresence) ?? false
         shopLastPublishedDayKey = try container.decodeIfPresent(String.self, forKey: .shopLastPublishedDayKey)
         companionName = try container.decodeIfPresent(String.self, forKey: .companionName) ?? ""
