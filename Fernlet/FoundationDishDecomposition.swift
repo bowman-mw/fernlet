@@ -149,6 +149,14 @@ enum MealDecompositionResolver {
         let caloriesPerGram = totalCalories / max(totalGrams, 1)
         guard caloriesPerGram >= 0.3 && caloriesPerGram <= 9 else { return nil }
 
+        // Total-plausibility sanity check: the per-ingredient gram cap (max 1500) and the caloric-
+        // density check above can BOTH pass while the summed decomposition still runs to tens of
+        // thousands of calories (the "2 burger patties" → 81,688 kcal bug). A single logged dish
+        // above ~4000 kcal / 3 kg is almost certainly a bad multi-ingredient decomposition, so
+        // return nil and let the cascade fall through to a saner tier rather than logging it.
+        guard totalCalories <= Double(MealPlausibility.maxSingleLogCalories),
+              totalGrams <= MealPlausibility.maxSingleLogGrams else { return nil }
+
         let confidence = resolutionConfidence(
             model: decomposition.overallConfidence,
             minBindScore: minBindScore == Int.max ? 0 : minBindScore,

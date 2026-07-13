@@ -136,7 +136,7 @@ private extension FoodCaptureRouter {
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
             do {
                 try handler.perform([request])
-                let observations = request.results as? [VNRecognizedTextObservation] ?? []
+                let observations = request.results ?? []
                 return observations.contains { $0.topCandidates(1).first?.string.isEmpty == false }
             } catch {
                 return true  // Unsure → let the accurate scan decide (preserves prior routing).

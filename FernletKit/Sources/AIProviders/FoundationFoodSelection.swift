@@ -71,13 +71,20 @@ public enum FoundationFoodSelectionModel {
     }
 
     private static func deterministicIngredients(for itemName: String, candidates: [FoodSelectionCandidate]) -> [FoodSelectionIngredient] {
+        let foodItems = candidates.map(\.foodItem)
         let itemCandidates = FoodSelectionCandidateBuilder.candidates(
             for: itemName,
-            foodItems: candidates.map(\.foodItem),
+            foodItems: foodItems,
             limit: 4
         )
+        // Bind-score floor: mirror the AI decompose path's `minimumBindScore` gate
+        // (FoundationDishDecomposition) so a candidate that surfaced only via a category/tags match —
+        // with no real name signal ("broccoli slaw" bound to "burger patties") — is dropped rather than
+        // logged. With ~50k branded foods in the catalog these weak binds are common; without a floor
+        // the deterministic tier commits them at high confidence.
+        let cleared = candidatesClearingBindFloor(itemCandidates, itemName: itemName, foodItems: foodItems)
         let candidateLimit = CompositeFoodLexicon.isComposite(itemName) ? 3 : 1
-        return itemCandidates.prefix(candidateLimit).compactMap { localCandidate in
+        return cleared.prefix(candidateLimit).compactMap { localCandidate in
             guard let candidate = candidates.first(where: { $0.foodItem.id == localCandidate.foodItem.id }) else { return nil }
             let unit = defaultUnit(for: candidate.foodItem, itemName: itemName)
             let quantity = defaultQuantity(for: candidate.foodItem, itemName: itemName, unit: unit)
@@ -88,6 +95,28 @@ public enum FoundationFoodSelectionModel {
                 unit: unit.rawValue
             )
         }
+    }
+
+    /// Keeps only the candidates that clear `FoodItemSearch.minimumBindScore`, preserving the builder's
+    /// ordering. The builder surfaced each candidate through a sub-phrase of `itemName`
+    /// (`FoodSelectionCandidateBuilder.searchPhrases`), so score each candidate against those same
+    /// phrases and keep it iff its BEST phrase score clears the floor — a candidate that matched only
+    /// via category/tags scores at or below the floor and is dropped, while legitimate multi-word /
+    /// composite matches (found via a shorter sub-phrase) score well above it and survive.
+    private static func candidatesClearingBindFloor(
+        _ itemCandidates: [FoodSelectionCandidate],
+        itemName: String,
+        foodItems: [FoodItem]
+    ) -> [FoodSelectionCandidate] {
+        guard itemCandidates.isEmpty == false, foodItems.isEmpty == false else { return itemCandidates }
+        let index = FoodItemSearch.Index(foodItems: foodItems)
+        var bestScore: [UUID: Int] = [:]
+        for phrase in FoodSelectionCandidateBuilder.searchPhrases(from: itemName) {
+            for scored in FoodItemSearch.scoredResults(for: phrase, in: index, limit: foodItems.count) {
+                bestScore[scored.item.id] = max(bestScore[scored.item.id] ?? Int.min, scored.score)
+            }
+        }
+        return itemCandidates.filter { (bestScore[$0.foodItem.id] ?? Int.min) >= FoodItemSearch.minimumBindScore }
     }
 
     private static func defaultUnit(for foodItem: FoodItem, itemName: String) -> RecipeUnit {

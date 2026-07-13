@@ -461,6 +461,88 @@ struct MealBuilderTests {
         #expect(meal.source == MealLogSource.manual)
     }
 
+    // MARK: - Resolution plausibility gate (belt-and-suspenders total-calorie cap)
+
+    @Test func implausibleCalorieResolutionIsGatedToReview() {
+        // A high-confidence resolution whose meals sum past the single-log ceiling — the "2 burger
+        // patties" → 81,688 kcal bug — must be DOWNGRADED to review rather than silently committed.
+        // The data is preserved (confidence lowered, meals kept) so the user can correct it, not lose it.
+        let absurd = Meal(
+            name: "Double hamburgers, broccoli slaw salad, pork with chilli and tomatoes",
+            mealType: .lunch,
+            macros: Macros(protein: 3_000, carbs: 3_000, fat: 6_000), // 4·3000 + 4·3000 + 9·6000 = 78,000 kcal
+            quality: .ok,
+            confidence: "Food match",
+            note: "",
+            source: MealLogSource.foundationModelFoodSelection
+        )
+        let resolution = MealResolution(meals: [absurd], createdRecipes: [], confidence: .high, isFallback: false)
+        #expect(resolution.needsReview == false) // sanity: high-confidence would auto-commit as-is
+
+        let gated = MealResolutionService.plausibilityGated(resolution)
+        #expect(gated.confidence == .low)
+        #expect(gated.needsReview)
+        #expect(gated.meals == resolution.meals) // preserved for review, not dropped
+    }
+
+    @Test func plausibleResolutionStaysHighConfidence() {
+        // A normal meal well under the ceiling passes the gate unchanged.
+        let normal = Meal(
+            name: "Chicken and rice",
+            mealType: .dinner,
+            macros: Macros(protein: 45, carbs: 60, fat: 15), // 4·45 + 4·60 + 9·15 = 555 kcal
+            quality: .good,
+            confidence: "Food match",
+            note: "",
+            source: MealLogSource.foundationModelFoodSelection
+        )
+        let resolution = MealResolution(meals: [normal], createdRecipes: [], confidence: .high, isFallback: false)
+        let gated = MealResolutionService.plausibilityGated(resolution)
+        #expect(gated.confidence == .high)
+        #expect(gated.needsReview == false)
+    }
+
+    // MARK: - Deterministic bind-score floor
+
+    @Test func deterministicPlanDropsBelowFloorGarbageMatch() throws {
+        // A food that matches "burger patties" ONLY through its category/tags (no name signal) scores
+        // below the bind floor and must be dropped, not logged — the "broccoli slaw for burger patties"
+        // class of bug. With ~50k branded foods in the catalog these weak binds are common.
+        let garbage = foodItem(
+            name: "Broccoli Slaw Salad",
+            source: .usda,
+            macros: Macros(protein: 2, carbs: 6, fat: 0),
+            category: "burger",
+            tags: ["patties"]
+        )
+        let garbageOnly = [FoodSelectionCandidate(id: 1, foodItem: garbage)]
+        #expect(FoundationFoodSelectionModel.deterministicPlan(
+            description: "burger patties",
+            candidates: garbageOnly,
+            fallbackType: .lunch
+        ) == nil)
+
+        // A real name match for the same query clears the floor and is bound instead of the garbage.
+        let patty = foodItem(
+            name: "Burger Patty",
+            source: .usda,
+            macros: Macros(protein: 20, carbs: 0, fat: 15),
+            category: "beef"
+        )
+        let mixed = [
+            FoodSelectionCandidate(id: 1, foodItem: garbage),
+            FoodSelectionCandidate(id: 2, foodItem: patty)
+        ]
+        let plan = try #require(FoundationFoodSelectionModel.deterministicPlan(
+            description: "burger patties",
+            candidates: mixed,
+            fallbackType: .lunch
+        ))
+        let ingredients = plan.items.flatMap(\.ingredients)
+        #expect(ingredients.contains(where: { $0.candidateId == 2 }))
+        #expect(ingredients.contains(where: { $0.candidateId == 1 }) == false)
+    }
+
     private func ingredient(
         candidateId: Int,
         foodName: String,

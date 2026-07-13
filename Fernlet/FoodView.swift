@@ -1086,13 +1086,13 @@ struct RecipeIngredientEditor: View {
     }
 
     private func syncSelection(for name: String) {
+        // Only UNBIND when the user edits the name away from a previously-selected food. We deliberately
+        // do NOT auto-bind on an exact normalized-name match while typing: with the large branded catalog
+        // (tens of thousands of products), common words like "chicken"/"milk"/"eggs" collide with branded
+        // product names, so auto-binding would silently hijack the field — locking macros to a random
+        // product and hiding the suggestion list. Binding happens only when the user taps a suggestion.
         if let selectedFoodItem, selectedFoodItem.name != name {
             ingredient.selectedFoodItemId = nil
-        }
-        guard ingredient.selectedFoodItemId == nil else { return }
-        let normalizedName = FoodItemSearch.normalized(ingredient.trimmedName)
-        if let exact = catalog.exactNameMatch(forNormalized: normalizedName) {
-            ingredient.selectedFoodItemId = exact.id
         }
     }
 }
@@ -2264,7 +2264,15 @@ struct MealComponentEditorRows: View {
                             .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                         Spacer()
-                        Text("\(component.quantity.formatted(.number.precision(.fractionLength(0...1)))) \(component.unit)")
+                        // Typeable quantity box so a wrong amount can be corrected directly, not only nudged.
+                        TextField("Qty", value: $component.quantity, format: .number.precision(.fractionLength(0...1)))
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .textContentType(.none)
+                            .frame(maxWidth: 64)
+                            .font(.fernlet(.stat))
+                            .foregroundStyle(Color.bark)
+                        Text(component.unit)
                             .font(.fernlet(.stat))
                             .foregroundStyle(Color.moss)
                     }
@@ -2597,17 +2605,9 @@ struct RecipeCreationOptionsView: View {
                 ScreenHeader(title: "Create recipe", subtitle: "Choose how to start.", subtitleFirst: false)
 
                 VStack(spacing: 10) {
-                    NavigationLink {
-                        RecipeSheet(store: store, isEmbeddedInNavigationStack: true, startsWithScanner: true)
-                    } label: {
-                        RecipeCreationOptionRow(
-                            title: "Scan label",
-                            subtitle: "Use a nutrition facts label, then fill in the name and servings.",
-                            systemImage: "camera.viewfinder"
-                        )
-                    }
-                    .buttonStyle(.plain)
-
+                    // Recipe creation is Import or Manual only. Nutrition-label scanning belongs to the
+                    // barcode-not-found handoff (BarcodeNotFoundView, reached from the camera when a scanned
+                    // barcode has no catalog match) — not as a standalone recipe-creation entry point.
                     NavigationLink {
                         RecipeImportSheet(store: store)
                     } label: {

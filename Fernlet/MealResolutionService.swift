@@ -17,6 +17,19 @@ protocol MealResolutionContext: AnyObject {
     var todayKey: String { get }
 }
 
+/// Ceilings above which a single quick-log is treated as an implausible resolution — almost always a
+/// hallucinated multi-ingredient decomposition (the "2 burger patties" → 81,688 kcal bug) rather than
+/// one real large meal. Deliberately generous so a genuine big restaurant plate still passes. Shared
+/// by the decompose-tier total guard (`FoundationDishDecomposition`) and the resolution-level
+/// plausibility gate below so both tiers agree on what "too big for one log" means.
+enum MealPlausibility {
+    /// A single quick-log whose meals sum past this many kcal is downgraded to review (gate) or
+    /// rejected (decompose tier).
+    static let maxSingleLogCalories = 4000
+    /// A single AI decomposition summing past this many total grams (3 kg) is almost certainly bad.
+    static let maxSingleLogGrams = 3000.0
+}
+
 /// The quick-log meal resolution cascade (AI dish decomposition → candidate-
 /// constrained AI selection → deterministic lexicon → deterministic plan →
 /// keyword-heuristic fallback) plus the catalog-grounded micronutrient fallback,
@@ -73,7 +86,7 @@ final class MealResolutionService {
                     MealDecompositionPayload(mealDescription: description, fallbackMealType: type),
                     catalog: host.foodCatalog
                 ) {
-                    return MealResolution(meals: [resolved.meal], createdRecipes: [], confidence: resolved.confidence, isFallback: false)
+                    return Self.plausibilityGated(MealResolution(meals: [resolved.meal], createdRecipes: [], confidence: resolved.confidence, isFallback: false))
                 }
             } catch {}
 
@@ -83,21 +96,21 @@ final class MealResolutionService {
                 if let plan = try await FoundationFoodSelectionModel.resolve(
                     FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type)
                 ), let resolution = highConfidenceResolution(from: plan, candidates: candidates, description: description) {
-                    return resolution
+                    return Self.plausibilityGated(resolution)
                 }
             } catch {}
         }
 
         // Deterministic tier 1 (M2): dish template lexicon — handles composite dishes when AI is off.
         if let lexiconMeals = DishTemplateLexicon.resolve(description: description, mealType: type, catalog: host.foodCatalog) {
-            return MealResolution(meals: lexiconMeals, createdRecipes: [], confidence: .high, isFallback: false)
+            return Self.plausibilityGated(MealResolution(meals: lexiconMeals, createdRecipes: [], confidence: .high, isFallback: false))
         }
 
         // Deterministic tier 2: candidate-constrained plan.
         let candidates = host.foodCatalog.candidates(for: description)
         if let plan = FoundationFoodSelectionModel.deterministicPlan(description: description, candidates: candidates, fallbackType: type),
            let resolution = highConfidenceResolution(from: plan, candidates: candidates, description: description) {
-            return resolution
+            return Self.plausibilityGated(resolution)
         }
 
         // Keyword-heuristic fallback: fabricated macros, no catalog grounding — always reviewed.
@@ -122,5 +135,25 @@ final class MealResolutionService {
             originalDescription: description
         ), result.meals.isEmpty == false else { return nil }
         return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
+    }
+
+    /// Belt-and-suspenders plausibility gate applied to every high-confidence resolution before it can
+    /// auto-commit — the one guard that catches EVERY tier, including the AI candidate-selection path.
+    /// When a single quick-log's meals sum past `MealPlausibility.maxSingleLogCalories` the resolution
+    /// is almost certainly wrong (a hallucinated multi-item decomposition — the "2 burger patties" →
+    /// 81,688 kcal bug), so it is DOWNGRADED to `.low` rather than dropped: that flips `needsReview`
+    /// on, pausing the flow at the pre-log review sheet instead of silently logging tens of thousands
+    /// of calories. Already-low resolutions (e.g. the keyword fallback) pass through unchanged.
+    /// Internal (not private) so `MealBuilderTests` can exercise it directly. Pure/static — no host state.
+    static func plausibilityGated(_ resolution: MealResolution) -> MealResolution {
+        guard resolution.confidence != .low else { return resolution }
+        let totalCalories = resolution.meals.reduce(0) { $0 + $1.macros.calories }
+        guard totalCalories > MealPlausibility.maxSingleLogCalories else { return resolution }
+        return MealResolution(
+            meals: resolution.meals,
+            createdRecipes: resolution.createdRecipes,
+            confidence: .low,
+            isFallback: resolution.isFallback
+        )
     }
 }
