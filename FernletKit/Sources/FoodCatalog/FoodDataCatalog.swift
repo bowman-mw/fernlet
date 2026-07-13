@@ -379,23 +379,8 @@ public enum FoodDataCatalog {
     }
 }
 
-public enum CompositeFoodLexicon {
-    nonisolated private static let singleTokenComposites: Set<String> = [
-        "sandwich", "burger", "cheeseburger", "hamburger", "bowl", "taco", "tacos",
-        "wrap", "burrito", "quesadilla", "enchilada", "fajita", "sub", "hoagie",
-        "smoothie", "salad", "pizza", "stew", "casserole", "calzone", "gyro"
-    ]
-
-    nonisolated private static let multiWordComposites: [String] = [
-        "grilled cheese", "stir fry", "fried rice", "lo mein", "pad thai",
-        "french dip", "club sandwich", "egg salad", "tuna melt", "chicken parm"
-    ]
-
-    public nonisolated static func isComposite(_ itemName: String) -> Bool {
-        let normalized = FoodItemSearch.normalized(itemName)
-        for term in multiWordComposites where normalized.contains(FoodItemSearch.normalized(term)) {
-            return true
-        }
-        return normalized.split(separator: " ").map(String.init).contains { singleTokenComposites.contains($0) }
-    }
-}
+// `CompositeFoodLexicon` was removed here: its token-based "is this a composite word" check (which
+// treated "burger patties" as a composite because it contained "burger") lost its only caller when the
+// deterministic resolver switched to binding one food per split item. The authoritative dish list with
+// component recipes is `DishTemplateLexicon` (DishTemplates.json); query-intent + dish demotion is
+// `PreparedDishHeuristic` (FernletDomainModel), which is head-noun-aware rather than token-based.

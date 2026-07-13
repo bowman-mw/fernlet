@@ -101,7 +101,11 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
             }
             if selected.count >= limit { break }
         }
-        return selected.enumerated().map { FoodSelectionCandidate(id: $0.offset + 1, foodItem: $0.element) }
+        // Prefer raw ingredients over assembled/prepared dishes for a bare-ingredient query (mirrors
+        // FoodSelectionCandidateBuilder.candidates), so the candidate pool the resolver/AI draws from
+        // isn't dominated by FNDDS "sandwich"/"on-bun" composites that outrank raw foods on data-type.
+        let ordered = PreparedDishHeuristic.demotingDishes(selected, forQuery: description)
+        return ordered.enumerated().map { FoodSelectionCandidate(id: $0.offset + 1, foodItem: $0.element) }
     }
 
     private func index(for query: String) -> FoodItemSearch.Index {

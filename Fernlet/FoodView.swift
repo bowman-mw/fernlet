@@ -55,26 +55,30 @@ struct FoodView: View {
                         }
                     }
 
-                    FernletScrollSection("Today") {
-                        if store.day.meals.isEmpty {
+                    if store.day.meals.isEmpty {
+                        FernletScrollSection("Today") {
                             EmptyState(text: "Nothing yet. Describe a meal when you are ready.")
-                        } else {
-                            ForEach(Array(mealsByType.enumerated()), id: \.element.id) { groupIndex, group in
-                                mealTypeSectionHeader(group.type, meals: group.meals)
-                                    .padding(.top, groupIndex == 0 ? 0 : 14)
-                                    .padding(.bottom, 2)
-                                ForEach(Array(group.meals.enumerated()), id: \.element.id) { rowIndex, meal in
-                                    MealRow(
-                                        meal: meal,
-                                        showCalories: store.settings.showCalories,
-                                        onDelete: { store.deleteMeal(meal) },
-                                        onCorrect: { correctingMeal = meal },
-                                        loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } },
-                                        showsMealTypeBadge: false
-                                    )
-                                    if rowIndex < group.meals.count - 1 {
-                                        FernletRowDivider()
+                        }
+                    } else {
+                        // Each meal type is its OWN section card, titled by a distinct small-caps
+                        // SectionLabel (not the meal-name font) — separate boxes rather than one long list.
+                        ForEach(mealsByType) { group in
+                            FernletScrollSection(group.type.rawValue) {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    ForEach(Array(group.meals.enumerated()), id: \.element.id) { rowIndex, meal in
+                                        MealRow(
+                                            meal: meal,
+                                            showCalories: store.settings.showCalories,
+                                            onDelete: { store.deleteMeal(meal) },
+                                            onCorrect: { correctingMeal = meal },
+                                            loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } },
+                                            showsMealTypeBadge: false
+                                        )
+                                        if rowIndex < group.meals.count - 1 {
+                                            FernletRowDivider()
+                                        }
                                     }
+                                    mealTypeSubtotal(group.meals)
                                 }
                             }
                         }
@@ -199,27 +203,22 @@ struct FoodView: View {
         }
     }
 
-    /// Small sub-header for a meal-type group inside the "Today" card: the type name plus a quiet
-    /// per-group protein (and, behind the calorie opt-in, calorie) subtotal, using the same macro
-    /// styling as `MealRow`'s footer line.
-    private func mealTypeSectionHeader(_ type: MealType, meals: [Meal]) -> some View {
+    /// A quiet per-section macro footer inside each meal-type card (the type name is the card's title,
+    /// so this only carries the protein and, behind the calorie opt-in, calorie subtotal).
+    private func mealTypeSubtotal(_ meals: [Meal]) -> some View {
         let protein = meals.reduce(0) { $0 + $1.macros.protein }
         let calories = meals.reduce(0) { $0 + $1.calories }
-        return HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(type.rawValue)
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
-            Spacer(minLength: 8)
+        return HStack(spacing: 10) {
+            Spacer(minLength: 0)
             Text("P \(protein)g")
-                .font(.fernlet(.stat))
                 .foregroundStyle(Color.moss)
             if store.settings.showCalories {
                 Text("\(calories) cal")
-                    .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .font(.fernlet(.stat))
+        .padding(.top, 10)
     }
 }
 

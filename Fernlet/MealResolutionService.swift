@@ -75,9 +75,13 @@ final class MealResolutionService {
     /// Runs the quick-log resolution cascade WITHOUT writing anything to the diary, returning the
     /// resolved meals plus a confidence. Separating resolve from commit lets the UI review a
     /// low-confidence / fabricated result before it counts toward the day's totals.
-    func resolveMeals(from description: String, type: MealType? = nil, date: String? = nil) async -> MealResolution {
+    func resolveMeals(from rawDescription: String, type: MealType? = nil, date: String? = nil) async -> MealResolution {
         let targetDate = date ?? host.todayKey
         assert(!targetDate.isEmpty, "meal date required")
+        // Rewrite colloquial ingredient phrasing to the catalog's vocabulary before matching, so the
+        // resolver binds the MEAT rather than an assembled fast-food dish ("burger patties" → "beef
+        // patties", which the FNDDS "hamburger, on wheat bun" entries can't match).
+        let description = Self.canonicalizedQuery(rawDescription)
 
         if host.settings.aiStatus != .off {
             // Primary (M1): model decomposes the dish from world knowledge, catalog supplies macros.
@@ -179,6 +183,29 @@ final class MealResolutionService {
             createdRecipes: resolution.createdRecipes,
             confidence: resolution.confidence,
             isFallback: resolution.isFallback
+        )
+    }
+
+    /// Rewrites colloquial ingredient phrasing to the catalog's vocabulary so the resolver matches the
+    /// MEAT, not an assembled fast-food dish. The FNDDS `survey` set has entries like "Double hamburger,
+    /// on wheat bun, 2 large patties" that outrank the plain `srLegacy` "Beef, ground, patty" — and since
+    /// data-type is sorted ABOVE relevance score, no score bias can demote them. Rewriting "burger
+    /// patty/patties" → "beef patty/patties" makes the query require the "beef" token, which the
+    /// hamburger/bun entries lack, so the token gate excludes them. Only a STANDALONE "burger" (never
+    /// "hamburger"/"cheeseburger") directly before "patty/patties" is rewritten, and non-beef patties
+    /// (turkey/veggie/…) are left untouched. Internal/static so `MealBuilderTests` can exercise it.
+    static func canonicalizedQuery(_ description: String) -> String {
+        let lower = description.lowercased()
+        guard lower.range(of: #"\bburger\s+patt(?:y|ies)\b"#, options: .regularExpression) != nil else {
+            return description
+        }
+        let nonBeef = ["turkey", "chicken", "veggie", "vegan", "plant", "black bean", "impossible",
+                       "beyond", "salmon", "tuna", "pork", "bison", "lentil", "quinoa", "fish", "mushroom"]
+        if nonBeef.contains(where: lower.contains) { return description }
+        return description.replacingOccurrences(
+            of: #"\bburger(\s+patt(?:y|ies))"#,
+            with: "beef$1",
+            options: [.regularExpression, .caseInsensitive]
         )
     }
 

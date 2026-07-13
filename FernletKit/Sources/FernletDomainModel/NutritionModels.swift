@@ -962,12 +962,104 @@ public nonisolated enum MealItemSplitter {
             .replacingOccurrences(of: ",", with: " and ")
             .replacingOccurrences(of: ";", with: " and ")
             .replacingOccurrences(of: " plus ", with: " and ", options: [.caseInsensitive])
-            .replacingOccurrences(of: " with ", with: " and ", options: [.caseInsensitive])
+            // "with" separates foods ("burger with fries") EXCEPT when it introduces a quantity modifier
+            // of the preceding food ("burger with 2 patties", "coffee with extra shots"). Then the head
+            // food is unchanged and the clause just describes it, so keep it attached as one item.
+            .replacingOccurrences(
+                of: #"\s+with\s+(?!(?:\d|two|three|four|five|six|seven|eight|nine|ten|extra|double|triple)\b)"#,
+                with: " and ",
+                options: [.regularExpression, .caseInsensitive]
+            )
         let pieces = normalized
             .components(separatedBy: " and ")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters)) }
             .filter { $0.count >= 3 }
         return pieces.isEmpty ? [trimmed] : pieces
+    }
+}
+
+/// Distinguishes an assembled/prepared DISH (a hamburger on a bun, a chicken sandwich, a taco) from a
+/// raw INGREDIENT, and demotes the former when a quick-log names an ingredient. This generalizes the
+/// "burger patties bound to 'double hamburger on wheat bun'" problem: the USDA FNDDS `survey` dataset is
+/// full of prepared/fast-food composite entries, and because data-type is sorted ABOVE relevance score
+/// in `FoodItemSearch`, those dishes outrank the raw food no matter how much better it matches. The rule
+/// is intent-based (not a food-name blocklist): a query "wants a dish" only when its HEAD noun (last
+/// significant word) is itself a dish/carrier word — "cheeseburger", "chicken sandwich", "burger" — so
+/// "burger patties" / "grilled chicken" (head = patties / chicken) prefer the raw food.
+public nonisolated enum PreparedDishHeuristic {
+    /// Carrier / assembly tokens that mark a food as a composed dish rather than a single ingredient.
+    nonisolated static let carrierTokens: Set<String> = [
+        "bun", "buns", "sandwich", "sandwiches", "roll", "rolls", "biscuit", "biscuits", "bagel",
+        "croissant", "wrap", "wraps", "tortilla", "taco", "tacos", "burrito", "burritos", "sub",
+        "hoagie", "pita", "melt", "toast", "panini", "quesadilla", "calzone", "nachos"
+    ]
+    /// Substrings that mark an FNDDS prepared / fast-food composite entry.
+    nonisolated static let preparedMarkers: [String] = [
+        "fast food", "on wheat", "on white", "with condiments", "double decker", "on bun", "on a bun"
+    ]
+    /// Head-noun words that mean the user WANTS the assembled dish — carriers plus the dish names whose
+    /// head noun is the dish itself. When the query's head noun is one of these, dishes aren't demoted.
+    nonisolated static let dishHeadNouns: Set<String> = carrierTokens.union([
+        "burger", "hamburger", "cheeseburger", "pizza", "sushi", "ramen", "pho", "curry", "stew",
+        "casserole", "lasagna", "enchilada", "gyro", "shawarma", "poutine"
+    ])
+
+    /// Whether a food is an assembled/prepared dish (carries an assembly token or a prepared marker).
+    public nonisolated static func isPreparedDish(_ foodItem: FoodItem) -> Bool {
+        let name = FoodItemSearch.normalized(foodItem.name)
+        if preparedMarkers.contains(where: name.contains) { return true }
+        let tokens = Set(name.split(separator: " ").map(String.init))
+        return !tokens.isDisjoint(with: carrierTokens)
+    }
+
+    /// Cut / component / portion nouns. When the query's head noun is one of these it names a raw
+    /// ingredient or cut, NOT the assembled dish — even under a dish modifier. This is what separates
+    /// "a burger" (head = burger → the dish, with a bun) from "a burger patty" (head = patty → just the
+    /// meat), and "chicken sandwich" (dish) from "chicken breast" (ingredient).
+    nonisolated static let componentNouns: Set<String> = [
+        "patty", "patties", "breast", "breasts", "thigh", "thighs", "drumstick", "drumsticks",
+        "wing", "wings", "fillet", "fillets", "filet", "filets", "cutlet", "cutlets", "loin", "loins",
+        "chop", "chops", "steak", "steaks", "strip", "strips", "tender", "tenders", "nugget", "nuggets",
+        "meatball", "meatballs", "slice", "slices", "scoop", "scoops", "ground", "link", "links"
+    ]
+
+    /// Whether the query asks for an assembled dish — decided by its HEAD noun (the grammatical head of
+    /// the main noun phrase), not by any token. A component head ("patty", "breast") is an ingredient;
+    /// otherwise a dish/carrier head ("burger", "sandwich", "taco") is a dish. So "a burger" → dish,
+    /// "a burger patty" → ingredient, "a burger with 2 patties" → dish (head = burger, before "with").
+    public nonisolated static func queryWantsDish(_ query: String) -> Bool {
+        guard let head = headNoun(of: query) else { return false }
+        if componentNouns.contains(head) || componentNouns.contains(singular(head)) { return false }
+        return dishHeadNouns.contains(head) || dishHeadNouns.contains(singular(head))
+    }
+
+    /// The head noun of the query's MAIN noun phrase: the last significant token BEFORE any trailing
+    /// modifier/preposition. A post-"with"/"on" clause usually modifies the head ("burger with 2 patties",
+    /// "toast on the side") rather than renaming it, so "burger with 2 patties" → "burger", not "patties".
+    private nonisolated static func headNoun(of query: String) -> String? {
+        var text = FoodItemSearch.normalized(query)
+        for separator in [" with ", " on ", " topped ", " smothered ", " served ", " over ", " plus ", " and "] {
+            if let range = text.range(of: separator) { text = String(text[..<range.lowerBound]) }
+        }
+        return text.split(separator: " ").map(String.init)
+            .filter { $0.count >= 2 && Double($0) == nil }
+            .last
+    }
+
+    /// Stable partition: raw ingredients first, prepared dishes last — but only for a bare-ingredient
+    /// query, and only when it actually reorders anything (some, not all, are dishes). Order within each
+    /// group is preserved, so the scorer's ranking is untouched apart from sinking the dishes.
+    public nonisolated static func demotingDishes(_ foods: [FoodItem], forQuery query: String) -> [FoodItem] {
+        guard !queryWantsDish(query) else { return foods }
+        let ingredients = foods.filter { !isPreparedDish($0) }
+        guard !ingredients.isEmpty, ingredients.count != foods.count else { return foods }
+        return ingredients + foods.filter { isPreparedDish($0) }
+    }
+
+    private nonisolated static func singular(_ token: String) -> String {
+        if token.hasSuffix("ies"), token.count >= 5 { return String(token.dropLast(3)) + "y" }
+        if token.hasSuffix("s"), !token.hasSuffix("ss"), token.count >= 4 { return String(token.dropLast()) }
+        return token
     }
 }
 
@@ -986,7 +1078,12 @@ public nonisolated enum FoodSelectionCandidateBuilder {
             if selected.count >= limit { break }
         }
 
-        return selected.enumerated().map { offset, foodItem in
+        // Prefer raw ingredients over assembled/prepared dishes when the query is a bare ingredient
+        // (its head noun isn't a dish word). FNDDS `survey` entries like "Chicken sandwich" or "Double
+        // hamburger, on wheat bun" outrank raw foods because data-type sorts ABOVE relevance score, so
+        // a plain "chicken" log would bind the sandwich; this demotes those unless a dish was asked for.
+        let ordered = PreparedDishHeuristic.demotingDishes(selected, forQuery: description)
+        return ordered.enumerated().map { offset, foodItem in
             FoodSelectionCandidate(id: offset + 1, foodItem: foodItem)
         }
     }

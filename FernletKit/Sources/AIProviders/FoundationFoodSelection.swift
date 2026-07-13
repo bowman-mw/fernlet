@@ -72,10 +72,13 @@ public enum FoundationFoodSelectionModel {
 
     private static func deterministicIngredients(for itemName: String, candidates: [FoodSelectionCandidate]) -> [FoodSelectionIngredient] {
         let foodItems = candidates.map(\.foodItem)
+        // Pull a wider set (not just 4) so the candidate builder's prepared-dish demotion has a raw
+        // ingredient to surface before we bind the single best food below — otherwise a top-4 that is
+        // all FNDDS dishes leaves nothing to promote.
         let itemCandidates = FoodSelectionCandidateBuilder.candidates(
             for: itemName,
             foodItems: foodItems,
-            limit: 4
+            limit: 12
         )
         // Bind-score floor: mirror the AI decompose path's `minimumBindScore` gate
         // (FoundationDishDecomposition) so a candidate that surfaced only via a category/tags match —

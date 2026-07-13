@@ -599,6 +599,64 @@ struct MealBuilderTests {
         #expect(unchanged.meals[0].name == "Egg")
     }
 
+    @Test func burgerPattyCanonicalizesToBeefButLeavesDishesAndNonBeefAlone() {
+        // "burger patties" is the meat — rewrite so it matches "beef patty", not FNDDS hamburger dishes.
+        #expect(MealResolutionService.canonicalizedQuery("two burger patties") == "two beef patties")
+        #expect(MealResolutionService.canonicalizedQuery("a burger patty") == "a beef patty")
+        // Never touch the assembled-dish words themselves.
+        #expect(MealResolutionService.canonicalizedQuery("hamburger") == "hamburger")
+        #expect(MealResolutionService.canonicalizedQuery("cheeseburger with fries") == "cheeseburger with fries")
+        // Leave non-beef patties alone.
+        #expect(MealResolutionService.canonicalizedQuery("turkey burger patty") == "turkey burger patty")
+        #expect(MealResolutionService.canonicalizedQuery("two veggie burger patties") == "two veggie burger patties")
+        // Unrelated text is unchanged.
+        #expect(MealResolutionService.canonicalizedQuery("grilled chicken and rice") == "grilled chicken and rice")
+    }
+
+    @Test func preparedDishHeuristicDemotesAssembledDishesForIngredientQueries() {
+        let sandwich = foodItem(name: "Chicken sandwich", source: .usda, macros: Macros(protein: 20, carbs: 30, fat: 12))
+        let onBun = foodItem(name: "Double hamburger, on wheat bun, 2 large patties", source: .usda, macros: Macros(protein: 60, carbs: 27, fat: 52))
+        let rawChicken = foodItem(name: "Chicken, breast, cooked, roasted", source: .usda, macros: Macros(protein: 31, carbs: 0, fat: 4))
+        let beefPatty = foodItem(name: "Beef, ground, patty, cooked", source: .usda, macros: Macros(protein: 25, carbs: 0, fat: 19))
+
+        // Classification: carrier/assembly words + FNDDS "on wheat bun" mark a dish.
+        #expect(PreparedDishHeuristic.isPreparedDish(sandwich))
+        #expect(PreparedDishHeuristic.isPreparedDish(onBun))
+        #expect(!PreparedDishHeuristic.isPreparedDish(rawChicken))
+        #expect(!PreparedDishHeuristic.isPreparedDish(beefPatty))
+
+        // Intent is the query's HEAD noun: a bare ingredient does NOT want a dish; a dish name does.
+        #expect(!PreparedDishHeuristic.queryWantsDish("grilled chicken"))
+        #expect(!PreparedDishHeuristic.queryWantsDish("two burger patties"))
+        #expect(!PreparedDishHeuristic.queryWantsDish("scrambled eggs"))
+        #expect(PreparedDishHeuristic.queryWantsDish("cheeseburger"))
+        #expect(PreparedDishHeuristic.queryWantsDish("chicken sandwich"))
+        #expect(PreparedDishHeuristic.queryWantsDish("burger"))
+        // The three-way distinction the user asked about, decided by the HEAD noun of the main phrase:
+        #expect(PreparedDishHeuristic.queryWantsDish("a burger"))            // head = burger  → dish (bun)
+        #expect(!PreparedDishHeuristic.queryWantsDish("a burger patty"))     // head = patty   → just the meat
+        #expect(PreparedDishHeuristic.queryWantsDish("a burger with 2 patties")) // head = burger (before "with") → dish
+        // Component/cut nouns are ingredients even under a dish modifier.
+        #expect(!PreparedDishHeuristic.queryWantsDish("chicken breast"))
+        #expect(!PreparedDishHeuristic.queryWantsDish("grilled chicken with rice"))
+
+        // An ingredient query sinks the dish below the raw food; a dish query leaves order intact.
+        #expect(PreparedDishHeuristic.demotingDishes([sandwich, rawChicken], forQuery: "grilled chicken").first?.name == rawChicken.name)
+        #expect(PreparedDishHeuristic.demotingDishes([sandwich, rawChicken], forQuery: "chicken sandwich").first?.name == sandwich.name)
+    }
+
+    @Test func mealItemSplitterKeepsQuantityModifiersButSplitsSeparateFoods() {
+        // "with <quantity/modifier> <component>" describes the head food — kept as ONE item.
+        #expect(MealItemSplitter.items(from: "burger with 2 patties") == ["burger with 2 patties"])
+        #expect(MealItemSplitter.items(from: "burger with two patties") == ["burger with two patties"])
+        #expect(MealItemSplitter.items(from: "burger with extra cheese") == ["burger with extra cheese"])
+        // "with <a separate food>" still splits.
+        #expect(MealItemSplitter.items(from: "burger with fries") == ["burger", "fries"])
+        #expect(MealItemSplitter.items(from: "eggs with toast") == ["eggs", "toast"])
+        // Mixed: the burger's patty count stays attached, the truly separate food splits off.
+        #expect(MealItemSplitter.items(from: "a burger with 2 patties and cottage cheese") == ["a burger with 2 patties", "cottage cheese"])
+    }
+
     private func foodItem(
         name: String,
         source: FoodItemSource,
