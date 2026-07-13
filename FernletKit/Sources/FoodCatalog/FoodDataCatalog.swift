@@ -337,7 +337,7 @@ public enum FoodDataCatalog {
     /// Source JSON file names (repo-only, under `FoodDataSource/`). These are no longer bundled
     /// into the app — they are the build-time input to `FoodCatalogDatabaseBuilder`, which emits the
     /// read-only `FoodCatalog.sqlite` resource the app actually ships. See FoodCatalog.swift.
-    public nonisolated static let sourceResourceNames = ["USDAFoodItems", "CuratedSurveyFoodItems"]
+    public nonisolated static let sourceResourceNames = ["USDAFoodItems", "CuratedSurveyFoodItems", "BrandedCuratedFoodItems"]
 
     /// Decodes a single USDA JSON payload (compact bundled schema *or* raw FDC envelope) into
     /// `FoodItem`s. Used by both the database generator and the decoder unit tests.

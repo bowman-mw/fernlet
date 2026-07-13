@@ -188,6 +188,9 @@ final class FernletStore {
     /// Read-only SQLite-backed bundled food store + user-item snapshot. Replaces the old in-memory
     /// `bundledFoodItems` array; see FoodCatalog.swift. Forwarded to DiaryStore (it owns it).
     var foodCatalog: FoodCatalog { diary.foodCatalog }
+    /// Loads the full branded catalog (On-Demand Resource) and attaches it to `foodCatalog` at launch;
+    /// held so its ODR access isn't reclaimed for the app session. See BrandedCatalogResourceLoader.
+    @ObservationIgnored private let brandedCatalogLoader = BrandedCatalogResourceLoader()
     @ObservationIgnored private var isReloadingFromRepository = false
     @ObservationIgnored private let mealPhotoStore = MealPhotoStore(
         directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
@@ -2185,6 +2188,11 @@ final class FernletStore {
         // Catches the async-load path (whose private init reconciled against a possibly-cold cache) and
         // any day that became active since launch. Idempotent, so a second pass is cheap and safe.
         reconcileCoinLedger()
+        // Best-effort: bring up the full branded food catalog (On-Demand Resource) and attach it to the
+        // live catalog for barcode + search. Non-blocking and failure-tolerant — the base catalog serves
+        // until (and if) this attaches; a missing/purged asset just leaves us on base coverage.
+        let catalog = foodCatalog
+        Task { [brandedCatalogLoader] in await brandedCatalogLoader.loadBrandedCatalog(into: catalog) }
     }
 
     func flushPendingSnapshotSave() {

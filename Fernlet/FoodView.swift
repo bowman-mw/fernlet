@@ -928,6 +928,11 @@ struct RecipeIngredientEditor: View {
     var onCollapse: (() -> Void)?
     var onRemove: () -> Void
 
+    /// Typeahead matches, computed off the main thread and debounced (see `.task` below).
+    /// The `catalog.results(for:)` call does real work (SQLite + hydrate + index + score) and the
+    /// catalog is growing toward ~482k rows, so it must never run synchronously in `body`.
+    @State private var matchingFoodItems: [FoodItem] = []
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -1033,14 +1038,35 @@ struct RecipeIngredientEditor: View {
         .onChange(of: ingredient.name) { _, newValue in
             syncSelection(for: newValue)
         }
+        // Recompute the typeahead once per settled keystroke, off the main actor.
+        // Keying on the raw bound text means every edit re-runs this and cancels the prior
+        // in-flight task; the cancellation on a new keystroke is what prevents stale/duplicate
+        // writes, so the body only ever reads the already-settled `matchingFoodItems` state.
+        .task(id: ingredient.name) {
+            let text = ingredient.trimmedName
+            // Mirror the render gating: nothing to show when a food is chosen or the field is empty.
+            guard selectedFoodItem == nil, !text.isEmpty else {
+                matchingFoodItems = []
+                return
+            }
+            // Debounce; a newer keystroke cancels this sleep and we bail before doing any work.
+            do {
+                try await Task.sleep(for: .milliseconds(220))
+            } catch {
+                return
+            }
+            // Heavy SQLite/index/score work runs off the main actor. `catalog` is Sendable.
+            let hits = await Task.detached { [catalog] in
+                catalog.results(for: text)
+            }.value
+            // Drop the result if this task was superseded while the query was running.
+            guard !Task.isCancelled else { return }
+            matchingFoodItems = hits
+        }
     }
 
     private var selectedFoodItem: FoodItem? {
         ingredient.selectedFoodItem(in: catalog.resolved(for: ingredient))
-    }
-
-    private var matchingFoodItems: [FoodItem] {
-        catalog.results(for: ingredient.trimmedName)
     }
 
     private var canSaveCustomIngredient: Bool {

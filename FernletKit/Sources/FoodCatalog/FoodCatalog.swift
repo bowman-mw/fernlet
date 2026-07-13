@@ -14,6 +14,10 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     private let source: BundledFoodSource
     private let lock = NSLock()
     private var _userItems: [FoodItem] = []
+    /// Optional secondary bundled source — the full branded catalog delivered later via On-Demand
+    /// Resource and purgeable at runtime. Guarded by the SAME `lock` as `_userItems`; every read
+    /// snapshots it into a local `let` so a concurrent `detachBrandedSource()` mid-query is safe.
+    private var _brandedSource: BundledFoodSource?
 
     public init(source: BundledFoodSource) {
         self.source = source
@@ -32,13 +36,36 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         return _userItems
     }
 
+    private var brandedSource: BundledFoodSource? {
+        lock.lock(); defer { lock.unlock() }
+        return _brandedSource
+    }
+
     /// Keeps the catalog's view of user-added foods in sync with `FernletStore.foodItems`.
     public func setUserItems(_ items: [FoodItem]) {
         lock.lock(); _userItems = items; lock.unlock()
     }
 
+    /// Attaches the optional branded catalog (e.g. once the On-Demand Resource has downloaded).
+    /// Replaces any previously attached source. Every read unions base + branded + user items.
+    public func attachBrandedSource(_ source: BundledFoodSource) {
+        lock.lock(); _brandedSource = source; lock.unlock()
+    }
+
+    /// Drops the branded catalog (e.g. when the ODR is purged). Reads fall back to base + user items.
+    public func detachBrandedSource() {
+        lock.lock(); _brandedSource = nil; lock.unlock()
+    }
+
+    /// Whether a branded source is currently attached.
+    public var hasBrandedSource: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return _brandedSource != nil
+    }
+
     /// Number of bundled foods — used by callers that previously guarded on `!foodItems.isEmpty`.
-    public var bundledCount: Int { source.count }
+    /// Includes the branded source's rows when one is attached.
+    public var bundledCount: Int { source.count + (brandedSource?.count ?? 0) }
 
     // MARK: - Search
 
@@ -52,12 +79,14 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
 
     public func exactNameMatch(forNormalized normalizedName: String) -> FoodItem? {
         let users = userItems
+        let branded = brandedSource
         // Manual user entries win ties (source priority manual > usda > aiResolved), matching the old
         // in-memory `Index.exactNameMatch`.
         if let manual = users.first(where: { $0.source == .manual && FoodItemSearch.normalized($0.name) == normalizedName }) {
             return manual
         }
         if let bundled = source.exactMatch(normalizedName: normalizedName) { return bundled }
+        if let brandedMatch = branded?.exactMatch(normalizedName: normalizedName) { return brandedMatch }
         return users.first(where: { FoodItemSearch.normalized($0.name) == normalizedName })
     }
 
@@ -76,13 +105,16 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     }
 
     private func index(for query: String) -> FoodItemSearch.Index {
-        FoodItemSearch.Index(foodItems: source.candidates(forQuery: query) + userItems)
+        let branded = brandedSource
+        let candidates = source.candidates(forQuery: query) + (branded?.candidates(forQuery: query) ?? [])
+        return FoodItemSearch.Index(foodItems: candidates + userItems)
     }
 
     // MARK: - Resolution
 
     public func item(id: UUID) -> FoodItem? {
-        userItems.first(where: { $0.id == id }) ?? source.item(id: id)
+        let branded = brandedSource
+        return userItems.first(where: { $0.id == id }) ?? source.item(id: id) ?? branded?.item(id: id)
     }
 
     /// Resolves a scanned product barcode: user items first (a product the user already paired via
@@ -91,19 +123,24 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// scanner rendering (UPC-A/EAN-13/EAN-8/GTIN-14) — comparison is on the normalized GTIN.
     public func item(forBarcode raw: String) -> FoodItem? {
         guard let normalized = FoodBarcode.normalized(raw) else { return nil }
+        let branded = brandedSource
         if let user = userItems.first(where: { FoodBarcode.normalized($0.barcode) == normalized }) {
             return user
         }
-        return source.item(barcode: normalized)
+        return source.item(barcode: normalized) ?? branded?.item(barcode: normalized)
     }
 
     public func items(ids: [UUID]) -> [FoodItem] {
         guard !ids.isEmpty else { return [] }
+        let branded = brandedSource
         let wanted = Set(ids)
         let users = userItems.filter { wanted.contains($0.id) }
-        let resolvedIDs = Set(users.map(\.id))
+        var resolvedIDs = Set(users.map(\.id))
         let bundled = source.items(ids: ids.filter { !resolvedIDs.contains($0) })
-        return users + bundled
+        resolvedIDs.formUnion(bundled.map(\.id))
+        let brandedItems = branded?.items(ids: ids.filter { !resolvedIDs.contains($0) }) ?? []
+        // First source that has an id wins: user items > base > branded (dedupe by id).
+        return users + bundled + brandedItems
     }
 
     /// The foods referenced by a single recipe's ingredients — what callers pass to MealBuilder /

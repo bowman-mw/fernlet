@@ -4,3 +4,11 @@
 # Swift Package Manager local build/metadata (FernletKit)
 .build/
 .swiftpm/
+
+# Branded food catalog: the full ~364k On-Demand Resource DB (~170 MB) is NOT committed — it is
+# regenerable via Scripts/branded-catalog/ and fetched at runtime as an ODR (see ODRAssets/README.md).
+# The bundled base DB (FoodCatalog.sqlite, generics + 50k curated floor) IS committed.
+ODRAssets/FoodCatalogBranded.sqlite
+# Large intermediate conversion artifacts (regenerable from the USDA FDC download)
+FoodDataSource/BrandedFoodItems.json
+FoodDataSource/BrandedODRFoodItems.json

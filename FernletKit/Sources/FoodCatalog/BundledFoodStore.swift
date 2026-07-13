@@ -125,20 +125,35 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     /// (PRAGMA table_info) so the same read path serves both the shipped v1 database and a future
     /// v2 regeneration — v1 statements never reference the missing column.
     let hasBarcodeColumn: Bool
+    /// When true, `candidates(forQuery:)` omits the data-type priority `ORDER BY`. Set for the
+    /// attachable branded/ODR database, which is 100% one `data_type` — the sort would be a wasted
+    /// O(matchset) pass over an identical key. The base catalog keeps it (see `candidates`).
+    private let skipPriorityOrder: Bool
+    /// Row cap applied to `candidates(forQuery:)`. Defaults to `candidateFetchLimit` (the base
+    /// catalog's tuned cap); the branded source can pass a smaller cap.
+    private let candidateCap: Int
 
     /// Locates `FoodCatalog.sqlite` in `bundle` (defaults to this module's resource bundle). Returns
     /// nil when the resource is absent so callers can fall back to a user-items-only catalog rather
     /// than crashing. `nil` resolves to `.module`; `.module` is synthesized as internal, so it cannot
     /// appear as a default-argument value in this public initializer.
-    public convenience init?(bundle: Bundle? = nil) {
+    public convenience init?(
+        bundle: Bundle? = nil,
+        skipPriorityOrder: Bool = false,
+        candidateCap: Int = FoodCatalogSchema.candidateFetchLimit
+    ) {
         let bundle = bundle ?? .module
         guard let url = bundle.url(forResource: FoodCatalogSchema.resourceName, withExtension: FoodCatalogSchema.resourceExtension) else {
             return nil
         }
-        self.init(url: url)
+        self.init(url: url, skipPriorityOrder: skipPriorityOrder, candidateCap: candidateCap)
     }
 
-    public init?(url: URL) {
+    public init?(
+        url: URL,
+        skipPriorityOrder: Bool = false,
+        candidateCap: Int = FoodCatalogSchema.candidateFetchLimit
+    ) {
         var handle: OpaquePointer?
         guard sqlite3_open_v2(url.path, &handle, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let handle else {
             sqlite3_close(handle)
@@ -147,6 +162,8 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         self.db = handle
         self.count = Self.scalarCount(handle)
         self.hasBarcodeColumn = Self.columnExists(handle, table: "food", column: "gtin_upc")
+        self.skipPriorityOrder = skipPriorityOrder
+        self.candidateCap = candidateCap
     }
 
     /// The select list matching this file's schema — v1 files must never see `gtin_upc`.
@@ -179,13 +196,17 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         // mirrors `FoodItemSearch.dataTypePriority(_, brandQuery: false)` — truncation only bites broad
         // *generic* prefixes (brand queries match too few rows to overflow), so the non-brand ordering
         // is the correct de-bias; the scorer still applies the final, brand-aware ranking.
+        //
+        // `skipPriorityOrder` OMITS that ORDER BY: the branded/ODR database is 100% one `data_type`,
+        // so the CASE key is identical for every matched row and the sort is a wasted O(matchset)
+        // pass — dropping it takes a broad-prefix branded query from ~29ms to ~5ms. The scorer still
+        // applies the final, brand-aware ranking over the hydrated candidates.
+        let priorityOrder = skipPriorityOrder ? "" :
+            "ORDER BY CASE data_type WHEN 'foundation' THEN 5 WHEN 'survey' THEN 4 WHEN 'srLegacy' THEN 3 WHEN 'branded' THEN 2 WHEN 'restaurant' THEN 1 ELSE 0 END DESC, food_id ASC "
         let sql = """
         SELECT \(selectColumns) FROM food \
         WHERE food_id IN (SELECT rowid FROM food_fts WHERE food_fts MATCH ?) \
-        ORDER BY CASE data_type \
-        WHEN 'foundation' THEN 5 WHEN 'survey' THEN 4 WHEN 'srLegacy' THEN 3 \
-        WHEN 'branded' THEN 2 WHEN 'restaurant' THEN 1 ELSE 0 END DESC, food_id ASC \
-        LIMIT \(FoodCatalogSchema.candidateFetchLimit);
+        \(priorityOrder)LIMIT \(candidateCap);
         """
         return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, match) }
     }

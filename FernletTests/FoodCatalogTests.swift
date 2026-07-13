@@ -164,6 +164,55 @@ struct FoodCatalogTests {
         #expect(catalog.results(for: "granola", limit: 6).contains { $0.id == custom.id })
         #expect(catalog.bundledCount == 0)
     }
+
+    // MARK: - Branded (ODR) secondary source
+
+    @Test func attachingBrandedSourceMakesItsItemsSearchableAndDetachRemovesThem() throws {
+        let catalog = FoodCatalog(source: try buildSQLiteSource(sampleItems))
+        #expect(!catalog.hasBrandedSource)
+
+        let brandedOnly = Self.sampleItem(name: "Galaxy Granola Bar", dataType: .branded, tags: ["granola", "bar"])
+        catalog.attachBrandedSource(InMemoryBundledFoodSource([brandedOnly]))
+        #expect(catalog.hasBrandedSource)
+        #expect(catalog.bundledCount == sampleItems.count + 1)
+        #expect(catalog.results(for: "galaxy granola", limit: 6).contains { $0.id == brandedOnly.id })
+        // The base catalog keeps answering while branded is attached.
+        #expect(catalog.results(for: "chicken", limit: 6).contains { $0.name.contains("Chicken") })
+
+        catalog.detachBrandedSource()
+        #expect(!catalog.hasBrandedSource)
+        #expect(catalog.bundledCount == sampleItems.count)
+        #expect(!catalog.results(for: "galaxy granola", limit: 6).contains { $0.id == brandedOnly.id })
+        // Base survives the detach.
+        #expect(catalog.results(for: "chicken", limit: 6).contains { $0.name.contains("Chicken") })
+    }
+
+    @Test func baseAndBrandedItemsBothSurfaceWhenBrandedAttached() throws {
+        let catalog = FoodCatalog(source: try buildSQLiteSource(sampleItems))
+        let brandedChicken = Self.sampleItem(name: "Brand X Chicken Nuggets", dataType: .branded, tags: ["chicken"])
+        catalog.attachBrandedSource(InMemoryBundledFoodSource([brandedChicken]))
+
+        let ids = catalog.results(for: "chicken", limit: 10).map(\.id)
+        #expect(ids.contains(sampleItems[0].id))   // base "Chicken breast, roasted"
+        #expect(ids.contains(brandedChicken.id))    // branded nuggets
+    }
+
+    @Test func barcodeResolvesFromBrandedSourceAndUserItemsStillWin() throws {
+        let catalog = FoodCatalog(source: try buildSQLiteSource(sampleItems))
+        let gtin = try #require(FoodBarcode.normalized("0123456789012"))
+        var brandedProduct = Self.sampleItem(name: "Zesty Cola 500ml", dataType: .branded)
+        brandedProduct.barcode = gtin
+        catalog.attachBrandedSource(InMemoryBundledFoodSource([brandedProduct]))
+
+        // Only the branded source carries this GTIN — the lookup resolves to it.
+        #expect(catalog.item(forBarcode: "0123456789012")?.id == brandedProduct.id)
+
+        // A user item paired to the same GTIN wins over branded.
+        var userProduct = Self.sampleItem(name: "My Cola", source: .manual)
+        userProduct.barcode = gtin
+        catalog.setUserItems([userProduct])
+        #expect(catalog.item(forBarcode: "0123456789012")?.id == userProduct.id)
+    }
 }
 
 // MARK: - Database generation (gated)
