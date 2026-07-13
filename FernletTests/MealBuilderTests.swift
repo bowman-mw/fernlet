@@ -568,6 +568,37 @@ struct MealBuilderTests {
         )
     }
 
+    @Test func multiItemResolutionFoldsIntoSingleMeal() {
+        func part(_ name: String, _ p: Int, _ c: Int, _ f: Int) -> Meal {
+            let component = MealComponentSnapshot(
+                foodItemId: UUID(), name: name, quantity: 1, unit: RecipeUnit.serving.rawValue,
+                macros: Macros(protein: p, carbs: c, fat: f), micronutrients: Micronutrients()
+            )
+            return Meal(
+                name: name, mealType: .lunch, macros: Macros(protein: p, carbs: c, fat: f),
+                componentSnapshots: [component], quality: .ok, confidence: "Food match", note: "", source: "manual"
+            )
+        }
+        // Three plan items (as MealBuilder emits one Meal each) must fold into ONE meal — the "burger
+        // patties with cottage cheese and ketchup logged as 3 separate meals" bug.
+        let resolution = MealResolution(
+            meals: [part("Beef patty", 20, 0, 15), part("Cottage cheese", 12, 4, 2), part("Ketchup", 0, 5, 0)],
+            createdRecipes: [], confidence: .high, isFallback: false
+        )
+        let merged = MealResolutionService.mergedIntoSingleMeal(resolution, description: "burger patties with cottage cheese and ketchup")
+        #expect(merged.meals.count == 1)
+        #expect(merged.meals[0].componentSnapshots.count == 3)
+        #expect(merged.meals[0].macros.protein == 32)   // 20 + 12 + 0
+        #expect(merged.meals[0].macros.carbs == 9)       // 0 + 4 + 5
+        #expect(merged.meals[0].macros.fat == 17)        // 15 + 2 + 0
+
+        // A single-meal resolution is returned untouched.
+        let single = MealResolution(meals: [part("Egg", 6, 0, 5)], createdRecipes: [], confidence: .high, isFallback: false)
+        let unchanged = MealResolutionService.mergedIntoSingleMeal(single, description: "egg")
+        #expect(unchanged.meals.count == 1)
+        #expect(unchanged.meals[0].name == "Egg")
+    }
+
     private func foodItem(
         name: String,
         source: FoodItemSource,

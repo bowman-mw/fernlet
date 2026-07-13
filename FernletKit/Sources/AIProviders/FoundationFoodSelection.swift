@@ -83,7 +83,12 @@ public enum FoundationFoodSelectionModel {
         // logged. With ~50k branded foods in the catalog these weak binds are common; without a floor
         // the deterministic tier commits them at high confidence.
         let cleared = candidatesClearingBindFloor(itemCandidates, itemName: itemName, foodItems: foodItems)
-        let candidateLimit = CompositeFoodLexicon.isComposite(itemName) ? 3 : 1
+        // One food per split item. Taking the top 3 for any "composite"-looking token (e.g. "burger
+        // patties") bound unrelated look-alikes — a branded "double hamburger on wheat bun, 2 large
+        // patties" — into a bogus multi-ingredient recipe. Genuine composite DISHES are handled upstream
+        // by DishTemplateLexicon with real components; this deterministic fallback resolves each split
+        // item to its single best food, and the caller merges the items into one meal.
+        let candidateLimit = 1
         return cleared.prefix(candidateLimit).compactMap { localCandidate in
             guard let candidate = candidates.first(where: { $0.foodItem.id == localCandidate.foodItem.id }) else { return nil }
             let unit = defaultUnit(for: candidate.foodItem, itemName: itemName)

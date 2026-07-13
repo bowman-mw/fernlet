@@ -96,21 +96,22 @@ final class MealResolutionService {
                 if let plan = try await FoundationFoodSelectionModel.resolve(
                     FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type)
                 ), let resolution = highConfidenceResolution(from: plan, candidates: candidates, description: description) {
-                    return Self.plausibilityGated(resolution)
+                    return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
                 }
             } catch {}
         }
 
         // Deterministic tier 1 (M2): dish template lexicon — handles composite dishes when AI is off.
         if let lexiconMeals = DishTemplateLexicon.resolve(description: description, mealType: type, catalog: host.foodCatalog) {
-            return Self.plausibilityGated(MealResolution(meals: lexiconMeals, createdRecipes: [], confidence: .high, isFallback: false))
+            let resolution = MealResolution(meals: lexiconMeals, createdRecipes: [], confidence: .high, isFallback: false)
+            return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
         }
 
         // Deterministic tier 2: candidate-constrained plan.
         let candidates = host.foodCatalog.candidates(for: description)
         if let plan = FoundationFoodSelectionModel.deterministicPlan(description: description, candidates: candidates, fallbackType: type),
            let resolution = highConfidenceResolution(from: plan, candidates: candidates, description: description) {
-            return Self.plausibilityGated(resolution)
+            return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
         }
 
         // Keyword-heuristic fallback: fabricated macros, no catalog grounding — always reviewed.
@@ -135,6 +136,50 @@ final class MealResolutionService {
             originalDescription: description
         ), result.meals.isEmpty == false else { return nil }
         return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
+    }
+
+    /// A single quick-log is ONE meal. The AI-selection, lexicon, and deterministic tiers each split a
+    /// description into several plan items (e.g. "burger patties with cottage cheese and ketchup" → 3
+    /// items) and `MealBuilder` turns each item into its OWN `Meal` — so one log fanned out into three
+    /// separate diary entries. This folds a multi-meal resolution back into a single meal whose
+    /// components are the UNION of the parts (macros + micronutrients summed). Single-meal resolutions
+    /// (the AI decomposition tier and the keyword fallback) pass through unchanged. Static/pure so
+    /// `MealBuilderTests` can exercise it directly.
+    static func mergedIntoSingleMeal(_ resolution: MealResolution, description: String) -> MealResolution {
+        guard resolution.meals.count > 1 else { return resolution }
+        let parts = resolution.meals
+        let components = parts.flatMap { $0.componentSnapshots }
+        let macros = parts.reduce(Macros(protein: 0, carbs: 0, fat: 0)) { sum, meal in
+            Macros(protein: sum.protein + meal.macros.protein,
+                   carbs: sum.carbs + meal.macros.carbs,
+                   fat: sum.fat + meal.macros.fat)
+        }
+        var micronutrients = Micronutrients()
+        for meal in parts { micronutrients.add(meal.micronutrientSnapshot) }
+        // Name from the food components when we have them (accurate), else from the raw description.
+        let name = components.isEmpty
+            ? MealParser.mealName(from: description)
+            : components.prefix(3).map(\.name).joined(separator: ", ")
+        let merged = Meal(
+            name: name,
+            mealType: parts[0].mealType,
+            macros: macros,
+            macroSnapshot: macros,
+            micronutrientSnapshot: micronutrients,
+            componentSnapshots: components,
+            mealSource: .manual,
+            isAIFallback: parts.contains { $0.isAIFallback },
+            quality: macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
+            confidence: parts[0].confidence,
+            note: "Logged as one meal from your description.",
+            source: parts[0].source
+        )
+        return MealResolution(
+            meals: [merged],
+            createdRecipes: resolution.createdRecipes,
+            confidence: resolution.confidence,
+            isFallback: resolution.isFallback
+        )
     }
 
     /// Belt-and-suspenders plausibility gate applied to every high-confidence resolution before it can
