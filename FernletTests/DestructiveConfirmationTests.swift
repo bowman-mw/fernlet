@@ -14,7 +14,7 @@ import FernletFoundation
 @MainActor
 struct DestructiveConfirmationTests {
 
-    @Test func mutationIsDeferredUntilPerform() {
+    @Test func mutationIsDeferredUntilPerform() async {
         let serviceID = "com.fernlet.destructive.test.\(UUID().uuidString)"
         defer { KeychainItem.delete(for: .storagePreferences, service: serviceID) }
         let prefs = StoragePreferencesStore(keychainService: serviceID)
@@ -33,7 +33,7 @@ struct DestructiveConfirmationTests {
         #expect(prefs.preferences.localBackupExcludedFromiOSBackup == false)
 
         // Only invoking perform (what the modifier does on the destructive confirm) commits the change.
-        action.perform()
+        await action.perform()
         #expect(prefs.preferences.localBackupExcludedFromiOSBackup == true)
     }
 

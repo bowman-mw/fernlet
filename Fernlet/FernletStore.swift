@@ -211,6 +211,10 @@ final class FernletStore {
     /// Inbound queue of widget App-Intent actions (injectable directory for tests).
     @ObservationIgnored var pendingWidgetActionQueue = PendingWidgetActionQueue()
     @ObservationIgnored private var isProcessingPendingWidgetActions = false
+    /// Inbound queue of recipes shared in from the share extension (injectable file URL for tests).
+    /// One instance shared by the drain and by "delete everything", so a wipe can't miss a queue the
+    /// drain would still find.
+    @ObservationIgnored var sharedRecipeImportQueue = SharedRecipeImportQueue()
     /// Read-only abstract egress from the private cycle data into scoring. Nil until the app wires a
     /// `PeriodContextBridge`; when nil (or the opt-in is off) scoring is byte-identical to period-unaware.
     @ObservationIgnored private(set) var periodScoringContext: (any PeriodScoringContextProviding)?
@@ -1447,7 +1451,7 @@ final class FernletStore {
         isProcessingSharedRecipeImportQueue = true
         defer { isProcessingSharedRecipeImportQueue = false }
 
-        let queue = SharedRecipeImportQueue()
+        let queue = sharedRecipeImportQueue
         let maxAge: TimeInterval = 7 * 24 * 3600
         for record in queue.records() {
             guard let url = record.url else {
@@ -2120,10 +2124,58 @@ final class FernletStore {
     /// `periodDataDeleteHook` / `intimacyDataDeleteHook` purge the sealed rows WITHOUT decrypting them,
     /// so they work while the app is locked. `healthKitSampleDeleteHook` deletes only the HealthKit
     /// samples Fernlet itself authored — no app can delete another app's samples.
-    @ObservationIgnored var periodDataDeleteHook: (() -> Void)?
-    @ObservationIgnored var intimacyDataDeleteHook: (() -> Void)?
-    @ObservationIgnored var journalDataDeleteHook: (() -> Void)?
+    /// Each returns whether it actually cleared. `Bool` rather than `Void` because these are the most
+    /// sensitive rows in the app and the confirm dialog promises they are gone — a hook that swallowed
+    /// its own failure would let a wipe that left the journal behind report success.
+    @ObservationIgnored var periodDataDeleteHook: (() -> Bool)?
+    @ObservationIgnored var intimacyDataDeleteHook: (() -> Bool)?
+    @ObservationIgnored var journalDataDeleteHook: (() -> Bool)?
     @ObservationIgnored var healthKitSampleDeleteHook: (() async -> Void)?
+    /// Purges the pending-narrative buffer — cycle notes written while the app was LOCKED, sealed under a
+    /// device key and parked in a file until the next unlock can file them.
+    ///
+    /// This is its own hook rather than part of `periodDataDeleteHook` because it is a different store
+    /// with a different key: the narrative repositories drop Core Data rows, and the buffer is a file
+    /// that no amount of row-deleting reaches. `FernletLockService.reset()` used to purge it, and this
+    /// funnel deliberately does not call `reset()` (the app lock survives a wipe by product decision) —
+    /// so without this, replacing `reset()` with the row hooks SILENTLY DROPPED the buffer purge, and a
+    /// note written while locked would be re-inserted into the emptied store on the next unlock.
+    @ObservationIgnored var pendingNarrativeBufferPurgeHook: (() -> Bool)?
+    /// Returns storage preferences to first-launch defaults. A hook because the preferences store is
+    /// app-scoped, not owned by `FernletStore`.
+    ///
+    /// `keepSealedBackupFlags` is passed when a sealed-backup deletion FAILED. Those flags are what
+    /// `hasSealedBackup` consults to decide there is a backup worth deleting, so clearing them after a
+    /// failure would make the failure permanent: the retry the alert invites would find the flags false,
+    /// skip the payload, and leave the backup in iCloud with nothing left to point at it.
+    @ObservationIgnored var storagePreferencesResetHook: ((_ keepSealedBackupFlags: Bool) -> Void)?
+
+    /// Whether a sealed backup of this payload may be uploaded — i.e. whether "delete everything" has
+    /// anything to remove. Lives here rather than on `StoragePreferences` because that type is Layer 0
+    /// and cannot see `SealedBackupPayloadType`, which is defined above it in `CloudKitSync`.
+    ///
+    /// Deliberately does NOT require `iCloudSyncEnabled`. That seems like the obvious guard and it is
+    /// wrong: `stopSyncingKeepCloudData()` is a first-class user flow that turns sync off while KEEPING
+    /// the server copy, so "sync is off" says nothing about whether a backup is sitting in iCloud. Gating
+    /// on it would skip the delete for exactly the user who most needs it, and the dialog would promise
+    /// a deletion that never ran.
+    private static func hasSealedBackup(_ payloadType: SealedBackupPayloadType, _ preferences: StoragePreferences) -> Bool {
+        switch payloadType {
+        case .sensitiveNotes: return preferences.sealedBackupSensitiveNotesEnabled
+        case .periodData: return preferences.sealedBackupPeriodEnabled
+        }
+    }
+
+    /// What a wipe actually managed to remove. Every layer of the delete is best-effort by design — a
+    /// Core Data save can fail, a HealthKit type may be unauthorized, a coordinated file write can lose
+    /// to another process — and the confirm dialog promises permanence. So a failure has to reach the
+    /// user instead of being swallowed; "delete everything" quietly half-working is the failure mode
+    /// this whole change exists to end.
+    struct DeleteAllOutcome: Equatable {
+        /// Human-readable names of the stores that did not confirm deletion, for the failure alert.
+        var incompleteStores: [String] = []
+        var isComplete: Bool { incompleteStores.isEmpty }
+    }
 
     /// The single "delete everything" funnel. Both Settings entry points route here, so there is one
     /// definition of what deletion means rather than two partial ones that disagree.
@@ -2134,29 +2186,112 @@ final class FernletStore {
     ///   my data" an abuse vector.
     /// - the milestone ledger — lifetime care counts, product call that they outlive a reset.
     /// - the mesh identity keypair — wiping it would force every friend to re-add you.
-    func deleteAllData(includingHealthKitSamples deleteHealthSamples: Bool) async {
-        // Sealed rows first: they are the most sensitive and the only ones with no second chance. If a
-        // later step fails, the private store is already clear.
-        periodDataDeleteHook?()
-        intimacyDataDeleteHook?()
-        journalDataDeleteHook?()
+    /// - friend photos received over the mesh — other people's gifts to you, not your own log.
+    /// - the app lock itself — a wipe empties the protected data, it does not drop your protection.
+    ///
+    /// The ORDER is the correctness argument, not housekeeping. A wipe races three background writers
+    /// that will happily rebuild what it deletes, so the writers are stopped BEFORE anything is removed
+    /// and the pending-save cancel is repeated at the END — `resetAll()` schedules a fresh save of its
+    /// own on the way past.
+    @discardableResult
+    func deleteAllData(includingHealthKitSamples deleteHealthSamples: Bool) async -> DeleteAllOutcome {
+        var outcome = DeleteAllOutcome()
+
+        // 1. Stop the writers first. A debounced save fires one second from now and a HealthKit workout
+        // notification can arrive at any moment; either one lands mid-wipe and re-creates day rows from
+        // samples that still exist. `stopHealthKitWorkoutObservation` matters most when the user chose
+        // to KEEP their Health samples — that is precisely when the observer still has data to re-import.
+        snapshotSaveCoordinator.cancelPending()
+        stopHealthKitWorkoutObservation()
+
+        // 2. Sealed iCloud backups, BEFORE the preference reset that would gate them off. Turning the
+        // pref off only stops the restore while it stays off; the CKRecords survive and re-appear the
+        // moment the user re-enables the backup — a wipe the user's own journal outlives. Disabling
+        // deletes the chunk set for real, and needs no escrow key, so it works while locked.
+        //
+        // Only backups the user actually ENABLED are touched. `setSealedBackupEnabled(false,…)` returns
+        // false when there is no provisioned identity — the common case for someone who never used
+        // proximity — so attempting it unconditionally would report a failure to delete a backup that
+        // was never uploaded, on the one dialog whose whole value is that its promises are true.
+        let preferences = StoragePreferencesStore.currentPreferences()
+        var sealedBackupDeleteFailed = false
+        for payloadType in SealedBackupPayloadType.allCases where Self.hasSealedBackup(payloadType, preferences) {
+            if await !setSealedBackupEnabled(false, payloadType: payloadType) {
+                sealedBackupDeleteFailed = true
+                if !outcome.incompleteStores.contains("your encrypted iCloud backup") {
+                    outcome.incompleteStores.append("your encrypted iCloud backup")
+                }
+            }
+        }
+
+        // 3. Sealed rows: the most sensitive data and the only rows with no second chance. Each hook
+        // drops rows WITHOUT decrypting, so this works while the app is locked and while a surface is
+        // hidden — deleting data must not require the ability to read it.
+        if periodDataDeleteHook?() == false { outcome.incompleteStores.append("your cycle notes") }
+        if intimacyDataDeleteHook?() == false { outcome.incompleteStores.append("your intimate logs") }
+        if journalDataDeleteHook?() == false { outcome.incompleteStores.append("your journal entries") }
         worryBoxResetHook?()
+
+        // The buffer of notes written while LOCKED. Not covered by the row hooks above — it is a file
+        // under a separate device key — and its next drain re-inserts every payload into the store we
+        // just emptied, so skipping it turns "delete everything" into "delete until the next unlock".
+        if pendingNarrativeBufferPurgeHook?() == false { outcome.incompleteStores.append("your cycle notes") }
 
         if deleteHealthSamples {
             await healthKitSampleDeleteHook?()
         }
 
-        // Photo bytes before the days that reference them: ownership lives in `Meal.photoID`, so once
+        // 4. Photo bytes before the days that reference them: ownership lives in `Meal.photoID`, so once
         // the days are gone nothing knows these files exist and they can never be reached again.
-        mealPhotoStore.deleteAll()
+        if !mealPhotoStore.deleteAll() {
+            outcome.incompleteStores.append("meal photos")
+        }
+
+        // 5. The share-extension inbox, which is drained on the next foreground. A recipe shared into
+        // Fernlet before the wipe would otherwise import itself back into the emptied store — and the
+        // extension can refill this file while the app is backgrounded, so the drain has to find it
+        // empty rather than the app remembering not to drain.
+        if !sharedRecipeImportQueue.clear() {
+            outcome.incompleteStores.append("shared recipe inbox")
+        }
+
+        // 6. Friends' clothing catalogs browsable for an hour after a session. Memory-only, but it is
+        // their social data visibly surviving a wipe in the running session.
+        meshNetworkManager.clothingShop.clearAll()
 
         resetAll()
 
-        // The authoritative per-row day store + the blob + the legacy JSON file. Without this, every
+        // 7. The authoritative per-row day store + the blob + the legacy JSON file. Without this, every
         // past day survives on disk, reloads on next launch, and re-uploads to iCloud — which is
         // exactly what "Reset everything" did before.
-        repository.purgeAllPersistedData()
-        repository.replaceTierTwoMemories([])
+        //
+        // Tier-two memories live inside the blob record, so the purge takes them; the old explicit
+        // `replaceTierTwoMemories([])` here was worse than redundant — it is load-then-SAVE, so it
+        // re-created the blob (and a fresh CloudKit record) microseconds after the purge deleted it.
+        if !repository.purgeAllPersistedData() {
+            outcome.incompleteStores.append("your day history")
+        }
+
+        // 8. Re-cancel: `resetAll` scheduled a debounced save on its way past (via
+        // `batchSnapshotPersistence`), which would fire one second from now and re-create today's row
+        // and the blob. Nothing between the purge and here suspends, so no save can slip in.
+        snapshotSaveCoordinator.cancelPending()
+
+        // 9. The widget's app-group files, LAST — after the cancel, so the debounced save's
+        // `publishWidgetSnapshot` can't write the file back moments later. Until this runs the user's
+        // score, water and macros keep rendering on the Home and Lock Screen.
+        if let widgetSnapshotMirror, !widgetSnapshotMirror.clear() {
+            outcome.incompleteStores.append("widget data")
+        }
+        pendingWidgetActionQueue.clear()
+
+        storagePreferencesResetHook?(sealedBackupDeleteFailed)
+
+        FernletAuditLog.log("settings.deleteAll.completed", context: [
+            "healthSamples": deleteHealthSamples ? "deleted" : "kept",
+            "complete": outcome.isComplete ? "true" : "false"
+        ])
+        return outcome
     }
 
     func resetAll() {

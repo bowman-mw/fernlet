@@ -606,11 +606,44 @@ struct ContentView: View {
     /// Extracted from the launch `.task` rather than inlined: the closures pushed that already-large
     /// body past the type-checker's budget.
     private func attachDeleteAllHooks() {
-        store.periodDataDeleteHook = { try? MenstrualNarrativeRepository().deleteAll() }
-        store.intimacyDataDeleteHook = { try? IntimacyLogRepository().deleteAll() }
-        store.journalDataDeleteHook = { try? JournalNarrativeRepository().deleteAll() }
+        // `(try? …) != nil` rather than a bare `try?`: a throw here means the user's sealed rows are
+        // still on disk, and the dialog promises they are gone. The failure has to reach the outcome.
+        store.periodDataDeleteHook = { (try? MenstrualNarrativeRepository().deleteAll()) != nil }
+        store.intimacyDataDeleteHook = { (try? IntimacyLogRepository().deleteAll()) != nil }
+        store.journalDataDeleteHook = { (try? JournalNarrativeRepository().deleteAll()) != nil }
+        // Cycle notes written while the app was locked live in a file, not in the rows above. The lock
+        // service owns the buffer, so the store can only reach it through a hook.
+        store.pendingNarrativeBufferPurgeHook = { [lockService] in
+            (try? lockService.purgePendingNarratives()) != nil
+        }
         store.healthKitSampleDeleteHook = { [storagePreferencesStore] in
             await HealthKitService(preferencesStore: storagePreferencesStore).deleteAllAuthoredSamples()
+        }
+        store.storagePreferencesResetHook = { [storagePreferencesStore] keepSealedBackupFlags in
+            // Two preferences survive the reset, both because erasing them would BREAK the delete rather
+            // than because they're worth keeping:
+            //
+            // - `iCloudSyncEnabled`: the local Core Data deletes reach the server by propagating over
+            //   the still-live sync session. Flipping sync off here would tear that down first and
+            //   strand the server copy, ready to sync straight back when the user next turned iCloud on.
+            // - the sealed-backup flags, ONLY when a backup delete just failed: they are how a retry
+            //   finds the backup again. Clearing them would make a transient network failure permanent.
+            //
+            // Everything else — Health access, per-capability grants, backup exclusion — goes back to
+            // first-launch defaults.
+            let current = storagePreferencesStore.preferences
+            var reset = StoragePreferences(iCloudSyncEnabled: current.iCloudSyncEnabled)
+            if keepSealedBackupFlags {
+                reset.sealedBackupSensitiveNotesEnabled = current.sealedBackupSensitiveNotesEnabled
+                reset.sealedBackupPeriodEnabled = current.sealedBackupPeriodEnabled
+            }
+            if reset == StoragePreferences(lastModifiedAt: reset.lastModifiedAt) {
+                // Nothing worth preserving: drop the keychain row entirely, so not even a
+                // `lastModifiedAt` survives as a trace of use.
+                storagePreferencesStore.resetToDefaults()
+            } else {
+                storagePreferencesStore.update { $0 = reset }
+            }
         }
     }
 

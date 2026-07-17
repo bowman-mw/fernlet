@@ -118,6 +118,33 @@ struct WidgetSnapshotFileStore {
         }
         return success && coordinatorError == nil
     }
+
+    /// Removes the mirrored snapshot file. Called by "delete everything": the widget renders straight
+    /// off these bytes, so without this the user's score, water count and macros keep glowing on the
+    /// Home and Lock Screen after they were told the data was deleted.
+    ///
+    /// Deleting is not the same as republishing an empty snapshot. The republish only happens ~1s later
+    /// via the debounced save, and the wipe CANCELS that save — but even without the cancel, a user who
+    /// swipes the app away right after confirming (the expected behavior) would never reach it. These
+    /// bytes also sit at `.completeFileProtectionUntilFirstUserAuthentication`, a weaker class than the
+    /// app's own data, which is what makes leaving them behind worse than it looks.
+    @discardableResult
+    func delete() -> Bool {
+        var success = false
+        var coordinatorError: NSError?
+        let coordinator = NSFileCoordinator()
+        coordinator.coordinate(writingItemAt: fileURL, options: .forDeleting, error: &coordinatorError) { url in
+            do {
+                if fileManager.fileExists(atPath: url.path) {
+                    try fileManager.removeItem(at: url)
+                }
+                success = true
+            } catch {
+                // Reported, not swallowed: a surviving snapshot file is the visible leak this exists to close.
+            }
+        }
+        return success && coordinatorError == nil
+    }
 }
 
 /// Coordinated reader/claimer of the widget's pending-action queue. `append` exists for tests and
@@ -187,6 +214,17 @@ struct PendingWidgetActionQueue {
         return claimed
     }
 
+    /// Discards every queued row without applying it. Called by "delete everything": a widget "+1 cup"
+    /// tapped before the wipe would otherwise drain on the next foreground and re-create a day record —
+    /// silently rebuilding data the user just deleted, from a tap they made before deleting it.
+    func clear() {
+        var coordinatorError: NSError?
+        let coordinator = NSFileCoordinator()
+        coordinator.coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordinatorError) { url in
+            write([], to: url)
+        }
+    }
+
     private func write(_ records: [PendingWidgetAction], to url: URL) {
         do {
             try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -215,6 +253,16 @@ final class WidgetSnapshotMirror {
     func publish(_ snapshot: WidgetSnapshot) {
         guard fileStore.write(snapshot) else { return }
         reloadTimelines()
+    }
+
+    /// Removes the mirrored snapshot and reloads the timelines so the widget re-renders from nothing.
+    /// The reload runs even if the delete failed — a widget showing its placeholder is a better outcome
+    /// than one still showing deleted data, and the caller reports the failure either way.
+    @discardableResult
+    func clear() -> Bool {
+        let deleted = fileStore.delete()
+        reloadTimelines()
+        return deleted
     }
 
     /// Test/inspection hook.

@@ -51,7 +51,8 @@ struct PrivacyDataSettingsView: View {
     @State private var deleteConfirmationText = ""
     @State private var isShowingDisableConfirmation = false
     @State private var isShowingEnableConfirmation = false
-    @State private var isShowingDeleteProtectedDataAlert = false
+    /// Non-nil when a wipe came back incomplete — drives the failure alert.
+    @State private var deleteAllFailure: FernletStore.DeleteAllOutcome?
     @State private var isUpdatingStorage = false
     @State private var isDetectingCloudData = false
     @State private var operationError: String?
@@ -120,6 +121,14 @@ struct PrivacyDataSettingsView: View {
             Text(sealedBackupDisclosure(for: pendingSealedBackupEnable))
         }
         .destructiveConfirmation($pendingDestructiveAction)
+        .alert("Couldn't delete everything", isPresented: Binding(
+            get: { deleteAllFailure != nil },
+            set: { if !$0 { deleteAllFailure = nil } }
+        ), presenting: deleteAllFailure) { _ in
+            Button("OK", role: .cancel) { deleteAllFailure = nil }
+        } message: { outcome in
+            Text(DeleteAllDataConfirmation.failureMessage(for: outcome))
+        }
         .sheet(item: $exportPayload) { payload in
             ActivityShareView(items: [payload.url])
         }
@@ -181,28 +190,55 @@ struct PrivacyDataSettingsView: View {
 
     private var lockSetupInterstitial: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SectionLabel("App lock needed")
-            Text("Set up app lock to access privacy settings")
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
-            Text("Privacy controls include iCloud deletion, Health access, and backup behavior, so Fernlet requires a lock before showing them.")
+            VStack(alignment: .leading, spacing: 16) {
+                SectionLabel("App lock needed")
+                Text("Set up app lock to access privacy settings")
+                    .font(.fernlet(.headerMedium))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                Text("Privacy controls include iCloud deletion, Health access, and backup behavior, so Fernlet requires a lock before showing them.")
+                    .font(.fernlet(.bubble))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+
+                Button("Set up app lock") { showLockSetup = true }
+                    .buttonStyle(.plain)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                    .accessibilityIdentifier("privacy.lock.setup")
+            }
+            .padding(16)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            .accessibilityIdentifier("privacy.lock.interstitial")
+
+            // Deletion is offered even with no lock configured. The lock gate exists so someone holding
+            // an unlocked phone can't BROWSE the user's privacy posture — it reveals nothing to erase
+            // your own data, and gating deletion behind lock setup produced the perverse result that the
+            // only way to delete your cycle, intimate and journal notes was to first hand Fernlet a new
+            // passcode. The confirm dialog, not the lock, is what stands between a tap and a wipe.
+            noLockDeleteCard
+        }
+    }
+
+    /// The delete affordance shown to a user with no app lock. Same funnel and same dialog as the card
+    /// inside `privacyControls`; only the framing differs, because here it sits on a screen the user is
+    /// otherwise being told they can't see.
+    private var noLockDeleteCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel("Delete your data")
+            Text("You don't need an app lock to delete what Fernlet has stored. This works for the entries Fernlet keeps encrypted too.")
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
-            Button("Set up app lock") { showLockSetup = true }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
-                .accessibilityIdentifier("privacy.lock.setup")
+            deleteEverythingButton
         }
-        .padding(16)
+        .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-        .accessibilityIdentifier("privacy.lock.interstitial")
+        .accessibilityIdentifier("privacy.lock.noLockDeleteCard")
     }
 
     private var privacyControls: some View {
@@ -575,10 +611,35 @@ struct PrivacyDataSettingsView: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
+            deleteEverythingButton
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The second entry point into the shared delete funnel.
+    ///
+    /// It used to be "Delete all protected data" calling `lockService.reset()`, whose copy claimed to
+    /// delete "all other protected Fernlet data" — false twice over. `reset()` clears exactly four sealed
+    /// entities (cycle notes, journal, intimate logs, Worry Box) and left days, photos, coins, recipes
+    /// and Fernlet's Health samples untouched; and the `try?` meant a FAILED delete looked identical to a
+    /// successful one on a screen whose whole premise is that nothing destructive happens silently.
+    /// Renders nothing without a store — the injected-nil case is previews and unit tests, and a delete
+    /// button that silently does nothing would be worse than an absent one.
+    @ViewBuilder
+    private var deleteEverythingButton: some View {
+        if let store {
             Button(role: .destructive) {
-                isShowingDeleteProtectedDataAlert = true
+                pendingDestructiveAction = DeleteAllDataConfirmation.make(
+                    canDeleteHealthSamples: storagePreferencesStore.preferences.healthKitMasterEnabled,
+                    hasCloudCopy: storagePreferencesStore.preferences.hasAnyCloudCopy,
+                    delete: { await store.deleteAllData(includingHealthKitSamples: $0) },
+                    onFinished: { outcome in
+                        if !outcome.isComplete { deleteAllFailure = outcome }
+                    }
+                )
             } label: {
-                Label("Delete all protected data", systemImage: "trash.fill")
+                Label("Delete everything", systemImage: "trash.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
@@ -587,16 +648,6 @@ struct PrivacyDataSettingsView: View {
             .padding(.vertical, 11)
             .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
             .accessibilityIdentifier("privacy.lock.deleteProtectedData")
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-        .alert("Delete all protected data?", isPresented: $isShowingDeleteProtectedDataAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                try? lockService.reset()
-            }
-        } message: {
-            Text("This permanently deletes your app lock, sealed journal entries, and all other protected Fernlet data. This cannot be undone.")
         }
     }
 

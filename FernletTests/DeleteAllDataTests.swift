@@ -1,5 +1,7 @@
 import Foundation
 import Testing
+// @testable for the internal `save`, which seeds the share-extension inbox the way the extension does.
+@testable import AppServices
 import FernletDomainModel
 import FernletPersistence
 import LocalPersistence
@@ -87,14 +89,45 @@ struct DeleteAllDataTests {
     @Test func deleteAllDataInvokesEverySealedStoreHook() async {
         let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-hooks")))
         var called: Set<String> = []
-        store.periodDataDeleteHook = { called.insert("period") }
-        store.intimacyDataDeleteHook = { called.insert("intimacy") }
-        store.journalDataDeleteHook = { called.insert("journal") }
+        store.periodDataDeleteHook = { called.insert("period"); return true }
+        store.intimacyDataDeleteHook = { called.insert("intimacy"); return true }
+        store.journalDataDeleteHook = { called.insert("journal"); return true }
         store.worryBoxResetHook = { called.insert("worry") }
+        store.pendingNarrativeBufferPurgeHook = { called.insert("pendingBuffer"); return true }
 
         await store.deleteAllData(includingHealthKitSamples: false)
 
-        #expect(called == ["period", "intimacy", "journal", "worry"])
+        #expect(called == ["period", "intimacy", "journal", "worry", "pendingBuffer"])
+    }
+
+    /// The pending-narrative buffer holds cycle notes written while the app was LOCKED, in a file under a
+    /// separate device key. The narrative repositories only drop Core Data rows, so nothing else in the
+    /// funnel reaches it — and its next drain re-inserts every payload into the store the wipe emptied.
+    ///
+    /// `FernletLockService.reset()` used to purge it. The funnel deliberately does not call `reset()`
+    /// (the app lock survives a wipe), so this must be its own step. Without it, "delete everything"
+    /// quietly means "delete until the next unlock".
+    @Test func pendingNarrativeBufferIsPurgedSoLockedNotesCannotComeBack() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-buffer")))
+        var purged = false
+        store.pendingNarrativeBufferPurgeHook = { purged = true; return true }
+
+        await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(purged, "the locked-note buffer survived the wipe and will re-insert on the next unlock")
+    }
+
+    /// A sealed store that fails to clear must reach the user. This is the most sensitive data in the
+    /// app and the dialog promises it is gone — silently swallowing the failure is the exact defect the
+    /// funnel exists to end.
+    @Test func outcomeReportsASealedStoreThatFailedToDelete() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-sealed-fail")))
+        store.journalDataDeleteHook = { false }
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!outcome.isComplete)
+        #expect(outcome.incompleteStores.contains("your journal entries"))
     }
 
     /// HealthKit deletion is the user's explicit choice at delete time, so it must NOT fire unless asked.
@@ -122,4 +155,106 @@ struct DeleteAllDataTests {
         #expect(store.day.bottleCount == 0)
         #expect(store.day.meals.isEmpty)
     }
+
+    /// THE regression test for the original bug: a wipe must survive a relaunch.
+    ///
+    /// Deleting is only half the property — the store re-reads from the repository at launch, so a wipe
+    /// that leaves rows behind (or lets a writer put them back) looks successful and then hands the data
+    /// straight back. Asserted by re-reading the repository directly rather than trusting the in-memory
+    /// store, which is what the old "Reset everything" made look empty.
+    ///
+    /// Note the post-condition: NOT `loadAllDays().isEmpty`. The repository synthesizes a blank entry for
+    /// the current date on read, so the assertion is that the WRITTEN day is gone.
+    @Test func deletedDaysDoNotComeBackOnTheNextLaunch() async {
+        let url = temporaryDatabaseURL("delete-all-relaunch")
+        let pastKey = "2026-01-02"
+        let repository = LocalFernletRepository(fileURL: url)
+        repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot(todayKey: pastKey, bottles: 4), sealedJournalIDs: []))
+        #expect(repository.loadAllDays()[pastKey] != nil, "precondition: the seeded day did not land")
+
+        let store = FernletStore(repository: repository)
+        await store.deleteAllData(includingHealthKitSamples: false)
+
+        // A fresh repository over the same file is the next launch.
+        let relaunched = LocalFernletRepository(fileURL: url)
+        #expect(relaunched.loadAllDays()[pastKey] == nil, "the deleted day came back on relaunch")
+    }
+
+    /// The debounced snapshot save is a writer that fires a second AFTER the wipe returns. `resetAll()`
+    /// schedules one on its way past, so without the closing `cancelPending()` the purge is undone by the
+    /// store's own save — re-creating today's row and the blob (and their CloudKit records).
+    ///
+    /// Waits past the 1s debounce deliberately: the whole failure mode is invisible to a test that
+    /// asserts immediately.
+    @Test func noPendingSaveResurrectsDataAfterTheWipe() async throws {
+        let url = temporaryDatabaseURL("delete-all-debounce")
+        let repository = LocalFernletRepository(fileURL: url)
+        let store = FernletStore(repository: repository)
+        store.addBottle()   // schedules a debounced save
+        await store.deleteAllData(includingHealthKitSamples: false)
+
+        try await Task.sleep(for: .milliseconds(1_400))
+
+        let relaunched = LocalFernletRepository(fileURL: url)
+        #expect(relaunched.loadAllDays().values.allSatisfy { $0.bottleCount == 0 })
+    }
+
+    /// A recipe shared in before the wipe must not import itself back afterwards. The queue is drained on
+    /// the next foreground, so a surviving row rebuilds user content into a store the user was told was
+    /// empty — and the share extension can refill the file while the app is backgrounded, which is why
+    /// the drain has to FIND it empty rather than be told not to run.
+    @Test func sharedRecipeInboxIsClearedSoItCannotDrainAfterTheWipe() async {
+        let queueURL = temporaryDatabaseURL("delete-all-recipe-inbox")
+        let queue = SharedRecipeImportQueue(fileURL: queueURL)
+        queue.save([SharedRecipeImportRecord(url: URL(string: "https://example.com/soup")!)])
+        #expect(!queue.records().isEmpty, "precondition: the seeded queue row did not land")
+
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-recipe-store")))
+        store.sharedRecipeImportQueue = queue
+        await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(queue.records().isEmpty)
+    }
+
+    /// A wipe reports what it could not finish. Every layer is best-effort, and the dialog promises
+    /// permanence — so a store that fails to clear has to reach the user instead of being swallowed.
+    @Test func outcomeReportsAStoreThatFailedToDelete() async {
+        let store = FernletStore(repository: FailingPurgeRepository())
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!outcome.isComplete)
+        #expect(outcome.incompleteStores.contains("your day history"))
+    }
+
+    /// A clean wipe reports success, so the caller can dismiss rather than cry wolf.
+    @Test func outcomeIsCompleteWhenEveryStoreClears() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-clean")))
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(outcome.isComplete)
+        #expect(outcome.incompleteStores.isEmpty)
+    }
+}
+
+/// A repository whose purge always fails, to prove the funnel surfaces the failure rather than reporting
+/// a wipe it never achieved. Everything else is an inert double — this exists for one return value.
+private struct FailingPurgeRepository: FernletRepository {
+    func loadSnapshot(todayKey: String) -> FernletSnapshot {
+        FernletSnapshot(
+            todayKey: todayKey,
+            day: FernletDay(date: todayKey),
+            settings: FernletSettings(),
+            recentMeals: [],
+            previousJournals: [],
+            memories: [],
+            goals: [],
+            workshop: WorkshopData()
+        )
+    }
+    func saveSnapshot(_ snapshot: SanitizedSnapshot) -> Bool { true }
+    func updateDay(_ day: SanitizedDay, for dateKey: String, todayKey: String) -> Bool { true }
+    func storageDescription() -> String { "failing-purge double" }
+    func loadAllDays() -> [String: FernletDay] { [:] }
+    func loadTierTwoMemories() -> [TierTwoMemoryRecord] { [] }
+    func purgeAllPersistedData() -> Bool { false }
 }

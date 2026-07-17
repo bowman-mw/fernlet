@@ -63,6 +63,21 @@ public struct SharedRecipeImportQueue {
         modifyRecords { $0.removeAll { $0.id == record.id } }
     }
 
+    /// Discards every queued import without running it. Called by "delete everything".
+    ///
+    /// The queue is drained on the next foreground (and on launch), so a recipe shared into Fernlet
+    /// before a wipe would otherwise import itself back into the just-emptied store — carrying its name,
+    /// servings, ingredients and source URL. The share extension can also refill this file while the app
+    /// is backgrounded, which is why the drain has to find it empty rather than the app remembering not
+    /// to drain.
+    ///
+    /// Deliberately does NOT go through `modifyRecords`: that helper aborts on a corrupt file to avoid
+    /// destroying records it cannot parse, which is right for an edit and exactly wrong for a wipe. Here
+    /// an unreadable file must still be cleared — unparseable is not the same as absent, and the drain
+    /// would keep retrying it.
+    @discardableResult
+    public func clear() -> Bool { save([]) }
+
     public func markAttempt(_ record: SharedRecipeImportRecord, errorDescription: String?) {
         modifyRecords { records in
             guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }

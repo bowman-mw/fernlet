@@ -48,6 +48,22 @@ public final class SnapshotSaveCoordinator {
         performSnapshotSave()
     }
 
+    /// Drops a pending debounced save WITHOUT writing it — the delete-everything counterpart to
+    /// `flushPending`. A scheduled save is a promise to serialize `buildSnapshot()` one second from now;
+    /// during a wipe that promise must be broken, not kept, or the save lands after the purge and
+    /// re-creates the very rows (and CloudKit records) the purge just removed.
+    ///
+    /// This does not merely fix an ordering nicety. `buildSnapshot` runs at FIRE time, so a save
+    /// scheduled before the wipe happens to serialize post-wipe (empty) state today — the store looks
+    /// safe by accident. Cancelling makes the invariant explicit instead of emergent, so moving to an
+    /// eager snapshot capture can't silently turn a wipe back into a resurrection.
+    public func cancelPending() {
+        snapshotSaveTask?.cancel()
+        snapshotSaveTask = nil
+        remoteReloadTask?.cancel()
+        remoteReloadTask = nil
+    }
+
     public func subscribeRemote(
         remoteReloadDebounce: Duration = .milliseconds(750),
         handler: @escaping @MainActor () async -> Void

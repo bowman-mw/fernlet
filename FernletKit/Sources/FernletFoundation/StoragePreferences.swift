@@ -31,6 +31,16 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         self.lastModifiedAt = lastModifiedAt
     }
 
+    /// Whether anything of the user's may be sitting in iCloud — a live sync, or a sealed backup.
+    ///
+    /// Deliberately NOT just `iCloudSyncEnabled`: "Stop syncing, keep cloud data" turns sync off while
+    /// leaving the server copy in place, so sync-off does not mean cloud-empty. Used to decide whether
+    /// the delete dialog may claim it removes the iCloud copy — a claim that must not be made to someone
+    /// who has never had one.
+    public var hasAnyCloudCopy: Bool {
+        iCloudSyncEnabled || sealedBackupSensitiveNotesEnabled || sealedBackupPeriodEnabled
+    }
+
     // Default per-capability map: every HealthKit capability disabled.
     //
     // NOTE: the capability *raw values* below must mirror `HealthCapability`'s

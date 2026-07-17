@@ -22,7 +22,9 @@ struct SettingsSheet: View {
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
-    @State private var confirmReset = false
+    /// Non-nil when a wipe came back incomplete — drives the failure alert. A silently half-finished
+    /// delete is the exact failure mode this screen is being fixed for, so it gets a surface.
+    @State private var deleteAllFailure: FernletStore.DeleteAllOutcome?
     /// Confirmation for consequential Settings changes (see `DestructiveConfirmation`). Hiding period /
     /// intimacy keeps the data, but changes what Fernlet reads and how the score behaves — so it is
     /// confirmed rather than silent.
@@ -244,6 +246,14 @@ struct SettingsSheet: View {
         }
         .background(Color.parchment)
         .destructiveConfirmation($pendingDestructiveAction)
+        .alert("Couldn't delete everything", isPresented: Binding(
+            get: { deleteAllFailure != nil },
+            set: { if !$0 { deleteAllFailure = nil } }
+        ), presenting: deleteAllFailure) { _ in
+            Button("OK", role: .cancel) { deleteAllFailure = nil }
+        } message: { outcome in
+            Text(DeleteAllDataConfirmation.failureMessage(for: outcome))
+        }
         .onAppear { healthKit.refresh() }
     }
 
@@ -1449,17 +1459,30 @@ struct SettingsSheet: View {
         }
     }
 
+    /// "Delete everything", not "Reset everything": the old label promised a scope `resetAll()` never
+    /// delivered — it left every logged day on disk to reload on the next launch — and the old two-tap
+    /// reveal named no data and stated no consequences. Both are now the shared dialog over the single
+    /// `deleteAllData` funnel.
     private var resetSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if confirmReset {
-                Button("Yes, reset everything", role: .destructive) {
-                    store.resetAll()
-                    dismiss()
-                }
-                Button("Cancel") { confirmReset = false }
-            } else {
-                Button("Reset everything", role: .destructive) { confirmReset = true }
+            Button("Delete everything", role: .destructive) {
+                pendingDestructiveAction = DeleteAllDataConfirmation.make(
+                    canDeleteHealthSamples: storagePreferencesStore.preferences.healthKitMasterEnabled,
+                    hasCloudCopy: storagePreferencesStore.preferences.hasAnyCloudCopy,
+                    delete: { await store.deleteAllData(includingHealthKitSamples: $0) },
+                    onFinished: { outcome in
+                        // Dismiss only on a clean wipe. On failure the sheet stays put behind the alert
+                        // so the user can read which store survived and retry — dismissing regardless
+                        // would hide the failure behind an app that merely looks empty.
+                        if outcome.isComplete {
+                            dismiss()
+                        } else {
+                            deleteAllFailure = outcome
+                        }
+                    }
+                )
             }
+            .accessibilityIdentifier("settings.deleteAll")
         }
         .font(.fernlet(.label))
     }
