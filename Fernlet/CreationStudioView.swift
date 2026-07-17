@@ -22,9 +22,6 @@ struct CreationStudioView: View {
     /// Whole-canvas snapshots, one per completed stroke. A stroke — not a cell — is the unit a user
     /// thinks in: one drag can paint dozens of cells, and undoing them one at a time would be useless.
     @State private var undoStack: [[Int]] = []
-    /// True between a drag's first `onChanged` and its `onEnded`, so a snapshot is pushed once per
-    /// stroke rather than on every touch sample.
-    @State private var isStroking = false
     /// Mirror mode: painting one side also paints the horizontal mirror. Off by default — a mirror the
     /// user didn't ask for is more surprising than a toggle they have to find.
     @State private var isSymmetric = false
@@ -177,46 +174,16 @@ struct CreationStudioView: View {
     }
 
     private var editorCanvas: some View {
-        GeometryReader { geo in
-            let cellW = geo.size.width / CGFloat(slot.gridCols)
-            let cellH = geo.size.height / CGFloat(slot.gridRows)
-            Canvas { context, _ in
-                for y in 0..<slot.gridRows {
-                    for x in 0..<slot.gridCols {
-                        let rect = CGRect(x: CGFloat(x) * cellW, y: CGFloat(y) * cellH, width: cellW, height: cellH)
-                        let flat = y * slot.gridCols + x
-                        let idx = flat < pixels.count ? pixels[flat] : ItemGridTexture.transparent
-                        if idx >= 0, idx < palette.count, let color = Color(itemHex: palette[idx]) {
-                            context.fill(Path(rect), with: .color(color))
-                        }
-                        context.stroke(Path(rect), with: .color(Color.bark.opacity(0.08)), lineWidth: 0.5)
-                    }
-                }
-            }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        // Snapshot on the stroke's first sample, not every sample — one drag is one undo.
-                        if !isStroking {
-                            isStroking = true
-                            pushUndoSnapshot()
-                        }
-                        paint(at: value.location, cellW: cellW, cellH: cellH)
-                    }
-                    .onEnded { _ in isStroking = false }
-            )
-            .overlay {
-                // Gentle first-touch hint when the grid is still blank.
-                if isCanvasBlank {
-                    Text("Drag to paint")
-                        .font(.fernlet(.body))
-                        .italic()
-                        .foregroundStyle(Color.slate.opacity(0.6))
-                        .allowsHitTesting(false)
-                }
-            }
-        }
+        // Zoomable/pannable surface (#15): pinch to zoom, two fingers to pan, one finger paints. The
+        // pixel/undo/symmetry logic stays here; the canvas just reports the touched cell + stroke start.
+        ZoomablePixelCanvas(
+            pixels: $pixels,
+            cols: slot.gridCols,
+            rows: slot.gridRows,
+            palette: palette,
+            onStrokeBegan: { pushUndoSnapshot() },
+            onPaintCell: { x, y in paintCell(x: x, y: y) }
+        )
         .aspectRatio(CGFloat(slot.gridCols) / CGFloat(slot.gridRows), contentMode: .fit)
         .frame(maxWidth: .infinity)
         .background(
@@ -227,6 +194,16 @@ struct CreationStudioView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(Color.bark.opacity(0.10), lineWidth: 1)
         )
+        .overlay {
+            // Gentle first-touch hint when the grid is still blank.
+            if isCanvasBlank {
+                Text("Drag to paint · pinch to zoom")
+                    .font(.fernlet(.body))
+                    .italic()
+                    .foregroundStyle(Color.slate.opacity(0.6))
+                    .allowsHitTesting(false)
+            }
+        }
         // 8pt, not 16 — see the outer padding note. Together these give the grid back ~32pt of width,
         // which at 48 columns is real cell size rather than decoration.
         .padding(8)
@@ -235,6 +212,7 @@ struct CreationStudioView: View {
                 .fill(Color.cream)
         )
         .fernletCardShadow()
+        .accessibilityIdentifier("studio.canvas")
     }
 
     /// True while every cell is still transparent — drives the "Drag to paint" hint.
@@ -425,10 +403,9 @@ struct CreationStudioView: View {
         )
     }
 
-    private func paint(at location: CGPoint, cellW: CGFloat, cellH: CGFloat) {
-        guard cellW > 0, cellH > 0 else { return }
-        let x = Int((location.x / cellW).rounded(.down))
-        let y = Int((location.y / cellH).rounded(.down))
+    /// Paints the grid cell reported by the zoomable canvas (plus its mirror when symmetry is on). The
+    /// canvas maps the touch to a cell at any zoom level; this owns the colour + symmetry.
+    private func paintCell(x: Int, y: Int) {
         setCell(x: x, y: y)
         if isSymmetric {
             // Every grid is even-width (32/36/48/28), so the axis falls cleanly between the two centre
