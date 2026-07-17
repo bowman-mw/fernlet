@@ -39,6 +39,15 @@ extension FernletStore {
         // Ensure the (age-gated) Intimacy section is reachable for appearance review.
         if settings.userProfile.age < 18 { settings.userProfile.age = 30 }
 
+        // Ensure the Period section is reachable for appearance review. Mirrors the age
+        // bump above: the Period surface gates on `isPeriodTrackingVisible`, which absent
+        // an explicit choice derives from `userProfile.sex` (default `.male` → hidden).
+        // Setting the explicit opt-in surfaces the Private hub's Period page for the
+        // gallery without asserting a biological sex on the demo persona. This only makes
+        // the surface MORE visible, so there is nothing to scrub — a direct settings write
+        // (like the age bump) is enough; no need to route through `setPeriodTrackingVisible`.
+        if settings.periodTrackingVisible != true { settings.periodTrackingVisible = true }
+
         seedMeals()
         seedRecipes()
         seedHydrationAndSleep()
