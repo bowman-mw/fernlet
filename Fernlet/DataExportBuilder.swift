@@ -233,16 +233,62 @@ extension FernletStore {
             friends: friendExports)
     }
 
+    /// The one directory every data export is written into — a dedicated subfolder of tmp/, so a wipe can
+    /// remove it wholesale (the same shape as `MealPhotoStore`) rather than chasing a filename. The export
+    /// is an UNENCRYPTED dump of the user's decrypted data, and `deleteAllData` clears this directory by
+    /// construction, so a future export path is swept without anyone remembering to update the eraser.
+    static var dataExportsDirectory: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("DataExports", isDirectory: true)
+    }
+
     /// Encodes the export to a temp JSON file (complete file protection) and returns its URL.
+    ///
+    /// Writes into `dataExportsDirectory` rather than the tmp/ root: the file is the user's entire
+    /// decrypted dataset in the clear (that is the point — it is theirs to take), so it has to land where
+    /// the wipe reaches by construction, not somewhere a cleanup step has to name explicitly.
     func writeDataExportFile() throws -> URL {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(buildDataExport())
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Fernlet-data-\(todayKey).json")
+        let directory = Self.dataExportsDirectory
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("Fernlet-data-\(todayKey).json")
         try data.write(to: url, options: [.atomic, .completeFileProtection])
         return url
+    }
+
+    /// Deletes every exported data file. The export is a full, UNENCRYPTED JSON dump of the user's
+    /// decrypted data — days, meals (names, notes, times), journal, goals, recipes, wardrobe/coins,
+    /// friends — and iOS only reclaims tmp/ under storage pressure, so without this a user who exported
+    /// and then tapped "Delete everything" is left with a complete plaintext copy on disk after a dialog
+    /// that told them it was gone.
+    ///
+    /// Removes the whole `dataExportsDirectory` rather than a single filename: exports are named by day
+    /// (`Fernlet-data-<todayKey>.json`), so a user who exported across several days has several files.
+    /// Also sweeps any legacy flat-named exports left at the tmp/ root by a build that wrote there before
+    /// this directory existed. No background writer rebuilds an export, so this can run at any point in
+    /// the funnel — the only requirement is that the funnel not forget it.
+    @discardableResult
+    func purgeDataExports() -> Bool {
+        let fileManager = FileManager.default
+        var ok = true
+
+        let directory = Self.dataExportsDirectory
+        if fileManager.fileExists(atPath: directory.path) {
+            do { try fileManager.removeItem(at: directory) }
+            catch { ok = false }
+        }
+
+        // Legacy sweep: exports used to be written straight into tmp/ as `Fernlet-data-<day>.json`.
+        let tmp = fileManager.temporaryDirectory
+        let strays = (try? fileManager.contentsOfDirectory(at: tmp, includingPropertiesForKeys: nil)) ?? []
+        for stray in strays
+        where stray.lastPathComponent.hasPrefix("Fernlet-data-") && stray.pathExtension == "json" {
+            do { try fileManager.removeItem(at: stray) }
+            catch { ok = false }
+        }
+        return ok
     }
 
     // MARK: - Projection helpers (static, pure)

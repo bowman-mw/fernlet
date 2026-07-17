@@ -2255,13 +2255,22 @@ final class FernletStore {
             outcome.incompleteStores.append("shared recipe inbox")
         }
 
-        // 6. Friends' clothing catalogs browsable for an hour after a session. Memory-only, but it is
+        // 6. The plaintext "export my data" dump. `writeDataExportFile()` writes the user's whole
+        // decrypted dataset — day logs, meals, journal, recipes, wardrobe, friends — UNENCRYPTED to a
+        // tmp/ file for the share sheet, and nothing else in this funnel reaches it. iOS only reclaims
+        // tmp/ under storage pressure, so a user who exported and then deleted everything could be left
+        // with a full plaintext copy on disk after a dialog that said it was gone.
+        if !purgeDataExports() {
+            outcome.incompleteStores.append("your exported data file")
+        }
+
+        // 7. Friends' clothing catalogs browsable for an hour after a session. Memory-only, but it is
         // their social data visibly surviving a wipe in the running session.
         meshNetworkManager.clothingShop.clearAll()
 
         resetAll()
 
-        // 7. The authoritative per-row day store + the blob + the legacy JSON file. Without this, every
+        // 8. The authoritative per-row day store + the blob + the legacy JSON file. Without this, every
         // past day survives on disk, reloads on next launch, and re-uploads to iCloud — which is
         // exactly what "Reset everything" did before.
         //
@@ -2272,12 +2281,12 @@ final class FernletStore {
             outcome.incompleteStores.append("your day history")
         }
 
-        // 8. Re-cancel: `resetAll` scheduled a debounced save on its way past (via
+        // 9. Re-cancel: `resetAll` scheduled a debounced save on its way past (via
         // `batchSnapshotPersistence`), which would fire one second from now and re-create today's row
         // and the blob. Nothing between the purge and here suspends, so no save can slip in.
         snapshotSaveCoordinator.cancelPending()
 
-        // 9. The widget's app-group files, LAST — after the cancel, so the debounced save's
+        // 10. The widget's app-group files, LAST — after the cancel, so the debounced save's
         // `publishWidgetSnapshot` can't write the file back moments later. Until this runs the user's
         // score, water and macros keep rendering on the Home and Lock Screen.
         if let widgetSnapshotMirror, !widgetSnapshotMirror.clear() {

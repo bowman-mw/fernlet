@@ -635,6 +635,11 @@ struct PrivacyDataSettingsView: View {
                     hasCloudCopy: storagePreferencesStore.preferences.hasAnyCloudCopy,
                     delete: { await store.deleteAllData(includingHealthKitSamples: $0) },
                     onFinished: { outcome in
+                        // The wipe has just swept the exported file off disk; drop the view's reference to
+                        // it too, so re-presenting the share sheet can't hand a now-deleted plaintext URL
+                        // to UIActivityViewController. `.sheet(item:)` already nils this on dismiss, so in
+                        // practice it is nil here — this is belt-and-braces against a retained stale URL.
+                        exportPayload = nil
                         if !outcome.isComplete { deleteAllFailure = outcome }
                     }
                 )

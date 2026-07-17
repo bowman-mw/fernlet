@@ -226,6 +226,36 @@ struct DeleteAllDataTests {
         #expect(outcome.incompleteStores.contains("your day history"))
     }
 
+    /// The plaintext "export my data" dump must not survive the wipe. `writeDataExportFile()` writes the
+    /// user's whole decrypted dataset UNENCRYPTED to tmp/ for the share sheet, and iOS only reclaims tmp/
+    /// under storage pressure — so a user who exported and then deleted everything could otherwise be left
+    /// with a full plaintext copy on disk after a dialog that told them it was gone.
+    @Test func exportedDataFileIsSweptByTheWipe() async throws {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-export")))
+        let exportURL = try store.writeDataExportFile()
+        #expect(FileManager.default.fileExists(atPath: exportURL.path), "precondition: the export file was not written")
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!FileManager.default.fileExists(atPath: exportURL.path), "the plaintext export survived the wipe")
+        // The sweep is one of the stores the funnel reports on, so a clean wipe stays complete.
+        #expect(outcome.isComplete)
+    }
+
+    /// A legacy export written flat into tmp/ (the location before the dedicated exports directory) is
+    /// still swept, so an app updated across that change can't strand an old plaintext dump.
+    @Test func legacyFlatExportFileIsSweptByTheWipe() async throws {
+        let legacyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Fernlet-data-2026-01-01.json")
+        try Data("{}".utf8).write(to: legacyURL, options: [.atomic, .completeFileProtection])
+        #expect(FileManager.default.fileExists(atPath: legacyURL.path), "precondition: the legacy file was not written")
+
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-legacy-export")))
+        await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!FileManager.default.fileExists(atPath: legacyURL.path), "the legacy plaintext export survived the wipe")
+    }
+
     /// A clean wipe reports success, so the caller can dismiss rather than cry wolf.
     @Test func outcomeIsCompleteWhenEveryStoreClears() async {
         let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-clean")))
