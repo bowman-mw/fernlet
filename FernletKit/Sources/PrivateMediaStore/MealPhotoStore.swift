@@ -1,18 +1,49 @@
 import Foundation
+import UIKit
+import ImageIO
+import CryptoKit
 import FernletDomainModel
 
+/// On-device, at-rest-encrypted store for the user's OWN photos attached to logged meals (and, from
+/// here on, other private personal photos such as gym progress pictures — body photos, which is why
+/// this store had to be sealed before they were added).
+///
+/// Every photo is normalized (downscaled + re-encoded to a bounded JPEG) and then AES-256-GCM-sealed
+/// under the shared `PrivateMediaKeyProviding` key before it touches disk — the same at-rest scheme as
+/// `PrivateMediaStore`. It used to write the raw, full-resolution JPEG in the clear (relying only on
+/// iOS `.completeFileProtection`); that was fine for a lunch snapshot but not for a body photo, and it
+/// stored multi-megabyte originals. Normalizing on the way in also means a 48 MP phone photo is bounded
+/// rather than rejected the way the peer decompression-bomb gate would reject it.
+///
+/// Photos written by the pre-sealing build are recognised as legacy plaintext on read and re-sealed in
+/// place on first access, so no migration pass is needed and existing meal photos keep working.
 public struct MealPhotoStore {
     private let directory: URL
+    private let keyProvider: PrivateMediaKeyProviding
 
-    public init(directory: URL) {
+    /// Longest-side cap for stored photos. Ample for the polaroid card and a full-screen detail view,
+    /// while keeping originals off disk. Small images are passed through at their native size.
+    private static let maxStoredPixelSize = 1600
+    private static let jpegQuality: CGFloat = 0.8
+    /// Refuse to even downscale a source whose dimensions are absurd (OOM guard), matching
+    /// `PrivateMediaStore`. The user's own camera photos are far below this.
+    private static let maxSourcePixelDimension = 20_000
+
+    public init(directory: URL, keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider()) {
         self.directory = directory
+        self.keyProvider = keyProvider
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
+    /// Normalizes, seals and stores `data`, returning the new id. Returns nil — writing NOTHING — when
+    /// the bytes aren't a decodable image or no encryption key is available: a photo is dropped rather
+    /// than persisted in the clear (fail-closed, as with the sealed peer store).
     public func save(_ data: Data) -> UUID? {
+        guard let normalized = Self.normalizedJPEG(from: data) else { return nil }
+        guard let sealed = seal(normalized) else { return nil }
         let id = UUID()
         do {
-            try data.write(to: url(for: id), options: [.atomic, .completeFileProtection])
+            try sealed.write(to: url(for: id), options: [.atomic, .completeFileProtection])
             return id
         } catch {
             return nil
@@ -20,7 +51,22 @@ public struct MealPhotoStore {
     }
 
     public func imageData(for id: UUID) -> Data? {
-        try? Data(contentsOf: url(for: id))
+        guard let stored = try? Data(contentsOf: url(for: id)) else { return nil }
+        // Sealed bytes (the normal case).
+        if let key = keyProvider.mediaKey(),
+           let box = try? AES.GCM.SealedBox(combined: stored),
+           let opened = try? AES.GCM.open(box, using: key) {
+            return opened
+        }
+        // A file written by the pre-sealing build is plaintext JPEG. GCM-open fails for it AND for
+        // genuinely corrupt/wrong-key bytes; tell them apart by whether the raw bytes are a valid
+        // image (a legacy photo passed the same image encode at save time). If so, re-seal in place
+        // and return it; otherwise treat it as missing rather than hand back ciphertext/garbage.
+        if PrivateMediaStore.isWithinSafePixelBounds(stored) {
+            reseal(stored, to: url(for: id))
+            return stored
+        }
+        return nil
     }
 
     public func delete(id: UUID) {
@@ -43,6 +89,43 @@ public struct MealPhotoStore {
         } catch {
             return false
         }
+    }
+
+    // MARK: - At-rest encryption
+
+    private func seal(_ plaintext: Data) -> Data? {
+        guard let key = keyProvider.mediaKey() else { return nil }
+        return try? AES.GCM.seal(plaintext, using: key).combined
+    }
+
+    private func reseal(_ plaintext: Data, to url: URL) {
+        guard let sealed = seal(plaintext) else { return }
+        try? sealed.write(to: url, options: [.atomic, .completeFileProtection])
+    }
+
+    // MARK: - Normalization
+
+    /// Downscales `data` so its longest side is at most `maxStoredPixelSize` and re-encodes it as a
+    /// JPEG, using ImageIO's thumbnail path so the full-resolution bitmap is never materialised (the
+    /// bomb-safe decode). Returns nil for non-image or absurdly-dimensioned input. Images already
+    /// within the cap are re-encoded at their native size (never upscaled).
+    static func normalizedJPEG(from data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
+            let width = properties[kCGImagePropertyPixelWidth] as? Int ?? 0
+            let height = properties[kCGImagePropertyPixelHeight] as? Int ?? 0
+            guard width > 0, height > 0,
+                  width <= maxSourcePixelDimension, height <= maxSourcePixelDimension else { return nil }
+        } else {
+            return nil
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxStoredPixelSize,
+            kCGImageSourceCreateThumbnailWithTransform: true  // bake in EXIF orientation
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return UIImage(cgImage: cgImage).jpegData(compressionQuality: jpegQuality)
     }
 
     private func url(for id: UUID) -> URL {
