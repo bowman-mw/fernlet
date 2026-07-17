@@ -45,6 +45,13 @@ struct OnboardingWelcomeView: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
+            // Claims the full proposed width so every card is the same size. Without it each card sizes
+            // to its own text and the enclosing centre-aligned VStack centres each one independently —
+            // so the three cards rendered at three different widths with three different insets.
+            // `fernletWrappingText` permits wrapping but never claims width, so it doesn't cover this.
+            // Matches the house pattern already used by OnboardingChoiceRow, lockChoice, storageCard
+            // and notificationsRow.
+            Spacer(minLength: 8)
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 8, style: .continuous))

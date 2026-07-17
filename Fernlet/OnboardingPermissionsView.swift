@@ -110,6 +110,10 @@ struct OnboardingPermissionsView: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
+            // Same width claim as `privacyRow` on the welcome step. More conspicuous here: the sibling
+            // `notificationsRow` in this same VStack already has its Spacer, so the Notifications card
+            // rendered full-width while these four rendered narrow and centred beside it.
+            Spacer(minLength: 8)
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 8, style: .continuous))

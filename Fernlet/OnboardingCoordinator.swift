@@ -71,7 +71,9 @@ final class OnboardingCoordinatorModel {
     var goalPlanningInterests = ""
     var goalPlanningConstraints = ""
     var starterName = "Fernlet"
-    var starterColor = "Fern"
+    /// Typed, not a display string — the picker, the live preview, and the write in `complete()` all
+    /// read this one value, so they cannot disagree about what colour was chosen.
+    var starterColor: CompanionAssetColor = .fern
     var proximityDisplayName = ""
 
     @ObservationIgnored private let store: FernletStore
@@ -123,14 +125,17 @@ final class OnboardingCoordinatorModel {
         if !trimmedStarterName.isEmpty {
             store.setCompanionName(trimmedStarterName)
         }
-        let paletteByColor: [String: CompanionPalette] = [
-            "Fern": .fern, "Moss": .fern, "Rose": .rose, "Gold": .sun
-        ]
-        if let palette = paletteByColor[starterColor] {
-            var appearance = store.settings.companionAppearance
-            appearance.palette = palette
-            store.setCompanionAppearance(appearance)
-        }
+        // Write `bodyColor` — the field the renderer actually reads (via
+        // `CompanionAppearance.resolvedBodyColor`). This used to set `palette`, which nothing in the
+        // render path consults: its only remaining job is supplying the absent-key decode default for
+        // `bodyColor`, and since the synthesized encoder always emits `bodyColor`, even that never
+        // fired. The colour picked during onboarding was silently discarded.
+        //
+        // Choosing `CompanionAssetColor` also fixes a second casualty of the old mapping: `CompanionPalette`
+        // has no `.moss` case, so Fern and Moss both mapped to `.fern` and were indistinguishable.
+        var appearance = store.settings.companionAppearance
+        appearance.bodyColor = starterColor
+        store.setCompanionAppearance(appearance)
         UserDefaults.standard.set(true, forKey: OnboardingDefaults.hasCompletedOnboardingKey)
         onComplete()
     }
@@ -294,10 +299,23 @@ struct OnboardingGoalScreen: View {
 struct OnboardingStarterScreen: View {
     var stepText: String
     @Binding var starterName: String
-    @Binding var starterColor: String
+    @Binding var starterColor: CompanionAssetColor
     var continueAction: () -> Void
 
-    private let colors = ["Fern", "Moss", "Rose", "Gold"]
+    /// A curated starter subset of `CompanionAssetColor` — the wardrobe offers the full set later.
+    /// Typed rather than stringly-typed so the picker, the preview, and the write on `complete()` are
+    /// driven by one value: the previous `String` needed a lookup table at each use site, and the two
+    /// tables drifted (see `complete()`).
+    private let colors: [CompanionAssetColor] = [.fern, .moss, .rose, .sun]
+
+    /// The appearance the preview draws. Derived from the live binding, so picking a colour updates the
+    /// companion on screen — previously the preview took the default `.standard` and could not react to
+    /// the picker at all, which is why changing colour appeared to do nothing.
+    private var previewAppearance: CompanionAppearance {
+        var appearance = CompanionAppearance.standard
+        appearance.bodyColor = starterColor
+        return appearance
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -306,7 +324,7 @@ struct OnboardingStarterScreen: View {
                 title: "Make Fernlet yours",
                 subtitle: "Pick a starter name and color. You can change these later."
             ) {
-                CompanionView(state: .thriving, size: 120)
+                CompanionView(state: .thriving, appearance: previewAppearance, size: 120)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
 
@@ -319,8 +337,10 @@ struct OnboardingStarterScreen: View {
 
                 SheetField("Color") {
                     Picker("Color", selection: $starterColor) {
-                        ForEach(colors, id: \.self) { color in
-                            Text(color).tag(color)
+                        ForEach(colors) { color in
+                            // `label` is the model's own name, so onboarding and the wardrobe agree.
+                            // The old hardcoded list said "Gold" for what the model calls "Sun".
+                            Text(color.label).tag(color)
                         }
                     }
                     .pickerStyle(.segmented)
