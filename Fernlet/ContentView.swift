@@ -259,6 +259,15 @@ struct ContentView: View {
         // A sheet is already open — leave the request PENDING (don't clear it) so it isn't silently
         // dropped; `handleActiveSheetDismiss` re-consumes it once the covering sheet closes.
         guard activeSheet == nil else { return }
+        // A foreground App Intent (#6, e.g. "Log a meal in Fernlet") records which sheet it wants; honor
+        // it before the notification path so a Siri/Shortcuts open lands on the right screen.
+        if let target = PendingIntentSheet.consume() {
+            switch target {
+            case .meal: activeSheet = .meal
+            case .journal: activeSheet = .journal
+            }
+            return
+        }
         guard let id = FernletNotificationDelegate.shared.pendingSheetID else { return }
         FernletNotificationDelegate.shared.pendingSheetID = nil
         switch id {
