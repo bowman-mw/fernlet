@@ -2186,7 +2186,11 @@ final class FernletStore {
     ///   my data" an abuse vector.
     /// - the milestone ledger — lifetime care counts, product call that they outlive a reset.
     /// - the mesh identity keypair — wiping it would force every friend to re-add you.
-    /// - friend photos received over the mesh — other people's gifts to you, not your own log.
+    /// - the shared-photo wall (`PrivateMediaStore` via `meshNetworkManager`) — BOTH the photos friends
+    ///   sent you and the ones you shared with them (a photo you shared is cached under your own
+    ///   fingerprint, so it is not "someone else's gift" — it is still kept). By product decision the wall
+    ///   is curated one photo at a time (`MeshNetworkManager.deletePhoto`, which purges the sealed bytes);
+    ///   there is deliberately NO "delete all photos", so this funnel must not add a bulk purge here.
     /// - the app lock itself — a wipe empties the protected data, it does not drop your protection.
     ///
     /// The ORDER is the correctness argument, not housekeeping. A wipe races three background writers

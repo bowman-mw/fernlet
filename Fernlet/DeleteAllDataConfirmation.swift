@@ -47,9 +47,13 @@ enum DeleteAllDataConfirmation {
     /// iCloud backup that the code will skip (because there isn't one) is exactly the kind of
     /// nearly-harmless overpromise that made the old "Reset everything" label untrue.
     private static func message(canDeleteHealthSamples: Bool, hasCloudCopy: Bool) -> String {
+        // "meals and their photos" — not a bare "photos". The only photos this funnel deletes are the
+        // ones attached to meals (`mealPhotoStore`). The shared-photo wall is KEPT (see below), so an
+        // unqualified "photos" here would contradict the kept list and re-open the exact
+        // says-more-than-it-does gap this dialog exists to close.
         var scope = """
-            This deletes your logged days, meals and photos, journal entries, cycle notes, intimate logs, \
-            Worry Box notes, saved recipes, custom items and coins.
+            This deletes your logged days, meals and their photos, journal entries, cycle notes, \
+            intimate logs, Worry Box notes, saved recipes, custom items and coins.
             """
         if hasCloudCopy {
             scope += " Your iCloud copy and any encrypted iCloud backups go too, as this device syncs."
@@ -66,10 +70,19 @@ enum DeleteAllDataConfirmation {
             // the wipe clears the vault wholesale, so claiming blocks are kept would be false. What
             // genuinely survives is the self-ban — Fernlet's own shop being barred for reported content —
             // which must outlive a wipe or "delete my data" becomes a way to launder it.
+            //
+            // The shared-photo wall is named in FULL — "the ones friends sent you and the ones you shared
+            // with them" — not the narrower "photos friends sent you" it used to say. The cache holds BOTH
+            // (a photo the user shared is cached under their own fingerprint), so the old copy disclosed
+            // half of what survives. By product decision the wall has no bulk clear — pictures come off it
+            // one at a time (`MeshNetworkManager.deletePhoto`) — so this funnel leaves the whole wall
+            // intact and the copy says how to remove them, rather than implying they are gone.
             """
             Kept on purpose: your milestone counts, your lifetime care history, your Fernlet identity, \
-            photos friends sent you, and any restriction on sharing your own designs. Your app lock stays \
-            set up. You'll need to add your friends again.
+            your shared photos — both the ones friends sent you and the ones you shared with them — and \
+            any restriction on sharing your own designs. You remove those one at a time from the photo \
+            itself; there's no bulk delete. Your app lock stays set up. You'll need to add your friends \
+            again.
             """
         ]
         if canDeleteHealthSamples {
