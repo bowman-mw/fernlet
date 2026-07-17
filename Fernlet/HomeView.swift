@@ -99,45 +99,122 @@ struct HomeView: View {
     /// empty — and taps through to `MilestonesView`. Cumulative-only, never a scoreboard: it shows a
     /// warm sentence and a soft coins aside, no streaks or percentages. Behaviour lives in
     /// MilestonesView; this is a warm doorway to it.
+    /// One kind of care the user has kept, as a struck-coin token on the shelf. Stable order + tint per
+    /// kind so the shelf doesn't reshuffle between renders.
+    private struct Keepsake: Identifiable {
+        let id: MilestoneEventKind
+        let icon: String
+        let tint: Color
+    }
+
+    /// Icon + tint per milestone kind. Tints are chosen to stay distinct on the parchment shelf rather
+    /// than to encode meaning. A kind with no entry here still gets a token (generic seal) — see
+    /// `keepsakeStyle(for:)` — so a new `MilestoneEventKind` can't make the shelf silently under-count
+    /// against the summary before someone styles it.
+    private static let keepsakeStyles: [MilestoneEventKind: (icon: String, tint: Color)] = [
+        .journal: ("book", .moss),
+        .meal: ("fork.knife", .goldenrod),
+        .workout: ("figure.walk", .terracotta),
+        .water: ("drop", Color(red: 0.36, green: 0.55, blue: 0.74)),
+        .breathing: ("wind", Color(red: 0.53, green: 0.51, blue: 0.72)),
+        .worry: ("archivebox", .softTaupe)
+    ]
+
+    private func keepsakeStyle(for kind: MilestoneEventKind) -> (icon: String, tint: Color) {
+        Self.keepsakeStyles[kind] ?? ("seal", .goldenrod)
+    }
+
+    /// The kinds the user has actually kept (count > 0) from the pre-read ledger inputs, one token each,
+    /// in enum-declaration order. Iterating `allCases` rather than the style table guarantees coverage of
+    /// a future kind instead of dropping it. Takes the counts + worry total as arguments so the card can
+    /// scan each ledger exactly once and share the result with the summary.
+    private func keptKeepsakes(counts: [MilestoneEventKind: Int], worries: Int) -> [Keepsake] {
+        MilestoneEventKind.allCases.compactMap { kind in
+            let kept = kind == .worry ? worries > 0 : (counts[kind] ?? 0) > 0
+            guard kept else { return nil }
+            let style = keepsakeStyle(for: kind)
+            return Keepsake(id: kind, icon: style.icon, tint: style.tint)
+        }
+    }
+
+    /// M1 "keepsake shelf": the kinds of care kept, as struck-coin tokens resting on a shelf ledge —
+    /// a keepsake shelf, not another nav row. Taps through to `MilestonesView`. Cumulative-only, never
+    /// a scoreboard: no streaks, no percentages, and the empty state is a gentle invitation.
     private var milestonesCard: some View {
-        // Compute the ledger-scanning summary once per render — it feeds both the visible Text and the
-        // accessibilityHint below, and each evaluation runs full-ledger scans with Set allocations.
-        let summary = milestonesCardSummary
+        // Read each lifetime ledger ONCE per render and derive the shelf, the summary, and the coin pill
+        // from the same values — the ledgers are append-only and only grow, and this card re-renders on
+        // every store mutation, so a per-derivation re-scan is avoidable main-thread work.
+        let counts = store.milestoneCounts
+        let worries = store.lifetimeWorriesLetGo
+        let coins = CoinEconomy.milestoneAwardCoins(in: store.coinLedgerService.entries)
+        let kept = keptKeepsakes(counts: counts, worries: worries)
+        let summary = Self.milestonesSummary(keptKinds: kept.count, coins: coins)
         return NavigationLink {
             MilestonesView(store: store)
         } label: {
             FernletCard {
-                HStack(spacing: 12) {
-                    PressedMedallion(icon: "seal", tint: .goldenrod, diameter: 40)
-                    VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
                         Text("Milestones")
                             .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
-                        Text(summary)
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
+                        Spacer()
+                        if coins > 0 {
+                            // Goldenrod text on the card's cream with a hairline goldenrod border — the
+                            // house coin style (MilestonesView), and the reason it isn't a goldenrod fill:
+                            // goldenrod-on-goldenrod-tint drops below the contrast floor for 12pt text.
+                            HStack(spacing: 4) {
+                                Image(systemName: "star.fill").font(.system(size: 9))
+                                Text("\(coins) gifted").font(.fernlet(.labelSmall))
+                            }
+                            .foregroundStyle(Color.goldenrod)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .overlay(Capsule().strokeBorder(Color.goldenrod.opacity(0.4), lineWidth: 1))
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.slate.opacity(0.65))
                     }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.slate.opacity(0.65))
+                    if !kept.isEmpty {
+                        ZStack(alignment: .bottom) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Color.bark.opacity(0.14))
+                                .frame(height: 3)
+                                .offset(y: 2)
+                            HStack(spacing: 12) {
+                                ForEach(kept.prefix(5)) { k in
+                                    PressedMedallion(icon: k.icon, tint: k.tint, diameter: 38)
+                                }
+                                if kept.count > 5 {
+                                    Text("+\(kept.count - 5)")
+                                        .font(.fernlet(.labelSmall))
+                                        .foregroundStyle(Color.slate)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                    Text(summary)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
                 }
             }
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("home.milestones")
-        .accessibilityLabel("Milestones")
-        .accessibilityHint(summary)
+        // Fold the summary into the LABEL, not the hint: `children: .ignore` drops the visible summary
+        // and coin pill from the tree, and a hint is silenced by the system "Speak Hints" setting — so a
+        // hint-only summary would leave a VoiceOver user hearing just "Milestones, button".
+        .accessibilityLabel("Milestones. \(summary)")
     }
 
-    /// A warm, count-aware one-liner for the milestones card. Keeps the keepsake framing: kinds with
-    /// keepsakes are "kept", coins are a soft aside, and the empty case is gentle — never a to-do.
-    private var milestonesCardSummary: String {
-        let keptKinds = store.milestoneCounts.values.filter { $0 > 0 }.count
-            + (store.lifetimeWorriesLetGo > 0 ? 1 : 0)
-        let coins = CoinEconomy.milestoneAwardCoins(in: store.coinLedgerService.entries)
-
+    /// A warm, count-aware one-liner for the milestones card, from already-scanned inputs. Keeps the
+    /// keepsake framing: coins are a soft aside, the empty case is gentle — never a to-do. `static` +
+    /// pure so the card can compute it from ledger values it already read, without re-scanning.
+    static func milestonesSummary(keptKinds: Int, coins: Int) -> String {
         if keptKinds == 0 {
             return "Your keepsake shelf is waiting — every bit of care will find a place here."
         }
@@ -331,33 +408,41 @@ struct HomeView: View {
         .accessibilityHint("Explains how body signals are estimated")
     }
 
-    /// First Aid as its own calm, standalone action (not a status chip): a soft moss-tinted row
-    /// with an icon tile, a title, a gentle italic subtitle, and a chevron — always reachable,
-    /// quietly present, never demanding attention. Sits below quick-log per the mockup.
+    /// First Aid as its own calm, standalone action (not a status chip): a soft moss-tinted card that
+    /// opens the First Aid sheet — but now with three chips previewing what's inside, so it reads as an
+    /// invitation rather than another unlabelled nav row. One tap on the card still opens the sheet; the
+    /// chips are a preview, not separate targets.
     private var firstAidAction: some View {
         Button {
             activeSheet = .firstAid(nil)
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "heart.circle")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                    .frame(width: 34, height: 34)
-                    .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("First aid")
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-                    Text("A quiet minute, whenever")
-                        .font(.fernlet(.bodySmall))
-                        .italic()
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: "heart.circle")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(Color.moss)
+                        .frame(width: 34, height: 34)
+                        .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("First aid")
+                            .font(.fernlet(.header))
+                            .foregroundStyle(Color.bark)
+                        Text("A quiet minute, whenever")
+                            .font(.fernlet(.bodySmall))
+                            .italic()
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.moss.opacity(0.7))
                 }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.moss.opacity(0.7))
+                HStack(spacing: 8) {
+                    firstAidChip("wind", "Breathe")
+                    firstAidChip("scope", "Ground")
+                    firstAidChip("archivebox", "Worry box")
+                }
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -371,9 +456,25 @@ struct HomeView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("home.firstAid")
         .accessibilityLabel("First aid")
         .accessibilityHint("Opens calm tools: breathing, grounding, and the worry box")
+    }
+
+    /// A preview chip inside the First Aid card. Decorative — the card is the tap target, so the chips
+    /// carry no accessibility of their own (the card's label already names the tools).
+    private func firstAidChip(_ icon: String, _ label: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+            Text(label).font(.fernlet(.labelSmall))
+        }
+        .foregroundStyle(Color.moss)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.cream, in: Capsule())
+        .overlay(Capsule().stroke(Color.moss.opacity(0.18), lineWidth: 1))
+        .accessibilityHidden(true)
     }
 
     /// Presentation-only frazzle flag for the companion. Never overrides the sick/resting
