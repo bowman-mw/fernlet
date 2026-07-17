@@ -121,6 +121,30 @@ struct MealPhotoStoreTests {
         #expect(storeB.imageData(for: id) == nil)
     }
 
+    @Test func savingUnderAGivenIdSealsRoundTripsAndOverwrites() throws {
+        // The recipe-photo path (#1) seals under the recipe's OWN id rather than a generated one.
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let id = UUID()
+        #expect(store.save(jpeg(width: 200, height: 200), forID: id))
+        // Sealed on disk (not a plain JPEG), and reads back as a decodable image.
+        let onDisk = try #require(try? Data(contentsOf: fileURL(dir, id)))
+        #expect(UIImage(data: onDisk) == nil, "recipe photo was written in the clear, not sealed")
+        #expect(store.imageData(for: id).flatMap { UIImage(data: $0) } != nil)
+
+        // A second save under the same id overwrites in place (a replaced recipe photo).
+        #expect(store.save(jpeg(width: 120, height: 120), forID: id))
+        #expect(store.imageData(for: id) != nil)
+
+        // No key → fail-closed, nothing written.
+        let noKeyDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MealPhotoStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: noKeyDir) }
+        let noKeyStore = MealPhotoStore(directory: noKeyDir, keyProvider: NoKeyProvider())
+        #expect(noKeyStore.save(jpeg(width: 100, height: 100), forID: UUID()) == false)
+    }
+
     @Test func deleteRemovesTheFileAndDeleteAllClearsTheStore() throws {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }

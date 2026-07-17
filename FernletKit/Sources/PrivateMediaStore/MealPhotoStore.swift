@@ -50,6 +50,20 @@ public struct MealPhotoStore {
         }
     }
 
+    /// Normalizes, seals and stores `data` under a CALLER-supplied id (overwriting any existing photo at
+    /// that id), returning whether it was written. Used where the owning record already has a stable id —
+    /// e.g. a recipe's own photo keyed by the recipe id — so there's no second id to track. Fail-closed
+    /// like `save`: writes nothing on non-image bytes or no key.
+    @discardableResult public func save(_ data: Data, forID id: UUID) -> Bool {
+        guard let normalized = Self.normalizedJPEG(from: data), let sealed = seal(normalized) else { return false }
+        do {
+            try sealed.write(to: url(for: id), options: [.atomic, .completeFileProtection])
+            return true
+        } catch {
+            return false
+        }
+    }
+
     public func imageData(for id: UUID) -> Data? {
         guard let stored = try? Data(contentsOf: url(for: id)) else { return nil }
         // Sealed bytes (the normal case).

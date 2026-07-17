@@ -2528,6 +2528,224 @@ struct RecipeRow: View {
     }
 }
 
+#if canImport(UIKit)
+/// Read-only detail view for a saved recipe (#1): the user's OWN photo, per-serving + total macros, the
+/// ingredient list, and notes — plus log / edit / share. Reached by tapping a recipe in the book (which
+/// used to jump straight into the editor). Recipe photos are the user's own pick — never an external
+/// fetch — sealed and keyed by the recipe id.
+struct RecipeDetailView: View {
+    var store: FernletStore
+    let recipe: RecipeDefinition
+    var onEdit: () -> Void
+    var onLog: (MealType) -> Void
+    var onShare: () -> Void
+
+    @State private var photo: UIImage?
+    @State private var didLoadPhoto = false
+
+    private var totals: MacroTotals { store.macroTotals(for: recipe) }
+    private var perServing: MacroTotals {
+        let divisor = max(recipe.servings, 1)
+        return MacroTotals(
+            protein: Int((Double(totals.protein) / Double(divisor)).rounded()),
+            carbs: Int((Double(totals.carbs) / Double(divisor)).rounded()),
+            fat: Int((Double(totals.fat) / Double(divisor)).rounded())
+        )
+    }
+    private var resolvedItems: [UUID: FoodItem] {
+        Dictionary(
+            store.foodCatalog.items(ids: recipe.ingredients.map(\.foodItemId)).map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                photoSection
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(recipe.name)
+                        .font(.fernlet(.displayMedium))
+                        .foregroundStyle(Color.bark)
+                    Text("\(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")")
+                        .font(.fernlet(.stat))
+                        .foregroundStyle(Color.slate)
+                }
+                macrosCard
+                ingredientsCard
+                if !recipe.notes.isEmpty { notesCard }
+                actionsRow
+            }
+            .padding(20)
+            .padding(.bottom, 24)
+        }
+        .background(Color.parchment)
+        .navigationTitle("Recipe")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard !didLoadPhoto else { return }
+            didLoadPhoto = true
+            if let data = store.recipePhotoData(for: recipe.id) {
+                photo = await UIImage(data: data)?.byPreparingForDisplay()
+            }
+        }
+    }
+
+    @ViewBuilder private var photoSection: some View {
+        if let photo {
+            ZStack(alignment: .topTrailing) {
+                Image(uiImage: photo)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 210)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                HStack(spacing: 8) {
+                    PhotoCaptureControl(onCameraCapture: { save($0) }) {
+                        photoIconChip("camera.fill")
+                    }
+                    Button { remove() } label: { photoIconChip("trash") }
+                        .buttonStyle(.plain)
+                }
+                .padding(8)
+            }
+        } else {
+            PhotoCaptureControl(onCameraCapture: { save($0) }) {
+                HStack(spacing: 10) {
+                    Image(systemName: "camera.fill").font(.system(size: 16, weight: .semibold))
+                    Text("Add a photo of this recipe").font(.fernlet(.label))
+                }
+                .foregroundStyle(Color.moss)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 22)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.moss.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                )
+            }
+            .accessibilityIdentifier("recipeDetail.addPhoto")
+        }
+    }
+
+    private func photoIconChip(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(Color.bark)
+            .frame(width: 34, height: 34)
+            .background(Color.cream.opacity(0.92), in: Circle())
+    }
+
+    private var macrosCard: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel("Per serving")
+                HStack(spacing: 10) {
+                    NutritionPill(title: "Protein", value: "\(perServing.protein)g")
+                    NutritionPill(title: "Carbs", value: "\(perServing.carbs)g")
+                    NutritionPill(title: "Fat", value: "\(perServing.fat)g")
+                    if store.settings.showCalories {
+                        NutritionPill(title: "Calories", value: "\(perServing.calories)")
+                    }
+                }
+                Text("Whole recipe: P \(totals.protein)g · C \(totals.carbs)g · F \(totals.fat)g\(store.settings.showCalories ? " · \(totals.calories) cal" : "")")
+                    .font(.fernlet(.stat))
+                    .foregroundStyle(Color.slate)
+            }
+        }
+    }
+
+    private var ingredientsCard: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel("Ingredients")
+                if recipe.ingredients.isEmpty {
+                    Text("No ingredients listed.")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                } else {
+                    ForEach(recipe.ingredients) { ingredient in
+                        HStack(alignment: .top, spacing: 8) {
+                            Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
+                            Text(ingredientLine(ingredient))
+                                .font(.fernlet(.body))
+                                .foregroundStyle(Color.bark)
+                                .fernletWrappingText()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var notesCard: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("Notes")
+                Text(recipe.notes)
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+            }
+        }
+    }
+
+    private var actionsRow: some View {
+        VStack(spacing: 10) {
+            Menu {
+                ForEach(MealType.allCases) { mealType in
+                    Button(mealType.rawValue) { onLog(mealType) }
+                }
+            } label: {
+                Label("Log this recipe", systemImage: "fork.knife")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.cream)
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            }
+            .accessibilityIdentifier("recipeDetail.log")
+            HStack(spacing: 10) {
+                Button { onEdit() } label: {
+                    secondaryActionLabel("Edit", icon: "pencil")
+                }
+                .buttonStyle(.plain)
+                Button { onShare() } label: {
+                    secondaryActionLabel("Share", icon: "square.and.arrow.up")
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func secondaryActionLabel(_ title: String, icon: String) -> some View {
+        Label(title, systemImage: icon)
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.moss)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+    }
+
+    private func ingredientLine(_ ingredient: RecipeIngredient) -> String {
+        let quantity = ingredient.quantity.formatted(.number.precision(.fractionLength(0...1)))
+        let name = resolvedItems[ingredient.foodItemId]?.name ?? "Ingredient"
+        return "\(quantity) \(ingredient.unit) · \(name)"
+    }
+
+    private func save(_ image: UIImage) {
+        store.saveRecipePhoto(image, for: recipe.id)
+        photo = image
+    }
+
+    private func remove() {
+        store.deleteRecipePhoto(for: recipe.id)
+        photo = nil
+    }
+}
+#endif
+
 struct MacroInputRow: View {
     let label: String
     let unit: String
@@ -2777,10 +2995,34 @@ struct RecipeBookSheet: View {
                                 ForEach(Array(allManual.enumerated()), id: \.element.id) { index, recipe in
                                     if index > 0 { FernletRowDivider() }
                                     HStack(spacing: 12) {
+                                        #if canImport(UIKit)
+                                        // Tapping a recipe now opens a read-only detail view (photo,
+                                        // per-serving macros, ingredients, notes) rather than jumping
+                                        // straight into the editor — the detail view offers edit/log/share.
+                                        NavigationLink {
+                                            RecipeDetailView(
+                                                store: store,
+                                                recipe: recipe,
+                                                onEdit: { editingRecipe = recipe; dismiss() },
+                                                onLog: { mealType in store.logRecipe(recipe, mealType: mealType); dismiss() },
+                                                onShare: {
+                                                    recipeShareDraft = ProximityRecipeShareDraft(
+                                                        title: recipe.name,
+                                                        shareText: store.recipeShareText(for: recipe),
+                                                        payload: store.proximityRecipeSharePayload(for: recipe)
+                                                    )
+                                                }
+                                            )
+                                        } label: {
+                                            RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
+                                        }
+                                        .buttonStyle(.plain)
+                                        #else
                                         Button { editingRecipe = recipe; dismiss() } label: {
                                             RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
                                         }
                                         .buttonStyle(.plain)
+                                        #endif
                                         RecipeMealTypeMenu { mealType in
                                             store.logRecipe(recipe, mealType: mealType)
                                             dismiss()

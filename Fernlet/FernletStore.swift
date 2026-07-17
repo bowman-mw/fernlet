@@ -202,6 +202,12 @@ final class FernletStore {
         directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
             .appendingPathComponent("ProgressPhotos", isDirectory: true)
     )
+    /// The user's OWN photo for a recipe (#1), sealed and keyed by the recipe id. No external image
+    /// fetch (tester decision) — this only ever holds a photo the user chose.
+    @ObservationIgnored private let recipePhotoStore = MealPhotoStore(
+        directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
+            .appendingPathComponent("RecipePhotos", isDirectory: true)
+    )
     /// Injected (or nil → default) journal narrative repository, captured so the lazily-built
     /// `journalSealingCoordinator` can own it.
     @ObservationIgnored private let providedJournalNarrativeRepository: (any JournalNarrativeStoring)?
@@ -2003,7 +2009,28 @@ final class FernletStore {
 
     func deleteRecipe(_ recipe: RecipeDefinition) {
         diary.deleteRecipe(recipe)
+        // The recipe's own photo is keyed by the recipe id, so it's cleaned up here rather than stranded.
+        recipePhotoStore.delete(id: recipe.id)
     }
+
+    // MARK: - Recipe photos (#1 — the user's OWN photo of a recipe, keyed by the recipe id)
+
+    func recipePhotoData(for recipeID: UUID) -> Data? {
+        recipePhotoStore.imageData(for: recipeID)
+    }
+
+    func deleteRecipePhoto(for recipeID: UUID) {
+        recipePhotoStore.delete(id: recipeID)
+    }
+
+    #if canImport(UIKit)
+    /// Seals the user's own photo for a recipe (no external fetch — see the tester decision). Keyed by
+    /// the recipe id so there's no separate id to thread through `RecipeDefinition`.
+    @discardableResult func saveRecipePhoto(_ image: UIImage, for recipeID: UUID) -> Bool {
+        guard let data = image.jpegData(compressionQuality: 0.85) else { return false }
+        return recipePhotoStore.save(data, forID: recipeID)
+    }
+    #endif
 
     // NOTE (deviation): macroTotals/micronutrientTotals(for:) STAY IN THE FACADE — app-target
     // `MealBuilder`.
@@ -2300,6 +2327,11 @@ final class FernletStore {
         // but the same reasoning applies: clear the store wholesale so nothing is stranded on disk.
         if !progressPhotoStore.deleteAll() {
             outcome.incompleteStores.append("progress photos")
+        }
+        // 4c. Recipe photos (#1), keyed by recipe id. The saved recipes themselves are cleared by the
+        // repository purge below; their photos live in a separate sealed store that the purge can't reach.
+        if !recipePhotoStore.deleteAll() {
+            outcome.incompleteStores.append("recipe photos")
         }
 
         // 5. The share-extension inbox, which is drained on the next foreground. A recipe shared into
