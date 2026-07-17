@@ -196,6 +196,12 @@ final class FernletStore {
         directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
             .appendingPathComponent("MealPhotos", isDirectory: true)
     )
+    /// The user's gym progress-photo timeline (#11). Body photos, so it seals the bytes AND the dated
+    /// index; reuses the same hardened media path as meal photos, in its own directory.
+    @ObservationIgnored private let progressPhotoStore = ProgressPhotoStore(
+        directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
+            .appendingPathComponent("ProgressPhotos", isDirectory: true)
+    )
     /// Injected (or nil → default) journal narrative repository, captured so the lazily-built
     /// `journalSealingCoordinator` can own it.
     @ObservationIgnored private let providedJournalNarrativeRepository: (any JournalNarrativeStoring)?
@@ -1403,6 +1409,45 @@ final class FernletStore {
     }
     #endif
 
+    // MARK: - Progress photos (#11 — the Move-tab timeline)
+
+    /// The progress-photo timeline, newest first. Reads the sealed store on demand (the Move tab caches
+    /// the result in view state and refreshes after a mutation, like `loadDays`), so there is no observed
+    /// copy of these body-photo records held in app state.
+    func progressPhotoRecords() -> [ProgressPhotoRecord] {
+        progressPhotoStore.records()
+    }
+
+    func progressPhotoData(for id: UUID) -> Data? {
+        progressPhotoStore.imageData(for: id)
+    }
+
+    func updateProgressPhotoCaption(id: UUID, caption: String?) {
+        progressPhotoStore.updateCaption(id: id, caption: caption)
+    }
+
+    func deleteProgressPhoto(id: UUID) {
+        progressPhotoStore.delete(id: id)
+    }
+
+    #if canImport(UIKit)
+    /// Seals a new progress photo taken now. Returns the stored record (nil if the image couldn't be
+    /// encoded/sealed). JPEG-encodes at source quality; the store downscales + re-encodes on the way in.
+    @discardableResult func addProgressPhoto(_ image: UIImage, caption: String? = nil) -> ProgressPhotoRecord? {
+        guard let data = image.jpegData(compressionQuality: 0.9) else { return nil }
+        return progressPhotoStore.add(data, caption: caption, capturedAt: Date())
+    }
+    #endif
+
+    #if DEBUG
+    /// DEBUG-only seam for the demo/appearance seed: seals a progress photo with an EXPLICIT capture
+    /// date so the seeded timeline shows a real spread rather than three photos stamped "now". Not on
+    /// the shipping path — the app always captures at the current moment.
+    @discardableResult func seedProgressPhoto(_ data: Data, caption: String?, capturedAt: Date) -> ProgressPhotoRecord? {
+        progressPhotoStore.add(data, caption: caption, capturedAt: capturedAt)
+    }
+    #endif
+
     // NOTE (deviation): logRecipe STAYS IN THE FACADE — it builds the meal via app-target
     // `MealBuilder`, then writes it through the diary's pure `appendMeal`.
     @discardableResult func logRecipe(_ recipe: RecipeDefinition, mealType: MealType? = nil, date: String? = nil) -> Meal {
@@ -2249,6 +2294,12 @@ final class FernletStore {
         // the days are gone nothing knows these files exist and they can never be reached again.
         if !mealPhotoStore.deleteAll() {
             outcome.incompleteStores.append("meal photos")
+        }
+        // 4b. The gym progress-photo timeline (#11) — the user's own body photos, a log like meals, so a
+        // full wipe includes them. Its dated index is self-contained (not referenced from day records),
+        // but the same reasoning applies: clear the store wholesale so nothing is stranded on disk.
+        if !progressPhotoStore.deleteAll() {
+            outcome.incompleteStores.append("progress photos")
         }
 
         // 5. The share-extension inbox, which is drained on the next foreground. A recipe shared into

@@ -62,7 +62,7 @@ struct S3BoundaryTests {
         // Raw cycle/intimacy value types — must travel only as de-identified AIContext payloads.
         "CyclePhase", "CycleDayEntry", "UserLoggedCycleEvent", "PeriodTrackerStore",
         // Sealed media stores + the pending-narrative buffer/payload.
-        "PrivateMediaStore", "MealPhotoStore", "PendingNarrativeBuffer", "PendingNarrativePayload",
+        "PrivateMediaStore", "MealPhotoStore", "ProgressPhotoStore", "PendingNarrativeBuffer", "PendingNarrativePayload",
         // Raw tier-two behavioral memory record (WI-7b). `TierTwoMemoryRecord` lives in
         // `FernletDomainModel`, a direct dependency of BOTH walled consumers — so the compiler wall
         // cannot keep it out of an AI prompt builder. AI may only receive `MemoryAgent`'s de-identified

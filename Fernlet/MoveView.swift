@@ -3,6 +3,7 @@ import LocalPersistence
 import FernletFoundation
 import FernletDomainModel
 import AIProviders
+import PrivateMediaStore
 
 struct MoveView: View {
     var store: FernletStore
@@ -13,6 +14,7 @@ struct MoveView: View {
     @State private var displayedWeek: Date = .now
     @State private var allDays: [String: FernletDay] = [:]
     @State private var showingLocations = false
+    @State private var progressPhotos: [ProgressPhotoRecord] = []
 
     private var hasRecentCoachInteraction: Bool {
         let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: .now) ?? .now
@@ -84,6 +86,18 @@ struct MoveView: View {
                             }
                         }
                     }
+
+                    #if canImport(UIKit)
+                    ProgressPhotoSection(
+                        records: progressPhotos,
+                        loadData: { store.progressPhotoData(for: $0) },
+                        onCapture: { image in
+                            store.addProgressPhoto(image)
+                            progressPhotos = store.progressPhotoRecords()
+                        },
+                        onOpen: { record in path.append(record) }
+                    )
+                    #endif
                 }
                 .padding(20)
             }
@@ -94,8 +108,22 @@ struct MoveView: View {
                 MoveDayDetailView(store: store, dateKey: dateKey, showsPlanSourceTag: hasRecentCoachInteraction)
                     .onDisappear { allDays = store.loadDays() }
             }
+            #if canImport(UIKit)
+            .navigationDestination(for: ProgressPhotoRecord.self) { record in
+                // The detail view refreshes us itself after each persisted change (save → refresh in one
+                // step), so there's no racing `onDisappear` and no stale caption on return.
+                ProgressPhotoDetailView(
+                    store: store,
+                    record: record,
+                    onChanged: { progressPhotos = store.progressPhotoRecords() }
+                )
+            }
+            #endif
         }
-        .onAppear { allDays = store.loadDays() }
+        .onAppear {
+            allDays = store.loadDays()
+            progressPhotos = store.progressPhotoRecords()
+        }
         .sheet(isPresented: $showingLocations) {
             WorkoutLocationSetupView(store: store)
                 .presentationDetents([.large])

@@ -1157,12 +1157,8 @@ struct MealSheet: View {
     @State private var reviewContext: MealReviewContext?
     #if canImport(UIKit)
     @State private var mealPhoto: UIImage?
-    @State private var showingCamera = false
-    @State private var selectedMealPhotoItem: PhotosPickerItem?
-    /// Drives the library fallback when the camera is unavailable (Simulator, or a camera-less /
-    /// access-denied device): present a `PhotosPicker` bound to `selectedMealPhotoItem` instead of a
-    /// dead black camera modal. Completes the already-present `selectedMealPhotoItem` onChange plumbing.
-    @State private var isMealPhotoLibraryPickerActive = false
+    // Camera / library-fallback plumbing now lives in the shared `PhotoCaptureControl` (#11 piece 4),
+    // which both the primary Capture button and the "try again" retry use.
     @State private var isIdentifyingPhoto = false
     // Unified Capture auto-routing (Food Capture mockup §2b–2e).
     /// Calm "analyzing…" state shown while the router runs barcode → label → meal detection.
@@ -1293,13 +1289,6 @@ struct MealSheet: View {
             .presentationCornerRadius(20)
         }
         #if canImport(UIKit)
-        .fullScreenCover(isPresented: $showingCamera) {
-            ImagePickerView(sourceType: .camera) { image in
-                // The unified front door: auto-detect what was captured and route it.
-                handleCapturedPhoto(image)
-            }
-            .ignoresSafeArea()
-        }
         .sheet(item: $captureChooser) { context in
             CaptureChooserSheet(
                 aiEnabled: store.settings.aiStatus != .off,
@@ -1323,16 +1312,6 @@ struct MealSheet: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(20)
-        }
-        .onChange(of: selectedMealPhotoItem) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    mealPhoto = image
-                }
-                selectedMealPhotoItem = nil
-            }
         }
         #endif
     }
@@ -1369,17 +1348,15 @@ struct MealSheet: View {
                     // default; barcode Scan, Recent history, and Import stay reachable but demoted.
                     VStack(spacing: 10) {
                         #if canImport(UIKit)
-                        mealCapturePrimaryButton {
-                            // No camera on the Simulator (the documented test target) and on camera-less
-                            // or access-denied devices — fall back to the photo library rather than
-                            // presenting a dead black camera modal.
-                            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                                showingCamera = true
-                            } else {
-                                isMealPhotoLibraryPickerActive = true
-                            }
+                        // A camera shot goes through the auto-detect front door; a library pick is just
+                        // attached as the meal photo (no barcode/label rescan on an arbitrary library image).
+                        PhotoCaptureControl(
+                            onCameraCapture: { handleCapturedPhoto($0) },
+                            onLibraryPick: { mealPhoto = $0 }
+                        ) {
+                            mealCapturePrimaryLabel
                         }
-                        .photosPicker(isPresented: $isMealPhotoLibraryPickerActive, selection: $selectedMealPhotoItem, matching: .images)
+                        .accessibilityLabel("Capture food")
 
                         HStack(spacing: 8) {
                             mealSecondaryButton("Scan", icon: "barcode.viewfinder") {
@@ -1620,15 +1597,14 @@ struct MealSheet: View {
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
-                Button {
-                    captureError = nil
-                    showingCamera = true
-                } label: {
+                PhotoCaptureControl(
+                    onCameraCapture: { captureError = nil; handleCapturedPhoto($0) },
+                    onLibraryPick: { captureError = nil; mealPhoto = $0 }
+                ) {
                     Label("Try again", systemImage: "arrow.clockwise")
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.moss)
                 }
-                .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1658,22 +1634,20 @@ struct MealSheet: View {
     #if canImport(UIKit)
     /// The single prominent capture affordance — "one button points at food." It opens the camera
     /// (the delightful default). Barcode/scan/import remain as quiet helpers beneath it.
-    private func mealCapturePrimaryButton(action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                Text("Capture")
-                    .font(.fernlet(.label))
-            }
-            .foregroundStyle(Color.cream)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
-            .fernletSmallShadow()
+    /// The styled label for the prominent capture affordance — "one button points at food." The tap
+    /// behavior (camera, or library fallback) lives in the shared `PhotoCaptureControl` that wraps this.
+    private var mealCapturePrimaryLabel: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "camera.fill")
+                .font(.system(size: 18, weight: .semibold))
+            Text("Capture")
+                .font(.fernlet(.label))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Capture food")
+        .foregroundStyle(Color.cream)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
+        .fernletSmallShadow()
     }
     #endif
 

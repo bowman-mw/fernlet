@@ -56,6 +56,9 @@ extension FernletStore {
         seedHydrationAndSleep()
         seedJournals()
         seedWorkout()
+        #if canImport(UIKit)
+        seedProgressPhotos()
+        #endif
         seedHygiene()
         seedMemories()
 
@@ -179,6 +182,47 @@ extension FernletStore {
         )
         addWorkout(workout, date: todayKey)
     }
+
+    #if canImport(UIKit)
+    /// A few gym progress photos so the Move tab's timeline (#11) renders populated in the gallery
+    /// rather than its empty state. Goes through the real sealed `ProgressPhotoStore` via
+    /// `addProgressPhoto`, exercising the seal/normalize/dated-index path end to end.
+    ///
+    /// Cross-day duplicate check of its own: progress photos persist across days (they are a timeline),
+    /// so the day-scoped guard in `seedDemoContent` doesn't cover them — same reasoning as
+    /// `seedJournals`/`seedMemories`.
+    private func seedProgressPhotos() {
+        guard progressPhotoRecords().isEmpty else { return }
+        let calendar = Calendar.current
+        let entries: [(weeksAgo: Int, hue: CGFloat, caption: String?)] = [
+            (6, 0.55, "Starting out"),
+            (3, 0.52, nil),
+            (0, 0.50, "Feeling stronger"),
+        ]
+        for entry in entries {
+            let image = Self.demoProgressImage(hue: entry.hue)
+            guard let data = image.jpegData(compressionQuality: 0.9) else { continue }
+            seedProgressPhoto(
+                data,
+                caption: entry.caption,
+                capturedAt: calendar.date(byAdding: .weekOfYear, value: -entry.weeksAgo, to: Date()) ?? Date()
+            )
+        }
+    }
+
+    /// A cool neutral gradient stand-in for a body photo (no bundled image assets in the test seed).
+    private static func demoProgressImage(hue: CGFloat) -> UIImage {
+        let size = CGSize(width: 480, height: 640)
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            let top = UIColor(hue: hue, saturation: 0.18, brightness: 0.82, alpha: 1).cgColor
+            let bottom = UIColor(hue: hue, saturation: 0.30, brightness: 0.52, alpha: 1).cgColor
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                      colors: [top, bottom] as CFArray, locations: [0, 1])!
+            ctx.cgContext.drawLinearGradient(gradient, start: .zero,
+                                             end: CGPoint(x: 0, y: size.height), options: [])
+        }
+    }
+    #endif
 
     // MARK: - Home (personal-care / hygiene)
 

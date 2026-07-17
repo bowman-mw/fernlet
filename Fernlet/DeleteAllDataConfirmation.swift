@@ -47,13 +47,15 @@ enum DeleteAllDataConfirmation {
     /// iCloud backup that the code will skip (because there isn't one) is exactly the kind of
     /// nearly-harmless overpromise that made the old "Reset everything" label untrue.
     private static func message(canDeleteHealthSamples: Bool, hasCloudCopy: Bool) -> String {
-        // "meals and their photos" — not a bare "photos". The only photos this funnel deletes are the
-        // ones attached to meals (`mealPhotoStore`). The shared-photo wall is KEPT (see below), so an
-        // unqualified "photos" here would contradict the kept list and re-open the exact
-        // says-more-than-it-does gap this dialog exists to close.
+        // "meals and their photos" + "gym progress photos" — never a bare "photos". The photos this funnel
+        // deletes are the user's OWN logged pictures: the ones attached to meals (`mealPhotoStore`) and the
+        // gym progress-photo timeline (`progressPhotoStore`, funnel step 4b). The shared-photo wall is KEPT
+        // (see below), so an unqualified "photos" here would contradict the kept list and re-open the exact
+        // says-more-than-it-does gap this dialog exists to close. This enumeration is the invariant backstop
+        // (there's no test coupling this text to the funnel) — keep it in step with what step 4/4b delete.
         var scope = """
-            This deletes your logged days, meals and their photos, journal entries, cycle notes, \
-            intimate logs, Worry Box notes, saved recipes, custom items and coins.
+            This deletes your logged days, meals and their photos, gym progress photos, journal entries, \
+            cycle notes, intimate logs, Worry Box notes, saved recipes, custom items and coins.
             """
         if hasCloudCopy {
             scope += " Your iCloud copy and any encrypted iCloud backups go too, as this device syncs."
