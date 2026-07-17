@@ -575,6 +575,49 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// One-line description of how this goal shapes the daily nutrition targets, for the goal preset
+    /// cards. Descriptive only — it summarizes the calorie/protein logic in
+    /// `NutritionTargetCalculator` (per-goal calorie multiplier + protein g/kg), it does not recompute
+    /// it. Keep the two in step: strength/sportsPrep eat a little more with more protein, weight
+    /// management runs a gentle deficit with higher protein, recovery sits near maintenance, and the
+    /// gentler goals hold at balanced maintenance.
+    public var nutritionSummary: String {
+        switch self {
+        case .strength:
+            "A little more to grow on · high protein (~1.7 g/kg)"
+        case .sportsPrep:
+            "Fuelled for training · high protein (~1.6 g/kg)"
+        case .weightManagement:
+            "A gentle calorie deficit · higher protein"
+        case .recovery:
+            "Maintenance calories · easy on the body"
+        case .wellness, .mentalHealth, .exploring:
+            "Balanced maintenance · steady protein"
+        }
+    }
+
+    /// One-line description of the training split this goal recommends, for the goal preset cards and the
+    /// Move tab. Mirrors the split logic in `WorkoutSplitRecommender`; moved here (from a private
+    /// MoveView extension) so Settings and Move share one source of truth.
+    public var trainingSummary: String {
+        switch self {
+        case .strength:
+            "Upper, lower, and full-body days across the week."
+        case .weightManagement:
+            "Strength days mixed with cardio and recovery."
+        case .mentalHealth:
+            "Gentle movement, cardio, and recovery anchors."
+        case .recovery:
+            "Recovery-first movement with optional light strength."
+        case .wellness:
+            "Balanced strength, cardio, and rest days."
+        case .exploring:
+            "Flexible splits based on what feels useful."
+        case .sportsPrep:
+            "Sport-specific training with strength and conditioning."
+        }
+    }
+
     /// Maps a persisted goal token — including the legacy aliases early builds wrote — to a case;
     /// nil for a token no case or alias matches (i.e. one minted by a newer build). The decode
     /// below freezes those to `.wellness`; `FernletSettings.selectedGoal` additionally parks them

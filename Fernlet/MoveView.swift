@@ -777,27 +777,6 @@ struct WorkoutCategoryPreview: View {
     }
 }
 
-private extension GoalType {
-    var defaultWorkoutSplitSummary: String {
-        switch self {
-        case .strength:
-            "Upper, lower, and full-body days across the week."
-        case .weightManagement:
-            "Strength days mixed with cardio and recovery."
-        case .mentalHealth:
-            "Gentle movement, cardio, and recovery anchors."
-        case .recovery:
-            "Recovery-first movement with optional light strength."
-        case .wellness:
-            "Balanced strength, cardio, and rest days."
-        case .exploring:
-            "Flexible splits based on what feels useful."
-        case .sportsPrep:
-            "Sport-specific training with strength and conditioning."
-        }
-    }
-}
-
 /// The three look-alike cream boxes above the calendar — a navigational goal, a passive readiness
 /// band, and a navigational location — collapse into one thin two-segment context strip
 /// (Goal · Space). Readiness, already surfaced on Home and inside Suggest, no longer claims a band

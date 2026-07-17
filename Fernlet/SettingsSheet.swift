@@ -1023,17 +1023,10 @@ struct SettingsSheet: View {
     private var generalTab: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionLabel("Goal")
+            // Preset cards: each goal shows its paired nutrition + training setup, so one choice reads as
+            // configuring both. Replaces the bare Picker + lone tagline.
+            GoalPresetCards(selectedGoal: $store.settings.selectedGoal)
             VStack(alignment: .leading, spacing: 10) {
-                Picker("Goal", selection: $store.settings.selectedGoal) {
-                    ForEach(GoalType.allCases) { goal in
-                        Text(goal.displayName).tag(goal)
-                    }
-                }
-                Text(store.settings.selectedGoal.tagline)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                Divider().overlay(Color.bark.opacity(0.08))
                 Toggle("Sick mode", isOn: Binding(
                     get: { store.isSick(on: store.todayKey) },
                     set: { store.setSick($0, on: store.todayKey) }
