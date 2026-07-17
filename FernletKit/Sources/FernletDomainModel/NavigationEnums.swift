@@ -235,12 +235,53 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         return Array(result.prefix(6))
     }
 
-    public static func visibleQuickLog(_ items: [FernletShortcut], allowsIntimacy: Bool) -> [FernletShortcut] {
-        let availableItems = allowsIntimacy ? items : items.filter { $0 != .intimacyTracking }
-        return normalizedQuickLog(availableItems)
+    /// Which sensitive surfaces the user can currently see. One value type rather than a widening
+    /// list of `allows…` Bools, so adding a future gate doesn't re-touch every call site.
+    ///
+    /// IMPORTANT: filtering by this is DISPLAY-ONLY. Never persist a filtered list back to settings —
+    /// hiding a surface would then permanently destroy the user's own quick-log layout, and un-hiding
+    /// would not restore it. The stored array keeps every choice; only rendering filters.
+    public static func visibleQuickLog(_ items: [FernletShortcut], visibility: SensitiveSurfaceVisibility) -> [FernletShortcut] {
+        normalizedQuickLog(items.filter { visibility.allows($0) })
     }
 
-    public static func selectableQuickLogItems(allowsIntimacy: Bool) -> [FernletShortcut] {
-        allCases.filter { allowsIntimacy || $0 != .intimacyTracking }
+    public static func selectableQuickLogItems(visibility: SensitiveSurfaceVisibility) -> [FernletShortcut] {
+        allCases.filter { visibility.allows($0) }
+    }
+}
+
+/// The visibility of Fernlet's gated sensitive surfaces. Defaults to fully visible so callers that
+/// don't care (and tests) read naturally.
+public nonisolated struct SensitiveSurfaceVisibility: Equatable, Sendable {
+    public var intimacy: Bool
+    public var period: Bool
+
+    public init(intimacy: Bool = true, period: Bool = true) {
+        self.intimacy = intimacy
+        self.period = period
+    }
+
+    /// Everything visible — the pre-gate behavior.
+    public static let all = SensitiveSurfaceVisibility()
+
+    /// Exhaustive on purpose — no `default`. A `default: true` here silently fails OPEN: `.logPeriod`
+    /// was missed exactly that way, leaving a live period-logging tile on Home while the feature was
+    /// hidden. Listing every case means a new shortcut cannot join without someone deciding whether it
+    /// is gated.
+    public func allows(_ shortcut: FernletShortcut) -> Bool {
+        switch shortcut {
+        case .intimacyTracking: intimacy
+        // `.logPeriod` writes cycle data; it is gated with the period surfaces, not merely hidden.
+        case .periodTracking, .logPeriod: period
+        case .meal, .water, .move, .sleep, .journal, .care, .friends, .breathing, .grounding, .worryBox: true
+        }
+    }
+
+    public func allows(_ screen: FernletScreen) -> Bool {
+        switch screen {
+        case .intimacyTracking: intimacy
+        case .periodTracking: period
+        case .food, .move, .journal, .friends, .photos: true
+        }
     }
 }

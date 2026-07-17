@@ -55,6 +55,27 @@ public nonisolated struct FernletSettings: Codable {
     public var weatherPromptsEnabled: Bool = false
     public var showCalories: Bool = false
     public var hasCompletedOnboarding: Bool = false
+    /// Whether the cycle surfaces are visible at all. `nil` means "not chosen" and derives from
+    /// `userProfile.sex` (see `isPeriodTrackingVisible`); a non-nil value is an explicit Settings
+    /// override that outranks `sex`. Hiding is a HARD gate, not cosmetic: while hidden Fernlet
+    /// performs no cycle decrypt and no cycle HealthKit read (see `PeriodTrackerStore.isVisible` and
+    /// `allowedHealthCapabilities`). Contrast `hidePredictions`/`hideFertileWindow`, which are
+    /// cosmetic sub-options that still read the data. Hidden NEVER deletes — the sealed rows survive
+    /// and re-appear if un-hidden.
+    public var periodTrackingVisible: Bool? = nil
+    /// One-time marker for the period-visibility gate, mirroring `didMigrateMilestonesFirstAidWidgets`.
+    /// Fresh installs start `true` (nothing to migrate — they derive from `sex`). A settings blob that
+    /// predates the gate decodes this as `false` (key absent), which pins `periodTrackingVisible = true`
+    /// once so an existing cycle-tracking user doesn't silently lose the feature to `sex`'s `.male`
+    /// default, then flips to `true` so it never runs again.
+    public var didMigratePeriodVisibility: Bool = true
+    /// Whether intimate-activity logging is visible. Default ON so this preserves today's behavior
+    /// exactly, and so the flag only deviates from its default in the benign direction (turned OFF) —
+    /// a default-OFF flag reading `true` would positively signal "this user tracks intimacy" to
+    /// anyone reading the synced blob. Still subordinate to the 18+ age check
+    /// (`isIntimateLoggingAllowed`), which is a separate concern: age says "may not", this says
+    /// "does not want to". Hiding is a hard gate on the same terms as `periodTrackingVisible`.
+    public var intimacyTrackingVisible: Bool = true
     public var hidePredictions: Bool = false
     public var hideFertileWindow: Bool = false
     /// Opt-in: let medium/high-confidence cycle-phase trends gently soften scoring (default off; only takes
@@ -169,6 +190,22 @@ public nonisolated struct FernletSettings: Codable {
         weatherPromptsEnabled = try container.decodeIfPresent(Bool.self, forKey: .weatherPromptsEnabled) ?? false
         showCalories = try container.decodeIfPresent(Bool.self, forKey: .showCalories) ?? false
         hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
+        // Absent key ⇒ nil ⇒ derive from `sex`. That is right for a fresh install but WRONG for an
+        // existing user: `sex` defaults to `.male`, so someone who has been tracking cycles without
+        // ever setting it would silently lose the feature (and their data would go dark behind the
+        // gate) on upgrade. Pin those users to visible once, and let them opt out in Settings.
+        //
+        // The marker MUST be a dedicated one-time flag. `hasCompletedOnboarding` looks like it would
+        // work but is not a proxy for "existing user" — it turns true for new users too, so gating on
+        // it would pin every new user to visible on their second launch and the `sex` derivation would
+        // never run at all.
+        periodTrackingVisible = try container.decodeIfPresent(Bool.self, forKey: .periodTrackingVisible)
+        didMigratePeriodVisibility = try container.decodeIfPresent(Bool.self, forKey: .didMigratePeriodVisibility) ?? false
+        if !didMigratePeriodVisibility {
+            if periodTrackingVisible == nil { periodTrackingVisible = true }
+            didMigratePeriodVisibility = true
+        }
+        intimacyTrackingVisible = try container.decodeIfPresent(Bool.self, forKey: .intimacyTrackingVisible) ?? true
         hidePredictions = try container.decodeIfPresent(Bool.self, forKey: .hidePredictions) ?? false
         hideFertileWindow = try container.decodeIfPresent(Bool.self, forKey: .hideFertileWindow) ?? false
         periodAwareScoringEnabled = try container.decodeIfPresent(Bool.self, forKey: .periodAwareScoringEnabled) ?? false

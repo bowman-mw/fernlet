@@ -385,18 +385,18 @@ struct FernletTests {
         store.settings.userProfile.age = 17
 
         #expect(!store.isIntimateLoggingAllowed)
-        #expect(!PrivateHubSection.visibleSections(allowsIntimacy: store.isIntimateLoggingAllowed).contains(.intimacy))
+        #expect(!PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility).contains(.intimacy))
 
         let quickLogItems = FernletShortcut.visibleQuickLog(
             [.meal, .water, .move, .sleep, .journal, .intimacyTracking],
-            allowsIntimacy: store.isIntimateLoggingAllowed
+            visibility: store.sensitiveSurfaceVisibility
         )
         #expect(!quickLogItems.contains(.intimacyTracking))
 
         store.settings.userProfile.age = 18
 
         #expect(store.isIntimateLoggingAllowed)
-        #expect(PrivateHubSection.visibleSections(allowsIntimacy: store.isIntimateLoggingAllowed).contains(.intimacy))
+        #expect(PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility).contains(.intimacy))
     }
 
     @MainActor

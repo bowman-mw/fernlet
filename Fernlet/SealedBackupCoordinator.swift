@@ -16,6 +16,9 @@ import HealthKitGateway
 protocol SealedBackupContext: AnyObject {
     var tierTwoMemories: [TierTwoMemoryRecord] { get }
     var sealedBackupContentKey: SymmetricKey? { get }
+    /// Whether cycle tracking is visible. The backup paths must consult this: both reconcile and
+    /// restore decrypt period narratives on ambient, launch-time paths that no view drives.
+    var isPeriodTrackingVisible: Bool { get }
     var previousJournals: [JournalEntry] { get }
     var memories: [MemoryNote] { get }
     var recentMeals: [Meal] { get }
@@ -171,6 +174,11 @@ final class SealedBackupCoordinator {
     /// worth of plaintext/ciphertext is ever resident — the rest of the (possibly very long) history
     /// stays on disk. Requires an unlocked content key, matching the locked-key guard on restore.
     private func reconcilePeriodBackup(using service: SealedBackupService) async throws {
+        // G5 (reconcile half). Pages the ENTIRE narrative store through plaintext, so it must honor
+        // the gate. Deliberately a silent no-op rather than disabling `sealedBackupPeriodEnabled`:
+        // turning that pref off DELETES the encrypted backup from iCloud, which would make hiding
+        // destructive. The pref and the cloud record are left exactly as they are.
+        guard host.isPeriodTrackingVisible else { return }
         guard let key = host.sealedBackupContentKey else { throw SealedBackupWiringError.locked }
         let repository = MenstrualNarrativeRepository()
         let pageSize = Self.periodBackupChunkSize
@@ -197,7 +205,10 @@ final class SealedBackupCoordinator {
         if prefs.sealedBackupSensitiveNotesEnabled {
             _ = await restoreSealedBackupOutcome(payloadType: .sensitiveNotes)
         }
-        if prefs.sealedBackupPeriodEnabled {
+        // G5 (restore half). This decrypts cycle history off CloudKit and WRITES it into the local
+        // narrative store, so a read-side gate alone would miss it. Skipping only defers: the backup
+        // stays in iCloud and restores if the user un-hides.
+        if prefs.sealedBackupPeriodEnabled && host.isPeriodTrackingVisible {
             _ = await restoreSealedBackupOutcome(payloadType: .periodData)
         }
     }

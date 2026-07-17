@@ -280,6 +280,41 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    /// Sets the hard cycle-visibility gate. Always writes an explicit value: once the user has made a
+    /// choice it must outrank `sex`, including when they choose the same value `sex` would have
+    /// derived (otherwise a later HealthKit sex auto-import would silently overturn them).
+    public func setPeriodTrackingVisible(_ visible: Bool) {
+        settings.periodTrackingVisible = visible
+        // The caller is responsible for scrubbing resident cycle state — see
+        // `FernletStore.setPeriodTrackingVisible`. This layer cannot reach the period store.
+        scheduleSnapshotSave()
+    }
+
+    public func setIntimacyTrackingVisible(_ visible: Bool) {
+        settings.intimacyTrackingVisible = visible
+        scheduleSnapshotSave()
+    }
+
+    /// Nils the health-context dimensions the user has hidden. Necessary because
+    /// `HealthDailyContext.merge` coalesces with `other.x ?? x`: simply not fetching a dimension
+    /// FREEZES its last value rather than clearing it, so a day that recorded cycle data before the
+    /// user hid the feature would keep serving it indefinitely.
+    public func scrubHiddenHealthContext(periodVisible: Bool, intimacyVisible: Bool) {
+        guard var context = day.healthContext else { return }
+        var changed = false
+        if !periodVisible, context.cycle != nil {
+            context.cycle = nil
+            changed = true
+        }
+        if !intimacyVisible, context.intimate != nil {
+            context.intimate = nil
+            changed = true
+        }
+        guard changed else { return }
+        day.healthContext = context
+        scheduleSnapshotSave()
+    }
+
     public func setStressAwarenessEnabled(_ enabled: Bool) {
         settings.stressAwarenessEnabled = enabled
         scheduleSnapshotSave()

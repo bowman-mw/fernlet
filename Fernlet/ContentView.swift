@@ -97,12 +97,40 @@ struct ContentView: View {
             }
             .animation(.spring(response: 0.34, dampingFraction: 0.86), value: mealLogNotification?.id)
             .animation(.easeOut(duration: 0.45), value: launcher.isDone)
+            // Scrub on the gate VALUE, not on the toggle that usually changes it. Visibility is derived
+            // (`periodTrackingVisible ?? sex == .female`, and intimacy ANDs the 18+ age check), so the
+            // Settings toggle is only ONE of its inputs — editing Gender or Age in the profile editor, or
+            // a HealthKit body-profile auto-import, flips the gate just as surely and never goes near
+            // `setPeriodTrackingVisible`. Keying the scrub to the setter left those paths hiding the UI
+            // while 240 days of decrypted narratives, the bridge's derived trends, and a persisted
+            // `healthContext.cycle` all stayed live. Watching the value covers every writer by construction.
+            .onChange(of: store.sensitiveSurfaceVisibility) { _, visibility in
+                if !visibility.period { store.periodScrubHook?() }
+                store.scrubHiddenHealthContext()
+            }
             .task {
                 periodStore.attachLockService(lockService)
+                // Hard visibility gate. Injected before ANY load below: the store's own `.task` runs
+                // on every cold launch, so wiring this later would let one full decrypt + HealthKit
+                // read through before the gate existed.
+                periodStore.isVisible = { [store] in store.isPeriodTrackingVisible }
+                // A day record written before the user hid a feature keeps its last cycle/intimate
+                // value (HealthDailyContext.merge coalesces), so scrub on load, not just on toggle.
+                store.scrubHiddenHealthContext()
                 if periodContext == nil {
                     let bridge = PeriodContextBridge(source: periodStore)
                     store.attachPeriodScoringContext(bridge)
                     periodContext = bridge
+                }
+                // Set AFTER the bridge exists so the closure can capture it. Scrubbing the store alone
+                // is not enough: the bridge memoizes derived period-start dates and per-phase symptom
+                // trends of its own, and nothing else invalidates them on a preference change. `refresh`
+                // is its documented invalidation point — with entries now empty it collapses trends to
+                // [] and drops the cached starts. `unlocked: false` is the fail-closed reading of hidden.
+                let bridge = periodContext
+                store.periodScrubHook = { [periodStore, store] in
+                    periodStore.scrubCycleState()
+                    bridge?.refresh(unlocked: false, wellbeingByDay: store.periodWellbeingByDay)
                 }
                 // Body signals (opt-in): wire the stress service to the store + a fresh
                 // gateway fetch. Foreground-pull only — refreshed below and on scene-active.
@@ -845,6 +873,11 @@ struct PersonalScreenView: View {
             .onChange(of: activeSheet?.id) { _, newValue in
                 if newValue == nil { Task { await loadIntimacyCalendar() } }
             }
+            // Hiding must drop plaintext already on screen, not just refuse the next load — this view
+            // holds decrypted logs in @State for as long as it stays in the hierarchy.
+            .onChange(of: store.isIntimacyTrackingVisible) { _, visible in
+                if !visible { scrubIntimacyState() }
+            }
         case .friends:
             PersonalMemoryList(category: "friend", emptyText: "No friend notes yet.", store: store)
         case .photos:
@@ -869,14 +902,20 @@ struct PersonalScreenView: View {
         "Tap to view your cycle"
     }
 
-    private var intimacySummary: String {
-        guard store.isIntimateLoggingAllowed else { return "Available for adults only." }
-        guard let count = store.day.healthContext?.intimate?.eventCount else { return "No intimacy context for today." }
-        return count == 0 ? "No intimacy events today." : "\(count) private event\(count == 1 ? "" : "s") today"
+    /// Drops the intimacy plaintext held in view state. Safe to call when already empty.
+    private func scrubIntimacyState() {
+        intimacyLogs = []
+        intimacyEventsByDay = [:]
     }
 
     private func loadIntimacyCalendar() async {
-        guard store.isIntimateLoggingAllowed else { return }
+        // G3 — the hard gate. Clears rather than merely returning, so hiding mid-session drops the
+        // logs already resident instead of leaving them readable until process death. Also skips the
+        // HealthKit read below, which the age check alone never covered.
+        guard store.isIntimacyTrackingVisible else {
+            scrubIntimacyState()
+            return
+        }
         let contentKey = lockService.contentKey()
         let localLogs: [IntimacyLog] = (try? IntimacyLogRepository().logs(contentKey: contentKey)) ?? []
         intimacyLogs = localLogs

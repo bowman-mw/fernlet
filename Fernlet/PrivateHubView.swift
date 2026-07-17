@@ -7,13 +7,21 @@ enum PrivateHubSection: String, CaseIterable, Identifiable {
     case journal = "Journal"
     case period = "Period"
     case intimacy = "Intimacy"
-    // Worry Box: always visible (no per-user gating), so BOTH visible-section computations —
-    // this helper AND the inline filter in `PrivateHubView.body` — pick it up via `allCases`.
+    // Worry Box + Journal: always visible (no per-user gating), so they pick up via `allCases`.
     case worryBox = "Worry Box"
     var id: String { rawValue }
 
-    static func visibleSections(allowsIntimacy: Bool) -> [PrivateHubSection] {
-        allowsIntimacy ? allCases : allCases.filter { $0 != .intimacy }
+    /// The single source of truth for hub section visibility. `PrivateHubView.body` used to inline a
+    /// second, near-identical copy of this filter that was the one actually running (the helper was
+    /// only reached by tests) — so the tests could pass while the UI diverged. There is one filter now.
+    static func visibleSections(visibility: SensitiveSurfaceVisibility) -> [PrivateHubSection] {
+        allCases.filter { section in
+            switch section {
+            case .intimacy: visibility.intimacy
+            case .period: visibility.period
+            case .journal, .worryBox: true
+            }
+        }
     }
 }
 
@@ -28,14 +36,16 @@ struct PrivateHubView: View {
     @Binding var tabResetToken: Int
 
     var body: some View {
-        let visibleSections = store.isIntimateLoggingAllowed ? PrivateHubSection.allCases : PrivateHubSection.allCases.filter { $0 != .intimacy }
+        let visibleSections = PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility)
 
         TabView(selection: $section) {
             JournalView(store: store, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                 .tag(PrivateHubSection.journal)
-            PeriodTrackerView(store: store, periodStore: periodStore, periodContext: periodContext, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
-                .tag(PrivateHubSection.period)
-            if store.isIntimateLoggingAllowed {
+            if store.isPeriodTrackingVisible {
+                PeriodTrackerView(store: store, periodStore: periodStore, periodContext: periodContext, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
+                    .tag(PrivateHubSection.period)
+            }
+            if store.isIntimacyTrackingVisible {
                 PersonalScreenView(screen: .intimacyTracking, store: store, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                     .tag(PrivateHubSection.intimacy)
             }
@@ -54,14 +64,15 @@ struct PrivateHubView: View {
         // Intimacy screens without configuring a passcode. Release builds: always gated.
         .fernletLockGate(active: !UITestSupport.bypassPrivateLockGate)
         .onAppear { resetUnavailableSectionIfNeeded() }
-        .onChange(of: store.isIntimateLoggingAllowed) { _, _ in
+        .onChange(of: store.sensitiveSurfaceVisibility) { _, _ in
             resetUnavailableSectionIfNeeded()
         }
     }
 
+    /// Moves off a section the user can no longer see. Without this, hiding the section you are
+    /// currently on strands the paged TabView on a tag that no longer has a page.
     private func resetUnavailableSectionIfNeeded() {
-        if !store.isIntimateLoggingAllowed && section == .intimacy {
-            section = .journal
-        }
+        guard !PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility).contains(section) else { return }
+        section = .journal
     }
 }

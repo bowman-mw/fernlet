@@ -56,6 +56,13 @@ public nonisolated enum PeriodLogResult: Equatable {
     case savedWithDroppedNarrative
 }
 
+/// Thrown when a cycle write is attempted while cycle tracking is hidden. Reaching this means a
+/// caller bypassed a suppressed entry point, so it is a programmer error surfaced as a throw rather
+/// than a user-facing state — the UI never offers the affordance while hidden.
+public nonisolated struct PeriodTrackingHiddenError: Error, Equatable {
+    public init() {}
+}
+
 public nonisolated enum PeriodFlowLevel: String, CaseIterable, Identifiable, Codable {
     case none, light, medium, heavy, unspecified
     public var id: String { rawValue }
@@ -229,6 +236,22 @@ public final class PeriodTrackerStore {
     @ObservationIgnored private var lockService: (any PeriodLockContext)?
     @ObservationIgnored private let calendar: Calendar
 
+    /// Hard visibility gate. While this returns false the store is INERT: it performs no cycle
+    /// decrypt, no cycle HealthKit read, and holds no cycle plaintext. This is deliberately enforced
+    /// here rather than in a `View` body — cycle data is read on ambient paths that no view drives
+    /// (cold launch, lock-state changes, the Home tab's health-context refresh), so a UI-level check
+    /// would hide the surface while the data kept flowing behind it.
+    ///
+    /// Injected as a closure because this store is a `nonisolated` leaf with no access to settings,
+    /// and because reading it lazily (rather than caching a Bool) means a toggle mid-session takes
+    /// effect on the very next call. Defaults to visible so existing callers and tests are unchanged.
+    @ObservationIgnored public var isVisible: () -> Bool = { true }
+
+    /// Whether the last `loadEntries` ran with a content key, i.e. whether `entries` carry narratives
+    /// and a prediction is legitimately derivable. Guards the recompute in `deleteEntry`, which has no
+    /// key of its own to check.
+    @ObservationIgnored private var lastLoadHadContentKey = false
+
     public init(
         healthService: PeriodHealthKitServicing,
         narrativeRepository: MenstrualNarrativeRepository? = nil,
@@ -246,6 +269,15 @@ public final class PeriodTrackerStore {
     }
 
     public func loadEntries(unlockedContentKey: SymmetricKey?) async {
+        // G1 — the hard gate. Returns BEFORE `loadPeriodEvents`, because that HealthKit read is the
+        // larger exposure here: flow, cycle dates, and BBT are ordinary unencrypted Health samples,
+        // so withholding the content key alone would still leave "is she bleeding today" resolvable.
+        // Scrubs on the way out so flipping to hidden mid-session drops plaintext already resident
+        // (up to 240 days of it) rather than merely refusing the next load.
+        guard isVisible() else {
+            scrubCycleState()
+            return
+        }
         let range = DateInterval(start: calendar.date(byAdding: .day, value: -240, to: Date()) ?? Date().addingTimeInterval(-240 * 86_400), end: Date())
         do {
             let samples = try await healthService.loadPeriodEvents(in: range)
@@ -253,6 +285,7 @@ public final class PeriodTrackerStore {
             let narrativeByUUID = Dictionary(uniqueKeysWithValues: narratives.map { ($0.hkExternalUUID, $0) })
             entries = buildEntries(samples: samples, narratives: narrativeByUUID, range: range)
             currentPhase = currentPhaseFromObservations()
+            lastLoadHadContentKey = unlockedContentKey != nil
             if unlockedContentKey != nil {
                 prediction = CyclePredictionEngine.predict(from: entries, today: Date(), calendar: calendar)
             } else {
@@ -262,10 +295,24 @@ public final class PeriodTrackerStore {
             entries = []
             currentPhase = .unknown
             prediction = nil
+            lastLoadHadContentKey = false
         }
     }
 
+    /// Drops every piece of cycle plaintext this store holds. Safe to call when already empty.
+    public func scrubCycleState() {
+        entries = []
+        currentPhase = .unknown
+        prediction = nil
+        lastLoadHadContentKey = false
+    }
+
     public func logEvent(_ event: UserLoggedCycleEvent, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
+        // G2 (write half). Refuse before touching HealthKit: logging while hidden would both write
+        // cycle data the user asked Fernlet to leave alone and, via the buffer path below, decrypt
+        // the whole pending buffer to re-seal it. Entry points are suppressed in the UI, so reaching
+        // here means a caller bypassed the gate.
+        guard isVisible() else { throw PeriodTrackingHiddenError() }
         let externalUUID = UUID()
         _ = try await healthService.savePeriodEvent(event, externalUUID: externalUUID)
         guard event.hasNarrative else { return .saved }
@@ -298,6 +345,11 @@ public final class PeriodTrackerStore {
     }
 
     public func editEvent(_ event: UserLoggedCycleEvent, replacingEntry entry: CycleDayEntry, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
+        // Gate BEFORE the deletes below. This is delete-then-recreate: it drops the old HealthKit
+        // samples and the sealed narrative, then re-adds via `logEvent`. If the gate only fired inside
+        // `logEvent`, an edit racing a hide would destroy the entry and then throw without writing the
+        // replacement — turning the hide gate itself into the cause of data loss.
+        guard isVisible() else { throw PeriodTrackingHiddenError() }
         let bundleID = Bundle.main.bundleIdentifier ?? ""
         let ownedSamples = entry.samples.filter { $0.sourceRevision.source.bundleIdentifier == bundleID }
         if !ownedSamples.isEmpty {
@@ -319,11 +371,24 @@ public final class PeriodTrackerStore {
             try? narrativeRepository.delete(id: narrative.id)
         }
         entries.removeAll { $0.id == entry.id }
-        prediction = CyclePredictionEngine.predict(from: entries, today: Date(), calendar: calendar)
+        // Only recompute a prediction we were entitled to in the first place. This used to run
+        // unconditionally, while the identical assignment in `loadEntries` is key-gated — so deleting
+        // an entry re-enabled full phase resolution (and the scoring softening that rides on it) with
+        // no content key at all, and would have punched straight through the visibility gate.
+        if lastLoadHadContentKey {
+            prediction = CyclePredictionEngine.predict(from: entries, today: Date(), calendar: calendar)
+        } else {
+            prediction = nil
+        }
         currentPhase = currentPhaseFromObservations()
     }
 
     public func drainPendingBuffer(contentKey: SymmetricKey) async throws {
+        // G2 (drain half). `PendingNarrativeBuffer.loadEntries` unseals with a device key that has
+        // nothing to do with the content key, so this path is invisible to key-withholding and must
+        // be refused explicitly. Not an error: an unlock while hidden is ordinary, and the buffer is
+        // left intact to drain later if the user un-hides.
+        guard isVisible() else { return }
         guard let lockService else { return }
         let pending = try lockService.drainPendingNarratives()
         guard !pending.isEmpty else { return }

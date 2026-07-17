@@ -225,6 +225,16 @@ final class FernletStore {
     @ObservationIgnored var worriesLetGoProvider: (() -> Int)?
     @ObservationIgnored var worryBoxResetHook: (() -> Void)?
 
+    /// Scrub seam for the cycle-visibility gate. Same shape as `worryBoxResetHook`: the
+    /// `PeriodTrackerStore` is `ContentView` state, not owned here, but hiding must drop its resident
+    /// plaintext synchronously — a gate that only refuses the NEXT load would leave up to 240 days of
+    /// decrypted narratives in memory until process death.
+    ///
+    /// Intimacy has no equivalent hook: its caches are `@State` on `PersonalScreenView`, which this
+    /// layer cannot reach. That view scrubs itself via `.onChange(of: isIntimacyTrackingVisible)`, and
+    /// `loadIntimacyCalendar`'s own gate catches anything that slips past.
+    @ObservationIgnored var periodScrubHook: (() -> Void)?
+
     /// Preference key + current version for the one-time historical past-day journal scrub (WI-1).
     /// Bump `pastDayJournalScrubVersion` to force the full-repository scan to re-run on next activation.
     static let pastDayJournalScrubFlagKey = "pastDayJournalScrubVersion"
@@ -432,6 +442,62 @@ final class FernletStore {
     }
 
     var isIntimateLoggingAllowed: Bool { diary.isIntimateLoggingAllowed }
+
+    /// Whether cycle surfaces are visible. An explicit Settings choice outranks `sex`; absent one,
+    /// derives from the onboarding answer. Distinct from `isIntimateLoggingAllowed`-style age gating:
+    /// there is no age floor on cycle tracking, only a preference.
+    ///
+    /// This is a HARD gate — see `PeriodTrackerStore.isVisible`. Callers must not treat it as a
+    /// display hint.
+    var isPeriodTrackingVisible: Bool {
+        settings.periodTrackingVisible ?? (settings.userProfile.sex == .female)
+    }
+
+    /// Whether intimate-activity surfaces are visible. Age is a separate, non-overridable floor —
+    /// an adult who hides the feature and an under-18 user are both invisible, but for different
+    /// reasons, and the UI must say the right one (see `intimacyHiddenReason`).
+    var isIntimacyTrackingVisible: Bool {
+        isIntimateLoggingAllowed && settings.intimacyTrackingVisible
+    }
+
+    /// The gate value for filtering navigation surfaces. Display-only — never persist a list filtered
+    /// by this (see `FernletShortcut.visibleQuickLog`).
+    var sensitiveSurfaceVisibility: SensitiveSurfaceVisibility {
+        SensitiveSurfaceVisibility(
+            intimacy: isIntimacyTrackingVisible,
+            period: isPeriodTrackingVisible
+        )
+    }
+
+    /// Flips the cycle-visibility gate and, when hiding, immediately drops every piece of cycle data
+    /// already resident. Refusing future loads is not enough on its own: `PeriodTrackerStore.entries`
+    /// can hold up to 240 days of decrypted narratives for the life of the process, and the day's
+    /// health context would otherwise keep its last cycle value forever (see `scrubHiddenHealthContext`).
+    /// Hiding never deletes — the sealed rows and HealthKit samples are untouched and come back if
+    /// the user un-hides.
+    func setPeriodTrackingVisible(_ visible: Bool) {
+        diary.setPeriodTrackingVisible(visible)
+        if !visible {
+            periodScrubHook?()
+            diary.scrubHiddenHealthContext(periodVisible: false, intimacyVisible: isIntimacyTrackingVisible)
+        }
+    }
+
+    func setIntimacyTrackingVisible(_ visible: Bool) {
+        diary.setIntimacyTrackingVisible(visible)
+        if !visible {
+            diary.scrubHiddenHealthContext(periodVisible: isPeriodTrackingVisible, intimacyVisible: false)
+        }
+    }
+
+    /// Drops any hidden dimension left resident in the day's health context. Called on load as well as
+    /// on the toggle, so a day record written before the user hid the feature can't keep serving it.
+    func scrubHiddenHealthContext() {
+        diary.scrubHiddenHealthContext(
+            periodVisible: isPeriodTrackingVisible,
+            intimacyVisible: isIntimacyTrackingVisible
+        )
+    }
 
     func setHidePredictions(_ hidePredictions: Bool) {
         diary.setHidePredictions(hidePredictions)
@@ -1114,10 +1180,20 @@ final class FernletStore {
         diary.setQuickLogItems(items)
     }
 
+    /// G4 — the ambient-read gate. This is the load-bearing one for hiding: the Home tab requests
+    /// EVERY capability on each appearance (see `refreshHealthContextForActiveTab`), so without this
+    /// subtraction Fernlet would keep reading cycle/intimacy samples out of HealthKit on a path no
+    /// view drives and the user cannot see.
     func allowedHealthCapabilities(from capabilities: Set<HealthCapability>) -> Set<HealthCapability> {
-        var allowed = isIntimateLoggingAllowed ? capabilities : capabilities.subtracting([.intimateLogging])
+        var allowed = capabilities
+        if !isIntimacyTrackingVisible { allowed.remove(.intimateLogging) }
+        if !isPeriodTrackingVisible { allowed.remove(.cycleTracking) }
         if lockState != .unlocked {
             allowed.remove(.cycleTracking)
+            // Previously only `.cycleTracking` was dropped on lock, so intimacy event counts were
+            // read out of HealthKit and rendered while the app was locked — the lock is supposed to
+            // cover intimate data at least as tightly as cycle data.
+            allowed.remove(.intimateLogging)
         }
         return allowed
     }
@@ -1126,9 +1202,19 @@ final class FernletStore {
     // app-target type (defined in HealthKitService.swift), not a portable DomainModel type — the
     // classification's "HealthCapability type, not HealthKit" note was incorrect. Its body forwards
     // to `diary.isIntimateLoggingAllowed`, preserving identical behavior.
+    /// Which capabilities Settings > Health offers a row for. MUST honor the visibility gates as well
+    /// as the age check: each row's "Update data" action passes its capability STRAIGHT to
+    /// `loadDailyHealthContext`, bypassing `allowedHealthCapabilities` entirely — so a listed Cycle row
+    /// doesn't merely ignore the gate, it undoes it, re-reading HealthKit and re-populating the exact
+    /// `healthContext.cycle` that hiding just scrubbed (and prompting for cycle authorization on a
+    /// feature the user just switched off).
     var visibleHealthCapabilities: [HealthCapability] {
         HealthCapability.allCases.filter { capability in
-            capability != .intimateLogging || isIntimateLoggingAllowed
+            switch capability {
+            case .intimateLogging: isIntimacyTrackingVisible
+            case .cycleTracking: isPeriodTrackingVisible
+            default: true
+            }
         }
     }
 

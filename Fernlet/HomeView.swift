@@ -87,6 +87,10 @@ struct HomeView: View {
         .onChange(of: activeSheet?.id) { _, new in
             if new == nil { Task { await refreshRecentPeriodActivity() } }
         }
+        // Hiding must drop the resident flag immediately, not wait for the next sheet dismiss.
+        .onChange(of: store.isPeriodTrackingVisible) { _, _ in
+            Task { await refreshRecentPeriodActivity() }
+        }
     }
 
     // MARK: - Milestones entry card
@@ -635,7 +639,7 @@ struct HomeView: View {
             FernletCard {
                 VStack(spacing: 12) {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                        ForEach(FernletShortcut.visibleQuickLog(store.settings.quickLogItems, allowsIntimacy: store.isIntimateLoggingAllowed)) { item in
+                        ForEach(FernletShortcut.visibleQuickLog(store.settings.quickLogItems, visibility: store.sensitiveSurfaceVisibility)) { item in
                             quickLogTile(item)
                         }
                     }
@@ -786,6 +790,20 @@ struct HomeView: View {
     }
 
     private func refreshRecentPeriodActivity() async {
+        // This owns a SECOND HealthKit client, so it inherits neither the period store's gate nor
+        // `allowedHealthCapabilities` — it must check for itself. Without this it queries 30 days of
+        // menstrual flow on every Home appearance, every cold launch, and every sheet dismiss, while
+        // the user has cycle tracking hidden and while the app is LOCKED, to compute a flag whose only
+        // consumer (the `.logPeriod` tile) is filtered out anyway.
+        //
+        // Routed through `allowedHealthCapabilities` rather than re-testing the flags by hand, so this
+        // inherits BOTH the visibility gate and the existing lock rule from the one place that defines
+        // them. Assigns rather than bails so hiding mid-session drops the resident answer to "has this
+        // user bled in the last month" instead of leaving it latched.
+        guard store.allowedHealthCapabilities(from: [.cycleTracking]).contains(.cycleTracking) else {
+            hasRecentPeriodEvent = false
+            return
+        }
         let service = HealthKitService()
         let start = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date().addingTimeInterval(-30 * 86_400)
         let range = DateInterval(start: start, end: Date())

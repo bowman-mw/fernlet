@@ -202,6 +202,220 @@ struct PeriodTrackerTests {
         #expect(today?.narrative == nil)
     }
 
+    // MARK: - Visibility gate (hide = inert, never delete)
+
+    /// The load-bearing guarantee: while hidden, Fernlet performs NO cycle decrypt AND no cycle
+    /// HealthKit read. The HealthKit half is the one a key-withholding gate would miss.
+    @Test func hiddenLoadPerformsNoHealthKitReadAndNoDecrypt() async throws {
+        let health = MockPeriodHealthKitService()
+        let repo = makeRepository()
+        let key = SymmetricKey(data: Data(repeating: 9, count: 32))
+        let externalUUID = UUID()
+        health.loadedSamples = try HealthKitService.periodSamples(
+            for: UserLoggedCycleEvent(flowLevel: .heavy),
+            externalUUID: externalUUID
+        )
+        try repo.insert(MenstrualNarrative(
+            hkExternalUUID: externalUUID.uuidString,
+            dateKey: FernletDate.dayKey(for: Date()),
+            note: "must never surface while hidden",
+            symptomFlags: [.cramps]
+        ), contentKey: key)
+        let store = PeriodTrackerStore(
+            healthService: health,
+            narrativeRepository: repo,
+            lockService: MockLockService(state: .unlocked)
+        )
+        store.isVisible = { false }
+
+        // Unlocked, with a valid key and real data present — the gate is the only thing stopping this.
+        await store.loadEntries(unlockedContentKey: key)
+
+        #expect(health.loadPeriodEventsCallCount == 0)
+        #expect(store.entries.isEmpty)
+        #expect(store.currentPhase == .unknown)
+        #expect(store.prediction == nil)
+    }
+
+    /// Hiding mid-session must DROP plaintext already resident, not merely refuse the next load —
+    /// otherwise up to 240 days of decrypted narratives stay in memory until the process dies.
+    @Test func hidingMidSessionScrubsResidentPlaintext() async throws {
+        let health = MockPeriodHealthKitService()
+        let repo = makeRepository()
+        let key = SymmetricKey(data: Data(repeating: 10, count: 32))
+        let externalUUID = UUID()
+        health.loadedSamples = try HealthKitService.periodSamples(
+            for: UserLoggedCycleEvent(flowLevel: .medium),
+            externalUUID: externalUUID
+        )
+        try repo.insert(MenstrualNarrative(
+            hkExternalUUID: externalUUID.uuidString,
+            dateKey: FernletDate.dayKey(for: Date()),
+            note: "loaded while visible"
+        ), contentKey: key)
+        var visible = true
+        let store = PeriodTrackerStore(
+            healthService: health,
+            narrativeRepository: repo,
+            lockService: MockLockService(state: .unlocked)
+        )
+        store.isVisible = { visible }
+
+        await store.loadEntries(unlockedContentKey: key)
+        #expect(!store.entries.isEmpty)
+
+        visible = false
+        store.scrubCycleState()
+
+        #expect(store.entries.isEmpty)
+        #expect(store.currentPhase == .unknown)
+        #expect(store.prediction == nil)
+    }
+
+    /// Hidden must never mean deleted: the sealed rows survive and come back on un-hide.
+    @Test func hidingKeepsDataAndUnhidingRestoresIt() async throws {
+        let health = MockPeriodHealthKitService()
+        let repo = makeRepository()
+        let key = SymmetricKey(data: Data(repeating: 11, count: 32))
+        let externalUUID = UUID()
+        health.loadedSamples = try HealthKitService.periodSamples(
+            for: UserLoggedCycleEvent(flowLevel: .light),
+            externalUUID: externalUUID
+        )
+        try repo.insert(MenstrualNarrative(
+            hkExternalUUID: externalUUID.uuidString,
+            dateKey: FernletDate.dayKey(for: Date()),
+            note: "survives hiding"
+        ), contentKey: key)
+        var visible = false
+        let store = PeriodTrackerStore(
+            healthService: health,
+            narrativeRepository: repo,
+            lockService: MockLockService(state: .unlocked)
+        )
+        store.isVisible = { visible }
+
+        await store.loadEntries(unlockedContentKey: key)
+        #expect(store.entries.isEmpty)
+
+        visible = true
+        await store.loadEntries(unlockedContentKey: key)
+
+        let today = store.entries.first { $0.dateKey == FernletDate.dayKey(for: Date()) }
+        #expect(today?.narrative?.note == "survives hiding")
+    }
+
+    @Test func hiddenLogEventIsRefused() async throws {
+        let health = MockPeriodHealthKitService()
+        let store = PeriodTrackerStore(
+            healthService: health,
+            narrativeRepository: makeRepository(),
+            lockService: MockLockService(state: .unlocked)
+        )
+        store.isVisible = { false }
+
+        await #expect(throws: PeriodTrackingHiddenError.self) {
+            _ = try await store.logEvent(
+                UserLoggedCycleEvent(flowLevel: .medium),
+                unlockedContentKey: SymmetricKey(data: Data(repeating: 12, count: 32))
+            )
+        }
+        #expect(health.savedSamples.isEmpty)
+    }
+
+    /// The pending buffer unseals under a DEVICE key, not the content key, so withholding the content
+    /// key does nothing here — the gate must refuse explicitly. The buffer is left intact to drain
+    /// later, because hiding is not deleting.
+    @Test func hiddenDrainIsRefusedAndLeavesBufferIntact() async throws {
+        let lock = MockLockService(state: .unlocked)
+        let key = SymmetricKey(data: Data(repeating: 13, count: 32))
+        lock.pending = [PendingNarrativePayload(
+            hkExternalUUID: UUID().uuidString,
+            dateKey: FernletDate.dayKey(for: Date()),
+            noteBytes: Data("buffered".utf8),
+            symptomFlagsBytes: nil,
+            customSymptomScalesBytes: nil
+        )]
+        let store = PeriodTrackerStore(
+            healthService: MockPeriodHealthKitService(),
+            narrativeRepository: makeRepository(),
+            lockService: lock
+        )
+        store.isVisible = { false }
+
+        try await store.drainPendingBuffer(contentKey: key)
+
+        #expect(lock.pending.count == 1)
+    }
+
+    /// Regression: `editEvent` is delete-then-recreate. When the gate lived only inside `logEvent`, an
+    /// edit racing a hide deleted the HealthKit samples AND the sealed narrative, then threw without
+    /// writing the replacement — the gate itself destroying data it was built to preserve.
+    @Test func hiddenEditIsRefusedBeforeAnythingIsDeleted() async throws {
+        let health = MockPeriodHealthKitService()
+        let repo = makeRepository()
+        let key = SymmetricKey(data: Data(repeating: 14, count: 32))
+        let externalUUID = UUID()
+        health.loadedSamples = try HealthKitService.periodSamples(
+            for: UserLoggedCycleEvent(flowLevel: .medium),
+            externalUUID: externalUUID
+        )
+        try repo.insert(MenstrualNarrative(
+            hkExternalUUID: externalUUID.uuidString,
+            dateKey: FernletDate.dayKey(for: Date()),
+            note: "must survive a refused edit"
+        ), contentKey: key)
+        var visible = true
+        let store = PeriodTrackerStore(
+            healthService: health,
+            narrativeRepository: repo,
+            lockService: MockLockService(state: .unlocked)
+        )
+        store.isVisible = { visible }
+        await store.loadEntries(unlockedContentKey: key)
+        let entry = try #require(store.entries.first { $0.narrative != nil })
+
+        visible = false
+        await #expect(throws: PeriodTrackingHiddenError.self) {
+            _ = try await store.editEvent(
+                UserLoggedCycleEvent(flowLevel: .heavy),
+                replacingEntry: entry,
+                unlockedContentKey: key
+            )
+        }
+
+        // The narrative must still be readable — the refused edit deleted nothing.
+        let surviving = try repo.narrative(forHKUUID: externalUUID.uuidString, contentKey: key)
+        #expect(surviving?.note == "must survive a refused edit")
+    }
+
+    /// Regression: `deleteEntry` used to recompute `prediction` with no key check, while the identical
+    /// assignment in `loadEntries` was gated — so deleting an entry re-enabled phase resolution (and
+    /// the scoring softening riding on it) with no content key, punching through both lock and gate.
+    @Test func deleteEntryDoesNotResurrectPredictionWithoutContentKey() async throws {
+        let health = MockPeriodHealthKitService()
+        let calendar = PeriodTestSupport.gmtCalendar()
+        health.loadedSamples = try HealthKitService.periodSamples(
+            for: UserLoggedCycleEvent(flowLevel: .medium),
+            externalUUID: UUID()
+        )
+        let store = PeriodTrackerStore(
+            healthService: health,
+            narrativeRepository: makeRepository(),
+            lockService: MockLockService(state: .locked(cooldownDeadline: nil)),
+            calendar: calendar
+        )
+
+        await store.loadEntries(unlockedContentKey: nil)
+        #expect(store.prediction == nil)
+
+        if let entry = store.entries.first(where: { !$0.samples.isEmpty }) {
+            try await store.deleteEntry(entry)
+        }
+
+        #expect(store.prediction == nil)
+    }
+
     @Test func loadEntriesJoinsNarrativeToSampleByExternalUUID() async throws {
         let health = MockPeriodHealthKitService()
         let repo = makeRepository()
@@ -382,8 +596,14 @@ private final class MockPeriodHealthKitService: PeriodHealthKitServicing {
         return samples
     }
 
+    /// Counts HealthKit cycle reads so the visibility gate can assert ZERO of them — the flow samples
+    /// this returns are unencrypted Health data, so "we withheld the content key" is not evidence the
+    /// gate held.
+    var loadPeriodEventsCallCount = 0
+
     func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample] {
-        loadedSamples
+        loadPeriodEventsCallCount += 1
+        return loadedSamples
     }
 }
 

@@ -23,6 +23,10 @@ struct SettingsSheet: View {
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
     @State private var confirmReset = false
+    /// Confirmation for consequential Settings changes (see `DestructiveConfirmation`). Hiding period /
+    /// intimacy keeps the data, but changes what Fernlet reads and how the score behaves — so it is
+    /// confirmed rather than silent.
+    @State private var pendingDestructiveAction: DestructiveConfirmation?
     @State private var editingMemory: MemoryNote?
     @State private var memorySearch = ""
     @State private var newCareTaskName = ""
@@ -81,13 +85,45 @@ struct SettingsSheet: View {
                 .listRowBackground(Color.cream)
 
                 Section {
-                    Toggle("Hide predictions", isOn: hidePredictionsBinding)
-                    Toggle("Hide fertile window", isOn: hideFertileWindowBinding)
-                    Toggle("Period-aware care", isOn: periodAwareScoringBinding)
+                    Toggle("Period tracking", isOn: periodTrackingVisibleBinding)
+                        .accessibilityIdentifier("settings.period.visible")
+                    // Cosmetic sub-options: these still read cycle data, so they only make sense —
+                    // and are only offered — while the hard gate above is on.
+                    if store.isPeriodTrackingVisible {
+                        Toggle("Hide predictions", isOn: hidePredictionsBinding)
+                        Toggle("Hide fertile window", isOn: hideFertileWindowBinding)
+                        Toggle("Period-aware care", isOn: periodAwareScoringBinding)
+                    }
                 } header: {
                     Text("Period")
                 } footer: {
-                    Text("When on, gentle cycle-phase trends can soften your daily score and surface a cycle chip and outlook on Home. Off by default, and only takes effect after a few cycles are logged.")
+                    if store.isPeriodTrackingVisible {
+                        Text("When on, gentle cycle-phase trends can soften your daily score and surface a cycle chip and outlook on Home. Off by default, and only takes effect after a few cycles are logged.\n\nTurning off Period tracking hides every cycle surface and stops Fernlet reading your cycle data. Your entries are kept, not deleted.")
+                    } else {
+                        Text("Cycle surfaces are hidden and Fernlet isn't reading your cycle data. Your entries are kept — turn this back on any time to see them again. Entries in Apple Health stay there either way.")
+                    }
+                }
+                .listRowBackground(Color.cream)
+
+                Section {
+                    if store.isIntimateLoggingAllowed {
+                        Toggle("Intimacy tracking", isOn: intimacyTrackingVisibleBinding)
+                            .accessibilityIdentifier("settings.intimacy.visible")
+                    } else {
+                        // Age is a floor, not a preference — say the true reason rather than showing a
+                        // toggle that would silently do nothing.
+                        Text("Available for adults only.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                    }
+                } header: {
+                    Text("Intimacy")
+                } footer: {
+                    if store.isIntimateLoggingAllowed {
+                        Text(store.settings.intimacyTrackingVisible
+                             ? "Private intimacy notes, sealed on this device. Turning this off hides the feature and stops Fernlet reading it. Your notes are kept, not deleted."
+                             : "Intimacy surfaces are hidden and Fernlet isn't reading them. Your notes are kept — turn this back on any time. Entries in Apple Health stay there either way.")
+                    }
                 }
                 .listRowBackground(Color.cream)
 
@@ -207,7 +243,58 @@ struct SettingsSheet: View {
             }
         }
         .background(Color.parchment)
+        .destructiveConfirmation($pendingDestructiveAction)
         .onAppear { healthKit.refresh() }
+    }
+
+    /// Turning cycle tracking OFF is confirmed; turning it back ON is not. Hiding is not destructive —
+    /// entries are kept — but it has a consequence the user cannot otherwise predict: cycle-phase
+    /// softening stops, so on a hard cycle day their score drops and the companion looks sadder right
+    /// after they chose privacy. Saying so up front is the difference between a considered choice and
+    /// an unexplained punishment.
+    private var periodTrackingVisibleBinding: Binding<Bool> {
+        Binding(
+            get: { store.isPeriodTrackingVisible },
+            set: { newValue in
+                guard !newValue else {
+                    store.setPeriodTrackingVisible(true)
+                    return
+                }
+                pendingDestructiveAction = DestructiveConfirmation(
+                    title: "Turn off period tracking?",
+                    message: "Fernlet will hide every cycle surface and stop reading your cycle data. "
+                        + "Your entries are kept — turn this back on any time to see them again.\n\n"
+                        + "Your daily score may change: Fernlet will stop softening it around your cycle. "
+                        + "Anything you've saved in Apple Health stays in Apple Health.",
+                    confirmLabel: "Turn off",
+                    auditEvent: "settings.period.hideConfirmed"
+                ) {
+                    store.setPeriodTrackingVisible(false)
+                }
+            }
+        )
+    }
+
+    private var intimacyTrackingVisibleBinding: Binding<Bool> {
+        Binding(
+            get: { store.settings.intimacyTrackingVisible },
+            set: { newValue in
+                guard !newValue else {
+                    store.setIntimacyTrackingVisible(true)
+                    return
+                }
+                pendingDestructiveAction = DestructiveConfirmation(
+                    title: "Turn off intimacy tracking?",
+                    message: "Fernlet will hide intimacy logging and stop reading it. Your notes are "
+                        + "kept — turn this back on any time to see them again.\n\n"
+                        + "Anything you've saved in Apple Health stays in Apple Health.",
+                    confirmLabel: "Turn off",
+                    auditEvent: "settings.intimacy.hideConfirmed"
+                ) {
+                    store.setIntimacyTrackingVisible(false)
+                }
+            }
+        )
     }
 
     private var hidePredictionsBinding: Binding<Bool> {
@@ -379,11 +466,12 @@ struct SettingsSheet: View {
         }
         .onAppear {
             store.setHomeWidgets(store.settings.homeWidgets)
-            store.setQuickLogItems(FernletShortcut.visibleQuickLog(store.settings.quickLogItems, allowsIntimacy: store.isIntimateLoggingAllowed))
         }
-        .onChange(of: store.isIntimateLoggingAllowed) { _, allowsIntimacy in
-            store.setQuickLogItems(FernletShortcut.visibleQuickLog(store.settings.quickLogItems, allowsIntimacy: allowsIntimacy))
-        }
+        // NOTE: this used to persist `visibleQuickLog(...)` back via `setQuickLogItems` on appear and
+        // on every gate change. That was survivable while the only gate was the 18+ age check (which
+        // effectively never flips mid-use), but it is destructive under a user-facing toggle: hiding a
+        // surface would strip its shortcut from the SAVED array, and un-hiding could not put it back —
+        // the choice is gone. Filtering is display-only now; the stored array keeps every choice.
     }
 
     private var availableHomeWidgets: [HomeWidget] {
@@ -452,7 +540,7 @@ struct SettingsSheet: View {
     }
 
     private func quickLogLayoutRow(_ index: Int) -> some View {
-        let currentItem = FernletShortcut.visibleQuickLog(store.settings.quickLogItems, allowsIntimacy: store.isIntimateLoggingAllowed)[index]
+        let currentItem = quickLogEditorItems[index]
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
@@ -498,32 +586,49 @@ struct SettingsSheet: View {
         .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 12))
     }
 
+    /// The layout this editor edits: the STORED array, deliberately NOT visibility-filtered.
+    ///
+    /// The editor's writes round-trip through `setQuickLogItems`, so feeding it a filtered list would
+    /// be destructive: `normalizedQuickLog` caps at 6 and back-fills, so a hidden `.periodTracking`
+    /// would be dropped from the SAVED layout and replaced by auto-filled padding — and un-hiding
+    /// could not bring it back. Editing the stored array keeps every choice intact.
+    ///
+    /// Consequence: while a surface is hidden its shortcut still shows in THIS editor. That is not a
+    /// leak (a quick-log preference is not cycle data), it is honest about what the saved layout is,
+    /// and the user is standing next to the visibility toggle. Home is where filtering happens; the
+    /// picker below still refuses to ADD a hidden surface.
+    private var quickLogEditorItems: [FernletShortcut] {
+        FernletShortcut.normalizedQuickLog(store.settings.quickLogItems)
+    }
+
     private func availableQuickLogItems(for index: Int) -> [FernletShortcut] {
-        let items = FernletShortcut.visibleQuickLog(store.settings.quickLogItems, allowsIntimacy: store.isIntimateLoggingAllowed)
+        let items = quickLogEditorItems
         let currentItem = items[index]
         let selectedElsewhere = Set(items.enumerated().compactMap { itemIndex, item in
             itemIndex == index ? nil : item
         })
 
-        return FernletShortcut.selectableQuickLogItems(allowsIntimacy: store.isIntimateLoggingAllowed).filter { item in
+        // Keep `currentItem` selectable even when hidden, so the chip for an already-chosen slot
+        // renders as selected rather than vanishing mid-edit.
+        return FernletShortcut.selectableQuickLogItems(visibility: store.sensitiveSurfaceVisibility).filter { item in
             item == currentItem || !selectedElsewhere.contains(item)
         }
     }
 
     private func setQuickLogItem(_ item: FernletShortcut, at index: Int) {
         guard store.isIntimateLoggingAllowed || item != .intimacyTracking else { return }
-        var items = FernletShortcut.visibleQuickLog(store.settings.quickLogItems, allowsIntimacy: store.isIntimateLoggingAllowed)
+        var items = quickLogEditorItems
         if let existingIndex = items.firstIndex(of: item), existingIndex != index {
             items[existingIndex] = items[index]
         }
         items[index] = item
-        store.setQuickLogItems(FernletShortcut.visibleQuickLog(items, allowsIntimacy: store.isIntimateLoggingAllowed))
+        store.setQuickLogItems(items)
     }
 
     private func moveQuickLogItem(from index: Int, by offset: Int) {
         let destination = index + offset
         guard (0..<6).contains(destination) else { return }
-        var items = FernletShortcut.visibleQuickLog(store.settings.quickLogItems, allowsIntimacy: store.isIntimateLoggingAllowed)
+        var items = quickLogEditorItems
         items.swapAt(index, destination)
         store.setQuickLogItems(items)
     }
@@ -836,11 +941,24 @@ struct SettingsSheet: View {
     }
 
     private func canUseHealthCapability(_ capability: HealthCapability) -> Bool {
+        // Age first: it has its own explanatory message, and "you're under 18" must not be reported as
+        // "you turned this off".
         guard capability != .intimateLogging || store.isIntimateLoggingAllowed else {
             healthKit.showIntimateLoggingAgeWallMessage()
             return false
         }
-        return true
+        // Defense in depth against the read this action performs. `visibleHealthCapabilities` already
+        // withholds the row, so this should be unreachable from the UI — but the action reads HealthKit
+        // and writes straight back into the day's health context, which is precisely the hole the
+        // visibility gate exists to close. Re-check at the point of use, not just the point of display.
+        // Visibility only, deliberately not lock state: the ambient paths already drop cycle reads while
+        // locked via `allowedHealthCapabilities`, and refusing this explicit, user-initiated action on
+        // lock state would be an unrelated behavior change that fails silently.
+        switch capability {
+        case .cycleTracking: return store.isPeriodTrackingVisible
+        case .intimateLogging: return store.isIntimacyTrackingVisible
+        default: return true
+        }
     }
 
     private func updateHealthData(for capability: HealthCapability) {

@@ -345,8 +345,20 @@ struct PrivacyDataSettingsView: View {
 
             Toggle("Sealed backup for sensitive notes", isOn: sealedSensitiveNotesBinding)
                 .toggleStyle(SwitchToggleStyle(tint: Color.moss))
-            Toggle("Sealed backup for period data", isOn: sealedPeriodBinding)
-                .toggleStyle(SwitchToggleStyle(tint: Color.moss))
+            // Withheld while cycle tracking is hidden. The backup reconcile honors the visibility gate
+            // by design (skipping rather than disabling the pref, since disabling DELETES the iCloud
+            // backup) — but that skip is silent, so leaving this toggle live would let the user switch
+            // it on, confirm a disclosure promising an encrypted upload, and be told it succeeded while
+            // nothing was ever uploaded. Don't offer a backup for a feature that is switched off.
+            if store?.isPeriodTrackingVisible ?? true {
+                Toggle("Sealed backup for period data", isOn: sealedPeriodBinding)
+                    .toggleStyle(SwitchToggleStyle(tint: Color.moss))
+            } else {
+                Text("Sealed backup for period data is unavailable while period tracking is turned off. Your existing backup is kept.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
