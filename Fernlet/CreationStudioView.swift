@@ -25,6 +25,9 @@ struct CreationStudioView: View {
     /// Mirror mode: painting one side also paints the horizontal mirror. Off by default — a mirror the
     /// user didn't ask for is more surprising than a toggle they have to find.
     @State private var isSymmetric = false
+    /// Drives the push to the naming + shop-listing confirmation step. The editor screen itself no longer
+    /// carries the name/shop controls — you draw, tap Next, then name and (optionally) list it.
+    @State private var showingConfirmation = false
 
     /// Bounded so a long session can't grow without limit. A body grid is 48×40 Ints ≈ 15 KB, so 32
     /// snapshots is ~0.5 MB worst case — irrelevant next to the images this app already holds.
@@ -75,7 +78,7 @@ struct CreationStudioView: View {
                 canvasTools
                 editorCanvas
                 paletteRow
-                detailsCard
+                clearCanvasButton
             }
             // 12pt, not 20. The canvas is the point of this screen and its cell size is
             // width / gridCols, so horizontal padding is the one thing directly costing drawing
@@ -87,8 +90,11 @@ struct CreationStudioView: View {
         .navigationTitle(editingItem == nil ? "New item" : "Edit item")
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
-            // Prominent capsule save, not a bare toolbar link.
-            SheetSaveBar(label: "Save to closet", disabled: !canSave) { save() }
+            // The editor screen is just the drawing now; naming + listing move to a confirmation step.
+            SheetSaveBar(label: "Next", disabled: !canSave) { showingConfirmation = true }
+        }
+        .navigationDestination(isPresented: $showingConfirmation) {
+            confirmationScreen
         }
         .alert(item: $shopAlert) { alert in
             switch alert {
@@ -295,79 +301,113 @@ struct CreationStudioView: View {
             .strokeBorder(isSelected ? Color.moss : Color.bark.opacity(0.22), lineWidth: isSelected ? 2.5 : 1)
     }
 
-    private var detailsCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            SheetField("Name") {
-                TextField("Name your item", text: $name)
-                    .sheetTextInput()
+    /// Clear-canvas lives on the editor (it's a drawing action); naming + shop listing moved to the
+    /// confirmation step.
+    private var clearCanvasButton: some View {
+        Button(role: .destructive) {
+            pixels = Self.blankPixels(for: slot)
+        } label: {
+            Label("Clear canvas", systemImage: "trash")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.terracotta)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("studio.clearCanvas")
+    }
+
+    // MARK: - Confirmation (name + shop) — the follow-up "save" step
+
+    /// The follow-up screen after drawing: a preview of the finished item, the name, and (for your own
+    /// designs) whether to list it in your shop — then the actual save. Reached via "Next" on the editor.
+    private var confirmationScreen: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                CompanionView(
+                    state: store.companionState,
+                    appearance: store.settings.companionAppearance,
+                    size: 148,
+                    equippedItems: previewEquipped
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .accessibilityIdentifier("studio.confirm.preview")
+
+                SheetField("Name") {
+                    TextField("Name your item", text: $name)
+                        .sheetTextInput()
+                        .accessibilityIdentifier("studio.confirm.name")
+                }
+
+                if canSell {
+                    shopSection
+                }
             }
+            .padding(20)
+            .padding(.bottom, 24)
+        }
+        .background(Color.parchment)
+        .tint(Color.moss)
+        .navigationTitle("Save item")
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            SheetSaveBar(label: "Save to closet", disabled: !canSave) { save() }
+        }
+    }
 
-            if canSell {
-                SheetField("Shop") {
-                    VStack(spacing: 0) {
-                        Toggle(isOn: $isShareable) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("List in my shop")
-                                    .font(.fernlet(.label))
-                                    .foregroundStyle(Color.bark)
-                                Text("Friends nearby can buy it for their companion.")
-                                    .font(.fernlet(.bodySmall))
-                                    .italic()
-                                    .foregroundStyle(Color.slate)
-                            }
-                        }
-                        .tint(Color.moss)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-
-                        if isShareable {
-                            Divider().overlay(Color.bark.opacity(0.08))
-                            Stepper(value: $price, in: ClothingShopLimits.minPrice...ClothingShopLimits.maxPrice) {
-                                HStack(spacing: 6) {
-                                    Text("Price")
-                                        .font(.fernlet(.label))
-                                        .foregroundStyle(Color.bark)
-                                    Spacer(minLength: 8)
-                                    Image(systemName: "circlebadge.2.fill").foregroundStyle(Color.sun)
-                                    Text("\(price) coins")
-                                        .font(.fernlet(.stat))
-                                        .foregroundStyle(Color.bark)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
+    private var shopSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SheetField("Shop") {
+                VStack(spacing: 0) {
+                    Toggle(isOn: $isShareable) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("List in my shop")
+                                .font(.fernlet(.label))
+                                .foregroundStyle(Color.bark)
+                            Text("Friends nearby can buy it for their companion.")
+                                .font(.fernlet(.bodySmall))
+                                .italic()
+                                .foregroundStyle(Color.slate)
                         }
                     }
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.bark.opacity(0.08), lineWidth: 1)
-                    )
-                }
+                    .tint(Color.moss)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .accessibilityIdentifier("studio.confirm.listToggle")
 
-                if isShareable {
-                    Text(shopHint)
-                        .font(.fernlet(.bodySmall))
-                        .italic()
-                        .foregroundStyle(Color.slate)
+                    if isShareable {
+                        Divider().overlay(Color.bark.opacity(0.08))
+                        Stepper(value: $price, in: ClothingShopLimits.minPrice...ClothingShopLimits.maxPrice) {
+                            HStack(spacing: 6) {
+                                Text("Price")
+                                    .font(.fernlet(.label))
+                                    .foregroundStyle(Color.bark)
+                                Spacer(minLength: 8)
+                                Image(systemName: "circlebadge.2.fill").foregroundStyle(Color.sun)
+                                Text("\(price) coins")
+                                    .font(.fernlet(.stat))
+                                    .foregroundStyle(Color.bark)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
                 }
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.bark.opacity(0.08), lineWidth: 1)
+                )
             }
 
-            Button(role: .destructive) {
-                pixels = Self.blankPixels(for: slot)
-            } label: {
-                Label("Clear canvas", systemImage: "trash")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.terracotta)
+            if isShareable {
+                Text(shopHint)
+                    .font(.fernlet(.bodySmall))
+                    .italic()
+                    .foregroundStyle(Color.slate)
             }
-            .buttonStyle(.plain)
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.cream.opacity(0.55))
-        )
     }
 
     // MARK: - Behavior

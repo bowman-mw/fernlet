@@ -359,6 +359,7 @@ struct HomeView: View {
             }
             .accessibilityLabel("Fernlet companion")
             .accessibilityHint("Tap to interact. Press and hold to edit.")
+            .accessibilityIdentifier("home.companion")
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity)
             .background {
