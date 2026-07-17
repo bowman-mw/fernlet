@@ -22,6 +22,9 @@
 import Foundation
 import FernletDomainModel
 import DiaryStore
+#if canImport(UIKit)
+import UIKit
+#endif
 
 extension FernletStore {
     /// Populate today's diary with representative demo content. Invoked from
@@ -88,7 +91,33 @@ extension FernletStore {
         for meal in meals {
             diary.appendMeal(meal, date: todayKey)
         }
+
+        #if canImport(UIKit)
+        // Attach photos to the first two meals so the "Recent bites" polaroid strip (#11) renders
+        // populated in the appearance gallery rather than its empty state. Goes through the real sealed
+        // MealPhotoStore via `saveMealPhoto`, so it also exercises the seal/normalize path end to end.
+        for (meal, hue) in zip(meals.prefix(2), [0.09, 0.33] as [CGFloat]) {
+            if let photoID = saveMealPhoto(Self.demoFoodImage(hue: hue)) {
+                attachMealPhoto(mealID: meal.id, photoID: photoID)
+            }
+        }
+        #endif
     }
+
+    #if canImport(UIKit)
+    /// A warm gradient stand-in for a food photo (no bundled image assets in the test seed).
+    private static func demoFoodImage(hue: CGFloat) -> UIImage {
+        let size = CGSize(width: 480, height: 480)
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            let top = UIColor(hue: hue, saturation: 0.62, brightness: 0.86, alpha: 1).cgColor
+            let bottom = UIColor(hue: hue, saturation: 0.72, brightness: 0.58, alpha: 1).cgColor
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                      colors: [top, bottom] as CFArray, locations: [0, 1])!
+            ctx.cgContext.drawLinearGradient(gradient, start: .zero,
+                                             end: CGPoint(x: size.width, y: size.height), options: [])
+        }
+    }
+    #endif
 
     /// Recipes for the Food tab's Recipes section, which otherwise renders its empty state in every
     /// gallery run — the one section reviewers could never actually see. Two entries with different

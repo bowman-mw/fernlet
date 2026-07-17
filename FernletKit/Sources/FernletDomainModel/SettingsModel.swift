@@ -114,6 +114,11 @@ public nonisolated struct FernletSettings: Codable {
     /// (the key is absent), which triggers a one-time append of `.milestones`/`.firstAid` in `init(from:)`
     /// so existing users don't silently lose them, then flips to `true` so it runs at most once.
     public var didMigrateMilestonesFirstAidWidgets: Bool = true
+    /// One-time marker for the "Recent bites" meal-photo home widget (#11), mirroring
+    /// `didMigrateMilestonesFirstAidWidgets`. Fresh installs start `true` (they already get it via
+    /// `defaultWidgets`); a settings blob written before the widget existed decodes this as `false` and
+    /// triggers a one-time append of `.mealPhotos` so an existing user sees it, then flips to `true`.
+    public var didMigrateMealPhotosWidget: Bool = true
     public var personalCareTasks: [PersonalCareTask] = PersonalCareTask.defaultTasks
     public var proximityDisplayName: String = ""
     public var showProximityDebugTools: Bool = false
@@ -257,6 +262,20 @@ public nonisolated struct FernletSettings: Codable {
                 decodedHomeWidgets.append(widget)
             }
             didMigrateMilestonesFirstAidWidgets = true
+        }
+        // One-time migration for the "Recent bites" meal-photo widget (#11): a separate marker, because
+        // the Milestones/First-aid marker above has already flipped true for existing users, so it can't
+        // carry a later widget. Append once if absent so an existing user sees it.
+        didMigrateMealPhotosWidget = try container.decodeIfPresent(Bool.self, forKey: .didMigrateMealPhotosWidget) ?? false
+        if !didMigrateMealPhotosWidget {
+            // Only append to a real widget list. An EMPTY decoded list (e.g. every token unknown, from a
+            // newer build) falls back to `defaultWidgets` in `normalized` below — which already includes
+            // `.mealPhotos` — so appending here would suppress that fallback and strand the user with ONLY
+            // this widget instead of the full default set.
+            if !decodedHomeWidgets.isEmpty && !decodedHomeWidgets.contains(.mealPhotos) {
+                decodedHomeWidgets.append(.mealPhotos)
+            }
+            didMigrateMealPhotosWidget = true
         }
         homeWidgets = HomeWidget.normalized(decodedHomeWidgets)
         let decodedCareTasks = try container.decodeIfPresent([PersonalCareTask].self, forKey: .personalCareTasks) ?? PersonalCareTask.defaultTasks

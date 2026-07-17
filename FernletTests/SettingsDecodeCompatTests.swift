@@ -21,6 +21,7 @@ struct SettingsDecodeCompatTests {
           "bottleOz": 32,
           "proximityDisplayName": "Compat",
           "didMigrateMilestonesFirstAidWidgets": true,
+          "didMigrateMealPhotosWidget": true,
           "homeWidgets": ["companion", "weatherOutlook", "quickLog"],
           "quickLogItems": ["meal", "futureShortcut", "water"]
         }
@@ -37,14 +38,15 @@ struct SettingsDecodeCompatTests {
     }
 
     @Test func unknownTokensCoexistWithWidgetMigration() throws {
-        // Legacy blob (no migration marker) that ALSO carries a future token: the one-time
-        // Milestones/First-aid append still runs, and the future token is parked, not thrown on.
+        // Legacy blob (no migration markers) that ALSO carries a future token: BOTH one-time appends
+        // (Milestones/First-aid, then Recent bites) run, and the future token is parked, not thrown on.
         let settings = try decode("""
         {"homeWidgets": ["companion", "futureWidget"]}
         """)
 
-        #expect(settings.homeWidgets == [.companion, .firstAid, .milestones])
+        #expect(settings.homeWidgets == [.companion, .firstAid, .milestones, .mealPhotos])
         #expect(settings.didMigrateMilestonesFirstAidWidgets)
+        #expect(settings.didMigrateMealPhotosWidget)
         #expect(settings.unknownHomeWidgetTokens == ["futureWidget"])
     }
 
@@ -54,6 +56,7 @@ struct SettingsDecodeCompatTests {
         let first = try decode("""
         {
           "didMigrateMilestonesFirstAidWidgets": true,
+          "didMigrateMealPhotosWidget": true,
           "homeWidgets": ["companion", "weatherOutlook", "quickLog"],
           "quickLogItems": ["meal", "futureShortcut", "water"]
         }
@@ -81,6 +84,7 @@ struct SettingsDecodeCompatTests {
         let settings = try decode("""
         {
           "didMigrateMilestonesFirstAidWidgets": true,
+          "didMigrateMealPhotosWidget": true,
           "homeWidgets": ["companion"],
           "unknownHomeWidgetTokens": ["firstAid"],
           "quickLogItems": ["meal", "water"],
@@ -102,6 +106,7 @@ struct SettingsDecodeCompatTests {
         let settings = try decode("""
         {
           "didMigrateMilestonesFirstAidWidgets": true,
+          "didMigrateMealPhotosWidget": true,
           "homeWidgets": ["companion", "quickLog", "macros"],
           "quickLogItems": ["meal", "water", "move", "sleep", "journal", "care"]
         }
@@ -135,14 +140,32 @@ struct SettingsDecodeCompatTests {
         let migrated = try decode("""
         {"homeWidgets": ["companion"], "quickLogItems": ["meal"]}
         """)
-        #expect(migrated.homeWidgets == [.companion, .firstAid, .milestones])
+        #expect(migrated.homeWidgets == [.companion, .firstAid, .milestones, .mealPhotos])
         #expect(migrated.didMigrateMilestonesFirstAidWidgets)
+        #expect(migrated.didMigrateMealPhotosWidget)
 
         var edited = migrated
-        edited.homeWidgets = [.milestones, .companion]  // user removed First aid + reordered
+        edited.homeWidgets = [.milestones, .companion]  // user removed First aid + Recent bites + reordered
         let reloaded = try decode(JSONEncoder().encode(edited))
         #expect(reloaded.homeWidgets == [.milestones, .companion])
         #expect(reloaded.didMigrateMilestonesFirstAidWidgets)
+        #expect(reloaded.didMigrateMealPhotosWidget)
+    }
+
+    @Test func recentBitesWidgetMigrationAppendsOnceForExistingUsers() throws {
+        // An existing user who already migrated Milestones/First-aid but predates the Recent bites
+        // widget (#11): only the mealPhotos append fires, appended after their kept widgets.
+        let settings = try decode("""
+        {"didMigrateMilestonesFirstAidWidgets": true, "homeWidgets": ["companion", "macros"]}
+        """)
+        #expect(settings.homeWidgets == [.companion, .macros, .mealPhotos])
+        #expect(settings.didMigrateMealPhotosWidget)
+
+        // Removing it sticks — the append does not refire once the marker has flipped true.
+        var edited = settings
+        edited.homeWidgets = [.companion, .macros]
+        let reloaded = try decode(JSONEncoder().encode(edited))
+        #expect(reloaded.homeWidgets == [.companion, .macros])
     }
 
     // MARK: - Scalar enum fields (freeze-on-unknown + parked-token side channels)

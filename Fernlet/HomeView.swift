@@ -251,6 +251,8 @@ struct HomeView: View {
             milestonesCard
         case .firstAid:
             firstAidAction
+        case .mealPhotos:
+            mealPhotosStrip
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .trends:
             HomeActionWidget(widget: widget) {
                 handleHomeWidget(widget)
@@ -475,6 +477,39 @@ struct HomeView: View {
         .background(Color.cream, in: Capsule())
         .overlay(Capsule().stroke(Color.moss.opacity(0.18), lineWidth: 1))
         .accessibilityHidden(true)
+    }
+
+    /// "Recent bites" (#11): today's photographed meals as free-floating classic polaroids. A horizontal
+    /// strip so the tilt/shadow reads as a scrapbook rather than a cramped list-row thumb; an empty state
+    /// keeps the widget from being a blank card before the user has snapped anything.
+    private var mealPhotosStrip: some View {
+        let photographed = store.day.meals.filter { $0.photoID != nil }.suffix(6)
+        let rotations: [Double] = [-3, 2, -1.5, 3, -2.5, 1.5]
+        return FernletCard {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionLabel("Recent bites")
+                if photographed.isEmpty {
+                    EmptyState(text: "Snap a photo when you log a meal and it'll show up here as a polaroid.")
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 20) {
+                            ForEach(Array(photographed.enumerated()), id: \.element.id) { index, meal in
+                                #if canImport(UIKit)
+                                MealPhotoPolaroid(
+                                    name: meal.name,
+                                    rotation: rotations[index % rotations.count],
+                                    loadData: { meal.photoID.flatMap { store.mealPhotoData(for: $0) } }
+                                )
+                                #endif
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 6)
+                    }
+                    .accessibilityIdentifier("home.recentBites")
+                }
+            }
+        }
     }
 
     /// Presentation-only frazzle flag for the companion. Never overrides the sick/resting
@@ -851,7 +886,7 @@ struct HomeView: View {
             activeSheet = .hygiene
         case .trends:
             activeSheet = .trends
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid:
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos:
             break
         }
     }
@@ -1828,7 +1863,7 @@ struct HomeActionWidget: View {
         case .water: "Update hydration."
         case .hygiene: "Open care tasks."
         case .trends: "Review local signals."
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid: ""
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos: ""
         }
     }
 }
