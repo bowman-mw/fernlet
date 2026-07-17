@@ -590,8 +590,13 @@ struct CompanionCustomItemLayer: View {
         Group {
             if let image {
                 let placement = Self.placement(for: item.slot, size: size, texture: item.texture)
+                // `.medium` rather than `.none`: nearest-neighbour was what made worn items read as hard
+                // blocks — a body item is ~48 cells across ~79pt, so every cell was a visible square.
+                // Safe on alpha because the renderer writes premultipliedLast with transparent cells left
+                // at (0,0,0,0), the correct premultiplied encoding, so filtering cannot bleed black halos
+                // in from outside the art.
                 Image(decorative: image, scale: 1)
-                    .interpolation(.none)
+                    .interpolation(.medium)
                     .resizable()
                     .frame(width: placement.width, height: placement.height)
                     .offset(x: placement.x, y: placement.y)

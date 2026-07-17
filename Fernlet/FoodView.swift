@@ -103,37 +103,50 @@ struct FoodView: View {
                                         if index > 0 { FernletRowDivider() }
                                         switch preview {
                                         case .local(let recipe):
-                                            HStack(spacing: 12) {
+                                            // Controls sit on their own trailing line rather than beside the
+                                            // row. In one HStack they claimed ~88pt of the card, so the row's
+                                            // own trailing edge — and the servings label right-aligned to it —
+                                            // stopped ~65% across and read as centered. Costs row height; the
+                                            // smaller title above pays some of it back.
+                                            VStack(alignment: .leading, spacing: 6) {
                                                 Button { editingRecipe = recipe } label: {
                                                     RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
                                                 }
                                                 .buttonStyle(.plain)
-                                                RecipeMealTypeMenu { mealType in
-                                                    store.logRecipe(recipe, mealType: mealType)
-                                                }
-                                                RecipeShareButton {
-                                                    recipeShareDraft = ProximityRecipeShareDraft(
-                                                        title: recipe.name,
-                                                        shareText: store.recipeShareText(for: recipe),
-                                                        payload: store.proximityRecipeSharePayload(for: recipe)
-                                                    )
+                                                HStack(spacing: 12) {
+                                                    Spacer()
+                                                    RecipeMealTypeMenu { mealType in
+                                                        store.logRecipe(recipe, mealType: mealType)
+                                                    }
+                                                    RecipeShareButton {
+                                                        recipeShareDraft = ProximityRecipeShareDraft(
+                                                            title: recipe.name,
+                                                            shareText: store.recipeShareText(for: recipe),
+                                                            payload: store.proximityRecipeSharePayload(for: recipe)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         case .saved(let recipe):
-                                            HStack(spacing: 12) {
+                                            // Same trailing-controls layout as `.local` above — the two row
+                                            // types interleave in one list and must not disagree.
+                                            VStack(alignment: .leading, spacing: 6) {
                                                 Button { editingSavedRecipe = recipe } label: {
                                                     SavedRecipeRow(recipe: recipe)
                                                 }
                                                 .buttonStyle(.plain)
-                                                RecipeMealTypeMenu { mealType in
-                                                    store.logSavedRecipe(recipe, mealType: mealType)
-                                                }
-                                                RecipeShareButton {
-                                                    recipeShareDraft = ProximityRecipeShareDraft(
-                                                        title: recipe.name,
-                                                        shareText: store.savedRecipeShareText(for: recipe),
-                                                        payload: store.proximityRecipeSharePayload(for: recipe)
-                                                    )
+                                                HStack(spacing: 12) {
+                                                    Spacer()
+                                                    RecipeMealTypeMenu { mealType in
+                                                        store.logSavedRecipe(recipe, mealType: mealType)
+                                                    }
+                                                    RecipeShareButton {
+                                                        recipeShareDraft = ProximityRecipeShareDraft(
+                                                            title: recipe.name,
+                                                            shareText: store.savedRecipeShareText(for: recipe),
+                                                            payload: store.proximityRecipeSharePayload(for: recipe)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -377,8 +390,10 @@ struct SavedRecipeRow: View {
                     .foregroundStyle(Color.moss)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 3) {
+                    // Matches `RecipeRow`'s title size — the two row types interleave in the same list
+                    // on the main food page, so they must not disagree about how loud a recipe is.
                     Text(recipe.name)
-                        .font(.fernlet(.header))
+                        .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
                     if let sourceURL = webImport?.sourceURL {
@@ -2496,8 +2511,11 @@ struct RecipeRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
+                // `.headerMedium` (20pt), a step down from the 24pt `.header` that `MealRow` uses above
+                // this section. Deliberate hierarchy rather than an inconsistency: meals are the log,
+                // recipes are a shortcut list beneath it.
                 Text(recipe.name)
-                    .font(.fernlet(.header))
+                    .font(.fernlet(.headerMedium))
                 Spacer()
                 Text("\(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")")
                     .font(.fernlet(.stat))

@@ -40,6 +40,7 @@ extension FernletStore {
         if settings.userProfile.age < 18 { settings.userProfile.age = 30 }
 
         seedMeals()
+        seedRecipes()
         seedHydrationAndSleep()
         seedJournals()
         seedWorkout()
@@ -78,6 +79,38 @@ extension FernletStore {
         for meal in meals {
             diary.appendMeal(meal, date: todayKey)
         }
+    }
+
+    /// Recipes for the Food tab's Recipes section, which otherwise renders its empty state in every
+    /// gallery run — the one section reviewers could never actually see. Two entries with different
+    /// serving counts and name lengths, so the row layout (title size, servings alignment, wrapping)
+    /// is reviewable rather than inferred.
+    ///
+    /// Cross-day duplicate check of its own: `recipes` persist across days, so the day-scoped guard in
+    /// `seedDemoContent` does not cover them (same reasoning as `seedJournals`/`seedMemories`).
+    private func seedRecipes() {
+        guard recipes.isEmpty else { return }
+        addRecipe(
+            name: "Overnight oats",
+            servings: 2,
+            notes: "Seeded demo recipe. Mix, chill overnight, top with fruit.",
+            ingredients: [
+                ManualRecipeIngredientInput(name: "Rolled oats", quantity: 1, unit: "cup", protein: 10, carbs: 54, fat: 6),
+                ManualRecipeIngredientInput(name: "Greek yogurt", quantity: 1, unit: "cup", protein: 20, carbs: 8, fat: 4),
+                ManualRecipeIngredientInput(name: "Blueberries", quantity: 0.5, unit: "cup", protein: 1, carbs: 11, fat: 0),
+            ]
+        )
+        addRecipe(
+            name: "Sheet pan chicken and vegetables",
+            servings: 4,
+            notes: "Seeded demo recipe. Roast at 425 for 25 minutes.",
+            ingredients: [
+                ManualRecipeIngredientInput(name: "Chicken thigh", quantity: 4, unit: "piece", protein: 96, carbs: 0, fat: 40),
+                ManualRecipeIngredientInput(name: "Broccoli", quantity: 2, unit: "cup", protein: 5, carbs: 12, fat: 1),
+                ManualRecipeIngredientInput(name: "Olive oil", quantity: 2, unit: "tbsp", protein: 0, carbs: 0, fat: 28),
+                ManualRecipeIngredientInput(name: "Sweet potato", quantity: 2, unit: "piece", protein: 4, carbs: 52, fat: 0),
+            ]
+        )
     }
 
     // MARK: - Home (hydration + sleep drive the companion mood)

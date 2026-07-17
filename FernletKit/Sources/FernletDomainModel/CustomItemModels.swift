@@ -37,22 +37,30 @@ public nonisolated enum ItemSlot: String, Codable, CaseIterable, Identifiable, S
     }
 
     /// Designer-canvas width in cells.
+    ///
+    /// Exactly 2× the original budget (16/18/24/14). The doubling is deliberately exact in BOTH axes so
+    /// each slot's aspect ratio is unchanged — `CompanionCustomItemLayer`'s placement keys its height off
+    /// the *stored* texture aspect, so an item drawn at either budget lands in the same rect on the body.
+    /// It also makes any future reprojection a lossless 1→4 cell expansion rather than a resample.
+    ///
+    /// These are editor-canvas dimensions only. `ItemGridTexture` carries its own `cols`/`rows`, so the
+    /// persisted and shared formats are self-describing and do not key off these values.
     public var gridCols: Int {
         switch self {
-        case .hat: 16
-        case .face: 18
-        case .body: 24
-        case .heldItem: 14
+        case .hat: 32
+        case .face: 36
+        case .body: 48
+        case .heldItem: 28
         }
     }
 
-    /// Designer-canvas height in cells.
+    /// Designer-canvas height in cells. See `gridCols` — kept at exactly 2× so aspect is preserved.
     public var gridRows: Int {
         switch self {
-        case .hat: 12
-        case .face: 8
-        case .body: 20
-        case .heldItem: 14
+        case .hat: 24
+        case .face: 16
+        case .body: 40
+        case .heldItem: 28
         }
     }
 

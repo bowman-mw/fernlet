@@ -66,8 +66,10 @@ struct CustomItemThumbnail: View {
             .fill(Color.parchment)
             .overlay {
                 if let image {
+                    // Matches `CompanionCustomItemLayer` — a thumbnail must not look like a different
+                    // item from the one worn on the companion.
                     Image(decorative: image, scale: 1)
-                        .interpolation(.none)
+                        .interpolation(.medium)
                         .resizable()
                         .aspectRatio(aspect, contentMode: .fit)
                         .padding(6)

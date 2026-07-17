@@ -19,6 +19,19 @@ struct CreationStudioView: View {
     @State private var price: Int
     @State private var shopAlert: ShopAlert?
     @State private var draftID = UUID()
+    /// Whole-canvas snapshots, one per completed stroke. A stroke — not a cell — is the unit a user
+    /// thinks in: one drag can paint dozens of cells, and undoing them one at a time would be useless.
+    @State private var undoStack: [[Int]] = []
+    /// True between a drag's first `onChanged` and its `onEnded`, so a snapshot is pushed once per
+    /// stroke rather than on every touch sample.
+    @State private var isStroking = false
+    /// Mirror mode: painting one side also paints the horizontal mirror. Off by default — a mirror the
+    /// user didn't ask for is more surprising than a toggle they have to find.
+    @State private var isSymmetric = false
+
+    /// Bounded so a long session can't grow without limit. A body grid is 48×40 Ints ≈ 15 KB, so 32
+    /// snapshots is ~0.5 MB worst case — irrelevant next to the images this app already holds.
+    private static let maxUndoSteps = 32
 
     private let palette = ItemDesignPalette.hexes
 
@@ -62,11 +75,15 @@ struct CreationStudioView: View {
                 if editingItem == nil {
                     slotPicker
                 }
+                canvasTools
                 editorCanvas
                 paletteRow
                 detailsCard
             }
-            .padding(20)
+            // 12pt, not 20. The canvas is the point of this screen and its cell size is
+            // width / gridCols, so horizontal padding is the one thing directly costing drawing
+            // resolution — and it was being paid twice (here and inside `editorCanvas`).
+            .padding(12)
         }
         .background(Color.parchment)
         .tint(Color.moss)
@@ -123,7 +140,40 @@ struct CreationStudioView: View {
         .onChange(of: slot) { _, newSlot in
             // Resizing the canvas discards the current art (only reachable while creating a new item).
             pixels = Self.blankPixels(for: newSlot)
+            // The history belongs to the old canvas — its snapshots are the wrong dimensions, so undoing
+            // into them would index a 48×40 buffer with 36×16 offsets and scramble the art.
+            undoStack.removeAll()
         }
+    }
+
+    /// Undo + mirror, sat directly above the canvas where the drawing hand already is.
+    private var canvasTools: some View {
+        HStack(spacing: 12) {
+            Button {
+                undo()
+            } label: {
+                Label("Undo", systemImage: "arrow.uturn.backward")
+                    .font(.fernlet(.label))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(undoStack.isEmpty ? Color.slate.opacity(0.4) : Color.fern)
+            .disabled(undoStack.isEmpty)
+            .accessibilityIdentifier("studio.undo")
+
+            Spacer()
+
+            Button {
+                isSymmetric.toggle()
+            } label: {
+                Label("Mirror", systemImage: isSymmetric ? "square.righthalf.filled" : "square.righthalf.filled")
+                    .font(.fernlet(.label))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(isSymmetric ? Color.fern : Color.slate)
+            .accessibilityIdentifier("studio.mirror")
+            .accessibilityAddTraits(isSymmetric ? [.isSelected] : [])
+        }
+        .padding(.horizontal, 4)
     }
 
     private var editorCanvas: some View {
@@ -147,8 +197,14 @@ struct CreationStudioView: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
+                        // Snapshot on the stroke's first sample, not every sample — one drag is one undo.
+                        if !isStroking {
+                            isStroking = true
+                            pushUndoSnapshot()
+                        }
                         paint(at: value.location, cellW: cellW, cellH: cellH)
                     }
+                    .onEnded { _ in isStroking = false }
             )
             .overlay {
                 // Gentle first-touch hint when the grid is still blank.
@@ -171,7 +227,9 @@ struct CreationStudioView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(Color.bark.opacity(0.10), lineWidth: 1)
         )
-        .padding(16)
+        // 8pt, not 16 — see the outer padding note. Together these give the grid back ~32pt of width,
+        // which at 48 columns is real cell size rather than decoration.
+        .padding(8)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color.cream)
@@ -369,12 +427,36 @@ struct CreationStudioView: View {
 
     private func paint(at location: CGPoint, cellW: CGFloat, cellH: CGFloat) {
         guard cellW > 0, cellH > 0 else { return }
-        let x = Int(location.x / cellW)
-        let y = Int(location.y / cellH)
+        let x = Int((location.x / cellW).rounded(.down))
+        let y = Int((location.y / cellH).rounded(.down))
+        setCell(x: x, y: y)
+        if isSymmetric {
+            // Every grid is even-width (32/36/48/28), so the axis falls cleanly between the two centre
+            // columns and there is no self-mirroring centre column to special-case.
+            setCell(x: slot.gridCols - 1 - x, y: y)
+        }
+    }
+
+    /// Paints one cell. Extracted so symmetry can paint both sides: the "already this colour" guard used
+    /// to early-return out of `paint` itself, which would have silently skipped the mirrored cell
+    /// whenever the touched cell happened to already match the selected colour.
+    private func setCell(x: Int, y: Int) {
         guard x >= 0, x < slot.gridCols, y >= 0, y < slot.gridRows else { return }
         let index = y * slot.gridCols + x
         guard index >= 0, index < pixels.count, pixels[index] != selectedColor else { return }
         pixels[index] = selectedColor
+    }
+
+    /// Snapshots the canvas before a stroke mutates it. Called once per stroke, from the drag's first
+    /// `onChanged`.
+    private func pushUndoSnapshot() {
+        undoStack.append(pixels)
+        if undoStack.count > Self.maxUndoSteps { undoStack.removeFirst() }
+    }
+
+    private func undo() {
+        guard let previous = undoStack.popLast() else { return }
+        pixels = previous
     }
 
     private func save() {
@@ -440,7 +522,9 @@ struct CreationStudioView: View {
     /// — even if the stored texture's dimensions differ from the current slot grid (a friend-received
     /// item, or data authored under different grid constants). Palette indices are remapped onto the
     /// editor palette by exact hex match (unmatched → transparent); a matching palette is a fast copy.
-    private static func editorPixels(for item: CustomizationItem, palette: [String]) -> [Int] {
+    /// Internal rather than private so the resample below is reachable from tests — it is the one path
+    /// here that can silently destroy a user's art, and it must not be verified by eye.
+    static func editorPixels(for item: CustomizationItem, palette: [String]) -> [Int] {
         let cols = item.slot.gridCols
         let rows = item.slot.gridRows
         var buffer = Array(repeating: ItemGridTexture.transparent, count: cols * rows)
@@ -453,11 +537,19 @@ struct CreationStudioView: View {
         if !samePalette {
             for (index, hex) in palette.enumerated() { lookup[hex.uppercased()] = index }
         }
-        let copyCols = min(cols, texture.cols)
-        let copyRows = min(rows, texture.rows)
-        for y in 0..<copyRows {
-            for x in 0..<copyCols {
-                let source = texture.pixels[y * texture.cols + x]
+        // Nearest-neighbour RESAMPLE across the whole canvas, rather than the 1:1 top-left copy this
+        // used to do. That copy was harmless only while every texture already matched the current slot
+        // dimensions: any texture drawn at a different budget (a smaller one from an older build, or a
+        // larger one from a newer build via the P2P shop) opened with its art crammed into one corner —
+        // and `save()` re-encodes at the current slot dims, making the damage permanent on first edit.
+        //
+        // Sampling by ratio is exact for the 2× case (each source cell fills a clean 2×2 block, so a
+        // round-trip is lossless) and merely approximate for arbitrary ratios, which beats corrupting.
+        for y in 0..<rows {
+            let sourceY = texture.rows == rows ? y : min(texture.rows - 1, y * texture.rows / rows)
+            for x in 0..<cols {
+                let sourceX = texture.cols == cols ? x : min(texture.cols - 1, x * texture.cols / cols)
+                let source = texture.pixels[sourceY * texture.cols + sourceX]
                 guard source >= 0, source < texture.palette.count else { continue }
                 buffer[y * cols + x] = samePalette ? source : (lookup[texture.palette[source].uppercased()] ?? ItemGridTexture.transparent)
             }
