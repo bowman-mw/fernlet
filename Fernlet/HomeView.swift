@@ -1891,7 +1891,16 @@ struct MacroRing: View {
     var current: Int
     var goal: Int
 
-    var progress: Double { min(Double(current) / Double(goal), 1) }
+    var progress: Double { Self.ringProgress(current: current, goal: goal) }
+
+    /// Clamped, finite ring fill. A macro *goal* can now be a user-typed override, so `goal == 0` is
+    /// reachable: the naive `current / goal` then yields `+inf` (or `.nan` when `current` is also 0),
+    /// and handing `.nan` to `.trim(to:)` crashes SwiftUI's path builder — on Home, Food AND Journal,
+    /// which all render this ring. Guard the divide and clamp into `[0, 1]`.
+    static func ringProgress(current: Int, goal: Int) -> Double {
+        guard goal > 0 else { return 0 }
+        return min(max(Double(current) / Double(goal), 0), 1)
+    }
 
     var body: some View {
         VStack(spacing: 6) {
