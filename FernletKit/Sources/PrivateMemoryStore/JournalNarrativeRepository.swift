@@ -107,6 +107,20 @@ public final class JournalNarrativeRepository: JournalNarrativeStoring {
         }
     }
 
+    /// Drops every stored journal narrative. Deletes rows WITHOUT decrypting them, so it works while the
+    /// app is locked — deletion must stay available even when reading is not. Mirrors
+    /// `WorryNarrativeRepository.deleteAll()`.
+    public func deleteAll() throws {
+        try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "JournalNarrative")
+            let rows = try context.fetch(request)
+            guard !rows.isEmpty else { return }
+            rows.forEach(context.delete)
+            try context.save()
+            try PrivatePersistentHistoryPruner.prune(context: context)
+        }
+    }
+
     public func narratives(forDayKey dayKey: String, contentKey: SymmetricKey?) throws -> [JournalNarrative] {
         guard let contentKey else { return [] }
         return try context.performAndWait {

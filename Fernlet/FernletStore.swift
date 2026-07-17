@@ -2114,6 +2114,51 @@ final class FernletStore {
         }
     }
 
+    /// Seams for the stores `FernletStore` does not own but "delete everything" must still reach. Same
+    /// shape as `worryBoxResetHook`. Wired in `ContentView`.
+    ///
+    /// `periodDataDeleteHook` / `intimacyDataDeleteHook` purge the sealed rows WITHOUT decrypting them,
+    /// so they work while the app is locked. `healthKitSampleDeleteHook` deletes only the HealthKit
+    /// samples Fernlet itself authored — no app can delete another app's samples.
+    @ObservationIgnored var periodDataDeleteHook: (() -> Void)?
+    @ObservationIgnored var intimacyDataDeleteHook: (() -> Void)?
+    @ObservationIgnored var journalDataDeleteHook: (() -> Void)?
+    @ObservationIgnored var healthKitSampleDeleteHook: (() async -> Void)?
+
+    /// The single "delete everything" funnel. Both Settings entry points route here, so there is one
+    /// definition of what deletion means rather than two partial ones that disagree.
+    ///
+    /// Deliberately NOT deleted (and disclosed in the confirm dialog, because a delete that quietly
+    /// keeps things is worse than one that says so):
+    /// - the moderation self-ban — a safety mechanism; letting a wipe undo a block would make "delete
+    ///   my data" an abuse vector.
+    /// - the milestone ledger — lifetime care counts, product call that they outlive a reset.
+    /// - the mesh identity keypair — wiping it would force every friend to re-add you.
+    func deleteAllData(includingHealthKitSamples deleteHealthSamples: Bool) async {
+        // Sealed rows first: they are the most sensitive and the only ones with no second chance. If a
+        // later step fails, the private store is already clear.
+        periodDataDeleteHook?()
+        intimacyDataDeleteHook?()
+        journalDataDeleteHook?()
+        worryBoxResetHook?()
+
+        if deleteHealthSamples {
+            await healthKitSampleDeleteHook?()
+        }
+
+        // Photo bytes before the days that reference them: ownership lives in `Meal.photoID`, so once
+        // the days are gone nothing knows these files exist and they can never be reached again.
+        mealPhotoStore.deleteAll()
+
+        resetAll()
+
+        // The authoritative per-row day store + the blob + the legacy JSON file. Without this, every
+        // past day survives on disk, reloads on next launch, and re-uploads to iCloud — which is
+        // exactly what "Reset everything" did before.
+        repository.purgeAllPersistedData()
+        repository.replaceTierTwoMemories([])
+    }
+
     func resetAll() {
         batchSnapshotPersistence {
             diary.resetDiary()

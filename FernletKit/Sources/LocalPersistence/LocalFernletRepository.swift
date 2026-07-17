@@ -192,6 +192,23 @@ public struct LocalFernletRepository: FernletRepository {
         state.persistenceBlockedByDecodeFailure = true
     }
 
+    /// Deletes the whole local store file. Removing the file rather than writing an empty database
+    /// leaves nothing on disk to be recovered, and the next `loadDatabase` already treats an absent
+    /// file as a fresh database — so this is the same end state a first launch sees.
+    @discardableResult public func purgeAllPersistedData() -> Bool {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return true }
+        do {
+            try FileManager.default.removeItem(at: fileURL)
+            // A decode failure earlier in the session blocks writes; the file is gone now, so the block
+            // must lift or the user would be unable to save anything after wiping.
+            state.persistenceBlockedByDecodeFailure = false
+            return true
+        } catch {
+            assertionFailure("local database purge failed")
+            return false
+        }
+    }
+
     private func saveDatabase(_ database: LocalFernletDatabase) -> Bool {
         assert(database.schemaVersion >= 1, "schema version invalid")
         guard !state.persistenceBlockedByDecodeFailure else {

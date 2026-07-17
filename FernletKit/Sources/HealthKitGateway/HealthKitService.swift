@@ -220,6 +220,11 @@ public protocol HealthKitStoreControlling: AnyObject {
     func stop(_ query: HKQuery)
     func save(_ samples: [HKObject]) async throws
     func delete(_ samples: [HKSample]) async throws
+    /// Bulk-deletes objects of one type matching a predicate. Needed for "delete everything": deleting
+    /// by fetched sample requires read authorization, but a user may have granted write-only — so
+    /// Fernlet could have written samples it cannot read back and therefore cannot delete one-by-one.
+    /// `HKHealthStore.deleteObjects(of:predicate:)` deletes only the caller's OWN samples regardless.
+    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws
     func disableBackgroundDelivery(for type: HKObjectType) async throws
 }
 
@@ -253,6 +258,11 @@ final class SystemHealthKitStoreController: HealthKitStoreControlling {
 
     func delete(_ samples: [HKSample]) async throws {
         try await healthStore.delete(samples)
+    }
+
+    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {
+        guard let sampleType = type as? HKSampleType else { return }
+        _ = try await healthStore.deleteObjects(of: sampleType, predicate: predicate)
     }
 
     func disableBackgroundDelivery(for type: HKObjectType) async throws {
@@ -368,6 +378,25 @@ public final class HealthKitService: HealthKitServicing {
         let types = try Self.types(for: capability)
         try await storeController.requestAuthorization(toShare: types.share, read: types.read)
         return AuthorizationOutcome(writeStatuses: writeStatuses(for: types.share))
+    }
+
+    /// Deletes every HealthKit sample Fernlet itself wrote, across every type it can write.
+    ///
+    /// Scoped by `HKSource.default()` — the current app — so it can only ever remove Fernlet's own
+    /// samples. HealthKit does not permit deleting another app's data, and entries the user logged in
+    /// Health or another app are untouched. That limit is the reason the delete dialog says the rest of
+    /// Apple Health is theirs to clear.
+    ///
+    /// Best-effort per type: a type Fernlet was never authorized to share throws, and one unauthorized
+    /// type must not abort the whole wipe.
+    public func deleteAllAuthoredSamples() async {
+        let shareTypes = Set(HealthCapability.allCases.flatMap { capability in
+            (try? Self.types(for: capability).share) ?? []
+        })
+        let ownSamples = HKQuery.predicateForObjects(from: HKSource.default())
+        for type in shareTypes {
+            try? await storeController.deleteObjects(of: type, predicate: ownSamples)
+        }
     }
 
     public func currentAuthorizationSnapshot() -> AuthorizationSnapshot {

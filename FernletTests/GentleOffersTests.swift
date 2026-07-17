@@ -217,6 +217,7 @@ struct MindfulSessionSaveTests {
         func stop(_ query: HKQuery) {}
         func save(_ samples: [HKObject]) async throws { savedObjects.append(contentsOf: samples) }
         func delete(_ samples: [HKSample]) async throws {}
+        func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {}
         func disableBackgroundDelivery(for type: HKObjectType) async throws {}
     }
 

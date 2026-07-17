@@ -108,6 +108,20 @@ public nonisolated final class MenstrualNarrativeRepository {
         }
     }
 
+    /// Drops every stored narrative. Deletes rows WITHOUT decrypting them, so it works while the app is
+    /// locked and while cycle tracking is hidden — the property that lets "delete my data" stay
+    /// available even when reading that data is not. Mirrors `WorryNarrativeRepository.deleteAll()`.
+    public func deleteAll() throws {
+        try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
+            let rows = try context.fetch(request)
+            guard !rows.isEmpty else { return }
+            rows.forEach(context.delete)
+            try context.save()
+            try PrivatePersistentHistoryPruner.prune(context: context)
+        }
+    }
+
     /// Total number of stored narratives, counted without decrypting (or even faulting in) any rows.
     /// Lets the sealed-backup export size its chunks up front so it never materializes the whole
     /// history at once — see `narratives(offset:limit:contentKey:)`.

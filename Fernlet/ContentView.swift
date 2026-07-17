@@ -11,6 +11,7 @@ import FernletFoundation
 import FernletDomainModel
 import FernletLock
 import PrivateHealthStore
+import PrivateMemoryStore
 import PeriodContextBridge
 import HealthKitGateway
 
@@ -154,6 +155,7 @@ struct ContentView: View {
                 // for MilestonesView, and purges the sealed rows + count on "Reset everything".
                 store.worriesLetGoProvider = { worryBoxService.lifetimeLetGoCount }
                 store.worryBoxResetHook = { worryBoxService.releaseAll() }
+                attachDeleteAllHooks()
                 #if DEBUG
                 // UX appearance tests: populate the diary so every tab renders real cards.
                 if UITestSupport.shouldSeedDemoContent {
@@ -597,6 +599,21 @@ struct ContentView: View {
 
     /// Loads period entries with whatever content key is currently available (nil when locked / no lock),
     /// so the bridge has cycle data for phase resolution and trends.
+    /// Wires the "delete everything" seams for the sealed stores `FernletStore` doesn't own. Each drops
+    /// rows WITHOUT decrypting them, so deletion stays available even while the app is locked and the
+    /// data itself is unreadable.
+    ///
+    /// Extracted from the launch `.task` rather than inlined: the closures pushed that already-large
+    /// body past the type-checker's budget.
+    private func attachDeleteAllHooks() {
+        store.periodDataDeleteHook = { try? MenstrualNarrativeRepository().deleteAll() }
+        store.intimacyDataDeleteHook = { try? IntimacyLogRepository().deleteAll() }
+        store.journalDataDeleteHook = { try? JournalNarrativeRepository().deleteAll() }
+        store.healthKitSampleDeleteHook = { [storagePreferencesStore] in
+            await HealthKitService(preferencesStore: storagePreferencesStore).deleteAllAuthoredSamples()
+        }
+    }
+
     private func loadPeriodEntriesIfPossible() async {
         let contentKey = { if case .unlocked = lockService.state { return lockService.contentKey() } else { return nil } }()
         await periodStore.loadEntries(unlockedContentKey: contentKey)

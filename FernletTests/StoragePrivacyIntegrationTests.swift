@@ -351,6 +351,10 @@ private final class MockHKStoreController: HealthKitStoreControlling {
     func stop(_ query: HKQuery) { stoppedQueries.append(query) }
     func save(_ samples: [HKObject]) async throws {}
     func delete(_ samples: [HKSample]) async throws { deleteCallCount += 1 }
+    var deletedObjectTypeIdentifiers: [String] = []
+    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {
+        deletedObjectTypeIdentifiers.append(type.identifier)
+    }
     func disableBackgroundDelivery(for type: HKObjectType) async throws {
         disabledBackgroundDeliveryIdentifiers.append(type.identifier)
     }

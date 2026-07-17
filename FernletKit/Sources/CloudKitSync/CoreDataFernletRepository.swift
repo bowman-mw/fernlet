@@ -483,6 +483,42 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         persistenceBlockedByFetchFailure = false
     }
 
+    /// Erases every persisted day row, the snapshot blob record, the legacy JSON store, and every
+    /// in-memory memo of them.
+    ///
+    /// All three stores must go together. The per-row `DayRecord` store is the authoritative source of
+    /// truth, so clearing only the blob leaves the whole history intact; clearing only the rows leaves
+    /// the blob's `days` cache to repopulate them; and leaving the legacy JSON file behind lets the
+    /// blob→row migration re-seed rows from it on a later launch. The memos must be dropped too, or the
+    /// next read serves the data we just deleted straight back.
+    ///
+    /// When iCloud sync is on, these deletions propagate as ordinary CloudKit deletes.
+    @discardableResult public func purgeAllPersistedData() -> Bool {
+        var succeeded = dayRecordRepository.deleteAll()
+
+        let context = controller.container.viewContext
+        let request = NSFetchRequest<NSManagedObject>(entityName: "FernletDatabaseRecord")
+        do {
+            for record in try context.fetch(request) { context.delete(record) }
+            if context.hasChanges { try context.save() }
+        } catch {
+            assertionFailure("database record purge failed")
+            context.rollback()
+            succeeded = false
+        }
+
+        if !legacyRepository.purgeAllPersistedData() { succeeded = false }
+
+        cachedDatabase = nil
+        cachedRecordUpdatedAt = nil
+        cachedAllDays = nil
+        // A decode/fetch failure earlier in the session latches writes off. The stores are empty now, so
+        // the latch must clear or the user could not save anything after wiping.
+        persistenceBlockedByDecodeFailure = false
+        persistenceBlockedByFetchFailure = false
+        return succeeded
+    }
+
     @discardableResult private func saveDatabase(_ database: LocalFernletDatabase, invalidatesDayCache: Bool = true) -> Bool {
         assert(database.schemaVersion >= 1, "schema version invalid")
         // Most saves (migration, tier-2 memories) may have changed the day history underneath the memo, so

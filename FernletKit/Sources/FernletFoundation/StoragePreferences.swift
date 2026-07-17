@@ -86,6 +86,16 @@ public final class StoragePreferencesStore {
         persist(updated)
     }
 
+    /// Returns storage preferences to their first-launch defaults and removes the persisted keychain
+    /// item, so "delete everything" leaves no record of the user's iCloud/backup choices.
+    ///
+    /// Deletes the keychain row rather than writing defaults over it: a written default is still a
+    /// stored value with a `lastModifiedAt`, which is itself a trace of use.
+    public func resetToDefaults() {
+        KeychainItem.delete(for: .storagePreferences, service: keychainService)
+        preferences = StoragePreferences()
+    }
+
     private func persist(_ preferences: StoragePreferences) {
         guard let data = try? encoder.encode(preferences) else { return }
         KeychainItem.store(data, for: .storagePreferences, service: keychainService)

@@ -262,6 +262,13 @@ private final class MockHealthKitStoreController: HealthKitStoreControlling {
         deleteCallCount += 1
     }
 
+    /// Records which types a bulk delete touched, so `deleteAllAuthoredSamples` can be asserted on.
+    var deletedObjectTypeIdentifiers: [String] = []
+
+    func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {
+        deletedObjectTypeIdentifiers.append(type.identifier)
+    }
+
     func disableBackgroundDelivery(for type: HKObjectType) async throws {
         disabledBackgroundDeliveryIdentifiers.append(type.identifier)
     }
