@@ -351,13 +351,24 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
         ownedEquipment.filter { $0.category == category }.count
     }
 
+    // Fixed IDs for the two built-in locations.
+    //
+    // These are computed properties, so every access builds a NEW value — and with a `UUID()` default
+    // that meant a new identity each time. `settings.activeWorkoutLocation` falls back to `.fullGym`,
+    // so two reads of the same property could disagree about which location was active, and an `activeID`
+    // captured from one read matched nothing on the next. A hardcoded UUID makes the built-ins stable
+    // across reads, launches and devices; `static let` would not (it is initialized once per PROCESS, so
+    // the id would still change every launch).
+    private static let fullGymID = UUID(uuidString: "F0E1D2C3-B4A5-4968-8778-6A5B4C3D2E1F")!
+    private static let homeID = UUID(uuidString: "0A1B2C3D-4E5F-4061-9273-8495A6B7C8D9")!
+
     /// The default location: assume the user has every standard piece of gym equipment.
     nonisolated public static var fullGym: WorkoutLocation {
-        WorkoutLocation(name: "Full gym", ownedEquipment: Set(GymEquipment.allCases))
+        WorkoutLocation(id: fullGymID, name: "Full gym", ownedEquipment: Set(GymEquipment.allCases))
     }
 
     nonisolated public static var home: WorkoutLocation {
-        WorkoutLocation(name: "Home", ownedEquipment: [.dumbbells, .kettlebells, .resistanceBands, .yogaMat, .pullUpBar])
+        WorkoutLocation(id: homeID, name: "Home", ownedEquipment: [.dumbbells, .kettlebells, .resistanceBands, .yogaMat, .pullUpBar])
     }
 }
 

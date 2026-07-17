@@ -6,6 +6,42 @@ import AIProviders
 
 @MainActor
 struct WorkoutProgramTests {
+    /// The built-in locations are computed properties, so every access builds a fresh value. With a
+    /// `UUID()` default that meant a new identity each read — and `settings.activeWorkoutLocation` falls
+    /// back to `.fullGym`, so two reads of the same property could disagree about which location is
+    /// active and an `activeID` captured from one read matched nothing on the next.
+    @Test func builtInLocationIDsAreStableAcrossAccesses() {
+        #expect(WorkoutLocation.fullGym.id == WorkoutLocation.fullGym.id)
+        #expect(WorkoutLocation.home.id == WorkoutLocation.home.id)
+        #expect(WorkoutLocation.fullGym.id != WorkoutLocation.home.id)
+    }
+
+    /// Templates must NOT inherit a built-in's fixed id, or adding a "Full gym" template alongside the
+    /// default would produce two locations sharing an id — an Identifiable collision in the ForEach and
+    /// an ambiguous `first(where:)` when resolving the active location.
+    @Test func templateLocationsGetFreshIDsDistinctFromTheBuiltIns() {
+        let ids = LocationTemplate.all.map { $0.makeLocation().id }
+        #expect(Set(ids).count == ids.count, "two templates minted the same id")
+        #expect(!ids.contains(WorkoutLocation.fullGym.id))
+        #expect(LocationTemplate.all.first!.makeLocation().id != LocationTemplate.all.first!.makeLocation().id)
+    }
+
+    /// The active location must survive a round-trip through the settings default. Guards the fallback
+    /// at `activeWorkoutLocation`'s `?? .fullGym`.
+    @Test func defaultActiveLocationResolvesToAStableID() {
+        let settings = FernletSettings()
+        #expect(settings.activeWorkoutLocation.id == settings.activeWorkoutLocation.id)
+        #expect(settings.workoutLocations.contains { $0.id == settings.activeWorkoutLocation.id })
+    }
+
+    /// The delete-confirm copy must agree in number and never read "the 0/1 pieces".
+    @Test func deleteConfirmCopyPluralizesAndHandlesZero() {
+        #expect(WorkoutLocationSetupView.deleteMessage(equipmentCount: 0) == "This deletes the location and its equipment setup. Your logged workouts are not affected.")
+        #expect(WorkoutLocationSetupView.deleteMessage(equipmentCount: 1).contains("the 1 piece of equipment"))
+        #expect(!WorkoutLocationSetupView.deleteMessage(equipmentCount: 1).contains("1 pieces"))
+        #expect(WorkoutLocationSetupView.deleteMessage(equipmentCount: 5).contains("the 5 pieces of equipment"))
+    }
+
     @Test func catalogDecodesWithEquipmentVariety() {
         let catalog = WorkoutExerciseCatalog.baseExercises
         #expect(catalog.count >= 80)

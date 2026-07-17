@@ -816,6 +816,9 @@ struct MoveContextStrip: View {
                 action: onEditSpace
             )
             .accessibilityLabel(spaceValue)
+            // Stable id: the label is the location's NAME, which the user can now rename, so a test that
+            // matched on it would break the moment it exercised the rename it's there to check.
+            .accessibilityIdentifier("move.space")
         }
         .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
         .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusSm).stroke(Color.bark.opacity(0.08), lineWidth: 1))

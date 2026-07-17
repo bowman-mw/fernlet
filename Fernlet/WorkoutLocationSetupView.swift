@@ -16,6 +16,7 @@ struct WorkoutLocationSetupView: View {
     @State private var editingIndex: Int?
     @State private var addingCustom = false
     @State private var customName = ""
+    @State private var pendingDestructiveAction: DestructiveConfirmation?
 
     init(store: FernletStore) {
         self.store = store
@@ -34,6 +35,7 @@ struct WorkoutLocationSetupView: View {
             }
         }
         .background(Color.parchment)
+        .destructiveConfirmation($pendingDestructiveAction)
     }
 
     // MARK: - Location step
@@ -97,14 +99,30 @@ struct WorkoutLocationSetupView: View {
             dismiss()
         } label: {
             VStack(alignment: .leading, spacing: 14) {
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "mappin.and.ellipse")
                         .font(.system(size: 22))
                         .foregroundStyle(Color.moss)
                     Spacer()
+                    // Delete used to be context-menu-only — a long-press with no affordance, sitting next
+                    // to a clearly visible pencil, so it read as "you can edit but not delete".
+                    if locations.count > 1 {
+                        Button { confirmRemoveLocation(index: index) } label: {
+                            Image(systemName: "trash")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.terracotta)
+                                .padding(6)
+                                .background(Color.parchment.opacity(0.8), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Delete \(location.name)")
+                        .accessibilityIdentifier("workout.location.delete")
+                    }
                     Button {
+                        // Edit equipment/name only — deliberately does NOT set `activeID`. It used to,
+                        // and because a later delete persists `activeID`, peeking at one location and
+                        // then deleting an unrelated one silently switched the user's active gym.
                         editingIndex = index
-                        activeID = location.id
                         step = .equipment
                     } label: {
                         Image(systemName: "pencil")
@@ -114,6 +132,7 @@ struct WorkoutLocationSetupView: View {
                             .background(Color.parchment.opacity(0.8), in: Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Edit \(location.name)")
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(location.name)
@@ -133,9 +152,10 @@ struct WorkoutLocationSetupView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("workout.location.card")
         .contextMenu {
             if locations.count > 1 {
-                Button(role: .destructive) { removeLocation(index: index) } label: {
+                Button(role: .destructive) { confirmRemoveLocation(index: index) } label: {
                     Label("Remove", systemImage: "trash")
                 }
             }
@@ -199,7 +219,7 @@ struct WorkoutLocationSetupView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
-                    Button { step = .location } label: {
+                    Button { commitEdits(); step = .location } label: {
                         Image(systemName: "chevron.left")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Color.bark)
@@ -207,11 +227,25 @@ struct WorkoutLocationSetupView: View {
                             .background(Color.cream, in: RoundedRectangle(cornerRadius: 11))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Back to locations")
+                    .accessibilityIdentifier("workout.location.back")
+                    // Editable, not a label: the model has always had `name` and the creator lets you set
+                    // it once, but nothing could ever rename a saved location — so a typo lived forever.
                     HStack(spacing: 6) {
                         Image(systemName: "mappin.and.ellipse")
                             .font(.caption2)
-                        Text(editingLocation?.name ?? "Location")
+                        TextField("Location", text: editingNameBinding)
                             .font(.fernlet(.labelSmall))
+                            .textInputAutocapitalization(.words)
+                            .submitLabel(.done)
+                            // Bounded width, not .fixedSize(): fixedSize grows the chip to the full text
+                            // width, so a long name pushed the trailing pencil and the caret off-screen.
+                            // A frame lets the field scroll its own content and keeps the row on-screen.
+                            .frame(maxWidth: 180)
+                            .accessibilityIdentifier("workout.location.name")
+                        Image(systemName: "pencil")
+                            .font(.system(size: 9))
+                            .foregroundStyle(Color.slate)
                     }
                     .foregroundStyle(Color.bark)
                     .padding(.horizontal, 12)
@@ -243,7 +277,7 @@ struct WorkoutLocationSetupView: View {
             }
 
             SheetSaveBar(label: "Save location") {
-                store.setWorkoutLocations(locations, activeID: activeID)
+                commitEdits()
                 dismiss()
             }
         }
@@ -318,6 +352,39 @@ struct WorkoutLocationSetupView: View {
         return locations[index]
     }
 
+    /// Writes straight into the edited location's name. The setter is guarded rather than force-indexed:
+    /// `editingIndex` can outlive the row it points at (a delete shifts every later index down), and a
+    /// binding that trapped on a stale index would crash the sheet instead of ignoring a dead keystroke.
+    ///
+    /// A blank name is allowed WHILE typing — clearing the field to retype is normal — and is repaired on
+    /// commit, not by fighting the user's keystrokes mid-edit.
+    private var editingNameBinding: Binding<String> {
+        Binding(
+            get: { editingLocation?.name ?? "" },
+            set: { newValue in
+                guard let index = editingIndex, locations.indices.contains(index) else { return }
+                locations[index].name = newValue
+            }
+        )
+    }
+
+    /// Falls back to a usable name if the field was left blank, so a half-finished rename can't produce
+    /// an unlabelled card the user can't tell apart from the others.
+    private func repairBlankName() {
+        guard let index = editingIndex, locations.indices.contains(index) else { return }
+        if locations[index].name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            locations[index].name = "Location \(index + 1)"
+        }
+    }
+
+    /// Repairs a blank name and persists, so leaving the equipment step commits the edit regardless of
+    /// HOW the user leaves it. Both exits (Save location, back chevron) go through here, so a rename
+    /// can't be lost to a swipe-dismiss the same way a delete could — the bug this whole change is about.
+    private func commitEdits() {
+        repairBlankName()
+        store.setWorkoutLocations(locations, activeID: activeID)
+    }
+
     private func sectionHeader(_ text: String) -> some View {
         Text(text.uppercased())
             .font(.fernlet(.labelSmall))
@@ -354,9 +421,44 @@ struct WorkoutLocationSetupView: View {
         step = .equipment
     }
 
+    /// Deleting a location throws away the equipment the user checked off for it, and there is no undo,
+    /// so it routes through the house destructive-confirmation pattern like every other irreversible
+    /// action rather than firing straight off a tap.
+    private func confirmRemoveLocation(index: Int) {
+        guard locations.indices.contains(index) else { return }
+        let location = locations[index]
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Delete \(location.name)?",
+            message: Self.deleteMessage(equipmentCount: location.ownedEquipment.count),
+            confirmLabel: "Delete",
+            auditEvent: "workout.location.deleteConfirmed",
+            perform: { removeLocation(index: index) }
+        )
+    }
+
+    /// The delete-confirm body. Pluralizes and special-cases zero, so the one dialog where copy matters
+    /// most doesn't read "the 1 pieces" or "the 0 pieces" — an empty custom location is one Add-then-back
+    /// away. `static` so it can be unit-tested without standing up the view.
+    static func deleteMessage(equipmentCount count: Int) -> String {
+        let equipmentClause: String
+        switch count {
+        case 0: equipmentClause = "its equipment setup"
+        case 1: equipmentClause = "the 1 piece of equipment you picked for it"
+        default: equipmentClause = "the \(count) pieces of equipment you picked for it"
+        }
+        return "This deletes the location and \(equipmentClause). Your logged workouts are not affected."
+    }
+
     private func removeLocation(index: Int) {
         guard locations.count > 1, locations.indices.contains(index) else { return }
         let removed = locations.remove(at: index)
         if activeID == removed.id { activeID = locations.first?.id ?? activeID }
+        // Persist NOW, not at "Done". `locations` is @State seeded from the store at init, so every
+        // mutation here is local until a save bar is tapped — and both steps of this sheet can be
+        // swipe-dismissed. A delete that only edited @State looked like it worked and then silently
+        // came back on the next open, which is the worst shape for a destructive action: the user
+        // believes it's gone. Add/edit still commit at their save bars, where the user has an explicit
+        // "I'm finished" moment; a delete's moment is the confirm they just tapped.
+        store.setWorkoutLocations(locations, activeID: activeID)
     }
 }
