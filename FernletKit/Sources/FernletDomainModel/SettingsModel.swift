@@ -89,6 +89,15 @@ public nonisolated struct FernletSettings: Codable {
     public var stressAwarenessEnabled: Bool = false
     public var userProfile: UserNutritionProfile = UserNutritionProfile()
     public var nutritionPreferences: UserNutritionPreferences = UserNutritionPreferences()
+    /// User-set macro *target* overrides. `nil` means "derive from goal, profile, activity and eating
+    /// pattern" (the default and today's only behavior); a non-nil value pins that one target and the
+    /// rest of the plan re-solves around it. Only calories, protein and fat are pinnable — carbs is
+    /// always the residual (`NutritionTargetCalculator`), so pinning any of these three rebalances carbs
+    /// for free and the four numbers can never disagree with the calorie total. These are last-writer-
+    /// wins scalars in the synced settings blob, exactly like `showCalories`.
+    public var calorieTargetOverride: Int? = nil
+    public var proteinTargetOverride: Int? = nil
+    public var fatTargetOverride: Int? = nil
     public var quickLogItems: [FernletShortcut] = FernletShortcut.defaultQuickLog
     /// Raw `quickLogItems` tokens this build's `FernletShortcut` doesn't know — shortcuts added by a
     /// NEWER build on another device. Parked here (and re-encoded) instead of thrown on, so a newer
@@ -213,6 +222,10 @@ public nonisolated struct FernletSettings: Codable {
         stressAwarenessEnabled = try container.decodeIfPresent(Bool.self, forKey: .stressAwarenessEnabled) ?? false
         userProfile = try container.decodeIfPresent(UserNutritionProfile.self, forKey: .userProfile) ?? UserNutritionProfile()
         nutritionPreferences = try container.decodeIfPresent(UserNutritionPreferences.self, forKey: .nutritionPreferences) ?? UserNutritionPreferences()
+        // Absent key ⇒ nil ⇒ derive (correct for every settings blob written before overrides existed).
+        calorieTargetOverride = try container.decodeIfPresent(Int.self, forKey: .calorieTargetOverride)
+        proteinTargetOverride = try container.decodeIfPresent(Int.self, forKey: .proteinTargetOverride)
+        fatTargetOverride = try container.decodeIfPresent(Int.self, forKey: .fatTargetOverride)
         // These enum arrays sync across devices, so decode them tolerantly: a strict `[FernletShortcut]`/
         // `[HomeWidget]` decode throws on the first raw value only a NEWER build knows, and that error
         // cascades into decode-failure recovery (empty read-only database) on this device. Known tokens

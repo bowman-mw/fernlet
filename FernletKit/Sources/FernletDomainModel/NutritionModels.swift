@@ -1565,9 +1565,13 @@ public nonisolated struct NutritionTargets: Equatable {
 public nonisolated enum NutritionTargetCalculator {
     public static func targets(for settings: FernletSettings) -> NutritionTargets {
         let profile = settings.userProfile
-        let calories = adjustedCalories(for: settings)
-        let protein = proteinTarget(for: settings)
-        let fat = fatTarget(calories: calories, preferences: settings.nutritionPreferences)
+        // A non-nil override pins the target; nil falls through to the derived value. `fat` derives from
+        // the (possibly overridden) `calories`, and `carbs` below is the residual of all three, so
+        // pinning any of these re-solves the rest and the four macros always agree with the calorie
+        // total. Overrides only ever reach here as a positive integer (the editor maps 0/blank → nil).
+        let calories = settings.calorieTargetOverride ?? adjustedCalories(for: settings)
+        let protein = settings.proteinTargetOverride ?? proteinTarget(for: settings)
+        let fat = settings.fatTargetOverride ?? fatTarget(calories: calories, preferences: settings.nutritionPreferences)
         let proteinCalories = protein * 4
         let fatCalories = fat * 9
         let remainingCalories = max(calories - proteinCalories - fatCalories, Int(Double(calories) * 0.30))

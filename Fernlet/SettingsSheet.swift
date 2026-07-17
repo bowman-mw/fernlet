@@ -1046,21 +1046,7 @@ struct SettingsSheet: View {
             SectionLabel("Body & preferences")
             ProfileEditor(profile: healthSyncedProfileBinding, preferences: $store.settings.nutritionPreferences)
 
-            FernletCard {
-                let targets = store.nutritionTargets
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionLabel("Current targets")
-                    HStack(spacing: 10) {
-                        NutritionPill(title: "Calories", value: "\(targets.calories)")
-                        NutritionPill(title: "Protein", value: "\(targets.protein)g")
-                        NutritionPill(title: "Fiber", value: "\(targets.fiber)g")
-                    }
-                    Text("Targets update automatically from goal, profile, activity, and eating pattern.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-            }
+            NutritionTargetsEditor(store: store)
 
             SectionLabel("AI")
             VStack(alignment: .leading, spacing: 10) {
