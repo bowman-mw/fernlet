@@ -68,6 +68,10 @@ struct HomeView: View {
             .presentationCornerRadius(20)
         }
         .task {
+            #if DEBUG
+            // Test hook: open customization directly (the real entry is a long-press XCUITest can't send).
+            if UITestSupport.shouldOpenCustomize { isCompanionSheetPresented = true }
+            #endif
             // Restore the settled pose if the app returned during an active cooldown window.
             isCompanionSettled = petGovernor.isSettled
             await refreshRecentPeriodActivity()

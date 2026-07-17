@@ -208,6 +208,8 @@ struct CreationStudioView: View {
                     .italic()
                     .foregroundStyle(Color.slate.opacity(0.6))
                     .allowsHitTesting(false)
+                    // Decorative; hidden from a11y so it doesn't also carry the canvas's `studio.canvas` id.
+                    .accessibilityHidden(true)
             }
         }
         // 8pt, not 16 — see the outer padding note. Together these give the grid back ~32pt of width,

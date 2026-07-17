@@ -133,6 +133,9 @@ final class ZoomScrollView: UIScrollView {
         contentInsetAdjustmentBehavior = .never
         // Two fingers to pan, so a single finger is free to paint.
         panGestureRecognizer.minimumNumberOfTouches = 2
+        // Let the 1-finger paint gestures on the content see touches immediately (no scroll-view delay),
+        // so a quick tap/dab paints rather than being swallowed.
+        delaysContentTouches = false
 
         content.contentMode = .scaleToFill
         content.backgroundColor = .clear

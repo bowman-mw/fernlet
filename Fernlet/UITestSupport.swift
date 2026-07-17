@@ -41,10 +41,16 @@ enum UITestSupport {
         guard let id = env["FERNLET_UI_TEST_OPEN_SHEET"] else { return nil }
         return FernletSheet(uiTestID: id)
     }
+
+    /// `FERNLET_UI_TEST_OPEN_CUSTOMIZE=1` — open the companion customization sheet on Home launch.
+    /// The sheet is only reachable by a long-press on the hero companion, which XCUITest can't
+    /// synthesize; this hook lets the item-creation flow (slot picker → Wardrobe → studio) be driven.
+    static var shouldOpenCustomize: Bool { env["FERNLET_UI_TEST_OPEN_CUSTOMIZE"] == "1" }
     #else
     static var shouldSeedDemoContent: Bool { false }
     static var bypassPrivateLockGate: Bool { false }
     static var initialSheet: FernletSheet? { nil }
+    static var shouldOpenCustomize: Bool { false }
     #endif
 }
 
