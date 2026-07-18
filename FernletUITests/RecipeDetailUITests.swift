@@ -29,4 +29,23 @@ final class RecipeDetailUITests: XCTestCase {
 
         UXScreenProbe(app, "Food · Recipe detail", in: self).capture()
     }
+
+    /// The Food page's own Recipes section used to jump straight into the editor on tap; it now pushes
+    /// the same read-only detail as the recipe book, so every recipe row behaves identically.
+    @MainActor
+    func testFoodPageRecipeRowOpensDetailView() {
+        let app = UXTestApp.launch()  // Home, demo-seeded (seeds "Overnight oats" in the Recipes section)
+
+        app.buttons["Food"].firstMatch.tap()
+
+        // The recipe row in the Food page's Recipes section (NOT the "Recipe book" button).
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Overnight oats")).firstMatch
+        for _ in 0..<8 where !row.isHittable { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 6), "seeded recipe row not found in the Food page Recipes section")
+        row.tap()
+
+        // Tapping now pushes the detail rather than presenting the editor sheet.
+        XCTAssertTrue(app.navigationBars["Recipe"].waitForExistence(timeout: 6), "recipe detail did not open from the Food page")
+        XCTAssertTrue(app.buttons["recipeDetail.log"].waitForExistence(timeout: 4), "detail is missing the log action")
+    }
 }

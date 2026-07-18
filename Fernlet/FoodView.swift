@@ -109,10 +109,34 @@ struct FoodView: View {
                                             // stopped ~65% across and read as centered. Costs row height; the
                                             // smaller title above pays some of it back.
                                             VStack(alignment: .leading, spacing: 6) {
+                                                #if canImport(UIKit)
+                                                // Tapping a recipe pushes the read-only detail (photo,
+                                                // per-serving macros, ingredients, notes); the editor is
+                                                // reachable only via the detail's Edit button.
+                                                NavigationLink {
+                                                    RecipeDetailView(
+                                                        store: store,
+                                                        recipe: recipe,
+                                                        onEdit: { editingRecipe = recipe },
+                                                        onLog: { mealType in store.logRecipe(recipe, mealType: mealType) },
+                                                        onShare: {
+                                                            recipeShareDraft = ProximityRecipeShareDraft(
+                                                                title: recipe.name,
+                                                                shareText: store.recipeShareText(for: recipe),
+                                                                payload: store.proximityRecipeSharePayload(for: recipe)
+                                                            )
+                                                        }
+                                                    )
+                                                } label: {
+                                                    RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
+                                                }
+                                                .buttonStyle(.plain)
+                                                #else
                                                 Button { editingRecipe = recipe } label: {
                                                     RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
                                                 }
                                                 .buttonStyle(.plain)
+                                                #endif
                                                 HStack(spacing: 12) {
                                                     Spacer()
                                                     RecipeMealTypeMenu { mealType in
@@ -131,10 +155,34 @@ struct FoodView: View {
                                             // Same trailing-controls layout as `.local` above — the two row
                                             // types interleave in one list and must not disagree.
                                             VStack(alignment: .leading, spacing: 6) {
+                                                #if canImport(UIKit)
+                                                // Same read-only detail as manual recipes; for a saved/web
+                                                // recipe Edit opens its notes/delete sheet (web imports have
+                                                // no structured ingredients to edit).
+                                                NavigationLink {
+                                                    RecipeDetailView(
+                                                        store: store,
+                                                        recipe: recipe,
+                                                        onEdit: { editingSavedRecipe = recipe },
+                                                        onLog: { mealType in store.logSavedRecipe(recipe, mealType: mealType) },
+                                                        onShare: {
+                                                            recipeShareDraft = ProximityRecipeShareDraft(
+                                                                title: recipe.name,
+                                                                shareText: store.savedRecipeShareText(for: recipe),
+                                                                payload: store.proximityRecipeSharePayload(for: recipe)
+                                                            )
+                                                        }
+                                                    )
+                                                } label: {
+                                                    SavedRecipeRow(recipe: recipe)
+                                                }
+                                                .buttonStyle(.plain)
+                                                #else
                                                 Button { editingSavedRecipe = recipe } label: {
                                                     SavedRecipeRow(recipe: recipe)
                                                 }
                                                 .buttonStyle(.plain)
+                                                #endif
                                                 HStack(spacing: 12) {
                                                     Spacer()
                                                     RecipeMealTypeMenu { mealType in
@@ -2569,19 +2617,41 @@ struct RecipeDetailView: View {
     /// warns + audits like every other irreversible action instead of firing off a single tap.
     @State private var pendingDestructiveAction: DestructiveConfirmation?
 
-    private var totals: MacroTotals { store.macroTotals(for: recipe) }
+    /// Manual recipes resolve their structured ingredients through the catalog; web imports carry
+    /// free-text ingredient lines and no structured `ingredients`, so their FoodCatalog resolution
+    /// would be empty. Cached once in `.task` (see below) so a pushed detail doesn't re-query on every
+    /// store-driven body re-eval.
+    @State private var resolvedItems: [UUID: FoodItem] = [:]
+
+    /// Whole-recipe macros. Manual recipes resolve their ingredients through the catalog; web imports
+    /// store per-serving macros under `webImport`, scaled back up here by the serving count.
+    private var totals: MacroTotals {
+        if let webImport = recipe.webImport {
+            let servings = max(recipe.servings, 1)
+            return MacroTotals(
+                protein: webImport.macros.protein * servings,
+                carbs: webImport.macros.carbs * servings,
+                fat: webImport.macros.fat * servings
+            )
+        }
+        return store.macroTotals(for: recipe)
+    }
+
+    /// Per-serving macros. Web imports already store per-serving values; manual recipes divide the
+    /// resolved whole-recipe totals by servings.
     private var perServing: MacroTotals {
+        if let webImport = recipe.webImport {
+            return MacroTotals(
+                protein: webImport.macros.protein,
+                carbs: webImport.macros.carbs,
+                fat: webImport.macros.fat
+            )
+        }
         let divisor = max(recipe.servings, 1)
         return MacroTotals(
             protein: Int((Double(totals.protein) / Double(divisor)).rounded()),
             carbs: Int((Double(totals.carbs) / Double(divisor)).rounded()),
             fat: Int((Double(totals.fat) / Double(divisor)).rounded())
-        )
-    }
-    private var resolvedItems: [UUID: FoodItem] {
-        Dictionary(
-            store.foodCatalog.items(ids: recipe.ingredients.map(\.foodItemId)).map { ($0.id, $0) },
-            uniquingKeysWith: { first, _ in first }
         )
     }
 
@@ -2618,6 +2688,16 @@ struct RecipeDetailView: View {
         .task {
             guard !didLoadPhoto else { return }
             didLoadPhoto = true
+            // Resolve the manual recipe's structured ingredients ONCE (a FoodCatalog SQLite read) into a
+            // cached dictionary, so a detail left on screen doesn't re-query on every store mutation.
+            // Web imports have no structured ingredients — they render free-text lines instead.
+            let ingredientIDs = recipe.ingredients.map(\.foodItemId)
+            if !ingredientIDs.isEmpty {
+                resolvedItems = Dictionary(
+                    store.foodCatalog.items(ids: ingredientIDs).map { ($0.id, $0) },
+                    uniquingKeysWith: { first, _ in first }
+                )
+            }
             if let data = store.recipePhotoData(for: recipe.id) {
                 photo = await UIImage(data: data)?.byPreparingForDisplay()
             }
@@ -2698,22 +2778,57 @@ struct RecipeDetailView: View {
         }
     }
 
-    private var ingredientsCard: some View {
-        FernletCard {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionLabel("Ingredients")
-                if recipe.ingredients.isEmpty {
-                    Text("No ingredients listed.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                } else {
-                    ForEach(recipe.ingredients) { ingredient in
-                        HStack(alignment: .top, spacing: 8) {
-                            Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
-                            Text(ingredientLine(ingredient))
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.bark)
-                                .fernletWrappingText()
+    @ViewBuilder private var ingredientsCard: some View {
+        if let webImport = recipe.webImport {
+            // Web imports keep free-text ingredient lines (no structured food-item resolution) plus the
+            // source URL as a provenance line where a manual recipe's resolved list would be.
+            FernletCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionLabel("Ingredients")
+                    if webImport.ingredientLines.isEmpty {
+                        Text("No ingredients listed.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                    } else {
+                        ForEach(webImport.ingredientLines, id: \.self) { line in
+                            HStack(alignment: .top, spacing: 8) {
+                                Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
+                                Text(line)
+                                    .font(.fernlet(.body))
+                                    .foregroundStyle(Color.bark)
+                                    .fernletWrappingText()
+                            }
+                        }
+                    }
+                    Link(destination: webImport.sourceURL) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "safari").font(.caption)
+                            Text(webImport.sourceURL.host() ?? webImport.sourceURL.absoluteString)
+                                .font(.fernlet(.labelSmall))
+                                .underline()
+                        }
+                        .foregroundStyle(Color.fern)
+                    }
+                    .padding(.top, 2)
+                }
+            }
+        } else {
+            FernletCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionLabel("Ingredients")
+                    if recipe.ingredients.isEmpty {
+                        Text("No ingredients listed.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                    } else {
+                        ForEach(recipe.ingredients) { ingredient in
+                            HStack(alignment: .top, spacing: 8) {
+                                Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
+                                Text(ingredientLine(ingredient))
+                                    .font(.fernlet(.body))
+                                    .foregroundStyle(Color.bark)
+                                    .fernletWrappingText()
+                            }
                         }
                     }
                 }
@@ -3122,10 +3237,33 @@ struct RecipeBookSheet: View {
                                 ForEach(Array(allSaved.enumerated()), id: \.element.id) { index, recipe in
                                     if index > 0 { FernletRowDivider() }
                                     HStack(spacing: 12) {
+                                        #if canImport(UIKit)
+                                        // Saved/web recipes push the same read-only detail as manual rows;
+                                        // Edit opens their notes/delete sheet (no structured ingredients).
+                                        NavigationLink {
+                                            RecipeDetailView(
+                                                store: store,
+                                                recipe: recipe,
+                                                onEdit: { editingSavedRecipe = recipe; dismiss() },
+                                                onLog: { mealType in store.logSavedRecipe(recipe, mealType: mealType); dismiss() },
+                                                onShare: {
+                                                    recipeShareDraft = ProximityRecipeShareDraft(
+                                                        title: recipe.name,
+                                                        shareText: store.savedRecipeShareText(for: recipe),
+                                                        payload: store.proximityRecipeSharePayload(for: recipe)
+                                                    )
+                                                }
+                                            )
+                                        } label: {
+                                            SavedRecipeRow(recipe: recipe)
+                                        }
+                                        .buttonStyle(.plain)
+                                        #else
                                         Button { editingSavedRecipe = recipe; dismiss() } label: {
                                             SavedRecipeRow(recipe: recipe)
                                         }
                                         .buttonStyle(.plain)
+                                        #endif
                                         RecipeMealTypeMenu { mealType in
                                             store.logSavedRecipe(recipe, mealType: mealType)
                                             dismiss()
