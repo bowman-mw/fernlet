@@ -389,13 +389,43 @@ public final class HealthKitService: HealthKitServicing {
     ///
     /// Best-effort per type: a type Fernlet was never authorized to share throws, and one unauthorized
     /// type must not abort the whole wipe.
-    public func deleteAllAuthoredSamples() async {
+    ///
+    /// Returns whether every type either cleared or was an EXPECTED skip. The old `try?` swallowed every
+    /// failure and returned Void, so the "delete everything" funnel — which promises these samples are
+    /// gone — could report success while an unexpected error left Fernlet-authored samples behind. An
+    /// authorization/availability error is not a failure to report: a type Fernlet cannot write has
+    /// nothing of Fernlet's to delete. Any OTHER error did leave data behind and must surface.
+    public func deleteAllAuthoredSamples() async -> Bool {
         let shareTypes = Set(HealthCapability.allCases.flatMap { capability in
             (try? Self.types(for: capability).share) ?? []
         })
         let ownSamples = HKQuery.predicateForObjects(from: HKSource.default())
+        var succeeded = true
         for type in shareTypes {
-            try? await storeController.deleteObjects(of: type, predicate: ownSamples)
+            do {
+                try await storeController.deleteObjects(of: type, predicate: ownSamples)
+            } catch let error as HKError where Self.isExpectedDeleteSkip(error) {
+                // Write-only / never-granted type, or Health unavailable on this device: nothing Fernlet
+                // wrote that it could reach here, not a failure. Skip it and keep clearing the rest.
+                continue
+            } catch {
+                // An unexpected error genuinely left authored samples behind — the one leg that used to
+                // hide this. Record it but keep going so one bad type can't abort the rest of the wipe.
+                succeeded = false
+            }
+        }
+        return succeeded
+    }
+
+    /// An authorization or availability error from a per-type delete is EXPECTED, not a failure: a type
+    /// Fernlet was never authorized to share can hold nothing Fernlet wrote, so reporting it would cry
+    /// wolf on the delete dialog just as surely as swallowing a real failure would lie on it.
+    private static func isExpectedDeleteSkip(_ error: HKError) -> Bool {
+        switch error.code {
+        case .errorAuthorizationDenied, .errorAuthorizationNotDetermined, .errorHealthDataUnavailable:
+            return true
+        default:
+            return false
         }
     }
 

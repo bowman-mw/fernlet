@@ -2206,7 +2206,15 @@ final class FernletStore {
     @ObservationIgnored var periodDataDeleteHook: (() -> Bool)?
     @ObservationIgnored var intimacyDataDeleteHook: (() -> Bool)?
     @ObservationIgnored var journalDataDeleteHook: (() -> Bool)?
-    @ObservationIgnored var healthKitSampleDeleteHook: (() async -> Void)?
+    /// Returns whether the HealthKit delete cleared — `Bool`, not `Void`, for the same reason as the
+    /// sealed hooks: `deleteAllAuthoredSamples` can hit an unexpected error that leaves authored samples
+    /// behind, and a hook that swallowed that would let a wipe the dialog called complete keep them.
+    @ObservationIgnored var healthKitSampleDeleteHook: (() async -> Bool)?
+    /// Deletes the day-blob copy sitting in the user's private CloudKit zone WITHOUT a live sync session
+    /// — the "Stop syncing, keep cloud data" case, where sync is off so the per-row deletes below can't
+    /// reach the server by propagating over a session. Returns whether it cleared. Wired in `ContentView`
+    /// (the store does not own a CloudKit service). Invoked only when `cloudCopyKept` is set.
+    @ObservationIgnored var cloudCopyDeleteHook: (() async -> Bool)?
     /// Purges the pending-narrative buffer — cycle notes written while the app was LOCKED, sealed under a
     /// device key and parked in a file until the next unlock can file them.
     ///
@@ -2224,7 +2232,10 @@ final class FernletStore {
     /// `hasSealedBackup` consults to decide there is a backup worth deleting, so clearing them after a
     /// failure would make the failure permanent: the retry the alert invites would find the flags false,
     /// skip the payload, and leave the backup in iCloud with nothing left to point at it.
-    @ObservationIgnored var storagePreferencesResetHook: ((_ keepSealedBackupFlags: Bool) -> Void)?
+    ///
+    /// `keepCloudCopyFlag` plays the same role for `cloudCopyKept`: passed when the kept-cloud-copy delete
+    /// failed, so a retry still knows there is a copy in iCloud to remove.
+    @ObservationIgnored var storagePreferencesResetHook: ((_ keepSealedBackupFlags: Bool, _ keepCloudCopyFlag: Bool) -> Void)?
 
     /// Whether a sealed backup of this payload may be uploaded — i.e. whether "delete everything" has
     /// anything to remove. Lives here rather than on `StoragePreferences` because that type is Layer 0
@@ -2304,21 +2315,40 @@ final class FernletStore {
             }
         }
 
+        // 2b. The "Stop syncing, keep cloud data" copy. Sync is OFF, so the per-row deletes below can't
+        // reach the server by propagating over a live session — but a full copy of the day blob is still
+        // sitting in the user's private CloudKit zone, ready to sync straight back the moment they turn
+        // iCloud on. Delete it directly (`deleteAllCloudKitData` opens its own connection and needs no
+        // live session). Gated on `cloudCopyKept` so it never runs — and the dialog never claims it — for
+        // a user who never kept a copy. A LIVE sync (`iCloudSyncEnabled`) needs nothing here: its server
+        // copy goes when the local deletes below propagate over the still-open session.
+        var cloudCopyDeleteFailed = false
+        if !preferences.iCloudSyncEnabled && preferences.cloudCopyKept {
+            if await cloudCopyDeleteHook?() != true {
+                cloudCopyDeleteFailed = true
+                outcome.incompleteStores.append("your iCloud copy")
+            }
+        }
+
         // 3. Sealed rows: the most sensitive data and the only rows with no second chance. Each hook
         // drops rows WITHOUT decrypting, so this works while the app is locked and while a surface is
         // hidden — deleting data must not require the ability to read it.
-        if periodDataDeleteHook?() == false { outcome.incompleteStores.append("your cycle notes") }
-        if intimacyDataDeleteHook?() == false { outcome.incompleteStores.append("your intimate logs") }
-        if journalDataDeleteHook?() == false { outcome.incompleteStores.append("your journal entries") }
+        //
+        // `!= true` (not `== false`): a NIL hook — an unwired run — must count as a failure, not a skip.
+        // `== false` treated nil as success, so an unwired funnel would silently miss the app's most
+        // sensitive rows and still report a complete wipe. Only an explicit `true` clears the store.
+        if periodDataDeleteHook?() != true { outcome.incompleteStores.append("your cycle notes") }
+        if intimacyDataDeleteHook?() != true { outcome.incompleteStores.append("your intimate logs") }
+        if journalDataDeleteHook?() != true { outcome.incompleteStores.append("your journal entries") }
         worryBoxResetHook?()
 
         // The buffer of notes written while LOCKED. Not covered by the row hooks above — it is a file
         // under a separate device key — and its next drain re-inserts every payload into the store we
         // just emptied, so skipping it turns "delete everything" into "delete until the next unlock".
-        if pendingNarrativeBufferPurgeHook?() == false { outcome.incompleteStores.append("your cycle notes") }
+        if pendingNarrativeBufferPurgeHook?() != true { outcome.incompleteStores.append("your cycle notes") }
 
         if deleteHealthSamples {
-            await healthKitSampleDeleteHook?()
+            if await healthKitSampleDeleteHook?() != true { outcome.incompleteStores.append("your Apple Health entries") }
         }
 
         // 4. Photo bytes before the days that reference them: ownership lives in `Meal.photoID`, so once
@@ -2359,7 +2389,9 @@ final class FernletStore {
         // their social data visibly surviving a wipe in the running session.
         meshNetworkManager.clothingShop.clearAll()
 
-        resetAll()
+        // `resetAll()` reports any per-row store whose CloudKit delete failed (designs / recipes / coins
+        // left on disk to re-sync). Those used to be discarded, so a failed delete there looked complete.
+        outcome.incompleteStores.append(contentsOf: resetAll())
 
         // 8. The authoritative per-row day store + the blob + the legacy JSON file. Without this, every
         // past day survives on disk, reloads on next launch, and re-uploads to iCloud — which is
@@ -2385,7 +2417,14 @@ final class FernletStore {
         }
         pendingWidgetActionQueue.clear()
 
-        storagePreferencesResetHook?(sealedBackupDeleteFailed)
+        storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed)
+
+        // A single store can be named by two independent legs — the sealed cycle-notes rows and the
+        // locked-note buffer both purge "your cycle notes" — so collapse to first-seen (order preserved)
+        // before the failure alert formats them, or it would read "…and your cycle notes and your cycle
+        // notes". `isComplete` (empty vs not) is unaffected by the dedupe.
+        var seenStores = Set<String>()
+        outcome.incompleteStores = outcome.incompleteStores.filter { seenStores.insert($0).inserted }
 
         FernletAuditLog.log("settings.deleteAll.completed", context: [
             "healthSamples": deleteHealthSamples ? "deleted" : "kept",
@@ -2394,19 +2433,25 @@ final class FernletStore {
         return outcome
     }
 
-    func resetAll() {
+    /// Returns the human-readable names of any per-row store whose persisted delete failed, so the
+    /// "delete everything" funnel can fold them into its failure alert. Empty on a clean reset. Still
+    /// safe to call in a Void context (`@discardableResult`) — the standalone "Reset everything" callers
+    /// ignore the value.
+    @discardableResult
+    func resetAll() -> [String] {
+        var incompleteStores: [String] = []
         batchSnapshotPersistence {
             diary.resetDiary()
             connectionSessionLogs = []
         }
-        savedRecipeService.reset()
-        customItemService.reset()
+        if !savedRecipeService.reset() { incompleteStores.append("your saved recipes") }
+        if !customItemService.reset() { incompleteStores.append("your custom items") }
         // Clears all earn/spend rows and appends a reset-boundary marker. The next `reconcileCoinLedger()`
         // re-mints `earn` rows ONLY for active days at or after the reset boundary day — days before the
         // reset stay voided and are never re-minted, so another device can't undo a reset by
         // deterministically re-minting pre-reset earns. Activity logged on or after the reset day still
         // earns normally (the reset zeroes the past, it doesn't disable earning going forward).
-        coinLedgerService.reset()
+        if !coinLedgerService.reset() { incompleteStores.append("your coins") }
         // The MILESTONE ledger is deliberately NOT reset: lifetime care counts ("you've written 40
         // journal moments") are memories of showing up, not spendable state, and the product call
         // is that they survive a data reset. The rows carry no content — only kind + day of a
@@ -2435,6 +2480,7 @@ final class FernletStore {
         // Group activities (hosted/joined rosters + join tokens) — device-local social data, never synced;
         // clear the sidecar too (the manager owns it, mirroring the clothing-shop clearAll seam).
         meshNetworkManager.activities.clearAll()
+        return incompleteStores
     }
 
     private func rebuildDerivedSignals() {

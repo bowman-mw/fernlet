@@ -100,13 +100,18 @@ public final class CoinLedgerService {
 
     // MARK: - Reset / flush
 
-    public func reset() {
+    /// Returns whether the persisted rows were actually deleted. Threaded back so "delete everything" can
+    /// report a failed per-row CloudKit delete (coins left on disk to re-sync) instead of the funnel
+    /// discarding it and claiming a complete wipe. The returned value reflects only the row DELETE — the
+    /// reset-boundary marker below is a new row whose write has its own retry, not data left behind.
+    @discardableResult
+    public func reset() -> Bool {
         // Delete every row (honoring the user's "delete all data" intent — the deletes propagate to their
         // other devices via CloudKit), THEN append a reset-boundary marker. The marker makes reconcile refuse
         // to re-mint earns for pre-reset days and makes the balance void any pre-reset row that lingers or
         // re-syncs from an offline device, so a reset can't be undone by another device deterministically
         // re-minting earns for pre-reset days. This is the append-only economy's "zero the balance".
-        repository.deleteAll()
+        let deleted = repository.deleteAll()
         let at = now()
         let marker = CoinLedgerEntry.reset(dayKey: FernletDate.dayKey(for: at), at: at)
         entries = [marker]
@@ -117,6 +122,7 @@ public final class CoinLedgerService {
             pendingAppends = [marker]
             scheduleSave()
         }
+        return deleted
     }
 
     public func flushPendingSave() {

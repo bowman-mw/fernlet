@@ -20,15 +20,24 @@ enum DeleteAllDataConfirmation {
     ///
     /// `onFinished` receives the outcome so the caller can surface a partial failure. Every layer of the
     /// delete is best-effort; the caller must not assume success just because the dialog was confirmed.
+    /// `hasICloudDayCopy` (a live sync copy OR one kept behind after sync was turned off) and
+    /// `hasSealedBackup` are claimed as SEPARATE sentences: a user may have one without the other, and
+    /// the old single sentence claiming both — "as this device syncs" — was false for the keep-cloud-copy
+    /// user (sync off) and overclaimed for anyone with only one of the two.
     static func make(
         canDeleteHealthSamples: Bool,
-        hasCloudCopy: Bool,
+        hasICloudDayCopy: Bool,
+        hasSealedBackup: Bool,
         delete: @escaping (Bool) async -> FernletStore.DeleteAllOutcome,
         onFinished: @escaping (FernletStore.DeleteAllOutcome) -> Void
     ) -> DestructiveConfirmation {
         DestructiveConfirmation(
             title: "Delete everything?",
-            message: message(canDeleteHealthSamples: canDeleteHealthSamples, hasCloudCopy: hasCloudCopy),
+            message: message(
+                canDeleteHealthSamples: canDeleteHealthSamples,
+                hasICloudDayCopy: hasICloudDayCopy,
+                hasSealedBackup: hasSealedBackup
+            ),
             confirmLabel: canDeleteHealthSamples ? "Delete, keep Health" : "Delete",
             auditEvent: "settings.deleteAll.confirmed",
             secondaryConfirm: canDeleteHealthSamples
@@ -46,7 +55,7 @@ enum DeleteAllDataConfirmation {
     /// on their behalf. The iCloud and Health sentences are CONDITIONAL — a claim about deleting an
     /// iCloud backup that the code will skip (because there isn't one) is exactly the kind of
     /// nearly-harmless overpromise that made the old "Reset everything" label untrue.
-    private static func message(canDeleteHealthSamples: Bool, hasCloudCopy: Bool) -> String {
+    private static func message(canDeleteHealthSamples: Bool, hasICloudDayCopy: Bool, hasSealedBackup: Bool) -> String {
         // "meals and their photos" + "gym progress photos" + "saved recipes and their photos" — never a
         // bare "photos". The photos this funnel deletes are the user's OWN logged pictures: the ones
         // attached to meals (`mealPhotoStore`), the gym progress-photo timeline (`progressPhotoStore`,
@@ -58,8 +67,14 @@ enum DeleteAllDataConfirmation {
             This deletes your logged days, meals and their photos, gym progress photos, journal entries, \
             cycle notes, intimate logs, Worry Box notes, saved recipes and their photos, custom items and coins.
             """
-        if hasCloudCopy {
-            scope += " Your iCloud copy and any encrypted iCloud backups go too, as this device syncs."
+        // Two INDEPENDENT claims, not one. The day-blob copy in iCloud (a live sync copy or one kept after
+        // sync was turned off) and any sealed encrypted backups are removed by different legs of the
+        // funnel, and a user can have either without the other — so each is only promised when it exists.
+        if hasICloudDayCopy {
+            scope += " Your iCloud copy goes too."
+        }
+        if hasSealedBackup {
+            scope += " Any encrypted iCloud backups go too."
         }
         // NOT "none of it can be recovered": local data is included in iOS device backups by default
         // (StoragePreferences.localBackupExcludedFromiOSBackup defaults to false, deliberately), so an
@@ -67,27 +82,36 @@ enum DeleteAllDataConfirmation {
         // an absolute permanence claim would be false for every user on the default setting.
         scope += " Fernlet can't undo this."
 
-        var paragraphs = [
-            scope,
-            // Blocks are NOT listed here. A block is a row in the trust vault (`blockedAt != nil`) and
-            // the wipe clears the vault wholesale, so claiming blocks are kept would be false. What
-            // genuinely survives is the self-ban — Fernlet's own shop being barred for reported content —
-            // which must outlive a wipe or "delete my data" becomes a way to launder it.
-            //
-            // The shared-photo wall is named in FULL — "the ones friends sent you and the ones you shared
-            // with them" — not the narrower "photos friends sent you" it used to say. The cache holds BOTH
-            // (a photo the user shared is cached under their own fingerprint), so the old copy disclosed
-            // half of what survives. By product decision the wall has no bulk clear — pictures come off it
-            // one at a time (`MeshNetworkManager.deletePhoto`) — so this funnel leaves the whole wall
-            // intact and the copy says how to remove them, rather than implying they are gone.
-            """
+        var paragraphs = [scope]
+
+        // A multi-device caveat, only when there is a day-blob copy in iCloud. Fernlet keeps no
+        // tombstones, so a device you are actively using can re-upload its most recent days after the
+        // wipe reaches the cloud — say so rather than imply the cloud is instantly and permanently empty.
+        if hasICloudDayCopy {
+            paragraphs.append("""
+                If you use Fernlet on another device, this reaches it the next time that device syncs — \
+                and a device you're using right then may re-add its most recent days.
+                """)
+        }
+
+        // Blocks are NOT listed as kept. A block is a row in the trust vault (`blockedAt != nil`) and
+        // the wipe clears the vault wholesale, so it is a CONSEQUENCE spelled out below, not a survivor.
+        // What genuinely survives is the self-ban — Fernlet's own shop being barred for reported content —
+        // which must outlive a wipe or "delete my data" becomes a way to launder it.
+        //
+        // The shared-photo wall is named in FULL — "the ones friends sent you and the ones you shared
+        // with them" — not the narrower "photos friends sent you" it used to say. The cache holds BOTH
+        // (a photo the user shared is cached under their own fingerprint), so the old copy disclosed
+        // half of what survives. By product decision the wall has no bulk clear — pictures come off it
+        // one at a time (`MeshNetworkManager.deletePhoto`) — so this funnel leaves the whole wall
+        // intact and the copy says how to remove them, rather than implying they are gone.
+        paragraphs.append("""
             Kept on purpose: your milestone counts, your lifetime care history, your Fernlet identity, \
             your shared photos — both the ones friends sent you and the ones you shared with them — and \
             any restriction on sharing your own designs. You remove those one at a time from the photo \
             itself; there's no bulk delete. Your app lock stays set up. You'll need to add your friends \
-            again.
-            """
-        ]
+            again, and anyone you blocked will no longer be blocked — block them again if you meet.
+            """)
         if canDeleteHealthSamples {
             paragraphs.append(
                 """
@@ -116,5 +140,28 @@ enum DeleteAllDataConfirmation {
         \(ListFormatter.localizedString(byJoining: outcome.incompleteStores)). \
         Try again — if it keeps failing, this data may still be on your device.
         """
+    }
+}
+
+/// A full-screen busy overlay shown while the "delete everything" wipe runs. The wipe is multi-second
+/// (CloudKit + HealthKit deletes) and the destructive alert dismisses the moment the user confirms, so
+/// without this the screen stays fully interactive: a second tap could interleave a second wipe, or the
+/// user could log new data into a store mid-deletion. The dimmed layer swallows taps; the caller also
+/// disables the delete button and blocks dismissal while it is up.
+struct DeletingEverythingOverlay: View {
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.20).ignoresSafeArea()
+            VStack(spacing: 12) {
+                ProgressView()
+                    .tint(Color.moss)
+                Text("Deleting everything…")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+            }
+            .padding(20)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .accessibilityIdentifier("deleteAll.spinner")
     }
 }

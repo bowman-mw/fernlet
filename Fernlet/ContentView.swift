@@ -6,6 +6,7 @@
 //
 
 import ProximityKit
+import CloudKitSync
 import SwiftUI
 import FernletFoundation
 import FernletDomainModel
@@ -639,7 +640,20 @@ struct ContentView: View {
         store.healthKitSampleDeleteHook = { [storagePreferencesStore] in
             await HealthKitService(preferencesStore: storagePreferencesStore).deleteAllAuthoredSamples()
         }
-        store.storagePreferencesResetHook = { [storagePreferencesStore] keepSealedBackupFlags in
+        // The "Stop syncing, keep cloud data" copy: a full day blob left in the user's CloudKit zone with
+        // sync off. `deleteAllCloudKitData` opens its own connection (no live sync session needed) and the
+        // user already confirmed the wipe via the destructive dialog, so "DELETE" is passed programmatically.
+        store.cloudCopyDeleteHook = {
+            do {
+                _ = try await CloudKitDataService().deleteAllCloudKitData(
+                    confirmation: DeletionConfirmation(userTypedConfirmation: "DELETE")
+                )
+                return true
+            } catch {
+                return false
+            }
+        }
+        store.storagePreferencesResetHook = { [storagePreferencesStore] keepSealedBackupFlags, keepCloudCopyFlag in
             // Two preferences survive the reset, both because erasing them would BREAK the delete rather
             // than because they're worth keeping:
             //
@@ -656,6 +670,12 @@ struct ContentView: View {
             if keepSealedBackupFlags {
                 reset.sealedBackupSensitiveNotesEnabled = current.sealedBackupSensitiveNotesEnabled
                 reset.sealedBackupPeriodEnabled = current.sealedBackupPeriodEnabled
+            }
+            // Same reasoning as the sealed-backup flags: keep `cloudCopyKept` only when the kept-copy
+            // delete FAILED, so the retry the alert invites still knows there is a copy in iCloud to
+            // remove. On success it clears to first-launch default (no copy left to point at).
+            if keepCloudCopyFlag {
+                reset.cloudCopyKept = current.cloudCopyKept
             }
             if reset == StoragePreferences(lastModifiedAt: reset.lastModifiedAt) {
                 // Nothing worth preserving: drop the keychain row entirely, so not even a

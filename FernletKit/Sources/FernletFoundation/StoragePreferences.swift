@@ -8,6 +8,12 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     public var healthKitCapabilityEnabled: [String: Bool]
     public var sealedBackupSensitiveNotesEnabled: Bool
     public var sealedBackupPeriodEnabled: Bool
+    /// Set when the user chose "Stop syncing, keep cloud data": sync is off, but a full copy of the day
+    /// blob is deliberately left in the user's private CloudKit zone. Nothing else records that choice,
+    /// so without this flag `hasAnyCloudCopy` reads false for exactly that user — the delete dialog then
+    /// omits the iCloud sentence and the wipe reports COMPLETE while the server copy survives. Cleared
+    /// once that copy is actually deleted (the delete-cloud-data flow, or "delete everything").
+    public var cloudCopyKept: Bool
     public var lastModifiedAt: Date
 
     public init(
@@ -20,6 +26,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         healthKitCapabilityEnabled: [String: Bool] = StoragePreferences.defaultHealthKitCapabilityEnabled,
         sealedBackupSensitiveNotesEnabled: Bool = false,
         sealedBackupPeriodEnabled: Bool = false,
+        cloudCopyKept: Bool = false,
         lastModifiedAt: Date = Date()
     ) {
         self.iCloudSyncEnabled = iCloudSyncEnabled
@@ -28,17 +35,50 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         self.healthKitCapabilityEnabled = healthKitCapabilityEnabled
         self.sealedBackupSensitiveNotesEnabled = sealedBackupSensitiveNotesEnabled
         self.sealedBackupPeriodEnabled = sealedBackupPeriodEnabled
+        self.cloudCopyKept = cloudCopyKept
         self.lastModifiedAt = lastModifiedAt
     }
 
-    /// Whether anything of the user's may be sitting in iCloud — a live sync, or a sealed backup.
+    // Tolerant decode: every field falls back to its default when absent. Synthesized `Codable` would
+    // THROW on a missing non-optional key, and `StoragePreferencesStore.loadPreferences` maps a throw to
+    // fresh defaults — so adding `cloudCopyKept` (or any field) would silently RESET an existing user's
+    // stored iCloud / HealthKit / sealed-backup choices on upgrade, since their keychain blob predates the
+    // key. A reset `sealedBackup*` flag would even make "delete everything" skip a backup it should erase.
+    // Decoding each key `IfPresent` keeps old blobs readable and new keys additive.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        iCloudSyncEnabled = try container.decodeIfPresent(Bool.self, forKey: .iCloudSyncEnabled) ?? false
+        localBackupExcludedFromiOSBackup = try container.decodeIfPresent(Bool.self, forKey: .localBackupExcludedFromiOSBackup) ?? false
+        healthKitMasterEnabled = try container.decodeIfPresent(Bool.self, forKey: .healthKitMasterEnabled) ?? false
+        healthKitCapabilityEnabled = try container.decodeIfPresent([String: Bool].self, forKey: .healthKitCapabilityEnabled)
+            ?? StoragePreferences.defaultHealthKitCapabilityEnabled
+        sealedBackupSensitiveNotesEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupSensitiveNotesEnabled) ?? false
+        sealedBackupPeriodEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPeriodEnabled) ?? false
+        cloudCopyKept = try container.decodeIfPresent(Bool.self, forKey: .cloudCopyKept) ?? false
+        lastModifiedAt = try container.decodeIfPresent(Date.self, forKey: .lastModifiedAt) ?? Date()
+    }
+
+    /// Whether anything of the user's may be sitting in iCloud — a live sync, a kept copy, or a sealed
+    /// backup.
     ///
     /// Deliberately NOT just `iCloudSyncEnabled`: "Stop syncing, keep cloud data" turns sync off while
-    /// leaving the server copy in place, so sync-off does not mean cloud-empty. Used to decide whether
-    /// the delete dialog may claim it removes the iCloud copy — a claim that must not be made to someone
-    /// who has never had one.
+    /// leaving the server copy in place (recorded by `cloudCopyKept`), so sync-off does not mean
+    /// cloud-empty. Used to decide whether the delete dialog may claim it removes the iCloud copy — a
+    /// claim that must not be made to someone who has never had one.
     public var hasAnyCloudCopy: Bool {
-        iCloudSyncEnabled || sealedBackupSensitiveNotesEnabled || sealedBackupPeriodEnabled
+        hasICloudDayCopy || hasSealedBackup
+    }
+
+    /// The day-blob copy in iCloud — a live sync copy, or one kept behind after sync was turned off.
+    /// Distinct from `hasSealedBackup` so the delete dialog can claim each independently (a user may have
+    /// one without the other, and a single sentence claiming both would be false in one direction).
+    public var hasICloudDayCopy: Bool {
+        iCloudSyncEnabled || cloudCopyKept
+    }
+
+    /// Whether a sealed (encrypted) backup of the sensitive stores may be sitting in iCloud.
+    public var hasSealedBackup: Bool {
+        sealedBackupSensitiveNotesEnabled || sealedBackupPeriodEnabled
     }
 
     // Default per-capability map: every HealthKit capability disabled.

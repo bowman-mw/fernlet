@@ -44,6 +44,11 @@ struct SettingsSheet: View {
     /// Hearts require presence (Group 2): when the user turns hearts ON while Nearby Friends is
     /// off, offer to enable presence too — hearts are dead without it.
     @State private var offerPresenceForHearts = false
+    /// True while a "delete everything" wipe runs — drives the busy overlay, disables the delete and Done
+    /// buttons, and blocks interactive dismissal so a second confirm can't interleave a wipe.
+    @State private var isDeletingEverything = false
+    /// True after a clean wipe; its alert affirms success, then dismisses the sheet on OK.
+    @State private var showDeleteSuccess = false
 
     var body: some View {
         NavigationStack {
@@ -245,6 +250,14 @@ struct SettingsSheet: View {
             }
         }
         .background(Color.parchment)
+        .overlay {
+            if isDeletingEverything {
+                DeletingEverythingOverlay()
+            }
+        }
+        // No swipe-to-dismiss mid-wipe: a wipe is multi-second and the sheet must not close (or re-run)
+        // out from under it.
+        .interactiveDismissDisabled(isDeletingEverything)
         .destructiveConfirmation($pendingDestructiveAction)
         .alert("Couldn't delete everything", isPresented: Binding(
             get: { deleteAllFailure != nil },
@@ -253,6 +266,11 @@ struct SettingsSheet: View {
             Button("OK", role: .cancel) { deleteAllFailure = nil }
         } message: { outcome in
             Text(DeleteAllDataConfirmation.failureMessage(for: outcome))
+        }
+        .alert("Everything deleted", isPresented: $showDeleteSuccess) {
+            Button("Done") { dismiss() }
+        } message: {
+            Text("Fernlet removed everything it stored on this device.")
         }
         .onAppear { healthKit.refresh() }
     }
@@ -1469,20 +1487,29 @@ struct SettingsSheet: View {
             Button("Delete everything", role: .destructive) {
                 pendingDestructiveAction = DeleteAllDataConfirmation.make(
                     canDeleteHealthSamples: storagePreferencesStore.preferences.healthKitMasterEnabled,
-                    hasCloudCopy: storagePreferencesStore.preferences.hasAnyCloudCopy,
-                    delete: { await store.deleteAllData(includingHealthKitSamples: $0) },
+                    hasICloudDayCopy: storagePreferencesStore.preferences.hasICloudDayCopy,
+                    hasSealedBackup: storagePreferencesStore.preferences.hasSealedBackup,
+                    delete: { includeHealth in
+                        // Set here (right after the user confirms) so the busy overlay covers the whole
+                        // multi-second wipe, disabling the buttons and blocking a second confirm.
+                        isDeletingEverything = true
+                        return await store.deleteAllData(includingHealthKitSamples: includeHealth)
+                    },
                     onFinished: { outcome in
-                        // Dismiss only on a clean wipe. On failure the sheet stays put behind the alert
-                        // so the user can read which store survived and retry — dismissing regardless
-                        // would hide the failure behind an app that merely looks empty.
+                        isDeletingEverything = false
+                        // Affirm success (its alert dismisses the sheet on OK) only on a clean wipe. On
+                        // failure the sheet stays put behind the failure alert so the user can read which
+                        // store survived and retry — dismissing regardless would hide the failure behind
+                        // an app that merely looks empty.
                         if outcome.isComplete {
-                            dismiss()
+                            showDeleteSuccess = true
                         } else {
                             deleteAllFailure = outcome
                         }
                     }
                 )
             }
+            .disabled(isDeletingEverything)
             .accessibilityIdentifier("settings.deleteAll")
         }
         .font(.fernlet(.label))
@@ -1498,6 +1525,7 @@ struct SettingsSheet: View {
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
                 .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
+                .disabled(isDeletingEverything)
         }
         .padding(20)
         .background(Color.parchment)

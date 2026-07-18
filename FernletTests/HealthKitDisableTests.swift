@@ -35,6 +35,44 @@ struct HealthKitDisableTests {
         #expect(harness.controller.deleteCallCount == 0)
     }
 
+    /// "Delete everything" with Health samples requested: when every authored type clears, the leg
+    /// reports success (true) and actually touched the writable types.
+    @Test func deleteAllAuthoredSamplesReturnsTrueWhenTypesClear() async {
+        let harness = HealthKitDisableHarness()
+        defer { harness.cleanup() }
+
+        let cleared = await harness.service.deleteAllAuthoredSamples()
+
+        #expect(cleared)
+        #expect(!harness.controller.deletedObjectTypeIdentifiers.isEmpty)
+    }
+
+    /// A type Fernlet was never authorized to share throws on delete, but it can hold nothing Fernlet
+    /// wrote — an EXPECTED skip, not a failure. The old `try?` swallowed everything; the new code must
+    /// still not report this as data left behind (crying wolf is as dishonest as swallowing a real fail).
+    @Test func deleteAllAuthoredSamplesTreatsAuthorizationErrorsAsExpectedSkips() async {
+        let harness = HealthKitDisableHarness()
+        defer { harness.cleanup() }
+        harness.controller.deleteObjectsError = HKError(.errorAuthorizationDenied)
+
+        let cleared = await harness.service.deleteAllAuthoredSamples()
+
+        #expect(cleared)
+    }
+
+    /// An UNEXPECTED error (not authorization/availability) genuinely leaves authored samples behind, so
+    /// the leg must return false — the "delete everything" dialog promised they were gone. This is the
+    /// failure the old Void `deleteAllAuthoredSamples` could not surface.
+    @Test func deleteAllAuthoredSamplesReturnsFalseOnUnexpectedError() async {
+        let harness = HealthKitDisableHarness()
+        defer { harness.cleanup() }
+        harness.controller.deleteObjectsError = HKError(.errorDatabaseInaccessible)
+
+        let cleared = await harness.service.deleteAllAuthoredSamples()
+
+        #expect(!cleared)
+    }
+
     @Test func disableClearsHealthKitAnchorsFromKeychain() async throws {
         let harness = HealthKitDisableHarness()
         defer { harness.cleanup() }
@@ -264,8 +302,12 @@ private final class MockHealthKitStoreController: HealthKitStoreControlling {
 
     /// Records which types a bulk delete touched, so `deleteAllAuthoredSamples` can be asserted on.
     var deletedObjectTypeIdentifiers: [String] = []
+    /// When set, every `deleteObjects` throws it — lets a test exercise the expected-skip vs.
+    /// unexpected-failure branches of `deleteAllAuthoredSamples`.
+    var deleteObjectsError: Error?
 
     func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws {
+        if let deleteObjectsError { throw deleteObjectsError }
         deletedObjectTypeIdentifiers.append(type.identifier)
     }
 

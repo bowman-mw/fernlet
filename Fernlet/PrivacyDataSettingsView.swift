@@ -65,6 +65,11 @@ struct PrivacyDataSettingsView: View {
     @State private var isResolvingEscrowConflict = false
     @State private var exportPayload: DataExportPayload?
     @State private var isBuildingExport = false
+    /// True for the duration of a "delete everything" wipe — drives the busy overlay, disables the delete
+    /// button, and (with the overlay swallowing taps) stops a second confirm from interleaving a wipe.
+    @State private var isDeletingEverything = false
+    /// True after a clean wipe, so success is affirmed rather than the screen just looking empty.
+    @State private var showDeleteSuccess = false
 
     private let cloudDataService: any PrivacyCloudDataManaging
     private let persistenceController: any PrivacyPersistenceReloading
@@ -92,6 +97,8 @@ struct PrivacyDataSettingsView: View {
 
             if isUpdatingStorage {
                 storageSpinner
+            } else if isDeletingEverything {
+                DeletingEverythingOverlay()
             }
         }
         .navigationTitle("Privacy & Data")
@@ -128,6 +135,11 @@ struct PrivacyDataSettingsView: View {
             Button("OK", role: .cancel) { deleteAllFailure = nil }
         } message: { outcome in
             Text(DeleteAllDataConfirmation.failureMessage(for: outcome))
+        }
+        .alert("Everything deleted", isPresented: $showDeleteSuccess) {
+            Button("OK", role: .cancel) { showDeleteSuccess = false }
+        } message: {
+            Text("Fernlet removed everything it stored on this device.")
         }
         .sheet(item: $exportPayload) { payload in
             ActivityShareView(items: [payload.url])
@@ -632,15 +644,23 @@ struct PrivacyDataSettingsView: View {
             Button(role: .destructive) {
                 pendingDestructiveAction = DeleteAllDataConfirmation.make(
                     canDeleteHealthSamples: storagePreferencesStore.preferences.healthKitMasterEnabled,
-                    hasCloudCopy: storagePreferencesStore.preferences.hasAnyCloudCopy,
-                    delete: { await store.deleteAllData(includingHealthKitSamples: $0) },
+                    hasICloudDayCopy: storagePreferencesStore.preferences.hasICloudDayCopy,
+                    hasSealedBackup: storagePreferencesStore.preferences.hasSealedBackup,
+                    delete: { includeHealth in
+                        // Set here (the first thing after the user confirms) so the busy overlay is up for
+                        // the whole multi-second wipe, disabling the button and swallowing a second tap.
+                        isDeletingEverything = true
+                        return await store.deleteAllData(includingHealthKitSamples: includeHealth)
+                    },
                     onFinished: { outcome in
+                        isDeletingEverything = false
                         // The wipe has just swept the exported file off disk; drop the view's reference to
                         // it too, so re-presenting the share sheet can't hand a now-deleted plaintext URL
                         // to UIActivityViewController. `.sheet(item:)` already nils this on dismiss, so in
                         // practice it is nil here — this is belt-and-braces against a retained stale URL.
                         exportPayload = nil
-                        if !outcome.isComplete { deleteAllFailure = outcome }
+                        if outcome.isComplete { showDeleteSuccess = true }
+                        else { deleteAllFailure = outcome }
                     }
                 )
             } label: {
@@ -652,6 +672,7 @@ struct PrivacyDataSettingsView: View {
             .foregroundStyle(.white)
             .padding(.vertical, 11)
             .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
+            .disabled(isDeletingEverything)
             .accessibilityIdentifier("privacy.lock.deleteProtectedData")
         }
     }
@@ -1029,6 +1050,8 @@ struct PrivacyDataSettingsView: View {
         FernletAuditLog.log("privacy.icloud.syncEnabled")
         var updated = storagePreferencesStore.preferences
         updated.iCloudSyncEnabled = true
+        // The live sync copy is now the cloud copy; the standalone "kept" marker no longer applies.
+        updated.cloudCopyKept = false
         applyStoragePreferences(updated)
     }
 
@@ -1036,6 +1059,10 @@ struct PrivacyDataSettingsView: View {
         FernletAuditLog.log("privacy.icloud.syncDisabled.keepData")
         var updated = storagePreferencesStore.preferences
         updated.iCloudSyncEnabled = false
+        // Record that a full copy is being LEFT in iCloud with sync off. Nothing else remembers this, so
+        // without it `hasAnyCloudCopy` reads false for this user — the delete dialog omits the iCloud
+        // sentence and "delete everything" can't reach the stranded copy.
+        updated.cloudCopyKept = true
         applyStoragePreferences(updated)
         isShowingDisableConfirmation = false
     }
@@ -1056,6 +1083,9 @@ struct PrivacyDataSettingsView: View {
                 _ = try await cloudDataService.deleteAllCloudKitData(
                     confirmation: DeletionConfirmation(userTypedConfirmation: deleteConfirmationText.uppercased())
                 )
+                // The cloud copy is now gone, so clear the "kept a copy" marker — leaving it set would make
+                // the delete dialog keep promising to remove an iCloud copy that no longer exists.
+                storagePreferencesStore.update { $0.cloudCopyKept = false }
                 // The cloud records were just deleted, so the previously-detected summary is stale. Clear it
                 // so the "Cloud records" card and the always-on multi-device warning banner immediately
                 // reflect the now-empty cloud instead of continuing to report data that no longer exists.

@@ -33,6 +33,30 @@ struct StoragePreferencesTests {
         #expect(decoded == original)
     }
 
+    /// A keychain blob written before `cloudCopyKept` existed (i.e. the key is absent) must still decode,
+    /// defaulting the new flag to false and PRESERVING the user's other choices. Synthesized `Codable`
+    /// throws on a missing non-optional key, which `loadPreferences` maps to fresh defaults — silently
+    /// wiping the user's iCloud / sealed-backup settings on upgrade. The custom tolerant decoder prevents it.
+    @Test func decodingLegacyBlobWithoutCloudCopyKeptPreservesOtherFields() throws {
+        let legacyJSON = """
+        {
+            "iCloudSyncEnabled": true,
+            "localBackupExcludedFromiOSBackup": false,
+            "healthKitMasterEnabled": true,
+            "healthKitCapabilityEnabled": {},
+            "sealedBackupSensitiveNotesEnabled": true,
+            "sealedBackupPeriodEnabled": true,
+            "lastModifiedAt": 700000000
+        }
+        """
+        let decoded = try JSONDecoder().decode(StoragePreferences.self, from: Data(legacyJSON.utf8))
+
+        #expect(decoded.iCloudSyncEnabled == true)
+        #expect(decoded.sealedBackupSensitiveNotesEnabled == true)
+        #expect(decoded.sealedBackupPeriodEnabled == true)
+        #expect(decoded.cloudCopyKept == false)
+    }
+
     @Test func defaultValuesMatchStorageSpec() {
         let preferences = StoragePreferences()
 

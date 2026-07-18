@@ -134,7 +134,7 @@ struct DeleteAllDataTests {
     @Test func healthKitSamplesAreOnlyDeletedWhenRequested() async {
         let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-hk-off")))
         var healthDeleted = false
-        store.healthKitSampleDeleteHook = { healthDeleted = true }
+        store.healthKitSampleDeleteHook = { healthDeleted = true; return true }
 
         await store.deleteAllData(includingHealthKitSamples: false)
         #expect(!healthDeleted)
@@ -232,6 +232,9 @@ struct DeleteAllDataTests {
     /// with a full plaintext copy on disk after a dialog that told them it was gone.
     @Test func exportedDataFileIsSweptByTheWipe() async throws {
         let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-export")))
+        // Wire the sealed hooks so the wipe is otherwise complete (an unwired hook now reports failure);
+        // this test asserts the export sweep specifically keeps a clean wipe complete.
+        wireSucceedingSealedHooks(store)
         let exportURL = try store.writeDataExportFile()
         #expect(FileManager.default.fileExists(atPath: exportURL.path), "precondition: the export file was not written")
 
@@ -259,10 +262,68 @@ struct DeleteAllDataTests {
     /// A clean wipe reports success, so the caller can dismiss rather than cry wolf.
     @Test func outcomeIsCompleteWhenEveryStoreClears() async {
         let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-clean")))
+        // A nil sealed hook now counts as a failure (an unwired funnel can't claim it cleared a store it
+        // never called), so a "clean wipe" must supply them all.
+        wireSucceedingSealedHooks(store)
+
         let outcome = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(outcome.isComplete)
         #expect(outcome.incompleteStores.isEmpty)
+    }
+
+    /// A NIL (unwired) sealed hook is a failure, not a silent skip. The old `== false` treated nil as
+    /// success, so an unwired funnel would quietly miss the app's most sensitive rows and still report a
+    /// complete wipe. Here the journal hook is left nil while the rest succeed.
+    @Test func outcomeReportsAnUnwiredSealedHookAsIncomplete() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-nil-hook")))
+        store.periodDataDeleteHook = { true }
+        store.intimacyDataDeleteHook = { true }
+        store.pendingNarrativeBufferPurgeHook = { true }
+        // journalDataDeleteHook deliberately left nil — the unwired case.
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!outcome.isComplete)
+        #expect(outcome.incompleteStores.contains("your journal entries"))
+    }
+
+    /// The HealthKit delete leg used to be the one hook typed Void, so a failure there was swallowed and
+    /// a wipe the dialog called complete could leave Fernlet's Apple Health samples behind. Now it returns
+    /// Bool, and a false must surface.
+    @Test func outcomeReportsWhenHealthKitDeleteFails() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-hk-fail")))
+        wireSucceedingSealedHooks(store)
+        store.healthKitSampleDeleteHook = { false }
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: true)
+
+        #expect(!outcome.isComplete)
+        #expect(outcome.incompleteStores.contains("your Apple Health entries"))
+    }
+
+    /// A single store can be named by two independent legs — the sealed cycle-notes rows and the
+    /// locked-note buffer both purge "your cycle notes". Both failing must still list it ONCE, or the
+    /// failure alert reads "…and your cycle notes and your cycle notes".
+    @Test func incompleteStoresAreDeduplicated() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-dedupe")))
+        store.periodDataDeleteHook = { false }            // names "your cycle notes"
+        store.intimacyDataDeleteHook = { true }
+        store.journalDataDeleteHook = { true }
+        store.pendingNarrativeBufferPurgeHook = { false } // also names "your cycle notes"
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(outcome.incompleteStores.filter { $0 == "your cycle notes" }.count == 1)
+    }
+
+    /// Wires every Bool sealed hook to succeed, for tests that need an otherwise-complete wipe. HealthKit
+    /// is left out because it only fires when the caller opts into deleting samples.
+    private func wireSucceedingSealedHooks(_ store: FernletStore) {
+        store.periodDataDeleteHook = { true }
+        store.intimacyDataDeleteHook = { true }
+        store.journalDataDeleteHook = { true }
+        store.pendingNarrativeBufferPurgeHook = { true }
     }
 }
 

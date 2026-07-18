@@ -76,12 +76,16 @@ public final class CustomItemService {
         enqueueUpsert(items[index])
     }
 
-    public func reset() {
+    /// Returns whether the persisted rows were actually deleted. Threaded back so "delete everything" can
+    /// report a failed per-row CloudKit delete (designs left on disk to re-sync) instead of the funnel
+    /// discarding it and claiming a complete wipe.
+    @discardableResult
+    public func reset() -> Bool {
         items = []
         pendingUpserts = [:]
         pendingDeletes = []
         saveScheduled = false
-        repository.deleteAll()
+        return repository.deleteAll()
     }
 
     public func flushPendingSave() {
