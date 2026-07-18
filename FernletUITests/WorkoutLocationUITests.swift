@@ -90,6 +90,43 @@ final class WorkoutLocationUITests: XCTestCase {
                       "the rename did not persist across back + swipe + reopen")
     }
 
+    /// The variant the older rename test does NOT cover. That one leaves the equipment step through the
+    /// back chevron, which already calls `commitEdits()`, so it passed even before the swipe path was
+    /// fixed. Here the user renames and swipe-dismisses the sheet STRAIGHT from the equipment step —
+    /// touching neither the save bar nor the back chevron. That exit ran no commit path at all, so the
+    /// rename evaporated on dismiss and the old name came back on the next open. The `.onDisappear`
+    /// commit is what this asserts.
+    func testRenamingThenSwipeDismissingStraightFromEquipmentStepSticks() throws {
+        let app = UXTestApp.launch()
+        _ = try openLocationSheet(in: app)
+
+        // Pencil on the built-in → the equipment step, where the rename field lives.
+        let edit = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Edit")).firstMatch
+        XCTAssertTrue(edit.waitForExistence(timeout: 5), "no edit affordance")
+        edit.tap()
+
+        let nameField = app.textFields["workout.location.name"].firstMatch
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5), "no rename field on the equipment step")
+
+        nameField.tap()
+        // Select-all + replace so this doesn't depend on the starting text; the trailing "\n" fires the
+        // Done key to drop the keyboard while STAYING on the equipment step (no onSubmit is wired, so it
+        // doesn't commit — the swipe is what must).
+        nameField.press(forDuration: 1.0)
+        if app.menuItems["Select All"].waitForExistence(timeout: 2) { app.menuItems["Select All"].tap() }
+        nameField.typeText("Shed\n")
+
+        // THE broken path: swipe the whole sheet away from the equipment step. No save bar, no back
+        // chevron.
+        swipeDismissFromEquipmentStep(app)
+        XCTAssertTrue(app.staticTexts["What's available?"].waitForNonExistence(timeout: 5),
+                      "the swipe-dismiss gesture did not close the equipment-step sheet")
+
+        _ = try openLocationSheet(in: app)
+        XCTAssertTrue(app.staticTexts["Shed"].waitForExistence(timeout: 5),
+                      "the rename did not persist across a swipe-dismiss straight from the equipment step")
+    }
+
     // MARK: - Helpers
 
     /// Walks Move → the location setup sheet. Driven by a11y id, never by tapping blind: the Space
@@ -134,6 +171,17 @@ final class WorkoutLocationUITests: XCTestCase {
         let sheet = app.descendants(matching: .any)["workout.location.card"].firstMatch
         let start = sheet.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: -0.6))
         let end = sheet.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 12))
+        start.press(forDuration: 0.05, thenDragTo: end)
+    }
+
+    /// Swipes the sheet away while it's on the EQUIPMENT step — where there are no location cards to
+    /// anchor on, so `dismissSheet` can't be reused. Anchors on the "What's available?" header (which
+    /// lives above the equipment ScrollView, so a downward drag from it is caught by the sheet's
+    /// pan-to-dismiss rather than scrolling the list) and drags far below the screen.
+    private func swipeDismissFromEquipmentStep(_ app: XCUIApplication) {
+        let anchor = app.staticTexts["What's available?"].firstMatch
+        let start = anchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.0))
+        let end = anchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 24))
         start.press(forDuration: 0.05, thenDragTo: end)
     }
 

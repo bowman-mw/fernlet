@@ -113,6 +113,11 @@ struct WorkoutLocationSetupView: View {
                                 .foregroundStyle(Color.terracotta)
                                 .padding(6)
                                 .background(Color.parchment.opacity(0.8), in: Circle())
+                                // The glyph stays ~26pt; the frame + contentShape expand only the tap
+                                // target to Apple's 44pt minimum, so a near-miss no longer falls through
+                                // to the card button underneath and navigates instead of deleting.
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Delete \(location.name)")
@@ -130,6 +135,9 @@ struct WorkoutLocationSetupView: View {
                             .foregroundStyle(Color.slate)
                             .padding(6)
                             .background(Color.parchment.opacity(0.8), in: Circle())
+                            // Same 44pt tap target as its sibling trash chip.
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Edit \(location.name)")
@@ -225,6 +233,9 @@ struct WorkoutLocationSetupView: View {
                             .foregroundStyle(Color.bark)
                             .frame(width: 34, height: 34)
                             .background(Color.cream, in: RoundedRectangle(cornerRadius: 11))
+                            // Visual stays 34pt; only the tap target grows to the 44pt minimum.
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Back to locations")
@@ -279,6 +290,20 @@ struct WorkoutLocationSetupView: View {
             SheetSaveBar(label: "Save location") {
                 commitEdits()
                 dismiss()
+            }
+        }
+        // Commit name + equipment edits on ANY exit from this step — including a swipe-dismiss, which
+        // routes through neither the save bar nor the back chevron, so an edited-but-unsaved rename used
+        // to evaporate exactly the way a delete once did. Guarded to fire only for a location that
+        // already exists in the store (compare by id): a brand-new location added at this step lives
+        // only in local @State until its save bar is tapped, so committing it on a cancel-swipe would
+        // persist a location the user was still deciding on and break the "add commits at the save bar"
+        // contract. A deleted row isn't in the store either, so this can never resurrect one. Committing
+        // here and then again at a save bar / back chevron writes the same rows, so it stays idempotent.
+        .onDisappear {
+            if let editing = editingLocation,
+               store.settings.workoutLocations.contains(where: { $0.id == editing.id }) {
+                commitEdits()
             }
         }
     }
