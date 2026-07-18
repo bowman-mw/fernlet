@@ -24,6 +24,7 @@ struct StoragePreferencesTests {
             ],
             sealedBackupSensitiveNotesEnabled: true,
             sealedBackupPeriodEnabled: true,
+            sealedBackupPeriodReuploadDeferred: true,
             lastModifiedAt: Date(timeIntervalSince1970: 1_800_000_000)
         )
 
@@ -55,6 +56,9 @@ struct StoragePreferencesTests {
         #expect(decoded.sealedBackupSensitiveNotesEnabled == true)
         #expect(decoded.sealedBackupPeriodEnabled == true)
         #expect(decoded.cloudCopyKept == false)
+        // Same tolerance for the (newer still) period re-upload deferral: absent key → default false,
+        // everything else preserved.
+        #expect(decoded.sealedBackupPeriodReuploadDeferred == false)
     }
 
     @Test func defaultValuesMatchStorageSpec() {
@@ -68,6 +72,7 @@ struct StoragePreferencesTests {
         #expect(preferences.healthKitCapabilityEnabled == StoragePreferences.defaultHealthKitCapabilityEnabled)
         #expect(preferences.sealedBackupSensitiveNotesEnabled == false)
         #expect(preferences.sealedBackupPeriodEnabled == false)
+        #expect(preferences.sealedBackupPeriodReuploadDeferred == false)
         #expect(preferences.healthKitCapabilityEnabled.values.allSatisfy { $0 == false })
     }
 

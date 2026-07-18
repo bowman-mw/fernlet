@@ -28,6 +28,14 @@ struct PhotoCaptureControl<Label: View>: View {
     /// Preferred library sink: the raw picked `Data` and the photo's creation date (nil if unknown).
     /// When set, it takes priority over `onLibraryPick` and the bitmap is never decoded here.
     var onLibraryPickData: ((Data, Date?) -> Void)?
+    /// Called when a library pick's bytes fail to load (iCloud eviction, transfer error), so the caller
+    /// can surface its "couldn't save this photo" feedback instead of the pick vanishing silently.
+    var onLibraryPickFailed: (() -> Void)? = nil
+    /// Reports when the control's OWN capture UI (the full-screen camera cover / library picker) is
+    /// presented or dismissed. The camera cover fires `onDisappear` on the hierarchy it covers, so a
+    /// host that re-locks on disappear (the progress-photo timeline) uses this to suppress that
+    /// re-lock mid-capture.
+    var onCaptureUIPresentationChange: ((Bool) -> Void)? = nil
     /// Offer a source chooser (camera vs library) instead of jumping straight to the camera.
     var allowsLibraryChoice: Bool = false
     @ViewBuilder var label: () -> Label
@@ -63,6 +71,8 @@ struct PhotoCaptureControl<Label: View>: View {
             .ignoresSafeArea()
         }
         .photosPicker(isPresented: $isLibraryPickerActive, selection: $selectedItem, matching: .images)
+        .onChange(of: showingCamera) { _, _ in reportCaptureUIPresentation() }
+        .onChange(of: isLibraryPickerActive) { _, _ in reportCaptureUIPresentation() }
         .onChange(of: selectedItem) { _, newItem in
             guard let newItem else { return }
             Task {
@@ -75,10 +85,18 @@ struct PhotoCaptureControl<Label: View>: View {
                         let handler = onLibraryPick ?? onCameraCapture
                         if let image = UIImage(data: data) { handler(image) }
                     }
+                } else {
+                    // A pick the user made but whose bytes couldn't load must not vanish silently —
+                    // the store-failure paths already show feedback, so this joins them.
+                    onLibraryPickFailed?()
                 }
                 selectedItem = nil
             }
         }
+    }
+
+    private func reportCaptureUIPresentation() {
+        onCaptureUIPresentationChange?(showingCamera || isLibraryPickerActive)
     }
 }
 
@@ -98,7 +116,10 @@ private enum PhotoMetadata {
         guard let raw = (exif?[kCGImagePropertyExifDateTimeOriginal] as? String)
             ?? (exif?[kCGImagePropertyExifDateTimeDigitized] as? String)
             ?? (tiff?[kCGImagePropertyTIFFDateTime] as? String) else { return nil }
-        return exifDateFormatter.date(from: raw)
+        guard let date = exifDateFormatter.date(from: raw) else { return nil }
+        // Clamp to now: a wrong camera clock can stamp a FUTURE date, and the manual date editor caps
+        // at today — an imported photo must not be able to sit past the cap the editor enforces.
+        return min(date, Date())
     }
 
     /// EXIF/TIFF dates are "yyyy:MM:dd HH:mm:ss" in the camera's local time (no zone), so parse in the

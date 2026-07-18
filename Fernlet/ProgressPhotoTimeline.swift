@@ -16,6 +16,9 @@ struct ProgressPhotoSection: View {
     /// A *library* pick delivered as raw JPEG `Data` plus a best-effort creation date, so the parent seals
     /// it through the bounded Data path (no full-res bitmap) and stamps the recovered date rather than "now".
     var onCaptureData: (Data, Date?) -> Void
+    /// A library pick whose bytes failed to load (iCloud eviction, transfer error) — surfaced so the
+    /// parent can show its "couldn't save this photo" feedback instead of the pick vanishing silently.
+    var onCaptureFailed: () -> Void = {}
     var onOpen: (ProgressPhotoRecord) -> Void
 
     // Body photos are as personal as journal/cycle/intimacy, so — when a Fernlet lock is configured —
@@ -28,6 +31,19 @@ struct ProgressPhotoSection: View {
     // Set just before pushing the detail so the re-lock-on-disappear doesn't fire during the push (which
     // would make the also-gated detail re-prompt). Reset on re-appear.
     @State private var isOpeningDetail = false
+    // Set while the section's OWN capture UI is up (the full-screen camera cover / library picker).
+    // The camera cover fires onDisappear on the hierarchy it covers, so without this the re-lock fired
+    // MID-CAPTURE and the fresh photo landed behind the unlock prompt (the library sheet path never
+    // did — sheets don't fire onDisappear — which is how we know the re-lock was unintended).
+    @State private var isCapturing = false
+    // Scene-transition suppression, mirroring FernletLockGateModifier (see its header comment): Face ID
+    // bounces the scene inactive→active, and on this page-style TabView that can fire a spurious
+    // onDisappear right after a successful unlock — re-locking the strip the user just revealed. A
+    // genuine departure during the settle window is only DEFERRED (pendingRelock), never dropped.
+    @State private var suppressRelock = false
+    @State private var suppressRelockTask: Task<Void, Never>?
+    @State private var pendingRelock = false
+    @State private var sectionIsVisible = false
 
     private var gateActive: Bool {
         lockService.isLockConfigured && !UITestSupport.bypassPrivateLockGate
@@ -52,8 +68,40 @@ struct ProgressPhotoSection: View {
                 lockedPlaceholder
             }
         }
-        .onAppear { isOpeningDetail = false }
-        .onDisappear { reLockOnDisappear() }
+        .onAppear {
+            sectionIsVisible = true
+            pendingRelock = false
+            isOpeningDetail = false
+        }
+        .onDisappear {
+            sectionIsVisible = false
+            reLockOnDisappear()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .inactive:
+                suppressRelockTask?.cancel()
+                suppressRelock = true
+            case .active:
+                // Keep suppression briefly after returning to foreground so any spurious
+                // onDisappear/onAppear lifecycle events from the transition settle (same window as
+                // FernletLockGateModifier).
+                suppressRelockTask?.cancel()
+                suppressRelockTask = Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(1500))
+                    suppressRelock = false
+                    // Execute a deferred genuine-departure lock if the section hasn't re-appeared.
+                    if pendingRelock && !sectionIsVisible && !isCapturing {
+                        pendingRelock = false
+                        if case .unlocked = lockService.state {
+                            lockService.lock(reason: .viewDisappeared)
+                        }
+                    }
+                }
+            default:
+                break
+            }
+        }
         .sheet(isPresented: $showingUnlock) {
             ProgressPhotoUnlockSheet(lockService: lockService)
         }
@@ -66,6 +114,8 @@ struct ProgressPhotoSection: View {
                 PhotoCaptureControl(
                     onCameraCapture: onCapture,
                     onLibraryPickData: onCaptureData,
+                    onLibraryPickFailed: onCaptureFailed,
+                    onCaptureUIPresentationChange: { isCapturing = $0 },
                     allowsLibraryChoice: true
                 ) {
                     addLabel(prominent: true)
@@ -80,6 +130,8 @@ struct ProgressPhotoSection: View {
                     PhotoCaptureControl(
                         onCameraCapture: onCapture,
                         onLibraryPickData: onCaptureData,
+                        onLibraryPickFailed: onCaptureFailed,
+                        onCaptureUIPresentationChange: { isCapturing = $0 },
                         allowsLibraryChoice: true
                     ) {
                         addTile
@@ -161,11 +213,18 @@ struct ProgressPhotoSection: View {
 
     /// Re-lock the global lock when the timeline goes away (tab switch / leaving), matching the Private
     /// Hub's "re-lock on disappear". Suppressed while pushing the detail (which is separately gated) so
-    /// the push doesn't force a second unlock prompt. Presenting the unlock sheet does NOT fire
-    /// onDisappear, so it never re-locks mid-unlock.
+    /// the push doesn't force a second unlock prompt, while the section's own capture UI covers it
+    /// (the camera cover fires onDisappear on what it covers), and during scene-transition settle
+    /// (deferred, not dropped — see the `suppressRelock` machinery above). Presenting the unlock sheet
+    /// does NOT fire onDisappear, so it never re-locks mid-unlock; backgrounding is centrally covered by
+    /// the app-level `.background` lock in `FernletApp`.
     private func reLockOnDisappear() {
-        guard gateActive, !isOpeningDetail else { return }
-        if case .unlocked = lockService.state {
+        guard gateActive, !isOpeningDetail, !isCapturing else { return }
+        guard !lockService.isPerformingBiometricUnlock else { return }
+        guard case .unlocked = lockService.state else { return }
+        if suppressRelock {
+            pendingRelock = true
+        } else {
             lockService.lock(reason: .viewDisappeared)
         }
     }
@@ -286,6 +345,11 @@ struct ProgressPhotoDetailView: View {
     /// Called right after any persisted change (caption save / delete) so the parent timeline refreshes
     /// from the store deterministically — NOT via a second racing `onDisappear`.
     var onChanged: () -> Void
+    /// Whether the gate should re-lock when this detail disappears. MoveView passes "still in the
+    /// navigation path": a pop back to the (still-gated, still-visible) timeline keeps the unlock
+    /// session — one Face ID covers strip → detail → pop-back — while a genuine departure (switching
+    /// tabs with the detail pushed) still re-locks. Defaults to always-lock for any other presenter.
+    var shouldLockOnDisappear: () -> Bool
 
     @Environment(\.dismiss) private var dismiss
     // Full-screen body photo → gated behind the same global lock as the Private Hub, and redacted from
@@ -311,10 +375,16 @@ struct ProgressPhotoDetailView: View {
 
     private var redactForSnapshot: Bool { scenePhase != .active }
 
-    init(store: FernletStore, record: ProgressPhotoRecord, onChanged: @escaping () -> Void) {
+    init(
+        store: FernletStore,
+        record: ProgressPhotoRecord,
+        onChanged: @escaping () -> Void,
+        shouldLockOnDisappear: @escaping () -> Bool = { true }
+    ) {
         self.store = store
         self.record = record
         self.onChanged = onChanged
+        self.shouldLockOnDisappear = shouldLockOnDisappear
         _caption = State(initialValue: record.caption ?? "")
         _capturedAt = State(initialValue: record.capturedAt)
     }
@@ -340,18 +410,6 @@ struct ProgressPhotoDetailView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                // Opaque cover while backgrounded so the app-switcher snapshot can't leak the body photo.
-                .overlay {
-                    if redactForSnapshot {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(Color.parchment)
-                            .overlay {
-                                Image(systemName: "lock.fill")
-                                    .font(.title2.weight(.semibold))
-                                    .foregroundStyle(Color.slate)
-                            }
-                    }
-                }
 
                 Text(capturedAt.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
                     .font(.fernlet(.displayMedium))
@@ -424,6 +482,24 @@ struct ProgressPhotoDetailView: View {
             .padding(20)
         }
         .background(Color.parchment)
+        // Opaque cover over the WHOLE detail while backgrounded so the app-switcher snapshot can't leak
+        // any of it — the previous cover redacted only the picture, leaving the capture date and the
+        // caption (free text about the user's body) readable in the snapshot.
+        .overlay {
+            if redactForSnapshot {
+                ZStack {
+                    Color.parchment.ignoresSafeArea()
+                    VStack(spacing: 6) {
+                        Image(systemName: "lock.fill")
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(Color.slate)
+                        Text("Hidden")
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                    }
+                }
+            }
+        }
         .navigationTitle("Progress photo")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -453,7 +529,9 @@ struct ProgressPhotoDetailView: View {
         .destructiveConfirmation($pendingDestructiveAction)
         // Same full-screen lock as the Private Hub: when configured + locked, an unlock overlay covers
         // the photo and re-locks on disappear. Inactive (no lock configured) → passes through unchanged.
-        .fernletLockGate(active: gateActive)
+        // The disappear re-lock defers to `shouldLockOnDisappear` so popping back to the still-unlocked
+        // strip doesn't cost a fresh Face ID per photo (see the property doc above).
+        .fernletLockGate(active: gateActive, shouldLockOnDisappear: shouldLockOnDisappear)
     }
 
     /// Persists the caption, then refreshes the parent timeline in the SAME step (save → refresh), so the

@@ -2740,6 +2740,7 @@ struct RecipeDetailView: View {
                     PhotoCaptureControl(
                         onCameraCapture: { save($0) },
                         onLibraryPickData: { data, _ in saveLibraryData(data) },
+                        onLibraryPickFailed: { photoNotice = "Couldn't save this photo to your private store. Please try again." },
                         allowsLibraryChoice: true
                     ) {
                         photoIconChip("camera.fill")
@@ -2754,6 +2755,7 @@ struct RecipeDetailView: View {
             PhotoCaptureControl(
                 onCameraCapture: { save($0) },
                 onLibraryPickData: { data, _ in saveLibraryData(data) },
+                onLibraryPickFailed: { photoNotice = "Couldn't save this photo to your private store. Please try again." },
                 allowsLibraryChoice: true
             ) {
                 HStack(spacing: 10) {

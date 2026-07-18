@@ -658,6 +658,14 @@ struct ContentView: View {
                 return false
             }
         }
+        // Persists the period re-upload deferral so the obligation survives relaunch. Routed through the
+        // app's SINGLE StoragePreferencesStore instance — a second writer would leave its in-memory copy
+        // stale and the next `update` would clobber the flag. The no-change guard keeps a launch-time
+        // re-record from bumping `lastModifiedAt` (or minting a keychain row) for nothing.
+        store.sealedBackupDeferralPersistHook = { [storagePreferencesStore] deferred in
+            guard storagePreferencesStore.preferences.sealedBackupPeriodReuploadDeferred != deferred else { return }
+            storagePreferencesStore.update { $0.sealedBackupPeriodReuploadDeferred = deferred }
+        }
         store.storagePreferencesResetHook = { [storagePreferencesStore] keepSealedBackupFlags, keepCloudCopyFlag in
             // Two preferences survive the reset, both because erasing them would BREAK the delete rather
             // than because they're worth keeping:

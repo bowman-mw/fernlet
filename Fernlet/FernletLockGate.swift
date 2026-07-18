@@ -22,6 +22,12 @@ import FernletLock
 
 struct FernletLockGateModifier: ViewModifier {
     let active: Bool
+    /// Consulted at the moment the gated view disappears; returning false skips the viewDisappeared
+    /// re-lock entirely (no deferred pending lock either). For the case where the gate is popped back
+    /// to an ALSO-GATED, still-visible parent (the progress-photo detail returning to the timeline
+    /// strip): one unlock session should cover strip → detail → pop-back, and the parent's own
+    /// disappear re-lock still guards the genuine departure. Defaults to always-lock.
+    var shouldLockOnDisappear: () -> Bool = { true }
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.scenePhase) private var scenePhase
 
@@ -125,6 +131,7 @@ struct FernletLockGateModifier: ViewModifier {
         gateIsActive = false
         guard !lockService.isPerformingBiometricUnlock else { return }
         guard case .unlocked = lockService.state else { return }
+        guard shouldLockOnDisappear() else { return }
         if suppressRelock {
             // Defer the lock so it fires when the suppression window expires,
             // preventing the view from staying unlocked if the user navigated away.
@@ -190,7 +197,12 @@ extension View {
     /// Gates the view behind FernletLock.
     /// When `active` is false the content passes through unchanged.
     /// On disappear the content key is scrubbed; every re-entry re-prompts.
-    func fernletLockGate(active: Bool = true) -> some View {
-        modifier(FernletLockGateModifier(active: active))
+    /// `shouldLockOnDisappear` (default always-true) can veto the disappear re-lock when the gate is
+    /// popping back to an also-gated, still-visible parent that owns the session's re-lock.
+    func fernletLockGate(
+        active: Bool = true,
+        shouldLockOnDisappear: @escaping () -> Bool = { true }
+    ) -> some View {
+        modifier(FernletLockGateModifier(active: active, shouldLockOnDisappear: shouldLockOnDisappear))
     }
 }

@@ -166,6 +166,17 @@ final class SealedBackupCoordinator {
             FernletAuditLog.log("sealedBackup.reconciled", context: [
                 "payload": payloadType.rawValue, "enabled": enabled ? "true" : "false"
             ])
+            if payloadType == .periodData {
+                // A pending period re-upload deferral (G5) is discharged by ANY successful period
+                // reconcile that actually touched the cloud chunk: an enable that really paged the
+                // narratives (visible — the hidden path above is a silent no-op, which must NOT clear),
+                // or a disable that deleted the backup outright. Cleared here, at the one seam every
+                // caller funnels through (the Privacy & Data toggle, the adopt flow, the un-hide
+                // trigger, delete-all), rather than per-caller.
+                if !enabled || host.isPeriodTrackingVisible {
+                    host.recordSealedBackupPeriodReuploadDeferred(false)
+                }
+            }
             return true
         } catch {
             FernletAuditLog.log("sealedBackup.reconcileFailed", context: ["payload": payloadType.rawValue])
@@ -215,6 +226,13 @@ final class SealedBackupCoordinator {
         if prefs.sealedBackupPeriodEnabled && host.isPeriodTrackingVisible {
             _ = await restoreSealedBackupOutcome(payloadType: .periodData)
         }
+        // G5 follow-through: a persisted period re-upload deferral (the escrow adopt ran while period
+        // tracking was hidden, or an earlier re-seal failed) is retried here once the narratives are
+        // reachable again — so the deferral self-heals across launches instead of waiting for another
+        // un-hide. Success clears the persisted flag inside setSealedBackupEnabled.
+        if prefs.sealedBackupPeriodEnabled && prefs.sealedBackupPeriodReuploadDeferred && host.isPeriodTrackingVisible {
+            _ = await setSealedBackupEnabled(true, payloadType: .periodData)
+        }
     }
 
     /// Reconciles the backup-escrow key across iCloud Keychain (WS-3) and records any conflict so the UI
@@ -259,8 +277,12 @@ final class SealedBackupCoordinator {
         }
         if prefs.sealedBackupPeriodEnabled {
             if host.isPeriodTrackingVisible {
-                _ = await setSealedBackupEnabled(true, payloadType: .periodData)
-                host.recordSealedBackupPeriodReuploadDeferred(false)
+                // Success clears the deferral inside setSealedBackupEnabled. A FAILED re-seal leaves the
+                // cloud chunk sealed to the key we just replaced, so record it as still-deferred (the
+                // banner surfaces it; retried at next launch) instead of silently claiming it done.
+                if await !setSealedBackupEnabled(true, payloadType: .periodData) {
+                    host.recordSealedBackupPeriodReuploadDeferred(true)
+                }
             } else {
                 // G5: period is hidden, so reconcilePeriodBackup is a silent no-op. Routing through
                 // setSealedBackupEnabled here would log a FALSE "reconciled" while the cloud period chunk

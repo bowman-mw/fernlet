@@ -8,6 +8,13 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     public var healthKitCapabilityEnabled: [String: Bool]
     public var sealedBackupSensitiveNotesEnabled: Bool
     public var sealedBackupPeriodEnabled: Bool
+    /// Set when the sealed PERIOD backup still needs re-uploading under a newly-adopted escrow key —
+    /// the escrow adopt (or a re-seal) ran while period tracking was hidden, so the cloud chunk is
+    /// still sealed to the replaced key. Persisted (not session-only) so the promised remedy —
+    /// "un-hide period tracking, then this device will re-upload it" — survives a relaunch. Cleared
+    /// when a period re-seal actually succeeds, when the backup is turned off/deleted, and by
+    /// "delete everything".
+    public var sealedBackupPeriodReuploadDeferred: Bool
     /// Set when the user chose "Stop syncing, keep cloud data": sync is off, but a full copy of the day
     /// blob is deliberately left in the user's private CloudKit zone. Nothing else records that choice,
     /// so without this flag `hasAnyCloudCopy` reads false for exactly that user — the delete dialog then
@@ -26,6 +33,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         healthKitCapabilityEnabled: [String: Bool] = StoragePreferences.defaultHealthKitCapabilityEnabled,
         sealedBackupSensitiveNotesEnabled: Bool = false,
         sealedBackupPeriodEnabled: Bool = false,
+        sealedBackupPeriodReuploadDeferred: Bool = false,
         cloudCopyKept: Bool = false,
         lastModifiedAt: Date = Date()
     ) {
@@ -35,6 +43,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         self.healthKitCapabilityEnabled = healthKitCapabilityEnabled
         self.sealedBackupSensitiveNotesEnabled = sealedBackupSensitiveNotesEnabled
         self.sealedBackupPeriodEnabled = sealedBackupPeriodEnabled
+        self.sealedBackupPeriodReuploadDeferred = sealedBackupPeriodReuploadDeferred
         self.cloudCopyKept = cloudCopyKept
         self.lastModifiedAt = lastModifiedAt
     }
@@ -54,6 +63,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
             ?? StoragePreferences.defaultHealthKitCapabilityEnabled
         sealedBackupSensitiveNotesEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupSensitiveNotesEnabled) ?? false
         sealedBackupPeriodEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPeriodEnabled) ?? false
+        sealedBackupPeriodReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPeriodReuploadDeferred) ?? false
         cloudCopyKept = try container.decodeIfPresent(Bool.self, forKey: .cloudCopyKept) ?? false
         lastModifiedAt = try container.decodeIfPresent(Date.self, forKey: .lastModifiedAt) ?? Date()
     }

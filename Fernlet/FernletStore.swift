@@ -524,6 +524,15 @@ final class FernletStore {
         if !visible {
             periodScrubHook?()
             diary.scrubHiddenHealthContext(periodVisible: false, intimacyVisible: isIntimacyTrackingVisible)
+        } else if sealedBackupPeriodReuploadDeferred,
+                  StoragePreferencesStore.currentPreferences().sealedBackupPeriodEnabled {
+            // The deferral banner's promised remedy (G5): the escrow adopt couldn't re-seal the period
+            // backup while it was hidden, so un-hiding is the moment the narrative store becomes pageable
+            // again — re-seal + re-upload now. The coordinator clears the deferral only on an ACTUAL
+            // re-seal success (the hidden-path no-op doesn't count), so a failure here keeps the banner
+            // honest and is retried at next launch. Gated on the pref so a backup the user has since
+            // turned off is never re-uploaded behind their back.
+            Task { await setSealedBackupEnabled(true, payloadType: .periodData) }
         }
     }
 
@@ -1864,7 +1873,10 @@ final class FernletStore {
     /// Whether a sealed PERIOD backup still needs re-uploading under the newly-adopted escrow key because
     /// period tracking was hidden when the key was adopted (G5). Surfaced (observably) in Privacy & Data so
     /// the stale cloud chunk is visible and can be re-uploaded after un-hiding, not silently left mismatched.
-    private(set) var sealedBackupPeriodReuploadDeferred = false
+    /// PERSISTED in `StoragePreferences` (via `sealedBackupDeferralPersistHook`) so the obligation survives
+    /// a relaunch; the initializer here re-publishes the persisted flag at launch.
+    private(set) var sealedBackupPeriodReuploadDeferred =
+        StoragePreferencesStore.currentPreferences().sealedBackupPeriodReuploadDeferred
 
     /// Seals + uploads (or deletes) the encrypted CloudKit backup for a payload; returns whether it
     /// succeeded. Delegates to `SealedBackupCoordinator`.
@@ -2366,6 +2378,12 @@ final class FernletStore {
     /// flags) as they were.
     @ObservationIgnored var storagePreferencesResetHook: ((_ keepSealedBackupFlags: Bool, _ keepCloudCopyFlag: Bool) -> Bool)?
 
+    /// Persists the period re-upload deferral into `StoragePreferences` so it survives relaunch. A hook
+    /// (like `storagePreferencesResetHook`) because the preferences store is app-scoped: writing through
+    /// a second `StoragePreferencesStore` instance would leave the app's observable copy stale, and its
+    /// next `update` would clobber the flag. Unwired (tests) the deferral stays session-only, as before.
+    @ObservationIgnored var sealedBackupDeferralPersistHook: ((Bool) -> Void)?
+
     /// Whether a sealed backup of this payload may be uploaded — i.e. whether "delete everything" has
     /// anything to remove. Lives here rather than on `StoragePreferences` because that type is Layer 0
     /// and cannot see `SealedBackupPayloadType`, which is defined above it in `CloudKitSync`.
@@ -2443,6 +2461,10 @@ final class FernletStore {
                 }
             }
         }
+        // The period re-upload deferral points at a backup this wipe just deleted — and the local
+        // period data behind it is about to go too, so the promised re-upload can never happen again
+        // either way. Clear it (observable + persisted) with the backup.
+        recordSealedBackupPeriodReuploadDeferred(false)
 
         // 2b. The "Stop syncing, keep cloud data" copy. Sync is OFF, so the per-row deletes below can't
         // reach the server by propagating over a live session — but a full copy of the day blob is still
@@ -3096,6 +3118,7 @@ extension FernletStore: SealedBackupContext {
     }
     func recordSealedBackupPeriodReuploadDeferred(_ deferred: Bool) {
         sealedBackupPeriodReuploadDeferred = deferred
+        sealedBackupDeferralPersistHook?(deferred)
     }
 }
 

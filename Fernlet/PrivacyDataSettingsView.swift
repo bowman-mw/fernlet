@@ -482,7 +482,12 @@ struct PrivacyDataSettingsView: View {
                     SectionLabel("Encrypted backup status")
 
                     if store.sealedBackupPeriodReuploadDeferred {
-                        Text("Your period backup still needs re-uploading with your other device's backup key. It's hidden right now — un-hide period tracking, then this device will re-upload it so it can be restored later.")
+                        // Two states share the flag: period still hidden (the un-hide is the remedy — and
+                        // it now actually triggers the re-upload), or already visible but the re-upload
+                        // hasn't succeeded yet (retried automatically at each launch).
+                        Text(store.isPeriodTrackingVisible
+                             ? "Your period backup still needs re-uploading with your other device's backup key. This device will retry automatically."
+                             : "Your period backup still needs re-uploading with your other device's backup key. It's hidden right now — un-hide period tracking, then this device will re-upload it so it can be restored later.")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()

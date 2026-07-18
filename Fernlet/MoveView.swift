@@ -102,12 +102,14 @@ struct MoveView: View {
                         },
                         onCaptureData: { data, capturedAt in
                             // Library pick: seal the raw bytes (bounded ImageIO decode) and stamp the
-                            // photo's own date when EXIF carried one, else default to now.
+                            // photo's own date when EXIF carried one (clamped to now at the EXIF read —
+                            // a wrong camera clock must not outrun the editor's today cap), else now.
                             if store.addProgressPhoto(data: data, capturedAt: capturedAt ?? Date()) == nil {
                                 showPhotoSaveFailedAlert = true
                             }
                             progressPhotos = store.progressPhotoRecords()
                         },
+                        onCaptureFailed: { showPhotoSaveFailedAlert = true },
                         onOpen: { record in path.append(record) }
                     )
                     #endif
@@ -128,7 +130,12 @@ struct MoveView: View {
                 ProgressPhotoDetailView(
                     store: store,
                     record: record,
-                    onChanged: { progressPhotos = store.progressPhotoRecords() }
+                    onChanged: { progressPhotos = store.progressPhotoRecords() },
+                    // Pop-back vs genuine departure: by the time the detail's onDisappear fires on a
+                    // pop, the record is already off the path (empty → back at the strip, which owns
+                    // the session's re-lock); on a tab switch away the detail stays pushed (non-empty)
+                    // and the gate re-locks as before. One unlock covers strip → detail → pop-back.
+                    shouldLockOnDisappear: { !path.isEmpty }
                 )
             }
             #endif
