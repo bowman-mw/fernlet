@@ -20,6 +20,7 @@ struct ContentView: View {
     @Bindable var store: FernletStore
     @State private var launcher = LaunchPreparationService()
     @State private var periodStore = PeriodTrackerStore(healthService: HealthKitService())
+    @State private var intimacyStore = IntimacyLogStore()
     @State private var periodContext: PeriodContextBridge?
     @State private var stressService = StressService()
     @State private var worryBoxService = WorryBoxService()
@@ -116,6 +117,10 @@ struct ContentView: View {
                 // on every cold launch, so wiring this later would let one full decrypt + HealthKit
                 // read through before the gate existed.
                 periodStore.isVisible = { [store] in store.isPeriodTrackingVisible }
+                // Same hard gate for the intimacy sealed-notes seam. `IntimacyLogStore` funnels every
+                // decrypt/seal and is fail-closed by default, so wiring it here — before any read below —
+                // is what turns the gate from "reads nothing" into "reads exactly when visible".
+                intimacyStore.isVisible = { [store] in store.isIntimacyTrackingVisible }
                 // A day record written before the user hid a feature keeps its last cycle/intimate
                 // value (HealthDailyContext.merge coalesces), so scrub on load, not just on toggle.
                 store.scrubHiddenHealthContext()
@@ -377,7 +382,7 @@ struct ContentView: View {
                 .tag(FernletTab.move)
             SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
                 .tag(FernletTab.social)
-            PrivateHubView(store: store, periodStore: periodStore, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal))
+            PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal))
                 .tag(FernletTab.personal)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
@@ -558,7 +563,7 @@ struct ContentView: View {
                 .presentationCornerRadius(20)
                 .environment(lockService)
         case .logIntimacy:
-            LogIntimacySheet()
+            LogIntimacySheet(intimacyStore: intimacyStore)
                 .uxScreenAnchor("sheet.logIntimacy")
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -838,6 +843,10 @@ struct ContentView: View {
 struct PersonalScreenView: View {
     var screen: FernletScreen
     @Bindable var store: FernletStore
+    /// The gated funnel for intimacy sealed-note reads. Owned by `ContentView`, threaded through
+    /// `PrivateHubView`. Its `isVisible` is wired to the derived gate in `ContentView`'s launch task, so
+    /// the `logs()` call in `loadIntimacyCalendar` decrypts nothing while intimacy tracking is hidden.
+    var intimacyStore: IntimacyLogStore
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
     @Binding var isTabBarCompact: Bool
@@ -999,15 +1008,17 @@ struct PersonalScreenView: View {
     }
 
     private func loadIntimacyCalendar() async {
-        // G3 — the hard gate. Clears rather than merely returning, so hiding mid-session drops the
-        // logs already resident instead of leaving them readable until process death. Also skips the
-        // HealthKit read below, which the age check alone never covered.
+        // Back-stop to the authoritative gate. The sealed-note decrypt is now gated at the seam by
+        // `intimacyStore` (fail-closed), so this view-level check no longer guards the plaintext — but
+        // it still does real extra work: it scrubs the logs already resident in @State (hiding
+        // mid-session must drop them, not leave them readable until process death) and skips the
+        // HealthKit read below, which the sealed store never covered.
         guard store.isIntimacyTrackingVisible else {
             scrubIntimacyState()
             return
         }
         let contentKey = lockService.contentKey()
-        let localLogs: [IntimacyLog] = (try? IntimacyLogRepository().logs(contentKey: contentKey)) ?? []
+        let localLogs: [IntimacyLog] = (try? intimacyStore.logs(contentKey: contentKey)) ?? []
         intimacyLogs = localLogs
         let localEventsByDay = Dictionary(grouping: localLogs, by: \.dayKey).mapValues(\.count)
         do {

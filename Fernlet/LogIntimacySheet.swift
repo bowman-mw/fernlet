@@ -6,6 +6,9 @@ import PrivateHealthStore
 import HealthKitGateway
 
 struct LogIntimacySheet: View {
+    /// The gated funnel for the sealed-note write. Reaches the same fail-closed decrypt/seam gate the
+    /// calendar reads through, so a save while intimacy is hidden throws instead of sealing a new row.
+    let intimacyStore: IntimacyLogStore
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @Environment(\.dismiss) private var dismiss
@@ -114,12 +117,11 @@ struct LogIntimacySheet: View {
         isSaving = true
         defer { isSaving = false }
         do {
-            let repository = IntimacyLogRepository()
             let log = IntimacyLog(
                 eventDate: eventDate,
                 note: String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(2000))
             )
-            try repository.insert(log, contentKey: lockService.contentKey())
+            try intimacyStore.insert(log, contentKey: lockService.contentKey())
             guard writesToHealthKit else {
                 dismiss()
                 return
@@ -132,7 +134,7 @@ struct LogIntimacySheet: View {
                     protectionUsed: protectionUsed,
                     externalUUID: externalUUID
                 )
-                try repository.markSavedToHealthKit(id: log.id, externalUUID: externalUUID)
+                try intimacyStore.markSavedToHealthKit(id: log.id, externalUUID: externalUUID)
             } catch {
                 statusMessage = "Private note saved, but Apple Health was not updated: \(error.localizedDescription)"
                 try? await Task.sleep(for: .seconds(1.8))

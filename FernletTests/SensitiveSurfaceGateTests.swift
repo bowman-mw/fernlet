@@ -1,9 +1,13 @@
+import CoreData
+import CryptoKit
 import Foundation
 import Testing
 import FernletDomainModel
 import FernletLock
 import HealthKitGateway
 import LocalPersistence
+import PrivateHealthStore
+import PrivateStoreCore
 @testable import Fernlet
 
 /// The hide gate for period (#4) + intimacy (#5). The rule these enforce: hiding is a HARD gate —
@@ -286,6 +290,70 @@ struct SensitiveSurfaceGateTests {
         // Ungated sections are unaffected.
         #expect(hidden.contains(.journal))
         #expect(hidden.contains(.worryBox))
+    }
+
+    // MARK: - Intimacy sealed-note decrypt seam (#5, mirrors PeriodTracker's gate)
+
+    private func makeIntimacyStore(context: NSManagedObjectContext) -> IntimacyLogStore {
+        IntimacyLogStore(repository: IntimacyLogRepository(context: context))
+    }
+
+    /// The load-bearing guarantee for #5: the gate lives at the decrypt/seal SEAM, not in a `View`. With
+    /// a REAL sealed row and a valid content key present, hiding makes the store inert — `logs()`
+    /// decrypts nothing (returns `[]`) and `insert()` refuses. Against the old unguarded
+    /// `IntimacyLogRepository`-only path these BOTH fail: `logs()` returned the decrypted row and
+    /// `insert()` sealed a new one regardless of visibility (the only guard was a `View`-body `if`).
+    @Test func hiddenIntimacyStoreReadsNothingAndRefusesWrites() throws {
+        let context = PrivatePersistenceController(inMemory: true).container.viewContext
+        let store = makeIntimacyStore(context: context)
+        let key = SymmetricKey(size: .bits256)
+        store.isVisible = { true }
+
+        // A real sealed row and a valid key — visibility is the only thing between caller and plaintext.
+        try store.insert(IntimacyLog(eventDate: Date(), note: "sealed while visible"), contentKey: key)
+        #expect(try store.logs(contentKey: key).count == 1)
+
+        store.isVisible = { false }
+
+        #expect(try store.logs(contentKey: key).isEmpty)
+        #expect(throws: IntimacyTrackingHiddenError.self) {
+            try store.insert(IntimacyLog(eventDate: Date(), note: "must not seal while hidden"), contentKey: key)
+        }
+    }
+
+    /// Hidden must never mean deleted: the sealed row survives hiding and comes back on un-hide.
+    @Test func hidingIntimacyKeepsDataAndUnhidingRestoresIt() throws {
+        let context = PrivatePersistenceController(inMemory: true).container.viewContext
+        let store = makeIntimacyStore(context: context)
+        let key = SymmetricKey(size: .bits256)
+        store.isVisible = { true }
+        try store.insert(IntimacyLog(eventDate: Date(), note: "survives hiding"), contentKey: key)
+
+        store.isVisible = { false }
+        #expect(try store.logs(contentKey: key).isEmpty)
+
+        store.isVisible = { true }
+        #expect(try store.logs(contentKey: key).first?.note == "survives hiding")
+    }
+
+    /// Fail-closed DEFAULT (#2, intimacy half): a store nobody wired reads/writes nothing, so a
+    /// regression of the default back to `{ true }` is caught here. The row is seeded through a
+    /// briefly-visible store sharing the same context, proving the data really is present and only the
+    /// default gate hides it.
+    @Test func unwiredIntimacyStoreDefaultsToFailClosed() throws {
+        let context = PrivatePersistenceController(inMemory: true).container.viewContext
+        let key = SymmetricKey(size: .bits256)
+
+        let seeder = makeIntimacyStore(context: context)
+        seeder.isVisible = { true }
+        try seeder.insert(IntimacyLog(eventDate: Date(), note: "present but gated"), contentKey: key)
+
+        // A fresh store with NO wiring — its default gate must be closed.
+        let unwired = makeIntimacyStore(context: context)
+        #expect(try unwired.logs(contentKey: key).isEmpty)
+        #expect(throws: IntimacyTrackingHiddenError.self) {
+            try unwired.insert(IntimacyLog(eventDate: Date(), note: "blocked by default"), contentKey: key)
+        }
     }
 }
 

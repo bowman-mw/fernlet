@@ -28,6 +28,7 @@ enum PrivateHubSection: String, CaseIterable, Identifiable {
 struct PrivateHubView: View {
     var store: FernletStore
     var periodStore: PeriodTrackerStore
+    var intimacyStore: IntimacyLogStore
     var periodContext: PeriodContextBridge? = nil
     var worryBox: WorryBoxService
     @Binding var activeSheet: FernletSheet?
@@ -46,7 +47,7 @@ struct PrivateHubView: View {
                     .tag(PrivateHubSection.period)
             }
             if store.isIntimacyTrackingVisible {
-                PersonalScreenView(screen: .intimacyTracking, store: store, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
+                PersonalScreenView(screen: .intimacyTracking, store: store, intimacyStore: intimacyStore, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                     .tag(PrivateHubSection.intimacy)
             }
             WorryBoxView(worryBox: worryBox)

@@ -244,8 +244,11 @@ public final class PeriodTrackerStore {
     ///
     /// Injected as a closure because this store is a `nonisolated` leaf with no access to settings,
     /// and because reading it lazily (rather than caching a Bool) means a toggle mid-session takes
-    /// effect on the very next call. Defaults to visible so existing callers and tests are unchanged.
-    @ObservationIgnored public var isVisible: () -> Bool = { true }
+    /// effect on the very next call. Defaults to fail-CLOSED (`{ false }`): a store nobody wired must
+    /// read nothing, so a construction that races ahead of its wiring can never leak cycle data. The
+    /// real derived closure is set in `ContentView`'s launch task before any load call runs; tests
+    /// that exercise the visible path inject `{ true }` explicitly.
+    @ObservationIgnored public var isVisible: () -> Bool = { false }
 
     /// Whether the last `loadEntries` ran with a content key, i.e. whether `entries` carry narratives
     /// and a prediction is legitimately derivable. Guards the recompute in `deleteEntry`, which has no

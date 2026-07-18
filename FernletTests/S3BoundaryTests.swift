@@ -60,7 +60,7 @@ struct S3BoundaryTests {
         "WorryNarrativeRepository",
         "MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative",
         // Raw cycle/intimacy value types — must travel only as de-identified AIContext payloads.
-        "CyclePhase", "CycleDayEntry", "UserLoggedCycleEvent", "PeriodTrackerStore",
+        "CyclePhase", "CycleDayEntry", "UserLoggedCycleEvent", "PeriodTrackerStore", "IntimacyLogStore",
         // Sealed media stores + the pending-narrative buffer/payload.
         "PrivateMediaStore", "MealPhotoStore", "ProgressPhotoStore", "PendingNarrativeBuffer", "PendingNarrativePayload",
         // Raw tier-two behavioral memory record (WI-7b). `TierTwoMemoryRecord` lives in

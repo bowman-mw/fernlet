@@ -64,7 +64,7 @@ struct PeriodTrackerTests {
 
     @Test func logEventWritesHealthKitMetadata() async throws {
         let health = MockPeriodHealthKitService()
-        let periodStore = PeriodTrackerStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .notConfigured))
+        let periodStore = makePeriodStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .notConfigured))
 
         _ = try await periodStore.logEvent(UserLoggedCycleEvent(flowLevel: .medium, isCycleStart: true), unlockedContentKey: nil)
         let sample = try #require(health.savedSamples.first as? HKCategorySample)
@@ -90,7 +90,7 @@ struct PeriodTrackerTests {
 
     @Test func logEventWithDefaultFlowSavesNoHealthKitSamples() async throws {
         let health = MockPeriodHealthKitService()
-        let periodStore = PeriodTrackerStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .notConfigured))
+        let periodStore = makePeriodStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .notConfigured))
 
         let result = try await periodStore.logEvent(UserLoggedCycleEvent(), unlockedContentKey: nil)
 
@@ -112,7 +112,7 @@ struct PeriodTrackerTests {
     @Test func logEventPersistsProvidedDate() async throws {
         let health = MockPeriodHealthKitService()
         let key = SymmetricKey(data: Data(repeating: 6, count: 32))
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: health,
             narrativeRepository: makeRepository(),
             lockService: MockLockService(state: .unlocked)
@@ -130,7 +130,7 @@ struct PeriodTrackerTests {
 
     @Test func lockedLogEventBuffersNarrative() async throws {
         let lock = MockLockService(state: .locked(cooldownDeadline: nil))
-        let periodStore = PeriodTrackerStore(healthService: MockPeriodHealthKitService(), narrativeRepository: makeRepository(), lockService: lock)
+        let periodStore = makePeriodStore(healthService: MockPeriodHealthKitService(), narrativeRepository: makeRepository(), lockService: lock)
 
         let result = try await periodStore.logEvent(UserLoggedCycleEvent(note: "save later", symptoms: [.headache]), unlockedContentKey: nil)
 
@@ -141,7 +141,7 @@ struct PeriodTrackerTests {
 
     @Test func lockedLogEventBuffersCustomSymptomScales() async throws {
         let lock = MockLockService(state: .locked(cooldownDeadline: nil))
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: MockPeriodHealthKitService(),
             narrativeRepository: makeRepository(),
             lockService: lock
@@ -161,7 +161,7 @@ struct PeriodTrackerTests {
         let lock = MockLockService(state: .unlocked)
         let repo = makeRepository()
         let key = SymmetricKey(data: Data(repeating: 3, count: 32))
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: MockPeriodHealthKitService(),
             narrativeRepository: repo,
             lockService: lock
@@ -189,7 +189,7 @@ struct PeriodTrackerTests {
             dateKey: FernletDate.dayKey(for: Date()),
             note: "should not surface"
         ), contentKey: key)
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: health,
             narrativeRepository: repo,
             lockService: MockLockService(state: .locked(cooldownDeadline: nil))
@@ -221,7 +221,7 @@ struct PeriodTrackerTests {
             note: "must never surface while hidden",
             symptomFlags: [.cramps]
         ), contentKey: key)
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: health,
             narrativeRepository: repo,
             lockService: MockLockService(state: .unlocked)
@@ -254,7 +254,7 @@ struct PeriodTrackerTests {
             note: "loaded while visible"
         ), contentKey: key)
         var visible = true
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: health,
             narrativeRepository: repo,
             lockService: MockLockService(state: .unlocked)
@@ -288,7 +288,7 @@ struct PeriodTrackerTests {
             note: "survives hiding"
         ), contentKey: key)
         var visible = false
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: health,
             narrativeRepository: repo,
             lockService: MockLockService(state: .unlocked)
@@ -307,7 +307,7 @@ struct PeriodTrackerTests {
 
     @Test func hiddenLogEventIsRefused() async throws {
         let health = MockPeriodHealthKitService()
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: health,
             narrativeRepository: makeRepository(),
             lockService: MockLockService(state: .unlocked)
@@ -336,7 +336,7 @@ struct PeriodTrackerTests {
             symptomFlagsBytes: nil,
             customSymptomScalesBytes: nil
         )]
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: MockPeriodHealthKitService(),
             narrativeRepository: makeRepository(),
             lockService: lock
@@ -366,7 +366,7 @@ struct PeriodTrackerTests {
             note: "must survive a refused edit"
         ), contentKey: key)
         var visible = true
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: health,
             narrativeRepository: repo,
             lockService: MockLockService(state: .unlocked)
@@ -399,7 +399,7 @@ struct PeriodTrackerTests {
             for: UserLoggedCycleEvent(flowLevel: .medium),
             externalUUID: UUID()
         )
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: health,
             narrativeRepository: makeRepository(),
             lockService: MockLockService(state: .locked(cooldownDeadline: nil)),
@@ -431,7 +431,7 @@ struct PeriodTrackerTests {
             note: "joined",
             symptomFlags: [.cramps]
         ), contentKey: key)
-        let store = PeriodTrackerStore(
+        let store = makePeriodStore(
             healthService: health,
             narrativeRepository: repo,
             lockService: MockLockService(state: .unlocked)
@@ -455,7 +455,7 @@ struct PeriodTrackerTests {
         )]
         let repository = makeRepository()
         let key = SymmetricKey(data: Data(repeating: 9, count: 32))
-        let periodStore = PeriodTrackerStore(healthService: MockPeriodHealthKitService(), narrativeRepository: repository, lockService: lock)
+        let periodStore = makePeriodStore(healthService: MockPeriodHealthKitService(), narrativeRepository: repository, lockService: lock)
 
         try await periodStore.drainPendingBuffer(contentKey: key)
         let read = try #require(try repository.narrative(forHKUUID: "hk-drain", contentKey: key))
@@ -489,7 +489,7 @@ struct PeriodTrackerTests {
         ]
         let repository = makeRepository()
         let key = SymmetricKey(data: Data(repeating: 7, count: 32))
-        let periodStore = PeriodTrackerStore(healthService: MockPeriodHealthKitService(), narrativeRepository: repository, lockService: lock)
+        let periodStore = makePeriodStore(healthService: MockPeriodHealthKitService(), narrativeRepository: repository, lockService: lock)
 
         await #expect(throws: (any Error).self) {
             try await periodStore.drainPendingBuffer(contentKey: key)
@@ -502,7 +502,7 @@ struct PeriodTrackerTests {
     @Test func currentPhaseUsesObservedFlowOnly() async throws {
         let health = MockPeriodHealthKitService()
         health.loadedSamples = try HealthKitService.periodSamples(for: UserLoggedCycleEvent(date: Date(), flowLevel: .light), externalUUID: UUID())
-        let periodStore = PeriodTrackerStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .unlocked))
+        let periodStore = makePeriodStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .unlocked))
 
         await periodStore.loadEntries(unlockedContentKey: SymmetricKey(data: Data(repeating: 1, count: 32)))
         #expect(periodStore.currentPhaseFromObservations() == .menstrual)
@@ -525,7 +525,7 @@ struct PeriodTrackerTests {
                 externalUUID: UUID()
             )
         }
-        let periodStore = PeriodTrackerStore(
+        let periodStore = makePeriodStore(
             healthService: health,
             narrativeRepository: makeRepository(),
             lockService: MockLockService(state: .unlocked),
@@ -562,6 +562,27 @@ struct PeriodTrackerTests {
 
     private func makeRepository() -> MenstrualNarrativeRepository {
         MenstrualNarrativeRepository(context: PrivatePersistenceController(inMemory: true).container.viewContext)
+    }
+
+    /// `PeriodTrackerStore.isVisible` now defaults to fail-CLOSED (`{ false }`), so a store must OPT IN
+    /// to visibility. These tests exercise the visible load/log/drain paths, so this factory injects
+    /// `isVisible = { true }` by default; the visibility-gate tests below override it to `{ false }` /
+    /// `{ visible }` after construction to assert the inert path.
+    private func makePeriodStore(
+        healthService: any PeriodHealthKitServicing,
+        narrativeRepository: MenstrualNarrativeRepository? = nil,
+        lockService: (any PeriodLockContext)? = nil,
+        calendar: Calendar = .current,
+        isVisible: @escaping () -> Bool = { true }
+    ) -> PeriodTrackerStore {
+        let store = PeriodTrackerStore(
+            healthService: healthService,
+            narrativeRepository: narrativeRepository,
+            lockService: lockService,
+            calendar: calendar
+        )
+        store.isVisible = isVisible
+        return store
     }
 }
 
