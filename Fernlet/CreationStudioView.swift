@@ -22,6 +22,10 @@ struct CreationStudioView: View {
     /// Whole-canvas snapshots, one per completed stroke. A stroke — not a cell — is the unit a user
     /// thinks in: one drag can paint dozens of cells, and undoing them one at a time would be useless.
     @State private var undoStack: [[Int]] = []
+    /// Per-slot canvas storage so switching slots stashes each drawing (and its undo history) instead of
+    /// destroying it. Keyed by slot, so every buffer is already at that slot's dimensions — restoring can
+    /// never index a wrong-sized grid, the hazard the old blank-on-switch was guarding against.
+    @State private var slotBuffers: [ItemSlot: (pixels: [Int], undoStack: [[Int]])] = [:]
     /// Mirror mode: painting one side also paints the horizontal mirror. Off by default — a mirror the
     /// user didn't ask for is more surprising than a toggle they have to find.
     @State private var isSymmetric = false
@@ -140,12 +144,20 @@ struct CreationStudioView: View {
             }
         }
         .pickerStyle(.segmented)
-        .onChange(of: slot) { _, newSlot in
-            // Resizing the canvas discards the current art (only reachable while creating a new item).
-            pixels = Self.blankPixels(for: newSlot)
-            // The history belongs to the old canvas — its snapshots are the wrong dimensions, so undoing
-            // into them would index a 48×40 buffer with 36×16 offsets and scramble the art.
-            undoStack.removeAll()
+        .onChange(of: slot) { oldSlot, newSlot in
+            guard oldSlot != newSlot else { return }
+            // Stash the slot we're leaving so its drawing — and its undo history — survives the trip.
+            slotBuffers[oldSlot] = (pixels, undoStack)
+            // Restore the slot we're entering, or start it blank. Each buffer was captured at its own
+            // slot's dimensions, so pixels + undoStack always move together and can never mismatch the
+            // grid (the corruption the old blank-and-clear was avoiding).
+            if let saved = slotBuffers[newSlot] {
+                pixels = saved.pixels
+                undoStack = saved.undoStack
+            } else {
+                pixels = Self.blankPixels(for: newSlot)
+                undoStack.removeAll()
+            }
         }
     }
 
@@ -168,7 +180,7 @@ struct CreationStudioView: View {
             Button {
                 isSymmetric.toggle()
             } label: {
-                Label("Mirror", systemImage: isSymmetric ? "square.righthalf.filled" : "square.righthalf.filled")
+                Label("Mirror", systemImage: isSymmetric ? "square.righthalf.filled" : "rectangle.split.2x1")
                     .font(.fernlet(.label))
             }
             .buttonStyle(.plain)
@@ -188,6 +200,7 @@ struct CreationStudioView: View {
             rows: slot.gridRows,
             palette: palette,
             onStrokeBegan: { pushUndoSnapshot() },
+            onStrokeCancelled: { cancelStroke() },
             onPaintCell: { x, y in paintCell(x: x, y: y) }
         )
         .aspectRatio(CGFloat(slot.gridCols) / CGFloat(slot.gridRows), contentMode: .fit)
@@ -307,6 +320,9 @@ struct CreationStudioView: View {
     /// confirmation step.
     private var clearCanvasButton: some View {
         Button(role: .destructive) {
+            // Snapshot before blanking so Clear is a single undoable step; guard skips a no-op snapshot on
+            // an already-blank canvas.
+            if !isCanvasBlank { pushUndoSnapshot() }
             pixels = Self.blankPixels(for: slot)
         } label: {
             Label("Clear canvas", systemImage: "trash")
@@ -478,6 +494,32 @@ struct CreationStudioView: View {
         pixels = previous
     }
 
+    /// A zoom/pan interrupted a stroke mid-drag: pop the snapshot that stroke pushed in `onStrokeBegan`
+    /// back into `pixels`, so a staggered-pinch stray dab is reverted rather than left painted. Reuses the
+    /// undo machinery — the interrupted stroke's snapshot is exactly the top of the stack.
+    private func cancelStroke() {
+        undo()
+    }
+
+    /// Persists the freshly-drawn item on the create path and returns its id. The id is the stable
+    /// `draftID` — NOT a fresh UUID per call — so the rename-and-retry loop after a `.nameFlagged` /
+    /// `.capReached` / `.storeBanned` alert re-saves the SAME row (an upsert) instead of stacking a
+    /// duplicate item on every attempt. Internal (not private) so the retry-dedup test can drive it.
+    @discardableResult
+    func persistDraftItem(named finalName: String, texture: ItemGridTexture) -> UUID {
+        let item = CustomizationItem(
+            id: editingItem?.id ?? draftID,
+            name: finalName,
+            slot: slot,
+            texture: texture,
+            designer: ItemDesigner(id: store.localDesignerID),
+            isShareable: false,
+            price: ClothingShopLimits.clampedPrice(price)
+        )
+        store.saveCustomItem(item)
+        return item.id
+    }
+
     private func save() {
         guard canSave else { return }
         let texture = ItemGridTexture(cols: slot.gridCols, rows: slot.gridRows, palette: palette, pixels: pixels)
@@ -496,17 +538,8 @@ struct CreationStudioView: View {
             store.saveCustomItem(updated)
             itemID = updated.id
         } else {
-            let item = CustomizationItem(
-                name: finalName,
-                slot: slot,
-                texture: texture,
-                designer: ItemDesigner(id: store.localDesignerID),
-                isShareable: false,
-                price: ClothingShopLimits.clampedPrice(price)
-            )
-            store.saveCustomItem(item)
-            store.equipCustomItem(id: item.id, slot: slot)
-            itemID = item.id
+            itemID = persistDraftItem(named: finalName, texture: texture)
+            store.equipCustomItem(id: itemID, slot: slot)
         }
 
         guard canSell, isShareable else {

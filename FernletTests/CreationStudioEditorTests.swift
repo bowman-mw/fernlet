@@ -144,6 +144,25 @@ struct CreationStudioEditorTests {
         }
     }
 
+    /// Regression (#1): the rename-and-retry loop after a `.nameFlagged` / `.capReached` / `.storeBanned`
+    /// shop alert keeps the user on the confirmation screen to re-save. The create path must persist the
+    /// item under the stable `draftID`, so a second save upserts the SAME row rather than minting a new
+    /// one. Pre-fix `save()` built a fresh random UUID on every call, so the retry added a second row —
+    /// against that code this assertion reads `customItems.count == 2` and fails.
+    @Test func resavingTheSameDraftUpsertsOneRowRatherThanDuplicating() {
+        let store = makeTestStore()
+        let view = CreationStudioView(store: store)
+        var texture = ItemGridTexture.blank(for: .body, palette: palette)
+        texture.pixels[0] = 3
+
+        // First save, then the rename-and-retry re-save — same editor session, so same draftID.
+        view.persistDraftItem(named: "sweater", texture: texture)
+        view.persistDraftItem(named: "sweater (renamed)", texture: texture)
+
+        #expect(store.customItems.count == 1)
+        #expect(store.customItems.first?.name == "sweater (renamed)")
+    }
+
     /// The 2× raise must keep each slot's aspect ratio identical, because the on-body placement derives
     /// an item's height from its stored texture aspect — a changed aspect would move existing art.
     @Test func doubledGridsPreserveTheOriginalAspectRatios() {

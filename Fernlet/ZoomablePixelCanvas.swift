@@ -21,6 +21,9 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
     let palette: [String]
     /// Called once at the start of each paint stroke (a drag or a tap), so the editor can snapshot for undo.
     var onStrokeBegan: () -> Void
+    /// Called when a zoom/pan begins while a stroke is in flight, so the editor can revert that stroke
+    /// (pop the snapshot `onStrokeBegan` pushed). Fires only when a stroke was actually in progress.
+    var onStrokeCancelled: () -> Void
     /// Called with the grid cell under the touch for every paint sample. The editor applies the colour +
     /// symmetry.
     var onPaintCell: (Int, Int) -> Void
@@ -60,11 +63,46 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
     final class Coordinator: NSObject, UIScrollViewDelegate, UIGestureRecognizerDelegate {
         var parent: ZoomablePixelCanvas
         private var isStroking = false
+        /// True while a zoom/pan owns the touches: paint is a no-op until the interaction ends. Guards
+        /// the staggered pinch where the first finger crosses the pan threshold before the second lands.
+        private var paintSuppressed = false
 
         init(_ parent: ZoomablePixelCanvas) { self.parent = parent }
 
         func viewForZooming(in scrollView: UIScrollView) -> UIView? {
             (scrollView as? ZoomScrollView)?.content
+        }
+
+        // A pinch or a two-finger pan started: stop painting for the rest of this touch sequence, and
+        // revert any stroke a staggered first finger already began.
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+            suppressPainting()
+        }
+
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            suppressPainting()
+        }
+
+        // Counterparts to the "will begin" hooks above — reliably called when the scroll/zoom interaction
+        // ends, so the suppression flag can never get stuck and wedge painting.
+        func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+            paintSuppressed = false
+        }
+
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            if !decelerate { paintSuppressed = false }
+        }
+
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            paintSuppressed = false
+        }
+
+        private func suppressPainting() {
+            paintSuppressed = true
+            if isStroking {
+                isStroking = false
+                parent.onStrokeCancelled()
+            }
         }
 
         // One-finger paint must coexist with the scroll view's pinch (and its 2-finger pan) — they engage
@@ -78,9 +116,11 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
             guard let content = gesture.view else { return }
             switch gesture.state {
             case .began:
+                guard !paintSuppressed else { return }
                 beginStroke()
                 paint(at: gesture.location(in: content), in: content)
             case .changed:
+                guard !paintSuppressed else { return }
                 paint(at: gesture.location(in: content), in: content)
             case .ended, .cancelled, .failed:
                 isStroking = false
@@ -91,6 +131,7 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
 
         @objc func handlePaintTap(_ gesture: UITapGestureRecognizer) {
             guard let content = gesture.view else { return }
+            guard !paintSuppressed else { return }
             beginStroke()
             paint(at: gesture.location(in: content), in: content)
             isStroking = false
