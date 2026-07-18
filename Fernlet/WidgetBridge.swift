@@ -119,6 +119,33 @@ struct WidgetSnapshotFileStore {
         return success && coordinatorError == nil
     }
 
+    /// Optimistic +1-water bump so a Siri/Shortcuts "log water" reflects instantly, exactly like the
+    /// widget's own "+1" button (`WidgetSnapshotStore.applyOptimisticWaterPlusOne`). The app remains the
+    /// source of truth and republishes the real snapshot on its next save/foreground. Kept byte-identical
+    /// to the widget-side twin (same clamp, day-rollover branch, and write options).
+    func applyOptimisticWaterPlusOne(dayKey: String) {
+        var coordinatorError: NSError?
+        let coordinator = NSFileCoordinator()
+        coordinator.coordinate(readingItemAt: fileURL, options: .withoutChanges,
+                               writingItemAt: fileURL, options: .forReplacing,
+                               error: &coordinatorError) { readURL, writeURL in
+            guard fileManager.fileExists(atPath: readURL.path),
+                  let data = try? Data(contentsOf: readURL),
+                  var snapshot = try? WidgetBridgeFiles.makeDecoder().decode(WidgetSnapshot.self, from: data) else { return }
+            if snapshot.dateKey == dayKey {
+                snapshot.bottleCount = min(snapshot.bottleCount + 1, 30)
+            } else {
+                // Day rolled over since the app last published: show the fresh day's first bottle.
+                // (Score/macros briefly show yesterday's values — the app corrects on next open.)
+                snapshot.dateKey = dayKey
+                snapshot.bottleCount = 1
+            }
+            snapshot.computedAt = Date()
+            guard let encoded = try? WidgetBridgeFiles.makeEncoder().encode(snapshot) else { return }
+            try? encoded.write(to: writeURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        }
+    }
+
     /// Removes the mirrored snapshot file. Called by "delete everything": the widget renders straight
     /// off these bytes, so without this the user's score, water count and macros keep glowing on the
     /// Home and Lock Screen after they were told the data was deleted.
@@ -172,8 +199,12 @@ struct PendingWidgetActionQueue {
         return result
     }
 
-    /// Idempotent by row id (a duplicate id is dropped) — mirrors the widget-side writer.
-    func append(_ action: PendingWidgetAction) {
+    /// Idempotent by row id (a duplicate id is dropped) — mirrors the widget-side writer. Returns whether
+    /// the row is durably queued (an already-present id counts as success); callers that need to confirm
+    /// the log landed (the Siri intent) check it, everyone else ignores it via `@discardableResult`.
+    @discardableResult
+    func append(_ action: PendingWidgetAction) -> Bool {
+        var success = false
         var coordinatorError: NSError?
         let coordinator = NSFileCoordinator()
         coordinator.coordinate(readingItemAt: fileURL, options: .withoutChanges,
@@ -185,10 +216,14 @@ struct PendingWidgetActionQueue {
                let decoded = try? WidgetBridgeFiles.makeDecoder().decode([PendingWidgetAction].self, from: data) {
                 records = decoded
             }
-            guard !records.contains(where: { $0.id == action.id }) else { return }
+            guard !records.contains(where: { $0.id == action.id }) else {
+                success = true  // already durably queued
+                return
+            }
             records.append(action)
-            write(records, to: writeURL)
+            success = write(records, to: writeURL)
         }
+        return success && coordinatorError == nil
     }
 
     /// Atomically takes every queued row and clears the file in ONE coordinated read+write, so a
@@ -225,13 +260,16 @@ struct PendingWidgetActionQueue {
         }
     }
 
-    private func write(_ records: [PendingWidgetAction], to url: URL) {
+    @discardableResult
+    private func write(_ records: [PendingWidgetAction], to url: URL) -> Bool {
         do {
             try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             let data = try WidgetBridgeFiles.makeEncoder().encode(records)
             try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            return true
         } catch {
             // Best-effort: an unwritable queue file degrades to "widget taps apply on next drain".
+            return false
         }
     }
 }

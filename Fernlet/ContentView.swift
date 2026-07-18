@@ -217,6 +217,10 @@ struct ContentView: View {
                     store.reconcileCoinLedger()
                     // Body signals refresh (debounced to >= 30 min inside the service).
                     Task { await stressService.refreshIfNeeded() }
+                    // Belt-and-braces for the foreground App Intent deep-link: the `requestNotification`
+                    // above is the primary path, but if a token is present when the scene reactivates
+                    // (and within its expiry window), honor it here too.
+                    consumePendingNotificationSheet()
                     if selectedTab == .social { startFriendsDiscovery() }
                 } else if selectedTab == .social {
                     stopFriendsDiscovery()
@@ -224,6 +228,13 @@ struct ContentView: View {
                 updateRecipeShareListener()
             }
             .onReceive(NotificationCenter.default.publisher(for: FernletNotificationDelegate.pendingSheetRequestNotification)) { _ in
+                consumePendingNotificationSheet()
+            }
+            // A foreground App Intent (#6, "Log a meal"/"Write in my journal") posts this AFTER writing its
+            // deep-link token. On the warm path the system foregrounds this already-running view before the
+            // intent's `perform()` writes the token, so the scene-active handler above ran too early to see
+            // it — this event-driven consume is what actually opens the sheet.
+            .onReceive(NotificationCenter.default.publisher(for: PendingIntentSheet.requestNotification)) { _ in
                 consumePendingNotificationSheet()
             }
             .onChange(of: store.settings.allowNearbyPresence) { _, _ in

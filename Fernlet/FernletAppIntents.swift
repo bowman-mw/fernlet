@@ -20,15 +20,25 @@ struct LogWaterIntent: AppIntent {
         // Same app-group queue the widget's "+1 water" button appends to; the app drains it on next
         // foreground and applies the canonical diary mutation against this row's own day key.
         let now = Date()
-        PendingWidgetActionQueue().append(
+        let dayKey = FernletDate.dayKey(for: now)
+        let queued = PendingWidgetActionQueue().append(
             PendingWidgetAction(
                 id: UUID(),
-                dateKey: FernletDate.dayKey(for: now),
+                dateKey: dayKey,
                 action: PendingWidgetAction.waterPlusOne,
                 createdAt: now
             )
         )
-        WidgetCenter.shared.reloadAllTimelines()
+        // The queue write silently swallows I/O errors; only claim success when the row is durably
+        // enqueued, so the dialog doesn't promise a log that never happened.
+        guard queued else {
+            return .result(dialog: "Couldn't log that just now — please try again in a moment.")
+        }
+        // Optimistically bump the mirrored snapshot exactly like the widget's own "+1" button, so the
+        // count updates instantly instead of showing a stale value until the app is next foregrounded.
+        // The app's authoritative store-drain publish overwrites this value, same as for widget taps.
+        WidgetSnapshotFileStore().applyOptimisticWaterPlusOne(dayKey: dayKey)
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetSnapshotMirror.widgetKind)
         return .result(dialog: "Logged a bottle of water.")
     }
 }
@@ -64,16 +74,50 @@ enum PendingIntentSheet {
         case journal
     }
 
+    /// Posted right after `request(_:)` writes the token, so a resident ContentView consumes it on the
+    /// WARM path too. With `openAppWhenRun`, the system foregrounds an already-running app (scene goes
+    /// `.active`) BEFORE `perform()` writes the token, so nothing would otherwise read it. This mirrors
+    /// `FernletNotificationDelegate.pendingSheetRequestNotification`; cold launches still consume the
+    /// token from ContentView's startup task.
+    static let requestNotification = Notification.Name("fernlet.intent.pendingSheetRequest")
+
+    /// An intent-driven open should land within seconds. A token older than this was stranded (onboarding
+    /// still up, the app killed under a covering sheet, …) and must not hijack a later notification tap,
+    /// cold launch, or unrelated sheet dismissal, so `consume()` discards it.
+    private static let expiryWindow: TimeInterval = 120
+
     private static let defaultsKey = "fernlet.intent.pendingSheet"
 
-    static func request(_ target: Target) {
-        UserDefaults.standard.set(target.rawValue, forKey: defaultsKey)
+    /// The persisted token: which sheet + when it was requested (for the expiry gate).
+    private struct Request: Codable {
+        var target: String
+        var createdAt: Date
     }
 
-    /// Returns the requested target and clears it, so it's honored exactly once.
+    /// `createdAt` is injectable for tests only; call sites use the defaulted `request(.meal)` form.
+    static func request(_ target: Target, createdAt: Date = Date()) {
+        let payload = Request(target: target.rawValue, createdAt: createdAt)
+        if let data = try? JSONEncoder().encode(payload) {
+            UserDefaults.standard.set(data, forKey: defaultsKey)
+        }
+        // Delivered on the main queue so the SwiftUI observer mutates state on the main actor; the token
+        // is already written synchronously above, so the observer always sees it.
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: requestNotification, object: nil)
+        }
+    }
+
+    /// Returns the requested target and clears it, so it's honored exactly once. A token older than
+    /// `expiryWindow` (or any legacy/corrupt value) is cleared and discarded.
     static func consume() -> Target? {
-        guard let raw = UserDefaults.standard.string(forKey: defaultsKey) else { return nil }
+        guard let data = UserDefaults.standard.data(forKey: defaultsKey),
+              let payload = try? JSONDecoder().decode(Request.self, from: data) else {
+            // Clear any stale/legacy value so it can't wedge the slot.
+            UserDefaults.standard.removeObject(forKey: defaultsKey)
+            return nil
+        }
         UserDefaults.standard.removeObject(forKey: defaultsKey)
-        return Target(rawValue: raw)
+        guard Date().timeIntervalSince(payload.createdAt) <= expiryWindow else { return nil }
+        return Target(rawValue: payload.target)
     }
 }
