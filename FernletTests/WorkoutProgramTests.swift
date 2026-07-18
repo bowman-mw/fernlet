@@ -210,4 +210,114 @@ struct WorkoutProgramTests {
         // A very-ready strength user should be offered something more specific than full-body.
         #expect((ranked.first?.specificity.rawValue ?? 0) >= SplitSpecificity.focused.rawValue)
     }
+
+    // MARK: - Guided-session runner (WorkoutSessionRunner)
+
+    private func ex(_ name: String, sets: Int, role: SlotRole = .main, reps: String = "5", fromCatalog: Bool = true) -> PrescribedExercise {
+        PrescribedExercise(name: name, sets: sets, reps: reps, role: role, fromCatalog: fromCatalog)
+    }
+
+    /// A fixed clock + fixed rest so rest transitions are asserted without wall-clock flakiness.
+    private func makeRunner(_ exercises: [PrescribedExercise], goal: GoalType = .strength, restSeconds: Int = 90) -> WorkoutSessionRunner {
+        WorkoutSessionRunner(
+            exercises: exercises,
+            goal: goal,
+            now: { Date(timeIntervalSince1970: 1_000) },
+            restProvider: { _, _ in restSeconds }
+        )
+    }
+
+    @Test func runnerStartsIntoWorkingOnFirstSet() {
+        let runner = makeRunner([ex("Squat", sets: 3)])
+        #expect(runner.phase == .ready)
+        runner.start()
+        #expect(runner.phase == .working)
+        #expect(runner.exerciseIndex == 0)
+        #expect(runner.currentSet == 1)
+        #expect(runner.completedNaturally == false)
+    }
+
+    @Test func runnerWithNoExercisesGoesStraightToDoneWithoutCompletion() {
+        let runner = makeRunner([])
+        runner.start()
+        #expect(runner.phase == .done)
+        // Nothing to log: an empty session must not count as a completed workout.
+        #expect(runner.completedNaturally == false)
+    }
+
+    @Test func completeSetAdvancesSetThenRests() {
+        let runner = makeRunner([ex("Squat", sets: 3)], restSeconds: 90)
+        runner.start()
+        runner.completeSet()
+        #expect(runner.phase == .resting)
+        #expect(runner.currentSet == 2)                // counter points at the upcoming set
+        #expect(runner.restDuration == 90)
+        #expect(runner.restEndsAt == Date(timeIntervalSince1970: 1_090))  // fixed now + rest
+    }
+
+    @Test func lastSetOfAnExerciseAdvancesToNextExerciseWorkingNoRest() {
+        let runner = makeRunner([ex("Squat", sets: 2), ex("Bench", sets: 2)])
+        runner.start()
+        runner.completeSet()   // ex0 set1 done → rest, currentSet 2
+        runner.skipRest()      // → working ex0 set2
+        #expect(runner.exerciseIndex == 0)
+        #expect(runner.currentSet == 2)
+        runner.completeSet()   // last set of ex0 → next exercise, straight to working
+        #expect(runner.phase == .working)
+        #expect(runner.exerciseIndex == 1)
+        #expect(runner.currentSet == 1)
+        #expect(runner.restEndsAt == nil)
+    }
+
+    @Test func lastSetOfLastExerciseFinishesAndMarksCompleted() {
+        let runner = makeRunner([ex("Squat", sets: 1)])
+        runner.start()
+        runner.completeSet()
+        #expect(runner.phase == .done)
+        #expect(runner.completedNaturally == true)
+    }
+
+    @Test func skipRestResumesWorkingAndClearsTimer() {
+        let runner = makeRunner([ex("Squat", sets: 3)])
+        runner.start()
+        runner.completeSet()          // → resting on set 2
+        #expect(runner.phase == .resting)
+        runner.skipRest()
+        #expect(runner.phase == .working)
+        #expect(runner.currentSet == 2)
+        #expect(runner.restEndsAt == nil)
+    }
+
+    @Test func endAbortsWithoutMarkingCompleted() {
+        let runner = makeRunner([ex("Squat", sets: 3)])
+        runner.start()
+        runner.completeSet()          // mid-session, resting
+        runner.end()
+        #expect(runner.phase == .done)
+        #expect(runner.completedNaturally == false)   // aborted → nothing to log
+    }
+
+    @Test func descriptorLineWithZeroSetsIsWalkedAsOneStep() {
+        // Cardio/conditioning lines carry sets == 0; the runner must treat them as a single
+        // completable step, not loop or divide by zero.
+        let runner = makeRunner([ex("Easy cardio - 20 min", sets: 0, role: .accessory, reps: "", fromCatalog: false)])
+        runner.start()
+        #expect(runner.totalSetsForCurrent == 1)
+        runner.completeSet()
+        #expect(runner.phase == .done)
+        #expect(runner.completedNaturally == true)
+    }
+
+    @Test func restSecondsVaryByRoleAndGoalAsIntended() {
+        // Compounds rest longer than accessories, which rest longer than core.
+        #expect(WorkoutSessionRunner.restSeconds(for: .main, goal: .strength)
+                > WorkoutSessionRunner.restSeconds(for: .accessory, goal: .strength))
+        #expect(WorkoutSessionRunner.restSeconds(for: .accessory, goal: .strength)
+                > WorkoutSessionRunner.restSeconds(for: .core, goal: .strength))
+        // Strength-leaning goals rest a touch longer than the gentler goals for the same role.
+        #expect(WorkoutSessionRunner.restSeconds(for: .main, goal: .strength)
+                > WorkoutSessionRunner.restSeconds(for: .main, goal: .recovery))
+        // Never below a sane floor.
+        #expect(WorkoutSessionRunner.restSeconds(for: .core, goal: .recovery) >= 30)
+    }
 }

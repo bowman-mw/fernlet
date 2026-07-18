@@ -515,9 +515,20 @@ struct WorkoutSuggestionSheet: View {
     @State private var adjustRequest = ""
     @State private var isAdjusting = false
     @State private var didApplyReadiness = false
+    // Set when the user taps "Start guided workout"; presents the guided runner sheet. nil = closed.
+    @State private var guidedSession: WorkoutProgram.SessionSuggestion?
 
     private var aiAdjustAvailable: Bool {
         store.settings.aiStatus != .off && FoodSelectionAvailability.isFoundationModelAvailable
+    }
+
+    /// The session in the current plan worth *guiding* through — the first with real, set-based
+    /// exercises. Pure cardio/mobility/rest days have only descriptor lines (sets == 0) and return
+    /// nil, so the guided button is absent (the retroactive "Mark done" path still works).
+    private func guidableSession(in plan: WorkoutProgram.DayPlan) -> WorkoutProgram.SessionSuggestion? {
+        plan.sessions.first { session in
+            session.exercises.contains { $0.fromCatalog && $0.sets >= 1 }
+        }
     }
 
     /// Maps the derived intensity-readiness signal to a recommended workout intensity, if present.
@@ -559,6 +570,30 @@ struct WorkoutSuggestionSheet: View {
                                 .padding(16)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+                            }
+
+                            if let guidable = guidableSession(in: dayPlan) {
+                                Button {
+                                    guidedSession = guidable
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "play.circle.fill")
+                                            .font(.body.weight(.semibold))
+                                        Text("Start guided workout")
+                                            .font(.fernlet(.label))
+                                    }
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 15)
+                                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("workout.startGuided")
+
+                                Text("We'll walk you through it set by set and time your rests. Or mark it done below if you'd rather log it yourself.")
+                                    .font(.fernlet(.bubble))
+                                    .foregroundStyle(Color.slate)
+                                    .fernletWrappingText()
                             }
 
                             if aiAdjustAvailable {
@@ -675,6 +710,23 @@ struct WorkoutSuggestionSheet: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
+        }
+        .sheet(item: $guidedSession) { session in
+            GuidedWorkoutSheet(
+                session: session,
+                goal: store.settings.selectedGoal,
+                onComplete: {
+                    // Reuse the exact retroactive "Mark done" logging path so the guided session
+                    // counts identically, then close the whole flow back to the Move tab.
+                    store.addWorkout(session.workout(intensity: energy))
+                    store.recordCompletedExercises(session.catalogExerciseNames)
+                    guidedSession = nil
+                    dismiss()
+                }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
         }
     }
 
