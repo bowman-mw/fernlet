@@ -140,6 +140,11 @@ struct LogIntimacySheet: View {
                 try? await Task.sleep(for: .seconds(1.8))
             }
             dismiss()
+        } catch is IntimacyTrackingHiddenError {
+            // The derived gate flipped to hidden while this sheet was open (a Settings toggle or a
+            // profile edit mid-session) and the funnel refused the seal. A raw Foundation error string
+            // would be alarming here — say what happened gently instead.
+            statusMessage = "Intimacy tracking was just hidden in Settings, so this entry wasn't saved. You can turn it back on any time to keep logging."
         } catch {
             statusMessage = error.localizedDescription
         }

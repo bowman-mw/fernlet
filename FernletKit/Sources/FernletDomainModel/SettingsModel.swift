@@ -63,15 +63,21 @@ public nonisolated struct FernletSettings: Codable {
     /// cosmetic sub-options that still read the data. Hidden NEVER deletes — the sealed rows survive
     /// and re-appear if un-hidden.
     public var periodTrackingVisible: Bool? = nil
-    /// One-time marker for the period-visibility gate. Fresh installs start `true` (nothing to migrate —
-    /// they derive from `sex`). A settings blob that predates the gate decodes this as `false` (key
+    /// One-time marker for the period-visibility gate: `true` means "a build really DETERMINED the
+    /// visibility state this blob carries". It is minted only at a real determination — the one-time
+    /// pin/derivation in `reconcilingSensitiveVisibility`, onboarding completion (which just captured
+    /// `sex`, making derive-from-`sex` a current choice), or an explicit Settings toggle — and NEVER as
+    /// a passive default: the memberwise default is `false`, so the synthesized missing-record database
+    /// a fresh install starts from (while it waits for its first CloudKit pull) cannot masquerade as an
+    /// already-migrated blob, mark the device "resolved" with pristine values, or write a blob other
+    /// devices would trust. A settings blob that predates the gate also decodes this as `false` (key
     /// absent) — the signal that pins `periodTrackingVisible = true` once so an existing cycle-tracking
     /// user doesn't silently lose the feature to `sex`'s `.male` default. Unlike the widget markers, the
     /// pin is NOT applied in `init(from:)`: a pre-gate peer that re-encodes the synced blob DROPS this key,
     /// which would make the pin re-fire and re-open a deliberately hidden surface. The pin/derivation runs
     /// in `reconcilingSensitiveVisibility`, gated on a device-local marker a pre-gate peer can never
-    /// rewrite; this field's decoded value is that reconciliation's up-to-date-vs-dropped discriminator.
-    public var didMigratePeriodVisibility: Bool = true
+    /// rewrite; this field's decoded value is that reconciliation's determined-vs-undetermined discriminator.
+    public var didMigratePeriodVisibility: Bool = false
     /// Whether intimate-activity logging is visible. Default ON so this preserves today's behavior
     /// exactly, and so the flag only deviates from its default in the benign direction (turned OFF) —
     /// a default-OFF flag reading `true` would positively signal "this user tracks intimacy" to
@@ -215,11 +221,12 @@ public nonisolated struct FernletSettings: Codable {
         showCalories = try container.decodeIfPresent(Bool.self, forKey: .showCalories) ?? false
         hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
         // Decode the visibility gate RAW and deterministically — the one-time pin migration does NOT
-        // fire here. Absent `didMigratePeriodVisibility` ⇒ `false` (a pre-gate/legacy blob), preserved as
-        // the discriminator the device-local reconciliation reads: an UP-TO-DATE build always encodes it
-        // `true`, so `false`-on-decode means "a build that predates this gate wrote (or re-encoded) this
-        // blob." Pure decode stays side-effect-free (no keychain/UserDefaults read), so it can't depend on
-        // device-local state.
+        // fire here. Absent `didMigratePeriodVisibility` ⇒ `false`, preserved as the discriminator the
+        // device-local reconciliation reads: a build that really determined the visibility state encodes
+        // it `true`, so `false`-on-decode means "no determination is represented here" — a pre-gate
+        // blob, a pre-gate peer's key-dropping re-encode, or an up-to-date device that has not
+        // determined anything yet. Pure decode stays side-effect-free (no keychain/UserDefaults read),
+        // so it can't depend on device-local state.
         //
         // Why the pin moved OUT of `init(from:)`: on a mixed-version multi-device sync, a SECOND device on
         // a pre-gate build decodes the synced settings and re-encodes with only the keys it knows —
@@ -349,37 +356,91 @@ public extension FernletSettings {
     /// Returns the reconciled settings, the resolution to persist device-locally, and whether the settings
     /// themselves changed (so the caller can schedule a snapshot save). Pure — no I/O.
     ///
-    /// - Fresh device (`!deviceLocal.resolved`): run the one-time migration exactly as before — pin an
-    ///   existing cycle user visible so `sex`'s `.male` default can't silently hide the feature.
-    /// - Resolved device + blob's migration marker ABSENT (`!didMigratePeriodVisibility`): a pre-gate peer
-    ///   re-encoded the synced blob and dropped the visibility keys. Re-assert this device's resolved
-    ///   values (fail-closed) — do NOT let the pin re-fire to visible / intimacy default back to visible.
-    /// - Resolved device + marker present: an up-to-date peer wrote this blob. Trust its explicit values
-    ///   (a real cross-device hide/show) and just refresh the device-local record.
+    /// A resolution is only ever minted from EVIDENCE of a real determination, never from a pristine
+    /// default state. A fresh install's synthesized missing-record database is indistinguishable from a
+    /// carefully-defaulted real blob at the value level, and marking it "resolved" would poison the
+    /// sidecar: when the real account blob finally syncs in, a pre-gate blob would be met with a
+    /// re-assert of pristine values instead of the migration pin — an existing cycle-tracking user
+    /// restoring a new phone would silently lose the feature to `sex`'s `.male` default, the exact
+    /// failure the pin exists to prevent. Evidence is the marker itself (`didMigratePeriodVisibility ==
+    /// true` is only ever written at a real determination — see its declaration) or the pin actually
+    /// firing below; explicit local choices mint the resolution at their own seam
+    /// (`FernletStore.recordSensitiveVisibilityResolution`).
+    ///
+    /// - Marker present: a build really determined this state. Trust/adopt its values (a real
+    ///   cross-device hide/show reaching a resolved device, or a restored post-gate blob resolving a
+    ///   fresh one) and refresh the device-local record.
+    /// - Fresh device + marker absent + real prior usage (`hasCompletedOnboarding`): a pre-gate user's
+    ///   blob — run the one-time migration: pin an existing cycle user visible so `sex`'s `.male`
+    ///   default can't silently hide the feature.
+    /// - Fresh device + marker absent + no prior usage: an undetermined blank slate (the synthesized
+    ///   default database, or a first launch that hasn't finished onboarding). Change nothing and stay
+    ///   genuinely unresolved, so a later sync-in still gets the branch it deserves.
+    /// - Resolved device + marker ABSENT: a pre-gate peer re-encoded the synced blob and dropped the
+    ///   visibility keys. Re-assert this device's resolved values (fail-closed) — do NOT let the pin
+    ///   re-fire to visible / intimacy default back to visible. The marker is stamped back (and a save
+    ///   requested) ONLY when the re-asserted values really deviate from the pristine defaults:
+    ///   re-encoding a reconstruction of `(nil, visible)` under a `true` marker would launder the
+    ///   key-dropped blob into one an up-to-date HIDDEN peer trusts into re-opening, while writing it
+    ///   adds no information any decoder wouldn't reconstruct from the absent keys anyway.
+    ///
+    /// Residual (documented honestly): a genuinely FRESH device receiving a key-dropped blob cannot
+    /// distinguish it from a genuine pre-gate account (the blob carries no provenance and the device has
+    /// no sidecar), so the pin fires visible and its marker-stamped save can propagate visible to
+    /// devices that had resolved hidden — unchanged from the original pin design. Two narrow cases on
+    /// fresh devices: a pre-gate user who never finished onboarding gets no pin (harmless — nothing was
+    /// trackable before onboarding), and completing onboarding BEFORE the first account pull writes a
+    /// marker-true derive/visible blob that resolved-hidden peers trust (last-writer-wins settings; far
+    /// narrower than the automatic first-save race this design closes). The previously documented
+    /// residual — a fresh install pulling a pre-gate blob re-asserting pristine values instead of
+    /// pinning — is FIXED by staying unresolved on the blank slate.
     func reconcilingSensitiveVisibility(
         deviceLocal: SensitiveVisibilityResolution
     ) -> (settings: FernletSettings, resolution: SensitiveVisibilityResolution, settingsChanged: Bool) {
         var reconciled = self
         var settingsChanged = false
+        var resolution = deviceLocal
 
-        if !deviceLocal.resolved {
-            if !reconciled.didMigratePeriodVisibility {
+        if reconciled.didMigratePeriodVisibility {
+            // A real determination (the marker is never a passive default) — trust/adopt its values.
+            resolution = SensitiveVisibilityResolution(
+                resolved: true,
+                periodTrackingVisible: reconciled.periodTrackingVisible,
+                intimacyTrackingVisible: reconciled.intimacyTrackingVisible
+            )
+        } else if !deviceLocal.resolved {
+            if reconciled.hasCompletedOnboarding {
+                // A real user's blob with no determination ⇒ pre-gate (or a pre-gate re-encode): the
+                // one-time pin. An explicit value, if one somehow survived, outranks the pin.
                 if reconciled.periodTrackingVisible == nil { reconciled.periodTrackingVisible = true }
                 reconciled.didMigratePeriodVisibility = true
                 settingsChanged = true
+                resolution = SensitiveVisibilityResolution(
+                    resolved: true,
+                    periodTrackingVisible: reconciled.periodTrackingVisible,
+                    intimacyTrackingVisible: reconciled.intimacyTrackingVisible
+                )
             }
-        } else if !reconciled.didMigratePeriodVisibility {
+            // else: blank slate — nothing was ever determined; stay genuinely unresolved.
+        } else {
+            // Mixed-version key-drop on a resolved device: re-assert this device's values fail-closed.
             reconciled.periodTrackingVisible = deviceLocal.periodTrackingVisible
             reconciled.intimacyTrackingVisible = deviceLocal.intimacyTrackingVisible
-            reconciled.didMigratePeriodVisibility = true
-            settingsChanged = true
+            let reassertsPristineDefaults = deviceLocal.periodTrackingVisible == nil
+                && deviceLocal.intimacyTrackingVisible
+            if !reassertsPristineDefaults {
+                // A real deviation is worth re-writing under the marker so it propagates (and so a
+                // hidden choice repairs the synced blob). A pristine reconstruction is NOT stamped —
+                // see the laundering note above.
+                reconciled.didMigratePeriodVisibility = true
+                settingsChanged = true
+            }
+            resolution = SensitiveVisibilityResolution(
+                resolved: true,
+                periodTrackingVisible: reconciled.periodTrackingVisible,
+                intimacyTrackingVisible: reconciled.intimacyTrackingVisible
+            )
         }
-
-        let resolution = SensitiveVisibilityResolution(
-            resolved: true,
-            periodTrackingVisible: reconciled.periodTrackingVisible,
-            intimacyTrackingVisible: reconciled.intimacyTrackingVisible
-        )
         return (reconciled, resolution, settingsChanged)
     }
 }

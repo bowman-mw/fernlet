@@ -591,7 +591,9 @@ final class FernletStore {
     /// Applies the one-time period-visibility migration + the mixed-version fail-closed guard against the
     /// just-loaded settings, using the device-local marker (see `FernletSettings.reconcilingSensitiveVisibility`).
     /// Runs at every settings load/apply. Persists a re-asserted/migrated flip so it survives and syncs from
-    /// an up-to-date device; always refreshes the device-local record.
+    /// an up-to-date device; refreshes the device-local record only when a real determination exists — a
+    /// blank-slate first load (the synthesized missing-record default) stays genuinely UNRESOLVED, so the
+    /// real account blob arriving via sync still gets the migration pin instead of a pristine re-assert.
     private func reconcileSensitiveSurfaceVisibility() {
         let deviceLocal = loadSensitiveVisibilityResolution()
         let result = settings.reconcilingSensitiveVisibility(deviceLocal: deviceLocal)
@@ -2087,6 +2089,10 @@ final class FernletStore {
 
     func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {
         diary.completeOnboarding(profile: profile, preferences: preferences, goal: goal)
+        // Onboarding is the fresh-install visibility determination point (the migration marker is
+        // stamped inside `DiaryStore.completeOnboarding`). Record it in the device-local sidecar too,
+        // so a later mixed-version key-drop re-asserts this state instead of re-running the pin.
+        recordSensitiveVisibilityResolution()
     }
 
     @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput]) -> RecipeDefinition {

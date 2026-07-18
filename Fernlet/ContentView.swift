@@ -224,7 +224,7 @@ struct ContentView: View {
                     // Body signals refresh (debounced to >= 30 min inside the service).
                     Task { await stressService.refreshIfNeeded() }
                     // Belt-and-braces for the foreground App Intent deep-link: the `requestNotification`
-                    // above is the primary path, but if a token is present when the scene reactivates
+                    // handler below is the primary path, but if a token is present when the scene reactivates
                     // (and within its expiry window), honor it here too.
                     consumePendingNotificationSheet()
                     if selectedTab == .social { startFriendsDiscovery() }
@@ -635,7 +635,11 @@ struct ContentView: View {
         // `(try? …) != nil` rather than a bare `try?`: a throw here means the user's sealed rows are
         // still on disk, and the dialog promises they are gone. The failure has to reach the outcome.
         store.periodDataDeleteHook = { (try? MenstrualNarrativeRepository().deleteAll()) != nil }
-        store.intimacyDataDeleteHook = { (try? IntimacyLogRepository().deleteAll()) != nil }
+        // Routed through the gated funnel rather than constructing a raw repository — every intimacy
+        // touch goes through `IntimacyLogStore` (pinned by the app-target source grep in
+        // `SensitiveSurfaceGateTests`). Its `deleteAll` is deliberately UNGATED (drops rows without
+        // decrypting), so the wipe still works while hidden and while locked.
+        store.intimacyDataDeleteHook = { [intimacyStore] in (try? intimacyStore.deleteAll()) != nil }
         store.journalDataDeleteHook = { (try? JournalNarrativeRepository().deleteAll()) != nil }
         // Cycle notes written while the app was locked live in a file, not in the rows above. The lock
         // service owns the buffer, so the store can only reach it through a hook.

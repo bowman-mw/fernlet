@@ -1,9 +1,11 @@
+import Combine
 import CoreData
 import CryptoKit
 import Foundation
 import Testing
 import FernletDomainModel
 import FernletLock
+import FernletPersistence
 import HealthKitGateway
 import LocalPersistence
 import PrivateHealthStore
@@ -346,6 +348,105 @@ struct SensitiveSurfaceGateTests {
         try JSONSerialization.data(withJSONObject: database).write(to: url)
     }
 
+    // MARK: - Fresh-install first load vs the real account blob (final-review finding)
+
+    /// A pre-gate database from a REAL user: months of use (onboarding completed), no visibility keys,
+    /// no migration marker — what the account blob of an existing cycle-tracking user looks like when a
+    /// fresh device's first sync pull finally lands.
+    private func writePreGateUserDatabase(to url: URL) throws {
+        var settings = FernletSettings()
+        settings.hasCompletedOnboarding = true
+        settings.userProfile.age = 30
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        var settingsObject = try #require(
+            JSONSerialization.jsonObject(with: try encoder.encode(settings)) as? [String: Any])
+        settingsObject.removeValue(forKey: "didMigratePeriodVisibility")
+        settingsObject.removeValue(forKey: "periodTrackingVisible")
+        settingsObject.removeValue(forKey: "intimacyTrackingVisible")
+        let database: [String: Any] = ["settings": settingsObject]
+        try JSONSerialization.data(withJSONObject: database).write(to: url)
+    }
+
+    /// The restore-regression half of the finding: on a fresh install with iCloud, the FIRST snapshot
+    /// the store loads is the repository's synthesized missing-record DEFAULT — pristine values that
+    /// are NOT a determination. The old code still minted `resolved = true` from them into the sidecar,
+    /// so when the real pre-gate account blob arrived via sync, the reconcile took the resolved branch
+    /// and re-asserted `(nil, visible)` instead of running the pin — an existing cycle-tracking user
+    /// restoring a new phone silently lost period tracking to `sex`'s `.male` default. The empty first
+    /// load must stay genuinely unresolved so the blob's `apply` runs the one-time migration pin.
+    /// Delivered through the REAL remote-change path (coordinator subscription → reload → apply).
+    @Test func freshInstallPullingAPreGateBlobRunsThePinNotAPristineReassert() async throws {
+        let suiteName = "gate-freshpull-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        // Fresh install: no record yet — the repository serves the synthesized default database.
+        let remote = RemoteSwappableRepository(
+            current: LocalFernletRepository(fileURL: temporaryDatabaseURL("gate-freshpull-empty")))
+        let store = FernletStore(repository: remote, sensitiveVisibilityDefaults: defaults)
+        #expect(store.settings.periodTrackingVisible == nil)
+        // Flush the init-scheduled save NOW so the reload below (which flushes pending saves before
+        // loading, as the real path does) can't clobber the just-arrived blob with pristine state.
+        store.flushPendingSnapshotSave()
+
+        // The real account blob arrives from sync: a pre-gate cycle-tracking user's settings.
+        let blobURL = temporaryDatabaseURL("gate-freshpull-blob")
+        try writePreGateUserDatabase(to: blobURL)
+        remote.current = LocalFernletRepository(fileURL: blobURL)
+        remote.simulateRemoteChange()
+
+        // The remote-reload path debounces (750ms); wait for apply() to land.
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(10))
+        while store.settings.periodTrackingVisible != true, clock.now < deadline {
+            try? await clock.sleep(for: .milliseconds(25))
+        }
+        #expect(store.settings.periodTrackingVisible == true,
+                "the one-time pin must fire for a pre-gate blob on a genuinely fresh device")
+        #expect(store.settings.didMigratePeriodVisibility)
+        #expect(store.isPeriodTrackingVisible)
+    }
+
+    /// The laundering half: the fresh device's own FIRST save (before any real blob has arrived) must
+    /// not stamp `didMigratePeriodVisibility = true` onto pristine values — a blob claiming an
+    /// up-to-date determination it never made. A properly-resolved-HIDDEN device syncing such a blob in
+    /// would trust the marker, re-open its hidden surfaces, and overwrite its own sidecar with
+    /// `(nil, visible)` — permanently erasing the fail-closed defense.
+    @Test func freshDeviceFirstSaveDoesNotClaimAVisibilityDetermination() throws {
+        let suiteName = "gate-freshsave-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let url = temporaryDatabaseURL("gate-freshsave")
+        let store = FernletStore(
+            repository: LocalFernletRepository(fileURL: url),
+            sensitiveVisibilityDefaults: defaults
+        )
+        // Any benign first-session mutation (init also schedules one for the designer-id mint).
+        store.setCompanionName("Fern")
+        store.flushPendingSnapshotSave()
+
+        let database = try #require(
+            JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let settingsObject = try #require(database["settings"] as? [String: Any])
+        #expect(settingsObject["didMigratePeriodVisibility"] as? Bool == false,
+                "an undetermined fresh device must not write an up-to-date migration marker")
+
+        // End-to-end: a resolved-HIDDEN device syncing this blob in keeps re-asserting hidden rather
+        // than trusting it as an up-to-date determination.
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(
+            FernletSettings.self,
+            from: JSONSerialization.data(withJSONObject: settingsObject))
+        let hiddenElsewhere = SensitiveVisibilityResolution(
+            resolved: true, periodTrackingVisible: false, intimacyTrackingVisible: false)
+        let reconciled = decoded.reconcilingSensitiveVisibility(deviceLocal: hiddenElsewhere)
+        #expect(reconciled.settings.periodTrackingVisible == false)
+        #expect(!reconciled.settings.intimacyTrackingVisible)
+    }
+
     // MARK: - Intimacy sealed-note decrypt seam (#5, mirrors PeriodTracker's gate)
 
     private func makeIntimacyStore(context: NSManagedObjectContext) -> IntimacyLogStore {
@@ -408,6 +509,84 @@ struct SensitiveSurfaceGateTests {
         #expect(throws: IntimacyTrackingHiddenError.self) {
             try unwired.insert(IntimacyLog(eventDate: Date(), note: "blocked by default"), contentKey: key)
         }
+    }
+
+    /// Pins the funnel WIRING, not just the funnel: the store-level gate tests above stay green even if
+    /// a call site regresses back to constructing a raw `IntimacyLogRepository` (the pre-#5 shape) and
+    /// reads/writes around the gate. So grep the APP TARGET's sources — every intimacy touch must go
+    /// through the gated `IntimacyLogStore` (whose default init builds the repository INSIDE the
+    /// `PrivateHealthStore` module, the one sanctioned construction site). Mirrors the
+    /// `S3BoundaryTests` grep-wall approach.
+    @Test func appTargetNeverConstructsARawIntimacyLogRepository() throws {
+        let appRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // FernletTests
+            .deletingLastPathComponent()   // repo root
+            .appendingPathComponent("Fernlet")
+        let enumerator = try #require(
+            FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil),
+            "app-target source root not found — moved?")
+        var scanned = 0
+        var offenders: [String] = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            scanned += 1
+            if source.contains("IntimacyLogRepository(") {
+                offenders.append(url.lastPathComponent)
+            }
+        }
+        // Guard against a vacuous pass if the root moves or the enumerator breaks.
+        #expect(scanned > 50, "app-target scan collapsed to \(scanned) files — discovery is broken")
+        #expect(offenders.isEmpty,
+                "raw IntimacyLogRepository constructed outside the gated IntimacyLogStore funnel: \(offenders)")
+    }
+}
+
+/// A repository wrapper that delivers a "remote change" through the REAL sync path — the coordinator
+/// subscription (`SnapshotSaveCoordinator.subscribeRemote`) → debounced reload → `FernletStore.apply` —
+/// exactly as a CloudKit push does. `current` is swappable so a store can boot against one database
+/// (the synthesized fresh-install default) and then "receive" another (the account blob).
+private final class RemoteSwappableRepository: RemoteChangePublishingRepository {
+    var current: FernletRepository
+    private let remoteChangeSubject = PassthroughSubject<Void, Never>()
+
+    init(current: FernletRepository) {
+        self.current = current
+    }
+
+    var remoteChangePublisher: AnyPublisher<Void, Never> {
+        remoteChangeSubject.eraseToAnyPublisher()
+    }
+
+    func simulateRemoteChange() {
+        remoteChangeSubject.send(())
+    }
+
+    func loadSnapshot(todayKey: String) -> FernletSnapshot {
+        current.loadSnapshot(todayKey: todayKey)
+    }
+
+    @discardableResult func saveSnapshot(_ snapshot: SanitizedSnapshot) -> Bool {
+        current.saveSnapshot(snapshot)
+    }
+
+    @discardableResult func updateDay(_ day: SanitizedDay, for dateKey: String, todayKey: String) -> Bool {
+        current.updateDay(day, for: dateKey, todayKey: todayKey)
+    }
+
+    func storageDescription() -> String {
+        current.storageDescription()
+    }
+
+    func loadAllDays() -> [String: FernletDay] {
+        current.loadAllDays()
+    }
+
+    func loadTierTwoMemories() -> [TierTwoMemoryRecord] {
+        current.loadTierTwoMemories()
+    }
+
+    func loadDay(for dateKey: String, todayKey: String) -> FernletDay {
+        current.loadDay(for: dateKey, todayKey: todayKey)
     }
 }
 
@@ -553,5 +732,39 @@ struct SensitiveSurfaceGateDecodeTests {
         #expect(reconciled.settings.periodTrackingVisible == true)
         #expect(reconciled.settings.intimacyTrackingVisible)
         #expect(reconciled.resolution.periodTrackingVisible == true)  // device-local record follows the agreed value
+    }
+
+    // MARK: - Pristine state is not a determination (final-review finding)
+
+    /// The synthesized missing-record default — what a fresh install loads FIRST, before any sync pull —
+    /// must never mint `resolved = true`: pristine values are the ABSENCE of a determination, and
+    /// storing them would make the later real blob hit the resolved branch (a pre-gate account blob
+    /// then gets a pristine re-assert instead of the migration pin; see the store-level
+    /// `freshInstallPullingAPreGateBlobRunsThePinNotAPristineReassert`).
+    @Test func pristineDefaultsNeverMintAResolution() {
+        let synthesized = FernletSettings()
+        let result = synthesized.reconcilingSensitiveVisibility(deviceLocal: SensitiveVisibilityResolution())
+
+        #expect(!result.resolution.resolved)
+        #expect(!result.settingsChanged)
+        #expect(result.settings.periodTrackingVisible == nil)
+        #expect(!result.settings.didMigratePeriodVisibility)
+    }
+
+    /// The laundering guard at the unit level: a resolved device whose values ARE the pristine defaults
+    /// re-asserts them into a key-dropped blob WITHOUT stamping the migration marker — a reconstruction
+    /// adds no information and must not masquerade as an up-to-date write, or a hidden peer would trust
+    /// the marker into re-opening. A real deviation still stamps and saves (covered by
+    /// `resolvedHiddenPeriodSurvivesAPreGateKeyDrop` above).
+    @Test func pristineReassertDoesNotStampTheMigrationMarker() throws {
+        let pristineResolved = SensitiveVisibilityResolution(
+            resolved: true, periodTrackingVisible: nil, intimacyTrackingVisible: true)
+        let dropped = try decode("{}")
+
+        let reconciled = dropped.reconcilingSensitiveVisibility(deviceLocal: pristineResolved)
+        #expect(!reconciled.settings.didMigratePeriodVisibility)
+        #expect(!reconciled.settingsChanged)
+        #expect(reconciled.settings.periodTrackingVisible == nil)
+        #expect(reconciled.settings.intimacyTrackingVisible)
     }
 }

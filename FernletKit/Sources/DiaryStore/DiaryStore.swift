@@ -293,6 +293,10 @@ public final class DiaryStore {
     /// derived (otherwise a later HealthKit sex auto-import would silently overturn them).
     public func setPeriodTrackingVisible(_ visible: Bool) {
         settings.periodTrackingVisible = visible
+        // An explicit choice IS a real visibility determination — stamp the migration marker (minted
+        // only at real determinations, see its declaration) so the saved blob is one other devices
+        // may trust rather than treat as undetermined.
+        settings.didMigratePeriodVisibility = true
         // The caller is responsible for scrubbing resident cycle state — see
         // `FernletStore.setPeriodTrackingVisible`. This layer cannot reach the period store.
         scheduleSnapshotSave()
@@ -300,6 +304,8 @@ public final class DiaryStore {
 
     public func setIntimacyTrackingVisible(_ visible: Bool) {
         settings.intimacyTrackingVisible = visible
+        // Same contract as `setPeriodTrackingVisible`: an explicit choice stamps the marker.
+        settings.didMigratePeriodVisibility = true
         scheduleSnapshotSave()
     }
 
@@ -828,6 +834,11 @@ public final class DiaryStore {
             settings.selectedGoal = goal
             settings.showCalories = true
             settings.hasCompletedOnboarding = true
+            // Onboarding just captured `sex`/age on an up-to-date build, so "derive from `sex`" is now
+            // a REAL visibility determination — stamp the marker (minted only at real determinations).
+            // Without this, the user's own saved blob (marker false + onboarding true) would look
+            // pre-gate on the next launch and the one-time pin would wrongly fire for every new user.
+            settings.didMigratePeriodVisibility = true
         }
     }
 
