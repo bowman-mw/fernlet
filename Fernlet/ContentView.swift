@@ -689,6 +689,10 @@ struct ContentView: View {
             } else {
                 storagePreferencesStore.update { $0 = reset }
             }
+            // The store's write paths don't report failure; `true` here means "the reset ran" — the
+            // hook's Bool exists so an UNWIRED funnel surfaces "your storage settings" instead of
+            // silently leaving Health grants and backup flags as they were.
+            return true
         }
     }
 

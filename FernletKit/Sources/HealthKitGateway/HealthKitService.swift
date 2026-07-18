@@ -336,6 +336,21 @@ public struct HealthKitAnchorKeychain {
     }
 }
 
+/// Outcome of `HealthKitService.deleteAllAuthoredSamples()`. An enum rather than `Bool` because the
+/// two failure modes need DIFFERENT messages from the "delete everything" funnel: `.failed` invites a
+/// retry, while `.accessRevoked` cannot be fixed by retrying — once the user revokes Fernlet's share
+/// access, only the Health app can remove the samples Fernlet wrote earlier.
+public enum AuthoredSampleDeleteOutcome: Sendable {
+    /// Every writable type cleared, or was an expected no-op skip (nothing of Fernlet's to delete).
+    case complete
+    /// At least one type hit an unexpected error — Fernlet-authored samples were left behind.
+    case failed
+    /// No unexpected errors, but at least one type refused with `.errorAuthorizationDenied`: the user
+    /// revoked Fernlet's share access, so samples it wrote may remain in Health and Fernlet cannot
+    /// remove them.
+    case accessRevoked
+}
+
 @MainActor
 public final class HealthKitService: HealthKitServicing {
     /// App-installed default cache cleaner. The concrete `CoreDataHealthKitCacheCleaner`
@@ -390,39 +405,61 @@ public final class HealthKitService: HealthKitServicing {
     /// Best-effort per type: a type Fernlet was never authorized to share throws, and one unauthorized
     /// type must not abort the whole wipe.
     ///
-    /// Returns whether every type either cleared or was an EXPECTED skip. The old `try?` swallowed every
-    /// failure and returned Void, so the "delete everything" funnel — which promises these samples are
-    /// gone — could report success while an unexpected error left Fernlet-authored samples behind. An
-    /// authorization/availability error is not a failure to report: a type Fernlet cannot write has
-    /// nothing of Fernlet's to delete. Any OTHER error did leave data behind and must surface.
-    public func deleteAllAuthoredSamples() async -> Bool {
+    /// Returns HOW the wipe ended, not just whether — the two failure modes need different messages.
+    /// The old `try?` swallowed every failure and returned Void, so the "delete everything" funnel —
+    /// which promises these samples are gone — could report success while an unexpected error left
+    /// Fernlet-authored samples behind. A never-granted / no-data / no-Health-store error is not a
+    /// failure to report: nothing of Fernlet's was left behind. `.errorAuthorizationDenied` is neither
+    /// a skip nor a plain failure: samples written BEFORE the user revoked share access remain in
+    /// Health, and no retry from Fernlet can remove them — only the Health app can, so the caller must
+    /// say that rather than report a false success (the old skip) or invite a doomed retry.
+    ///
+    /// Precedence when both occur: `.failed` wins — an unexpected error is retryable, and its generic
+    /// label still tells the user Health entries remain.
+    public func deleteAllAuthoredSamples() async -> AuthoredSampleDeleteOutcome {
         let shareTypes = Set(HealthCapability.allCases.flatMap { capability in
             (try? Self.types(for: capability).share) ?? []
         })
         let ownSamples = HKQuery.predicateForObjects(from: HKSource.default())
-        var succeeded = true
+        var sawUnexpectedFailure = false
+        var sawRevokedAccess = false
         for type in shareTypes {
             do {
                 try await storeController.deleteObjects(of: type, predicate: ownSamples)
             } catch let error as HKError where Self.isExpectedDeleteSkip(error) {
-                // Write-only / never-granted type, or Health unavailable on this device: nothing Fernlet
-                // wrote that it could reach here, not a failure. Skip it and keep clearing the rest.
+                // Never-granted type, nothing matching the predicate, or Health unavailable on this
+                // device: nothing Fernlet wrote was left behind, not a failure. Keep clearing the rest.
                 continue
+            } catch let error as HKError where error.code == .errorAuthorizationDenied {
+                // Revoked share access: samples Fernlet wrote before the revocation may remain, and
+                // Fernlet can no longer reach them. Tracked separately so the funnel can point the
+                // user at the Health app instead of reporting the wipe complete.
+                sawRevokedAccess = true
             } catch {
                 // An unexpected error genuinely left authored samples behind — the one leg that used to
                 // hide this. Record it but keep going so one bad type can't abort the rest of the wipe.
-                succeeded = false
+                sawUnexpectedFailure = true
             }
         }
-        return succeeded
+        if sawUnexpectedFailure { return .failed }
+        if sawRevokedAccess { return .accessRevoked }
+        return .complete
     }
 
-    /// An authorization or availability error from a per-type delete is EXPECTED, not a failure: a type
-    /// Fernlet was never authorized to share can hold nothing Fernlet wrote, so reporting it would cry
-    /// wolf on the delete dialog just as surely as swallowing a real failure would lie on it.
+    /// A per-type delete error that provably left nothing of Fernlet's behind is an EXPECTED skip, not
+    /// a failure: `.errorNoData` means the authored-samples predicate matched nothing (the NORMAL case
+    /// for a type Fernlet was authorized for but never wrote to — a no-match delete left nothing behind
+    /// by definition), `.errorAuthorizationNotDetermined` means the type was never granted at all, and
+    /// `.errorHealthDataUnavailable` means this device has no Health store. Reporting any of these would
+    /// cry wolf on the delete dialog just as surely as swallowing a real failure would lie on it.
+    ///
+    /// `.errorAuthorizationDenied` is deliberately NOT here: a user who let Fernlet write samples and
+    /// then revoked its share access still has those samples in Health, so treating denial as a skip
+    /// reports a wipe complete while the data remains — the exact silent-failure mode this funnel
+    /// exists to prevent. Denial surfaces as `.accessRevoked` instead.
     private static func isExpectedDeleteSkip(_ error: HKError) -> Bool {
         switch error.code {
-        case .errorAuthorizationDenied, .errorAuthorizationNotDetermined, .errorHealthDataUnavailable:
+        case .errorNoData, .errorAuthorizationNotDetermined, .errorHealthDataUnavailable:
             return true
         default:
             return false

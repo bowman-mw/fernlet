@@ -36,41 +36,69 @@ struct HealthKitDisableTests {
     }
 
     /// "Delete everything" with Health samples requested: when every authored type clears, the leg
-    /// reports success (true) and actually touched the writable types.
-    @Test func deleteAllAuthoredSamplesReturnsTrueWhenTypesClear() async {
+    /// reports `.complete` and actually touched the writable types.
+    @Test func deleteAllAuthoredSamplesReturnsCompleteWhenTypesClear() async {
         let harness = HealthKitDisableHarness()
         defer { harness.cleanup() }
 
-        let cleared = await harness.service.deleteAllAuthoredSamples()
+        let outcome = await harness.service.deleteAllAuthoredSamples()
 
-        #expect(cleared)
+        #expect(outcome == .complete)
         #expect(!harness.controller.deletedObjectTypeIdentifiers.isEmpty)
     }
 
     /// A type Fernlet was never authorized to share throws on delete, but it can hold nothing Fernlet
     /// wrote — an EXPECTED skip, not a failure. The old `try?` swallowed everything; the new code must
     /// still not report this as data left behind (crying wolf is as dishonest as swallowing a real fail).
-    @Test func deleteAllAuthoredSamplesTreatsAuthorizationErrorsAsExpectedSkips() async {
+    @Test func deleteAllAuthoredSamplesTreatsNeverGrantedTypesAsExpectedSkips() async {
+        let harness = HealthKitDisableHarness()
+        defer { harness.cleanup() }
+        harness.controller.deleteObjectsError = HKError(.errorAuthorizationNotDetermined)
+
+        let outcome = await harness.service.deleteAllAuthoredSamples()
+
+        #expect(outcome == .complete)
+    }
+
+    /// `deleteObjects` throws `.errorNoData` when the authored-samples predicate matches nothing — the
+    /// NORMAL case for a type Fernlet is authorized for but never wrote. A no-match delete left nothing
+    /// behind by definition, so it must be a skip: before it joined the skip list, every wipe on such a
+    /// user reported a false "Couldn't delete everything" forever.
+    @Test func deleteAllAuthoredSamplesTreatsNoMatchingSamplesAsAnExpectedSkip() async {
+        let harness = HealthKitDisableHarness()
+        defer { harness.cleanup() }
+        harness.controller.deleteObjectsError = HKError(.errorNoData)
+
+        let outcome = await harness.service.deleteAllAuthoredSamples()
+
+        #expect(outcome == .complete)
+    }
+
+    /// `.errorAuthorizationDenied` means the user REVOKED Fernlet's share access — samples it wrote
+    /// before that remain in Health and Fernlet cannot remove them. The old skip list treated this as
+    /// an expected skip, so the wipe reported success while the samples stayed (the silent-failure mode
+    /// the honest-outcome funnel exists to prevent). It must surface as the distinct `.accessRevoked`.
+    @Test func deleteAllAuthoredSamplesReportsRevokedAccessDistinctly() async {
         let harness = HealthKitDisableHarness()
         defer { harness.cleanup() }
         harness.controller.deleteObjectsError = HKError(.errorAuthorizationDenied)
 
-        let cleared = await harness.service.deleteAllAuthoredSamples()
+        let outcome = await harness.service.deleteAllAuthoredSamples()
 
-        #expect(cleared)
+        #expect(outcome == .accessRevoked)
     }
 
-    /// An UNEXPECTED error (not authorization/availability) genuinely leaves authored samples behind, so
-    /// the leg must return false — the "delete everything" dialog promised they were gone. This is the
-    /// failure the old Void `deleteAllAuthoredSamples` could not surface.
-    @Test func deleteAllAuthoredSamplesReturnsFalseOnUnexpectedError() async {
+    /// An UNEXPECTED error (not a skip, not revoked access) genuinely leaves authored samples behind, so
+    /// the leg must return `.failed` — the "delete everything" dialog promised they were gone. This is
+    /// the failure the old Void `deleteAllAuthoredSamples` could not surface.
+    @Test func deleteAllAuthoredSamplesReturnsFailedOnUnexpectedError() async {
         let harness = HealthKitDisableHarness()
         defer { harness.cleanup() }
         harness.controller.deleteObjectsError = HKError(.errorDatabaseInaccessible)
 
-        let cleared = await harness.service.deleteAllAuthoredSamples()
+        let outcome = await harness.service.deleteAllAuthoredSamples()
 
-        #expect(!cleared)
+        #expect(outcome == .failed)
     }
 
     @Test func disableClearsHealthKitAnchorsFromKeychain() async throws {

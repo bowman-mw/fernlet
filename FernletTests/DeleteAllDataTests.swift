@@ -4,6 +4,7 @@ import Testing
 @testable import AppServices
 import FernletDomainModel
 import FernletPersistence
+import HealthKitGateway
 import LocalPersistence
 @testable import Fernlet
 
@@ -89,15 +90,19 @@ struct DeleteAllDataTests {
     @Test func deleteAllDataInvokesEverySealedStoreHook() async {
         let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-hooks")))
         var called: Set<String> = []
+        var worryCallCount = 0
         store.periodDataDeleteHook = { called.insert("period"); return true }
         store.intimacyDataDeleteHook = { called.insert("intimacy"); return true }
         store.journalDataDeleteHook = { called.insert("journal"); return true }
-        store.worryBoxResetHook = { called.insert("worry") }
+        store.worryBoxResetHook = { called.insert("worry"); worryCallCount += 1; return true }
         store.pendingNarrativeBufferPurgeHook = { called.insert("pendingBuffer"); return true }
 
         await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(called == ["period", "intimacy", "journal", "worry", "pendingBuffer"])
+        // Exactly once: the funnel used to invoke the worry hook itself AND again via `resetAll()`.
+        // One purge per wipe — the `resetAll` one, so a standalone reset keeps it.
+        #expect(worryCallCount == 1)
     }
 
     /// The pending-narrative buffer holds cycle notes written while the app was LOCKED, in a file under a
@@ -134,7 +139,7 @@ struct DeleteAllDataTests {
     @Test func healthKitSamplesAreOnlyDeletedWhenRequested() async {
         let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-hk-off")))
         var healthDeleted = false
-        store.healthKitSampleDeleteHook = { healthDeleted = true; return true }
+        store.healthKitSampleDeleteHook = { healthDeleted = true; return .complete }
 
         await store.deleteAllData(includingHealthKitSamples: false)
         #expect(!healthDeleted)
@@ -290,16 +295,76 @@ struct DeleteAllDataTests {
 
     /// The HealthKit delete leg used to be the one hook typed Void, so a failure there was swallowed and
     /// a wipe the dialog called complete could leave Fernlet's Apple Health samples behind. Now it returns
-    /// Bool, and a false must surface.
+    /// an outcome, and `.failed` must surface.
     @Test func outcomeReportsWhenHealthKitDeleteFails() async {
         let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-hk-fail")))
         wireSucceedingSealedHooks(store)
-        store.healthKitSampleDeleteHook = { false }
+        store.healthKitSampleDeleteHook = { .failed }
 
         let outcome = await store.deleteAllData(includingHealthKitSamples: true)
 
         #expect(!outcome.isComplete)
         #expect(outcome.incompleteStores.contains("your Apple Health entries"))
+    }
+
+    /// Revoked Health share access is NOT a plain failure: the samples Fernlet wrote remain in Health
+    /// and no retry from Fernlet can remove them — only the Health app can. The old skip-list treated
+    /// denial as an expected skip, so the wipe reported COMPLETE while the samples remained (the silent
+    /// failure this funnel exists to end). The outcome must be incomplete with the actionable label,
+    /// not the generic one that would invite a doomed retry.
+    @Test func outcomeReportsRevokedHealthAccessWithTheActionableLabel() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-hk-revoked")))
+        wireSucceedingSealedHooks(store)
+        store.healthKitSampleDeleteHook = { .accessRevoked }
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: true)
+
+        #expect(!outcome.isComplete)
+        #expect(outcome.incompleteStores.contains(
+            "your Apple Health entries (Fernlet's Health access is turned off — remove them in the Health app)"
+        ))
+        #expect(!outcome.incompleteStores.contains("your Apple Health entries"),
+                "revoked access must not ALSO show the generic label — the retry it invites can only fail")
+    }
+
+    /// The Worry Box hook used to be the one enumerated sealed store typed Void, so a failed (or
+    /// unwired) purge was swallowed while the dialog promised "Worry Box notes" by name. A false must
+    /// surface like every other sealed hook.
+    @Test func outcomeReportsAWorryBoxPurgeThatFailed() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-worry-fail")))
+        wireSucceedingSealedHooks(store)
+        store.worryBoxResetHook = { false }
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!outcome.isComplete)
+        #expect(outcome.incompleteStores.contains("your Worry Box notes"))
+    }
+
+    /// A NIL (unwired) Worry Box hook is a failure, not a silent skip — same rule as the other sealed
+    /// hooks: an unwired funnel can't claim it cleared a store it never called.
+    @Test func outcomeReportsAnUnwiredWorryBoxHookAsIncomplete() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-worry-nil")))
+        wireSucceedingSealedHooks(store)
+        store.worryBoxResetHook = nil
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!outcome.isComplete)
+        #expect(outcome.incompleteStores.contains("your Worry Box notes"))
+    }
+
+    /// The storage-preferences reset was the last nil-silent hook in the funnel: an unwired run left
+    /// Health grants and backup flags as they were while the wipe reported complete.
+    @Test func outcomeReportsAnUnwiredStoragePreferencesHookAsIncomplete() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-prefs-nil")))
+        wireSucceedingSealedHooks(store)
+        store.storagePreferencesResetHook = nil
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!outcome.isComplete)
+        #expect(outcome.incompleteStores.contains("your storage settings"))
     }
 
     /// A single store can be named by two independent legs — the sealed cycle-notes rows and the
@@ -317,13 +382,15 @@ struct DeleteAllDataTests {
         #expect(outcome.incompleteStores.filter { $0 == "your cycle notes" }.count == 1)
     }
 
-    /// Wires every Bool sealed hook to succeed, for tests that need an otherwise-complete wipe. HealthKit
-    /// is left out because it only fires when the caller opts into deleting samples.
+    /// Wires every sealed/reset hook to succeed, for tests that need an otherwise-complete wipe.
+    /// HealthKit is left out because it only fires when the caller opts into deleting samples.
     private func wireSucceedingSealedHooks(_ store: FernletStore) {
         store.periodDataDeleteHook = { true }
         store.intimacyDataDeleteHook = { true }
         store.journalDataDeleteHook = { true }
         store.pendingNarrativeBufferPurgeHook = { true }
+        store.worryBoxResetHook = { true }
+        store.storagePreferencesResetHook = { _, _ in true }
     }
 }
 

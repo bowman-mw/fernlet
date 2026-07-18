@@ -102,6 +102,14 @@ struct PrivacyDataSettingsView: View {
             }
         }
         .navigationTitle("Privacy & Data")
+        // Mid-wipe escape hatches, mirroring the SettingsSheet entry point's guard set. The busy
+        // overlay lives INSIDE this pushed view, so the nav bar's Back chevron stays tappable above
+        // it — and the enclosing Settings sheet's own `interactiveDismissDisabled` keys off ITS delete
+        // flag, which is false for a wipe started here. Either escape tears down the @State that
+        // presents the success/FAILURE alert (a silently failed wipe) and re-enables the delete
+        // button mid-wipe. `interactiveDismissDisabled` applies from a pushed child of the sheet.
+        .navigationBarBackButtonHidden(isDeletingEverything)
+        .interactiveDismissDisabled(isDeletingEverything)
         .sheet(isPresented: $showLockSetup) {
             FernletLockSetupView()
                 .environment(lockService)
@@ -1083,6 +1091,13 @@ struct PrivacyDataSettingsView: View {
             do {
                 var updated = storagePreferencesStore.preferences
                 updated.iCloudSyncEnabled = false
+                // Record the copy TOGETHER with turning sync off: `deleteAllCloudKitData` below can
+                // throw, and by then sync-off has persisted — exactly the sync-off-with-cloud-copy
+                // state `cloudCopyKept` exists to track. Without this, the catch shows a one-shot
+                // error and the stranded copy becomes invisible forever: `hasAnyCloudCopy` reads
+                // false, so the delete dialog never claims it and "delete everything" never reaches
+                // it. The success path clears the marker below.
+                updated.cloudCopyKept = true
                 try await reloadPersistence(with: updated)
                 storagePreferencesStore.update { $0 = updated }
                 FernletAuditLog.log("privacy.icloud.syncDisabled")

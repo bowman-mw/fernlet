@@ -239,9 +239,12 @@ final class FernletStore {
     /// Device-local Worry Box seams (the `WorryBoxService` is a `ContentView` @State, not owned here).
     /// The lifetime "worries let go" count is read through `worriesLetGoProvider` — it stays device-local
     /// (never the synced milestone ledger) so worry metadata honors the box's "never sync" promise —
-    /// and `worryBoxResetHook` lets `resetAll` purge the sealed worry rows + count.
+    /// and `worryBoxResetHook` lets `resetAll` purge the sealed worry rows + count. The hook returns
+    /// whether the row delete landed — `Bool` like the sealed delete hooks, so a failed (or unwired)
+    /// purge reaches the "delete everything" outcome instead of being swallowed while the dialog
+    /// promises "Worry Box notes" are gone.
     @ObservationIgnored var worriesLetGoProvider: (() -> Int)?
-    @ObservationIgnored var worryBoxResetHook: (() -> Void)?
+    @ObservationIgnored var worryBoxResetHook: (() -> Bool)?
 
     /// Scrub seam for the cycle-visibility gate. Same shape as `worryBoxResetHook`: the
     /// `PeriodTrackerStore` is `ContentView` state, not owned here, but hiding must drop its resident
@@ -2323,10 +2326,13 @@ final class FernletStore {
     @ObservationIgnored var periodDataDeleteHook: (() -> Bool)?
     @ObservationIgnored var intimacyDataDeleteHook: (() -> Bool)?
     @ObservationIgnored var journalDataDeleteHook: (() -> Bool)?
-    /// Returns whether the HealthKit delete cleared — `Bool`, not `Void`, for the same reason as the
-    /// sealed hooks: `deleteAllAuthoredSamples` can hit an unexpected error that leaves authored samples
-    /// behind, and a hook that swallowed that would let a wipe the dialog called complete keep them.
-    @ObservationIgnored var healthKitSampleDeleteHook: (() async -> Bool)?
+    /// Returns whether the HealthKit delete cleared — and HOW it fell short when it didn't, for the same
+    /// reason as the sealed hooks: `deleteAllAuthoredSamples` can hit an unexpected error that leaves
+    /// authored samples behind, and a hook that swallowed that would let a wipe the dialog called
+    /// complete keep them. `.accessRevoked` is distinct from `.failed` because it is not retryable —
+    /// once share access is revoked only the Health app can remove Fernlet's samples, so the funnel
+    /// names that path instead of inviting a retry that can only fail.
+    @ObservationIgnored var healthKitSampleDeleteHook: (() async -> AuthoredSampleDeleteOutcome)?
     /// Deletes the day-blob copy sitting in the user's private CloudKit zone WITHOUT a live sync session
     /// — the "Stop syncing, keep cloud data" case, where sync is off so the per-row deletes below can't
     /// reach the server by propagating over a session. Returns whether it cleared. Wired in `ContentView`
@@ -2352,7 +2358,11 @@ final class FernletStore {
     ///
     /// `keepCloudCopyFlag` plays the same role for `cloudCopyKept`: passed when the kept-cloud-copy delete
     /// failed, so a retry still knows there is a copy in iCloud to remove.
-    @ObservationIgnored var storagePreferencesResetHook: ((_ keepSealedBackupFlags: Bool, _ keepCloudCopyFlag: Bool) -> Void)?
+    ///
+    /// Returns whether the reset ran — `Bool` like the other hooks, so an unwired funnel reports
+    /// "your storage settings" instead of silently leaving the preferences (Health grants, backup
+    /// flags) as they were.
+    @ObservationIgnored var storagePreferencesResetHook: ((_ keepSealedBackupFlags: Bool, _ keepCloudCopyFlag: Bool) -> Bool)?
 
     /// Whether a sealed backup of this payload may be uploaded — i.e. whether "delete everything" has
     /// anything to remove. Lives here rather than on `StoragePreferences` because that type is Layer 0
@@ -2457,7 +2467,8 @@ final class FernletStore {
         if periodDataDeleteHook?() != true { outcome.incompleteStores.append("your cycle notes") }
         if intimacyDataDeleteHook?() != true { outcome.incompleteStores.append("your intimate logs") }
         if journalDataDeleteHook?() != true { outcome.incompleteStores.append("your journal entries") }
-        worryBoxResetHook?()
+        // Worry Box rows are purged (and reported) inside `resetAll()` below — its ONE invocation per
+        // wipe, kept there so a standalone "Reset everything" purges them too.
 
         // The buffer of notes written while LOCKED. Not covered by the row hooks above — it is a file
         // under a separate device key — and its next drain re-inserts every payload into the store we
@@ -2465,7 +2476,19 @@ final class FernletStore {
         if pendingNarrativeBufferPurgeHook?() != true { outcome.incompleteStores.append("your cycle notes") }
 
         if deleteHealthSamples {
-            if await healthKitSampleDeleteHook?() != true { outcome.incompleteStores.append("your Apple Health entries") }
+            switch await healthKitSampleDeleteHook?() {
+            case .complete:
+                break
+            case .accessRevoked:
+                // Samples Fernlet wrote are still in Health and Fernlet can no longer reach them: the
+                // user revoked its share access after writing. Reporting this as complete would be the
+                // silent failure this funnel exists to end, and the bare label below would invite a
+                // retry that can only fail — name the one path that works instead.
+                outcome.incompleteStores.append("your Apple Health entries (Fernlet's Health access is turned off — remove them in the Health app)")
+            case .failed, nil:
+                // `nil` (an unwired hook) counts as failure, same as the sealed hooks above.
+                outcome.incompleteStores.append("your Apple Health entries")
+            }
         }
 
         // 4. Photo bytes before the days that reference them: ownership lives in `Meal.photoID`, so once
@@ -2507,7 +2530,8 @@ final class FernletStore {
         meshNetworkManager.clothingShop.clearAll()
 
         // `resetAll()` reports any per-row store whose CloudKit delete failed (designs / recipes / coins
-        // left on disk to re-sync). Those used to be discarded, so a failed delete there looked complete.
+        // left on disk to re-sync) plus the Worry Box purge. Those used to be discarded, so a failed
+        // delete there looked complete.
         outcome.incompleteStores.append(contentsOf: resetAll())
 
         // 8. The authoritative per-row day store + the blob + the legacy JSON file. Without this, every
@@ -2534,7 +2558,9 @@ final class FernletStore {
         }
         pendingWidgetActionQueue.clear()
 
-        storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed)
+        if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {
+            outcome.incompleteStores.append("your storage settings")
+        }
 
         // A single store can be named by two independent legs — the sealed cycle-notes rows and the
         // locked-note buffer both purge "your cycle notes" — so collapse to first-seen (order preserved)
@@ -2582,8 +2608,10 @@ final class FernletStore {
         // must not leave clinical derivatives behind.
         stressScoringContext?.scrubStressLocalState()
         // Worry Box notes are the app's most sensitive free-text data and a no-lock user has no
-        // other bulk-wipe path — purge the sealed rows + the device-local let-go count.
-        worryBoxResetHook?()
+        // other bulk-wipe path — purge the sealed rows + the device-local let-go count. `!= true`
+        // like the funnel's sealed hooks: a nil (unwired) hook or a failed row delete must surface,
+        // because the delete dialog promises "Worry Box notes" by name.
+        if worryBoxResetHook?() != true { incompleteStores.append("your Worry Box notes") }
         // Received-heart records (friend names, fingerprints, glow, rate-limit keys) outlive the
         // trust-vault wipe otherwise; clear the device-local sidecar too.
         heartLedger.clearAll()

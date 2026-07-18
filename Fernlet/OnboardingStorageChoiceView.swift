@@ -101,6 +101,12 @@ struct OnboardingStorageChoiceView: View {
             selectedStorage = choice
             storagePreferencesStore.update { preferences in
                 preferences.iCloudSyncEnabled = choice == .icloud
+                // "Just on this device" while this iCloud account already holds Fernlet data leaves
+                // that copy in the cloud with sync off — record it, or `hasAnyCloudCopy` reads false
+                // and the delete dialog never claims (nor "delete everything" ever reaches) the
+                // stranded copy. Recomputed on every tap, so switching back to iCloud clears it (a
+                // live sync copy is tracked by `iCloudSyncEnabled` itself).
+                preferences.cloudCopyKept = choice == .localOnly && existingDataSummary?.hasData == true
             }
             FernletAuditLog.log("onboarding.storage.chosen", context: [
                 "choice": choice == .icloud ? "icloud" : "localOnly"

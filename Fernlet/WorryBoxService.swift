@@ -114,11 +114,22 @@ final class WorryBoxService {
 
     /// Bulk purge for "Reset everything": deletes every sealed worry row (even while locked — rows
     /// are dropped, not decrypted) and zeroes the lifetime count. Wired from `FernletStore.resetAll`
-    /// so the app's most sensitive free-text data doesn't survive a full data reset.
-    func releaseAll() {
-        try? repository.deleteAll()
+    /// so the app's most sensitive free-text data doesn't survive a full data reset. Returns whether
+    /// the row delete landed — the "delete everything" dialog promises Worry Box notes by name, so a
+    /// throw here must reach the outcome instead of being swallowed by `try?`. The in-memory state and
+    /// count are cleared either way (the user asked for them gone; only the disk rows can fail).
+    @discardableResult
+    func releaseAll() -> Bool {
+        let deleted: Bool
+        do {
+            try repository.deleteAll()
+            deleted = true
+        } catch {
+            deleted = false
+        }
         worries = []
         lifetimeLetGoCount = 0
+        return deleted
     }
 
     /// Re-reads the sealed store with the currently active key (empty while locked/inactive).
