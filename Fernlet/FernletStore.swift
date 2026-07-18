@@ -1647,6 +1647,8 @@ final class FernletStore {
 
     func deleteSavedRecipe(_ recipe: RecipeDefinition) {
         savedRecipeService.delete(recipe)
+        // The recipe's own photo is keyed by the recipe id, so it's cleaned up here rather than stranded.
+        recipePhotoStore.delete(id: recipe.id)
     }
 
     func addWorkout(_ workout: Workout) {

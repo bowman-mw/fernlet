@@ -53,6 +53,9 @@ struct MilestonesView: View {
             .tracking(1.6)
             .foregroundStyle(Color.slate)
             .frame(maxWidth: .infinity)
+            // Stable screen anchor (same convention as ScreenHeader's "screen.home" etc.) so UI tests
+            // can assert this screen was actually reached, not just that some nav bar exists.
+            .accessibilityIdentifier("screen.milestones")
     }
 
     // MARK: - Data

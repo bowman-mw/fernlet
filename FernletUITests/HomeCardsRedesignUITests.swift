@@ -21,9 +21,9 @@ final class HomeCardsRedesignUITests: XCTestCase {
         let milestones = app.descendants(matching: .any)["home.milestones"].firstMatch
         XCTAssertTrue(scrollUntilHittable(milestones, in: app), "Milestones card not reachable")
         milestones.tap()
-        // MilestonesView pushes; assert we left Home by looking for a Milestones-screen element.
-        XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 5)
-                      || app.staticTexts["Milestones"].firstMatch.waitForExistence(timeout: 5),
+        // MilestonesView pushes; assert its stable screen anchor (a bare navigationBars.firstMatch
+        // check matched ANY nav bar, so it passed without navigating at all).
+        XCTAssertTrue(app.descendants(matching: .any)["screen.milestones"].firstMatch.waitForExistence(timeout: 5),
                       "Milestones card did not navigate")
     }
 

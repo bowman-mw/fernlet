@@ -1202,6 +1202,9 @@ struct MealSheet: View {
     @State private var notice: String?
     @State private var path: [MealFlowDestination] = []
     @State private var isResolvingMeal = false
+    /// True once a meal has been committed but the sheet stayed open (photo-save failure notice). The
+    /// save bar then becomes a Done/dismiss — a second "Save" tap must never log the same meal twice.
+    @State private var didLogMeal = false
     @State private var reviewContext: MealReviewContext?
     #if canImport(UIKit)
     @State private var mealPhoto: UIImage?
@@ -1330,6 +1333,8 @@ struct MealSheet: View {
                     if photoAttached {
                         dismiss()
                     } else {
+                        // Same disarm as the direct resolve path: the meal is in, only the photo failed.
+                        didLogMeal = true
                         notice = "Your meal is logged, but its photo couldn't be saved to your private store."
                     }
                 },
@@ -1469,7 +1474,15 @@ struct MealSheet: View {
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(label: isResolvingMeal ? "Matching" : "Save", disabled: description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isResolvingMeal) {
+            SheetSaveBar(
+                label: didLogMeal ? "Done" : (isResolvingMeal ? "Matching" : "Save"),
+                disabled: !didLogMeal && (description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isResolvingMeal)
+            ) {
+                if didLogMeal {
+                    // The meal already logged (only its photo failed) — never log it a second time.
+                    dismiss()
+                    return
+                }
                 let mealDescription = description
                 let selectedMealType = mealType
                 if FoodProductWebSearch.shouldSearch(for: mealDescription, foodItems: store.foodItems) {
@@ -1523,7 +1536,9 @@ struct MealSheet: View {
                 dismiss()
             } else {
                 // The meal logged; only its photo couldn't be sealed. Keep the sheet open so the
-                // notice is seen rather than the photo silently vanishing.
+                // notice is seen rather than the photo silently vanishing — but disarm Save so the
+                // notice can't be answered with a second tap that logs the meal again.
+                didLogMeal = true
                 notice = "Your meal is logged, but its photo couldn't be saved to your private store."
             }
         }
@@ -2619,8 +2634,8 @@ struct RecipeDetailView: View {
 
     /// Manual recipes resolve their structured ingredients through the catalog; web imports carry
     /// free-text ingredient lines and no structured `ingredients`, so their FoodCatalog resolution
-    /// would be empty. Cached once in `.task` (see below) so a pushed detail doesn't re-query on every
-    /// store-driven body re-eval.
+    /// would be empty. Cached in a `.task(id:)` keyed on the ingredient ids (see below) so a pushed
+    /// detail doesn't re-query on every store-driven body re-eval, yet re-resolves after an edit.
     @State private var resolvedItems: [UUID: FoodItem] = [:]
 
     /// Whole-recipe macros. Manual recipes resolve their ingredients through the catalog; web imports
@@ -2685,12 +2700,13 @@ struct RecipeDetailView: View {
         .background(Color.parchment)
         .navigationTitle("Recipe")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            guard !didLoadPhoto else { return }
-            didLoadPhoto = true
-            // Resolve the manual recipe's structured ingredients ONCE (a FoodCatalog SQLite read) into a
-            // cached dictionary, so a detail left on screen doesn't re-query on every store mutation.
-            // Web imports have no structured ingredients — they render free-text lines instead.
+        // Resolve the manual recipe's structured ingredients (a FoodCatalog SQLite read) into a cached
+        // dictionary, keyed on the ingredient ids so an edit-and-save under this detail (the editor
+        // presents over a pushed detail) re-resolves — a once-guard here left added/swapped ingredients
+        // rendering as a generic "Ingredient" until pop-and-repush. Unchanged ids don't re-query, so a
+        // detail left on screen still doesn't hit SQLite on every store mutation. Web imports have no
+        // structured ingredients — they render free-text lines instead.
+        .task(id: recipe.ingredients.map(\.foodItemId)) {
             let ingredientIDs = recipe.ingredients.map(\.foodItemId)
             if !ingredientIDs.isEmpty {
                 resolvedItems = Dictionary(
@@ -2698,6 +2714,12 @@ struct RecipeDetailView: View {
                     uniquingKeysWith: { first, _ in first }
                 )
             }
+        }
+        .task {
+            // The photo load keeps its own once-guard — it's a separate cache from the ingredient
+            // resolution and shouldn't re-decode when ingredients change.
+            guard !didLoadPhoto else { return }
+            didLoadPhoto = true
             if let data = store.recipePhotoData(for: recipe.id) {
                 photo = await UIImage(data: data)?.byPreparingForDisplay()
             }
@@ -2757,6 +2779,10 @@ struct RecipeDetailView: View {
             .foregroundStyle(Color.bark)
             .frame(width: 34, height: 34)
             .background(Color.cream.opacity(0.92), in: Circle())
+            // The chip stays 34pt; the frame + contentShape expand only the tap target to Apple's
+            // 44pt minimum — same pattern as the gym-location glyphs.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
     }
 
     private var macrosCard: some View {

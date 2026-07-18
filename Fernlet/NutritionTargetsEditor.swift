@@ -24,11 +24,18 @@ struct NutritionTargetsEditor: View {
             || store.settings.fatTargetOverride != nil
     }
 
-    /// True when the protein + fat targets in effect alone meet or exceed the calorie target. There the
-    /// carbs residual bottoms out at its floor instead of going negative, so the four macros sum ABOVE
-    /// the stated calories — the one case where "carbs balance to fit your calories" stops being true.
+    /// True when the protein + fat targets in effect alone meet or exceed the calorie target — the
+    /// strongest over-budget case, where the carbs residual bottoms out well below its floor.
     private var proteinAndFatExceedCalories: Bool {
         applied.protein * 4 + applied.fat * 9 > applied.calories
+    }
+
+    /// True whenever the macros THIS CARD SHOWS sum above the stated calorie target. The carbs floor
+    /// (30% of calories / 50 g) kicks in long before protein + fat alone fill the budget — from roughly
+    /// 70% — so this is the honest trigger for "the totals read high", keyed to the same
+    /// `macroTotals.calories` math the rings use rather than to the protein + fat extreme only.
+    private var totalsExceedCalories: Bool {
+        applied.macroTotals.calories > applied.calories
     }
 
     /// The plan Fernlet would derive with every override cleared — the "back to automatic" values, so a
@@ -41,12 +48,16 @@ struct NutritionTargetsEditor: View {
         return NutritionTargetCalculator.targets(for: settings)
     }
 
-    /// The footer/caution copy. Swaps to a gentle heads-up when protein + fat alone clear the calorie
-    /// target (the totals then read a little high); otherwise it explains the residual honestly without
+    /// The footer/caution copy. Swaps to a gentle heads-up whenever the displayed totals read above the
+    /// stated calories — strongest when protein + fat alone clear the target, a softer variant when only
+    /// the carb minimum pushes the sum over; otherwise it explains the residual honestly without
     /// promising the numbers always add up exactly.
     private var footerText: String {
         if proteinAndFatExceedCalories {
             return "Your protein and fat alone are above your calorie target, so carbs sit at a gentle minimum and the totals come out a little higher than your calories."
+        }
+        if totalsExceedCalories {
+            return "Your protein and fat leave less room than the carb minimum, so the totals come out a little above your calories."
         }
         return hasAnyOverride
             ? "Carbs fill in the calories your protein and fat leave room for. Clear a field to let Fernlet set it from your goal and profile again."
@@ -112,7 +123,7 @@ struct NutritionTargetsEditor: View {
 
                 Text(footerText)
                     .font(.fernlet(.bodySmall))
-                    .foregroundStyle(proteinAndFatExceedCalories ? Color.bark : Color.slate)
+                    .foregroundStyle(totalsExceedCalories ? Color.bark : Color.slate)
                     .fernletWrappingText()
                     .accessibilityIdentifier("nutritionTargets.footer")
 

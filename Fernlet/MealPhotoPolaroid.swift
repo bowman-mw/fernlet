@@ -10,6 +10,7 @@ struct MealPhotoPolaroid: View {
     let loadData: () -> Data?
     var width: CGFloat = 128
 
+    @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
 
     var body: some View {
@@ -44,10 +45,13 @@ struct MealPhotoPolaroid: View {
         .shadow(color: Color.barkShadow.opacity(0.10), radius: 10, x: 0, y: 5)
         .rotationEffect(.degrees(rotation))
         .task {
-            // Decode off the main thread (`byPreparingForDisplay`) so the Home strip doesn't jank while
-            // scrolling; only the finished image is assigned back on the MainActor. Mirrors ProgressPhotoCard.
+            // Decode off the main thread, straight to the polaroid's own pixel size — the sealed bytes
+            // are ~1600px, and `byPreparingForDisplay` would retain that full bitmap (~8MB apiece,
+            // ~50MB across a scrolled strip) behind a 128pt thumbnail. Only the finished image is
+            // assigned back on the MainActor.
             guard image == nil, let data = loadData() else { return }
-            image = await UIImage(data: data)?.byPreparingForDisplay()
+            let pixelSize = CGSize(width: width * displayScale, height: width * 0.86 * displayScale)
+            image = await UIImage(data: data)?.byPreparingThumbnail(ofSize: pixelSize)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Photo of \(name)")
