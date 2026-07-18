@@ -273,7 +273,22 @@ final class FernletStore {
     /// a fresh process launch resets it.
     @ObservationIgnored private var pastDayScrubBudgetConsumedThisSession = false
 
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled()) {
+    /// Device-local sidecar for the sensitive-surface (period/intimacy) visibility RESOLUTION — the marker
+    /// a mixed-version peer can never rewrite because it never rides the synced blob. A pre-gate build on a
+    /// second device re-encodes the synced settings without the visibility keys; on re-decode the pin would
+    /// re-fire (nil ⇒ visible-true) and intimacy would default back to visible, silently re-opening a
+    /// deliberately hidden surface. This marker lets a device that has already resolved re-assert its own
+    /// values fail-closed instead. Injectable so tests isolate it from `.standard`, mirroring
+    /// `pastDayJournalScrubDefaults`. See `reconcileSensitiveSurfaceVisibility`.
+    @ObservationIgnored private let sensitiveVisibilityDefaults: UserDefaults
+    private enum SensitiveVisibilityKeys {
+        static let resolved = "sensitiveVisibilityResolved"
+        static let period = "sensitiveVisibilityResolvedPeriodVisible"
+        static let intimacy = "sensitiveVisibilityResolvedIntimacyVisible"
+    }
+
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard) {
+        self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
 
@@ -332,6 +347,9 @@ final class FernletStore {
         // Mint the anonymous designer id now (not lazily from a view body) so the first Wardrobe/Studio
         // render is a pure read and never mutates @Observable state mid-update.
         self.diary.ensureLocalDesignerID()
+        // Apply the one-time period-visibility migration + the mixed-version fail-closed guard against the
+        // just-loaded settings, BEFORE any UI reads `isPeriodTrackingVisible` or a save can persist.
+        reconcileSensitiveSurfaceVisibility()
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -355,6 +373,7 @@ final class FernletStore {
         healthKitService: (any HealthKitServicing)? = nil,
         foodCatalog: FoodCatalog = .bundled()
     ) {
+        self.sensitiveVisibilityDefaults = .standard
         self.savedRecipeService = savedRecipeService
         self.customItemService = customItemService
         self.coinLedgerService = coinLedgerService
@@ -382,6 +401,7 @@ final class FernletStore {
             sealedJournalIDs: { [weak self] in self?.journalSealingCoordinator.sealedJournalIDs ?? [] }
         )
         self.diary.ensureLocalDesignerID()
+        reconcileSensitiveSurfaceVisibility()
         self.connectionInspector.attachStore(self)
         proximityTrustVault.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
         aiRetryQueueService.onChange = { [weak self] in self?.snapshotSaveCoordinator.schedule() }
@@ -495,6 +515,9 @@ final class FernletStore {
     /// the user un-hides.
     func setPeriodTrackingVisible(_ visible: Bool) {
         diary.setPeriodTrackingVisible(visible)
+        // Record the explicit choice device-locally so a later mixed-version key-drop re-asserts exactly
+        // what the user last chose here (fail-closed) rather than re-running the pin-to-visible.
+        recordSensitiveVisibilityResolution()
         if !visible {
             periodScrubHook?()
             diary.scrubHiddenHealthContext(periodVisible: false, intimacyVisible: isIntimacyTrackingVisible)
@@ -503,8 +526,73 @@ final class FernletStore {
 
     func setIntimacyTrackingVisible(_ visible: Bool) {
         diary.setIntimacyTrackingVisible(visible)
+        recordSensitiveVisibilityResolution()
         if !visible {
             diary.scrubHiddenHealthContext(periodVisible: isPeriodTrackingVisible, intimacyVisible: false)
+        }
+    }
+
+    // MARK: - Sensitive-surface visibility resolution (device-local, never synced)
+
+    /// Reads the device-local resolution marker from the sidecar. `resolved == false` means this device
+    /// has never made a determination (a genuinely fresh device); the period value is a tri-state stored
+    /// as an object so `nil` ("derive from `sex`") is distinct from an explicit `false`.
+    private func loadSensitiveVisibilityResolution() -> SensitiveVisibilityResolution {
+        let defaults = sensitiveVisibilityDefaults
+        return SensitiveVisibilityResolution(
+            resolved: defaults.bool(forKey: SensitiveVisibilityKeys.resolved),
+            periodTrackingVisible: defaults.object(forKey: SensitiveVisibilityKeys.period) as? Bool,
+            intimacyTrackingVisible: (defaults.object(forKey: SensitiveVisibilityKeys.intimacy) as? Bool) ?? true
+        )
+    }
+
+    private func storeSensitiveVisibilityResolution(_ resolution: SensitiveVisibilityResolution) {
+        let defaults = sensitiveVisibilityDefaults
+        defaults.set(resolution.resolved, forKey: SensitiveVisibilityKeys.resolved)
+        if let period = resolution.periodTrackingVisible {
+            defaults.set(period, forKey: SensitiveVisibilityKeys.period)
+        } else {
+            defaults.removeObject(forKey: SensitiveVisibilityKeys.period)
+        }
+        defaults.set(resolution.intimacyTrackingVisible, forKey: SensitiveVisibilityKeys.intimacy)
+    }
+
+    /// Clears the device-local marker back to "unresolved" so a full reset returns to a genuinely fresh
+    /// device that re-derives from `sex`. Called from `resetAll` alongside the other device-local sidecars.
+    private func clearSensitiveVisibilityResolution() {
+        let defaults = sensitiveVisibilityDefaults
+        defaults.removeObject(forKey: SensitiveVisibilityKeys.resolved)
+        defaults.removeObject(forKey: SensitiveVisibilityKeys.period)
+        defaults.removeObject(forKey: SensitiveVisibilityKeys.intimacy)
+    }
+
+    /// Snapshots the CURRENT explicit visibility values into the device-local marker after the user changes
+    /// a toggle. Resolving is implied by the act of choosing.
+    private func recordSensitiveVisibilityResolution() {
+        storeSensitiveVisibilityResolution(SensitiveVisibilityResolution(
+            resolved: true,
+            periodTrackingVisible: settings.periodTrackingVisible,
+            intimacyTrackingVisible: settings.intimacyTrackingVisible
+        ))
+    }
+
+    /// Applies the one-time period-visibility migration + the mixed-version fail-closed guard against the
+    /// just-loaded settings, using the device-local marker (see `FernletSettings.reconcilingSensitiveVisibility`).
+    /// Runs at every settings load/apply. Persists a re-asserted/migrated flip so it survives and syncs from
+    /// an up-to-date device; always refreshes the device-local record.
+    private func reconcileSensitiveSurfaceVisibility() {
+        let deviceLocal = loadSensitiveVisibilityResolution()
+        let result = settings.reconcilingSensitiveVisibility(deviceLocal: deviceLocal)
+        if result.settings.periodTrackingVisible != settings.periodTrackingVisible
+            || result.settings.intimacyTrackingVisible != settings.intimacyTrackingVisible
+            || result.settings.didMigratePeriodVisibility != settings.didMigratePeriodVisibility {
+            settings = result.settings
+        }
+        if result.resolution != deviceLocal {
+            storeSensitiveVisibilityResolution(result.resolution)
+        }
+        if result.settingsChanged {
+            snapshotSaveCoordinator.schedule()
         }
     }
 
@@ -2509,6 +2597,9 @@ final class FernletStore {
         // Group activities (hosted/joined rosters + join tokens) — device-local social data, never synced;
         // clear the sidecar too (the manager owns it, mirroring the clothing-shop clearAll seam).
         meshNetworkManager.activities.clearAll()
+        // Device-local sensitive-surface visibility resolution — reset to "unresolved" so a fresh start
+        // re-derives from `sex` (resetDiary already restored the settings gate to its defaults).
+        clearSensitiveVisibilityResolution()
         return incompleteStores
     }
 
@@ -2671,6 +2762,10 @@ final class FernletStore {
 
     private func apply(_ snapshot: FernletSnapshot) {
         diary.applyDiarySlice(snapshot)
+        // A remote (CloudKit) blob may have been re-encoded by a pre-gate peer that dropped the visibility
+        // keys — reconcile immediately, before any read or the derived-signals rebuild below, so a mixed-
+        // version sync can't re-open a hidden period/intimacy surface.
+        reconcileSensitiveSurfaceVisibility()
         connectionSessionLogs = snapshot.connectionSessionLogs
         aiRetryQueueService.apply(snapshot.retryQueue)
         proximityTrustVault.apply(peers: snapshot.trustedProximityPeers, audit: snapshot.trainerAuditEvents)

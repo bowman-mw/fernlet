@@ -292,6 +292,60 @@ struct SensitiveSurfaceGateTests {
         #expect(hidden.contains(.worryBox))
     }
 
+    // MARK: - Mixed-version multi-device key-drop (end-to-end)
+
+    /// End-to-end: this device resolves period+intimacy HIDDEN, then a PRE-GATE peer re-encodes the synced
+    /// settings and drops the visibility keys. A fresh store on the SAME device (same device-local sidecar)
+    /// loading that key-dropped blob stays HIDDEN. Against the pre-guard code the reload re-pinned period to
+    /// visible (migration marker absent) and defaulted intimacy back to visible — both gates failed OPEN,
+    /// and the HealthKit reads behind them (keyed off this derived value) resumed.
+    @Test func mixedVersionKeyDropDoesNotReopenHiddenSurfaces() throws {
+        let suiteName = "gate-keydrop-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        // 1. This device explicitly hides BOTH surfaces — the setters write the device-local marker.
+        let store1 = FernletStore(
+            repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("gate-keydrop-src")),
+            sensitiveVisibilityDefaults: defaults
+        )
+        store1.settings.userProfile.age = 30
+        store1.setPeriodTrackingVisible(false)
+        store1.setIntimacyTrackingVisible(false)
+        #expect(!store1.isPeriodTrackingVisible)
+        #expect(!store1.isIntimacyTrackingVisible)
+
+        // 2. A pre-gate peer re-encodes the synced blob, dropping all three visibility keys.
+        let syncedURL = temporaryDatabaseURL("gate-keydrop-synced")
+        try writeKeyDroppedDatabase(to: syncedURL)
+
+        // 3. A fresh store on the SAME device (same sidecar) loads the key-dropped blob.
+        let store2 = FernletStore(
+            repository: LocalFernletRepository(fileURL: syncedURL),
+            sensitiveVisibilityDefaults: defaults
+        )
+        store2.settings.userProfile.age = 30
+
+        #expect(!store2.isPeriodTrackingVisible)
+        #expect(!store2.isIntimacyTrackingVisible)
+    }
+
+    /// Writes a `LocalFernletRepository` database file whose settings LACK the three visibility keys —
+    /// exactly what a build that predates the gate produces when it re-encodes the synced settings.
+    private func writeKeyDroppedDatabase(to url: URL) throws {
+        var settings = FernletSettings()
+        settings.userProfile.age = 30
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        var settingsObject = try #require(
+            JSONSerialization.jsonObject(with: try encoder.encode(settings)) as? [String: Any])
+        settingsObject.removeValue(forKey: "didMigratePeriodVisibility")
+        settingsObject.removeValue(forKey: "periodTrackingVisible")
+        settingsObject.removeValue(forKey: "intimacyTrackingVisible")
+        let database: [String: Any] = ["settings": settingsObject]
+        try JSONSerialization.data(withJSONObject: database).write(to: url)
+    }
+
     // MARK: - Intimacy sealed-note decrypt seam (#5, mirrors PeriodTracker's gate)
 
     private func makeIntimacyStore(context: NSManagedObjectContext) -> IntimacyLogStore {
@@ -367,12 +421,20 @@ struct SensitiveSurfaceGateDecodeTests {
 
     /// A blob from a build that predates the gate: no `periodTrackingVisible` AND no migration marker.
     /// Such a user may have been tracking cycles for months while `sex` sat at its `.male` default, so
-    /// they must be pinned visible rather than silently losing the feature.
-    @Test func legacySettingsPinPeriodTrackingVisible() throws {
-        let settings = try decode(#"{"hasCompletedOnboarding": true}"#)
+    /// they must be pinned visible rather than silently losing the feature. The pin now runs in
+    /// `reconcilingSensitiveVisibility` gated on a FRESH device-local marker — pure decode only preserves
+    /// the RAW marker (absent ⇒ false) as the reconciliation discriminator, so a mixed-version key-drop
+    /// can't make the pin re-fire on a device that already resolved.
+    @Test func legacySettingsPinPeriodTrackingVisibleOnAFreshDevice() throws {
+        let decoded = try decode(#"{"hasCompletedOnboarding": true}"#)
+        #expect(decoded.periodTrackingVisible == nil)
+        #expect(decoded.didMigratePeriodVisibility == false)
 
-        #expect(settings.periodTrackingVisible == true)
-        #expect(settings.didMigratePeriodVisibility)
+        let reconciled = decoded.reconcilingSensitiveVisibility(deviceLocal: SensitiveVisibilityResolution())
+        #expect(reconciled.settings.periodTrackingVisible == true)
+        #expect(reconciled.settings.didMigratePeriodVisibility)
+        #expect(reconciled.resolution.resolved)
+        #expect(reconciled.settingsChanged)
     }
 
     /// Regression: the marker was originally `hasCompletedOnboarding`, which is NOT a proxy for
@@ -400,13 +462,20 @@ struct SensitiveSurfaceGateDecodeTests {
         #expect(settings.periodTrackingVisible == false)
     }
 
-    @Test func migrationMarkerRoundTripsSoItNeverRunsTwice() throws {
-        let migrated = try decode(#"{"hasCompletedOnboarding": true}"#)
-        let data = try JSONEncoder().encode(migrated)
-        let reloaded = try JSONDecoder().decode(FernletSettings.self, from: data)
+    @Test func migrationDoesNotRefireOnceTheDeviceHasResolved() throws {
+        // A fresh device migrates a legacy blob → pins visible and records the resolution device-locally.
+        let first = try decode(#"{"hasCompletedOnboarding": true}"#)
+            .reconcilingSensitiveVisibility(deviceLocal: SensitiveVisibilityResolution())
+        #expect(first.settings.periodTrackingVisible == true)
+        #expect(first.resolution.resolved)
 
-        #expect(reloaded.didMigratePeriodVisibility)
-        #expect(reloaded.periodTrackingVisible == true)
+        // What an up-to-date device now syncs (didMigrate encoded true), reloaded on the SAME resolved
+        // device: the migration does not re-run, and nothing changes.
+        let reencoded = try JSONDecoder().decode(FernletSettings.self, from: JSONEncoder().encode(first.settings))
+        #expect(reencoded.didMigratePeriodVisibility)
+        let second = reencoded.reconcilingSensitiveVisibility(deviceLocal: first.resolution)
+        #expect(second.settings.periodTrackingVisible == true)
+        #expect(!second.settingsChanged)
     }
 
     @Test func explicitStoredChoiceSurvivesDecode() throws {
@@ -433,5 +502,56 @@ struct SensitiveSurfaceGateDecodeTests {
 
         #expect(decoded.periodTrackingVisible == false)
         #expect(!decoded.intimacyTrackingVisible)
+    }
+
+    // MARK: - Mixed-version key-drop (the privacy-critical fail-closed guard)
+
+    /// The headline finding: a user hides period on an up-to-date device (`periodTrackingVisible=false`
+    /// syncs); a SECOND device on a PRE-GATE build decodes the synced settings and re-encodes WITHOUT the
+    /// visibility keys. When the up-to-date device re-decodes that blob, `didMigratePeriodVisibility` is
+    /// absent — under the OLD code the pin re-fired (nil ⇒ visible-true), silently re-opening the hidden
+    /// surface and resuming the HealthKit cycle reads behind it. With the device-local marker recording
+    /// HIDDEN, reconcile re-asserts hidden instead of re-pinning.
+    @Test func resolvedHiddenPeriodSurvivesAPreGateKeyDrop() throws {
+        let hiddenOnThisDevice = SensitiveVisibilityResolution(
+            resolved: true, periodTrackingVisible: false, intimacyTrackingVisible: true)
+        // The pre-gate re-encode: the synced blob has NONE of the three visibility keys.
+        let dropped = try decode("{}")
+        #expect(dropped.periodTrackingVisible == nil)         // OLD code pinned this to visible-true...
+        #expect(dropped.didMigratePeriodVisibility == false)  // ...because the migration marker is absent.
+
+        let reconciled = dropped.reconcilingSensitiveVisibility(deviceLocal: hiddenOnThisDevice)
+        #expect(reconciled.settings.periodTrackingVisible == false)   // re-asserted hidden, NOT re-pinned
+        #expect(reconciled.settings.didMigratePeriodVisibility)
+        #expect(reconciled.resolution.periodTrackingVisible == false)
+    }
+
+    /// Intimacy analogue: a pre-gate build also drops `intimacyTrackingVisible`, which decodes back to its
+    /// default of `true` (visible). A device that resolved intimacy HIDDEN re-asserts hidden rather than
+    /// letting the default re-open it.
+    @Test func resolvedHiddenIntimacySurvivesAPreGateKeyDrop() throws {
+        let hiddenOnThisDevice = SensitiveVisibilityResolution(
+            resolved: true, periodTrackingVisible: nil, intimacyTrackingVisible: false)
+        let dropped = try decode("{}")
+        #expect(dropped.intimacyTrackingVisible)  // OLD code: intimacy defaults straight back to visible.
+
+        let reconciled = dropped.reconcilingSensitiveVisibility(deviceLocal: hiddenOnThisDevice)
+        #expect(!reconciled.settings.intimacyTrackingVisible)   // re-asserted hidden
+        #expect(!reconciled.resolution.intimacyTrackingVisible)
+    }
+
+    /// The normal both-new-build path must stay intact: a genuine cross-device UN-HIDE from an UP-TO-DATE
+    /// peer (blob carries `didMigratePeriodVisibility: true`) still propagates to a device that had resolved
+    /// hidden. The guard is a mixed-version discriminator, not a blanket hidden-latch.
+    @Test func upToDatePeerUnhidePropagatesToAResolvedDevice() throws {
+        let hiddenOnThisDevice = SensitiveVisibilityResolution(
+            resolved: true, periodTrackingVisible: false, intimacyTrackingVisible: false)
+        let unhidden = try decode(
+            #"{"didMigratePeriodVisibility": true, "periodTrackingVisible": true, "intimacyTrackingVisible": true}"#)
+
+        let reconciled = unhidden.reconcilingSensitiveVisibility(deviceLocal: hiddenOnThisDevice)
+        #expect(reconciled.settings.periodTrackingVisible == true)
+        #expect(reconciled.settings.intimacyTrackingVisible)
+        #expect(reconciled.resolution.periodTrackingVisible == true)  // device-local record follows the agreed value
     }
 }
