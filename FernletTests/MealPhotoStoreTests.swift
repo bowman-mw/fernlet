@@ -145,6 +145,34 @@ struct MealPhotoStoreTests {
         #expect(noKeyStore.save(jpeg(width: 100, height: 100), forID: UUID()) == false)
     }
 
+    @Test func legacyPlaintextUpgradeDisabledResolvesNilAndDoesNotReseal() throws {
+        // Body (progress) and recipe photo stores never had a plaintext generation, so they construct
+        // with the legacy-plaintext upgrade DISABLED: an unsealed file that merely parses as an image
+        // must NOT be trusted, returned, or re-sealed in place (that would launder attacker-dropped
+        // plaintext into authentic ciphertext). Against the OLD flag-less store — which always upgraded —
+        // this same file WOULD round-trip and get re-sealed, so this test fails there.
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MealPhotoStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = MealPhotoStore(
+            directory: dir,
+            keyProvider: InMemoryPrivateMediaKeyProvider(),
+            allowsLegacyPlaintextUpgrade: false
+        )
+
+        let id = UUID()
+        let plaintext = jpeg(width: 150, height: 150)
+        try plaintext.write(to: fileURL(dir, id))
+
+        // Fail-closed: an unsealed file at a valid id path resolves to nil...
+        #expect(store.imageData(for: id) == nil,
+                "an unsealed file was trusted despite the legacy upgrade being disabled")
+        // ...and is left exactly as-is on disk (never re-sealed).
+        let afterRead = try #require(try? Data(contentsOf: fileURL(dir, id)))
+        #expect(afterRead == plaintext,
+                "the unsealed file was re-sealed despite the legacy upgrade being disabled")
+    }
+
     @Test func deleteRemovesTheFileAndDeleteAllClearsTheStore() throws {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }

@@ -15,6 +15,9 @@ struct MoveView: View {
     @State private var allDays: [String: FernletDay] = [:]
     @State private var showingLocations = false
     @State private var progressPhotos: [ProgressPhotoRecord] = []
+    // Surfaced when a progress-photo capture couldn't be sealed to disk (fail-closed store returned nil):
+    // the photo would otherwise vanish silently. A clear per-capture alert, never a silent drop.
+    @State private var showPhotoSaveFailedAlert = false
 
     private var hasRecentCoachInteraction: Bool {
         let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: .now) ?? .now
@@ -92,7 +95,9 @@ struct MoveView: View {
                         records: progressPhotos,
                         loadData: { store.progressPhotoData(for: $0) },
                         onCapture: { image in
-                            store.addProgressPhoto(image)
+                            if store.addProgressPhoto(image) == nil {
+                                showPhotoSaveFailedAlert = true
+                            }
                             progressPhotos = store.progressPhotoRecords()
                         },
                         onOpen: { record in path.append(record) }
@@ -123,6 +128,11 @@ struct MoveView: View {
         .onAppear {
             allDays = store.loadDays()
             progressPhotos = store.progressPhotoRecords()
+        }
+        .alert("Couldn't save this photo", isPresented: $showPhotoSaveFailedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Fernlet couldn't seal this photo to your private timeline. Please try again.")
         }
         .sheet(isPresented: $showingLocations) {
             WorkoutLocationSetupView(store: store)

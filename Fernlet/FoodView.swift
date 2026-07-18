@@ -1273,11 +1273,17 @@ struct MealSheet: View {
                         )
                     )
                     #if canImport(UIKit)
-                    attachPhoto(context.photo, to: committed)
+                    let photoAttached = attachPhoto(context.photo, to: committed)
+                    #else
+                    let photoAttached = true
                     #endif
                     reviewContext = nil
                     onLogged(committed)
-                    dismiss()
+                    if photoAttached {
+                        dismiss()
+                    } else {
+                        notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+                    }
                 },
                 onDiscard: {
                     // Leave the log sheet open with the original text so the user can adjust and retry.
@@ -1460,10 +1466,18 @@ struct MealSheet: View {
             }
             let meals = store.commitResolution(resolution)
             #if canImport(UIKit)
-            attachPhoto(capturedPhoto, to: meals)
+            let photoAttached = attachPhoto(capturedPhoto, to: meals)
+            #else
+            let photoAttached = true
             #endif
             onLogged(meals)
-            dismiss()
+            if photoAttached {
+                dismiss()
+            } else {
+                // The meal logged; only its photo couldn't be sealed. Keep the sheet open so the
+                // notice is seen rather than the photo silently vanishing.
+                notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+            }
         }
     }
 
@@ -1476,11 +1490,17 @@ struct MealSheet: View {
     }
 
     #if canImport(UIKit)
-    private func attachPhoto(_ photo: UIImage?, to meals: [Meal]) {
-        guard let photo, let photoID = store.saveMealPhoto(photo) else { return }
+    /// Attaches the captured photo to the just-logged meals. Returns false ONLY when a photo was present
+    /// but couldn't be sealed (fail-closed `saveMealPhoto` returned nil) — the meal still logged, but its
+    /// photo was dropped, so the caller surfaces a gentle notice instead of dismissing on a silent loss.
+    @discardableResult
+    private func attachPhoto(_ photo: UIImage?, to meals: [Meal]) -> Bool {
+        guard let photo else { return true }
+        guard let photoID = store.saveMealPhoto(photo) else { return false }
         for meal in meals {
             store.attachMealPhoto(mealID: meal.id, photoID: photoID)
         }
+        return true
     }
 
     /// "Identify from photo": Vision classification composes a description that runs the normal
@@ -2542,6 +2562,9 @@ struct RecipeDetailView: View {
 
     @State private var photo: UIImage?
     @State private var didLoadPhoto = false
+    /// Calm inline notice when a photo couldn't be sealed to disk (fail-closed save returned false), so
+    /// the UI never shows a false success that then vanishes on next open.
+    @State private var photoNotice: String?
 
     private var totals: MacroTotals { store.macroTotals(for: recipe) }
     private var perServing: MacroTotals {
@@ -2563,6 +2586,13 @@ struct RecipeDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 photoSection
+                if let photoNotice {
+                    Text(photoNotice)
+                        .font(.fernlet(.bodySmall))
+                        .italic()
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(recipe.name)
                         .font(.fernlet(.displayMedium))
@@ -2735,13 +2765,21 @@ struct RecipeDetailView: View {
     }
 
     private func save(_ image: UIImage) {
-        store.saveRecipePhoto(image, for: recipe.id)
+        // saveRecipePhoto is fail-closed (false on jpeg/keychain/disk failure). Only reflect the photo
+        // when it actually sealed to disk — otherwise a false success would show it, then it would vanish
+        // on next open when the store read finds nothing.
+        guard store.saveRecipePhoto(image, for: recipe.id) else {
+            photoNotice = "Couldn't save this photo to your private store. Please try again."
+            return
+        }
         photo = image
+        photoNotice = nil
     }
 
     private func remove() {
         store.deleteRecipePhoto(for: recipe.id)
         photo = nil
+        photoNotice = nil
     }
 }
 #endif

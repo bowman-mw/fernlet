@@ -24,6 +24,10 @@ protocol SealedBackupContext: AnyObject {
     var recentMeals: [Meal] { get }
     func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord])
     func loadAllDaysFromRepository() -> [String: FernletDay]
+    /// Records whether a sealed PERIOD backup still needs re-uploading under a newly-adopted escrow key
+    /// because period tracking is currently hidden (G5). Surfaced non-silently so the user can trigger the
+    /// re-upload after un-hiding, instead of the cloud chunk silently staying sealed to the old identity.
+    func recordSealedBackupPeriodReuploadDeferred(_ deferred: Bool)
     /// Records the outcome of a sealed-backup restore attempt so the UI can show an honest, retryable
     /// status (WS-4) instead of a silently-swallowed failure.
     func recordSealedBackupRestoreOutcome(_ outcome: SealedBackupRestoreOutcome, payloadType: SealedBackupPayloadType)
@@ -254,7 +258,19 @@ final class SealedBackupCoordinator {
             _ = await setSealedBackupEnabled(true, payloadType: .sensitiveNotes)
         }
         if prefs.sealedBackupPeriodEnabled {
-            _ = await setSealedBackupEnabled(true, payloadType: .periodData)
+            if host.isPeriodTrackingVisible {
+                _ = await setSealedBackupEnabled(true, payloadType: .periodData)
+                host.recordSealedBackupPeriodReuploadDeferred(false)
+            } else {
+                // G5: period is hidden, so reconcilePeriodBackup is a silent no-op. Routing through
+                // setSealedBackupEnabled here would log a FALSE "reconciled" while the cloud period chunk
+                // stays sealed to the OLD escrow key we just replaced — a later restore of the user's OWN
+                // backup then fails terminally with keyAgreementIdentityMismatch. Re-sealing requires
+                // paging the (gated) narrative store, which we won't do while hidden. Record the deferral
+                // honestly so it's surfaced (re-upload after un-hiding) rather than silently claimed done.
+                host.recordSealedBackupPeriodReuploadDeferred(true)
+                FernletAuditLog.log("sealedBackup.escrowAdoptPeriodDeferredHidden")
+            }
         }
         return true
     }

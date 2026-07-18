@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import SwiftUI
 import PrivateMediaStore
+import FernletLock
 
 /// The gym progress-photo timeline that lives under the Move tab (#11 piece 3). A private, at-rest-sealed
 /// strip of the user's own body photos, newest first, with an add affordance and a tap-through to a
@@ -14,39 +15,147 @@ struct ProgressPhotoSection: View {
     var onCapture: (UIImage) -> Void
     var onOpen: (ProgressPhotoRecord) -> Void
 
+    // Body photos are as personal as journal/cycle/intimacy, so — when a Fernlet lock is configured —
+    // the timeline reveals behind the SAME global lock as the Private Hub (fail-closed at the reveal
+    // seam: no thumbnail decodes until unlocked). With no lock configured the section behaves exactly as
+    // before, keeping the capture affordance discoverable.
+    @Environment(FernletLockService.self) private var lockService
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showingUnlock = false
+    // Set just before pushing the detail so the re-lock-on-disappear doesn't fire during the push (which
+    // would make the also-gated detail re-prompt). Reset on re-appear.
+    @State private var isOpeningDetail = false
+
+    private var gateActive: Bool {
+        lockService.isLockConfigured && !UITestSupport.bypassPrivateLockGate
+    }
+
+    private var isUnlocked: Bool {
+        if case .unlocked = lockService.state { return true }
+        return false
+    }
+
+    /// Whether the real photos may be shown. Gated behind the global lock when configured.
+    private var isRevealed: Bool { !gateActive || isUnlocked }
+
+    /// Hide the app-switcher snapshot of body photos while the app isn't frontmost.
+    private var redactForSnapshot: Bool { scenePhase != .active }
+
     var body: some View {
         FernletScrollSection("Progress photos") {
-            if records.isEmpty {
-                VStack(spacing: 16) {
-                    EmptyState(text: "See how you're changing. Add a progress photo and it'll build a private timeline here — sealed on your device.")
-                    PhotoCaptureControl(onCameraCapture: onCapture) {
-                        addLabel(prominent: true)
-                    }
-                    .accessibilityIdentifier("move.progressPhotos.addFirst")
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
+            if isRevealed {
+                revealedContent
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 14) {
-                        PhotoCaptureControl(onCameraCapture: onCapture) {
-                            addTile
-                        }
-                        .accessibilityIdentifier("move.progressPhotos.add")
-                        ForEach(records) { record in
-                            Button {
-                                onOpen(record)
-                            } label: {
-                                ProgressPhotoCard(record: record, loadData: { loadData(record.id) })
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 2)
-                }
-                .accessibilityIdentifier("move.progressPhotos")
+                lockedPlaceholder
             }
+        }
+        .onAppear { isOpeningDetail = false }
+        .onDisappear { reLockOnDisappear() }
+        .sheet(isPresented: $showingUnlock) {
+            ProgressPhotoUnlockSheet(lockService: lockService)
+        }
+    }
+
+    @ViewBuilder private var revealedContent: some View {
+        if records.isEmpty {
+            VStack(spacing: 16) {
+                EmptyState(text: "See how you're changing. Add a progress photo and it'll build a private timeline here — sealed on your device.")
+                PhotoCaptureControl(onCameraCapture: onCapture) {
+                    addLabel(prominent: true)
+                }
+                .accessibilityIdentifier("move.progressPhotos.addFirst")
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 14) {
+                    PhotoCaptureControl(onCameraCapture: onCapture) {
+                        addTile
+                    }
+                    .accessibilityIdentifier("move.progressPhotos.add")
+                    ForEach(records) { record in
+                        Button {
+                            isOpeningDetail = true
+                            onOpen(record)
+                        } label: {
+                            ProgressPhotoCard(record: record, loadData: { loadData(record.id) })
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 2)
+            }
+            .accessibilityIdentifier("move.progressPhotos")
+            // Opaque cover over the thumbnails while backgrounded so the app-switcher snapshot can't
+            // leak body photos (belt-and-suspenders with the reveal gate, which only guards decoding).
+            .overlay {
+                if redactForSnapshot { snapshotCover }
+            }
+        }
+    }
+
+    /// Shown when a Fernlet lock is configured and the app is locked: a calm placeholder with a
+    /// tap-to-unlock, so nobody handed the unlocked phone can scroll the body-photo timeline.
+    private var lockedPlaceholder: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(Color.moss)
+            Text("Your progress photos are private")
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+            Text("These body photos sit behind your Fernlet lock. Unlock to see your timeline.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .multilineTextAlignment(.center)
+                .fernletWrappingText()
+            Button {
+                showingUnlock = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.open.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Unlock to view")
+                        .font(.fernlet(.label))
+                }
+                .foregroundStyle(Color.cream)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(Color.moss, in: Capsule())
+                .fernletSmallShadow()
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("move.progressPhotos.unlock")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+
+    /// Opaque privacy cover used to redact the timeline in the app-switcher snapshot.
+    private var snapshotCover: some View {
+        ZStack {
+            Rectangle().fill(Color.parchment)
+            VStack(spacing: 6) {
+                Image(systemName: "lock.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.slate)
+                Text("Hidden")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+            }
+        }
+    }
+
+    /// Re-lock the global lock when the timeline goes away (tab switch / leaving), matching the Private
+    /// Hub's "re-lock on disappear". Suppressed while pushing the detail (which is separately gated) so
+    /// the push doesn't force a second unlock prompt. Presenting the unlock sheet does NOT fire
+    /// onDisappear, so it never re-locks mid-unlock.
+    private func reLockOnDisappear() {
+        guard gateActive, !isOpeningDetail else { return }
+        if case .unlocked = lockService.state {
+            lockService.lock(reason: .viewDisappeared)
         }
     }
 
@@ -83,6 +192,23 @@ struct ProgressPhotoSection: View {
                 .font(.fernlet(.labelSmall))
                 .hidden()
         }
+    }
+}
+
+/// A calm sheet that runs the app's real unlock flow (`FernletLockView`) so revealing the progress-photo
+/// timeline uses the SAME lock as the Private Hub — one authentication, one content key. The lock service
+/// is passed in explicitly (rather than read from the sheet's environment) since sheets don't reliably
+/// inherit it, then re-injected for `FernletLockView`. Dismisses the moment the global lock unlocks.
+private struct ProgressPhotoUnlockSheet: View {
+    let lockService: FernletLockService
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        FernletLockView(onUnlocked: { dismiss() }, onResetRequested: nil)
+            .environment(lockService)
+            .onChange(of: lockService.state) { _, newState in
+                if case .unlocked = newState { dismiss() }
+            }
     }
 }
 
@@ -151,10 +277,27 @@ struct ProgressPhotoDetailView: View {
     var onChanged: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    // Full-screen body photo → gated behind the same global lock as the Private Hub, and redacted from
+    // the app-switcher snapshot while backgrounded.
+    @Environment(FernletLockService.self) private var lockService
+    @Environment(\.scenePhase) private var scenePhase
     @State private var image: UIImage?
     @State private var caption: String
     @State private var showingDeleteConfirm = false
     @FocusState private var captionFocused: Bool
+
+    private var gateActive: Bool {
+        lockService.isLockConfigured && !UITestSupport.bypassPrivateLockGate
+    }
+
+    /// Fail-closed at the reveal seam: don't even decode the sealed bytes until unlocked.
+    private var canReveal: Bool {
+        guard gateActive else { return true }
+        if case .unlocked = lockService.state { return true }
+        return false
+    }
+
+    private var redactForSnapshot: Bool { scenePhase != .active }
 
     init(store: FernletStore, record: ProgressPhotoRecord, onChanged: @escaping () -> Void) {
         self.store = store
@@ -184,6 +327,18 @@ struct ProgressPhotoDetailView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                // Opaque cover while backgrounded so the app-switcher snapshot can't leak the body photo.
+                .overlay {
+                    if redactForSnapshot {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.parchment)
+                            .overlay {
+                                Image(systemName: "lock.fill")
+                                    .font(.title2.weight(.semibold))
+                                    .foregroundStyle(Color.slate)
+                            }
+                    }
+                }
 
                 Text(record.capturedAt.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
                     .font(.fernlet(.displayMedium))
@@ -237,9 +392,11 @@ struct ProgressPhotoDetailView: View {
                 }
             }
         }
-        .task {
+        // Keyed on the lock state so the decode runs (and re-runs) the moment the gate unlocks. The
+        // reveal guard means the sealed bytes are never even decoded into memory while locked.
+        .task(id: lockService.state) {
             // Decode off-main; only the finished image lands back on the MainActor.
-            guard image == nil, let data = store.progressPhotoData(for: record.id) else { return }
+            guard canReveal, image == nil, let data = store.progressPhotoData(for: record.id) else { return }
             image = await UIImage(data: data)?.byPreparingForDisplay()
         }
         // Backstop for the caption if the user leaves without tapping Done (e.g. taps back with the
@@ -260,6 +417,9 @@ struct ProgressPhotoDetailView: View {
         } message: {
             Text("This removes it from your timeline and your device. Fernlet can't undo this.")
         }
+        // Same full-screen lock as the Private Hub: when configured + locked, an unlock overlay covers
+        // the photo and re-locks on disappear. Inactive (no lock configured) → passes through unchanged.
+        .fernletLockGate(active: gateActive)
     }
 
     /// Persists the caption, then refreshes the parent timeline in the SAME step (save → refresh), so the

@@ -206,7 +206,9 @@ final class FernletStore {
     /// fetch (tester decision) — this only ever holds a photo the user chose.
     @ObservationIgnored private let recipePhotoStore = MealPhotoStore(
         directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
-            .appendingPathComponent("RecipePhotos", isDirectory: true)
+            .appendingPathComponent("RecipePhotos", isDirectory: true),
+        // Recipe photos never had a plaintext generation — fail closed on unsealed on-disk bytes.
+        allowsLegacyPlaintextUpgrade: false
     )
     /// Injected (or nil → default) journal narrative repository, captured so the lazily-built
     /// `journalSealingCoordinator` can own it.
@@ -1751,6 +1753,11 @@ final class FernletStore {
     /// (WS-3). Surfaced (observably) in Privacy & Data; never auto-resolved.
     private(set) var sealedBackupEscrowConflict = false
 
+    /// Whether a sealed PERIOD backup still needs re-uploading under the newly-adopted escrow key because
+    /// period tracking was hidden when the key was adopted (G5). Surfaced (observably) in Privacy & Data so
+    /// the stale cloud chunk is visible and can be re-uploaded after un-hiding, not silently left mismatched.
+    private(set) var sealedBackupPeriodReuploadDeferred = false
+
     /// Seals + uploads (or deletes) the encrypted CloudKit backup for a payload; returns whether it
     /// succeeded. Delegates to `SealedBackupCoordinator`.
     @discardableResult
@@ -2939,6 +2946,9 @@ extension FernletStore: SealedBackupContext {
     }
     func recordSealedBackupEscrowConflict(_ inConflict: Bool) {
         sealedBackupEscrowConflict = inConflict
+    }
+    func recordSealedBackupPeriodReuploadDeferred(_ deferred: Bool) {
+        sealedBackupPeriodReuploadDeferred = deferred
     }
 }
 

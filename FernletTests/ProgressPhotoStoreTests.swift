@@ -143,6 +143,28 @@ struct ProgressPhotoStoreTests {
         #expect(store.records().isEmpty, "a plaintext index was trusted and surfaced injected records")
     }
 
+    /// The photo BYTES go through a `MealPhotoStore` composed with the legacy-plaintext upgrade DISABLED
+    /// (body photos never had a plaintext generation). So an unsealed JPEG dropped into the `Photos/`
+    /// subdir at a valid id path (tampered restore, shared-container write) must resolve to nil — never be
+    /// trusted as a progress photo and re-sealed into authentic ciphertext. Against the pre-flag store,
+    /// which always upgraded plaintext on read, `imageData` would return the injected image instead.
+    @Test func plaintextPhotoFileIsNotTrustedAsProgressPhoto() throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let photosDir = dir.appendingPathComponent("Photos", isDirectory: true)
+        try FileManager.default.createDirectory(at: photosDir, withIntermediateDirectories: true)
+        let id = UUID()
+        let plaintext = jpeg(width: 150, height: 150)
+        let photoURL = photosDir.appendingPathComponent("\(id.uuidString).jpg")
+        try plaintext.write(to: photoURL)
+
+        #expect(store.imageData(for: id) == nil, "an unsealed photo file was trusted as a progress photo")
+        // Left untouched (not re-sealed in place).
+        let afterRead = try #require(try? Data(contentsOf: photoURL))
+        #expect(afterRead == plaintext, "the unsealed photo file was re-sealed despite the disabled upgrade")
+    }
+
     /// An index that is present but won't decrypt (bit-rot / truncation / wrong key) must NOT be
     /// overwritten by a new add — doing so would silently drop the sealed timeline and orphan its photo
     /// files. add() refuses (returns nil) and leaves the index untouched and no orphan photo behind.

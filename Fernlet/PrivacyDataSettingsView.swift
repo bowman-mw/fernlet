@@ -469,9 +469,16 @@ struct PrivacyDataSettingsView: View {
                     guard let outcome = store.sealedBackupRestoreStatus[payload], outcome.needsAttention else { return nil }
                     return SealedBackupAttention(payload: payload, outcome: outcome)
                 }
-            if store.sealedBackupEscrowConflict || !attentionItems.isEmpty {
+            if store.sealedBackupEscrowConflict || store.sealedBackupPeriodReuploadDeferred || !attentionItems.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     SectionLabel("Encrypted backup status")
+
+                    if store.sealedBackupPeriodReuploadDeferred {
+                        Text("Your period backup still needs re-uploading with your other device's backup key. It's hidden right now — un-hide period tracking, then this device will re-upload it so it can be restored later.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
 
                     if store.sealedBackupEscrowConflict {
                         Text("We found the backup key from your other device. To keep your encrypted backups in sync across devices, this device can switch to it. Backups made only on this device may need to be re-uploaded.")

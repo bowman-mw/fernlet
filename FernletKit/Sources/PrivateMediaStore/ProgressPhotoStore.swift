@@ -41,9 +41,14 @@ public struct ProgressPhotoStore {
     public init(directory: URL, keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider()) {
         self.directory = directory
         self.keyProvider = keyProvider
+        // Body photos never had a plaintext generation, so the legacy-plaintext-upgrade read path is
+        // disabled: an unsealed file dropped at a valid id path (tampered restore, shared-container
+        // write) resolves to nil rather than being trusted and re-sealed into authentic ciphertext.
+        // This mirrors the sealed index's own fail-closed refusal (see `readIndex`).
         self.photoStore = MealPhotoStore(
             directory: directory.appendingPathComponent("Photos", isDirectory: true),
-            keyProvider: keyProvider
+            keyProvider: keyProvider,
+            allowsLegacyPlaintextUpgrade: false
         )
         self.indexURL = directory.appendingPathComponent("index.bin")
         let enc = JSONEncoder()

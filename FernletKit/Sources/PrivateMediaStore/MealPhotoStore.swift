@@ -20,6 +20,13 @@ import FernletDomainModel
 public struct MealPhotoStore {
     private let directory: URL
     private let keyProvider: PrivateMediaKeyProviding
+    /// Whether an unsealed on-disk file that parses as a safe-bounds image is trusted as pre-sealing
+    /// "legacy plaintext", re-sealed in place, and returned. TRUE only for the original meal-photo store,
+    /// which legitimately has such files from the pre-sealing build. Body (progress) photos and recipe
+    /// photos never had a plaintext generation, so their stores pass FALSE: unsealed bytes at a valid id
+    /// path resolve to nil (fail-closed) rather than being laundered into authentic ciphertext by an
+    /// attacker-dropped JPEG. Matches the index's own fail-closed refusal in `ProgressPhotoStore`.
+    private let allowsLegacyPlaintextUpgrade: Bool
 
     /// Longest-side cap for stored photos. Ample for the polaroid card and a full-screen detail view,
     /// while keeping originals off disk. Small images are passed through at their native size.
@@ -29,9 +36,14 @@ public struct MealPhotoStore {
     /// `PrivateMediaStore`. The user's own camera photos are far below this.
     private static let maxSourcePixelDimension = 20_000
 
-    public init(directory: URL, keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider()) {
+    public init(
+        directory: URL,
+        keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(),
+        allowsLegacyPlaintextUpgrade: Bool = true
+    ) {
         self.directory = directory
         self.keyProvider = keyProvider
+        self.allowsLegacyPlaintextUpgrade = allowsLegacyPlaintextUpgrade
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
@@ -76,7 +88,9 @@ public struct MealPhotoStore {
         // genuinely corrupt/wrong-key bytes; tell them apart by whether the raw bytes are a valid
         // image (a legacy photo passed the same image encode at save time). If so, re-seal in place
         // and return it; otherwise treat it as missing rather than hand back ciphertext/garbage.
-        if PrivateMediaStore.isWithinSafePixelBounds(stored) {
+        // Stores with NO legacy plaintext generation (body/recipe photos) skip this branch entirely:
+        // an unsealed file that merely parses as an image is refused, not trusted and re-sealed.
+        if allowsLegacyPlaintextUpgrade, PrivateMediaStore.isWithinSafePixelBounds(stored) {
             reseal(stored, to: url(for: id))
             return stored
         }
