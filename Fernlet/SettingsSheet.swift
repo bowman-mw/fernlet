@@ -1010,6 +1010,18 @@ struct SettingsSheet: View {
         }
     }
 
+    /// Shown under the goal cards when the user has pinned nutrition targets or an explicit training
+    /// split: a preset only sets the *goal*, so those custom choices quietly win over the goal's plan.
+    /// nil when nothing is pinned (the goal's own summaries then describe the plan in effect).
+    private var goalOverrideFootnote: String? {
+        var pieces: [String] = []
+        if store.settings.hasAnyNutritionOverride { pieces.append("custom nutrition targets") }
+        if store.settings.workoutProfile.selectedSplitID != nil { pieces.append("chosen training split") }
+        guard !pieces.isEmpty else { return nil }
+        let list = pieces.count == 2 ? "\(pieces[0]) and \(pieces[1])" : pieces[0]
+        return "Your \(list) stay as you set them — clear them to follow this goal's plan."
+    }
+
     private var healthSyncedProfileBinding: Binding<UserNutritionProfile> {
         Binding(
             get: { store.settings.userProfile },
@@ -1024,8 +1036,18 @@ struct SettingsSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             SectionLabel("Goal")
             // Preset cards: each goal shows its paired nutrition + training setup, so one choice reads as
-            // configuring both. Replaces the bare Picker + lone tagline.
-            GoalPresetCards(selectedGoal: $store.settings.selectedGoal)
+            // configuring both. Replaces the bare Picker + lone tagline. The binding routes through
+            // `setSelectedGoal` so the pick schedules a snapshot save (a bare keypath binding never did).
+            GoalPresetCards(selectedGoal: Binding(
+                get: { store.settings.selectedGoal },
+                set: { store.setSelectedGoal($0) }
+            ))
+            if let note = goalOverrideFootnote {
+                Text(note)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Sick mode", isOn: Binding(
                     get: { store.isSick(on: store.todayKey) },

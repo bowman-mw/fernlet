@@ -24,6 +24,47 @@ struct NutritionTargetsEditor: View {
             || store.settings.fatTargetOverride != nil
     }
 
+    /// True when the protein + fat targets in effect alone meet or exceed the calorie target. There the
+    /// carbs residual bottoms out at its floor instead of going negative, so the four macros sum ABOVE
+    /// the stated calories — the one case where "carbs balance to fit your calories" stops being true.
+    private var proteinAndFatExceedCalories: Bool {
+        applied.protein * 4 + applied.fat * 9 > applied.calories
+    }
+
+    /// The plan Fernlet would derive with every override cleared — the "back to automatic" values, so a
+    /// very low manual target can be disclosed against what the app would otherwise pick.
+    private var derivedTargets: NutritionTargets {
+        var settings = store.settings
+        settings.calorieTargetOverride = nil
+        settings.proteinTargetOverride = nil
+        settings.fatTargetOverride = nil
+        return NutritionTargetCalculator.targets(for: settings)
+    }
+
+    /// The footer/caution copy. Swaps to a gentle heads-up when protein + fat alone clear the calorie
+    /// target (the totals then read a little high); otherwise it explains the residual honestly without
+    /// promising the numbers always add up exactly.
+    private var footerText: String {
+        if proteinAndFatExceedCalories {
+            return "Your protein and fat alone are above your calorie target, so carbs sit at a gentle minimum and the totals come out a little higher than your calories."
+        }
+        return hasAnyOverride
+            ? "Carbs fill in the calories your protein and fat leave room for. Clear a field to let Fernlet set it from your goal and profile again."
+            : "These come from your goal, profile, activity and eating pattern. Type a number to set your own — carbs fill in the calories your protein and fat leave room for."
+    }
+
+    /// A gentle, non-blocking note when a manual target sits implausibly low. It discloses and points at
+    /// the derived value — it never blocks or hard-floors the input; staying in control is the point.
+    private var lowTargetNote: String? {
+        if let calories = store.settings.calorieTargetOverride, calories < 1_200 {
+            return "That's a very low daily target — your derived value is about \(derivedTargets.calories) cal. Gentle fueling helps your companion too."
+        }
+        if let protein = store.settings.proteinTargetOverride, protein < max(derivedTargets.protein / 2, 20) {
+            return "That's quite low on protein — your derived value is about \(derivedTargets.protein) g. Gentle, steady fueling helps your companion too."
+        }
+        return nil
+    }
+
     var body: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -69,12 +110,19 @@ struct NutritionTargetsEditor: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("nutritionTargets.carbs")
 
-                Text(hasAnyOverride
-                     ? "Carbs balance automatically to fit your calories. Clear a field to let Fernlet set it from your goal and profile again."
-                     : "These come from your goal, profile, activity and eating pattern. Type a number to set your own — carbs always balance to fit your calories.")
+                Text(footerText)
                     .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(proteinAndFatExceedCalories ? Color.bark : Color.slate)
                     .fernletWrappingText()
+                    .accessibilityIdentifier("nutritionTargets.footer")
+
+                if let note = lowTargetNote {
+                    Text(note)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
+                        .accessibilityIdentifier("nutritionTargets.lowTargetNote")
+                }
             }
         }
     }

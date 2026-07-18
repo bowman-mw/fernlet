@@ -1567,8 +1567,11 @@ public nonisolated enum NutritionTargetCalculator {
         let profile = settings.userProfile
         // A non-nil override pins the target; nil falls through to the derived value. `fat` derives from
         // the (possibly overridden) `calories`, and `carbs` below is the residual of all three, so
-        // pinning any of these re-solves the rest and the four macros always agree with the calorie
-        // total. Overrides only ever reach here as a positive integer (the editor maps 0/blank → nil).
+        // pinning any of these re-solves the rest. The four macros agree with the calorie total in the
+        // normal case; when a user pins protein and fat high enough that they alone exceed ~70% of the
+        // calorie target, the carbs floor below holds instead of going negative, so the totals sum a
+        // little ABOVE the stated calories. Overrides only ever reach here as a positive integer (the
+        // editor maps 0/blank → nil).
         let calories = settings.calorieTargetOverride ?? adjustedCalories(for: settings)
         let protein = settings.proteinTargetOverride ?? proteinTarget(for: settings)
         let fat = settings.fatTargetOverride ?? fatTarget(calories: calories, preferences: settings.nutritionPreferences)

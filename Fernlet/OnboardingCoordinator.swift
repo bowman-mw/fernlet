@@ -256,19 +256,10 @@ struct OnboardingGoalScreen: View {
                 subtitle: "Choose a focus and outline how movement should fit your life."
             ) {
                 VStack(alignment: .leading, spacing: 16) {
-                    VStack(spacing: 10) {
-                        ForEach(GoalType.allCases) { option in
-                            OnboardingChoiceRow(
-                                title: option.displayName,
-                                subtitle: option.tagline,
-                                systemImage: goal == option ? "checkmark.circle.fill" : "circle",
-                                isSelected: goal == option
-                            ) {
-                                goal = option
-                            }
-                            .accessibilityIdentifier("onboarding.goal.\(option.rawValue)")
-                        }
-                    }
+                    // Reuse the Settings preset cards so the moment the goal is actually chosen shows the
+                    // same paired nutrition + training summaries, not just displayName + tagline. The
+                    // binding is onboarding's `@State`; it persists on `complete()`, so no per-tap save.
+                    GoalPresetCards(selectedGoal: $goal)
 
                     SheetField("Current level") {
                         FlowLayout(spacing: 8) {

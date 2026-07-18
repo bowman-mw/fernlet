@@ -265,6 +265,14 @@ public final class DiaryStore {
 
     // MARK: - Settings toggles
 
+    /// Persists the goal chosen from the Settings/onboarding preset cards. Mirrors the other setters:
+    /// set the keypath then schedule the debounced snapshot save — a bare `settings.selectedGoal =`
+    /// binding mutated memory but never scheduled a save, so the choice reverted on the next launch.
+    public func setSelectedGoal(_ goal: GoalType) {
+        settings.selectedGoal = goal
+        scheduleSnapshotSave()
+    }
+
     public func setHidePredictions(_ hidePredictions: Bool) {
         settings.hidePredictions = hidePredictions
         scheduleSnapshotSave()

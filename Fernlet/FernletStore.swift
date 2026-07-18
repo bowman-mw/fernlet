@@ -515,6 +515,10 @@ final class FernletStore {
         )
     }
 
+    func setSelectedGoal(_ goal: GoalType) {
+        diary.setSelectedGoal(goal)
+    }
+
     func setHidePredictions(_ hidePredictions: Bool) {
         diary.setHidePredictions(hidePredictions)
     }

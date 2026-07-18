@@ -93,11 +93,18 @@ public nonisolated struct FernletSettings: Codable {
     /// pattern" (the default and today's only behavior); a non-nil value pins that one target and the
     /// rest of the plan re-solves around it. Only calories, protein and fat are pinnable — carbs is
     /// always the residual (`NutritionTargetCalculator`), so pinning any of these three rebalances carbs
-    /// for free and the four numbers can never disagree with the calorie total. These are last-writer-
+    /// for free and the four numbers agree with the calorie total in the normal case (see the carbs floor
+    /// in `NutritionTargetCalculator` for the high-protein/fat exception). These are last-writer-
     /// wins scalars in the synced settings blob, exactly like `showCalories`.
     public var calorieTargetOverride: Int? = nil
     public var proteinTargetOverride: Int? = nil
     public var fatTargetOverride: Int? = nil
+
+    /// True when the user has pinned any macro target — the point past which a goal's nutrition summary
+    /// no longer fully describes the plan in effect (the override wins). Computed, not stored.
+    public var hasAnyNutritionOverride: Bool {
+        calorieTargetOverride != nil || proteinTargetOverride != nil || fatTargetOverride != nil
+    }
     public var quickLogItems: [FernletShortcut] = FernletShortcut.defaultQuickLog
     /// Raw `quickLogItems` tokens this build's `FernletShortcut` doesn't know — shortcuts added by a
     /// NEWER build on another device. Parked here (and re-encoded) instead of thrown on, so a newer
