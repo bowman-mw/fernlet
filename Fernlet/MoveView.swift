@@ -517,17 +517,22 @@ struct WorkoutSuggestionSheet: View {
     @State private var didApplyReadiness = false
     // Set when the user taps "Start guided workout"; presents the guided runner sheet. nil = closed.
     @State private var guidedSession: WorkoutProgram.SessionSuggestion?
+    // Sessions already logged through the guided runner. The save bar and the guided-workout button
+    // both skip these, so a guided session can't be logged a second time on a multi-session day.
+    @State private var guidedCompletedSessionIDs: Set<UUID> = []
 
     private var aiAdjustAvailable: Bool {
         store.settings.aiStatus != .off && FoodSelectionAvailability.isFoundationModelAvailable
     }
 
     /// The session in the current plan worth *guiding* through — the first with real, set-based
-    /// exercises. Pure cardio/mobility/rest days have only descriptor lines (sets == 0) and return
-    /// nil, so the guided button is absent (the retroactive "Mark done" path still works).
+    /// exercises that hasn't already been guided to completion. Pure cardio/mobility/rest days have
+    /// only descriptor lines (sets == 0) and return nil, so the guided button is absent (the
+    /// retroactive "Mark done" path still works).
     private func guidableSession(in plan: WorkoutProgram.DayPlan) -> WorkoutProgram.SessionSuggestion? {
         plan.sessions.first { session in
-            session.exercises.contains { $0.fromCatalog && $0.sets >= 1 }
+            !guidedCompletedSessionIDs.contains(session.id)
+                && session.exercises.contains { $0.fromCatalog && $0.sets >= 1 }
         }
     }
 
@@ -691,8 +696,11 @@ struct WorkoutSuggestionSheet: View {
             }
 
             if let dayPlan {
-                SheetSaveBar(label: dayPlan.sessions.count > 1 ? "Mark all done" : "Mark done") {
-                    for session in dayPlan.sessions {
+                // Sessions the guided runner already logged are excluded, so "Mark all done" after
+                // a guided session only logs what's actually left.
+                let remainingSessions = dayPlan.sessions.filter { !guidedCompletedSessionIDs.contains($0.id) }
+                SheetSaveBar(label: remainingSessions.count > 1 ? "Mark all done" : "Mark done") {
+                    for session in remainingSessions {
                         store.addWorkout(session.workout(intensity: energy))
                         store.recordCompletedExercises(session.catalogExerciseNames)
                     }
@@ -711,17 +719,29 @@ struct WorkoutSuggestionSheet: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
-        .sheet(item: $guidedSession) { session in
+        .sheet(item: $guidedSession, onDismiss: {
+            // Every session in the plan went through the runner (always the case on a
+            // single-session day once it's guided) → nothing left to mark done, so close the whole
+            // Suggest flow. Otherwise stay up so the remaining sessions can be marked.
+            if let plan = dayPlan, !plan.sessions.isEmpty,
+               plan.sessions.allSatisfy({ guidedCompletedSessionIDs.contains($0.id) }) {
+                dismiss()
+            }
+        }) { session in
             GuidedWorkoutSheet(
                 session: session,
                 goal: store.settings.selectedGoal,
+                sessionsRemain: dayPlan.map { plan in
+                    plan.sessions.contains { $0.id != session.id && !guidedCompletedSessionIDs.contains($0.id) }
+                } ?? false,
                 onComplete: {
                     // Reuse the exact retroactive "Mark done" logging path so the guided session
-                    // counts identically, then close the whole flow back to the Move tab.
+                    // counts identically. The runner's one-shot latch keeps this from re-firing,
+                    // and recording the ID keeps the save bar from logging this session again.
+                    // Dismissal happens when the user closes the done screen.
                     store.addWorkout(session.workout(intensity: energy))
                     store.recordCompletedExercises(session.catalogExerciseNames)
-                    guidedSession = nil
-                    dismiss()
+                    guidedCompletedSessionIDs.insert(session.id)
                 }
             )
             .presentationDetents([.large])

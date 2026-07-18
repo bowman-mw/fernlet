@@ -297,6 +297,63 @@ struct WorkoutProgramTests {
         #expect(runner.completedNaturally == false)   // aborted → nothing to log
     }
 
+    @Test func restWindowIsAFixedValidRangeSetOnlyWhileResting() throws {
+        let runner = makeRunner([ex("Squat", sets: 2), ex("Bench", sets: 1)], restSeconds: 90)
+        #expect(runner.restStartedAt == nil)
+        #expect(runner.restEndsAt == nil)
+        runner.start()
+        #expect(runner.restStartedAt == nil)
+        #expect(runner.restEndsAt == nil)
+
+        runner.completeSet()          // → resting before set 2
+        let started = try #require(runner.restStartedAt)
+        let ends = try #require(runner.restEndsAt)
+        // The sheet renders `Text(timerInterval: started...ends)` — a fixed window. It must be a
+        // valid (non-inverted) range or the range literal traps, however long the user over-rests.
+        #expect(started <= ends)
+        #expect(ends.timeIntervalSince(started) == 90)
+
+        runner.skipRest()             // leaving .resting clears both halves together
+        #expect(runner.restStartedAt == nil)
+        #expect(runner.restEndsAt == nil)
+
+        runner.completeSet()          // last set of Squat → straight to Bench, no rest window
+        #expect(runner.phase == .working)
+        #expect(runner.restStartedAt == nil)
+        #expect(runner.restEndsAt == nil)
+
+        runner.completeSet()          // finish Bench → done, still no rest window
+        #expect(runner.phase == .done)
+        #expect(runner.restStartedAt == nil)
+        #expect(runner.restEndsAt == nil)
+    }
+
+    @Test func zeroLengthRestStillFormsAValidWindow() throws {
+        let runner = makeRunner([ex("Squat", sets: 2)], restSeconds: 0)
+        runner.start()
+        runner.completeSet()
+        let started = try #require(runner.restStartedAt)
+        let ends = try #require(runner.restEndsAt)
+        #expect(started <= ends)      // degenerate but valid: started...started
+    }
+
+    @Test func consumeCompletionReportsExactlyOnce() {
+        let runner = makeRunner([ex("Squat", sets: 1)])
+        runner.start()
+        #expect(runner.consumeCompletion() == false)   // mid-session: nothing to report yet
+        runner.completeSet()                           // natural finish
+        #expect(runner.consumeCompletion() == true)    // the one report → onComplete fires once
+        #expect(runner.consumeCompletion() == false)   // double-tap of "Finish workout" → no-op
+    }
+
+    @Test func consumeCompletionNeverReportsAnAbandonedSession() {
+        let runner = makeRunner([ex("Squat", sets: 3)])
+        runner.start()
+        runner.completeSet()
+        runner.end()                                   // "End without logging"
+        #expect(runner.consumeCompletion() == false)
+    }
+
     @Test func descriptorLineWithZeroSetsIsWalkedAsOneStep() {
         // Cardio/conditioning lines carry sets == 0; the runner must treat them as a single
         // completable step, not loop or divide by zero.

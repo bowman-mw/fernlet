@@ -34,12 +34,19 @@ final class WorkoutSessionRunner {
     private(set) var phase: Phase = .ready
     /// When the current rest ends. Drives the live `Text(timerInterval:)` countdown in the sheet.
     private(set) var restEndsAt: Date? = nil
+    /// When the current rest began. Paired with `restEndsAt` so the sheet can render a *fixed*
+    /// `Text(timerInterval:)` range that stays valid after the deadline passes — over-resting is a
+    /// designed state, and a live `Date()...restEndsAt` lower bound would invert and trap once the
+    /// countdown expires. Always set and cleared together with `restEndsAt`.
+    private(set) var restStartedAt: Date? = nil
     /// Seconds of the most recent rest — exposed separately from `restEndsAt` so tests can assert the
     /// rest length without touching the clock.
     private(set) var restDuration: Int = 0
     /// True only after the session was walked all the way to the end. `end()` (an early exit) leaves
     /// this false, so the sheet logs the workout on natural completion but not on an abandon.
     private(set) var completedNaturally: Bool = false
+    /// Flipped by `consumeCompletion()` so the completion side effects can only ever fire once.
+    private(set) var completionReported: Bool = false
 
     init(
         exercises: [PrescribedExercise],
@@ -72,9 +79,11 @@ final class WorkoutSessionRunner {
     func start() {
         exerciseIndex = 0
         currentSet = 1
+        restStartedAt = nil
         restEndsAt = nil
         restDuration = 0
         completedNaturally = false
+        completionReported = false
         phase = exercises.isEmpty ? .done : .working
     }
 
@@ -89,6 +98,7 @@ final class WorkoutSessionRunner {
         } else if exerciseIndex < exercises.count - 1 {
             exerciseIndex += 1
             currentSet = 1
+            restStartedAt = nil
             restEndsAt = nil
             phase = .working
         } else {
@@ -100,6 +110,7 @@ final class WorkoutSessionRunner {
     /// began).
     func skipRest() {
         guard phase == .resting else { return }
+        restStartedAt = nil
         restEndsAt = nil
         if currentExercise == nil {
             finish()
@@ -111,18 +122,31 @@ final class WorkoutSessionRunner {
     /// Abandon the session. Goes to `.done` but leaves `completedNaturally` false, so nothing is
     /// logged.
     func end() {
+        restStartedAt = nil
         restEndsAt = nil
         phase = .done
+    }
+
+    /// One-shot gate for the completion side effects (logging the workout, advancing progression).
+    /// Returns true exactly once — on the first call after a natural finish; any repeat (a
+    /// same-runloop double-tap of "Finish workout", a re-entrant UI event) is a no-op.
+    func consumeCompletion() -> Bool {
+        guard phase == .done, completedNaturally, !completionReported else { return false }
+        completionReported = true
+        return true
     }
 
     private func beginRest(for role: SlotRole) {
         let seconds = max(0, restProvider(role, goal))
         restDuration = seconds
-        restEndsAt = now().addingTimeInterval(TimeInterval(seconds))
+        let started = now()
+        restStartedAt = started
+        restEndsAt = started.addingTimeInterval(TimeInterval(seconds))
         phase = .resting
     }
 
     private func finish() {
+        restStartedAt = nil
         restEndsAt = nil
         completedNaturally = true
         phase = .done
@@ -162,6 +186,9 @@ struct GuidedWorkoutSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let session: WorkoutProgram.SessionSuggestion
+    /// True when other sessions in today's plan still need marking done after this one — the done
+    /// copy then names what was logged instead of implying the whole day is.
+    var sessionsRemain: Bool
     /// Logs the finished session. Called once, only on natural completion.
     var onComplete: () -> Void
 
@@ -171,9 +198,11 @@ struct GuidedWorkoutSheet: View {
     init(
         session: WorkoutProgram.SessionSuggestion,
         goal: GoalType,
+        sessionsRemain: Bool = false,
         onComplete: @escaping () -> Void
     ) {
         self.session = session
+        self.sessionsRemain = sessionsRemain
         self.onComplete = onComplete
         _runner = State(initialValue: WorkoutSessionRunner(exercises: session.exercises, goal: goal))
     }
@@ -187,7 +216,10 @@ struct GuidedWorkoutSheet: View {
                     case .ready: readyView
                     case .working: workingView
                     case .resting: restingView
-                    case .done: doneView
+                    case .done:
+                        // An abandon dismisses straight away — only a natural finish shows the
+                        // logged copy, so "End without logging" never flashes "That's logged".
+                        if runner.completedNaturally { doneView }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -324,8 +356,11 @@ struct GuidedWorkoutSheet: View {
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.moss)
 
-            if let restEndsAt = runner.restEndsAt {
-                Text(timerInterval: Date()...restEndsAt, countsDown: true)
+            if let restStartedAt = runner.restStartedAt, let restEndsAt = runner.restEndsAt {
+                // A fixed window: Text(timerInterval:) clamps to 0:00 once it expires, and the
+                // range stays valid however long the user over-rests. A live `Date()` lower bound
+                // would invert past the deadline and trap on the next body re-evaluation.
+                Text(timerInterval: restStartedAt...restEndsAt, countsDown: true)
                     .font(.system(size: 68, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Color.bark)
@@ -371,20 +406,34 @@ struct GuidedWorkoutSheet: View {
             Text("Nicely done")
                 .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.bark)
-            Text("That's logged for today.")
+            Text(completionMessage)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
+                .multilineTextAlignment(.center)
+                .fernletWrappingText()
+            primaryButton("Done", identifier: "workout.guided.close") {
+                dismiss()
+            }
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 30)
     }
 
+    private var completionMessage: String {
+        sessionsRemain
+            ? "\(session.suggestion.name) is logged. The rest of today's plan is there whenever you're ready."
+            : "That's logged for today."
+    }
+
     // MARK: Completion
 
-    /// On natural completion, log through the shared path and close the whole flow. `onComplete`
-    /// owns the logging (and dismissing the parent Suggest sheet), so we don't double-dismiss here.
+    /// On natural completion, log through the shared path — `onComplete` owns the logging — then
+    /// let the done view linger until the user closes it. The runner's one-shot
+    /// `consumeCompletion()` makes any re-fire (a same-runloop double-tap of "Finish workout")
+    /// a no-op, so the workout can't be logged twice.
     private func logIfDone() {
-        guard runner.phase == .done, runner.completedNaturally else { return }
+        guard runner.consumeCompletion() else { return }
         onComplete()
     }
 
