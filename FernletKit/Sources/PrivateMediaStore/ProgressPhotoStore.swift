@@ -100,6 +100,16 @@ public struct ProgressPhotoStore {
         _ = persist(all)
     }
 
+    /// Edits a photo's capture date so an imported/older picture isn't pinned to "today" (the timeline is
+    /// about dates). Same fail-closed sealed-index rewrite as `updateCaption`; `capturedAt` is a `let`, so
+    /// the record is rebuilt in place, preserving its id and caption.
+    public func updateCapturedAt(id: UUID, date: Date) {
+        guard var all = existingRecordsForWrite(),
+              let index = all.firstIndex(where: { $0.id == id }) else { return }
+        all[index] = ProgressPhotoRecord(id: all[index].id, capturedAt: date, caption: all[index].caption)
+        _ = persist(all)
+    }
+
     public func delete(id: UUID) {
         // Remove the photo bytes regardless (the user asked to delete this one)...
         photoStore.delete(id: id)

@@ -11,8 +11,11 @@ struct ProgressPhotoSection: View {
     var records: [ProgressPhotoRecord]
     /// Loads a photo's sealed bytes on demand (off `FernletStore.progressPhotoData`).
     var loadData: (UUID) -> Data?
-    /// A freshly captured photo (camera or library). The parent seals it and refreshes `records`.
+    /// A freshly *captured* photo (live camera). The parent seals it and refreshes `records`.
     var onCapture: (UIImage) -> Void
+    /// A *library* pick delivered as raw JPEG `Data` plus a best-effort creation date, so the parent seals
+    /// it through the bounded Data path (no full-res bitmap) and stamps the recovered date rather than "now".
+    var onCaptureData: (Data, Date?) -> Void
     var onOpen: (ProgressPhotoRecord) -> Void
 
     // Body photos are as personal as journal/cycle/intimacy, so — when a Fernlet lock is configured —
@@ -60,7 +63,11 @@ struct ProgressPhotoSection: View {
         if records.isEmpty {
             VStack(spacing: 16) {
                 EmptyState(text: "See how you're changing. Add a progress photo and it'll build a private timeline here — sealed on your device.")
-                PhotoCaptureControl(onCameraCapture: onCapture) {
+                PhotoCaptureControl(
+                    onCameraCapture: onCapture,
+                    onLibraryPickData: onCaptureData,
+                    allowsLibraryChoice: true
+                ) {
                     addLabel(prominent: true)
                 }
                 .accessibilityIdentifier("move.progressPhotos.addFirst")
@@ -70,7 +77,11 @@ struct ProgressPhotoSection: View {
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
-                    PhotoCaptureControl(onCameraCapture: onCapture) {
+                    PhotoCaptureControl(
+                        onCameraCapture: onCapture,
+                        onLibraryPickData: onCaptureData,
+                        allowsLibraryChoice: true
+                    ) {
                         addTile
                     }
                     .accessibilityIdentifier("move.progressPhotos.add")
@@ -283,7 +294,8 @@ struct ProgressPhotoDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var image: UIImage?
     @State private var caption: String
-    @State private var showingDeleteConfirm = false
+    @State private var capturedAt: Date
+    @State private var pendingDestructiveAction: DestructiveConfirmation?
     @FocusState private var captionFocused: Bool
 
     private var gateActive: Bool {
@@ -304,6 +316,7 @@ struct ProgressPhotoDetailView: View {
         self.record = record
         self.onChanged = onChanged
         _caption = State(initialValue: record.caption ?? "")
+        _capturedAt = State(initialValue: record.capturedAt)
     }
 
     var body: some View {
@@ -340,9 +353,31 @@ struct ProgressPhotoDetailView: View {
                     }
                 }
 
-                Text(record.capturedAt.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
+                Text(capturedAt.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
                     .font(.fernlet(.displayMedium))
                     .foregroundStyle(Color.bark)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel("Date taken")
+                    // Imported/older photos default to "today" (the app captures at the current moment and
+                    // library picks only recover a date when the EXIF carries one), so let the user correct
+                    // it — the timeline is about dates. Capped at today; edits persist through the same
+                    // sealed-index rewrite as the caption.
+                    DatePicker(
+                        "Date taken",
+                        selection: $capturedAt,
+                        in: ...Date(),
+                        displayedComponents: .date
+                    )
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .tint(Color.moss)
+                    .accessibilityIdentifier("progressPhoto.datePicker")
+                    .onChange(of: capturedAt) { _, newValue in
+                        store.updateProgressPhotoCapturedAt(id: record.id, date: newValue)
+                        onChanged()
+                    }
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel("Note")
@@ -364,7 +399,17 @@ struct ProgressPhotoDetailView: View {
                 }
 
                 Button(role: .destructive) {
-                    showingDeleteConfirm = true
+                    pendingDestructiveAction = DestructiveConfirmation(
+                        title: "Delete this progress photo?",
+                        message: "This removes it from your timeline and your device. Fernlet can't undo this.",
+                        confirmLabel: "Delete",
+                        auditEvent: "progressPhoto.deleteConfirmed",
+                        perform: {
+                            store.deleteProgressPhoto(id: record.id)
+                            onChanged()
+                            dismiss()
+                        }
+                    )
                 } label: {
                     Label("Delete this photo", systemImage: "trash")
                         .font(.fernlet(.label))
@@ -403,20 +448,9 @@ struct ProgressPhotoDetailView: View {
         // keyboard still up). Idempotent with the Done save. `saveCaption` refreshes the parent itself,
         // so ordering vs the parent no longer matters.
         .onDisappear { saveCaption() }
-        .confirmationDialog(
-            "Delete this progress photo?",
-            isPresented: $showingDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                store.deleteProgressPhoto(id: record.id)
-                onChanged()
-                dismiss()
-            }
-            Button("Keep", role: .cancel) {}
-        } message: {
-            Text("This removes it from your timeline and your device. Fernlet can't undo this.")
-        }
+        // Routes through the shared destructive-confirmation so the delete warns AND leaves an audit trail,
+        // like every other irreversible action (the bespoke confirmationDialog it replaced had no audit).
+        .destructiveConfirmation($pendingDestructiveAction)
         // Same full-screen lock as the Private Hub: when configured + locked, an unlock overlay covers
         // the photo and re-locks on disappear. Inactive (no lock configured) → passes through unchanged.
         .fernletLockGate(active: gateActive)

@@ -39,12 +39,15 @@ struct MealPhotoPolaroid: View {
         .padding(.top, 8)
         .padding(.bottom, 14)
         .background(Color.cream.opacity(0.92), in: RoundedRectangle(cornerRadius: 5))
-        .shadow(color: Color.bark.opacity(0.10), radius: 10, x: 0, y: 5)
+        // `barkShadow` is the fixed dark-brown shadow token; the adaptive `bark` text token resolves
+        // near-white under the forced dark appearance and would read as a pale halo, not a shadow.
+        .shadow(color: Color.barkShadow.opacity(0.10), radius: 10, x: 0, y: 5)
         .rotationEffect(.degrees(rotation))
         .task {
-            if image == nil, let data = loadData(), let loaded = UIImage(data: data) {
-                image = loaded
-            }
+            // Decode off the main thread (`byPreparingForDisplay`) so the Home strip doesn't jank while
+            // scrolling; only the finished image is assigned back on the MainActor. Mirrors ProgressPhotoCard.
+            guard image == nil, let data = loadData() else { return }
+            image = await UIImage(data: data)?.byPreparingForDisplay()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Photo of \(name)")

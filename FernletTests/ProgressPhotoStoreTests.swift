@@ -120,6 +120,22 @@ struct ProgressPhotoStoreTests {
         #expect(store.records().first?.caption == nil, "a blank caption should clear to nil, not empty string")
     }
 
+    @Test func updateCapturedAtPersistsTheNewDateAndKeepsCaption() throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let original = Date()
+        let record = try #require(store.add(jpeg(width: 100, height: 100), caption: "8 weeks in", capturedAt: original))
+
+        // Re-date it to a month earlier (an imported photo that shouldn't sit at "today").
+        let corrected = original.addingTimeInterval(-30 * 24 * 60 * 60)
+        store.updateCapturedAt(id: record.id, date: corrected)
+
+        let reloaded = try #require(store.records().first)
+        #expect(reloaded.id == record.id)
+        #expect(abs(reloaded.capturedAt.timeIntervalSince(corrected)) < 1, "the new capture date was not persisted/reloaded")
+        #expect(reloaded.caption == "8 weeks in", "editing the date clobbered the caption")
+    }
+
     @Test func blankCaptionAtAddIsStoredAsNil() throws {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }

@@ -100,6 +100,14 @@ struct MoveView: View {
                             }
                             progressPhotos = store.progressPhotoRecords()
                         },
+                        onCaptureData: { data, capturedAt in
+                            // Library pick: seal the raw bytes (bounded ImageIO decode) and stamp the
+                            // photo's own date when EXIF carried one, else default to now.
+                            if store.addProgressPhoto(data: data, capturedAt: capturedAt ?? Date()) == nil {
+                                showPhotoSaveFailedAlert = true
+                            }
+                            progressPhotos = store.progressPhotoRecords()
+                        },
                         onOpen: { record in path.append(record) }
                     )
                     #endif

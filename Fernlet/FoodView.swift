@@ -2565,6 +2565,9 @@ struct RecipeDetailView: View {
     /// Calm inline notice when a photo couldn't be sealed to disk (fail-closed save returned false), so
     /// the UI never shows a false success that then vanishes on next open.
     @State private var photoNotice: String?
+    /// Drives the shared destructive-confirmation for the photo trash chip, so deleting the recipe photo
+    /// warns + audits like every other irreversible action instead of firing off a single tap.
+    @State private var pendingDestructiveAction: DestructiveConfirmation?
 
     private var totals: MacroTotals { store.macroTotals(for: recipe) }
     private var perServing: MacroTotals {
@@ -2619,6 +2622,7 @@ struct RecipeDetailView: View {
                 photo = await UIImage(data: data)?.byPreparingForDisplay()
             }
         }
+        .destructiveConfirmation($pendingDestructiveAction)
     }
 
     @ViewBuilder private var photoSection: some View {
@@ -2631,16 +2635,25 @@ struct RecipeDetailView: View {
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 HStack(spacing: 8) {
-                    PhotoCaptureControl(onCameraCapture: { save($0) }) {
+                    PhotoCaptureControl(
+                        onCameraCapture: { save($0) },
+                        onLibraryPickData: { data, _ in saveLibraryData(data) },
+                        allowsLibraryChoice: true
+                    ) {
                         photoIconChip("camera.fill")
                     }
-                    Button { remove() } label: { photoIconChip("trash") }
+                    Button { confirmRemovePhoto() } label: { photoIconChip("trash") }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("recipeDetail.deletePhoto")
                 }
                 .padding(8)
             }
         } else {
-            PhotoCaptureControl(onCameraCapture: { save($0) }) {
+            PhotoCaptureControl(
+                onCameraCapture: { save($0) },
+                onLibraryPickData: { data, _ in saveLibraryData(data) },
+                allowsLibraryChoice: true
+            ) {
                 HStack(spacing: 10) {
                     Image(systemName: "camera.fill").font(.system(size: 16, weight: .semibold))
                     Text("Add a photo of this recipe").font(.fernlet(.label))
@@ -2774,6 +2787,31 @@ struct RecipeDetailView: View {
         }
         photo = image
         photoNotice = nil
+    }
+
+    /// Library pick: seal the picked `Data` through the bounded ImageIO downscale (no full-res bitmap),
+    /// then show the just-sealed (≤1600px) bytes rather than re-decoding the full-resolution original.
+    private func saveLibraryData(_ data: Data) {
+        guard store.saveRecipePhoto(data: data, for: recipe.id) else {
+            photoNotice = "Couldn't save this photo to your private store. Please try again."
+            return
+        }
+        photoNotice = nil
+        Task {
+            if let stored = store.recipePhotoData(for: recipe.id) {
+                photo = await UIImage(data: stored)?.byPreparingForDisplay()
+            }
+        }
+    }
+
+    private func confirmRemovePhoto() {
+        pendingDestructiveAction = DestructiveConfirmation(
+            title: "Delete this photo?",
+            message: "This removes your photo of this recipe from your device. Fernlet can't undo this.",
+            confirmLabel: "Delete",
+            auditEvent: "recipe.photo.deleteConfirmed",
+            perform: { remove() }
+        )
     }
 
     private func remove() {

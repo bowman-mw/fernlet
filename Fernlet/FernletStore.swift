@@ -1438,6 +1438,21 @@ final class FernletStore {
         progressPhotoStore.updateCaption(id: id, caption: caption)
     }
 
+    /// Edits a progress photo's capture date (the manual editor in the detail view). Backs onto the same
+    /// fail-closed sealed-index rewrite as the caption edit.
+    func updateProgressPhotoCapturedAt(id: UUID, date: Date) {
+        progressPhotoStore.updateCapturedAt(id: id, date: date)
+    }
+
+    /// Library-pick entry point: seals the picked JPEG `Data` straight through the store's bounded ImageIO
+    /// downscale (the ONLY decode), skipping the full-resolution-bitmap round trip that `UIImage.jpegData`
+    /// forces. A 48 MP pick would otherwise materialise a ~190 MB bitmap and risk jetsam on the iPhone-11
+    /// floor. `capturedAt` carries the photo's real (best-effort recovered) date so imports aren't pinned
+    /// to "now". Returns the stored record, or nil when the bytes can't be sealed (fail-closed).
+    @discardableResult func addProgressPhoto(data: Data, capturedAt: Date) -> ProgressPhotoRecord? {
+        progressPhotoStore.add(data, capturedAt: capturedAt)
+    }
+
     func deleteProgressPhoto(id: UUID) {
         progressPhotoStore.delete(id: id)
     }
@@ -2042,6 +2057,13 @@ final class FernletStore {
         return recipePhotoStore.save(data, forID: recipeID)
     }
     #endif
+
+    /// Library-pick entry point mirroring `addProgressPhoto(data:)`: seals the picked JPEG `Data` straight
+    /// through the store's bounded ImageIO downscale, so a full-resolution library pick isn't decoded into
+    /// a giant bitmap just to be re-encoded. Fail-closed (false on non-image bytes or no key).
+    @discardableResult func saveRecipePhoto(data: Data, for recipeID: UUID) -> Bool {
+        recipePhotoStore.save(data, forID: recipeID)
+    }
 
     // NOTE (deviation): macroTotals/micronutrientTotals(for:) STAY IN THE FACADE — app-target
     // `MealBuilder`.

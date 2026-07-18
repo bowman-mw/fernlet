@@ -497,7 +497,10 @@ struct HomeView: View {
                     EmptyState(text: "Snap a photo when you log a meal and it'll show up here as a polaroid.")
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 20) {
+                        // Lazy so only the polaroids scrolled into view decode their (sealed ~1600px) JPEG,
+                        // instead of all six firing on Home render — the transient bitmaps add up on the
+                        // iPhone-11 floor. The decode itself is off-main (see MealPhotoPolaroid).
+                        LazyHStack(spacing: 20) {
                             ForEach(Array(photographed.enumerated()), id: \.element.id) { index, meal in
                                 #if canImport(UIKit)
                                 MealPhotoPolaroid(
