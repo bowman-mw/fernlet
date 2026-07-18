@@ -146,8 +146,8 @@ struct CreationStudioEditorTests {
 
     /// Regression (#1): the rename-and-retry loop after a `.nameFlagged` / `.capReached` / `.storeBanned`
     /// shop alert keeps the user on the confirmation screen to re-save. The create path must persist the
-    /// item under the stable `draftID`, so a second save upserts the SAME row rather than minting a new
-    /// one. Pre-fix `save()` built a fresh random UUID on every call, so the retry added a second row —
+    /// item under the slot's stable draft id, so a second save upserts the SAME row rather than minting a
+    /// new one. Pre-fix `save()` built a fresh random UUID on every call, so the retry added a second row —
     /// against that code this assertion reads `customItems.count == 2` and fails.
     @Test func resavingTheSameDraftUpsertsOneRowRatherThanDuplicating() {
         let store = makeTestStore()
@@ -155,12 +155,43 @@ struct CreationStudioEditorTests {
         var texture = ItemGridTexture.blank(for: .body, palette: palette)
         texture.pixels[0] = 3
 
-        // First save, then the rename-and-retry re-save — same editor session, so same draftID.
-        view.persistDraftItem(named: "sweater", texture: texture)
-        view.persistDraftItem(named: "sweater (renamed)", texture: texture)
+        // First save, then the rename-and-retry re-save — same editor session + slot, so same draft id.
+        view.persistDraftItem(named: "sweater", texture: texture, slot: .body)
+        view.persistDraftItem(named: "sweater (renamed)", texture: texture, slot: .body)
 
         #expect(store.customItems.count == 1)
         #expect(store.customItems.first?.name == "sweater (renamed)")
+    }
+
+    /// Regression: the retry-dedup fix above originally keyed EVERY create-path save to one per-session
+    /// draft id. Reachable in-app: save a body item (a shop alert keeps you in the session — the item IS
+    /// persisted), go back, switch slot (a normal action with the per-slot buffers), draw a hat, save.
+    /// `CustomItemService.upsert` is a whole-row replace, so the hat overwrote the saved body row under
+    /// the shared id — against that code this reads `customItems.count == 1` (the body item silently
+    /// destroyed, both ids equal) and fails. Draft ids must be per-slot: a slot-switched save is a
+    /// distinct row, while the same-slot retry above still upserts one.
+    @Test func savingOnASecondSlotAddsARowInsteadOfReplacingTheFirstSlotsItem() {
+        let store = makeTestStore()
+        let view = CreationStudioView(store: store)
+        var bodyTexture = ItemGridTexture.blank(for: .body, palette: palette)
+        bodyTexture.pixels[0] = 3
+        var hatTexture = ItemGridTexture.blank(for: .hat, palette: palette)
+        hatTexture.pixels[0] = 2
+
+        // Save on slot .body, then — after the in-editor slot switch — save on slot .hat.
+        let bodyID = view.persistDraftItem(named: "sweater", texture: bodyTexture, slot: .body)
+        let hatID = view.persistDraftItem(named: "cap", texture: hatTexture, slot: .hat)
+
+        // Two rows, distinct ids: the body item survived the hat save.
+        #expect(store.customItems.count == 2)
+        #expect(bodyID != hatID)
+        #expect(store.customItems.contains { $0.id == bodyID && $0.slot == .body && $0.name == "sweater" })
+        #expect(store.customItems.contains { $0.id == hatID && $0.slot == .hat && $0.name == "cap" })
+
+        // And per-slot ids keep the same-slot retry an upsert — still two rows, same hat id.
+        let hatRetryID = view.persistDraftItem(named: "cap (renamed)", texture: hatTexture, slot: .hat)
+        #expect(hatRetryID == hatID)
+        #expect(store.customItems.count == 2)
     }
 
     /// The 2× raise must keep each slot's aspect ratio identical, because the on-body placement derives

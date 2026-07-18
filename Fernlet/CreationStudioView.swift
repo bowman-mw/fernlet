@@ -18,7 +18,14 @@ struct CreationStudioView: View {
     @State private var isShareable: Bool
     @State private var price: Int
     @State private var shopAlert: ShopAlert?
-    @State private var draftID = UUID()
+    /// Per-slot draft ids for the create path, seeded for every slot up front so reads during body
+    /// (the companion preview) never mutate state. Keyed by slot because `CustomItemService.upsert`
+    /// is a whole-row replace: a single session-wide id let a save after switching slots silently
+    /// destroy the item already saved on the first slot — and put duplicate Identifiable ids in the
+    /// preview's `ForEach` (saved body item + draft preview sharing one id).
+    @State private var draftIDs: [ItemSlot: UUID] = Dictionary(
+        uniqueKeysWithValues: ItemSlot.allCases.map { ($0, UUID()) }
+    )
     /// Whole-canvas snapshots, one per completed stroke. A stroke — not a cell — is the unit a user
     /// thinks in: one drag can paint dozens of cells, and undoing them one at a time would be useless.
     @State private var undoStack: [[Int]] = []
@@ -453,7 +460,7 @@ struct CreationStudioView: View {
 
     private var draftPreviewItem: CustomizationItem {
         CustomizationItem(
-            id: editingItem?.id ?? draftID,
+            id: editingItem?.id ?? draftID(for: slot),
             name: name,
             slot: slot,
             texture: ItemGridTexture(cols: slot.gridCols, rows: slot.gridRows, palette: palette, pixels: pixels),
@@ -501,14 +508,26 @@ struct CreationStudioView: View {
         undo()
     }
 
-    /// Persists the freshly-drawn item on the create path and returns its id. The id is the stable
-    /// `draftID` — NOT a fresh UUID per call — so the rename-and-retry loop after a `.nameFlagged` /
+    /// The slot's stable draft id. Every slot is seeded at init, so this is a pure read in practice;
+    /// the mint is a defensive fallback that keeps the accessor total without a force-unwrap.
+    private func draftID(for slot: ItemSlot) -> UUID {
+        if let id = draftIDs[slot] { return id }
+        let id = UUID()
+        draftIDs[slot] = id
+        return id
+    }
+
+    /// Persists the freshly-drawn item on the create path and returns its id. The id is the SLOT'S
+    /// stable draft id — NOT a fresh UUID per call — so the rename-and-retry loop after a `.nameFlagged` /
     /// `.capReached` / `.storeBanned` alert re-saves the SAME row (an upsert) instead of stacking a
-    /// duplicate item on every attempt. Internal (not private) so the retry-dedup test can drive it.
+    /// duplicate item on every attempt, while a save after switching slots gets that slot's own id and
+    /// so its own row (a session-wide id made it silently replace the previous slot's saved item).
+    /// Internal (not private) so the dedup tests can drive it; `slot` is passed explicitly for the
+    /// same reason.
     @discardableResult
-    func persistDraftItem(named finalName: String, texture: ItemGridTexture) -> UUID {
+    func persistDraftItem(named finalName: String, texture: ItemGridTexture, slot: ItemSlot) -> UUID {
         let item = CustomizationItem(
-            id: editingItem?.id ?? draftID,
+            id: editingItem?.id ?? draftID(for: slot),
             name: finalName,
             slot: slot,
             texture: texture,
@@ -538,7 +557,7 @@ struct CreationStudioView: View {
             store.saveCustomItem(updated)
             itemID = updated.id
         } else {
-            itemID = persistDraftItem(named: finalName, texture: texture)
+            itemID = persistDraftItem(named: finalName, texture: texture, slot: slot)
             store.equipCustomItem(id: itemID, slot: slot)
         }
 

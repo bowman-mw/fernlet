@@ -121,6 +121,11 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
                 paint(at: gesture.location(in: content), in: content)
             case .changed:
                 guard !paintSuppressed else { return }
+                // A pinch can end while this finger is still down (suppression cancelled the stroke,
+                // then cleared): the resumed segment arrives here with no stroke in flight. beginStroke
+                // is a no-op mid-stroke, so calling it per-sample re-arms the undo snapshot + the
+                // cancellation path for exactly that resumed segment.
+                beginStroke()
                 paint(at: gesture.location(in: content), in: content)
             case .ended, .cancelled, .failed:
                 isStroking = false
