@@ -60,6 +60,16 @@ final class HealthSyncCoordinator {
         await workoutHealthKitSync.saveIfAuthorized(workout, date: date)
     }
 
+    /// Deletes the app-authored Health sample for a locally-removed workout (tombstone-guarded).
+    func removeWorkoutFromHealth(fernletWorkoutID id: UUID) async {
+        await workoutHealthKitSync.removeAuthoredWorkoutFromHealth(fernletWorkoutID: id)
+    }
+
+    /// Re-syncs an edited authored workout's immutable Health sample (delete-old + save-new).
+    func resyncWorkoutInHealth(_ workout: Workout, date: String) async {
+        await workoutHealthKitSync.resyncAuthoredWorkoutInHealth(workout, date: date)
+    }
+
     func refreshWorkoutsFromHealth() async {
         await workoutHealthKitSync.refreshFromHealth()
     }

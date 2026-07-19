@@ -1,6 +1,9 @@
 import Foundation
+import HealthKit
 import Testing
 import FernletDomainModel
+import HealthKitGateway
+import LocalPersistence
 @testable import Fernlet
 
 /// Covers the tester-requested recoverability of logged workouts: a one-tap "Complete" is easy to
@@ -178,7 +181,7 @@ struct WorkoutRecoveryTests {
         #expect(updated.plannedWorkoutID == planned.id)   // re-asserted from the stored row
     }
 
-    @Test func updateWorkoutPreservesGuidedFlag() {
+    @Test func updateWorkoutPreservesGuidedFlagAndPinsName() {
         let store = makeTestStore()
         var workout = Workout(
             name: "Guided", type: .fullBody, exercises: "circuit", rpe: nil, notes: "",
@@ -186,11 +189,15 @@ struct WorkoutRecoveryTests {
         )
         store.addWorkout(workout, date: store.todayKey)
 
-        workout.name = "Guided (edited)"
-        workout.loggedFromGuidedSession = nil   // dropped by the edit path
+        workout.name = "Guided (edited)"          // a rename must be REFUSED for guided rows...
+        workout.intensity = .hard                 // ...while other edits still apply
+        workout.loggedFromGuidedSession = nil     // dropped by the edit path
         #expect(store.updateWorkout(workout, date: store.todayKey))
-        #expect(store.day.workouts[0].name == "Guided (edited)")
-        #expect(store.day.workouts[0].loggedFromGuidedSession == true)   // re-asserted
+        // The name is the guided card's relaunch reconciliation key — pinned to the stored value so a
+        // rename can't un-key it into a double-log.
+        #expect(store.day.workouts[0].name == "Guided")
+        #expect(store.day.workouts[0].intensity == .hard)                 // other fields still edited
+        #expect(store.day.workouts[0].loggedFromGuidedSession == true)    // re-asserted
     }
 
     @Test func updateWorkoutRefusesHealthKitImportedRow() {
@@ -205,4 +212,135 @@ struct WorkoutRecoveryTests {
         #expect(store.updateWorkout(imported, date: store.todayKey) == false)
         #expect(store.day.workouts[0].name == "Morning Run")   // unchanged
     }
+
+    // MARK: authored rows (Fernlet owns the Health sample)
+
+    /// Finding A.1: with HK write auth, a Fernlet log is stamped `healthKitAuthored` seconds after
+    /// logging. That row IS removable — and removing it also deletes the Fernlet-authored Health sample.
+    @Test func removeWorkoutAllowsAuthoredRowAndDeletesHealthCopy() async {
+        let service = RecordingWorkoutHealthKitService(authorized: true)
+        let store = makeStore(healthKitService: service)
+        let workout = plainWorkout()
+        store.addWorkout(workout, date: store.todayKey)
+        // The HK save Task stamps the row authored a beat after logging.
+        await waitFor { store.day.workouts.first?.isHealthAuthored == true }
+        #expect(store.day.workouts.first?.isHealthAuthored == true)
+
+        #expect(store.removeWorkout(id: workout.id, date: store.todayKey))   // authored → allowed
+        #expect(store.day.workouts.isEmpty)                                   // local intent wins immediately
+
+        await waitFor { service.deletedFernletWorkoutIDs.contains(workout.id) }
+        #expect(service.deletedFernletWorkoutIDs == [workout.id])             // Health copy deleted too
+    }
+
+    /// Finding A.2: editing an authored row re-syncs its immutable Health sample — delete the old sample,
+    /// save a new one (so the Health copy never silently diverges from the edit).
+    @Test func updateWorkoutResyncsAuthoredHealthCopy() async {
+        let service = RecordingWorkoutHealthKitService(authorized: true)
+        let store = makeStore(healthKitService: service)
+        let workout = plainWorkout()
+        store.addWorkout(workout, date: store.todayKey)
+        await waitFor { store.day.workouts.first?.isHealthAuthored == true }
+        #expect(service.saveWorkoutCallCount == 1)   // the original log
+
+        var edited = store.day.workouts[0]
+        edited.name = "Upper strength (easy)"
+        edited.intensity = .light
+        #expect(store.updateWorkout(edited, date: store.todayKey))
+        #expect(store.day.workouts[0].name == "Upper strength (easy)")   // local edit applied
+
+        // Re-sync: old sample deleted, a fresh one saved, and the row re-stamped authored.
+        await waitFor { service.deletedFernletWorkoutIDs.contains(workout.id) && service.saveWorkoutCallCount == 2 }
+        #expect(service.deletedFernletWorkoutIDs == [workout.id])
+        #expect(service.saveWorkoutCallCount == 2)
+        await waitFor { store.day.workouts.first?.isHealthAuthored == true }
+        #expect(store.day.workouts.first?.isHealthAuthored == true)   // re-stamped on the new sample
+    }
+
+    /// Finding A.3: a Health-app-side deletion (routed through `removeWorkoutByHealthKitUUID`) removes the
+    /// local mirror row WITHOUT restoring a planned row or undoing guided/progression bookkeeping — an
+    /// external deletion is not an accidental-completion undo.
+    @Test func healthSideDeletionRemovesRowWithoutReversingGuidedState() throws {
+        let store = makeTestStore()
+        let session = guidedSession(name: "Solo Day", exercise: "Back Squat")
+        store.completeGuidedRunnerSession(session)
+        #expect(store.settings.workoutProgression["Back Squat"] == 1)
+        #expect(store.guidedCompletedSessionIDs.contains(session.id))
+
+        // Stamp the logged row as an authored Health sample (as the HK save would), then simulate the user
+        // deleting that sample in the Health app.
+        let logged = try #require(store.day.workouts.first { $0.name == "Solo Day" })
+        let hkUUID = UUID()
+        store.setWorkoutHealthKitUUID(workoutID: logged.id, hkUUID: hkUUID, date: store.todayKey)
+        #expect(store.day.workouts.first?.isHealthAuthored == true)
+
+        store.removeWorkoutByHealthKitUUID(hkUUID)
+
+        #expect(store.day.workouts.isEmpty)                                  // mirror row removed
+        #expect(store.day.plannedWorkouts.isEmpty)                          // NOT restored
+        #expect(store.settings.workoutProgression["Back Squat"] == 1)       // progression untouched
+        #expect(store.guidedCompletedSessionIDs.contains(session.id))       // completion NOT undone
+    }
+
+    // MARK: helpers
+
+    @MainActor
+    private func makeStore(healthKitService: any HealthKitServicing) -> FernletStore {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkoutRecoveryTests-\(UUID().uuidString)")
+            .appendingPathExtension("json")
+        return FernletStore(repository: LocalFernletRepository(fileURL: url), healthKitService: healthKitService)
+    }
+
+    private func waitFor(_ condition: @MainActor () -> Bool) async {
+        for _ in 0..<50 {
+            if condition() { return }
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+}
+
+/// Records the HealthKit calls the store's workout recover/edit path makes, and stamps a logged workout
+/// so it becomes `healthKitAuthored` (as the real save does). Authorized by default so `saveWorkout` /
+/// `deleteWorkout` actually fire.
+@MainActor
+private final class RecordingWorkoutHealthKitService: HealthKitServicing {
+    private let authorized: Bool
+    let saveWorkoutUUID = UUID()
+    private(set) var saveWorkoutCallCount = 0
+    private(set) var deletedFernletWorkoutIDs: [UUID] = []
+
+    init(authorized: Bool) { self.authorized = authorized }
+
+    func isHealthDataAvailable() -> Bool { true }
+    func requestAuthorization(for capability: HealthCapability) async throws -> AuthorizationOutcome { AuthorizationOutcome(writeStatuses: [:]) }
+    func currentAuthorizationSnapshot() -> AuthorizationSnapshot {
+        let statuses = authorized ? [HKObjectType.workoutType().identifier: HKAuthorizationStatus.sharingAuthorized] : [:]
+        return AuthorizationSnapshot(isAvailable: true, writeStatuses: statuses)
+    }
+    func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws { }
+    func startObservingWorkouts(handler: @escaping ([HKWorkout], [UUID]) -> Void) async throws { }
+    func stopObservingWorkouts() { }
+    func recentWorkouts(since anchorDate: Date) async throws -> [HKWorkout] { [] }
+    func backfillWorkoutsFromHealth(referenceDate: Date) async throws -> [HKWorkout] { [] }
+    func save(_ samples: [HKObject]) async throws { }
+    func delete(_ samples: [HKSample]) async throws { }
+    func deleteWorkout(fernletWorkoutID: UUID) async throws -> Bool {
+        deletedFernletWorkoutIDs.append(fernletWorkoutID)
+        return true
+    }
+    func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics] { [] }
+    func requestBodyProfileAuthorization() async throws -> HealthBodyProfile { HealthBodyProfile() }
+    func loadBodyProfile() async throws -> HealthBodyProfile { HealthBodyProfile() }
+    func saveBodyProfileMeasurements(_ profile: UserNutritionProfile) async throws { }
+    func saveWorkout(_ workout: Workout) async throws -> UUID {
+        saveWorkoutCallCount += 1
+        return saveWorkoutUUID
+    }
+    func loadLastNightSleepHours(referenceDate: Date) async throws -> Double? { nil }
+    func loadDailyHealthContext(referenceDate: Date, capabilities: Set<HealthCapability>?) async throws -> HealthDailyContext { HealthDailyContext() }
+    func disableIntegration() async throws { }
+    func enableIntegration() async throws { }
+    func openHealthPrivacySettings() async { }
 }

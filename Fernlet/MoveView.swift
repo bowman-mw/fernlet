@@ -1149,6 +1149,7 @@ struct WorkoutRow: View {
 
     @State private var showRemoveConfirm = false
     @State private var showEditSheet = false
+    @State private var showHealthRefusalAlert = false
 
     private var category: WorkoutType {
         WorkoutExerciseCatalog.inferredCategory(for: workout)
@@ -1158,16 +1159,27 @@ struct WorkoutRow: View {
         WorkoutExerciseCatalog.targetSummary(for: workout)
     }
 
-    /// Health owns any row carrying a HealthKit UUID; those aren't editable/removable in Fernlet.
-    private var isHealthManaged: Bool { workout.healthKitUUID != nil }
+    /// Only genuine Apple Health *imports* (a sample another app or a manual Health entry owns) are
+    /// read-only here. A Fernlet-authored row — even one already synced to Health — stays editable and
+    /// removable; removal deletes the Health copy too.
+    private var isHealthImported: Bool { workout.isHealthImported }
+
+    /// Removing an authored row also deletes the Health copy Fernlet wrote — surfaced in the dialog copy.
+    private var removesHealthCopy: Bool { workout.isHealthAuthored }
 
     /// A completion that consumed a planned row will restore it on remove — surfaced in the dialog copy.
     private var restoresPlannedRow: Bool { workout.plannedWorkoutID != nil }
 
     private var removeConfirmMessage: String {
-        restoresPlannedRow
-            ? "I'll put it back in your plan so you can redo it whenever you're ready."
-            : "This just clears it from your log — no worries, you can always add it again."
+        var parts: [String] = [
+            restoresPlannedRow
+                ? "I'll put it back in your plan so you can redo it whenever you're ready."
+                : "This just clears it from your log — no worries, you can always add it again."
+        ]
+        if removesHealthCopy {
+            parts.append("This also removes the copy saved to your Health app.")
+        }
+        return parts.joined(separator: " ")
     }
 
     var body: some View {
@@ -1210,7 +1222,7 @@ struct WorkoutRow: View {
                     .foregroundStyle(Color.slate)
             }
 
-            if isHealthManaged {
+            if isHealthImported {
                 HStack(spacing: 8) {
                     Image(systemName: "heart.text.square")
                         .font(.caption)
@@ -1238,12 +1250,22 @@ struct WorkoutRow: View {
         .padding(.vertical, 4)
         .confirmationDialog("Remove this workout?", isPresented: $showRemoveConfirm, titleVisibility: .visible) {
             Button("Remove", role: .destructive) {
-                store.removeWorkout(id: workout.id, date: date)
-                onChanged()
+                // Consume the store's refusal Bool: on a refusal (a genuine Health import — defensive here,
+                // since Remove is hidden for those) show the gentle Health note instead of reporting success.
+                if store.removeWorkout(id: workout.id, date: date) {
+                    onChanged()
+                } else {
+                    showHealthRefusalAlert = true
+                }
             }
             Button("Keep it", role: .cancel) {}
         } message: {
             Text(removeConfirmMessage)
+        }
+        .alert("This one lives in Apple Health", isPresented: $showHealthRefusalAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("It came from Health, so manage it in the Health app.")
         }
         .sheet(isPresented: $showEditSheet) {
             EditWorkoutSheet(store: store, workout: workout, date: date, onSaved: onChanged)
@@ -1271,6 +1293,7 @@ struct EditWorkoutSheet: View {
     @State private var intensity: WorkoutIntensity
     @State private var duration: String
     @State private var notes: String
+    @State private var showHealthRefusalAlert = false
 
     init(store: FernletStore, workout: Workout, date: String, onSaved: @escaping () -> Void = {}) {
         self.store = store
@@ -1285,6 +1308,10 @@ struct EditWorkoutSheet: View {
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    /// A guided-logged row's name is the guided card's reconciliation key, so it can't be renamed here
+    /// (the store also pins it as a fail-closed backstop). The field is shown disabled with a gentle note.
+    private var isGuided: Bool { workout.loggedFromGuidedSession == true }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -1296,7 +1323,15 @@ struct EditWorkoutSheet: View {
                     SheetField("Workout") {
                         TextField("e.g. Upper strength", text: $name)
                             .sheetTextInput()
+                            .disabled(isGuided)
+                            .opacity(isGuided ? 0.55 : 1)
                             .accessibilityIdentifier("workout.edit.name")
+                        if isGuided {
+                            Text("Name stays put — it's how your guided plan keeps track of this one.")
+                                .font(.fernlet(.bodySmall))
+                                .foregroundStyle(Color.slate)
+                                .fernletWrappingText()
+                        }
                     }
 
                     SheetField("Intensity") {
@@ -1333,12 +1368,22 @@ struct EditWorkoutSheet: View {
                 updated.intensity = intensity
                 updated.duration = Int(duration.trimmingCharacters(in: .whitespacesAndNewlines))
                 updated.notes = notes
-                store.updateWorkout(updated, date: date)
-                onSaved()
-                dismiss()
+                // Consume the store's refusal Bool: on a refusal (a genuine Health import) keep the sheet
+                // open and explain, rather than dismissing as if the edit saved.
+                if store.updateWorkout(updated, date: date) {
+                    onSaved()
+                    dismiss()
+                } else {
+                    showHealthRefusalAlert = true
+                }
             }
         }
         .background(Color.parchment)
+        .alert("This one lives in Apple Health", isPresented: $showHealthRefusalAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("It came from Health, so manage it in the Health app.")
+        }
     }
 }
 
@@ -2077,12 +2122,21 @@ struct MoveDayDetailView: View {
                                 plannedWorkout: workout,
                                 showsPlanSourceTag: showsPlanSourceTag,
                                 showsCompleteAction: !isFuture,
-                                onComplete: { store.completePlannedWorkout(workout, date: dateKey) },
+                                // Past-day reads aren't observed — bump the reload token so the list
+                                // re-reads `day` after a complete/delete (a stale row otherwise allows a
+                                // second tap).
+                                onComplete: {
+                                    store.completePlannedWorkout(workout, date: dateKey)
+                                    reloadToken += 1
+                                },
                                 onEdit: {
                                     editingPlannedWorkout = workout
                                     showPlanSheet = true
                                 },
-                                onDelete: { store.deletePlannedWorkout(workout, date: dateKey) }
+                                onDelete: {
+                                    store.deletePlannedWorkout(workout, date: dateKey)
+                                    reloadToken += 1
+                                }
                             )
                             if index < day.plannedWorkouts.count - 1 { FernletRowDivider() }
                         }

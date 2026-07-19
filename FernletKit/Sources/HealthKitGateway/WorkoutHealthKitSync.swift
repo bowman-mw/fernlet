@@ -10,6 +10,15 @@ public protocol WorkoutSyncContext: AnyObject {
     func workoutExists(healthKitUUID: UUID) -> Bool
     func setWorkoutHealthKitUUID(workoutID: UUID, hkUUID: UUID, date: String)
     func upsertWorkout(_ workout: Workout, date: String)
+    /// True while a locally-removed workout's app-authored Health sample might still resurface (the save
+    /// can land seconds after logging, after the row was removed). Consulted by `reconcileWorkouts` so a
+    /// resurrected orphan is deleted-and-skipped, not re-imported as a new untagged Health row.
+    func isWorkoutTombstoned(fernletWorkoutID: UUID) -> Bool
+    /// Clears a tombstone once its Health sample has been confirmed deleted.
+    func clearWorkoutTombstone(fernletWorkoutID: UUID)
+    /// Removes the local row mirroring a Health sample that was deleted in the Health app. Must NOT
+    /// restore a planned row or touch guided/progression bookkeeping — an external deletion is not an undo.
+    func removeWorkoutByHealthKitUUID(_ hkUUID: UUID)
 }
 
 public protocol HealthWorkoutSample {
@@ -66,12 +75,44 @@ public final class WorkoutHealthKitSync {
 
     public func refreshFromHealth() async {
         do {
-            try await service.startObservingWorkouts { [weak self] workouts in
+            try await service.startObservingWorkouts { [weak self] workouts, deletedHealthKitUUIDs in
                 self?.reconcileWorkouts(workouts)
+                self?.reconcileDeletedWorkouts(deletedHealthKitUUIDs)
             }
         } catch {
             FernletAuditLog.log("healthkit.workouts.refresh.failed", context: ["error": error.localizedDescription])
         }
+    }
+
+    /// Deletes the app-authored Health sample for a locally-removed workout. Fired by the store's
+    /// `removeWorkout` for every removable (authored OR not-yet-stamped) row: an authored row's sample is
+    /// deleted now; a row still mid-save has no sample yet, so the delete no-ops and the tombstone catches
+    /// the sample once it lands (`reconcileWorkouts` deletes + skips it). Clears the tombstone as soon as
+    /// the delete confirms. No-op when workout logging isn't authorized — there is no sample we could own.
+    public func removeAuthoredWorkoutFromHealth(fernletWorkoutID id: UUID) async {
+        guard Self.isWorkoutLoggingAuthorized(service.currentAuthorizationSnapshot()) else { return }
+        do {
+            let deleted = try await service.deleteWorkout(fernletWorkoutID: id)
+            if deleted { context?.clearWorkoutTombstone(fernletWorkoutID: id) }
+        } catch {
+            FernletAuditLog.log("healthkit.workout.delete.failed", context: ["error": error.localizedDescription])
+        }
+    }
+
+    /// Re-syncs an edited authored workout's Health copy. `HKWorkout` samples are immutable, so the only
+    /// way to reflect an edit is delete-the-old-sample + save-a-new-one. The new sample re-stamps the row
+    /// with a fresh `healthKitUUID` + authored flag (via `saveIfAuthorized` → `setWorkoutHealthKitUUID`);
+    /// the workout id (== `fernlet.workoutID` metadata) is unchanged, so reconcile keeps matching. The
+    /// store clears the local row's `healthKitUUID` BEFORE calling this, so the delete's own deleted-object
+    /// echo can't match — and therefore can't remove — the just-edited row.
+    public func resyncAuthoredWorkoutInHealth(_ workout: Workout, date: String) async {
+        guard Self.isWorkoutLoggingAuthorized(service.currentAuthorizationSnapshot()) else { return }
+        do {
+            _ = try await service.deleteWorkout(fernletWorkoutID: workout.id)
+        } catch {
+            FernletAuditLog.log("healthkit.workout.resyncDelete.failed", context: ["error": error.localizedDescription])
+        }
+        await saveIfAuthorized(workout, date: date)
     }
 
     public func backfillIfNeeded(defaults: UserDefaults = .standard) async {
@@ -179,9 +220,19 @@ public final class WorkoutHealthKitSync {
             let externalID = sample.metadata?["fernlet.workoutID"] as? String
             let syncID = sample.metadata?[HKMetadataKeySyncIdentifier] as? String
             let knownID = externalID ?? syncID
-            if let knownID, let uuid = UUID(uuidString: knownID), context.workoutExists(id: uuid) {
+            let knownUUID = knownID.flatMap(UUID.init(uuidString:))
+            // A tombstoned id is a locally-removed workout whose app-authored Health sample just
+            // resurfaced (its in-flight save landed after the row was gone). Delete it from Health and
+            // skip the import so it can't come back as a new, untagged, unremovable Health row.
+            if let knownUUID, context.isWorkoutTombstoned(fernletWorkoutID: knownUUID) {
+                Task { [weak self] in
+                    await self?.removeAuthoredWorkoutFromHealth(fernletWorkoutID: knownUUID)
+                }
+                continue
+            }
+            if let knownUUID, context.workoutExists(id: knownUUID) {
                 context.setWorkoutHealthKitUUID(
-                    workoutID: uuid,
+                    workoutID: knownUUID,
                     hkUUID: sample.uuid,
                     date: FernletDate.dayKey(for: sample.endDate)
                 )
@@ -194,6 +245,20 @@ public final class WorkoutHealthKitSync {
             let workout = Self.makeWorkout(from: sample)
             let dayKey = FernletDate.dayKey(for: sample.endDate)
             context.upsertWorkout(workout, date: dayKey)
+        }
+    }
+
+    /// Consumes the Health-app-side deletions the workout observer delivers: for each deleted sample the
+    /// local mirror row (matched by `healthKitUUID`, imports AND authored alike) is removed, making the
+    /// row's "manage it in the Health app" advice real. A row removed this way must NOT restore a planned
+    /// row or touch guided/progression bookkeeping — an external deletion is not an undo — which the
+    /// context method enforces. Self-initiated deletes (our own remove/edit-resync) echo back here too, but
+    /// find no matching row (remove already dropped it; edit cleared the row's `healthKitUUID`), so they
+    /// no-op.
+    public func reconcileDeletedWorkouts(_ deletedHealthKitUUIDs: [UUID]) {
+        guard let context else { return }
+        for uuid in deletedHealthKitUUIDs {
+            context.removeWorkoutByHealthKitUUID(uuid)
         }
     }
 }

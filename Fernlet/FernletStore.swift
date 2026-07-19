@@ -177,6 +177,9 @@ final class FernletStore {
     @ObservationIgnored let derivedSignalsService = DerivedSignalsService()
     @ObservationIgnored private let healthKitService: (any HealthKitServicing)?
     @ObservationIgnored private lazy var healthSyncCoordinator = HealthSyncCoordinator(host: self, healthKitService: healthKitService)
+    /// Persisted tombstones for locally-removed workouts, so the workout observer can delete-and-skip an
+    /// app-authored Health sample that resurfaces after its row was already removed (see `removeWorkout`).
+    @ObservationIgnored private let workoutTombstones = WorkoutTombstoneStore()
     @ObservationIgnored private lazy var workoutPlanningService = WorkoutPlanningService(host: self)
     @ObservationIgnored private lazy var mealResolutionService = MealResolutionService(host: self)
     @ObservationIgnored private lazy var sealedBackupCoordinator = SealedBackupCoordinator(host: self)
@@ -1712,22 +1715,28 @@ final class FernletStore {
 
     /// Removes a logged workout and reverses the bookkeeping its completion set up, so an accidental
     /// "Complete" is fully recoverable. Returns `false` (no change) when the id isn't on `date`, or the
-    /// row is Health-managed. Health-managed rows (any row carrying a `healthKitUUID` — an Apple Health
-    /// import, or a Fernlet log already synced to Health) are refused: removing only our copy would
-    /// orphan the Health sample and the next Health refresh would resurrect it. The UI offers those rows
-    /// a "manage in Health" affordance instead of Remove.
+    /// row is a genuine Apple Health *import* (`isHealthImported` — a sample owned by another app or a
+    /// manual Health entry). Imports are refused: removing only our mirror would orphan the Health sample
+    /// and the next refresh would resurrect it; the UI offers those rows a "manage in Health" affordance
+    /// instead of Remove.
     ///
-    /// For a removable (Fernlet-only) row it also:
+    /// A Fernlet-*authored* row IS removable — Fernlet owns that Health sample, so removal also deletes the
+    /// Health copy (async, honestly reported; the local row is removed regardless — local intent wins). A
+    /// not-yet-stamped row (its Health save may still be in flight) is removable too. For every removable
+    /// row it also:
     /// - clears the guided completion (session id + progression) when the row was guided-logged and the
     ///   committed plan is still resolvable, so the Start card / "Mark done" honestly re-offer it;
     /// - restores the planned row a completion consumed (best-effort; the original planned id is
-    ///   preserved so weekly copy-forward identity survives).
+    ///   preserved so weekly copy-forward identity survives);
+    /// - records a tombstone + fires a targeted Health delete by `fernlet.workoutID`, so an app-authored
+    ///   sample that lands (or already landed) can't come back as a new untagged row (see the tombstone
+    ///   note below).
     @discardableResult
     func removeWorkout(id: UUID, date: String) -> Bool {
         assert(!date.isEmpty, "workout date required")
         guard let workout = diary.loadDay(for: date).workouts.first(where: { $0.id == id }) else { return false }
-        // Health owns any row carrying a HealthKit UUID; refuse so we never orphan / resurrect it.
-        guard workout.healthKitUUID == nil else { return false }
+        // A genuine Health import is read-only here; refuse so we never orphan / resurrect it.
+        guard !workout.isHealthImported else { return false }
 
         // Reverse the guided completion while the committed plan + the row's name are still resolvable.
         if workout.loggedFromGuidedSession == true {
@@ -1741,25 +1750,65 @@ final class FernletStore {
         if let plannedID = workout.plannedWorkoutID {
             diary.planWorkout(Self.reconstructPlannedWorkout(from: workout, plannedID: plannedID), date: date)
         }
+
+        // Tombstone synchronously (survives relaunch; the observer anchor persists immediately while the
+        // snapshot save is debounced), then delete the app-authored Health sample by `fernlet.workoutID`.
+        // Fired even for a not-yet-stamped row: if a save is still in flight the delete no-ops now and the
+        // tombstone catches the sample when it lands (reconcile deletes + skips it).
+        workoutTombstones.insert(id)
+        Task { [weak self] in
+            await self?.healthSyncCoordinator.removeWorkoutFromHealth(fernletWorkoutID: id)
+        }
         return true
     }
 
     /// Replaces a logged workout in place (used by the edit sheet, which only exposes
     /// name/intensity/duration/notes). Provenance and timestamps the edit UI can't reach are re-asserted
-    /// from the stored row so a partial edit can't drop them. Health-managed rows are refused (not
-    /// editable — Health owns them). Returns `false` when the id isn't on `date` or the row is
-    /// Health-managed.
+    /// from the stored row so a partial edit can't drop them. Genuine Health *imports* are refused (not
+    /// editable — another app owns them). A Fernlet-*authored* row IS editable — its immutable Health
+    /// sample is re-synced (delete-old + save-new) so the Health copy never silently diverges from the
+    /// edit. Returns `false` when the id isn't on `date` or the row is a Health import.
     @discardableResult
     func updateWorkout(_ workout: Workout, date: String) -> Bool {
         assert(!date.isEmpty, "workout date required")
         guard let existing = diary.loadDay(for: date).workouts.first(where: { $0.id == workout.id }) else { return false }
-        guard existing.healthKitUUID == nil else { return false }
+        guard !existing.isHealthImported else { return false }
         var updated = workout
         updated.plannedWorkoutID = existing.plannedWorkoutID
-        updated.healthKitUUID = existing.healthKitUUID
         updated.loggedFromGuidedSession = existing.loggedFromGuidedSession
         updated.completedAt = existing.completedAt
         updated.loggedAt = existing.loggedAt
+        // A guided row's NAME is the relaunch reconciliation key (`loggedGuidedWorkoutNamesToday`) — pin it
+        // so a rename can't un-key the guided card into a post-relaunch double-log, or stop a removal
+        // reversal from matching. The edit sheet also disables the name field for guided rows; this is the
+        // fail-closed backstop.
+        if existing.loggedFromGuidedSession == true {
+            updated.name = existing.name
+        }
+
+        if existing.isHealthAuthored {
+            // Fernlet owns the Health sample. HKWorkouts are immutable, so reflect the edit by
+            // delete-old + save-new. Clear the row's HK provenance for the re-sync window so the delete's
+            // own deleted-object echo can't match — and therefore can't remove — the just-edited row; the
+            // re-save re-stamps a fresh healthKitUUID + authored flag.
+            updated.healthKitUUID = nil
+            updated.healthKitAuthored = nil
+            let replaced = diary.updateWorkout(updated, date: date)
+            if replaced {
+                let resyncWorkout = updated   // POST-edit values, stable id (== fernlet.workoutID)
+                Task { [weak self] in
+                    await self?.healthSyncCoordinator.resyncWorkoutInHealth(resyncWorkout, date: date)
+                }
+            }
+            return replaced
+        }
+
+        // Not-yet-stamped / plain local row: carry the (nil) HK provenance straight through. If a save was
+        // in flight the stamp still lands on this edited row; the Health sample then reflects the pre-edit
+        // values until a later edit re-syncs it — a small, transient divergence limited to an edit within
+        // the ~second-long save window right after logging.
+        updated.healthKitUUID = existing.healthKitUUID
+        updated.healthKitAuthored = existing.healthKitAuthored
         return diary.updateWorkout(updated, date: date)
     }
 
@@ -1787,6 +1836,11 @@ final class FernletStore {
     /// (push/pull/upper all read back as `.upper`, legs/lower → `.lower`, etc.), `source` is recovered
     /// from the boilerplate completion note (else `.user`), `createdAt` is taken from the completion
     /// time, and the plan's own free-text notes are gone when the plan had exercises.
+    ///
+    /// Notes-vs-exercises origin is genuinely undetectable post-hoc: `PlannedWorkout.completedWorkout`
+    /// folds a notes-only plan's text into `workout.exercises` (`exercises.isEmpty ? notes : exercises`),
+    /// and the completed row carries no marker of which field it came from — so a restored notes-only plan
+    /// reads its text back in `exercises`, not `notes`. Left as-is rather than guessed at.
     static func reconstructPlannedWorkout(from workout: Workout, plannedID: UUID) -> PlannedWorkout {
         let source: WorkoutPlanSource =
             workout.notes == WorkoutPlanSource.coach.completionNote ? .coach : .user
@@ -3307,6 +3361,27 @@ extension FernletStore: WorkoutSyncContext {
     /// calling the pure append directly preserves that semantics without depending on the guard.
     func upsertWorkout(_ workout: Workout, date: String) {
         diary.appendWorkout(workout, date: date)
+    }
+
+    func isWorkoutTombstoned(fernletWorkoutID id: UUID) -> Bool {
+        workoutTombstones.contains(id)
+    }
+
+    func clearWorkoutTombstone(fernletWorkoutID id: UUID) {
+        workoutTombstones.remove(id)
+    }
+
+    /// Removes the local row mirroring a Health sample the user deleted in the Health app (observer
+    /// deleted-objects path). Matched across days by `healthKitUUID`. Deliberately does NOT restore a
+    /// planned row or touch guided/progression bookkeeping — a Health-side deletion is an external event,
+    /// not an undo of a completion, so we honour the deletion without re-offering the plan.
+    func removeWorkoutByHealthKitUUID(_ hkUUID: UUID) {
+        for (dateKey, dayValue) in diary.loadDays() {
+            if let row = dayValue.workouts.first(where: { $0.healthKitUUID == hkUUID }) {
+                diary.removeWorkout(id: row.id, date: dateKey)
+                return
+            }
+        }
     }
 }
 

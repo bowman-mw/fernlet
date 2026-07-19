@@ -1076,12 +1076,13 @@ private final class MockWorkoutHealthKitService: HealthKitServicing {
         return AuthorizationSnapshot(isAvailable: true, writeStatuses: statuses)
     }
     func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws { }
-    func startObservingWorkouts(handler: @escaping ([HKWorkout]) -> Void) async throws { }
+    func startObservingWorkouts(handler: @escaping ([HKWorkout], [UUID]) -> Void) async throws { }
     func stopObservingWorkouts() { }
     func recentWorkouts(since anchorDate: Date) async throws -> [HKWorkout] { [] }
     func backfillWorkoutsFromHealth(referenceDate: Date) async throws -> [HKWorkout] { [] }
     func save(_ samples: [HKObject]) async throws { }
     func delete(_ samples: [HKSample]) async throws { }
+    func deleteWorkout(fernletWorkoutID: UUID) async throws -> Bool { false }
     func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics] { [] }
     func requestBodyProfileAuthorization() async throws -> HealthBodyProfile { HealthBodyProfile() }
     func loadBodyProfile() async throws -> HealthBodyProfile { HealthBodyProfile() }

@@ -33,6 +33,15 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
     public var muscleGroups: Set<MuscleGroup> = []
     public var unknownMuscleGroupTokens: [String] = []
     public var healthKitUUID: UUID?
+    /// Provenance marker: `true` iff Fernlet itself AUTHORED the Health sample this row points at (we
+    /// wrote it via `saveWorkout` and stamped the returned UUID — or our own sample came back through the
+    /// workout observer carrying our `fernlet.workoutID`). It disambiguates the two very different reasons
+    /// a row can carry a `healthKitUUID`: a genuine Apple Health *import* (some other app / a manual Health
+    /// entry owns the sample — remove/edit must be refused, deleting our mirror would orphan + resurrect
+    /// it) versus a Fernlet-*authored* sample (we own it, so remove deletes the Health copy and edit
+    /// re-syncs it). `nil` on imports and on plain local rows; encoded only when set, so untagged rows
+    /// stay byte-identical; never written `false`.
+    public var healthKitAuthored: Bool?
     public var plannedWorkoutID: UUID?
     /// Provenance marker: `true` iff this row was logged by the guided-workout flow (the Move-root
     /// card runner, the Suggest sheet's runner, or its "Mark done"). It is what lets name-based
@@ -54,6 +63,14 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
+
+    /// Genuinely Apple Health-owned: carries a `healthKitUUID` we did NOT author (an import from another
+    /// app or a manual Health entry). Remove/edit are refused for these — our copy is a read-only mirror.
+    public var isHealthImported: Bool { healthKitUUID != nil && healthKitAuthored != true }
+
+    /// Fernlet authored this Health sample; Fernlet owns it, so remove deletes the Health copy and edit
+    /// re-syncs it.
+    public var isHealthAuthored: Bool { healthKitAuthored == true }
 
     public var inferredCategory: WorkoutType {
         if mode == .activity, let activityType {
@@ -91,6 +108,7 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         effort: Int? = nil,
         muscleGroups: Set<MuscleGroup> = [],
         healthKitUUID: UUID? = nil,
+        healthKitAuthored: Bool? = nil,
         plannedWorkoutID: UUID? = nil,
         loggedFromGuidedSession: Bool? = nil,
         intensity: WorkoutIntensity,
@@ -111,6 +129,7 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         self.effort = effort
         self.muscleGroups = muscleGroups
         self.healthKitUUID = healthKitUUID
+        self.healthKitAuthored = healthKitAuthored
         self.plannedWorkoutID = plannedWorkoutID
         self.loggedFromGuidedSession = loggedFromGuidedSession
         self.intensity = intensity
@@ -147,6 +166,7 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         muscleGroups = muscleSplit.known
         unknownMuscleGroupTokens = muscleSplit.unknownTokens
         healthKitUUID = try container.decodeIfPresent(UUID.self, forKey: .healthKitUUID)
+        healthKitAuthored = try container.decodeIfPresent(Bool.self, forKey: .healthKitAuthored)
         plannedWorkoutID = try container.decodeIfPresent(UUID.self, forKey: .plannedWorkoutID)
         loggedFromGuidedSession = try container.decodeIfPresent(Bool.self, forKey: .loggedFromGuidedSession)
         // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
@@ -178,6 +198,8 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         try container.encode(muscleGroups, forKey: .muscleGroups)
         try container.encode(unknownMuscleGroupTokens, forKey: .unknownMuscleGroupTokens)
         try container.encodeIfPresent(healthKitUUID, forKey: .healthKitUUID)
+        // Encoded only when set (never written `false`), so untagged rows stay byte-identical.
+        try container.encodeIfPresent(healthKitAuthored, forKey: .healthKitAuthored)
         try container.encodeIfPresent(plannedWorkoutID, forKey: .plannedWorkoutID)
         // Encoded only when set (never written `false`), so untagged rows stay byte-identical.
         try container.encodeIfPresent(loggedFromGuidedSession, forKey: .loggedFromGuidedSession)
@@ -189,7 +211,7 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, type, mode, activityType, exercises, rpe, notes, duration
-        case distanceMiles, activeEnergyKcal, effort, muscleGroups, healthKitUUID, plannedWorkoutID
+        case distanceMiles, activeEnergyKcal, effort, muscleGroups, healthKitUUID, healthKitAuthored, plannedWorkoutID
         case loggedFromGuidedSession
         case intensity, completedAt, loggedAt
         case unknownTypeToken, unknownModeToken, unknownActivityTypeToken

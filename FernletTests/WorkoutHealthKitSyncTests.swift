@@ -70,6 +70,43 @@ struct WorkoutHealthKitSyncTests {
         #expect(service.stopObservingWorkoutsCallCount == 1)
     }
 
+    /// Finding B: a locally-removed workout whose app-authored sample resurfaces (its in-flight save
+    /// landed after the row was gone) must NOT be re-imported. reconcile skips the upsert and deletes the
+    /// orphan from Health by its `fernlet.workoutID`, clearing the tombstone once the delete confirms.
+    @Test func reconcileSkipsAndDeletesTombstonedSample() async {
+        let removedID = UUID()
+        let context = FakeWorkoutSyncContext(tombstonedIDs: [removedID])
+        let sample = FakeHealthWorkoutSample(metadata: ["fernlet.workoutID": removedID.uuidString])
+        let service = FakeWorkoutHealthKitService(
+            authorizationStatuses: [HKObjectType.workoutType().identifier: .sharingAuthorized]
+        )
+        let sync = WorkoutHealthKitSync(context: context, service: service)
+
+        sync.reconcileWorkouts([sample])
+        // The Health delete is fired on a detached Task; let it run.
+        for _ in 0..<20 where service.deletedFernletWorkoutIDs.isEmpty { await Task.yield() }
+
+        #expect(context.upsertedWorkouts.isEmpty)
+        #expect(context.setUUIDCalls.isEmpty)
+        #expect(service.deletedFernletWorkoutIDs == [removedID])
+        #expect(context.clearedTombstones == [removedID])   // delete confirmed → tombstone pruned
+    }
+
+    /// Finding A.3: a Health-app-side deletion (delivered as deleted UUIDs) removes the matching local
+    /// mirror row by `healthKitUUID` — making "manage it in the Health app" real.
+    @Test func reconcileDeletedRemovesLocalRowByHealthKitUUID() {
+        let context = FakeWorkoutSyncContext()
+        let service = FakeWorkoutHealthKitService(
+            authorizationStatuses: [HKObjectType.workoutType().identifier: .sharingAuthorized]
+        )
+        let sync = WorkoutHealthKitSync(context: context, service: service)
+        let deletedUUID = UUID()
+
+        sync.reconcileDeletedWorkouts([deletedUUID])
+
+        #expect(context.removedByHealthKitUUID == [deletedUUID])
+    }
+
     @Test func saveIfAuthorizedNoOpsWhenWorkoutAuthorizationMissing() async {
         let context = FakeWorkoutSyncContext()
         let service = FakeWorkoutHealthKitService(authorizationStatuses: [:])
@@ -146,12 +183,16 @@ private final class FakeWorkoutSyncContext: WorkoutSyncContext {
     let todayKey = "2026-05-26"
     var existingIDs: Set<UUID>
     var existingHealthKitUUIDs: Set<UUID>
+    var tombstonedIDs: Set<UUID>
     private(set) var setUUIDCalls: [(workoutID: UUID, hkUUID: UUID, date: String)] = []
     private(set) var upsertedWorkouts: [(workout: Workout, date: String)] = []
+    private(set) var clearedTombstones: [UUID] = []
+    private(set) var removedByHealthKitUUID: [UUID] = []
 
-    init(existingIDs: Set<UUID> = [], existingHealthKitUUIDs: Set<UUID> = []) {
+    init(existingIDs: Set<UUID> = [], existingHealthKitUUIDs: Set<UUID> = [], tombstonedIDs: Set<UUID> = []) {
         self.existingIDs = existingIDs
         self.existingHealthKitUUIDs = existingHealthKitUUIDs
+        self.tombstonedIDs = tombstonedIDs
     }
 
     func workoutExists(id: UUID) -> Bool {
@@ -173,6 +214,20 @@ private final class FakeWorkoutSyncContext: WorkoutSyncContext {
             existingHealthKitUUIDs.insert(healthKitUUID)
         }
     }
+
+    func isWorkoutTombstoned(fernletWorkoutID id: UUID) -> Bool {
+        tombstonedIDs.contains(id)
+    }
+
+    func clearWorkoutTombstone(fernletWorkoutID id: UUID) {
+        clearedTombstones.append(id)
+        tombstonedIDs.remove(id)
+    }
+
+    func removeWorkoutByHealthKitUUID(_ hkUUID: UUID) {
+        removedByHealthKitUUID.append(hkUUID)
+        existingHealthKitUUIDs.remove(hkUUID)
+    }
 }
 
 @MainActor
@@ -181,8 +236,10 @@ private final class FakeWorkoutHealthKitService: HealthKitServicing {
     var observedWorkouts: [HKWorkout]
     var integrationAvailable = true
     var saveWorkoutUUID = UUID()
+    var deleteWorkoutReturns = true
     private(set) var saveWorkoutCallCount = 0
     private(set) var stopObservingWorkoutsCallCount = 0
+    private(set) var deletedFernletWorkoutIDs: [UUID] = []
 
     init(authorizationStatuses: [String: HKAuthorizationStatus], observedWorkouts: [HKWorkout] = []) {
         self.authorizationStatuses = authorizationStatuses
@@ -195,14 +252,18 @@ private final class FakeWorkoutHealthKitService: HealthKitServicing {
         AuthorizationSnapshot(isAvailable: integrationAvailable, writeStatuses: authorizationStatuses)
     }
     func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws { }
-    func startObservingWorkouts(handler: @escaping ([HKWorkout]) -> Void) async throws {
-        handler(observedWorkouts)
+    func startObservingWorkouts(handler: @escaping ([HKWorkout], [UUID]) -> Void) async throws {
+        handler(observedWorkouts, [])
     }
     func stopObservingWorkouts() { stopObservingWorkoutsCallCount += 1 }
     func recentWorkouts(since anchorDate: Date) async throws -> [HKWorkout] { [] }
     func backfillWorkoutsFromHealth(referenceDate: Date) async throws -> [HKWorkout] { observedWorkouts }
     func save(_ samples: [HKObject]) async throws { }
     func delete(_ samples: [HKSample]) async throws { }
+    func deleteWorkout(fernletWorkoutID: UUID) async throws -> Bool {
+        deletedFernletWorkoutIDs.append(fernletWorkoutID)
+        return deleteWorkoutReturns
+    }
     func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics] { [] }
     func requestBodyProfileAuthorization() async throws -> HealthBodyProfile { HealthBodyProfile() }
     func loadBodyProfile() async throws -> HealthBodyProfile { HealthBodyProfile() }

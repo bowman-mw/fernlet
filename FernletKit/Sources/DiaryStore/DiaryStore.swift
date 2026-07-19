@@ -1064,11 +1064,18 @@ public final class DiaryStore {
         }
     }
 
+    /// Stamps a workout row with its Apple Health UUID. Both callers stamp a Fernlet-*authored* sample —
+    /// `WorkoutHealthKitSync.saveIfAuthorized` after our own save, and `reconcileWorkouts` when our own
+    /// sample returns through the observer carrying our `fernlet.workoutID` — so this also marks the row
+    /// `healthKitAuthored`, the provenance that lets the store allow remove/edit (and manage the Health
+    /// copy) while still refusing true imports. A safe no-op when the workout isn't found (e.g. it was
+    /// removed while its save was in flight).
     public func setWorkoutHealthKitUUID(workoutID: UUID, hkUUID: UUID, date: String) {
         batchSnapshotPersistence {
             if date == todayKey {
                 if let index = day.workouts.firstIndex(where: { $0.id == workoutID }) {
                     day.workouts[index].healthKitUUID = hkUUID
+                    day.workouts[index].healthKitAuthored = true
                     return
                 }
             } else {
@@ -1077,6 +1084,7 @@ public final class DiaryStore {
                     mutatePastDay(date) { day in
                         if let index = day.workouts.firstIndex(where: { $0.id == workoutID }) {
                             day.workouts[index].healthKitUUID = hkUUID
+                            day.workouts[index].healthKitAuthored = true
                         }
                     }
                     return
@@ -1085,6 +1093,7 @@ public final class DiaryStore {
 
             if let index = day.workouts.firstIndex(where: { $0.id == workoutID }) {
                 day.workouts[index].healthKitUUID = hkUUID
+                day.workouts[index].healthKitAuthored = true
                 return
             }
 
@@ -1093,6 +1102,7 @@ public final class DiaryStore {
                 mutatePastDay(dateKey) { targetDay in
                     if let index = targetDay.workouts.firstIndex(where: { $0.id == workoutID && $0.healthKitUUID == nil }) {
                         targetDay.workouts[index].healthKitUUID = hkUUID
+                        targetDay.workouts[index].healthKitAuthored = true
                     }
                 }
                 return

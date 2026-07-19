@@ -17,12 +17,19 @@ public protocol HealthKitServicing {
     func requestAuthorization(for capability: HealthCapability) async throws -> AuthorizationOutcome
     func currentAuthorizationSnapshot() -> AuthorizationSnapshot
     func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws
-    func startObservingWorkouts(handler: @escaping ([HKWorkout]) -> Void) async throws
+    /// Observes workout additions AND deletions. The handler receives the added/updated samples and the
+    /// UUIDs of samples deleted since the last anchor (so a Health-app-side deletion can remove its local
+    /// mirror row).
+    func startObservingWorkouts(handler: @escaping ([HKWorkout], [UUID]) -> Void) async throws
     func stopObservingWorkouts()
     func recentWorkouts(since anchorDate: Date) async throws -> [HKWorkout]
     func backfillWorkoutsFromHealth(referenceDate: Date) async throws -> [HKWorkout]
     func save(_ samples: [HKObject]) async throws
     func delete(_ samples: [HKSample]) async throws
+    /// Deletes the Fernlet-authored workout sample(s) matching `fernletWorkoutID` (our `fernlet.workoutID`
+    /// / sync-identifier metadata). Returns whether anything was found and deleted. Only ever finds our own
+    /// authored samples — imports carry no such metadata.
+    func deleteWorkout(fernletWorkoutID: UUID) async throws -> Bool
     func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics]
     func requestBodyProfileAuthorization() async throws -> HealthBodyProfile
     func loadBodyProfile() async throws -> HealthBodyProfile
@@ -482,7 +489,7 @@ public final class HealthKitService: HealthKitServicing {
         startAnchoredQuery(for: type, handler: handler)
     }
 
-    public func startObservingWorkouts(handler: @escaping ([HKWorkout]) -> Void) async throws {
+    public func startObservingWorkouts(handler: @escaping ([HKWorkout], [UUID]) -> Void) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         stopObservingWorkouts()
 
@@ -495,13 +502,13 @@ public final class HealthKitService: HealthKitServicing {
             predicate: predicate,
             anchor: anchor,
             limit: HKObjectQueryNoLimit
-        ) { _, samples, _, newAnchor, error in
+        ) { _, samples, deletedObjects, newAnchor, error in
             guard error == nil else { return }
-            Self.deliver(workoutSamples: samples, anchor: newAnchor, handler: handler)
+            Self.deliver(workoutSamples: samples, deletedObjects: deletedObjects, anchor: newAnchor, handler: handler)
         }
-        query.updateHandler = { _, samples, _, newAnchor, error in
+        query.updateHandler = { _, samples, deletedObjects, newAnchor, error in
             guard error == nil else { return }
-            Self.deliver(workoutSamples: samples, anchor: newAnchor, handler: handler)
+            Self.deliver(workoutSamples: samples, deletedObjects: deletedObjects, anchor: newAnchor, handler: handler)
         }
         workoutObservationQuery = query
         activeQueries.append(query)
@@ -544,6 +551,38 @@ public final class HealthKitService: HealthKitServicing {
     public func delete(_ samples: [HKSample]) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         try await storeController.delete(samples)
+    }
+
+    public func deleteWorkout(fernletWorkoutID id: UUID) async throws -> Bool {
+        guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
+        // We stamp both `fernlet.workoutID` and the sync identifier with the workout id on save; match
+        // either so a sample is found regardless of which key survived.
+        let idString = id.uuidString
+        let byWorkoutID = HKQuery.predicateForObjects(withMetadataKey: "fernlet.workoutID", allowedValues: [idString])
+        let bySyncID = HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: [idString])
+        let predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [byWorkoutID, bySyncID])
+        let samples = try await fetchWorkouts(matching: predicate)
+        guard !samples.isEmpty else { return false }
+        try await storeController.delete(samples)
+        return true
+    }
+
+    private func fetchWorkouts(matching predicate: NSPredicate) async throws -> [HKWorkout] {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[HKWorkout], Error>) in
+            let query = HKSampleQuery(
+                sampleType: HKObjectType.workoutType(),
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: samples?.compactMap { $0 as? HKWorkout } ?? [])
+            }
+            healthStore.execute(query)
+        }
     }
 
     public func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics] {
@@ -1016,14 +1055,15 @@ public final class HealthKitService: HealthKitServicing {
             && StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService).healthKitMasterEnabled
     }
 
-    nonisolated private static func deliver(workoutSamples samples: [HKSample]?, anchor: HKQueryAnchor?, handler: @escaping ([HKWorkout]) -> Void) {
+    nonisolated private static func deliver(workoutSamples samples: [HKSample]?, deletedObjects: [HKDeletedObject]?, anchor: HKQueryAnchor?, handler: @escaping ([HKWorkout], [UUID]) -> Void) {
         let workouts = samples?.compactMap { $0 as? HKWorkout } ?? []
+        let deletedUUIDs = (deletedObjects ?? []).map(\.uuid)
         Task { @MainActor in
-            guard !workouts.isEmpty else {
-                if let anchor { HealthKitAnchorKeychain.storeWorkoutAnchor(anchor) }
-                return
+            // A pure-deletion update carries no added samples — still deliver so the local mirror row can
+            // be removed. Only skip the handler when there is genuinely nothing to report.
+            if !workouts.isEmpty || !deletedUUIDs.isEmpty {
+                handler(workouts, deletedUUIDs)
             }
-            handler(workouts)
             if let anchor { HealthKitAnchorKeychain.storeWorkoutAnchor(anchor) }
         }
     }
