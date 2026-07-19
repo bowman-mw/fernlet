@@ -458,7 +458,7 @@ extension View {
     }
 }
 
-private struct FernletTabBarCompactionModifier: ViewModifier {
+struct FernletTabBarCompactionModifier: ViewModifier {
     @Binding var isCompact: Bool
     @Binding var resetToken: Int
     @State private var scrollPosition = ScrollPosition(edge: .top)
@@ -466,10 +466,17 @@ private struct FernletTabBarCompactionModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scrollPosition($scrollPosition)
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                let scrollableOverflow = geometry.contentSize.height - geometry.containerSize.height
-                return scrollableOverflow > 24 && geometry.contentOffset.y > geometry.contentInsets.top + 24
-            } action: { _, shouldCompact in
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                // Signed distance scrolled past the top edge. Unlike `containerSize`, this is
+                // invariant to the animated BOTTOM safe-area inset that the compacting tab bar
+                // itself contributes — which is what breaks the compact⇄expand feedback loop
+                // (and stops neighbor pages from re-firing when an inset animation runs).
+                geometry.contentOffset.y - geometry.contentInsets.top
+            } action: { _, distanceScrolledPastTop in
+                let shouldCompact = Self.shouldCompact(
+                    isCompact: isCompact,
+                    distanceScrolledPastTop: distanceScrolledPastTop
+                )
                 guard isCompact != shouldCompact else { return }
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                     isCompact = shouldCompact
@@ -482,6 +489,16 @@ private struct FernletTabBarCompactionModifier: ViewModifier {
             .onDisappear {
                 isCompact = false
             }
+    }
+
+    /// Pure compaction decision with hysteresis, extracted for testability.
+    ///
+    /// `distanceScrolledPastTop` is `contentOffset.y - contentInsets.top`. Enter compaction only
+    /// after 48pt of real downward travel; leave only once settled back under 8pt. The 8…48 dead
+    /// band means a value dwelling anywhere in the old oscillation range cannot flip states, and
+    /// requiring 48pt of travel means an unscrollable screen can never trigger compaction.
+    static func shouldCompact(isCompact: Bool, distanceScrolledPastTop: CGFloat) -> Bool {
+        isCompact ? (distanceScrolledPastTop > 8) : (distanceScrolledPastTop > 48)
     }
 }
 
