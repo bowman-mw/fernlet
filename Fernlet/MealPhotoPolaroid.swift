@@ -57,4 +57,67 @@ struct MealPhotoPolaroid: View {
         .accessibilityLabel("Photo of \(name)")
     }
 }
+
+/// A light tap-through for a "Recent bites" polaroid: the meal's photo shown larger, with its name and
+/// the day it was logged, dismissible. Mirrors the progress-photo detail's shape but deliberately WITHOUT
+/// any lock/snapshot gating — meal photos aren't private the way body photos are. Loads the sealed bytes
+/// lazily off the passed closure; never fetches anything over the network.
+struct MealPhotoDetailView: View {
+    let name: String
+    let loggedAt: Date
+    let loadData: () -> Data?
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var image: UIImage?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Group {
+                        if let image {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFit()
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        } else {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color.cream)
+                                .frame(height: 320)
+                                .overlay {
+                                    Image(systemName: "fork.knife")
+                                        .font(.largeTitle)
+                                        .foregroundStyle(Color.slate.opacity(0.4))
+                                }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(name)
+                            .font(.fernlet(.displayMedium))
+                            .foregroundStyle(Color.bark)
+                        Text(loggedAt.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                            .font(.fernlet(.body))
+                            .foregroundStyle(Color.slate)
+                    }
+                }
+                .padding(20)
+            }
+            .background(Color.parchment)
+            .navigationTitle("Meal photo")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .task {
+            // Decode off the main thread; only the finished image lands back on the MainActor.
+            guard image == nil, let data = loadData() else { return }
+            image = await UIImage(data: data)?.byPreparingForDisplay()
+        }
+    }
+}
 #endif

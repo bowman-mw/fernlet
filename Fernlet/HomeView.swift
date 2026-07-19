@@ -42,6 +42,8 @@ struct HomeView: View {
     @State private var isCompanionSettled = false
     /// Cached sky snapshot for the ambience layer; nil ⇒ time-of-day tint only.
     @State private var companionAmbient: WeatherAmbient?
+    /// The "Recent bites" polaroid the user tapped, presented as a larger dismissible viewer.
+    @State private var selectedBite: RecentBite?
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -484,16 +486,31 @@ struct HomeView: View {
         .accessibilityHidden(true)
     }
 
-    /// "Recent bites" (#11): today's photographed meals as free-floating classic polaroids. A horizontal
+    /// The recent photographed meals for the strip — any meal with a photo across the last 7 days, newest
+    /// first (so the strip doesn't empty out at midnight the way "today only" did). Reads at most 7 day
+    /// rows (today is the in-memory `day`; the prior six are single-row repository reads) and no photo
+    /// bytes: the polaroids decode their JPEGs lazily as they scroll into view.
+    private var recentBites: [RecentBite] {
+        let today = Date()
+        let calendar = Calendar.current
+        let days: [FernletDay] = (0..<7).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
+            return store.loadDay(for: FernletDate.dayKey(for: date))
+        }
+        return RecentBites.recent(from: days, today: today)
+    }
+
+    /// "Recent bites" (#11): recently photographed meals as free-floating classic polaroids. A horizontal
     /// strip so the tilt/shadow reads as a scrapbook rather than a cramped list-row thumb; an empty state
-    /// keeps the widget from being a blank card before the user has snapped anything.
+    /// keeps the widget from being a blank card before the user has snapped anything. Each polaroid taps
+    /// through to a larger viewer.
     private var mealPhotosStrip: some View {
-        let photographed = store.day.meals.filter { $0.photoID != nil }.suffix(6)
+        let bites = recentBites
         let rotations: [Double] = [-3, 2, -1.5, 3, -2.5, 1.5]
         return FernletCard {
             VStack(alignment: .leading, spacing: 12) {
                 SectionLabel("Recent bites")
-                if photographed.isEmpty {
+                if bites.isEmpty {
                     EmptyState(text: "Snap a photo when you log a meal and it'll show up here as a polaroid.")
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -501,13 +518,21 @@ struct HomeView: View {
                         // instead of all six firing on Home render — the transient bitmaps add up on the
                         // iPhone-11 floor. The decode itself is off-main (see MealPhotoPolaroid).
                         LazyHStack(spacing: 20) {
-                            ForEach(Array(photographed.enumerated()), id: \.element.id) { index, meal in
+                            ForEach(Array(bites.enumerated()), id: \.element.id) { index, bite in
                                 #if canImport(UIKit)
-                                MealPhotoPolaroid(
-                                    name: meal.name,
-                                    rotation: rotations[index % rotations.count],
-                                    loadData: { meal.photoID.flatMap { store.mealPhotoData(for: $0) } }
-                                )
+                                // The a11y id lives on the Button (a container's identifier overrides its
+                                // children), so the tappable polaroid is what tests find.
+                                Button {
+                                    selectedBite = bite
+                                } label: {
+                                    MealPhotoPolaroid(
+                                        name: bite.name,
+                                        rotation: rotations[index % rotations.count],
+                                        loadData: { store.mealPhotoData(for: bite.photoID) }
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("home.recentBites.polaroid")
                                 #endif
                             }
                         }
@@ -518,6 +543,15 @@ struct HomeView: View {
                 }
             }
         }
+        #if canImport(UIKit)
+        .sheet(item: $selectedBite) { bite in
+            MealPhotoDetailView(
+                name: bite.name,
+                loggedAt: bite.loggedAt,
+                loadData: { store.mealPhotoData(for: bite.photoID) }
+            )
+        }
+        #endif
     }
 
     /// Presentation-only frazzle flag for the companion. Never overrides the sick/resting
