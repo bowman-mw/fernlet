@@ -95,6 +95,54 @@ struct RecentBitesTests {
         #expect(RecentBites.recent(from: days, today: today).isEmpty)
     }
 
+    // MARK: - Midnight rollover (day T → T+1)
+
+    /// The window where the app is foreground-resident across local midnight: the strip's prior-day fetch
+    /// has re-run for T+1, but the store hasn't advanced off T yet — so asking it for T returns the very
+    /// row it already handed over as "today", and day T arrives twice. Each of T's photographed meals
+    /// would otherwise yield two bites sharing one id, which the strip's `ForEach` identifies by.
+    @Test func collapsesTheSameDayArrivingTwiceAcrossMidnight() {
+        let today = Date()
+        let liveToday = day("T", [photographedMeal(name: "Snapped on T", loggedAt: today)])
+        // Offsets 1...6 measured from T+1 → the first is T itself, which `loadDay` answers with the
+        // in-memory row; the rest are genuine prior days.
+        let asPriorDay = liveToday
+        let days = [liveToday, asPriorDay, day("T-1", [photographedMeal(name: "Yesterday", loggedAt: daysAgo(1, from: today))])]
+
+        let bites = RecentBites.recent(from: days, today: today)
+
+        #expect(bites.map(\.name) == ["Snapped on T", "Yesterday"])
+        #expect(Set(bites.map(\.id)).count == bites.count)   // ids the ForEach can key on
+    }
+
+    /// First row wins when a day key repeats: the caller hands today's live row first, so a meal logged
+    /// after the prior-day fetch snapshotted that day still shows.
+    @Test func prefersTheFirstRowWhenADayKeyRepeats() {
+        let today = Date()
+        let breakfast = photographedMeal(
+            name: "Breakfast", loggedAt: Calendar.current.date(byAdding: .hour, value: -3, to: today)!)
+        let snapshot = day("T", [breakfast])
+        let live = day("T", [breakfast, photographedMeal(name: "Lunch just logged", loggedAt: today)])
+
+        let bites = RecentBites.recent(from: [live, snapshot], today: today)
+
+        #expect(bites.map(\.name) == ["Lunch just logged", "Breakfast"])
+    }
+
+    /// Once the store advances to T+1, the cached copy of T is what keeps T's meals in the strip — the
+    /// keys now differ, so nothing collapses and both days show.
+    @Test func keepsBothDaysOnceTheStoreAdvancesPastMidnight() {
+        let today = Date()
+        let days = [
+            day("T+1", [photographedMeal(name: "New day", loggedAt: today)]),
+            day("T", [photographedMeal(name: "Snapped on T", loggedAt: daysAgo(1, from: today))]),
+        ]
+
+        let bites = RecentBites.recent(from: days, today: today)
+
+        #expect(bites.map(\.name) == ["New day", "Snapped on T"])
+    }
+
     // MARK: - Photo presence classification (Item C: "on your other device")
 
     @Test func classifyDistinguishesNoPhotoMissingFileAndBrokenFile() {

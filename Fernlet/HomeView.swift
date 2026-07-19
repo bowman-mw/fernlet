@@ -502,6 +502,13 @@ struct HomeView: View {
     /// Load the prior six days' rows into `cachedPriorDays`. These are synchronous single-row repository
     /// fetches; driving them from `.task(id: <today's day key>)` runs them exactly once per day rollover
     /// rather than on every Home render, while today's bites stay live off `store.day` in `recentBites`.
+    ///
+    /// This can run at wall-clock day T+1 while the store is still on T (the rollover and this `task` fire
+    /// on independent triggers, in no guaranteed order), in which case offset-1 asks for T — still the
+    /// store's "today", so `loadDay` hands back the in-memory row rather than a repository read. Don't
+    /// "fix" that by skipping today's key: this cached copy is what keeps T's photographed meals in the
+    /// strip once the store swaps `day` to T+1 (the `task` id is already T+1 by then, so it won't re-run).
+    /// The transient duplicate it creates is collapsed by day key in `RecentBites.recent`.
     private func reloadPriorDayRows() {
         let today = Date()
         let calendar = Calendar.current

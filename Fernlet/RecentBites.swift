@@ -61,6 +61,14 @@ enum RecentBites {
     /// `days`, newest first, capped at `limit`. Pure over already-loaded day rows (it reads no photo
     /// bytes). An explicit `window` (in days, inclusive of `today`) keeps a stale row from sneaking past
     /// the recent horizon even if the caller hands over more days than it should.
+    ///
+    /// Repeat day keys collapse to their FIRST row, because the caller assembles `days` from two sources
+    /// that can briefly name the same day: today's live in-memory row first, then the prior days it
+    /// fetched. Across local midnight (day T → T+1) the fetch can re-run before the store has advanced
+    /// off T, and asking the store for T while T is still its "today" hands back that same in-memory row —
+    /// so T arrives twice. Without collapsing, T's photographed meals would each yield two bites sharing
+    /// one `id` and the strip's `ForEach` would see duplicate ids. First-wins is also the fresher row:
+    /// the caller's leading entry is the live one, any later copy a snapshot.
     static func recent(
         from days: [FernletDay],
         today: Date,
@@ -72,7 +80,9 @@ enum RecentBites {
         // `window` days INCLUSIVE of today → reach back window - 1 days.
         let cutoff = calendar.date(byAdding: .day, value: -(max(window, 1) - 1), to: startOfToday) ?? startOfToday
 
+        var seenDayKeys = Set<String>()
         return days
+            .filter { seenDayKeys.insert($0.date).inserted }
             .flatMap { day in
                 day.meals.compactMap { meal -> RecentBite? in
                     guard let photoID = meal.photoID else { return nil }
