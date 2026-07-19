@@ -2648,6 +2648,9 @@ struct RecipeDetailView: View {
     /// Drives the shared destructive-confirmation for the photo trash chip, so deleting the recipe photo
     /// warns + audits like every other irreversible action instead of firing off a single tap.
     @State private var pendingDestructiveAction: DestructiveConfirmation?
+    /// Presents the web-import source page in an in-app Safari sheet (`SafariView`) rather than kicking
+    /// the user out to external Safari — matching the recipe *edit* sheet's own source link.
+    @State private var showingSafari = false
 
     /// Manual recipes resolve their structured ingredients through the catalog; web imports carry
     /// free-text ingredient lines and no structured `ingredients`, so their FoodCatalog resolution
@@ -2742,6 +2745,12 @@ struct RecipeDetailView: View {
             }
         }
         .destructiveConfirmation($pendingDestructiveAction)
+        .sheet(isPresented: $showingSafari) {
+            if let sourceURL = recipe.webImport?.sourceURL {
+                SafariView(url: sourceURL)
+                    .ignoresSafeArea()
+            }
+        }
     }
 
     @ViewBuilder private var photoSection: some View {
@@ -2845,7 +2854,9 @@ struct RecipeDetailView: View {
                             }
                         }
                     }
-                    Link(destination: webImport.sourceURL) {
+                    Button {
+                        showingSafari = true
+                    } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "safari").font(.caption)
                             Text(webImport.sourceURL.host() ?? webImport.sourceURL.absoluteString)
@@ -2854,6 +2865,7 @@ struct RecipeDetailView: View {
                         }
                         .foregroundStyle(Color.fern)
                     }
+                    .buttonStyle(.plain)
                     .padding(.top, 2)
                 }
             }
