@@ -247,6 +247,14 @@ extension FernletStore {
     /// decrypted dataset in the clear (that is the point — it is theirs to take), so it has to land where
     /// the wipe reaches by construction, not somewhere a cleanup step has to name explicitly.
     func writeDataExportFile() throws -> URL {
+        // Belt-and-braces: sweep any earlier plaintext export before writing a new one. The share-sheet
+        // completion handler purges once sharing finishes, but a kill/crash/jettison mid-share leaves the
+        // full decrypted dump in tmp/ indefinitely — so every fresh export first clears whatever a prior
+        // share may have stranded. Best-effort (nothing to keep from a previous export), so the result is
+        // ignored; the new file we write below is what the caller shares. Launch sweeps too, so between the
+        // two no plaintext dump outlives its share.
+        purgeDataExports()
+
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601

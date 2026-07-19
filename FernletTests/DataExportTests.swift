@@ -100,4 +100,28 @@ final class DataExportTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: freshURL.path), "the shared export survived the purge")
         XCTAssertFalse(FileManager.default.fileExists(atPath: staleURL.path), "a lingering older export survived the purge")
     }
+
+    /// Belt-and-braces: a kill/crash/jettison while the share sheet was up leaves a previous plaintext
+    /// dump on disk, so the completion-handler purge never fired. The NEXT export's write path must sweep
+    /// that survivor before writing — no two plaintext dumps ever coexist.
+    func testWriteDataExportFileSweepsALingeringPriorExport() throws {
+        let (store, _, _) = makeTestStoreWithRepositories()
+
+        // A plaintext dump stranded by an interrupted share (a different day's filename, still in the dir).
+        let strandedURL = FernletStore.dataExportsDirectory.appendingPathComponent("Fernlet-data-2025-12-31.json")
+        try FileManager.default.createDirectory(at: FernletStore.dataExportsDirectory, withIntermediateDirectories: true)
+        try Data("{\"stranded\":true}".utf8).write(to: strandedURL, options: [.atomic, .completeFileProtection])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: strandedURL.path), "precondition: stranded export not written")
+
+        // Writing a fresh export sweeps the stranded one first, then lands the new file.
+        let freshURL = try store.writeDataExportFile()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: strandedURL.path),
+                       "the stranded prior export survived the next write")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: freshURL.path),
+                      "the fresh export should exist after writing")
+
+        // Clean up so the shared tmp/ directory doesn't leak between tests.
+        store.purgeDataExports()
+    }
 }

@@ -110,6 +110,12 @@ final class LaunchPreparationService {
         // any still on screen from a previous launch is orphaned. End them once at startup.
         WorkoutLiveActivityController.endStaleActivities()
 
+        // A plaintext "export my data" dump is written to tmp/ for the share sheet and purged when the
+        // sheet closes — but a kill/crash/jettison mid-share leaves the full decrypted dump on disk. Launch
+        // is a point where no share can be in flight, so sweep any survivor here (belt-and-braces with the
+        // pre-write sweep in writeDataExportFile()).
+        store.purgeDataExports()
+
         // Keep launch work deterministic and cheap so the first screen can animate.
         store.photowallSeeds = buildPhotowallSeeds(store: store)
         statusMessage = "Reading your recent patterns..."
