@@ -127,7 +127,13 @@ public final class WorkoutHealthKitSync {
         }
     }
 
-    static func makeWorkout(from sample: some HealthWorkoutSample) -> Workout {
+    /// Builds a local row from a Health sample. `authoredFernletID` is non-nil only when the sample
+    /// carries OUR OWN `fernlet.workoutID` metadata (see `reconcileWorkouts`), which makes it a sample
+    /// Fernlet wrote: the row is rebuilt under that same workout id and re-marked `healthKitAuthored`
+    /// rather than landing as a fresh random-id Health *import*. That keeps identity stable across
+    /// devices — a rebuilt row merges with the same-id row another device holds instead of duplicating
+    /// it — and keeps the row editable/removable, which an import is not.
+    static func makeWorkout(from sample: some HealthWorkoutSample, authoredFernletID: UUID? = nil) -> Workout {
         let activityType: WorkoutActivityType = {
             if let rawValue = sample.metadata?["fernlet.activityType"] as? String,
                let type = WorkoutActivityType(rawValue: rawValue) {
@@ -160,6 +166,7 @@ public final class WorkoutHealthKitSync {
         }()
         let metadata = parseFernletMetadata(sample.metadata)
         return Workout(
+            id: authoredFernletID ?? UUID(),
             name: name,
             type: activityType.fernletCategory,
             mode: mode,
@@ -173,6 +180,7 @@ public final class WorkoutHealthKitSync {
             effort: metadata.effort,
             muscleGroups: metadata.muscleGroups,
             healthKitUUID: sample.uuid,
+            healthKitAuthored: authoredFernletID != nil ? true : nil,
             plannedWorkoutID: metadata.plannedWorkoutID,
             intensity: .moderate,
             completedAt: sample.endDate
@@ -242,7 +250,14 @@ public final class WorkoutHealthKitSync {
                 continue
             }
 
-            let workout = Self.makeWorkout(from: sample)
+            // No local row for this sample. If it carries OUR OWN `fernlet.workoutID` (never `syncID`,
+            // which any app may set) then Fernlet authored it and the row is missing — most often because
+            // another device edited the workout and this device consumed the resync's *delete* of the old
+            // sample before the day record or the replacement sample arrived. Rebuild under the sample's
+            // own workout id and authored provenance so the row returns as itself, editable, instead of
+            // demoted to an un-editable import under a fresh random id.
+            let authoredID = externalID.flatMap(UUID.init(uuidString:))
+            let workout = Self.makeWorkout(from: sample, authoredFernletID: authoredID)
             let dayKey = FernletDate.dayKey(for: sample.endDate)
             context.upsertWorkout(workout, date: dayKey)
         }
@@ -255,6 +270,17 @@ public final class WorkoutHealthKitSync {
     /// context method enforces. Self-initiated deletes (our own remove/edit-resync) echo back here too, but
     /// find no matching row (remove already dropped it; edit cleared the row's `healthKitUUID`), so they
     /// no-op.
+    ///
+    /// That clear-before-resync guard is per-device. A SECOND device still holding the pre-edit row (whose
+    /// `healthKitUUID` is the now-deleted old sample) has no way to tell "the user deleted this in the
+    /// Health app" from "another device edited it" — the two are the same deletion until the replacement
+    /// arrives. We deliberately honour the deletion immediately rather than deferring it behind a grace
+    /// window: a deferral that an app kill lands inside would silently swallow a real Health-app deletion,
+    /// which is the worse failure. The replacement sample then heals the row — it carries the unchanged
+    /// `fernlet.workoutID`, so `reconcileWorkouts` rebuilds it under its own id with authored provenance.
+    /// Net effect on the second device is a transient disappearance, not a demotion to an un-editable
+    /// import. Deletes delivered in the same batch as (or after) the replacement never remove anything:
+    /// `refreshFromHealth` reconciles adds first, which re-stamps the row's `healthKitUUID`.
     public func reconcileDeletedWorkouts(_ deletedHealthKitUUIDs: [UUID]) {
         guard let context else { return }
         for uuid in deletedHealthKitUUIDs {

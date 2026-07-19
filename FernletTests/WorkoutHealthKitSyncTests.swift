@@ -107,6 +107,96 @@ struct WorkoutHealthKitSyncTests {
         #expect(context.removedByHealthKitUUID == [deletedUUID])
     }
 
+    /// A sample with no `fernlet.workoutID` is a genuine Apple Health import: fresh id, NOT authored, so
+    /// the store keeps refusing edit/remove on it. Guards the authored-rebuild below from over-reaching.
+    @Test func reconcileImportsForeignSampleWithoutAuthoredProvenance() throws {
+        let context = FakeWorkoutSyncContext()
+        let service = FakeWorkoutHealthKitService(
+            authorizationStatuses: [HKObjectType.workoutType().identifier: .sharingAuthorized]
+        )
+        let sync = WorkoutHealthKitSync(context: context, service: service)
+
+        sync.reconcileWorkouts([FakeHealthWorkoutSample()])
+
+        let imported = try #require(context.upsertedWorkouts.first?.workout)
+        #expect(imported.healthKitAuthored == nil)
+        #expect(imported.isHealthImported)
+    }
+
+    /// A foreign sample carrying only `HKMetadataKeySyncIdentifier` — a key ANY app may set — must not be
+    /// mistaken for one of ours: the authored rebuild keys off our private `fernlet.workoutID` alone.
+    @Test func reconcileDoesNotClaimAuthorshipFromSyncIdentifierAlone() throws {
+        let context = FakeWorkoutSyncContext()
+        let foreignID = UUID()
+        let sample = FakeHealthWorkoutSample(metadata: [HKMetadataKeySyncIdentifier: foreignID.uuidString])
+        let service = FakeWorkoutHealthKitService(
+            authorizationStatuses: [HKObjectType.workoutType().identifier: .sharingAuthorized]
+        )
+        let sync = WorkoutHealthKitSync(context: context, service: service)
+
+        sync.reconcileWorkouts([sample])
+
+        let imported = try #require(context.upsertedWorkouts.first?.workout)
+        #expect(imported.healthKitAuthored == nil)
+        #expect(imported.id != foreignID)
+    }
+
+    /// Pre-merge review finding #4: two devices, Health iCloud on. Device A edits a Fernlet-authored
+    /// workout W, so its resync deletes sample S_old and saves S_new. Device B still holds the pre-edit row
+    /// (`healthKitUUID == S_old`), and A's edit is not yet merged in over CloudKit. If B's observer delivers
+    /// S_old's DELETION first, B drops its row — then S_new arrives with no matching row left.
+    ///
+    /// S_new must rebuild W as ITSELF: same workout id (so it merges with A's edited row instead of
+    /// duplicating it) and `healthKitAuthored` (so it stays editable/removable). Rebuilding it as a fresh
+    /// random-id import would strand the user with a workout Fernlet refuses to edit or remove.
+    @Test func deleteBeforeDayRecordRebuildsAuthoredWorkoutInsteadOfDemotingIt() throws {
+        let workoutID = UUID()
+        let oldSampleUUID = UUID()
+        // Device B's pre-edit state: row W, stamped with the sample A is about to supersede.
+        let context = FakeWorkoutSyncContext(
+            existingIDs: [workoutID],
+            existingHealthKitUUIDs: [oldSampleUUID]
+        )
+        let service = FakeWorkoutHealthKitService(
+            authorizationStatuses: [HKObjectType.workoutType().identifier: .sharingAuthorized]
+        )
+        let sync = WorkoutHealthKitSync(context: context, service: service)
+
+        // Batch 1 — the resync's delete lands alone, ahead of both S_new and A's day record.
+        sync.reconcileDeletedWorkouts([oldSampleUUID])
+        #expect(context.removedByHealthKitUUID == [oldSampleUUID])
+        context.existingIDs.remove(workoutID)   // the row is gone on B
+
+        // Batch 2 — the replacement sample arrives, still tagged with the unchanged workout id.
+        let newSample = FakeHealthWorkoutSample(metadata: ["fernlet.workoutID": workoutID.uuidString])
+        sync.reconcileWorkouts([newSample])
+
+        #expect(context.upsertedWorkouts.count == 1)
+        let rebuilt = try #require(context.upsertedWorkouts.first?.workout)
+        #expect(rebuilt.id == workoutID)                   // same identity → merges, never duplicates
+        #expect(rebuilt.healthKitUUID == newSample.uuid)
+        #expect(rebuilt.isHealthAuthored)                  // still Fernlet's own
+        #expect(!rebuilt.isHealthImported)                 // NOT demoted to an un-editable import
+    }
+
+    /// The rebuild must not resurrect a workout the user removed here: a tombstoned id still wins, and its
+    /// resurfaced sample is deleted from Health rather than rebuilt as authored.
+    @Test func tombstoneStillBeatsAuthoredRebuild() async {
+        let removedID = UUID()
+        let context = FakeWorkoutSyncContext(tombstonedIDs: [removedID])
+        let sample = FakeHealthWorkoutSample(metadata: ["fernlet.workoutID": removedID.uuidString])
+        let service = FakeWorkoutHealthKitService(
+            authorizationStatuses: [HKObjectType.workoutType().identifier: .sharingAuthorized]
+        )
+        let sync = WorkoutHealthKitSync(context: context, service: service)
+
+        sync.reconcileWorkouts([sample])
+        for _ in 0..<20 where service.deletedFernletWorkoutIDs.isEmpty { await Task.yield() }
+
+        #expect(context.upsertedWorkouts.isEmpty)
+        #expect(service.deletedFernletWorkoutIDs == [removedID])
+    }
+
     @Test func saveIfAuthorizedNoOpsWhenWorkoutAuthorizationMissing() async {
         let context = FakeWorkoutSyncContext()
         let service = FakeWorkoutHealthKitService(authorizationStatuses: [:])
