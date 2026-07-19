@@ -19,6 +19,7 @@ enum FernletWidgetKind {
 struct FernletWidgetsBundle: WidgetBundle {
     var body: some Widget {
         FernletCompanionWidget()
+        WorkoutLiveActivity()
     }
 }
 
@@ -68,16 +69,21 @@ struct FernletCompanionWidget: Widget {
 
 // MARK: - Palette (widget-local; the widget can't use the app's Color.* extension)
 
-private enum FernletWidgetPalette {
+// Widget-target-internal (not private) so the workout Live Activity can reuse the same colours
+// without re-declaring the literals — see WorkoutLiveActivity.swift.
+enum FernletWidgetPalette {
     // Card + text (9b)
     static let card = Color(red: 0.984, green: 0.969, blue: 0.933)     // #FBF7EE
     static let ink = Color(red: 0.239, green: 0.180, blue: 0.118)      // #3D2E1E
     static let inkSoft = Color(red: 0.541, green: 0.478, blue: 0.384)  // #8A7A62
     static let waterAccent = Color(red: 0.369, green: 0.486, blue: 0.549) // #5E7C8C
     static let waterTrack = Color(red: 0.369, green: 0.486, blue: 0.549).opacity(0.18)
-    static let buttonFill = Color(red: 0.353, green: 0.478, blue: 0.322) // #5A7A52
+    static let buttonFill = Color(red: 0.353, green: 0.478, blue: 0.322) // #5A7A52 deep moss
     static let buttonInk = Color(red: 0.961, green: 0.937, blue: 0.878)  // #F5EFE0
     static let dashed = Color(red: 0.776, green: 0.718, blue: 0.604)   // #C6B79A
+    /// Brighter fern (the "thriving" mood colour) — reads on the Dynamic Island's always-black
+    /// background where the deep-brown `ink` would vanish.
+    static let leaf = Color(red: 0.420, green: 0.620, blue: 0.384)     // #6B9E62
 
     // Mood colours (9a). The Lock Screen tints/monochromes these away — the EXPRESSION carries the mood.
     static func mood(_ state: WidgetCompanionState?) -> Color {

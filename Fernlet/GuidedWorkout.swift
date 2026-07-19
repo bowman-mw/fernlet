@@ -194,6 +194,9 @@ struct GuidedWorkoutSheet: View {
 
     @State private var runner: WorkoutSessionRunner
     @State private var showEndConfirm = false
+    /// One controller per sheet presentation — the Live Activity's lifetime equals this sheet's, so an
+    /// `end` here can only ever touch this presentation's own activity, never a later sheet's.
+    @State private var liveActivity = WorkoutLiveActivityController()
 
     init(
         session: WorkoutProgram.SessionSuggestion,
@@ -231,11 +234,19 @@ struct GuidedWorkoutSheet: View {
         .confirmationDialog("End this session?", isPresented: $showEndConfirm, titleVisibility: .visible) {
             Button("End without logging", role: .destructive) {
                 runner.end()
+                syncLiveActivity()
                 dismiss()
             }
             Button("Keep going", role: .cancel) {}
         } message: {
             Text("You can always come back and start again — no pressure.")
+        }
+        // Belt-and-braces: end any still-live activity when the sheet goes away — covers a swipe
+        // dismiss in `.ready`, the done screen close, and any path not handled explicitly. `end` is a
+        // no-op once the activity is already ended, so this never double-ends, and because the
+        // controller is @State-scoped to THIS presentation it can't end a later sheet's activity.
+        .onDisappear {
+            liveActivity.end(final: WorkoutActivityAttributes.ContentState(runner: runner))
         }
     }
 
@@ -259,6 +270,7 @@ struct GuidedWorkoutSheet: View {
                     showEndConfirm = true
                 } else {
                     runner.end()
+                    syncLiveActivity()
                     dismiss()
                 }
             } label: {
@@ -308,6 +320,7 @@ struct GuidedWorkoutSheet: View {
 
             primaryButton("Start", identifier: "workout.guided.start") {
                 runner.start()
+                startLiveActivity()
             }
         }
     }
@@ -344,6 +357,7 @@ struct GuidedWorkoutSheet: View {
 
                 primaryButton(doneSetLabel, identifier: "workout.guided.doneSet") {
                     runner.completeSet()
+                    syncLiveActivity()
                     logIfDone()
                 }
             }
@@ -391,6 +405,7 @@ struct GuidedWorkoutSheet: View {
 
             secondaryButton("Skip rest", identifier: "workout.guided.skipRest") {
                 runner.skipRest()
+                syncLiveActivity()
                 logIfDone()
             }
         }
@@ -435,6 +450,33 @@ struct GuidedWorkoutSheet: View {
     private func logIfDone() {
         guard runner.consumeCompletion() else { return }
         onComplete()
+    }
+
+    // MARK: Live Activity
+
+    /// Request the Lock Screen / Dynamic Island activity when the workout begins — but only if the
+    /// runner actually entered a live phase (an empty session goes straight to `.done`, so nothing to
+    /// show). Silently no-ops when Live Activities are disabled.
+    private func startLiveActivity() {
+        guard runner.phase == .working || runner.phase == .resting else { return }
+        liveActivity.start(
+            title: session.suggestion.name,
+            state: WorkoutActivityAttributes.ContentState(runner: runner)
+        )
+    }
+
+    /// Mirror the runner's latest state onto the activity after a transition: update while the session
+    /// is live, end (with a brief final state + immediate dismissal) once it reaches `.done`.
+    private func syncLiveActivity() {
+        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        switch runner.phase {
+        case .working, .resting:
+            liveActivity.update(state: state)
+        case .done:
+            liveActivity.end(final: state)
+        case .ready:
+            break
+        }
     }
 
     // MARK: Pieces

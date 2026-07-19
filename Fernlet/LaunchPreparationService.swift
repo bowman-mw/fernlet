@@ -106,6 +106,10 @@ final class LaunchPreparationService {
         statusMessage = Self.initialStatusMessage
         await Task.yield()
 
+        // A guided-workout Live Activity's state lives in a sheet's @State and can't survive a kill —
+        // any still on screen from a previous launch is orphaned. End them once at startup.
+        WorkoutLiveActivityController.endStaleActivities()
+
         // Keep launch work deterministic and cheap so the first screen can animate.
         store.photowallSeeds = buildPhotowallSeeds(store: store)
         statusMessage = "Reading your recent patterns..."

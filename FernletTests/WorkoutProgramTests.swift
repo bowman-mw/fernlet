@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import ActivityKit
 import FernletDomainModel
 import AIProviders
 @testable import Fernlet
@@ -376,6 +377,90 @@ struct WorkoutProgramTests {
                 > WorkoutSessionRunner.restSeconds(for: .main, goal: .recovery))
         // Never below a sane floor.
         #expect(WorkoutSessionRunner.restSeconds(for: .core, goal: .recovery) >= 30)
+    }
+
+    // MARK: - Live Activity content mapping (WorkoutActivityAttributes.ContentState)
+
+    /// `.ready`: the mapping is total, but nothing is rendered yet — the controller only starts on the
+    /// first working set, so the collapsed phase reads `.working` and no rest window is set.
+    @Test func contentStateFromReadyRunnerCollapsesToWorkingWithNoTimer() {
+        let runner = makeRunner([ex("Squat", sets: 3, reps: "5")])
+        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        #expect(state.phase == .working)
+        #expect(state.exerciseName == "Squat")
+        #expect(state.setNumber == 1)
+        #expect(state.totalSets == 3)
+        #expect(state.reps == "5")
+        #expect(state.restStartedAt == nil)
+        #expect(state.restEndsAt == nil)
+        #expect(state.exerciseIndex == 0)
+        #expect(state.totalExercises == 1)
+    }
+
+    @Test func contentStateFromWorkingRunnerCarriesSetAndReps() {
+        let runner = makeRunner([ex("Squat", sets: 3, reps: "5"), ex("Bench", sets: 2, reps: "8")])
+        runner.start()
+        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        #expect(state.phase == .working)
+        #expect(state.exerciseName == "Squat")
+        #expect(state.setNumber == 1)
+        #expect(state.totalSets == 3)
+        #expect(state.reps == "5")
+        #expect(state.totalExercises == 2)
+        #expect(state.restStartedAt == nil && state.restEndsAt == nil)
+    }
+
+    /// `.resting`: phase flips and the FIXED rest window passes through verbatim, so the widget can
+    /// render `Text(timerInterval: restStartedAt...restEndsAt)` without inverting after expiry.
+    @Test func contentStateFromRestingRunnerPassesTheFixedWindowThrough() throws {
+        let runner = makeRunner([ex("Squat", sets: 3, reps: "5")], restSeconds: 90)
+        runner.start()
+        runner.completeSet()                       // → resting before set 2
+        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        #expect(state.phase == .resting)
+        #expect(state.setNumber == 2)              // the upcoming set
+        let start = try #require(state.restStartedAt)
+        let end = try #require(state.restEndsAt)
+        #expect(start == runner.restStartedAt)
+        #expect(end == runner.restEndsAt)
+        // The load-bearing invariant the widget guards on: a non-inverted window.
+        #expect(start <= end)
+        #expect(end.timeIntervalSince(start) == 90)
+    }
+
+    /// `.done`: the mapping stays total (collapses to `.working`), but the controller ENDS on done —
+    /// it never `update`s to this state — so the rendered phase here is moot by design.
+    @Test func contentStateFromDoneRunnerIsTotalAndClearsTheTimer() {
+        let runner = makeRunner([ex("Squat", sets: 1, reps: "5")])
+        runner.start()
+        runner.completeSet()                       // natural finish
+        #expect(runner.phase == .done)
+        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        #expect(state.phase == .working)           // collapsed; controller ends rather than updating
+        #expect(state.restStartedAt == nil && state.restEndsAt == nil)
+    }
+
+    /// A cardio/mobility line carries `sets == 0`; the mapping must surface the runner's `max(1, …)`
+    /// clamp so the widget shows one step, not "Set 1 of 0".
+    @Test func contentStateClampsCardioZeroSetsToOne() {
+        let runner = makeRunner([ex("Easy cardio", sets: 0, role: .accessory, reps: "", fromCatalog: false)])
+        runner.start()
+        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        #expect(state.totalSets == 1)
+        #expect(state.setNumber == 1)
+        #expect(state.reps.isEmpty)
+    }
+
+    /// Whatever rest length the runner produces, the mapped window is always a valid range — the
+    /// degenerate zero-rest case still yields `start...start`, never an inverted range.
+    @Test func contentStateRestWindowStaysValidEvenForZeroRest() throws {
+        let runner = makeRunner([ex("Squat", sets: 2, reps: "5")], restSeconds: 0)
+        runner.start()
+        runner.completeSet()
+        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        let start = try #require(state.restStartedAt)
+        let end = try #require(state.restEndsAt)
+        #expect(start <= end)                      // degenerate but valid: start...start
     }
 
     // MARK: Move-root "Start today's workout" card availability

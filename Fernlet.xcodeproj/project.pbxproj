@@ -131,6 +131,13 @@
 			);
 			target = 68FE5E00000000000000B010 /* FernletWidgets */;
 		};
+		68FE5E00000000000000B003 /* Exceptions for "FernletWidgets" folder in "Fernlet" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				WorkoutActivityAttributes.swift,
+			);
+			target = 6869C2E12FB8D39D0098A0F3 /* Fernlet */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -164,6 +171,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				68FE5E00000000000000B002 /* Exceptions for "FernletWidgets" folder in "FernletWidgets" target */,
+				68FE5E00000000000000B003 /* Exceptions for "FernletWidgets" folder in "Fernlet" target */,
 			);
 			path = FernletWidgets;
 			sourceTree = "<group>";
