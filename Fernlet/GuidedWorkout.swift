@@ -23,14 +23,26 @@ struct GuidedWorkoutSheet: View {
     /// True when other sessions in today's plan still need doing after this one — the done copy then
     /// names what was logged instead of implying the whole day is.
     var sessionsRemain: Bool
+    /// Ran (after this sheet's own dismiss) when the user declines to replace a live run — "Go back to
+    /// it" promises a route to the Move-root Resume card, so a presenter that has this sheet NESTED
+    /// inside another (the Suggest flow) passes its own dismiss here; otherwise closing just this sheet
+    /// would strand the user on the Suggest configurator, whose Start loops back into the same dialog.
+    /// The Move-root presenter leaves it nil — one dismiss already lands beside the Resume card.
+    var onExitToResumeCard: (() -> Void)?
 
     @State private var showEndConfirm = false
     @State private var showReplaceConfirm = false
 
-    init(store: FernletStore, session: WorkoutProgram.SessionSuggestion, sessionsRemain: Bool = false) {
+    init(
+        store: FernletStore,
+        session: WorkoutProgram.SessionSuggestion,
+        sessionsRemain: Bool = false,
+        onExitToResumeCard: (() -> Void)? = nil
+    ) {
         self.store = store
         self.session = session
         self.sessionsRemain = sessionsRemain
+        self.onExitToResumeCard = onExitToResumeCard
     }
 
     /// The active run iff it belongs to THIS session; otherwise nil (show the ready screen).
@@ -90,7 +102,13 @@ struct GuidedWorkoutSheet: View {
             Button("Start this one instead", role: .destructive) {
                 store.startGuidedRun(session, replacingActiveRun: true)
             }
-            Button("Go back to it", role: .cancel) { dismiss() }
+            Button("Go back to it", role: .cancel) {
+                dismiss()
+                // Nested presentation (the Suggest flow): also close the presenter, or the user lands on
+                // the configurator whose Start re-opens this same dialog — a loop, not the promised
+                // route back to the Resume card.
+                onExitToResumeCard?()
+            }
         } message: {
             Text(replaceConfirmMessage)
         }

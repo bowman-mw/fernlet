@@ -1212,7 +1212,10 @@ struct WorkoutSuggestionSheet: View {
                             loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
                         )
                     }
-                } ?? false
+                } ?? false,
+                // "Go back to it" (declining to replace a live run) must land on the Move-root Resume
+                // card; from THIS nested presentation that means closing the Suggest flow too.
+                onExitToResumeCard: { dismiss() }
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)

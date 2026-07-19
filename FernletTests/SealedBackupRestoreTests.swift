@@ -316,8 +316,10 @@ struct SealedBackupRestoreTests {
     }
 
     /// The un-hide restore relaxes ONLY the whole-device freshness gate. Cycle history the user already
-    /// has on this device is still never clobbered or duplicated — the narrative-store check (the
-    /// invariant that actually protects period data) still refuses.
+    /// has on this device is still never clobbered or duplicated. (Mechanically the refusal now comes
+    /// from the `hasEverStoredNarrative` latch — the insert latches before the count is ever consulted —
+    /// and the count check remains behind it as defense in depth; the populated-but-UNLATCHED
+    /// configuration is exercised by `latchBackfillsFromExistingRowsWrittenBeforeTheLatchShipped`.)
     @MainActor
     @Test func unhideRestoreStillRefusesPopulatedNarrativeStore() async throws {
         let store = makeTestStore()
@@ -396,6 +398,134 @@ struct SealedBackupRestoreTests {
         #expect(outcome.didRestore == false)
         #expect(outcome.needsAttention == false)   // a deliberate, benign refusal — no banner
         #expect(try narrativeRepository.narrativeCount() == 0)
+    }
+
+    /// The upgrade configuration: rows written by a build that PREDATES the latch (simulated by reading
+    /// the same populated context through fresh defaults, where the insert never latched). The getter
+    /// must backfill from the row count — without it, an upgrading install reads as "never populated"
+    /// and the whole latch scheme silently no-ops for exactly the users with history to protect.
+    @MainActor
+    @Test func latchBackfillsFromExistingRowsWrittenBeforeTheLatchShipped() async throws {
+        let store = makeTestStore()
+        store.settings.periodTrackingVisible = true
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        let context = PrivatePersistenceController(inMemory: true).container.viewContext
+        // The "old build" writes a narrative; its defaults suite is then discarded, like an app update
+        // shipping the latch after the data already exists.
+        let preLatchRepository = MenstrualNarrativeRepository(context: context, defaults: isolatedDefaults())
+        try preLatchRepository.insert(
+            MenstrualNarrative(hkExternalUUID: "pre-1", dateKey: "2026-04-01", note: "Pre-upgrade.", symptomFlags: []),
+            contentKey: key
+        )
+        // The "new build" sees the same rows through defaults that never latched.
+        let upgraded = MenstrualNarrativeRepository(context: context, defaults: isolatedDefaults())
+        #expect(upgraded.hasEverStoredNarrative, "the latch did not backfill from existing rows")
+
+        let outcome = await store.restorePeriodBackupTargeted(narrativeRepository: upgraded)
+        #expect(outcome == .skippedStoreNotEmpty)
+    }
+
+    /// The resurrection the backfill alone cannot stop: the upgrading user DELETES their pre-latch
+    /// history first (nothing ever read the latch while rows existed), leaving an empty store behind
+    /// unlatched defaults — indistinguishable from a fresh install by count. The DELETE itself must
+    /// latch: removing a row is proof this device diverged from the cloud snapshot, so a later un-hide
+    /// must refuse to re-pull the deliberately-deleted notes.
+    @MainActor
+    @Test func targetedRestoreRefusesAfterPreLatchHistoryIsDeleted() async throws {
+        let store = makeTestStore()
+        store.settings.periodTrackingVisible = true
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        let context = PrivatePersistenceController(inMemory: true).container.viewContext
+        let preLatchRepository = MenstrualNarrativeRepository(context: context, defaults: isolatedDefaults())
+        let narrative = MenstrualNarrative(
+            hkExternalUUID: "pre-1", dateKey: "2026-04-01", note: "Pre-upgrade, then deleted.", symptomFlags: []
+        )
+        try preLatchRepository.insert(narrative, contentKey: key)
+
+        // The upgraded build's first touch of the store is the DELETE — no read ever backfilled.
+        let upgraded = MenstrualNarrativeRepository(context: context, defaults: isolatedDefaults())
+        try upgraded.delete(id: narrative.id)
+        #expect(try upgraded.narrativeCount() == 0)
+        #expect(upgraded.hasEverStoredNarrative, "the delete did not latch the diverged marker")
+
+        let outcome = await store.restorePeriodBackupTargeted(narrativeRepository: upgraded)
+        #expect(outcome == .skippedStoreNotEmpty)
+        #expect(try upgraded.narrativeCount() == 0)
+    }
+
+    /// The diverged latch is enforced in `isEmptyStoreForRestore` itself — the gate EVERY restore path
+    /// funnels through — so the AMBIENT `.freshInstall` pass honors it too. The scenario: delete-all
+    /// empties the day blob (the device classifies as fresh again) but the sealed-backup chunk delete
+    /// failed, so a stale cloud backup survives; the next launch must NOT quietly restore the wiped
+    /// cycle history. The write point throws rather than inserting.
+    @MainActor
+    @Test func freshInstallScopedApplyRefusesADivergedEmptyStore() throws {
+        let store = makeTestStore()   // blank → classifies as a fresh install
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        let repository = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
+        )
+        // Populate then wipe THROUGH the repository, the way the delete-all funnel's period hook does:
+        // the deleteAll latches, leaving an empty-but-diverged store.
+        try repository.insert(
+            MenstrualNarrative(hkExternalUUID: "wiped-1", dateKey: "2026-04-01", note: "Wiped.", symptomFlags: []),
+            contentKey: key
+        )
+        try repository.deleteAll()
+        #expect(try repository.narrativeCount() == 0)
+        #expect(repository.hasEverStoredNarrative)
+
+        let data = try JSONEncoder().encode([
+            MenstrualNarrative(hkExternalUUID: "stale-1", dateKey: "2026-03-01", note: "Stale cloud copy.", symptomFlags: [])
+        ])
+        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
+            try store.applyRestoredPayload(
+                data, payloadType: .periodData, narrativeRepository: repository, scope: .freshInstall
+            )
+        }
+        #expect(try repository.narrativeCount() == 0)
+    }
+
+    /// Delete-all cancels the in-flight un-hide settle Task, and the restore write point honors that
+    /// cancellation: a settle suspended in its CloudKit fetch when the wipe runs must not resume and
+    /// re-insert cycle narratives into the just-emptied store.
+    @MainActor
+    @Test func applyRefusesToWriteInsideACancelledTask() async throws {
+        let store = makeTestStore()
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        let repository = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
+        )
+        let data = try JSONEncoder().encode([
+            MenstrualNarrative(hkExternalUUID: "backup-1", dateKey: "2026-06-01", note: "From backup.", symptomFlags: [])
+        ])
+
+        let restore = Task { () -> Result<Int, Error> in
+            // Deterministically wait out the cancel below — models the settle suspended in its fetch
+            // when "delete everything" cancels it.
+            while !Task.isCancelled { await Task.yield() }
+            return Result { try store.applyRestoredPayload(
+                data, payloadType: .periodData, narrativeRepository: repository, scope: .payloadStoreOnly
+            ) }
+        }
+        restore.cancel()
+
+        guard case .failure(let error) = await restore.value else {
+            Issue.record("a cancelled restore still wrote \((try? repository.narrativeCount()) ?? -1) records")
+            return
+        }
+        #expect(error is CancellationError)
+        #expect(try repository.narrativeCount() == 0)
     }
 
     /// The latch must be set by the RESTORE path too, not just ordinary logging — otherwise a user who

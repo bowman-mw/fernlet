@@ -165,6 +165,12 @@ public final class WorkoutHealthKitSync {
             return .activity
         }()
         let metadata = parseFernletMetadata(sample.metadata)
+        // `HealthKitService.makeMetadata` writes the workout's true intensity onto every app-authored
+        // sample; read it back so a REBUILT authored row returns as itself rather than reset to
+        // `.moderate` — a lossy rebuild can win the day-record last-writer-wins merge and silently
+        // revert an edit made on another device. Foreign samples lack the key and keep the default.
+        let intensity = (sample.metadata?["fernlet.intensity"] as? String)
+            .flatMap(WorkoutIntensity.init(rawValue:)) ?? .moderate
         return Workout(
             id: authoredFernletID ?? UUID(),
             name: name,
@@ -182,7 +188,7 @@ public final class WorkoutHealthKitSync {
             healthKitUUID: sample.uuid,
             healthKitAuthored: authoredFernletID != nil ? true : nil,
             plannedWorkoutID: metadata.plannedWorkoutID,
-            intensity: .moderate,
+            intensity: intensity,
             completedAt: sample.endDate
         )
     }

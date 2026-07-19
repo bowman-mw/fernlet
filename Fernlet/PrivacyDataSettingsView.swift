@@ -499,9 +499,13 @@ struct PrivacyDataSettingsView: View {
                     if store.sealedBackupPeriodReuploadDeferred {
                         // Two states share the flag: period still hidden (the un-hide is the remedy — and
                         // it now actually triggers the re-upload), or already visible but the re-upload
-                        // hasn't succeeded yet (retried automatically at each launch).
+                        // hasn't succeeded yet. The visible copy must NOT promise an unconditional
+                        // automatic retry: the launch follow-through re-uploads only from a NON-EMPTY
+                        // narrative store (an empty one would overwrite the good cloud backup), so a
+                        // visible device with no local history waits on "Retry restore" (shown below for
+                        // exactly this state) to pull the backup down first.
                         Text(store.isPeriodTrackingVisible
-                             ? "Your period backup still needs re-uploading with your other device's backup key. This device will retry automatically."
+                             ? "Your period backup still needs re-uploading with your other device's backup key. This device re-uploads it automatically once your cycle history is on it — if it isn't yet, tap Retry restore to pull it down first."
                              : "Your period backup still needs re-uploading with your other device's backup key. It's hidden right now — un-hide period tracking, then this device will re-upload it so it can be restored later.")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
@@ -534,7 +538,12 @@ struct PrivacyDataSettingsView: View {
                             .fernletWrappingText()
                     }
 
-                    if attentionItems.contains(where: { $0.outcome.isRetryable }) {
+                    // Also offered for a stuck VISIBLE re-upload deferral: with an empty narrative store
+                    // there is no retryable attention item (the ambient restore is fresh-install-only and
+                    // records nothing), yet the remedy IS a retry — `userInitiated` takes the targeted
+                    // restore, and the same pass's follow-through then re-uploads and clears the deferral.
+                    if attentionItems.contains(where: { $0.outcome.isRetryable })
+                        || (store.sealedBackupPeriodReuploadDeferred && store.isPeriodTrackingVisible) {
                         Button { retrySealedRestore() } label: {
                             Label("Retry restore", systemImage: "arrow.clockwise")
                                 .frame(maxWidth: .infinity)

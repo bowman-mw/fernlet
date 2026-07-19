@@ -62,8 +62,23 @@ public nonisolated final class MenstrualNarrativeRepository {
     /// writing a narrative would leak "this device has diverged" into every later test in the run.
     private let defaults: UserDefaults
 
+    /// Reads the latch, BACKFILLING it from the row count first: installs whose narratives predate the
+    /// latch (it ships later than the store) have rows but no defaults bit, and without the backfill an
+    /// upgrading user who then deleted their entries would read as "never populated" — re-opening the
+    /// resurrection this latch exists to close. A count error leaves the latch unread and un-backfilled
+    /// (return the raw bit): claiming divergence on an error would wrongly block a genuine reinstall's
+    /// restore forever, and the restore path's own no-clobber count check still refuses a populated store.
+    ///
+    /// The backfill covers a populated-at-read store; `update`/`delete`/`deleteAll` latch too, so the
+    /// upgrade window closes on the FIRST mutation even if nothing read the latch while rows existed.
+    /// The one unreachable sliver: a user who emptied their store entirely on a pre-latch build has no
+    /// device-local bit left to distinguish them from a fresh reinstall — for them the (stale) cloud
+    /// backup is restorable until `PeriodTrackerStore.deleteEntry` learns to reconcile it (tracked).
     public var hasEverStoredNarrative: Bool {
-        defaults.bool(forKey: Self.everStoredDefaultsKey)
+        if defaults.bool(forKey: Self.everStoredDefaultsKey) { return true }
+        guard let count = try? narrativeCount(), count > 0 else { return false }
+        markNarrativeStored()
+        return true
     }
 
     private func markNarrativeStored() {
@@ -132,15 +147,26 @@ public nonisolated final class MenstrualNarrativeRepository {
             // Save, then prune history so the prior ciphertext for this row is not retained in the
             // persistent-history transaction log (best-effort).
             try PrivatePersistentHistoryPruner.saveAndPrune(context)
+            // An update proves a row existed — latch even when the ORIGINAL insert predates the latch
+            // (an upgrading install), so a later empty store still reads as "diverged", not "fresh".
+            markNarrativeStored()
         }
     }
 
     public func delete(id: UUID) throws {
         try context.performAndWait {
             let request = request(id: id)
-            try context.fetch(request).forEach(context.delete)
+            let rows = try context.fetch(request)
+            guard !rows.isEmpty else { return }
+            rows.forEach(context.delete)
             try context.save()
             try PrivatePersistentHistoryPruner.prune(context: context)
+            // The deletion itself is the proof this device diverged from the cloud snapshot: the row it
+            // just removed may predate the latch (pre-upgrade data never latched on insert), and the
+            // sealed backup is NOT reconciled by deletes — so without latching here, deleting the last
+            // entry would leave an empty, unlatched store that a later un-hide "restores" the deleted
+            // notes into. Latch only when something was actually deleted.
+            markNarrativeStored()
         }
     }
 
@@ -155,6 +181,9 @@ public nonisolated final class MenstrualNarrativeRepository {
             rows.forEach(context.delete)
             try context.save()
             try PrivatePersistentHistoryPruner.prune(context: context)
+            // Same reasoning as `delete(id:)`: emptying the store is divergence, and the rows it just
+            // dropped may never have latched (pre-upgrade inserts). Non-empty guaranteed by the guard.
+            markNarrativeStored()
         }
     }
 

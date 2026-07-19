@@ -532,6 +532,11 @@ final class FernletStore {
         }
     }
 
+    /// The in-flight un-hide settle, held so the delete-all funnel can cancel it (see
+    /// `settlePeriodBackupAfterUnhide`). Internal-settable ONLY so the delete-all tests can seed a live
+    /// task; production writes it solely in `settlePeriodBackupAfterUnhide`.
+    @ObservationIgnored var periodBackupSettleTask: Task<Void, Never>?
+
     /// Settles BOTH halves of the sealed period backup at the one moment the sealed narrative store
     /// becomes reachable again. Order is load-bearing:
     ///
@@ -555,15 +560,26 @@ final class FernletStore {
     ///    pending restore can never be overwritten in the meantime.
     ///
     /// Both halves are gated on the pref so a backup the user has since turned off is never touched.
+    ///
+    /// The Task is HELD in `periodBackupSettleTask` (not fire-and-forget) so "delete everything" can
+    /// cancel it: a settle suspended in the CloudKit fetch when the wipe runs would otherwise resume
+    /// afterwards and re-insert cycle narratives into the just-emptied store — the same live-writer
+    /// class as the debounced save and the guided run, which the funnel already stops.
+    /// `applyRestoredChunks` checks for cancellation at the write point, and the `Task.isCancelled`
+    /// guard here keeps a cancelled settle from re-uploading.
     private func settlePeriodBackupAfterUnhide() {
         let preferences = StoragePreferencesStore.currentPreferences()
         guard preferences.sealedBackupPeriodEnabled else { return }
         let reuploadDeferred = sealedBackupPeriodReuploadDeferred
-        Task {
+        // A re-toggle while a settle is in flight replaces it — two concurrent settles could interleave
+        // their restore/re-upload halves.
+        periodBackupSettleTask?.cancel()
+        periodBackupSettleTask = Task {
             if preferences.iCloudSyncEnabled {
                 let outcome = await restorePeriodBackupTargeted()
                 guard !outcome.isRetryable else { return }
             }
+            guard !Task.isCancelled else { return }
             if reuploadDeferred, sealedBackupCoordinator.periodNarrativeCount() > 0 {
                 await setSealedBackupEnabled(true, payloadType: .periodData)
             }
@@ -3090,6 +3106,11 @@ final class FernletStore {
         // to KEEP their Health samples — that is precisely when the observer still has data to re-import.
         snapshotSaveCoordinator.cancelPending()
         stopHealthKitWorkoutObservation()
+        // The un-hide settle is a third writer: suspended in its CloudKit fetch it would resume AFTER
+        // the wipe and re-insert cycle narratives (and possibly re-upload a fresh backup) into the
+        // just-emptied store. `applyRestoredChunks` honors the cancellation at its write point, and the
+        // diverged-device latch backstops any restore this cancel arrives too late for.
+        periodBackupSettleTask?.cancel()
 
         // 2. Sealed iCloud backups, BEFORE the preference reset that would gate them off. Turning the
         // pref off only stops the restore while it stays off; the CKRecords survive and re-appear the

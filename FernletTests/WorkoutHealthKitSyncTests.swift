@@ -167,8 +167,12 @@ struct WorkoutHealthKitSyncTests {
         #expect(context.removedByHealthKitUUID == [oldSampleUUID])
         context.existingIDs.remove(workoutID)   // the row is gone on B
 
-        // Batch 2 — the replacement sample arrives, still tagged with the unchanged workout id.
-        let newSample = FakeHealthWorkoutSample(metadata: ["fernlet.workoutID": workoutID.uuidString])
+        // Batch 2 — the replacement sample arrives, still tagged with the unchanged workout id, and
+        // carrying the edit's intensity the way `HealthKitService.makeMetadata` writes it.
+        let newSample = FakeHealthWorkoutSample(metadata: [
+            "fernlet.workoutID": workoutID.uuidString,
+            "fernlet.intensity": WorkoutIntensity.hard.rawValue
+        ])
         sync.reconcileWorkouts([newSample])
 
         #expect(context.upsertedWorkouts.count == 1)
@@ -177,6 +181,9 @@ struct WorkoutHealthKitSyncTests {
         #expect(rebuilt.healthKitUUID == newSample.uuid)
         #expect(rebuilt.isHealthAuthored)                  // still Fernlet's own
         #expect(!rebuilt.isHealthImported)                 // NOT demoted to an un-editable import
+        // "Returns as itself" includes the edited intensity: a rebuild reset to `.moderate` can win the
+        // day-record last-writer-wins merge and silently revert the edit on BOTH devices.
+        #expect(rebuilt.intensity == .hard)
     }
 
     /// The rebuild must not resurrect a workout the user removed here: a tombstoned id still wins, and its

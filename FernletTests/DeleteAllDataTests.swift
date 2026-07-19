@@ -413,6 +413,21 @@ struct DeleteAllDataTests {
         #expect(store.day.workouts.isEmpty, "a guided run re-logged a workout after the wipe")
     }
 
+    /// The un-hide period-backup settle is a live writer like the guided run and the widget queue: a
+    /// settle suspended in its CloudKit fetch when the wipe runs would resume afterwards and re-insert
+    /// cycle narratives (and possibly re-upload a backup) into the just-emptied store. The funnel must
+    /// cancel it; `applyRestoredChunks`' cancellation check then stops the write
+    /// (`applyRefusesToWriteInsideACancelledTask` in SealedBackupRestoreTests covers that half).
+    @Test func deleteAllCancelsTheInFlightPeriodBackupSettle() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-settle")))
+        let inFlight = Task { while !Task.isCancelled { await Task.yield() } }
+        store.periodBackupSettleTask = inFlight
+
+        await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(inFlight.isCancelled, "the wipe left the period-backup settle running")
+    }
+
     /// Wires every sealed/reset hook to succeed, for tests that need an otherwise-complete wipe.
     /// HealthKit is left out because it only fires when the caller opts into deleting samples.
     private func wireSucceedingSealedHooks(_ store: FernletStore) {

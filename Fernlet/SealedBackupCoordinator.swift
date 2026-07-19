@@ -535,6 +535,13 @@ final class SealedBackupCoordinator {
         narrativeRepository: MenstrualNarrativeRepository? = nil,
         scope: RestoreScope = .freshInstall
     ) throws -> Int {
+        // A restore whose surrounding Task was cancelled must not write. The concrete race: the un-hide
+        // settle Task is suspended in the CloudKit chunk fetch when "delete everything" runs; the funnel
+        // cancels that Task (a live writer, like the debounced save and the guided run), and this check —
+        // at the single write point every restore funnels through — makes the cancellation actually stop
+        // the write instead of racing it. Cheap no-op in any uncancelled context, including the
+        // synchronous test callers. (`CancellationError` classifies as `.deferredTransient` upstream.)
+        try Task.checkCancellation()
         // Constructed here rather than as a default argument: `MenstrualNarrativeRepository` is
         // MainActor-isolated, and default-argument expressions evaluate in a nonisolated context.
         // Resolved BEFORE the guard so the no-clobber check and the inserts consult the SAME store
@@ -598,7 +605,19 @@ final class SealedBackupCoordinator {
             // (treated as non-empty → skip), which is safe to retry next launch. NOTE: only the menstrual
             // narrative store is gated/backed up here; intimacy logs (IntimacyLogRepository) are NOT part
             // of the `.periodData` payload, so do not assume this gate covers them.
+            //
+            // ALSO refuses an empty-but-DIVERGED store: `hasEverStoredNarrative` is the device-local
+            // "this install held cycle data at some point" latch, and an empty store behind a set latch
+            // means the user deleted their entries — restoring the (stale-by-construction) cloud copy
+            // there would resurrect them. Checked HERE, in the one gate every restore path funnels
+            // through, so the AMBIENT fresh-install pass honors it too: a completed delete-all makes the
+            // device classify as fresh again, and without this bit a backup surviving a failed chunk
+            // delete would silently restore the wiped history at the next launch. It also backstops an
+            // in-flight restore that resumes after a wipe — `applyRestoredChunks` re-checks this gate
+            // before writing. (The targeted path's own latch guard remains as its pre-network
+            // short-circuit, mirroring the outer/inner count checks.)
             return (try? narrativeRepository.narrativeCount()) == 0
+                && !narrativeRepository.hasEverStoredNarrative
         }
     }
 
