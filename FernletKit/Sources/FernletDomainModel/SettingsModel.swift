@@ -599,13 +599,16 @@ public nonisolated enum AIStatus: String, Codable, CaseIterable, Identifiable {
 }
 
 /// A minimal, lossless representation of an arbitrary JSON value — the raw material `FernletSettings`
-/// parks for the top-level keys it doesn't yet understand (`parkedUnknownKeys`). It stores exactly the
-/// six JSON kinds, invents no semantics, and round-trips through `Codable` verbatim (numbers held as
-/// `Double`, which `JSONEncoder` re-emits without a spurious decimal for whole values). Kept in this
-/// file alongside the only thing that uses it. Mirrors the spirit of `EnumDecodeCompat`: preserve what
-/// you can't interpret, re-emit it untouched, never fabricate meaning for it.
+/// parks for the top-level keys it doesn't yet understand (`parkedUnknownKeys`). It invents no
+/// semantics and round-trips through `Codable` verbatim. Integers are held exactly as `Int64` (not
+/// coerced through `Double`, which silently corrupts values above 2^53 and re-emits large ids in
+/// e-notation that a strict `Int64` decode on a newer build then throws on); non-integral and
+/// out-of-`Int64`-range numbers stay `Double`. Kept in this file alongside the only thing that uses
+/// it. Mirrors the spirit of `EnumDecodeCompat`: preserve what you can't interpret, re-emit it
+/// untouched, never fabricate meaning for it.
 public nonisolated enum JSONValue: Codable, Hashable, Sendable {
     case string(String)
+    case integer(Int64)
     case number(Double)
     case bool(Bool)
     case null
@@ -617,9 +620,15 @@ public nonisolated enum JSONValue: Codable, Hashable, Sendable {
         if container.decodeNil() {
             self = .null
         } else if let value = try? container.decode(Bool.self) {
-            // Bool BEFORE Double: a JSON bool must not be swallowed as a number (and a JSON number
-            // throws when decoded as Bool, so this order is unambiguous for the stdlib JSON coder).
+            // Bool BEFORE the number kinds: a JSON bool must not be swallowed as a number (and a JSON
+            // number throws when decoded as Bool, so this order is unambiguous for the stdlib JSON coder).
             self = .bool(value)
+        } else if let value = try? container.decode(Int64.self) {
+            // Int64 BEFORE Double: an integral value within Int64 range is parked exactly, so a 64-bit
+            // id/timestamp above 2^53 round-trips without the precision loss (and without the e-notation
+            // re-emit) a Double detour would introduce. Fractional or out-of-range numbers throw the
+            // Int64 decode and fall through to Double below.
+            self = .integer(value)
         } else if let value = try? container.decode(Double.self) {
             self = .number(value)
         } else if let value = try? container.decode(String.self) {
@@ -638,6 +647,7 @@ public nonisolated enum JSONValue: Codable, Hashable, Sendable {
         var container = encoder.singleValueContainer()
         switch self {
         case .string(let value): try container.encode(value)
+        case .integer(let value): try container.encode(value)
         case .number(let value): try container.encode(value)
         case .bool(let value): try container.encode(value)
         case .null: try container.encodeNil()

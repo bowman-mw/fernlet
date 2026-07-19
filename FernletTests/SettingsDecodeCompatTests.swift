@@ -296,11 +296,11 @@ struct SettingsDecodeCompatTests {
         #expect(Set(first.parkedUnknownKeys.keys)
             == ["futureScalarFlag", "futureCount", "futureString", "futureObject", "futureArray"])
         #expect(first.parkedUnknownKeys["futureScalarFlag"] == .bool(true))
-        #expect(first.parkedUnknownKeys["futureCount"] == .number(7))
+        #expect(first.parkedUnknownKeys["futureCount"] == .integer(7))   // integral JSON numbers park exactly as Int64
         #expect(first.parkedUnknownKeys["futureString"] == .string("hello"))
-        #expect(first.parkedUnknownKeys["futureArray"] == .array([.number(1), .string("two"), .bool(false), .null]))
+        #expect(first.parkedUnknownKeys["futureArray"] == .array([.integer(1), .string("two"), .bool(false), .null]))
         #expect(first.parkedUnknownKeys["futureObject"]
-            == .object(["nested": .number(1), "deep": .object(["x": .string("y")])]))
+            == .object(["nested": .integer(1), "deep": .object(["x": .string("y")])]))
         #expect(first.bottleOz == 30)
 
         // Re-encode: every parked key reappears at the top level; no nested wrapper key is introduced.
@@ -440,6 +440,54 @@ struct SettingsDecodeCompatTests {
         #expect(reloaded.unknownAIStatusToken == "hibernating")
         #expect(reloaded.hasPromptedForPresence)
         #expect(reloaded.workoutProgression == ["squat": 3])
+    }
+
+    // MARK: - JSONValue 64-bit integer precision (parked ids/timestamps must not detour through Double)
+
+    @Test func jsonValueDecodesIntegersExactlyAndKeepsFractionsAsDouble() throws {
+        // A top-level array so both decode and encode stay on the always-allowed path.
+        let decoded = try JSONDecoder().decode([JSONValue].self,
+            from: Data("[9007199254740993, 1.5, -42, 1e30]".utf8))
+        // 2^53 + 1 is the smallest integer a Double can't represent; it must park as Int64, exactly.
+        // 1.5 stays Double, -42 parks as Int64, and 1e30 (beyond Int64 range) stays Double.
+        #expect(decoded == [.integer(9_007_199_254_740_993), .number(1.5), .integer(-42), .number(1e30)])
+
+        let reencoded = try #require(String(data: JSONEncoder().encode(decoded), encoding: .utf8))
+        #expect(reencoded.contains("9007199254740993"))   // emitted exactly, not rounded…
+        #expect(!reencoded.contains("9.007"))             // …and never in e-notation
+    }
+
+    @Test func parkedIntegersRoundTripExactlyThroughSettings() throws {
+        let bigID: Int64 = 9_007_199_254_740_993
+        let nanos: Int64 = 1_752_940_800_123_456_789   // realistic ns timestamp, above 2^53, inside Int64
+        let first = try decode("""
+        {
+          "bottleOz": 30,
+          "futureBigID": 9007199254740993,
+          "futureNanos": 1752940800123456789,
+          "futureFraction": 1.5,
+          "futureMix": {"count": 42, "ratios": [1, 2.5, 3]}
+        }
+        """)
+
+        #expect(first.parkedUnknownKeys["futureBigID"] == .integer(bigID))
+        #expect(first.parkedUnknownKeys["futureNanos"] == .integer(nanos))
+        #expect(first.parkedUnknownKeys["futureFraction"] == .number(1.5))
+        #expect(first.parkedUnknownKeys["futureMix"]
+            == .object(["count": .integer(42), "ratios": .array([.integer(1), .number(2.5), .integer(3)])]))
+        #expect(first.bottleOz == 30)   // the known key is still not parked
+
+        // Re-emit as plain integer text — the whole point: a Double detour would corrupt bigID (off-by-one)
+        // and re-emit large ids in e-notation that a strict Int64 decode on a newer build then throws on.
+        let encoded = try JSONEncoder().encode(first)
+        let text = try #require(String(data: encoded, encoding: .utf8))
+        #expect(text.contains("9007199254740993"))
+        #expect(text.contains("1752940800123456789"))
+        #expect(!text.contains("9.007199254740993e"))
+
+        // Full decode round trip preserves the parked payload exactly.
+        let second = try decode(encoded)
+        #expect(second.parkedUnknownKeys == first.parkedUnknownKeys)
     }
 
     // MARK: - Helpers
