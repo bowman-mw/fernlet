@@ -25,6 +25,27 @@ struct RecentBite: Identifiable, Equatable {
     let photoID: UUID
 }
 
+/// How a meal photo should render, given whether the meal claims a photo and whether that photo's bytes
+/// are on THIS device. Multi-device day-split sync copies a day's data between devices but not the sealed
+/// photo bytes, so a meal photographed on another device arrives here with a photo id but no bytes — this
+/// distinguishes that ("on your other device") from a meal that simply has no photo, so the former reads
+/// as a deliberate, gentle state rather than a broken frame.
+enum MealPhotoPresence: Equatable {
+    /// The meal carries no photo at all.
+    case none
+    /// The meal has a photo and its bytes are readable on this device.
+    case onThisDevice
+    /// The meal has a photo, but its bytes never synced to this device.
+    case onOtherDevice
+
+    /// - Parameter hasPhoto: the meal carries a photo id.
+    /// - Parameter bytesAvailable: a sealed-store read for that photo returned bytes on THIS device.
+    static func classify(hasPhoto: Bool, bytesAvailable: Bool) -> MealPhotoPresence {
+        guard hasPhoto else { return .none }
+        return bytesAvailable ? .onThisDevice : .onOtherDevice
+    }
+}
+
 enum RecentBites {
     /// The recent photographed meals for the strip: every meal that carries a photo across the given
     /// `days`, newest first, capped at `limit`. Pure over already-loaded day rows (it reads no photo

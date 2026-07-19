@@ -2535,6 +2535,14 @@ struct MealReviewSheet: View {
 private struct MealPhotoThumb: View {
     var loadData: () -> Data?
     @State private var image: UIImage?
+    /// nil until the sealed read runs; false once it comes back empty (bytes not on this device).
+    @State private var bytesAvailable: Bool?
+
+    /// The thumbnail is only rendered for a meal that HAS a photo, so the read outcome alone decides
+    /// whether the picture is on this device or on another one (see MealPhotoPresence).
+    private var presence: MealPhotoPresence {
+        MealPhotoPresence.classify(hasPhoto: true, bytesAvailable: bytesAvailable ?? true)
+    }
 
     var body: some View {
         Group {
@@ -2544,6 +2552,14 @@ private struct MealPhotoThumb: View {
                     .scaledToFill()
                     .frame(width: 54, height: 54)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else if presence == .onOtherDevice {
+                // Photo taken on another device; day data synced here, the bytes didn't. A quiet,
+                // deliberate glyph rather than the same "no photo yet" fork-and-knife.
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.cream)
+                    .frame(width: 54, height: 54)
+                    .overlay(Image(systemName: "iphone.and.arrow.forward").font(.caption).foregroundStyle(Color.slate.opacity(0.7)))
+                    .accessibilityLabel("Photo on your other device")
             } else {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.cream)
@@ -2552,9 +2568,10 @@ private struct MealPhotoThumb: View {
             }
         }
         .task {
-            if let data = loadData(), let img = UIImage(data: data) {
-                image = img
-            }
+            guard image == nil else { return }
+            guard let data = loadData() else { bytesAvailable = false; return }
+            bytesAvailable = true
+            if let img = UIImage(data: data) { image = img }
         }
     }
 }

@@ -94,4 +94,16 @@ struct RecentBitesTests {
         let days = [day("d0", [plainMeal(name: "None", loggedAt: today)])]
         #expect(RecentBites.recent(from: days, today: today).isEmpty)
     }
+
+    // MARK: - Photo presence classification (Item C: "on your other device")
+
+    @Test func classifyDistinguishesNoPhotoFromMissingBytes() {
+        // No photo at all → nothing to render.
+        #expect(MealPhotoPresence.classify(hasPhoto: false, bytesAvailable: false) == .none)
+        #expect(MealPhotoPresence.classify(hasPhoto: false, bytesAvailable: true) == .none)
+        // Has a photo, bytes are here → show the picture.
+        #expect(MealPhotoPresence.classify(hasPhoto: true, bytesAvailable: true) == .onThisDevice)
+        // Has a photo, but its bytes never synced to this device → the "other device" state, NOT "no photo".
+        #expect(MealPhotoPresence.classify(hasPhoto: true, bytesAvailable: false) == .onOtherDevice)
+    }
 }
