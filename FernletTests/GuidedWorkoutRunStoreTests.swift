@@ -152,4 +152,41 @@ struct GuidedWorkoutRunStoreTests {
         #expect(resume?.exercises.first?.name == "Bench")
         relaunched.clearGuidedRun()
     }
+
+    /// The detour past the Resume card: after a relaunch the user opens Suggest instead of resuming,
+    /// mints a NEW session, and taps Start. That must not silently discard the run already in progress —
+    /// the store refuses until the Ready screen has confirmed the replacement.
+    @Test func startingADifferentSessionCannotClobberALiveRunWithoutConfirmation() throws {
+        let store = makeTestStore()
+        store.clearGuidedRun()
+        let inProgress = session("Legs", [PrescribedExercise(name: "Squat", sets: 3, reps: "5", role: .main, fromCatalog: true)])
+        commitPlan(store, inProgress)
+        #expect(store.startGuidedRun(inProgress) == true)
+        store.guidedMarkSetDone()   // partway in: set 1 done, now resting before set 2
+        let progressed = try #require(store.guidedRunState)
+        #expect(progressed.currentSet == 2)
+
+        // A fresh session minted after the relaunch — different id, same store.
+        let freshlyMinted = session("Push", [PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true)])
+        #expect(store.activeGuidedRunBlockingStart(of: freshlyMinted)?.sessionID == inProgress.id)
+        #expect(store.startGuidedRun(freshlyMinted) == false)
+
+        // The live run is untouched — same session, same cursor…
+        #expect(store.guidedRunState?.sessionID == inProgress.id)
+        #expect(store.guidedRunState?.currentSet == progressed.currentSet)
+        #expect(store.guidedRunState?.isResting == true)
+        // …and so is the app-group mirror the Live Activity advances (a fresh store adopts the old run).
+        let relaunched = makeTestStore()
+        relaunched.reconcileGuidedRunFromAppGroup()
+        #expect(relaunched.guidedRunState?.sessionID == inProgress.id)
+
+        // Resuming the SAME session is never blocked — that path is a resume, not a replacement.
+        #expect(store.activeGuidedRunBlockingStart(of: inProgress) == nil)
+
+        // Once the user confirms on the Ready screen, the replacement goes through.
+        #expect(store.startGuidedRun(freshlyMinted, replacingActiveRun: true) == true)
+        #expect(store.guidedRunState?.sessionID == freshlyMinted.id)
+        #expect(store.guidedRunState?.currentSet == 1)
+        store.clearGuidedRun()
+    }
 }

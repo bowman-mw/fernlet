@@ -25,6 +25,7 @@ struct GuidedWorkoutSheet: View {
     var sessionsRemain: Bool
 
     @State private var showEndConfirm = false
+    @State private var showReplaceConfirm = false
 
     init(store: FernletStore, session: WorkoutProgram.SessionSuggestion, sessionsRemain: Bool = false) {
         self.store = store
@@ -39,6 +40,12 @@ struct GuidedWorkoutSheet: View {
     }
 
     private var isLive: Bool { run?.isWorking == true || run?.isResting == true }
+
+    /// Names the run that would be lost, so the trade is legible before it's made rather than after.
+    private var replaceConfirmMessage: String {
+        guard let other = store.activeGuidedRunBlockingStart(of: session) else { return "" }
+        return "\(other.title) is still going. Starting this one will let go of the sets you've already done there."
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -72,6 +79,20 @@ struct GuidedWorkoutSheet: View {
             Button("Keep going", role: .cancel) {}
         } message: {
             Text("You can always come back and start again — no pressure.")
+        }
+        // Starting here would throw away a live run for a different session. Name what's at stake, and
+        // let "Go back to it" close the sheet onto the Move-root Resume card that resumes the other run.
+        .confirmationDialog(
+            "You have a workout in progress",
+            isPresented: $showReplaceConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Start this one instead", role: .destructive) {
+                store.startGuidedRun(session, replacingActiveRun: true)
+            }
+            Button("Go back to it", role: .cancel) { dismiss() }
+        } message: {
+            Text(replaceConfirmMessage)
         }
         // Pick up a set/rest transition (or a finish) made from the Live Activity while the app was in
         // the background: reconcile the shared run so this sheet re-renders in step. `.onChange` doesn't
@@ -151,7 +172,13 @@ struct GuidedWorkoutSheet: View {
             }
 
             primaryButton("Start", identifier: "workout.guided.start") {
-                store.startGuidedRun(session)
+                // Another session's run may still be live — after a relaunch the Suggest sheet mints a
+                // fresh session, so this Start can arrive with sets already done elsewhere. Ask first.
+                if store.activeGuidedRunBlockingStart(of: session) != nil {
+                    showReplaceConfirm = true
+                } else {
+                    store.startGuidedRun(session)
+                }
             }
         }
     }

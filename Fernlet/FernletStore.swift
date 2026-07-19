@@ -2506,11 +2506,28 @@ final class FernletStore {
         )
     }
 
+    /// The unfinished run that starting `session` would displace — i.e. a live run belonging to a
+    /// DIFFERENT session. Nil when there is no run, when the run IS this session (that's a resume, and
+    /// the sheet renders it instead of the Ready screen), or when it has already finished. The Ready
+    /// screen asks this before starting so it can confirm rather than discard someone's sets.
+    func activeGuidedRunBlockingStart(of session: WorkoutProgram.SessionSuggestion) -> GuidedWorkoutRunState? {
+        guard let state = guidedRunState, !state.isDone, state.sessionID != session.id else { return nil }
+        return state
+    }
+
     /// Begin guiding a session set-by-set. Builds the run from the plan's committed day/intensity,
     /// baking each exercise's rest (per-exercise override, else the research-based default), mirrors it
     /// to the app group, and requests the Live Activity. A pure cardio/mobility session (no set-based
     /// exercises) is a no-op — the guidable filter keeps those off this path.
-    func startGuidedRun(_ session: WorkoutProgram.SessionSuggestion) {
+    ///
+    /// Fails closed on a live run for a different session: after a relaunch the committed plan is gone,
+    /// so a user can walk past the Resume card into the configurator and mint a fresh session, and this
+    /// would otherwise overwrite the in-progress run — state, app-group mirror and Live Activity — with
+    /// no prompt. `replacingActiveRun` is the caller's word that the user was asked and said yes.
+    /// Returns whether the run actually started.
+    @discardableResult
+    func startGuidedRun(_ session: WorkoutProgram.SessionSuggestion, replacingActiveRun: Bool = false) -> Bool {
+        guard replacingActiveRun || activeGuidedRunBlockingStart(of: session) == nil else { return false }
         let dayKey = guidedPlanDayKey ?? todayKey
         let intensity = committedGuidedIntensityStorage ?? recommendedWorkoutIntensity() ?? .moderate
         let goal = settings.selectedGoal
@@ -2526,7 +2543,7 @@ final class FernletStore {
                     ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: pe.name, role: pe.role, goal: goal)
             )
         }
-        guard !exercises.isEmpty else { return }
+        guard !exercises.isEmpty else { return false }
 
         var state = GuidedWorkoutRunState(
             sessionID: session.id,
@@ -2542,6 +2559,7 @@ final class FernletStore {
         guidedRunState = state
         guidedRunStateStore.write(state)
         WorkoutLiveActivityController.start(state)
+        return true
     }
 
     /// Mark the current set done from the in-app sheet (mirrors the Live Activity "Done set" button):
