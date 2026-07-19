@@ -41,12 +41,43 @@ public nonisolated final class MenstrualNarrativeRepository {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "menstrual-narrative")
 
-    public init(controller: PrivatePersistenceController? = nil) {
-        self.context = (controller ?? .shared).container.viewContext
+    /// Device-local marker for "this install has written cycle narratives at some point", used by the
+    /// targeted sealed-backup restore to tell TWO very different empty stores apart:
+    ///
+    /// - **never populated** (a genuine reinstall / new device) — restoring the sealed backup is the
+    ///   whole point, and there is nothing local to lose.
+    /// - **emptied by the user** (they deleted their cycle entries) — the cloud backup is stale by
+    ///   construction, because `PeriodTrackerStore.deleteEntry` hard-deletes the row and does NOT
+    ///   reconcile the sealed backup. Restoring there would silently resurrect notes the user
+    ///   deliberately deleted, which is precisely the harm the sealed store exists to prevent.
+    ///
+    /// A plain row count cannot distinguish them, so this flag carries the missing bit. Deliberately in
+    /// **standard (device-local, non-synced) defaults**: iOS drops the app container on uninstall, so a
+    /// real reinstall clears it for free — which is exactly the "never populated" semantics we want —
+    /// while a delete-all on a live install leaves it SET, so the wipe cannot be undone by a stale cloud
+    /// copy. Never cleared once set; it is a one-way "this device has diverged" latch.
+    private static let everStoredDefaultsKey = "fernlet.menstrualNarrative.everStored"
+
+    /// Injected so tests get an isolated suite — the latch is process-global otherwise, and one test
+    /// writing a narrative would leak "this device has diverged" into every later test in the run.
+    private let defaults: UserDefaults
+
+    public var hasEverStoredNarrative: Bool {
+        defaults.bool(forKey: Self.everStoredDefaultsKey)
     }
 
-    public init(context: NSManagedObjectContext) {
+    private func markNarrativeStored() {
+        defaults.set(true, forKey: Self.everStoredDefaultsKey)
+    }
+
+    public init(controller: PrivatePersistenceController? = nil, defaults: UserDefaults = .standard) {
+        self.context = (controller ?? .shared).container.viewContext
+        self.defaults = defaults
+    }
+
+    public init(context: NSManagedObjectContext, defaults: UserDefaults = .standard) {
         self.context = context
+        self.defaults = defaults
     }
 
     public func insert(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
@@ -57,6 +88,8 @@ public nonisolated final class MenstrualNarrativeRepository {
             // Save, then prune history so a re-sealed (updated) row leaves no prior ciphertext in the
             // persistent-history transaction log (best-effort).
             try PrivatePersistentHistoryPruner.saveAndPrune(context)
+            // Latch AFTER a successful save, so a failed write never claims this device has diverged.
+            markNarrativeStored()
         }
     }
 
@@ -83,6 +116,9 @@ public nonisolated final class MenstrualNarrativeRepository {
             // Prune history after the atomic restore so no per-record transaction lingers in the
             // persistent-history transaction log (best-effort).
             try? PrivatePersistentHistoryPruner.prune(context: context)
+            // Latch AFTER the transaction commits. A restore that populates the store also counts as
+            // "this device has narratives", so a later delete-everything + un-hide cannot re-pull them.
+            markNarrativeStored()
         }
     }
 

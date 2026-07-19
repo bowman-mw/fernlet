@@ -541,12 +541,18 @@ final class FernletStore {
     ///    another never gets their sealed history back, and every other period seam re-uploads instead.
     ///    The targeted restore drops only the whole-device freshness gate; a narrative store that already
     ///    holds history still refuses, so this can add data back but never overwrite.
-    /// 2. **Re-upload second, and only if the restore left nothing retryable.** This is the deferral
-    ///    banner's promised remedy (G5) — the escrow adopt couldn't re-seal while hidden. But re-sealing
-    ///    pages the LOCAL narrative store, so running it while a restore is still pending would overwrite
-    ///    the good cloud backup with this device's empty store. A retryable outcome leaves the deferral
-    ///    flag set, and the launch follow-through retries both next launch. The coordinator clears the
+    /// 2. **Re-upload second, and only if the restore left nothing retryable AND this device actually has
+    ///    narratives to seal.** This is the deferral banner's promised remedy (G5) — the escrow adopt
+    ///    couldn't re-seal while hidden. But re-sealing pages the LOCAL narrative store and rewrites the
+    ///    whole chunk set, so running it over an empty store would overwrite the good cloud backup with a
+    ///    single empty chunk. A retryable outcome leaves the deferral flag set; the coordinator clears the
     ///    deferral only on an ACTUAL re-seal success, so a failure keeps the banner honest.
+    ///
+    ///    Note the deferral does NOT fully self-heal at next launch: the ambient launch pass is
+    ///    fresh-install-only and does not take the targeted-restore fallback (that is reserved for the
+    ///    user's explicit Retry), so on an in-use device the restore half stays pending until the user
+    ///    taps Retry. The launch follow-through re-upload is guarded on the same non-empty check, so a
+    ///    pending restore can never be overwritten in the meantime.
     ///
     /// Both halves are gated on the pref so a backup the user has since turned off is never touched.
     private func settlePeriodBackupAfterUnhide() {
@@ -558,7 +564,7 @@ final class FernletStore {
                 let outcome = await restorePeriodBackupTargeted()
                 guard !outcome.isRetryable else { return }
             }
-            if reuploadDeferred {
+            if reuploadDeferred, sealedBackupCoordinator.periodNarrativeCount() > 0 {
                 await setSealedBackupEnabled(true, payloadType: .periodData)
             }
         }

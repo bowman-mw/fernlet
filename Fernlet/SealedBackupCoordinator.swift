@@ -152,6 +152,13 @@ final class SealedBackupCoordinator {
         }
     }
 
+    /// How many cycle narratives this device holds, counted without decrypting anything. A count error
+    /// fails CLOSED at 0 — callers use this to refuse a destructive empty-store re-upload, so "unknown"
+    /// must read as "do not re-upload".
+    func periodNarrativeCount() -> Int {
+        (try? MenstrualNarrativeRepository().narrativeCount()) ?? 0
+    }
+
     private func makeSealedBackupService(identity: IdentityService) -> SealedBackupService {
         SealedBackupService(cloudDataService: CloudKitDataService(), identityService: identity)
     }
@@ -263,7 +270,15 @@ final class SealedBackupCoordinator {
         // tracking was hidden, or an earlier re-seal failed) is retried here once the narratives are
         // reachable again — so the deferral self-heals across launches instead of waiting for another
         // un-hide. Success clears the persisted flag inside setSealedBackupEnabled.
-        if prefs.sealedBackupPeriodEnabled && prefs.sealedBackupPeriodReuploadDeferred && host.isPeriodTrackingVisible {
+        //
+        // Guarded on a NON-EMPTY narrative store. Re-sealing pages the LOCAL store and rewrites the whole
+        // chunk set, so re-uploading from an empty one would overwrite the cloud backup with a single
+        // empty chunk — destroying the very history the deferral exists to preserve. The restore half
+        // above is fresh-install-only on the ambient path, so an empty store here means "not restored
+        // yet", NOT "nothing to back up". The deferral flag stays set, so this self-heals on the launch
+        // after the user actually restores (or re-uploads from a device that has the data).
+        if prefs.sealedBackupPeriodEnabled && prefs.sealedBackupPeriodReuploadDeferred && host.isPeriodTrackingVisible,
+           periodNarrativeCount() > 0 {
             _ = await setSealedBackupEnabled(true, payloadType: .periodData)
         }
     }
@@ -371,10 +386,23 @@ final class SealedBackupCoordinator {
             FernletAuditLog.log("sealedBackup.targetedPeriodRestoreSkippedHidden")
             return .deferredTransient
         }
+        // An empty narrative store is NOT self-evidently safe to restore into. It means either "never
+        // populated" (a genuine reinstall — restore is the point) or "the user deleted their cycle
+        // entries" — and `PeriodTrackerStore.deleteEntry` hard-deletes the row WITHOUT reconciling the
+        // sealed backup, so the cloud copy is stale by construction. Without this bit, un-hiding — a mere
+        // visibility toggle — would silently resurrect deliberately-deleted cycle notes. The whole-device
+        // freshness gate used to stand in for this ("has this device diverged from the cloud snapshot?");
+        // `.payloadStoreOnly` drops that gate, so the marker has to carry the bit explicitly.
+        // Resolved once so the latch check and the restore itself consult the SAME store.
+        let repository = narrativeRepository ?? MenstrualNarrativeRepository()
+        guard !repository.hasEverStoredNarrative else {
+            FernletAuditLog.log("sealedBackup.targetedPeriodRestoreSkippedDeviceDiverged")
+            return .skippedStoreNotEmpty
+        }
         let outcome = await performRestore(
             payloadType: .periodData,
             scope: .payloadStoreOnly,
-            narrativeRepository: narrativeRepository
+            narrativeRepository: repository
         )
         FernletAuditLog.log("sealedBackup.targetedPeriodRestoreAttempted")
         host.recordSealedBackupRestoreOutcome(outcome, payloadType: .periodData)

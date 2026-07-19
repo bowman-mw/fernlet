@@ -23,6 +23,14 @@ import PrivateMemoryStore
 import CloudKitSync
 @testable import Fernlet
 
+/// A throwaway `UserDefaults` suite per call, so the device-local `hasEverStoredNarrative` latch cannot
+/// leak between tests. In production the latch lives in `.standard`, which is process-global under the
+/// test runner — one test inserting a narrative would otherwise mark every later test's device as
+/// "already diverged" and silently invert the targeted-restore assertions.
+private func isolatedDefaults() -> UserDefaults {
+    UserDefaults(suiteName: "fernlet.tests.narrativeLatch.\(UUID().uuidString)") ?? .standard
+}
+
 struct SealedBackupRestoreTests {
 
     // MARK: - Empty-store guard
@@ -129,7 +137,8 @@ struct SealedBackupRestoreTests {
         store.activateSealedJournals(contentKey: key)
 
         let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
         )
         let narratives = [
             MenstrualNarrative(hkExternalUUID: "uuid-1", dateKey: "2026-06-01", note: "Cramps, low energy.", symptomFlags: []),
@@ -175,7 +184,8 @@ struct SealedBackupRestoreTests {
 
         // One in-memory narrative store shared across both restores (mirrors production's shared store).
         let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
         )
         let data = try JSONEncoder().encode([
             MenstrualNarrative(hkExternalUUID: "uuid-1", dateKey: "2026-06-01", note: "Cramps.", symptomFlags: []),
@@ -204,7 +214,8 @@ struct SealedBackupRestoreTests {
         store.activateSealedJournals(contentKey: key)
 
         let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
         )
         try narrativeRepository.insert(
             MenstrualNarrative(hkExternalUUID: "local-1", dateKey: "2026-05-20", note: "Logged locally.", symptomFlags: []),
@@ -291,7 +302,8 @@ struct SealedBackupRestoreTests {
         let store = makePopulatedTestStore()
         store.settings.periodTrackingVisible = true
         let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
         )
 
         // Baseline: the launch/auto path is permanently blocked on this device — the bug's mechanism.
@@ -314,7 +326,8 @@ struct SealedBackupRestoreTests {
         store.activateSealedJournals(contentKey: key)
 
         let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
         )
         try narrativeRepository.insert(
             MenstrualNarrative(hkExternalUUID: "local-1", dateKey: "2026-05-20", note: "Logged locally.", symptomFlags: []),
@@ -335,12 +348,76 @@ struct SealedBackupRestoreTests {
         let store = makeTestStore()
         store.settings.periodTrackingVisible = false
         let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
         )
 
         let outcome = await store.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
         #expect(outcome.didRestore == false)
         #expect(outcome.isRetryable)
+    }
+
+    /// The regression the first cut of this fix shipped, caught by adversarial review: an empty narrative
+    /// store is NOT self-evidently safe to restore into. `PeriodTrackerStore.deleteEntry` hard-deletes the
+    /// row and never reconciles the sealed backup, so after the user deletes their cycle entries the store
+    /// is empty while the CLOUD copy is stale-but-populated. `.payloadStoreOnly` dropped the whole-device
+    /// freshness gate that had been standing in for "has this device diverged from the cloud snapshot?",
+    /// so un-hiding — a mere visibility toggle — silently resurrected deliberately-deleted cycle notes
+    /// (`.restored` has needsAttention == false, so not even a banner). The device-local
+    /// `hasEverStoredNarrative` latch carries that missing bit.
+    ///
+    /// Here the store is empty because a narrative was written and then deleted. The targeted restore must
+    /// refuse, even though the row count is 0 and period tracking is visible.
+    @MainActor
+    @Test func unhideRestoreRefusesAfterTheUserDeletedTheirCycleHistory() async throws {
+        let store = makeTestStore()
+        store.settings.periodTrackingVisible = true
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        let narrativeRepository = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
+        )
+        let narrative = MenstrualNarrative(
+            hkExternalUUID: "local-1", dateKey: "2026-05-20", note: "Logged, then deleted.", symptomFlags: []
+        )
+        try narrativeRepository.insert(narrative, contentKey: key)
+        #expect(narrativeRepository.hasEverStoredNarrative)   // latched by the write
+
+        // The user deletes it — the store is now empty, but the cloud backup still holds it.
+        try narrativeRepository.delete(id: narrative.id)
+        #expect(try narrativeRepository.narrativeCount() == 0)
+        #expect(narrativeRepository.hasEverStoredNarrative)   // latch is one-way, survives the delete
+
+        // Un-hiding must NOT resurrect the deleted note, despite the empty store.
+        let outcome = await store.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
+        #expect(outcome == .skippedStoreNotEmpty)
+        #expect(outcome.didRestore == false)
+        #expect(outcome.needsAttention == false)   // a deliberate, benign refusal — no banner
+        #expect(try narrativeRepository.narrativeCount() == 0)
+    }
+
+    /// The latch must be set by the RESTORE path too, not just ordinary logging — otherwise a user who
+    /// restores a backup, then deletes it all, could re-pull it by toggling visibility.
+    @MainActor
+    @Test func restoringNarrativesLatchesTheEverStoredMarker() throws {
+        let store = makePopulatedTestStore()
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        let narrativeRepository = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
+        )
+        #expect(narrativeRepository.hasEverStoredNarrative == false)
+        let data = try JSONEncoder().encode([
+            MenstrualNarrative(hkExternalUUID: "backup-1", dateKey: "2026-06-01", note: "From backup.", symptomFlags: [])
+        ])
+        _ = try store.applyRestoredPayload(
+            data, payloadType: .periodData, narrativeRepository: narrativeRepository, scope: .payloadStoreOnly
+        )
+        #expect(narrativeRepository.hasEverStoredNarrative)
     }
 
     /// The write point honors the relaxed scope too (defense in depth cuts both ways): with
@@ -353,7 +430,8 @@ struct SealedBackupRestoreTests {
         store.activateSealedJournals(contentKey: key)
 
         let narrativeRepository = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
         )
         let data = try JSONEncoder().encode([
             MenstrualNarrative(hkExternalUUID: "backup-1", dateKey: "2026-06-01", note: "From backup.", symptomFlags: []),
