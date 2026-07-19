@@ -2087,6 +2087,76 @@ final class FernletStore {
         await workoutPlanningService.adjustWorkoutDayPlan(plan, request: request)
     }
 
+    // MARK: Guided workout — shared session state (in-memory, session-scoped; NEVER persisted)
+
+    /// Today's committed guided-workout plan, shared by the Move-root "Start today's workout" card and
+    /// the Suggest sheet. The domain mints a *fresh* `SessionSuggestion.id` on every generation, so a
+    /// completed-id set is only meaningful against one plan instance — sharing that instance (not just
+    /// the id set) is what lets a session guided to completion from either entry point be excluded from
+    /// re-running and "Mark done" in both. Not persisted: a fresh app run rebuilds it; a new day
+    /// discards it. Kept observable so both surfaces re-render the moment it's committed or replaced.
+    private var guidedPlanStorage: WorkoutProgram.DayPlan?
+    /// The day `guidedPlanStorage` was generated for; a rollover makes the cached plan stale.
+    @ObservationIgnored private var guidedPlanDayKey: String?
+
+    /// Sessions already logged today through the guided runner *or* the retroactive "Mark done" path —
+    /// both mean "this session's workout is now logged; don't log it again." Cleared when a fresh plan
+    /// is committed (a new day). Observable so a completion updates the card and the sheet at once.
+    private(set) var guidedCompletedSessionIDs: Set<UUID> = []
+
+    /// The committed plan iff it belongs to today; a day rollover reads through as nil.
+    var currentGuidedWorkoutPlan: WorkoutProgram.DayPlan? {
+        guidedPlanDayKey == todayKey ? guidedPlanStorage : nil
+    }
+
+    /// Maps the derived intensity-readiness signal to a recommended workout intensity, if present.
+    /// Shared by the card (to pick a start intensity) and the Suggest sheet (its readiness note).
+    func recommendedWorkoutIntensity() -> WorkoutIntensity? {
+        guard let r = derivedSignals.first(where: { $0.signalName == "intensityReadiness" }) else { return nil }
+        switch r.value {
+        case "ready for hard": return .hard
+        case "ready for light": return .light
+        case "ready for moderate": return .moderate
+        default: return nil
+        }
+    }
+
+    /// Generates today's plan *without committing it* — for the Move-root card to read availability
+    /// (guidable vs rest / cardio-only) before the user commits to anything. Plan *content* is
+    /// deterministic, so this yields the same availability the committed plan will have; only the
+    /// ephemeral session UUIDs differ, which is why the card must re-resolve against the committed
+    /// plan on tap rather than trusting a preview's id.
+    func previewTodaysGuidedWorkoutPlan(intensity: WorkoutIntensity) -> WorkoutProgram.DayPlan {
+        currentGuidedWorkoutPlan ?? workoutDayPlan(intensity: intensity, context: "")
+    }
+
+    /// Commits today's plan (generating it once if today has none yet) and returns it — used when the
+    /// user actually starts, from the card or from the Suggest sheet's "Suggest" button. A same-day
+    /// call reuses the committed instance so its session IDs and any completions survive; only a new
+    /// day (re)generates and clears the completed-session set.
+    @discardableResult
+    func commitTodaysGuidedWorkoutPlan(intensity: WorkoutIntensity, context: String = "") -> WorkoutProgram.DayPlan {
+        if let plan = currentGuidedWorkoutPlan { return plan }
+        let plan = workoutDayPlan(intensity: intensity, context: context)
+        guidedPlanStorage = plan
+        guidedPlanDayKey = todayKey
+        guidedCompletedSessionIDs = []
+        return plan
+    }
+
+    /// Replaces today's committed plan in place (an AI adjustment keeps each `SessionSuggestion.id`,
+    /// so completions stay valid — do NOT clear them here).
+    func replaceGuidedWorkoutPlan(_ plan: WorkoutProgram.DayPlan) {
+        guidedPlanStorage = plan
+        guidedPlanDayKey = todayKey
+    }
+
+    /// Records that a session's workout was logged today (guided runner or "Mark done"), excluding it
+    /// from any further guided run or logging in either surface.
+    func markGuidedSessionCompleted(_ id: UUID) {
+        guidedCompletedSessionIDs.insert(id)
+    }
+
     func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {
         diary.completeOnboarding(profile: profile, preferences: preferences, goal: goal)
         // Onboarding is the fresh-install visibility determination point (the migration marker is

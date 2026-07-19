@@ -377,4 +377,71 @@ struct WorkoutProgramTests {
         // Never below a sane floor.
         #expect(WorkoutSessionRunner.restSeconds(for: .core, goal: .recovery) >= 30)
     }
+
+    // MARK: Move-root "Start today's workout" card availability
+
+    private func session(_ name: String, _ exercises: [PrescribedExercise], kind: SessionKind = .strength) -> WorkoutProgram.SessionSuggestion {
+        WorkoutProgram.SessionSuggestion(
+            title: name,
+            timeLabel: "",
+            kind: kind,
+            exercises: exercises,
+            suggestion: WorkoutSuggestion(name: name, exercises: exercises.map(\.line).joined(separator: "\n"), notes: "")
+        )
+    }
+
+    private func plan(_ sessions: [WorkoutProgram.SessionSuggestion]) -> WorkoutProgram.DayPlan {
+        WorkoutProgram.DayPlan(splitName: "Test", dayTitle: "Day", sessions: sessions, droppedSlots: [], locationName: "Gym")
+    }
+
+    @Test func cardIsReadyForAGuidableSession() {
+        let s = session("Upper", [ex("Bench", sets: 3)])
+        let state = GuidedWorkoutCardState.resolve(plan: plan([s]), completed: [])
+        #expect(state == .ready(sessionID: s.id))
+    }
+
+    @Test func cardIsAllCompleteOnceTheGuidableSessionIsLogged() {
+        // Requirement 6: a fully-logged day must show a done state, never a restart that double-logs.
+        let s = session("Upper", [ex("Bench", sets: 3)])
+        let state = GuidedWorkoutCardState.resolve(plan: plan([s]), completed: [s.id])
+        #expect(state == .allComplete)
+    }
+
+    @Test func cardIsNoneToGuideForACardioOnlyDay() {
+        // A descriptor line carries sets == 0 → not guidable, but there's still movement to do.
+        let cardio = session("Zone 2", [ex("Easy cardio - 25 min", sets: 0, role: .accessory, reps: "", fromCatalog: false)], kind: .cardio)
+        let state = GuidedWorkoutCardState.resolve(plan: plan([cardio]), completed: [])
+        if case .noneToGuide(let reason) = state {
+            #expect(reason.contains("easy movement"))
+        } else {
+            Issue.record("expected .noneToGuide for a cardio-only day, got \(state)")
+        }
+    }
+
+    @Test func cardIsNoneToGuideForARestDay() {
+        // No sessions with any exercises at all → a rest day.
+        let state = GuidedWorkoutCardState.resolve(plan: plan([session("Rest", [], kind: .mobility)]), completed: [])
+        if case .noneToGuide(let reason) = state {
+            #expect(reason.contains("Rest day"))
+        } else {
+            Issue.record("expected .noneToGuide for a rest day, got \(state)")
+        }
+    }
+
+    @Test func cardPicksTheFirstUnloggedGuidableSessionOnAMultiSessionDay() {
+        // Cardio warm-up first (not guidable), then two strength sessions. The card opens the first
+        // *guidable, not-yet-logged* session — and reports allComplete only once both are logged.
+        let cardio = session("Warm-up", [ex("Row - 10 min", sets: 0, role: .accessory, reps: "", fromCatalog: false)], kind: .cardio)
+        let am = session("AM strength", [ex("Squat", sets: 3)])
+        let pm = session("PM strength", [ex("Deadlift", sets: 2)])
+        let day = plan([cardio, am, pm])
+
+        #expect(GuidedWorkoutCardState.resolve(plan: day, completed: []) == .ready(sessionID: am.id))
+        #expect(GuidedWorkoutCardState.resolve(plan: day, completed: [am.id]) == .ready(sessionID: pm.id))
+        #expect(GuidedWorkoutCardState.resolve(plan: day, completed: [am.id, pm.id]) == .allComplete)
+
+        // The shared guidable filter agrees and skips the cardio session outright.
+        #expect(GuidedWorkoutAvailability.firstGuidable(in: day, excluding: [])?.id == am.id)
+        #expect(GuidedWorkoutAvailability.firstGuidable(in: day, excluding: [am.id, pm.id]) == nil)
+    }
 }
