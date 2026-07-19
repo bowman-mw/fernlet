@@ -25,24 +25,34 @@ struct RecentBite: Identifiable, Equatable {
     let photoID: UUID
 }
 
-/// How a meal photo should render, given whether the meal claims a photo and whether that photo's bytes
-/// are on THIS device. Multi-device day-split sync copies a day's data between devices but not the sealed
-/// photo bytes, so a meal photographed on another device arrives here with a photo id but no bytes — this
-/// distinguishes that ("on your other device") from a meal that simply has no photo, so the former reads
-/// as a deliberate, gentle state rather than a broken frame.
+/// How a meal photo should render, given whether the meal claims a photo, whether a sealed file for it
+/// exists on THIS device, and whether that file could actually be opened. Multi-device day-split sync
+/// copies a day's data between devices but not the sealed photo bytes, so a meal photographed on another
+/// device arrives here with a photo id but no file at all ("on your other device"). A file that IS here
+/// but won't open (corrupt seal, decrypt failure) is a different, local problem — surfaced as a gentle
+/// "unavailable" state — and must NOT be mislabelled as living on another device.
 enum MealPhotoPresence: Equatable {
     /// The meal carries no photo at all.
     case none
     /// The meal has a photo and its bytes are readable on this device.
     case onThisDevice
-    /// The meal has a photo, but its bytes never synced to this device.
+    /// The meal has a photo, but no sealed file for it exists on this device (never synced here).
     case onOtherDevice
+    /// A sealed file IS on this device but couldn't be opened (corrupt / undecryptable) — it's here and
+    /// broken, not elsewhere.
+    case unavailable
 
     /// - Parameter hasPhoto: the meal carries a photo id.
-    /// - Parameter bytesAvailable: a sealed-store read for that photo returned bytes on THIS device.
-    static func classify(hasPhoto: Bool, bytesAvailable: Bool) -> MealPhotoPresence {
+    /// - Parameter sealedFileExists: a sealed file for that photo is present on THIS device (existence
+    ///   only — says nothing about whether it can be decrypted).
+    /// - Parameter bytesAvailable: a sealed-store read for that photo returned openable bytes on THIS
+    ///   device.
+    static func classify(hasPhoto: Bool, sealedFileExists: Bool, bytesAvailable: Bool) -> MealPhotoPresence {
         guard hasPhoto else { return .none }
-        return bytesAvailable ? .onThisDevice : .onOtherDevice
+        if bytesAvailable { return .onThisDevice }
+        // No openable bytes: a file that's present but unreadable is broken-here; no file means the
+        // photo lives on the device it was taken on.
+        return sealedFileExists ? .unavailable : .onOtherDevice
     }
 }
 

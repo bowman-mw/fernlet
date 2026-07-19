@@ -1516,6 +1516,13 @@ final class FernletStore {
         mealPhotoStore.imageData(for: id)
     }
 
+    /// Whether a sealed meal-photo file exists on this device for `id` (existence only — no decrypt).
+    /// Lets a renderer tell "the bytes never synced here" (no file → on your other device) from "the
+    /// file is here but couldn't be opened" (corrupt / undecryptable → a gentle unavailable state).
+    func mealPhotoHasSealedFile(for id: UUID) -> Bool {
+        mealPhotoStore.hasSealedData(forID: id)
+    }
+
     #if canImport(UIKit)
     @discardableResult func saveMealPhoto(_ image: UIImage) -> UUID? {
         guard let data = image.jpegData(compressionQuality: 0.82) else { return nil }

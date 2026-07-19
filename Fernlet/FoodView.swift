@@ -72,6 +72,7 @@ struct FoodView: View {
                                             onDelete: { store.deleteMeal(meal) },
                                             onCorrect: { correctingMeal = meal },
                                             loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } },
+                                            hasPhotoSealedFile: meal.photoID.map { id in { store.mealPhotoHasSealedFile(for: id) } },
                                             showsMealTypeBadge: false
                                         )
                                         if rowIndex < group.meals.count - 1 {
@@ -2116,6 +2117,9 @@ struct MealRow: View {
     var onDelete: () -> Void
     var onCorrect: () -> Void
     var loadPhotoData: (() -> Data?)? = nil
+    /// Existence-only probe paired with `loadPhotoData`: lets the thumb tell a photo that never synced
+    /// here from one that's here but couldn't be opened. Non-nil exactly when `loadPhotoData` is.
+    var hasPhotoSealedFile: (() -> Bool)? = nil
     /// The row's own meal-type capsule. Suppressed when the row already sits under a meal-type section
     /// header (the "Today" card) so the type isn't labelled twice; defaults to shown for any other use.
     var showsMealTypeBadge: Bool = true
@@ -2124,7 +2128,7 @@ struct MealRow: View {
         HStack(alignment: .top, spacing: 10) {
             #if canImport(UIKit)
             if let loadData = loadPhotoData {
-                MealPhotoThumb(loadData: loadData)
+                MealPhotoThumb(loadData: loadData, hasSealedData: hasPhotoSealedFile ?? { false })
             }
             #endif
             VStack(alignment: .leading, spacing: 8) {
@@ -2547,14 +2551,21 @@ struct MealReviewSheet: View {
 #if canImport(UIKit)
 private struct MealPhotoThumb: View {
     var loadData: () -> Data?
+    /// Existence-only probe (no decrypt): tells a photo that never synced here (no file) from one that's
+    /// here but wouldn't open (corrupt). See `MealPhotoPolaroid.hasSealedData`.
+    var hasSealedData: () -> Bool
     @State private var image: UIImage?
-    /// nil until the sealed read runs; false once it comes back empty (bytes not on this device).
+    /// nil until the sealed read runs; false once it comes back empty (no openable bytes on this device).
     @State private var bytesAvailable: Bool?
+    /// Consulted only when `bytesAvailable == false` — splits "on another device" (no file) from
+    /// "couldn't open" (file present but broken).
+    @State private var sealedFileExists: Bool = false
 
     /// The thumbnail is only rendered for a meal that HAS a photo, so the read outcome alone decides
-    /// whether the picture is on this device or on another one (see MealPhotoPresence).
+    /// whether the picture is here, on another device, or here-but-unreadable (see MealPhotoPresence).
     private var presence: MealPhotoPresence {
-        MealPhotoPresence.classify(hasPhoto: true, bytesAvailable: bytesAvailable ?? true)
+        MealPhotoPresence.classify(
+            hasPhoto: true, sealedFileExists: sealedFileExists, bytesAvailable: bytesAvailable ?? true)
     }
 
     var body: some View {
@@ -2573,6 +2584,14 @@ private struct MealPhotoThumb: View {
                     .frame(width: 54, height: 54)
                     .overlay(Image(systemName: "iphone.and.arrow.forward").font(.caption).foregroundStyle(Color.slate.opacity(0.7)))
                     .accessibilityLabel("Photo on your other device")
+            } else if presence == .unavailable {
+                // The sealed file is here but wouldn't open (corrupt / undecryptable) — a distinct,
+                // honest glyph rather than claiming it lives on another device.
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.cream)
+                    .frame(width: 54, height: 54)
+                    .overlay(Image(systemName: "photo.badge.exclamationmark").font(.caption).foregroundStyle(Color.slate.opacity(0.7)))
+                    .accessibilityLabel("Photo couldn't be opened")
             } else {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.cream)
@@ -2582,7 +2601,11 @@ private struct MealPhotoThumb: View {
         }
         .task {
             guard image == nil else { return }
-            guard let data = loadData() else { bytesAvailable = false; return }
+            guard let data = loadData() else {
+                sealedFileExists = hasSealedData()
+                bytesAvailable = false
+                return
+            }
             bytesAvailable = true
             if let img = UIImage(data: data) { image = img }
         }

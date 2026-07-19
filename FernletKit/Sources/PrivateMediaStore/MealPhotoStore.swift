@@ -97,6 +97,14 @@ public struct MealPhotoStore {
         return nil
     }
 
+    /// Whether a sealed file exists on disk for `id` — an existence check ONLY: no read, no decrypt, no
+    /// key, no plaintext ever touched. `imageData` returns nil both when the bytes never synced to this
+    /// device (no file) AND when a file is here but can't be opened (corrupt / wrong key); this lets a
+    /// caller tell those two apart so a broken photo doesn't get mislabelled "on your other device".
+    public func hasSealedData(forID id: UUID) -> Bool {
+        FileManager.default.fileExists(atPath: url(for: id).path)
+    }
+
     public func delete(id: UUID) {
         try? FileManager.default.removeItem(at: url(for: id))
     }

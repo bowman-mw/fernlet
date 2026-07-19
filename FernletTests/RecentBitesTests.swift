@@ -97,13 +97,16 @@ struct RecentBitesTests {
 
     // MARK: - Photo presence classification (Item C: "on your other device")
 
-    @Test func classifyDistinguishesNoPhotoFromMissingBytes() {
-        // No photo at all → nothing to render.
-        #expect(MealPhotoPresence.classify(hasPhoto: false, bytesAvailable: false) == .none)
-        #expect(MealPhotoPresence.classify(hasPhoto: false, bytesAvailable: true) == .none)
-        // Has a photo, bytes are here → show the picture.
-        #expect(MealPhotoPresence.classify(hasPhoto: true, bytesAvailable: true) == .onThisDevice)
-        // Has a photo, but its bytes never synced to this device → the "other device" state, NOT "no photo".
-        #expect(MealPhotoPresence.classify(hasPhoto: true, bytesAvailable: false) == .onOtherDevice)
+    @Test func classifyDistinguishesNoPhotoMissingFileAndBrokenFile() {
+        // No photo at all → nothing to render, regardless of the file/bytes signals.
+        #expect(MealPhotoPresence.classify(hasPhoto: false, sealedFileExists: false, bytesAvailable: false) == .none)
+        #expect(MealPhotoPresence.classify(hasPhoto: false, sealedFileExists: true, bytesAvailable: true) == .none)
+        // Has a photo, bytes opened → show the picture (file presence is moot once bytes are readable).
+        #expect(MealPhotoPresence.classify(hasPhoto: true, sealedFileExists: true, bytesAvailable: true) == .onThisDevice)
+        #expect(MealPhotoPresence.classify(hasPhoto: true, sealedFileExists: false, bytesAvailable: true) == .onThisDevice)
+        // Has a photo, no openable bytes, NO file here → it lives on the device it was taken on.
+        #expect(MealPhotoPresence.classify(hasPhoto: true, sealedFileExists: false, bytesAvailable: false) == .onOtherDevice)
+        // Has a photo, no openable bytes, but a file IS here → it's here and broken, not elsewhere.
+        #expect(MealPhotoPresence.classify(hasPhoto: true, sealedFileExists: true, bytesAvailable: false) == .unavailable)
     }
 }

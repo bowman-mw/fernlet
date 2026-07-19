@@ -173,6 +173,27 @@ struct MealPhotoStoreTests {
                 "the unsealed file was re-sealed despite the legacy upgrade being disabled")
     }
 
+    @Test func hasSealedDataReportsFilePresenceWithoutDecrypting() throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // No file yet → the "bytes never synced here" signal.
+        let id = try #require(store.save(jpeg(width: 120, height: 120)))
+        #expect(store.hasSealedData(forID: id))
+        #expect(!store.hasSealedData(forID: UUID()), "a never-written id reported a file")
+
+        // A file that's present but can't be opened (garbage) still reports as present — that's the whole
+        // point: imageData returns nil for it, but it's here-and-broken, not on another device.
+        let brokenID = UUID()
+        try Data(repeating: 0xAB, count: 512).write(to: fileURL(dir, brokenID))
+        #expect(store.hasSealedData(forID: brokenID))
+        #expect(store.imageData(for: brokenID) == nil)
+
+        // After deletion the file is gone.
+        store.delete(id: id)
+        #expect(!store.hasSealedData(forID: id))
+    }
+
     @Test func deleteRemovesTheFileAndDeleteAllClearsTheStore() throws {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }

@@ -539,7 +539,8 @@ struct HomeView: View {
                                     MealPhotoPolaroid(
                                         name: bite.name,
                                         rotation: rotations[index % rotations.count],
-                                        loadData: { store.mealPhotoData(for: bite.photoID) }
+                                        loadData: { store.mealPhotoData(for: bite.photoID) },
+                                        hasSealedData: { store.mealPhotoHasSealedFile(for: bite.photoID) }
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -559,7 +560,8 @@ struct HomeView: View {
             MealPhotoDetailView(
                 name: bite.name,
                 loggedAt: bite.loggedAt,
-                loadData: { store.mealPhotoData(for: bite.photoID) }
+                loadData: { store.mealPhotoData(for: bite.photoID) },
+                hasSealedData: { store.mealPhotoHasSealedFile(for: bite.photoID) }
             )
         }
         #endif

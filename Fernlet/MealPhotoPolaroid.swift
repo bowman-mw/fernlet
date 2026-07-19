@@ -8,17 +8,32 @@ struct MealPhotoPolaroid: View {
     let name: String
     let rotation: Double
     let loadData: () -> Data?
+    /// Existence-only probe (no decrypt) used to tell a photo that never synced here (no file → "on your
+    /// other device") from one that's here but won't open (corrupt → "couldn't open this photo").
+    let hasSealedData: () -> Bool
     var width: CGFloat = 128
 
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
-    /// nil until the sealed read runs; false once it comes back empty (bytes not on this device).
+    /// nil until the sealed read runs; false once it comes back empty (no openable bytes on this device).
     @State private var bytesAvailable: Bool?
+    /// Whether a sealed file for this photo exists on disk — only consulted once `bytesAvailable == false`
+    /// to split "on your other device" (no file) from "couldn't open this photo" (file here but broken).
+    @State private var sealedFileExists: Bool = false
 
     /// These tiles are only ever built for a meal that HAS a photo, so the read outcome alone decides
-    /// whether the picture is here or "on your other device" (see MealPhotoPresence).
+    /// whether the picture is here, on another device, or here-but-unreadable (see MealPhotoPresence).
     private var presence: MealPhotoPresence {
-        MealPhotoPresence.classify(hasPhoto: true, bytesAvailable: bytesAvailable ?? true)
+        MealPhotoPresence.classify(
+            hasPhoto: true, sealedFileExists: sealedFileExists, bytesAvailable: bytesAvailable ?? true)
+    }
+
+    private var accessibilityText: String {
+        switch presence {
+        case .onOtherDevice: return "Photo of \(name), on your other device"
+        case .unavailable: return "Photo of \(name), couldn't be opened"
+        default: return "Photo of \(name)"
+        }
     }
 
     var body: some View {
@@ -39,6 +54,21 @@ struct MealPhotoPolaroid: View {
                                 .font(.title3)
                                 .foregroundStyle(Color.slate.opacity(0.5))
                             Text("On your other device")
+                                .font(.fernlet(.labelSmall))
+                                .foregroundStyle(Color.slate.opacity(0.75))
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.85)
+                                .padding(.horizontal, 6)
+                        }
+                    } else if presence == .unavailable {
+                        // The sealed file IS here but wouldn't open (corrupt / undecryptable). Say so
+                        // plainly rather than claiming it's on another device where it isn't.
+                        VStack(spacing: 5) {
+                            Image(systemName: "photo.badge.exclamationmark")
+                                .font(.title3)
+                                .foregroundStyle(Color.slate.opacity(0.5))
+                            Text("Couldn't open this photo")
                                 .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate.opacity(0.75))
                                 .multilineTextAlignment(.center)
@@ -73,13 +103,19 @@ struct MealPhotoPolaroid: View {
             // ~50MB across a scrolled strip) behind a 128pt thumbnail. Only the finished image is
             // assigned back on the MainActor.
             guard image == nil else { return }
-            guard let data = loadData() else { bytesAvailable = false; return }
+            guard let data = loadData() else {
+                // No openable bytes: record whether a file is nonetheless present, then flip the flag
+                // that reveals the placeholder (order matters — presence reads sealedFileExists).
+                sealedFileExists = hasSealedData()
+                bytesAvailable = false
+                return
+            }
             bytesAvailable = true
             let pixelSize = CGSize(width: width * displayScale, height: width * 0.86 * displayScale)
             image = await UIImage(data: data)?.byPreparingThumbnail(ofSize: pixelSize)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(presence == .onOtherDevice ? "Photo of \(name), on your other device" : "Photo of \(name)")
+        .accessibilityLabel(accessibilityText)
     }
 }
 
@@ -91,14 +127,21 @@ struct MealPhotoDetailView: View {
     let name: String
     let loggedAt: Date
     let loadData: () -> Data?
+    /// Existence-only probe (no decrypt): distinguishes a photo that never synced here from one that's
+    /// here but won't open. See `MealPhotoPolaroid.hasSealedData`.
+    let hasSealedData: () -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var image: UIImage?
-    /// nil until the sealed read runs; false once it comes back empty (bytes not on this device).
+    /// nil until the sealed read runs; false once it comes back empty (no openable bytes on this device).
     @State private var bytesAvailable: Bool?
+    /// Consulted only when `bytesAvailable == false` — splits "on your other device" (no file) from
+    /// "couldn't open this photo" (file present but broken).
+    @State private var sealedFileExists: Bool = false
 
     private var presence: MealPhotoPresence {
-        MealPhotoPresence.classify(hasPhoto: true, bytesAvailable: bytesAvailable ?? true)
+        MealPhotoPresence.classify(
+            hasPhoto: true, sealedFileExists: sealedFileExists, bytesAvailable: bytesAvailable ?? true)
     }
 
     var body: some View {
@@ -126,6 +169,28 @@ struct MealPhotoDetailView: View {
                                             .font(.fernlet(.body))
                                             .foregroundStyle(Color.slate)
                                         Text("This photo lives on the device you took it on. Its details are here; the picture stays where it was snapped.")
+                                            .font(.fernlet(.bodySmall))
+                                            .foregroundStyle(Color.slate.opacity(0.8))
+                                            .multilineTextAlignment(.center)
+                                            .fernletWrappingText()
+                                            .padding(.horizontal, 24)
+                                    }
+                                }
+                        } else if presence == .unavailable {
+                            // The sealed file is on this device but couldn't be opened (corrupt /
+                            // undecryptable). Say so gently — it's here and broken, not elsewhere.
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color.cream)
+                                .frame(height: 320)
+                                .overlay {
+                                    VStack(spacing: 10) {
+                                        Image(systemName: "photo.badge.exclamationmark")
+                                            .font(.largeTitle)
+                                            .foregroundStyle(Color.slate.opacity(0.5))
+                                        Text("Couldn't open this photo")
+                                            .font(.fernlet(.body))
+                                            .foregroundStyle(Color.slate)
+                                        Text("This photo is saved on this device but couldn't be opened. Its details are still here.")
                                             .font(.fernlet(.bodySmall))
                                             .foregroundStyle(Color.slate.opacity(0.8))
                                             .multilineTextAlignment(.center)
@@ -168,9 +233,14 @@ struct MealPhotoDetailView: View {
         }
         .task {
             // Decode off the main thread; only the finished image lands back on the MainActor. A nil read
-            // is the "on your other device" case, not a decode failure.
+            // with no file present is the "on your other device" case; a nil read with a file present is a
+            // photo that's here but couldn't be opened.
             guard image == nil else { return }
-            guard let data = loadData() else { bytesAvailable = false; return }
+            guard let data = loadData() else {
+                sealedFileExists = hasSealedData()
+                bytesAvailable = false
+                return
+            }
             bytesAvailable = true
             image = await UIImage(data: data)?.byPreparingForDisplay()
         }
