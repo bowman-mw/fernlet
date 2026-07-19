@@ -923,13 +923,14 @@ public nonisolated struct WorkoutGoalStyle {
 /// (e.g. a conditioning finisher) when `fromCatalog` is false.
 public nonisolated struct PrescribedExercise: Identifiable, Equatable {
 
-    public init(id: UUID = UUID(), name: String, sets: Int, reps: String, role: SlotRole, fromCatalog: Bool) {
+    public init(id: UUID = UUID(), name: String, sets: Int, reps: String, role: SlotRole, fromCatalog: Bool, restSecondsOverride: Int? = nil) {
         self.id = id
         self.name = name
         self.sets = sets
         self.reps = reps
         self.role = role
         self.fromCatalog = fromCatalog
+        self.restSecondsOverride = restSecondsOverride
     }
     public var id = UUID()
     public var name: String
@@ -937,6 +938,9 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
     public var reps: String
     public var role: SlotRole
     public var fromCatalog: Bool
+    /// A per-exercise rest override (seconds) set by the in-app editor or the coach app; when nil the
+    /// guided runner falls back to `WorkoutRestGuidance`'s goal-/movement-based default.
+    public var restSecondsOverride: Int?
 
     public var line: String { fromCatalog ? "\(name) - \(sets) x \(reps)" : name }
 }

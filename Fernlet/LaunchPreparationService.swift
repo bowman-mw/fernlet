@@ -106,9 +106,11 @@ final class LaunchPreparationService {
         statusMessage = Self.initialStatusMessage
         await Task.yield()
 
-        // A guided-workout Live Activity's state lives in a sheet's @State and can't survive a kill —
-        // any still on screen from a previous launch is orphaned. End them once at startup.
-        WorkoutLiveActivityController.endStaleActivities()
+        // The guided-workout run now survives a kill in the app-group container. Reconcile it: a finish
+        // made from the Lock Screen is logged, an abandoned (long-untouched) run is retired, a live run
+        // is adopted (resumable from the Move-root card). If nothing is active, reconcile also retires
+        // any orphaned activity still on screen.
+        store.reconcileGuidedRunFromAppGroup()
 
         // A plaintext "export my data" dump is written to tmp/ for the share sheet and purged when the
         // sheet closes — but a kill/crash/jettison mid-share leaves the full decrypted dump on disk. Launch

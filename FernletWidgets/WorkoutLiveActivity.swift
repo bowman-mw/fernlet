@@ -12,6 +12,7 @@
 // AND `restStartedAt <= restEndsAt`; otherwise a static "Rest" label stands in.
 
 import ActivityKit
+import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -70,22 +71,25 @@ struct WorkoutLiveActivity: Widget {
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity)
-                    } else if state.phase == .resting {
-                        VStack(spacing: 2) {
-                            RestCountdownText(state: state,
-                                              font: .system(size: 40, weight: .semibold, design: .rounded),
-                                              color: .primary)
-                            Text(nextUpLine(state))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                    } else {
+                        VStack(spacing: 8) {
+                            if state.phase == .resting {
+                                RestCountdownText(state: state,
+                                                  font: .system(size: 38, weight: .semibold, design: .rounded),
+                                                  color: .primary)
+                                Text(nextUpLine(state))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            } else {
+                                Text(setRepsLine(state))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            guidedActionButton(state)
                         }
                         .frame(maxWidth: .infinity)
-                    } else {
-                        Text(setRepsLine(state))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             } compactLeading: {
@@ -239,52 +243,83 @@ private struct WorkoutLockScreenView: View {
     }
 
     private var liveCard: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Label {
-                    Text(attributes.workoutTitle)
-                        .font(.caption)
-                        .foregroundStyle(FernletWidgetPalette.inkSoft)
-                        .lineLimit(1)
-                } icon: {
-                    Image(systemName: "leaf.fill")
-                        .font(.caption)
-                        .foregroundStyle(FernletWidgetPalette.buttonFill)
+        VStack(spacing: 12) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Label {
+                        Text(attributes.workoutTitle)
+                            .font(.caption)
+                            .foregroundStyle(FernletWidgetPalette.inkSoft)
+                            .lineLimit(1)
+                    } icon: {
+                        Image(systemName: "leaf.fill")
+                            .font(.caption)
+                            .foregroundStyle(FernletWidgetPalette.buttonFill)
+                    }
+
+                    if state.phase == .resting {
+                        Text("Rest")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(FernletWidgetPalette.buttonFill)
+                        Text(nextUpLine(state))
+                            .font(.subheadline)
+                            .foregroundStyle(FernletWidgetPalette.ink)
+                            .lineLimit(2)
+                    } else {
+                        Text(state.exerciseName)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(FernletWidgetPalette.ink)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        Text(setRepsLine(state))
+                            .font(.subheadline)
+                            .foregroundStyle(FernletWidgetPalette.inkSoft)
+                            .lineLimit(1)
+                    }
                 }
+
+                Spacer(minLength: 8)
 
                 if state.phase == .resting {
-                    Text("Rest")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(FernletWidgetPalette.buttonFill)
-                    Text(nextUpLine(state))
-                        .font(.subheadline)
-                        .foregroundStyle(FernletWidgetPalette.ink)
-                        .lineLimit(2)
+                    RestCountdownText(state: state,
+                                      font: .system(size: 40, weight: .semibold, design: .rounded),
+                                      color: FernletWidgetPalette.ink)
                 } else {
-                    Text(state.exerciseName)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(FernletWidgetPalette.ink)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Text(setRepsLine(state))
-                        .font(.subheadline)
-                        .foregroundStyle(FernletWidgetPalette.inkSoft)
-                        .lineLimit(1)
+                    ExerciseProgressDots(index: state.exerciseIndex, total: state.totalExercises)
                 }
             }
 
-            Spacer(minLength: 8)
-
-            if state.phase == .resting {
-                RestCountdownText(state: state,
-                                  font: .system(size: 40, weight: .semibold, design: .rounded),
-                                  color: FernletWidgetPalette.ink)
-            } else {
-                ExerciseProgressDots(index: state.exerciseIndex, total: state.totalExercises)
-            }
+            guidedActionButton(state)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
+    }
+}
+
+/// The interactive "Done set" / "Skip rest" control shared by the Lock Screen card and the Dynamic
+/// Island. Each is a `LiveActivityIntent` the system runs in the app's process, advancing the shared
+/// app-group run state (see GuidedWorkoutLiveActivityIntents). Only ever rendered in a live (non-stale)
+/// state, so the run always exists when a tap lands.
+@ViewBuilder
+private func guidedActionButton(_ state: WorkoutActivityAttributes.ContentState) -> some View {
+    if state.phase == .resting {
+        Button(intent: GuidedWorkoutSkipRestIntent()) {
+            Label("Skip rest", systemImage: "forward.fill")
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .tint(FernletWidgetPalette.leaf)
+    } else {
+        // Last set of the last exercise finishes (and logs) the workout.
+        let finishing = state.setNumber >= state.totalSets && state.exerciseIndex >= state.totalExercises - 1
+        Button(intent: GuidedWorkoutMarkSetDoneIntent()) {
+            Label(finishing ? "Finish workout" : "Done set", systemImage: "checkmark")
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(FernletWidgetPalette.buttonFill)
     }
 }
 

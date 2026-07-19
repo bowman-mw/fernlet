@@ -115,6 +115,15 @@ struct FernletApp: App {
                         store.flushPendingSnapshotSave()
                     }
                     lockService.lock(reason: .background)
+                } else if newPhase == .active {
+                    // Pick up a guided-workout finish or set/rest advance made from the Live Activity
+                    // while the app was backgrounded — even if the Move tab isn't the one on screen.
+                    // Roll the day FIRST (a foreground can cross local midnight without onAppear), so a
+                    // finish reconciled here anchors/back-dates to the correct day.
+                    if case .ready(let store) = loader.phase {
+                        store.refreshCurrentDayIfNeeded()
+                        store.reconcileGuidedRunFromAppGroup()
+                    }
                 }
             }
             #if canImport(UIKit)

@@ -2337,6 +2337,9 @@ final class FernletStore {
         guidedPlanDayKey = todayKey
         committedGuidedIntensityStorage = intensity
         guidedCompletedSessionIDs = []
+        // A freshly generated plan is not yet approved — the user reviews it in the Suggest sheet and
+        // taps "Approve workout" (or starts it) to surface the Move-root card.
+        guidedPlanApprovedDayKey = nil
         return plan
     }
 
@@ -2362,6 +2365,7 @@ final class FernletStore {
         guidedPlanDayKey = nil
         committedGuidedIntensityStorage = nil
         guidedCompletedSessionIDs = []
+        guidedPlanApprovedDayKey = nil
         return true
     }
 
@@ -2412,6 +2416,242 @@ final class FernletStore {
     /// from any further guided run or logging in either surface.
     func markGuidedSessionCompleted(_ id: UUID) {
         guidedCompletedSessionIDs.insert(id)
+    }
+
+    // MARK: Guided workout — approval gate (the Move-root "Today's workout" card)
+
+    /// The day today's committed plan was APPROVED for. Distinct from "committed": tapping Suggest
+    /// commits a plan so the sheet can show/edit/run it, but the Move-root "Today's workout" card only
+    /// appears once the user explicitly approves it (or starts it) — so a plan the user generated to
+    /// look at, then closed, doesn't silently become "today's workout". Observable so the card shows
+    /// the moment approval lands; a rollover reads through as unapproved.
+    private(set) var guidedPlanApprovedDayKey: String?
+
+    /// Whether today's committed plan has been approved (or started) — the card's visibility gate.
+    var isTodaysGuidedPlanApproved: Bool {
+        guidedPlanApprovedDayKey == todayKey && currentGuidedWorkoutPlan != nil
+    }
+
+    /// Approve today's committed plan so the Move-root card surfaces it. Committing first (if needed)
+    /// is the caller's job; this only flips the approval gate.
+    func approveTodaysGuidedPlan() {
+        guard currentGuidedWorkoutPlan != nil else { return }
+        guidedPlanApprovedDayKey = todayKey
+    }
+
+    /// Replace one session of today's committed plan with an edited version from the in-app editor,
+    /// preserving its `SessionSuggestion.id` so completions/dedup stay valid. Allowed only while nothing
+    /// of the plan is logged (same guard as rework) — editing after a session started would orphan a
+    /// logged place in the plan. Returns false (changing nothing) otherwise.
+    @discardableResult
+    func updateGuidedSession(_ updated: WorkoutProgram.SessionSuggestion) -> Bool {
+        guard var plan = currentGuidedWorkoutPlan, canReworkTodaysGuidedPlan,
+              let index = plan.sessions.firstIndex(where: { $0.id == updated.id }) else { return false }
+        plan.sessions[index] = updated
+        guidedPlanStorage = plan
+        return true
+    }
+
+    // MARK: Guided workout — the active run (mirrored to the app group for the Live Activity buttons)
+
+    /// The in-progress guided run, or nil when none is active. Mirrored into the app-group container
+    /// (`guidedRunStateStore`) so the interactive Live Activity buttons ("Done set" / "Skip rest")
+    /// can advance it from the Lock Screen — even after the app is suspended or terminated. Observable
+    /// so the guided sheet and card reflect every transition, whether it came from the in-app buttons
+    /// or the Lock Screen. Session-scoped; never part of the synced blob.
+    private(set) var guidedRunState: GuidedWorkoutRunState?
+    @ObservationIgnored private let guidedRunStateStore = GuidedWorkoutRunStateStore()
+    /// Serializes Live Activity update/end calls so two rapid transitions can't land out of order.
+    @ObservationIgnored private var activitySyncTask: Task<Void, Never>?
+
+    private static func roleRaw(_ role: SlotRole) -> String {
+        switch role {
+        case .main: "main"
+        case .accessory: "accessory"
+        case .core: "core"
+        }
+    }
+
+    private static func role(fromRaw raw: String) -> SlotRole {
+        switch raw {
+        case "main": .main
+        case "core": .core
+        default: .accessory
+        }
+    }
+
+    /// Chain a Live Activity op after the previous one so update/end calls stay ordered on screen.
+    private func syncActivity(_ op: @escaping @Sendable () async -> Void) {
+        let previous = activitySyncTask
+        activitySyncTask = Task { await previous?.value; await op() }
+    }
+
+    /// Reconstruct a `SessionSuggestion` from the active run so the guided sheet can RESUME it after a
+    /// cold launch, when the committed plan (in-memory, session-scoped) is gone. Carries the run's own
+    /// `sessionID` (so the sheet's `run` match holds) and its baked per-exercise rests (as overrides).
+    func guidedSessionForResume() -> WorkoutProgram.SessionSuggestion? {
+        guard let s = guidedRunState, !s.isDone else { return nil }
+        let prescribed = s.exercises.map {
+            PrescribedExercise(
+                id: $0.id, name: $0.name, sets: $0.sets, reps: $0.reps,
+                role: Self.role(fromRaw: $0.roleRaw), fromCatalog: $0.fromCatalog,
+                restSecondsOverride: $0.restSeconds
+            )
+        }
+        return WorkoutProgram.SessionSuggestion(
+            id: s.sessionID, title: s.title, timeLabel: "",
+            kind: SessionKind(rawValue: s.sessionKindRaw) ?? .fullBody,
+            exercises: prescribed,
+            suggestion: WorkoutSuggestion(name: s.title, exercises: s.suggestionExercisesText, notes: s.suggestionNotes)
+        )
+    }
+
+    /// Begin guiding a session set-by-set. Builds the run from the plan's committed day/intensity,
+    /// baking each exercise's rest (per-exercise override, else the research-based default), mirrors it
+    /// to the app group, and requests the Live Activity. A pure cardio/mobility session (no set-based
+    /// exercises) is a no-op — the guidable filter keeps those off this path.
+    func startGuidedRun(_ session: WorkoutProgram.SessionSuggestion) {
+        let dayKey = guidedPlanDayKey ?? todayKey
+        let intensity = committedGuidedIntensityStorage ?? recommendedWorkoutIntensity() ?? .moderate
+        let goal = settings.selectedGoal
+        let exercises = session.exercises.map { pe in
+            GuidedWorkoutRunState.Exercise(
+                id: pe.id,
+                name: pe.name,
+                sets: pe.sets,
+                reps: pe.reps,
+                roleRaw: Self.roleRaw(pe.role),
+                fromCatalog: pe.fromCatalog,
+                restSeconds: pe.restSecondsOverride
+                    ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: pe.name, role: pe.role, goal: goal)
+            )
+        }
+        guard !exercises.isEmpty else { return }
+
+        var state = GuidedWorkoutRunState(
+            sessionID: session.id,
+            committedDayKey: dayKey,
+            intensityRaw: intensity.rawValue,
+            title: session.suggestion.name,
+            suggestionExercisesText: session.suggestion.exercises,
+            suggestionNotes: session.suggestion.notes,
+            sessionKindRaw: session.kind.rawValue,
+            exercises: exercises
+        )
+        state.phase = .working
+        guidedRunState = state
+        guidedRunStateStore.write(state)
+        WorkoutLiveActivityController.start(state)
+    }
+
+    /// Mark the current set done from the in-app sheet (mirrors the Live Activity "Done set" button):
+    /// advance the runner, mirror it, and reflect it onto the activity — finishing (and logging) when
+    /// the last set of the last exercise is done.
+    func guidedMarkSetDone() {
+        guard var state = guidedRunState, state.phase == .working else { return }
+        state.markSetDone(now: Date())
+        applyGuidedTransition(state)
+    }
+
+    /// End the current rest early from the in-app sheet (mirrors the Live Activity "Skip rest" button).
+    func guidedSkipRest() {
+        guard var state = guidedRunState, state.phase == .resting else { return }
+        state.skipRest()
+        applyGuidedTransition(state)
+    }
+
+    /// Shared handling after an in-app transition: mirror to the group + reflect onto the activity;
+    /// on a natural finish, log the workout (deduped) and end the activity; keep the done state in
+    /// memory so the sheet can show its "nicely done" screen.
+    private func applyGuidedTransition(_ state: GuidedWorkoutRunState) {
+        guidedRunState = state
+        if state.isDone {
+            // Clear the group file first so a foreground reconcile racing this can't re-log the finish.
+            guidedRunStateStore.clear()
+            if state.completedNaturally { finishGuidedRunLogging(state) }
+            syncActivity { await GuidedWorkoutActivityBridge.end() }
+        } else {
+            guidedRunStateStore.write(state)
+            syncActivity { await GuidedWorkoutActivityBridge.sync(to: state) }
+        }
+    }
+
+    /// Abandon the active run (the sheet's "End without logging"): nothing is logged. Clears the group
+    /// file and ends the activity.
+    func abandonGuidedRun() {
+        guard guidedRunState != nil else { return }
+        guidedRunState = nil
+        guidedRunStateStore.clear()
+        syncActivity { await GuidedWorkoutActivityBridge.end() }
+    }
+
+    /// Clear a finished run once the user closes the done screen (the activity was already ended on
+    /// finish).
+    func clearGuidedRun() {
+        guidedRunState = nil
+        guidedRunStateStore.clear()
+    }
+
+    /// Reconcile the in-memory run with the app-group file — call on foreground and at launch so a
+    /// finish or advance made entirely from the Live Activity is picked up. A natural finish is logged
+    /// (deduped) and cleared; a live active run (including one whose rest crossed local midnight) is
+    /// adopted so the sheet/card resume it; a run the process merely outlived (untouched for hours) is
+    /// retired. When there is no run at all, any activity still on screen is retired.
+    func reconcileGuidedRunFromAppGroup() {
+        guard let fileState = guidedRunStateStore.read() else {
+            // No backing run: retire any activity left on screen (an in-app finish whose immediate
+            // end() didn't land, or an orphan from a prior build). No-op when nothing is live.
+            syncActivity { await GuidedWorkoutActivityBridge.end() }
+            return
+        }
+        if fileState.isDone {
+            // Clear the file BEFORE logging so a crash mid-log can't re-log the finish on the next
+            // launch (mirrors the in-app finish path; a lost log beats a duplicate).
+            guidedRunStateStore.clear()
+            guidedRunState = fileState.completedNaturally ? fileState : nil
+            if fileState.completedNaturally { finishGuidedRunLogging(fileState) }
+            syncActivity { await GuidedWorkoutActivityBridge.end() }
+            return
+        }
+        // Active run. Retire only one untouched for hours (abandoned — the process outlived it); a
+        // recently-touched run, even one resting across midnight, is adopted so it stays resumable.
+        if Date().timeIntervalSince(fileState.updatedAt) > GuidedWorkoutRunState.abandonedAfter {
+            guidedRunState = nil
+            guidedRunStateStore.clear()
+            syncActivity { await GuidedWorkoutActivityBridge.end() }
+            return
+        }
+        guidedRunState = fileState
+    }
+
+    /// Log a finished guided run from its run state (works even after a cold launch, when the domain
+    /// plan is gone). Anchors the logged workout to the day/intensity the plan was committed with — a
+    /// rest can cross local midnight — tags it as a guided log, advances progression, and records the
+    /// completion. Deduped by session id so a finish seen by both the sheet and a reconcile logs once.
+    private func finishGuidedRunLogging(_ state: GuidedWorkoutRunState) {
+        guard !guidedCompletedSessionIDs.contains(state.sessionID) else { return }
+        let dayKey = state.committedDayKey
+        // Durable same-day backstop: after a relaunch the in-memory completed set is empty, but a
+        // guided log already in today's record (tagged with this name) means it's done — don't re-log.
+        if dayKey == todayKey && loggedGuidedWorkoutNamesToday.contains(state.title) { return }
+        let intensity = WorkoutIntensity(rawValue: state.intensityRaw) ?? .moderate
+        let kind = SessionKind(rawValue: state.sessionKindRaw) ?? .fullBody
+        let mode: WorkoutMode = (kind == .strength || kind == .fullBody) ? .strengthTraining : .activity
+        let type: WorkoutType = (kind == .cardio) ? .cardio : .fullBody
+        var workout = Workout(
+            name: state.title, type: type, mode: mode, exercises: state.suggestionExercisesText,
+            rpe: nil, notes: state.suggestionNotes, duration: nil,
+            loggedFromGuidedSession: true, intensity: intensity
+        )
+        if dayKey != todayKey,
+           let targetDate = FernletDate.date(fromDayKey: dayKey),
+           let completedAt = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: targetDate) {
+            workout.completedAt = completedAt
+            workout.loggedAt = completedAt
+        }
+        addWorkout(workout, date: dayKey)
+        recordCompletedExercises(state.exercises.filter { $0.fromCatalog }.map(\.name))
+        markGuidedSessionCompleted(state.sessionID)
     }
 
     func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {

@@ -212,195 +212,167 @@ struct WorkoutProgramTests {
         #expect((ranked.first?.specificity.rawValue ?? 0) >= SplitSpecificity.focused.rawValue)
     }
 
-    // MARK: - Guided-session runner (WorkoutSessionRunner)
+    // MARK: - Guided-session state machine (GuidedWorkoutRunState)
 
     private func ex(_ name: String, sets: Int, role: SlotRole = .main, reps: String = "5", fromCatalog: Bool = true) -> PrescribedExercise {
         PrescribedExercise(name: name, sets: sets, reps: reps, role: role, fromCatalog: fromCatalog)
     }
 
-    /// A fixed clock + fixed rest so rest transitions are asserted without wall-clock flakiness.
-    private func makeRunner(_ exercises: [PrescribedExercise], goal: GoalType = .strength, restSeconds: Int = 90) -> WorkoutSessionRunner {
-        WorkoutSessionRunner(
-            exercises: exercises,
-            goal: goal,
-            now: { Date(timeIntervalSince1970: 1_000) },
-            restProvider: { _, _ in restSeconds }
+    private func roleRaw(_ role: SlotRole) -> String {
+        switch role { case .main: "main"; case .accessory: "accessory"; case .core: "core" }
+    }
+    private let fixedNow = Date(timeIntervalSince1970: 1_000)
+
+    /// Build a WORKING run with a fixed per-exercise rest so transitions assert without wall-clock
+    /// flakiness. The sheet-local runner is gone; the state machine now lives on the value type
+    /// GuidedWorkoutRunState, shared with the Live Activity intents.
+    private func makeRun(_ exercises: [PrescribedExercise], restSeconds: Int = 90) -> GuidedWorkoutRunState {
+        let runExercises = exercises.map {
+            GuidedWorkoutRunState.Exercise(
+                id: $0.id, name: $0.name, sets: $0.sets, reps: $0.reps,
+                roleRaw: roleRaw($0.role), fromCatalog: $0.fromCatalog, restSeconds: restSeconds
+            )
+        }
+        var state = GuidedWorkoutRunState(
+            sessionID: UUID(), committedDayKey: "2026-07-19", intensityRaw: "Moderate",
+            title: "Test", suggestionExercisesText: "", suggestionNotes: "", sessionKindRaw: "strength",
+            exercises: runExercises
         )
+        state.phase = runExercises.isEmpty ? .done : .working
+        return state
     }
 
-    @Test func runnerStartsIntoWorkingOnFirstSet() {
-        let runner = makeRunner([ex("Squat", sets: 3)])
-        #expect(runner.phase == .ready)
-        runner.start()
-        #expect(runner.phase == .working)
-        #expect(runner.exerciseIndex == 0)
-        #expect(runner.currentSet == 1)
-        #expect(runner.completedNaturally == false)
+    @Test func runStartsWorkingOnFirstSet() {
+        let run = makeRun([ex("Squat", sets: 3)])
+        #expect(run.phase == .working)
+        #expect(run.exerciseIndex == 0)
+        #expect(run.currentSet == 1)
+        #expect(run.completedNaturally == false)
     }
 
-    @Test func runnerWithNoExercisesGoesStraightToDoneWithoutCompletion() {
-        let runner = makeRunner([])
-        runner.start()
-        #expect(runner.phase == .done)
-        // Nothing to log: an empty session must not count as a completed workout.
-        #expect(runner.completedNaturally == false)
-    }
-
-    @Test func completeSetAdvancesSetThenRests() {
-        let runner = makeRunner([ex("Squat", sets: 3)], restSeconds: 90)
-        runner.start()
-        runner.completeSet()
-        #expect(runner.phase == .resting)
-        #expect(runner.currentSet == 2)                // counter points at the upcoming set
-        #expect(runner.restDuration == 90)
-        #expect(runner.restEndsAt == Date(timeIntervalSince1970: 1_090))  // fixed now + rest
+    @Test func markSetDoneAdvancesSetThenRests() {
+        var run = makeRun([ex("Squat", sets: 3)], restSeconds: 90)
+        run.markSetDone(now: fixedNow)
+        #expect(run.phase == .resting)
+        #expect(run.currentSet == 2)                       // counter points at the upcoming set
+        #expect(run.restDuration == 90)
+        #expect(run.restEndsAt == fixedNow.addingTimeInterval(90))
     }
 
     @Test func lastSetOfAnExerciseAdvancesToNextExerciseWorkingNoRest() {
-        let runner = makeRunner([ex("Squat", sets: 2), ex("Bench", sets: 2)])
-        runner.start()
-        runner.completeSet()   // ex0 set1 done → rest, currentSet 2
-        runner.skipRest()      // → working ex0 set2
-        #expect(runner.exerciseIndex == 0)
-        #expect(runner.currentSet == 2)
-        runner.completeSet()   // last set of ex0 → next exercise, straight to working
-        #expect(runner.phase == .working)
-        #expect(runner.exerciseIndex == 1)
-        #expect(runner.currentSet == 1)
-        #expect(runner.restEndsAt == nil)
+        var run = makeRun([ex("Squat", sets: 2), ex("Bench", sets: 2)])
+        run.markSetDone(now: fixedNow)   // ex0 set1 done → rest, currentSet 2
+        run.skipRest()                    // → working ex0 set2
+        #expect(run.exerciseIndex == 0)
+        #expect(run.currentSet == 2)
+        run.markSetDone(now: fixedNow)   // last set of ex0 → next exercise, straight to working
+        #expect(run.phase == .working)
+        #expect(run.exerciseIndex == 1)
+        #expect(run.currentSet == 1)
+        #expect(run.restEndsAt == nil)
     }
 
     @Test func lastSetOfLastExerciseFinishesAndMarksCompleted() {
-        let runner = makeRunner([ex("Squat", sets: 1)])
-        runner.start()
-        runner.completeSet()
-        #expect(runner.phase == .done)
-        #expect(runner.completedNaturally == true)
+        var run = makeRun([ex("Squat", sets: 1)])
+        run.markSetDone(now: fixedNow)
+        #expect(run.phase == .done)
+        #expect(run.completedNaturally == true)
     }
 
     @Test func skipRestResumesWorkingAndClearsTimer() {
-        let runner = makeRunner([ex("Squat", sets: 3)])
-        runner.start()
-        runner.completeSet()          // → resting on set 2
-        #expect(runner.phase == .resting)
-        runner.skipRest()
-        #expect(runner.phase == .working)
-        #expect(runner.currentSet == 2)
-        #expect(runner.restEndsAt == nil)
+        var run = makeRun([ex("Squat", sets: 3)])
+        run.markSetDone(now: fixedNow)    // → resting on set 2
+        #expect(run.phase == .resting)
+        run.skipRest()
+        #expect(run.phase == .working)
+        #expect(run.currentSet == 2)
+        #expect(run.restEndsAt == nil)
     }
 
     @Test func endAbortsWithoutMarkingCompleted() {
-        let runner = makeRunner([ex("Squat", sets: 3)])
-        runner.start()
-        runner.completeSet()          // mid-session, resting
-        runner.end()
-        #expect(runner.phase == .done)
-        #expect(runner.completedNaturally == false)   // aborted → nothing to log
+        var run = makeRun([ex("Squat", sets: 3)])
+        run.markSetDone(now: fixedNow)    // mid-session, resting
+        run.end()
+        #expect(run.phase == .done)
+        #expect(run.completedNaturally == false)   // aborted → nothing to log
     }
 
     @Test func restWindowIsAFixedValidRangeSetOnlyWhileResting() throws {
-        let runner = makeRunner([ex("Squat", sets: 2), ex("Bench", sets: 1)], restSeconds: 90)
-        #expect(runner.restStartedAt == nil)
-        #expect(runner.restEndsAt == nil)
-        runner.start()
-        #expect(runner.restStartedAt == nil)
-        #expect(runner.restEndsAt == nil)
+        var run = makeRun([ex("Squat", sets: 2), ex("Bench", sets: 1)], restSeconds: 90)
+        #expect(run.restStartedAt == nil)
+        #expect(run.restEndsAt == nil)
 
-        runner.completeSet()          // → resting before set 2
-        let started = try #require(runner.restStartedAt)
-        let ends = try #require(runner.restEndsAt)
-        // The sheet renders `Text(timerInterval: started...ends)` — a fixed window. It must be a
+        run.markSetDone(now: fixedNow)    // → resting before set 2
+        let started = try #require(run.restStartedAt)
+        let ends = try #require(run.restEndsAt)
+        // The sheet/widget render `Text(timerInterval: started...ends)` — a fixed window. It must be a
         // valid (non-inverted) range or the range literal traps, however long the user over-rests.
         #expect(started <= ends)
         #expect(ends.timeIntervalSince(started) == 90)
 
-        runner.skipRest()             // leaving .resting clears both halves together
-        #expect(runner.restStartedAt == nil)
-        #expect(runner.restEndsAt == nil)
+        run.skipRest()                    // leaving .resting clears both halves together
+        #expect(run.restStartedAt == nil)
+        #expect(run.restEndsAt == nil)
 
-        runner.completeSet()          // last set of Squat → straight to Bench, no rest window
-        #expect(runner.phase == .working)
-        #expect(runner.restStartedAt == nil)
-        #expect(runner.restEndsAt == nil)
+        run.markSetDone(now: fixedNow)    // last set of Squat → straight to Bench, no rest window
+        #expect(run.phase == .working)
+        #expect(run.restStartedAt == nil)
+        #expect(run.restEndsAt == nil)
 
-        runner.completeSet()          // finish Bench → done, still no rest window
-        #expect(runner.phase == .done)
-        #expect(runner.restStartedAt == nil)
-        #expect(runner.restEndsAt == nil)
+        run.markSetDone(now: fixedNow)    // finish Bench → done, still no rest window
+        #expect(run.phase == .done)
+        #expect(run.restStartedAt == nil)
+        #expect(run.restEndsAt == nil)
     }
 
     @Test func zeroLengthRestStillFormsAValidWindow() throws {
-        let runner = makeRunner([ex("Squat", sets: 2)], restSeconds: 0)
-        runner.start()
-        runner.completeSet()
-        let started = try #require(runner.restStartedAt)
-        let ends = try #require(runner.restEndsAt)
+        var run = makeRun([ex("Squat", sets: 2)], restSeconds: 0)
+        run.markSetDone(now: fixedNow)
+        let started = try #require(run.restStartedAt)
+        let ends = try #require(run.restEndsAt)
         #expect(started <= ends)      // degenerate but valid: started...started
-    }
-
-    @Test func consumeCompletionReportsExactlyOnce() {
-        let runner = makeRunner([ex("Squat", sets: 1)])
-        runner.start()
-        #expect(runner.consumeCompletion() == false)   // mid-session: nothing to report yet
-        runner.completeSet()                           // natural finish
-        #expect(runner.consumeCompletion() == true)    // the one report → onComplete fires once
-        #expect(runner.consumeCompletion() == false)   // double-tap of "Finish workout" → no-op
-    }
-
-    @Test func consumeCompletionNeverReportsAnAbandonedSession() {
-        let runner = makeRunner([ex("Squat", sets: 3)])
-        runner.start()
-        runner.completeSet()
-        runner.end()                                   // "End without logging"
-        #expect(runner.consumeCompletion() == false)
     }
 
     @Test func descriptorLineWithZeroSetsIsWalkedAsOneStep() {
         // Cardio/conditioning lines carry sets == 0; the runner must treat them as a single
         // completable step, not loop or divide by zero.
-        let runner = makeRunner([ex("Easy cardio - 20 min", sets: 0, role: .accessory, reps: "", fromCatalog: false)])
-        runner.start()
-        #expect(runner.totalSetsForCurrent == 1)
-        runner.completeSet()
-        #expect(runner.phase == .done)
-        #expect(runner.completedNaturally == true)
+        var run = makeRun([ex("Easy cardio - 20 min", sets: 0, role: .accessory, reps: "", fromCatalog: false)])
+        #expect(run.totalSetsForCurrent == 1)
+        run.markSetDone(now: fixedNow)
+        #expect(run.phase == .done)
+        #expect(run.completedNaturally == true)
     }
 
-    @Test func restSecondsVaryByRoleAndGoalAsIntended() {
-        // Compounds rest longer than accessories, which rest longer than core.
-        #expect(WorkoutSessionRunner.restSeconds(for: .main, goal: .strength)
-                > WorkoutSessionRunner.restSeconds(for: .accessory, goal: .strength))
-        #expect(WorkoutSessionRunner.restSeconds(for: .accessory, goal: .strength)
-                > WorkoutSessionRunner.restSeconds(for: .core, goal: .strength))
-        // Strength-leaning goals rest a touch longer than the gentler goals for the same role.
-        #expect(WorkoutSessionRunner.restSeconds(for: .main, goal: .strength)
-                > WorkoutSessionRunner.restSeconds(for: .main, goal: .recovery))
-        // Never below a sane floor.
-        #expect(WorkoutSessionRunner.restSeconds(for: .core, goal: .recovery) >= 30)
+    // MARK: - Rest guidance (WorkoutRestGuidance)
+
+    @Test func restSecondsVaryByDemandAndGoalAsIntended() {
+        // Heavy compounds rest longer than isolation, which rests longer than core.
+        #expect(WorkoutRestGuidance.restSeconds(demand: .heavyCompound, goal: .strength)
+                > WorkoutRestGuidance.restSeconds(demand: .isolation, goal: .strength))
+        #expect(WorkoutRestGuidance.restSeconds(demand: .isolation, goal: .strength)
+                > WorkoutRestGuidance.restSeconds(demand: .core, goal: .strength))
+        // Strength rests longer than the gentler recovery goal for the same demand.
+        #expect(WorkoutRestGuidance.restSeconds(demand: .heavyCompound, goal: .strength)
+                > WorkoutRestGuidance.restSeconds(demand: .heavyCompound, goal: .recovery))
+        // Never below the floor; hypertrophy isolation never dips under 60s (evidence caveat).
+        #expect(WorkoutRestGuidance.restSeconds(demand: .core, goal: .recovery) >= WorkoutRestGuidance.minimumSeconds)
+        #expect(WorkoutRestGuidance.restSeconds(demand: .isolation, goal: .wellness) >= 60)
     }
 
-    // MARK: - Live Activity content mapping (WorkoutActivityAttributes.ContentState)
-
-    /// `.ready`: the mapping is total, but nothing is rendered yet — the controller only starts on the
-    /// first working set, so the collapsed phase reads `.working` and no rest window is set.
-    @Test func contentStateFromReadyRunnerCollapsesToWorkingWithNoTimer() {
-        let runner = makeRunner([ex("Squat", sets: 3, reps: "5")])
-        let state = WorkoutActivityAttributes.ContentState(runner: runner)
-        #expect(state.phase == .working)
-        #expect(state.exerciseName == "Squat")
-        #expect(state.setNumber == 1)
-        #expect(state.totalSets == 3)
-        #expect(state.reps == "5")
-        #expect(state.restStartedAt == nil)
-        #expect(state.restEndsAt == nil)
-        #expect(state.exerciseIndex == 0)
-        #expect(state.totalExercises == 1)
+    @Test func restDemandKeysOffMovementAndRole() {
+        // A squat/hinge pattern is a heavy compound even as an accessory; isolation stays isolation.
+        #expect(WorkoutRestGuidance.demand(role: .accessory, movementPattern: .squat) == .heavyCompound)
+        #expect(WorkoutRestGuidance.demand(role: .accessory, movementPattern: .isolation) == .isolation)
+        // A main lift with no known pattern falls back to a heavy compound; core role is always core.
+        #expect(WorkoutRestGuidance.demand(role: .main, movementPattern: nil) == .heavyCompound)
+        #expect(WorkoutRestGuidance.demand(role: .core, movementPattern: .push) == .core)
     }
 
-    @Test func contentStateFromWorkingRunnerCarriesSetAndReps() {
-        let runner = makeRunner([ex("Squat", sets: 3, reps: "5"), ex("Bench", sets: 2, reps: "8")])
-        runner.start()
-        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+    // MARK: - Live Activity content mapping (GuidedWorkoutRunState.contentState)
+
+    @Test func contentStateFromWorkingRunCarriesSetAndReps() {
+        let run = makeRun([ex("Squat", sets: 3, reps: "5"), ex("Bench", sets: 2, reps: "8")])
+        let state = run.contentState
         #expect(state.phase == .working)
         #expect(state.exerciseName == "Squat")
         #expect(state.setNumber == 1)
@@ -412,52 +384,48 @@ struct WorkoutProgramTests {
 
     /// `.resting`: phase flips and the FIXED rest window passes through verbatim, so the widget can
     /// render `Text(timerInterval: restStartedAt...restEndsAt)` without inverting after expiry.
-    @Test func contentStateFromRestingRunnerPassesTheFixedWindowThrough() throws {
-        let runner = makeRunner([ex("Squat", sets: 3, reps: "5")], restSeconds: 90)
-        runner.start()
-        runner.completeSet()                       // → resting before set 2
-        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+    @Test func contentStateFromRestingRunPassesTheFixedWindowThrough() throws {
+        var run = makeRun([ex("Squat", sets: 3, reps: "5")], restSeconds: 90)
+        run.markSetDone(now: fixedNow)             // → resting before set 2
+        let state = run.contentState
         #expect(state.phase == .resting)
         #expect(state.setNumber == 2)              // the upcoming set
         let start = try #require(state.restStartedAt)
         let end = try #require(state.restEndsAt)
-        #expect(start == runner.restStartedAt)
-        #expect(end == runner.restEndsAt)
+        #expect(start == run.restStartedAt)
+        #expect(end == run.restEndsAt)
         // The load-bearing invariant the widget guards on: a non-inverted window.
         #expect(start <= end)
         #expect(end.timeIntervalSince(start) == 90)
     }
 
-    /// `.done`: the mapping stays total (collapses to `.working`), but the controller ENDS on done —
-    /// it never `update`s to this state — so the rendered phase here is moot by design.
-    @Test func contentStateFromDoneRunnerIsTotalAndClearsTheTimer() {
-        let runner = makeRunner([ex("Squat", sets: 1, reps: "5")])
-        runner.start()
-        runner.completeSet()                       // natural finish
-        #expect(runner.phase == .done)
-        let state = WorkoutActivityAttributes.ContentState(runner: runner)
-        #expect(state.phase == .working)           // collapsed; controller ends rather than updating
+    /// `.done`: the mapping stays total (collapses to `.working`), but the activity ENDS on done — it
+    /// is never `update`d to this state — so the rendered phase here is moot by design.
+    @Test func contentStateFromDoneRunIsTotalAndClearsTheTimer() {
+        var run = makeRun([ex("Squat", sets: 1, reps: "5")])
+        run.markSetDone(now: fixedNow)             // natural finish
+        #expect(run.phase == .done)
+        let state = run.contentState
+        #expect(state.phase == .working)           // collapsed; the activity ends rather than updating
         #expect(state.restStartedAt == nil && state.restEndsAt == nil)
     }
 
-    /// A cardio/mobility line carries `sets == 0`; the mapping must surface the runner's `max(1, …)`
-    /// clamp so the widget shows one step, not "Set 1 of 0".
+    /// A cardio/mobility line carries `sets == 0`; the mapping must surface the `max(1, …)` clamp so
+    /// the widget shows one step, not "Set 1 of 0".
     @Test func contentStateClampsCardioZeroSetsToOne() {
-        let runner = makeRunner([ex("Easy cardio", sets: 0, role: .accessory, reps: "", fromCatalog: false)])
-        runner.start()
-        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        let run = makeRun([ex("Easy cardio", sets: 0, role: .accessory, reps: "", fromCatalog: false)])
+        let state = run.contentState
         #expect(state.totalSets == 1)
         #expect(state.setNumber == 1)
         #expect(state.reps.isEmpty)
     }
 
-    /// Whatever rest length the runner produces, the mapped window is always a valid range — the
+    /// Whatever rest length the run produces, the mapped window is always a valid range — the
     /// degenerate zero-rest case still yields `start...start`, never an inverted range.
     @Test func contentStateRestWindowStaysValidEvenForZeroRest() throws {
-        let runner = makeRunner([ex("Squat", sets: 2, reps: "5")], restSeconds: 0)
-        runner.start()
-        runner.completeSet()
-        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        var run = makeRun([ex("Squat", sets: 2, reps: "5")], restSeconds: 0)
+        run.markSetDone(now: fixedNow)
+        let state = run.contentState
         let start = try #require(state.restStartedAt)
         let end = try #require(state.restEndsAt)
         #expect(start <= end)                      // degenerate but valid: start...start
@@ -468,39 +436,32 @@ struct WorkoutProgramTests {
     /// While resting, the activity stays fresh until a grace PAST the rest deadline — never stale the
     /// instant the timer hits 0:00, because over-resting is a designed state.
     @Test func staleDateWhileRestingIsTheDeadlinePlusAGrace() throws {
-        let runner = makeRunner([ex("Squat", sets: 3, reps: "5")], restSeconds: 90)
-        runner.start()
-        runner.completeSet()                       // → resting
-        let state = WorkoutActivityAttributes.ContentState(runner: runner)
-        let end = try #require(state.restEndsAt)
+        var run = makeRun([ex("Squat", sets: 3, reps: "5")], restSeconds: 90)
+        run.markSetDone(now: fixedNow)             // → resting
+        let end = try #require(run.restEndsAt)
         // The resting branch keys off the rest deadline, not the posting time, so `postedAt` is moot.
-        let stale = state.staleDate(postedAt: Date(timeIntervalSince1970: 9_999))
-        #expect(stale == end.addingTimeInterval(WorkoutActivityAttributes.ContentState.Staleness.restGrace))
+        let stale = run.staleDate(postedAt: Date(timeIntervalSince1970: 9_999))
+        #expect(stale == end.addingTimeInterval(GuidedWorkoutRunState.Staleness.restGrace))
         #expect(stale > end)                       // a live 0:00 is never treated as stale
     }
 
     /// While working, the activity stays fresh for the working cap measured from when it was posted —
     /// long enough never to clip a real set, short enough a dead process can't haunt the Lock Screen.
     @Test func staleDateWhileWorkingIsPostingTimePlusTheCap() {
-        let runner = makeRunner([ex("Squat", sets: 3, reps: "5")])
-        runner.start()                             // → working
-        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        let run = makeRun([ex("Squat", sets: 3, reps: "5")])   // → working
         let posted = Date(timeIntervalSince1970: 5_000)
-        #expect(state.staleDate(postedAt: posted)
-                == posted.addingTimeInterval(WorkoutActivityAttributes.ContentState.Staleness.workingCap))
+        #expect(run.staleDate(postedAt: posted)
+                == posted.addingTimeInterval(GuidedWorkoutRunState.Staleness.workingCap))
     }
 
     /// Defensive: a resting snapshot that is somehow missing its window falls back to the working cap
     /// rather than trapping — the helper is total.
     @Test func staleDateFallsBackToTheCapWhenRestingHasNoWindow() {
-        let state = WorkoutActivityAttributes.ContentState(
-            exerciseName: "Squat", setNumber: 2, totalSets: 3, reps: "5",
-            phase: .resting, restStartedAt: nil, restEndsAt: nil,
-            exerciseIndex: 0, totalExercises: 1
-        )
+        var run = makeRun([ex("Squat", sets: 3, reps: "5")])
+        run.phase = .resting                       // resting but the window is somehow missing
         let posted = Date(timeIntervalSince1970: 5_000)
-        #expect(state.staleDate(postedAt: posted)
-                == posted.addingTimeInterval(WorkoutActivityAttributes.ContentState.Staleness.workingCap))
+        #expect(run.staleDate(postedAt: posted)
+                == posted.addingTimeInterval(GuidedWorkoutRunState.Staleness.workingCap))
     }
 
     // MARK: Move-root "Start today's workout" card availability

@@ -18,34 +18,24 @@ struct MoveView: View {
     // Surfaced when a progress-photo capture couldn't be sealed to disk (fail-closed store returned nil):
     // the photo would otherwise vanish silently. A clear per-capture alert, never a silent drop.
     @State private var showPhotoSaveFailedAlert = false
-    // Guided-workout entry point (Move root). The committed plan + completed-session set live on the
-    // store (shared with the Suggest sheet). This is only the uncommitted preview used to show the
-    // card's availability before the user commits anything; once a plan is committed the card prefers
-    // `store.currentGuidedWorkoutPlan`.
-    @State private var cardPreviewPlan: WorkoutProgram.DayPlan?
     // The session the guided runner is walking through, presented from the root card. nil = closed.
     @State private var guidedSession: WorkoutProgram.SessionSuggestion?
     // A foreground can cross local midnight without re-firing `onAppear`; observing scenePhase lets the
     // card refresh its preview on the day-rollover / scene-active seam so it can't sit on a stale read.
     @Environment(\.scenePhase) private var scenePhase
 
-    /// The plan the card reads: the committed one if it exists (needed to reflect completions), else
-    /// the uncommitted preview (content-deterministic, so availability matches what a commit yields).
-    private var guidedCardPlan: WorkoutProgram.DayPlan? {
-        store.currentGuidedWorkoutPlan ?? cardPreviewPlan
-    }
-
+    /// The Move-root "Today's workout" card appears only once the user has APPROVED today's plan (or
+    /// started it from the card) — so a plan generated just to look at, then closed, doesn't silently
+    /// become "today's workout". Resolves against the approved committed plan and today's logged
+    /// sessions, so it shows a done state (never a re-runnable `.ready`) for a session already logged,
+    /// and re-derives the moment a workout is logged.
     private var guidedCardState: GuidedWorkoutCardState? {
-        // Reconcile against today's logged workouts (observable via `day`) so the card shows a done
-        // state — never a re-runnable `.ready` — for a session already in the day record after a
-        // relaunch, and re-derives the moment a workout is logged.
-        guidedCardPlan.map {
-            GuidedWorkoutCardState.resolve(
-                plan: $0,
-                completed: store.guidedCompletedSessionIDs,
-                loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
-            )
-        }
+        guard store.isTodaysGuidedPlanApproved, let plan = store.currentGuidedWorkoutPlan else { return nil }
+        return GuidedWorkoutCardState.resolve(
+            plan: plan,
+            completed: store.guidedCompletedSessionIDs,
+            loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+        )
     }
 
     /// Commits today's plan and opens the guided runner on the first still-to-do guidable session.
@@ -62,11 +52,9 @@ struct MoveView: View {
         } else {
             // A stale `.ready` that raced a day rollover or an equipment edit: the freshly committed
             // plan has nothing left to guide. Release the just-committed plan (safe — no session of it
-            // is logged yet, so `reworkTodaysGuidedPlan` accepts it) and re-derive the preview, so the
-            // card settles on its real state instead of leaving the day silently pinned behind a dead
-            // button.
+            // is logged yet, so `reworkTodaysGuidedPlan` accepts it) so the card settles on its real
+            // state instead of leaving the day silently pinned behind a dead button.
             store.reworkTodaysGuidedPlan()
-            refreshGuidedCardPreview()
         }
     }
 
@@ -97,7 +85,14 @@ struct MoveView: View {
                         onEditSpace: { showingLocations = true }
                     )
 
-                    if let guidedCardState {
+                    // A run in progress takes precedence — it stays resumable even after an app kill
+                    // (the run survives in the app group though the in-memory committed plan doesn't),
+                    // so this is driven by `guidedRunState` alone, not the plan-based card.
+                    if let activeRun = store.guidedRunState, activeRun.isWorking || activeRun.isResting {
+                        ResumeWorkoutCard(title: activeRun.title, isResting: activeRun.isResting) {
+                            if let session = store.guidedSessionForResume() { guidedSession = session }
+                        }
+                    } else if let guidedCardState {
                         StartTodaysWorkoutCard(state: guidedCardState, onStart: startTodaysGuidedWorkout)
                     }
 
@@ -203,19 +198,14 @@ struct MoveView: View {
         .onAppear {
             allDays = store.loadDays()
             progressPhotos = store.progressPhotoRecords()
-            refreshGuidedCardPreview()
+            store.reconcileGuidedRunFromAppGroup()
         }
         .alert("Couldn't save this photo", isPresented: $showPhotoSaveFailedAlert) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Fernlet couldn't seal this photo to your private timeline. Please try again.")
         }
-        .sheet(isPresented: $showingLocations, onDismiss: {
-            // An equipment/space edit changes what a plan would generate; re-derive the (uncommitted)
-            // preview so the card reflects the new setup. A committed plan is left intact — the Suggest
-            // sheet's "Rework today's plan" affordance is the way to regenerate against new equipment.
-            refreshGuidedCardPreview()
-        }) {
+        .sheet(isPresented: $showingLocations) {
             WorkoutLocationSetupView(store: store)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -223,8 +213,8 @@ struct MoveView: View {
         }
         .sheet(item: $guidedSession) { session in
             GuidedWorkoutSheet(
+                store: store,
                 session: session,
-                goal: store.settings.selectedGoal,
                 sessionsRemain: store.currentGuidedWorkoutPlan.map { plan in
                     // Route through the reconciliation seam (not an id-only check) so the done copy stays
                     // truthful after a relaunch, when the completed-id set is empty but the day record
@@ -235,15 +225,7 @@ struct MoveView: View {
                             loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
                         )
                     }
-                } ?? false,
-                onComplete: {
-                    // The guided runner's completion belongs to the day the plan was committed (a rest can
-                    // cross local midnight while this sheet is open), logged with the committed intensity
-                    // and tagged as a guided log. `completeGuidedRunnerSession` owns all of that plus
-                    // progression and the completed-id record, shared with the Suggest sheet's runner.
-                    store.completeGuidedRunnerSession(session)
-                    allDays = store.loadDays()
-                }
+                } ?? false
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -259,21 +241,11 @@ struct MoveView: View {
             guard phase == .active else { return }
             // The app can foreground across local midnight without re-firing `onAppear`. Roll the store
             // over to the current day first (idempotent — ContentView does this too; a no-op when the
-            // day hasn't changed), then re-derive the card's preview for the current day so it can't sit
-            // on yesterday's cached availability (ready on a rest day, or rest-day copy on a training day).
+            // day hasn't changed), then pick up any guided-run progress made from the Live Activity.
             store.refreshCurrentDayIfNeeded()
-            refreshGuidedCardPreview()
+            store.reconcileGuidedRunFromAppGroup()
             allDays = store.loadDays()
         }
-    }
-
-    /// Builds the uncommitted preview once (only when nothing's committed for today) so the card can
-    /// show the right availability without pinning the Suggest sheet's own plan/intensity choices.
-    private func refreshGuidedCardPreview() {
-        guard store.currentGuidedWorkoutPlan == nil else { return }
-        cardPreviewPlan = store.previewTodaysGuidedWorkoutPlan(
-            intensity: store.recommendedWorkoutIntensity() ?? .moderate
-        )
     }
 }
 
@@ -353,6 +325,53 @@ enum GuidedWorkoutCardState: Equatable {
                 && !GuidedWorkoutAvailability.isAlreadyLogged(session, completed: completed, loggedGuidedWorkoutNames: loggedGuidedWorkoutNames)
         }
         return .allComplete(remainingMovement: remainingMovement)
+    }
+}
+
+/// Shown while a guided run is in progress — the resume entry point. Driven purely by the persisted
+/// run state (not the in-memory committed plan), so a workout interrupted by an app kill can still be
+/// picked back up in-app, not only from the Live Activity.
+struct ResumeWorkoutCard: View {
+    var title: String
+    var isResting: Bool
+    var onResume: () -> Void
+
+    var body: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: "figure.strengthtraining.traditional")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Color.moss)
+                        .frame(width: 30)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Workout in progress")
+                            .font(.fernlet(.headerMedium))
+                            .foregroundStyle(Color.bark)
+                        Text(isResting ? "\(title) — you're resting between sets." : "\(title) — pick up where you left off.")
+                            .font(.fernlet(.bubble))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                Button(action: onResume) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "play.circle.fill")
+                            .font(.body.weight(.semibold))
+                        Text("Resume workout")
+                            .font(.fernlet(.label))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("workout.resume")
+            }
+        }
     }
 }
 
@@ -791,8 +810,12 @@ struct WorkoutSuggestionSheet: View {
     @State private var adjustRequest = ""
     @State private var isAdjusting = false
     @State private var didApplyReadiness = false
+    // True while a plan is being generated after the user taps "Suggest" — drives the loading state.
+    @State private var isSuggesting = false
     // Set when the user taps "Start guided workout"; presents the guided runner sheet. nil = closed.
     @State private var guidedSession: WorkoutProgram.SessionSuggestion?
+    // Set when the user taps "Edit"; presents the manual workout editor for that session. nil = closed.
+    @State private var editingSession: WorkoutProgram.SessionSuggestion?
 
     // Today's plan and the set of already-logged sessions live on the store, shared with the Move-root
     // "Start today's workout" card. Reading them here (instead of a private @State) is what lets a
@@ -890,6 +913,122 @@ struct WorkoutSuggestionSheet: View {
         }
     }
 
+    /// The committed-plan bottom bar: **Approve workout** (make it today's plan, surfacing the Move
+    /// card, then close) + **Edit** (open the manual editor). Below, a gentle "Log as already done"
+    /// link retains the old retroactive bulk-log for a workout done outside the app.
+    @ViewBuilder private func committedPlanActionBar(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
+        let editTarget = guidableSession(in: dayPlan) ?? dayPlan.sessions.first
+        // Sessions not yet logged (guided runner, card, a prior log, or — after a relaunch — a matching
+        // tagged workout already in the day record), so "Log as already done" never double-logs.
+        let remainingSessions = dayPlan.sessions.filter {
+            !GuidedWorkoutAvailability.isAlreadyLogged(
+                $0, completed: guidedCompletedSessionIDs,
+                loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+            )
+        }
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                // Edit is offered only while nothing of the plan is logged yet — the same precondition
+                // `updateGuidedSession` enforces — so an edit is never silently discarded after a
+                // session started (matching the rework affordance).
+                if store.canReworkTodaysGuidedPlan, let editTarget {
+                    Button {
+                        editingSession = editTarget
+                    } label: {
+                        Text("Edit")
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.moss)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.moss.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isAdjusting)
+                    .accessibilityIdentifier("workout.editPlan")
+                }
+                Button {
+                    store.approveTodaysGuidedPlan()
+                    dismiss()
+                } label: {
+                    Text("Approve workout")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("workout.approvePlan")
+            }
+            if !remainingSessions.isEmpty {
+                Button {
+                    // Retroactive log for a workout done outside the app — logs the remaining sessions to
+                    // the committed day at the committed intensity, tagged as guided so reconciliation
+                    // recognizes them after a relaunch.
+                    let intensity = store.committedGuidedIntensity ?? energy
+                    for session in remainingSessions {
+                        store.addWorkout(session.workout(intensity: intensity, loggedFromGuidedSession: true))
+                        store.recordCompletedExercises(session.catalogExerciseNames)
+                        store.markGuidedSessionCompleted(session.id)
+                    }
+                    dismiss()
+                } label: {
+                    Text("Log as already done")
+                        .font(.fernlet(.bubble))
+                        .foregroundStyle(Color.slate)
+                        .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("workout.logAlreadyDone")
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 20)
+        .background(Color.parchment)
+    }
+
+    /// The configurator bottom bar: **Suggest**, with a loading state while the plan is generated.
+    @ViewBuilder private var suggestActionBar: some View {
+        HStack {
+            Spacer()
+            Button(action: startSuggesting) {
+                HStack(spacing: 8) {
+                    if isSuggesting {
+                        ProgressView().controlSize(.small).tint(.white)
+                    }
+                    Text(isSuggesting ? "Building your workout…" : "Suggest")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, 16)
+                .background(isSuggesting ? Color.moss.opacity(0.6) : Color.moss, in: RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
+            .disabled(isSuggesting)
+            .accessibilityIdentifier("workout.suggest")
+        }
+        .padding(20)
+        .background(Color.parchment)
+    }
+
+    /// Generate today's plan with a brief, deliberate loading state. Generation is on-device and
+    /// near-instant today, so a short minimum keeps the affordance from flashing (and future-proofs it
+    /// for AI-backed generation, which is genuinely slow). The `nil` guard makes a double-tap a no-op.
+    private func startSuggesting() {
+        guard !isSuggesting, store.currentGuidedWorkoutPlan == nil else { return }
+        isSuggesting = true
+        let intensity = energy
+        let requestContext = context
+        Task {
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(450))
+            store.commitTodaysGuidedWorkoutPlan(intensity: intensity, context: requestContext)
+            isSuggesting = false
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -922,12 +1061,15 @@ struct WorkoutSuggestionSheet: View {
 
                             if let guidable = guidableSession(in: dayPlan) {
                                 Button {
+                                    // Starting now also approves the plan, so the Move-root "Today's
+                                    // workout" card surfaces it if the user backs out and returns.
+                                    store.approveTodaysGuidedPlan()
                                     guidedSession = guidable
                                 } label: {
                                     HStack(spacing: 8) {
                                         Image(systemName: "play.circle.fill")
                                             .font(.body.weight(.semibold))
-                                        Text("Start guided workout")
+                                        Text("Start now")
                                             .font(.fernlet(.label))
                                     }
                                     .foregroundStyle(.white)
@@ -938,7 +1080,7 @@ struct WorkoutSuggestionSheet: View {
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("workout.startGuided")
 
-                                Text("We'll walk you through it set by set and time your rests. Or mark it done below if you'd rather log it yourself.")
+                                Text("We'll walk you through it set by set and time your rests — with a Live Activity on your Lock Screen. Approve it below to start from your Move tab whenever you're ready, or edit it first.")
                                     .font(.fernlet(.bubble))
                                     .foregroundStyle(Color.slate)
                                     .fernletWrappingText()
@@ -1020,38 +1162,9 @@ struct WorkoutSuggestionSheet: View {
             }
 
             if let dayPlan {
-                // Sessions already logged (the guided runner, the Move-root card, a prior "Mark done",
-                // or — after a relaunch — a matching workout already in today's day record) are
-                // excluded, so "Mark all done" only logs what's actually left, never a duplicate.
-                let remainingSessions = dayPlan.sessions.filter {
-                    !GuidedWorkoutAvailability.isAlreadyLogged(
-                        $0,
-                        completed: guidedCompletedSessionIDs,
-                        loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
-                    )
-                }
-                if remainingSessions.isEmpty {
-                    // Reopened after everything today was already logged — no dead "Mark done" button.
-                    SheetSaveBar(label: "Close") { dismiss() }
-                } else {
-                    SheetSaveBar(label: remainingSessions.count > 1 ? "Mark all done" : "Mark done") {
-                        // Retroactive "Mark done": logs the committed plan's sessions to TODAY (this bar is
-                        // only reachable while the plan is today's), with the plan's committed intensity —
-                        // not the drifting readiness signal — and tagged as a guided log so reconciliation
-                        // recognizes them after a relaunch.
-                        let intensity = store.committedGuidedIntensity ?? energy
-                        for session in remainingSessions {
-                            store.addWorkout(session.workout(intensity: intensity, loggedFromGuidedSession: true))
-                            store.recordCompletedExercises(session.catalogExerciseNames)
-                            store.markGuidedSessionCompleted(session.id)
-                        }
-                        dismiss()
-                    }
-                }
+                committedPlanActionBar(dayPlan)
             } else {
-                SheetSaveBar(label: "Suggest") {
-                    store.commitTodaysGuidedWorkoutPlan(intensity: energy, context: context)
-                }
+                suggestActionBar
             }
         }
         .background(Color.parchment)
@@ -1089,8 +1202,8 @@ struct WorkoutSuggestionSheet: View {
             }
         }) { session in
             GuidedWorkoutSheet(
+                store: store,
                 session: session,
-                goal: store.settings.selectedGoal,
                 sessionsRemain: dayPlan.map { plan in
                     // Reconciliation seam, not an id-only check — truthful done copy after a relaunch.
                     plan.sessions.contains {
@@ -1099,18 +1212,17 @@ struct WorkoutSuggestionSheet: View {
                             loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
                         )
                     }
-                } ?? false,
-                onComplete: {
-                    // Same plan-day-anchored guided completion the Move-root card uses: logs to the day
-                    // the plan was committed with the committed intensity, tagged as a guided log, plus
-                    // progression and the completed-id record. The runner's one-shot latch keeps this from
-                    // re-firing; dismissal happens when the user closes the done screen.
-                    store.completeGuidedRunnerSession(session)
-                }
+                } ?? false
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(20)
+        }
+        .sheet(item: $editingSession) { session in
+            GuidedWorkoutEditorSheet(store: store, session: session)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
         }
     }
 
