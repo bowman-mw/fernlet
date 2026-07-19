@@ -157,7 +157,11 @@ final class WorkoutSessionRunner {
     /// How long to rest after a set, by movement role and goal. Compounds (`.main`) rest longer than
     /// accessories/core; strength-leaning goals rest a touch longer still, while the gentler goals
     /// keep rests short so a session stays brisk and unintimidating. Pure — unit-testable.
-    static func restSeconds(for role: SlotRole, goal: GoalType) -> Int {
+    ///
+    /// `nonisolated`: the class is `@MainActor`, so without this the function value is `@MainActor`
+    /// and the `restProvider` default argument (a plain `(SlotRole, GoalType) -> Int`) would drop the
+    /// actor. The function touches no instance state — it's pure — so it's safe off the main actor.
+    nonisolated static func restSeconds(for role: SlotRole, goal: GoalType) -> Int {
         let base: Int
         switch role {
         case .main: base = 150

@@ -16,6 +16,11 @@ struct LogWaterIntent: AppIntent {
     // Runs in the background — no need to bring the app forward for a one-tap log.
     static let openAppWhenRun = false
 
+    // @MainActor: the app target has default-MainActor isolation, so the app-group queue, snapshot
+    // store, and `WidgetSnapshotMirror.widgetKind` are all implicitly main-actor-isolated. AppIntent's
+    // `perform()` is `nonisolated` by default; hop onto the main actor once here (this runs in the app
+    // process, where the work is trivial file I/O) rather than sprinkling `await`s across an implicit hop.
+    @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         // Same app-group queue the widget's "+1 water" button appends to; the app drains it on next
         // foreground and applies the canonical diary mutation against this row's own day key.
@@ -48,6 +53,7 @@ struct LogMealIntent: AppIntent {
     static let description = IntentDescription("Opens Fernlet to log a meal.")
     static let openAppWhenRun = true
 
+    @MainActor
     func perform() async throws -> some IntentResult {
         PendingIntentSheet.request(.meal)
         return .result()
@@ -59,6 +65,7 @@ struct OpenJournalIntent: AppIntent {
     static let description = IntentDescription("Opens Fernlet to a new journal entry.")
     static let openAppWhenRun = true
 
+    @MainActor
     func perform() async throws -> some IntentResult {
         PendingIntentSheet.request(.journal)
         return .result()
