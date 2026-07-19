@@ -487,9 +487,10 @@ struct WorkoutProgramTests {
 
     @Test func cardIsAllCompleteOnceTheGuidableSessionIsLogged() {
         // Requirement 6: a fully-logged day must show a done state, never a restart that double-logs.
+        // A single-session day has no leftover movement, so the done copy is the plain "rest up" one.
         let s = session("Upper", [ex("Bench", sets: 3)])
         let state = GuidedWorkoutCardState.resolve(plan: plan([s]), completed: [s.id])
-        #expect(state == .allComplete)
+        #expect(state == .allComplete(remainingMovement: false))
     }
 
     @Test func cardIsNoneToGuideForACardioOnlyDay() {
@@ -523,10 +524,156 @@ struct WorkoutProgramTests {
 
         #expect(GuidedWorkoutCardState.resolve(plan: day, completed: []) == .ready(sessionID: am.id))
         #expect(GuidedWorkoutCardState.resolve(plan: day, completed: [am.id]) == .ready(sessionID: pm.id))
-        #expect(GuidedWorkoutCardState.resolve(plan: day, completed: [am.id, pm.id]) == .allComplete)
+        // Both strength sessions logged, but the cardio warm-up (a non-guided movement session) is still
+        // unlogged — so the done state flags remaining movement rather than implying the whole day's done.
+        #expect(GuidedWorkoutCardState.resolve(plan: day, completed: [am.id, pm.id]) == .allComplete(remainingMovement: true))
+        // Once the cardio is logged too (by name), nothing's left and the plain done state stands.
+        #expect(GuidedWorkoutCardState.resolve(plan: day, completed: [am.id, pm.id], loggedWorkoutNames: ["Warm-up"]) == .allComplete(remainingMovement: false))
 
         // The shared guidable filter agrees and skips the cardio session outright.
         #expect(GuidedWorkoutAvailability.firstGuidable(in: day, excluding: [])?.id == am.id)
         #expect(GuidedWorkoutAvailability.firstGuidable(in: day, excluding: [am.id, pm.id]) == nil)
+    }
+
+    // MARK: Reconciliation, rework, committed intensity, and day rollover (f502506 review fixes)
+
+    /// Finding 1: after a routine relaunch the plan is regenerated with FRESH session ids and the
+    /// in-memory completed set is empty — but the logged workout survives in the day record, keyed by
+    /// `suggestion.name`. The card must reconcile against that name and show a done state (never a
+    /// re-runnable `.ready`), so a tapped Start can't add the workout, save to HealthKit, or advance
+    /// progression a second time.
+    @Test func cardReconcilesANameMatchedLoggedWorkoutAfterRelaunch() {
+        let s = session("Upper", [ex("Bench", sets: 3)])
+        // Fresh plan instance, empty completed set — only the day record (by name) knows it's logged.
+        let state = GuidedWorkoutCardState.resolve(plan: plan([s]), completed: [], loggedWorkoutNames: ["Upper"])
+        #expect(state == .allComplete(remainingMovement: false))
+        // …and firstGuidable must not re-offer it, so Start opens nothing to re-log.
+        #expect(GuidedWorkoutAvailability.firstGuidable(in: plan([s]), excluding: [], loggedWorkoutNames: ["Upper"]) == nil)
+    }
+
+    /// The reconciliation seam is robust to regeneration: two generations of the "same" plan mint
+    /// different ids, so a completed-id set from one never lines up with the other — but the name does.
+    @Test func nameReconciliationSurvivesFreshSessionIDs() {
+        let first = session("Push", [ex("Bench", sets: 3)])
+        let regenerated = session("Push", [ex("Bench", sets: 3)])   // identical content, fresh id
+        #expect(first.id != regenerated.id)
+        #expect(GuidedWorkoutAvailability.isAlreadyLogged(regenerated, completed: [first.id], loggedWorkoutNames: []) == false)
+        #expect(GuidedWorkoutAvailability.isAlreadyLogged(regenerated, completed: [], loggedWorkoutNames: ["Push"]) == true)
+    }
+
+    /// Finding 1 through the real store: logging a session's workout (exactly as the guided onComplete
+    /// does) leaves the day record carrying its name, so a fresh plan instance with an EMPTY completed
+    /// set still resolves to done via `store.loggedWorkoutNamesToday`.
+    @Test func loggedWorkoutNamesTodayReconcilesTheCardAfterRelaunch() {
+        let store = makeTestStore()
+        let s = session("Upper", [ex("Bench", sets: 3)])
+        store.addWorkout(s.workout(intensity: .moderate))
+        #expect(store.loggedWorkoutNamesToday.contains("Upper"))
+        let state = GuidedWorkoutCardState.resolve(
+            plan: plan([s]),
+            completed: store.guidedCompletedSessionIDs,   // empty on a fresh run
+            loggedWorkoutNames: store.loggedWorkoutNamesToday
+        )
+        #expect(state == .allComplete(remainingMovement: false))
+    }
+
+    /// Finding 2: while nothing of the committed plan is logged, it stays regenerable — rework clears it
+    /// so the configurator (and the Equipment & limits entry) is reachable again.
+    @Test func reworkClearsTheCommittedPlanWhileNothingIsLogged() {
+        let store = makeTestStore()
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)
+        #expect(store.currentGuidedWorkoutPlan != nil)
+        #expect(store.canReworkTodaysGuidedPlan == true)
+        #expect(store.reworkTodaysGuidedPlan() == true)
+        #expect(store.currentGuidedWorkoutPlan == nil)
+        #expect(store.committedGuidedIntensity == nil)
+    }
+
+    /// Finding 2 invariant: any recorded session completion pins the plan — rework refuses, so it can
+    /// never orphan an already-counted session.
+    @Test func reworkRefusesOnceAnySessionCompletionIsRecorded() {
+        let store = makeTestStore()
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)
+        store.markGuidedSessionCompleted(UUID())
+        #expect(store.canReworkTodaysGuidedPlan == false)
+        #expect(store.reworkTodaysGuidedPlan() == false)
+        #expect(store.currentGuidedWorkoutPlan != nil)
+    }
+
+    /// Finding 2 invariant, relaunch flavor: a session logged only in the day record (no recorded id)
+    /// still pins the plan, because rework's guard also reconciles against `loggedWorkoutNamesToday`.
+    @Test func reworkRefusesWhenAPlanSessionIsLoggedByNameOnly() {
+        let store = makeTestStore()
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)   // pins today's day key
+        let s = session("Upper", [ex("Bench", sets: 3)])
+        store.replaceGuidedWorkoutPlan(plan([s]))                   // a committed plan with a known session
+        #expect(store.canReworkTodaysGuidedPlan == true)
+        store.addWorkout(s.workout(intensity: .hard))              // relaunch-style: only the day record knows
+        #expect(store.guidedCompletedSessionIDs.isEmpty)
+        #expect(store.canReworkTodaysGuidedPlan == false)
+        #expect(store.reworkTodaysGuidedPlan() == false)
+        #expect(store.currentGuidedWorkoutPlan != nil)
+    }
+
+    /// Finding 3: the committed intensity is recorded and stable — a same-day re-commit ignores its
+    /// intensity argument, so a later readiness-derived value can't override how the plan was built.
+    @Test func committedIntensityIsRecordedAndStableAcrossSameDayRecommits() {
+        let store = makeTestStore()
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)
+        #expect(store.committedGuidedIntensity == .hard)
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .light)
+        #expect(store.committedGuidedIntensity == .hard)
+    }
+
+    /// Finding 3: every logging surface reads `store.committedGuidedIntensity` — pin that the logged
+    /// workout carries the committed value (`.hard`), not a re-derived `.moderate`.
+    @Test func loggingSurfacesUseTheCommittedIntensityNotAReDerivedOne() {
+        let store = makeTestStore()
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)
+        let s = session("Upper", [ex("Bench", sets: 3)])
+        // The exact expression both surfaces evaluate at their logging sites:
+        let logged = s.workout(intensity: store.committedGuidedIntensity ?? .moderate)
+        #expect(logged.intensity == .hard)
+        store.addWorkout(logged)
+        #expect(store.day.workouts.last?.intensity == .hard)
+    }
+
+    /// Finding 4: a committed plan (and its intensity) reads through as nil once the store rolls over to
+    /// a new day, so the card re-resolves against the new day instead of yesterday's cached plan.
+    @Test func committedPlanReadsThroughAsNilAfterDayRollover() {
+        let store = makeTestStore()
+        let base = store.todayKey
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)
+        #expect(store.currentGuidedWorkoutPlan != nil)
+        #expect(store.committedGuidedIntensity == .hard)
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        _ = store.refreshCurrentDayIfNeeded(now: tomorrow)
+        #expect(store.todayKey != base)
+        #expect(store.currentGuidedWorkoutPlan == nil)
+        #expect(store.committedGuidedIntensity == nil)
+    }
+
+    /// Low note under finding 4: an AI adjust that resolves after a rollover must not resurrect
+    /// yesterday's plan (with yesterday's completions) as today's — `replaceGuidedWorkoutPlan` refuses
+    /// once the plan it targets is no longer today's.
+    @Test func replaceGuidedPlanDoesNotResurrectYesterdaysPlanAfterRollover() {
+        let store = makeTestStore()
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        _ = store.refreshCurrentDayIfNeeded(now: tomorrow)
+        #expect(store.currentGuidedWorkoutPlan == nil)
+        store.replaceGuidedWorkoutPlan(plan([session("Upper", [ex("Bench", sets: 3)])]))
+        #expect(store.currentGuidedWorkoutPlan == nil)
+    }
+
+    /// Finding 4b: the recovery `startTodaysGuidedWorkout` relies on when a stale Start commits but the
+    /// plan has nothing to guide — with no completion recorded, the just-committed plan can be released,
+    /// so the day is never left silently pinned behind a dead button.
+    @Test func aNoOpCommitStaysReleasableWhenNothingIsGuidable() {
+        let store = makeTestStore()
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .moderate)
+        #expect(store.currentGuidedWorkoutPlan != nil)
+        #expect(store.reworkTodaysGuidedPlan() == true)   // releasable — nothing logged
+        #expect(store.currentGuidedWorkoutPlan == nil)
     }
 }

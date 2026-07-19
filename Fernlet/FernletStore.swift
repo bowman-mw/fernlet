@@ -2098,6 +2098,13 @@ final class FernletStore {
     private var guidedPlanStorage: WorkoutProgram.DayPlan?
     /// The day `guidedPlanStorage` was generated for; a rollover makes the cached plan stale.
     @ObservationIgnored private var guidedPlanDayKey: String?
+    /// The intensity `guidedPlanStorage` was committed with. Recorded so EVERY logging site for the
+    /// committed plan (the Move-root card's guided runner, the Suggest sheet's "Mark done", and the
+    /// Suggest sheet's own guided runner) logs the intensity the plan was actually *built* with, rather
+    /// than re-deriving from readiness at tap time — which drifts across the day, so a plan committed at
+    /// `.hard` could be logged as `.moderate`/`.light`. Session-scoped like the plan; reads through as
+    /// nil after a rollover.
+    @ObservationIgnored private var committedGuidedIntensityStorage: WorkoutIntensity?
 
     /// Sessions already logged today through the guided runner *or* the retroactive "Mark done" path —
     /// both mean "this session's workout is now logged; don't log it again." Cleared when a fresh plan
@@ -2107,6 +2114,22 @@ final class FernletStore {
     /// The committed plan iff it belongs to today; a day rollover reads through as nil.
     var currentGuidedWorkoutPlan: WorkoutProgram.DayPlan? {
         guidedPlanDayKey == todayKey ? guidedPlanStorage : nil
+    }
+
+    /// The intensity today's committed plan was built with, iff the plan belongs to today. Every site
+    /// that logs a session of the committed plan reads this so the logged intensity matches the plan.
+    var committedGuidedIntensity: WorkoutIntensity? {
+        guidedPlanDayKey == todayKey ? committedGuidedIntensityStorage : nil
+    }
+
+    /// Names of workouts already logged today. The reconciliation seam behind the guided card: a
+    /// guided session's workout is logged with its `suggestion.name`, so a session whose name is already
+    /// present here counts as done — even after a routine relaunch minted the plan with fresh session
+    /// ids and started `guidedCompletedSessionIDs` empty. Reconciling against the day record (rather
+    /// than adding new persisted state) is what stops a reopened `.ready` card from re-running — and
+    /// double-logging — a workout that's already in `day.workouts`. Observable via `day`.
+    var loggedWorkoutNamesToday: Set<String> {
+        Set(day.workouts.map(\.name))
     }
 
     /// Maps the derived intensity-readiness signal to a recommended workout intensity, if present.
@@ -2140,15 +2163,43 @@ final class FernletStore {
         let plan = workoutDayPlan(intensity: intensity, context: context)
         guidedPlanStorage = plan
         guidedPlanDayKey = todayKey
+        committedGuidedIntensityStorage = intensity
         guidedCompletedSessionIDs = []
         return plan
     }
 
+    /// Whether today's committed plan can still be reworked back into the configurator. True only while
+    /// NOTHING of it has been logged — neither through the in-memory completed set, nor (after a
+    /// relaunch) as a matching workout already in today's day record. Once anything is logged the plan
+    /// is pinned, because reworking it would orphan a logged session's place in the plan.
+    var canReworkTodaysGuidedPlan: Bool {
+        guard let plan = currentGuidedWorkoutPlan, guidedCompletedSessionIDs.isEmpty else { return false }
+        let logged = loggedWorkoutNamesToday
+        return !plan.sessions.contains { logged.contains($0.suggestion.name) }
+    }
+
+    /// Clears today's committed guided plan so the Suggest sheet falls back to its configurator
+    /// (intensity chips, context, and the "Equipment & limits" entry). Refuses — returns false, changes
+    /// nothing — once any session has been completed or logged, so a rework can never orphan an
+    /// already-counted session. This restores pre-refactor reachability: a plan committed by an
+    /// exploratory tap is no longer an irreversible same-day pin.
+    @discardableResult
+    func reworkTodaysGuidedPlan() -> Bool {
+        guard canReworkTodaysGuidedPlan else { return false }
+        guidedPlanStorage = nil
+        guidedPlanDayKey = nil
+        committedGuidedIntensityStorage = nil
+        guidedCompletedSessionIDs = []
+        return true
+    }
+
     /// Replaces today's committed plan in place (an AI adjustment keeps each `SessionSuggestion.id`,
-    /// so completions stay valid — do NOT clear them here).
+    /// so completions stay valid — do NOT clear them here). Guarded so an adjustment that resolves
+    /// *after* a day rollover can't resurrect yesterday's plan (with yesterday's completions) as today's:
+    /// it only applies while the plan being replaced is still today's committed plan.
     func replaceGuidedWorkoutPlan(_ plan: WorkoutProgram.DayPlan) {
+        guard guidedPlanDayKey == todayKey else { return }
         guidedPlanStorage = plan
-        guidedPlanDayKey = todayKey
     }
 
     /// Records that a session's workout was logged today (guided runner or "Mark done"), excluding it
