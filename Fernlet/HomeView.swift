@@ -44,6 +44,10 @@ struct HomeView: View {
     @State private var companionAmbient: WeatherAmbient?
     /// The "Recent bites" polaroid the user tapped, presented as a larger dismissible viewer.
     @State private var selectedBite: RecentBite?
+    /// The prior six days' rows behind "Recent bites", loaded once per day rollover (see
+    /// `reloadPriorDayRows` / `mealPhotosStrip`'s `.task(id:)`) instead of on every `body` pass. Today is
+    /// never cached here — it stays live from the observed `store.day`.
+    @State private var cachedPriorDays: [FernletDay] = []
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -487,17 +491,24 @@ struct HomeView: View {
     }
 
     /// The recent photographed meals for the strip — any meal with a photo across the last 7 days, newest
-    /// first (so the strip doesn't empty out at midnight the way "today only" did). Reads at most 7 day
-    /// rows (today is the in-memory `day`; the prior six are single-row repository reads) and no photo
-    /// bytes: the polaroids decode their JPEGs lazily as they scroll into view.
+    /// first (so the strip doesn't empty out at midnight the way "today only" did). Today comes from the
+    /// observed in-memory `store.day` (so a just-photographed meal shows up immediately); the prior six
+    /// rows are read from the repository, but only once per day rollover into `cachedPriorDays` — NOT on
+    /// every `body` pass. Reads no photo bytes: the polaroids decode their JPEGs lazily as they scroll in.
     private var recentBites: [RecentBite] {
+        RecentBites.recent(from: [store.day] + cachedPriorDays, today: Date())
+    }
+
+    /// Load the prior six days' rows into `cachedPriorDays`. These are synchronous single-row repository
+    /// fetches; driving them from `.task(id: <today's day key>)` runs them exactly once per day rollover
+    /// rather than on every Home render, while today's bites stay live off `store.day` in `recentBites`.
+    private func reloadPriorDayRows() {
         let today = Date()
         let calendar = Calendar.current
-        let days: [FernletDay] = (0..<7).compactMap { offset in
+        cachedPriorDays = (1..<7).compactMap { offset in
             guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
             return store.loadDay(for: FernletDate.dayKey(for: date))
         }
-        return RecentBites.recent(from: days, today: today)
     }
 
     /// "Recent bites" (#11): recently photographed meals as free-floating classic polaroids. A horizontal
@@ -552,6 +563,11 @@ struct HomeView: View {
             )
         }
         #endif
+        // Keyed on today's day key so the six prior-day fetches run once now and once per midnight
+        // rollover — never on every body pass. Today's bites remain live from `store.day`.
+        .task(id: FernletDate.dayKey(for: Date())) {
+            reloadPriorDayRows()
+        }
     }
 
     /// Presentation-only frazzle flag for the companion. Never overrides the sick/resting
