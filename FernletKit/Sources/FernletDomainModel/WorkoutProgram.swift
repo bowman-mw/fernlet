@@ -962,12 +962,17 @@ public nonisolated enum WorkoutProgram {
         /// Names of catalog exercises in this session (for progression bookkeeping).
         public var catalogExerciseNames: [String] { exercises.filter(\.fromCatalog).map(\.name) }
 
-        public func workout(intensity: WorkoutIntensity) -> Workout {
+        /// Builds the loggable `Workout` for this session. `loggedFromGuidedSession` tags the row as
+        /// coming from the guided flow so name-based reconciliation only ever matches the guided
+        /// flow's own logs; every guided logging site passes `true`, and no other caller does.
+        public func workout(intensity: WorkoutIntensity, loggedFromGuidedSession: Bool = false) -> Workout {
             let mode: WorkoutMode = (kind == .strength || kind == .fullBody) ? .strengthTraining : .activity
             let type: WorkoutType = (kind == .cardio) ? .cardio : .fullBody
             return Workout(
                 name: suggestion.name, type: type, mode: mode, exercises: suggestion.exercises,
-                rpe: nil, notes: suggestion.notes, duration: nil, intensity: intensity
+                rpe: nil, notes: suggestion.notes, duration: nil,
+                loggedFromGuidedSession: loggedFromGuidedSession ? true : nil,
+                intensity: intensity
             )
         }
     }

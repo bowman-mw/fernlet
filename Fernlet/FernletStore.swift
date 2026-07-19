@@ -2122,14 +2122,16 @@ final class FernletStore {
         guidedPlanDayKey == todayKey ? committedGuidedIntensityStorage : nil
     }
 
-    /// Names of workouts already logged today. The reconciliation seam behind the guided card: a
-    /// guided session's workout is logged with its `suggestion.name`, so a session whose name is already
-    /// present here counts as done — even after a routine relaunch minted the plan with fresh session
-    /// ids and started `guidedCompletedSessionIDs` empty. Reconciling against the day record (rather
-    /// than adding new persisted state) is what stops a reopened `.ready` card from re-running — and
-    /// double-logging — a workout that's already in `day.workouts`. Observable via `day`.
-    var loggedWorkoutNamesToday: Set<String> {
-        Set(day.workouts.map(\.name))
+    /// Names of GUIDED-logged workouts already in today's record. The reconciliation seam behind the
+    /// guided card: a guided session's workout is logged with its `suggestion.name` AND tagged
+    /// `loggedFromGuidedSession`, so a guided session whose name is present here counts as done — even
+    /// after a routine relaunch minted the plan with fresh session ids and started
+    /// `guidedCompletedSessionIDs` empty. Only tagged rows count: a manual Log-sheet entry or a planned
+    /// completion that happens to share a guided session's name ("Legs", "Push") must NOT make the
+    /// guided flow claim itself done or refuse a rework. The guided log itself carries the tag, so the
+    /// relaunch double-log protection still holds. Observable via `day`.
+    var loggedGuidedWorkoutNamesToday: Set<String> {
+        Set(day.workouts.filter { $0.loggedFromGuidedSession == true }.map(\.name))
     }
 
     /// Maps the derived intensity-readiness signal to a recommended workout intensity, if present.
@@ -2174,7 +2176,7 @@ final class FernletStore {
     /// is pinned, because reworking it would orphan a logged session's place in the plan.
     var canReworkTodaysGuidedPlan: Bool {
         guard let plan = currentGuidedWorkoutPlan, guidedCompletedSessionIDs.isEmpty else { return false }
-        let logged = loggedWorkoutNamesToday
+        let logged = loggedGuidedWorkoutNamesToday
         return !plan.sessions.contains { logged.contains($0.suggestion.name) }
     }
 
@@ -2193,13 +2195,47 @@ final class FernletStore {
         return true
     }
 
-    /// Replaces today's committed plan in place (an AI adjustment keeps each `SessionSuggestion.id`,
-    /// so completions stay valid — do NOT clear them here). Guarded so an adjustment that resolves
-    /// *after* a day rollover can't resurrect yesterday's plan (with yesterday's completions) as today's:
-    /// it only applies while the plan being replaced is still today's committed plan.
-    func replaceGuidedWorkoutPlan(_ plan: WorkoutProgram.DayPlan) {
+    /// Replaces today's committed plan in place with an AI-adjusted version (an adjustment keeps each
+    /// `SessionSuggestion.id`, so completions stay valid — do NOT clear them here). Guarded twice:
+    /// (1) the plan must still belong to today, so an adjustment resolving *after* a day rollover can't
+    /// resurrect yesterday's plan as today's; and (2) the currently committed plan must still be the
+    /// SAME plan the adjustment started from, identified by `baseSessionIDs` — the base plan's
+    /// session-id set, which an adjustment preserves but a rework-and-recommit replaces with fresh ids.
+    /// Without (2) an adjustment kicked off against P1 could clobber a P2 the user reworked-and-committed
+    /// while it was in flight (wrong content, wrong ids, wrong intensity).
+    func replaceGuidedWorkoutPlan(_ plan: WorkoutProgram.DayPlan, replacing baseSessionIDs: Set<UUID>) {
         guard guidedPlanDayKey == todayKey else { return }
+        guard let current = guidedPlanStorage,
+              Set(current.sessions.map(\.id)) == baseSessionIDs else { return }
         guidedPlanStorage = plan
+    }
+
+    /// Logs a session of the committed guided plan as done from the guided RUNNER — the Move-root card's
+    /// runner or the Suggest sheet's in-flow runner. The completion belongs to the day (and the
+    /// intensity) the plan was COMMITTED with, not "today": a rest between sets can cross local midnight
+    /// while the runner sheet is open, and filing under the rolled-over day would (a) land the workout on
+    /// the wrong day at a re-derived `.moderate`, and (b) leave the weekday-aliased next-day session
+    /// reading `.allComplete` all day. So it anchors to `guidedPlanDayKey`/`committedGuidedIntensityStorage`
+    /// (read directly, NOT through the today-gated `committedGuidedIntensity`), tags the row so name
+    /// reconciliation only matches the guided flow's own logs, advances progression, and records the
+    /// completion. The retroactive "Mark done" path stays today-anchored (it's only reachable while the
+    /// plan is today's) and logs inline.
+    func completeGuidedRunnerSession(_ session: WorkoutProgram.SessionSuggestion) {
+        let dayKey = guidedPlanDayKey ?? todayKey
+        let intensity = committedGuidedIntensityStorage ?? .moderate
+        var workout = session.workout(intensity: intensity, loggedFromGuidedSession: true)
+        // When the completion lands on an earlier day than today (a midnight-crossing rest), anchor its
+        // timestamps to that day (noon) too, so they match the day bucket it's filed under — the same
+        // back-dating `completePlannedWorkout` uses for a past-dated completion.
+        if dayKey != todayKey,
+           let targetDate = FernletDate.date(fromDayKey: dayKey),
+           let completedAt = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: targetDate) {
+            workout.completedAt = completedAt
+            workout.loggedAt = completedAt
+        }
+        addWorkout(workout, date: dayKey)
+        recordCompletedExercises(session.catalogExerciseNames)
+        markGuidedSessionCompleted(session.id)
     }
 
     /// Records that a session's workout was logged today (guided runner or "Mark done"), excluding it

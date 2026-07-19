@@ -43,7 +43,7 @@ struct MoveView: View {
             GuidedWorkoutCardState.resolve(
                 plan: $0,
                 completed: store.guidedCompletedSessionIDs,
-                loggedWorkoutNames: store.loggedWorkoutNamesToday
+                loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
             )
         }
     }
@@ -56,7 +56,7 @@ struct MoveView: View {
         if let session = GuidedWorkoutAvailability.firstGuidable(
             in: plan,
             excluding: store.guidedCompletedSessionIDs,
-            loggedWorkoutNames: store.loggedWorkoutNamesToday
+            loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
         ) {
             guidedSession = session
         } else {
@@ -221,17 +221,22 @@ struct MoveView: View {
                 session: session,
                 goal: store.settings.selectedGoal,
                 sessionsRemain: store.currentGuidedWorkoutPlan.map { plan in
-                    plan.sessions.contains { $0.id != session.id && !store.guidedCompletedSessionIDs.contains($0.id) }
+                    // Route through the reconciliation seam (not an id-only check) so the done copy stays
+                    // truthful after a relaunch, when the completed-id set is empty but the day record
+                    // (by tagged name) still knows what's been guided.
+                    plan.sessions.contains {
+                        $0.id != session.id && !GuidedWorkoutAvailability.isAlreadyLogged(
+                            $0, completed: store.guidedCompletedSessionIDs,
+                            loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+                        )
+                    }
                 } ?? false,
                 onComplete: {
-                    // Same logging path the Suggest sheet uses, so a guided session counts identically.
-                    // Log with the intensity the plan was committed with (not a re-derived one), so the
-                    // logged workout matches the plan. Recording the id excludes it from any further
-                    // guided run or "Mark done" — in both this card and the Suggest sheet, which read the
-                    // same store state.
-                    store.addWorkout(session.workout(intensity: store.committedGuidedIntensity ?? .moderate))
-                    store.recordCompletedExercises(session.catalogExerciseNames)
-                    store.markGuidedSessionCompleted(session.id)
+                    // The guided runner's completion belongs to the day the plan was committed (a rest can
+                    // cross local midnight while this sheet is open), logged with the committed intensity
+                    // and tagged as a guided log. `completeGuidedRunnerSession` owns all of that plus
+                    // progression and the completed-id record, shared with the Suggest sheet's runner.
+                    store.completeGuidedRunnerSession(session)
                     allDays = store.loadDays()
                 }
             )
@@ -277,28 +282,30 @@ enum GuidedWorkoutAvailability {
     }
 
     /// A session is already accounted for when its id is in the in-memory completed set OR today's
-    /// logged workouts already carry its `suggestion.name`. The name check is the reconciliation seam:
-    /// a routine relaunch mints the plan with fresh session ids and starts the completed set empty, but
-    /// the logged workout (written with `suggestion.name` via `addWorkout`) survives in `day.workouts` —
-    /// so matching on that name keeps an already-logged session from being offered, and re-logged, again.
+    /// GUIDED-logged workouts already carry its `suggestion.name`. The name check is the reconciliation
+    /// seam: a routine relaunch mints the plan with fresh session ids and starts the completed set empty,
+    /// but the guided log (written with `suggestion.name` and tagged `loggedFromGuidedSession`) survives
+    /// in `day.workouts` — so matching on that name keeps an already-logged guided session from being
+    /// offered, and re-logged, again. Only tagged names are passed in, so a manual or planned "Legs"
+    /// never counts.
     static func isAlreadyLogged(
         _ session: WorkoutProgram.SessionSuggestion,
         completed: Set<UUID>,
-        loggedWorkoutNames: Set<String>
+        loggedGuidedWorkoutNames: Set<String>
     ) -> Bool {
-        completed.contains(session.id) || loggedWorkoutNames.contains(session.suggestion.name)
+        completed.contains(session.id) || loggedGuidedWorkoutNames.contains(session.suggestion.name)
     }
 
     /// The first guidable session not already logged today — what a "start guided workout" tap opens.
-    /// `loggedWorkoutNames` reconciles against the day record so a relaunch can't re-open a logged
-    /// session (its fresh id isn't in `completed`, but its name is already logged).
+    /// `loggedGuidedWorkoutNames` reconciles against the day record so a relaunch can't re-open a logged
+    /// session (its fresh id isn't in `completed`, but its name is already guided-logged).
     static func firstGuidable(
         in plan: WorkoutProgram.DayPlan,
         excluding completed: Set<UUID>,
-        loggedWorkoutNames: Set<String> = []
+        loggedGuidedWorkoutNames: Set<String> = []
     ) -> WorkoutProgram.SessionSuggestion? {
         plan.sessions.first {
-            isGuidable($0) && !isAlreadyLogged($0, completed: completed, loggedWorkoutNames: loggedWorkoutNames)
+            isGuidable($0) && !isAlreadyLogged($0, completed: completed, loggedGuidedWorkoutNames: loggedGuidedWorkoutNames)
         }
     }
 }
@@ -319,7 +326,7 @@ enum GuidedWorkoutCardState: Equatable {
     static func resolve(
         plan: WorkoutProgram.DayPlan,
         completed: Set<UUID>,
-        loggedWorkoutNames: Set<String> = []
+        loggedGuidedWorkoutNames: Set<String> = []
     ) -> GuidedWorkoutCardState {
         let guidable = plan.sessions.filter(GuidedWorkoutAvailability.isGuidable)
         guard !guidable.isEmpty else {
@@ -329,7 +336,7 @@ enum GuidedWorkoutCardState: Equatable {
                 : "Rest day. Nothing to push — let your body settle.")
         }
         if let next = guidable.first(where: {
-            !GuidedWorkoutAvailability.isAlreadyLogged($0, completed: completed, loggedWorkoutNames: loggedWorkoutNames)
+            !GuidedWorkoutAvailability.isAlreadyLogged($0, completed: completed, loggedGuidedWorkoutNames: loggedGuidedWorkoutNames)
         }) {
             return .ready(sessionID: next.id)
         }
@@ -338,7 +345,7 @@ enum GuidedWorkoutCardState: Equatable {
         let remainingMovement = plan.sessions.contains { session in
             !GuidedWorkoutAvailability.isGuidable(session)
                 && !session.exercises.isEmpty
-                && !GuidedWorkoutAvailability.isAlreadyLogged(session, completed: completed, loggedWorkoutNames: loggedWorkoutNames)
+                && !GuidedWorkoutAvailability.isAlreadyLogged(session, completed: completed, loggedGuidedWorkoutNames: loggedGuidedWorkoutNames)
         }
         return .allComplete(remainingMovement: remainingMovement)
     }
@@ -801,7 +808,7 @@ struct WorkoutSuggestionSheet: View {
         GuidedWorkoutAvailability.firstGuidable(
             in: plan,
             excluding: guidedCompletedSessionIDs,
-            loggedWorkoutNames: store.loggedWorkoutNamesToday
+            loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
         )
     }
 
@@ -861,13 +868,20 @@ struct WorkoutSuggestionSheet: View {
                     .background(Color.slate.opacity(0.10), in: Capsule())
                 }
                 .buttonStyle(.plain)
+                // Reworking mid-adjustment would let a stale AI result land on a freshly reworked plan;
+                // hold the affordance while an adjustment is in flight (belt to the store-side identity
+                // guard's braces), with gentle copy explaining the brief wait.
+                .disabled(isAdjusting)
                 .accessibilityIdentifier("workout.reworkPlan")
 
-                Text("Nothing's logged yet, so you can rebuild it — adjust your intensity, notes, or equipment.")
+                Text(isAdjusting
+                    ? "Hang on — we'll finish your adjustment first, then you can rework it."
+                    : "Nothing's logged yet, so you can rebuild it — adjust your intensity, notes, or equipment.")
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
             }
+            .opacity(isAdjusting ? 0.5 : 1)
         }
     }
 
@@ -1008,7 +1022,7 @@ struct WorkoutSuggestionSheet: View {
                     !GuidedWorkoutAvailability.isAlreadyLogged(
                         $0,
                         completed: guidedCompletedSessionIDs,
-                        loggedWorkoutNames: store.loggedWorkoutNamesToday
+                        loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
                     )
                 }
                 if remainingSessions.isEmpty {
@@ -1016,10 +1030,13 @@ struct WorkoutSuggestionSheet: View {
                     SheetSaveBar(label: "Close") { dismiss() }
                 } else {
                     SheetSaveBar(label: remainingSessions.count > 1 ? "Mark all done" : "Mark done") {
-                        // Log with the plan's committed intensity, not the drifting readiness signal.
+                        // Retroactive "Mark done": logs the committed plan's sessions to TODAY (this bar is
+                        // only reachable while the plan is today's), with the plan's committed intensity —
+                        // not the drifting readiness signal — and tagged as a guided log so reconciliation
+                        // recognizes them after a relaunch.
                         let intensity = store.committedGuidedIntensity ?? energy
                         for session in remainingSessions {
-                            store.addWorkout(session.workout(intensity: intensity))
+                            store.addWorkout(session.workout(intensity: intensity, loggedFromGuidedSession: true))
                             store.recordCompletedExercises(session.catalogExerciseNames)
                             store.markGuidedSessionCompleted(session.id)
                         }
@@ -1053,11 +1070,16 @@ struct WorkoutSuggestionSheet: View {
                 .presentationCornerRadius(20)
         }
         .sheet(item: $guidedSession, onDismiss: {
-            // Every session in the plan went through the runner (always the case on a
-            // single-session day once it's guided) → nothing left to mark done, so close the whole
-            // Suggest flow. Otherwise stay up so the remaining sessions can be marked.
+            // Every session in the plan is accounted for (always the case on a single-session day once
+            // it's guided) → nothing left to mark done, so close the whole Suggest flow. Routed through
+            // the reconciliation seam (not an id-only check) so it stays correct after a relaunch.
             if let plan = dayPlan, !plan.sessions.isEmpty,
-               plan.sessions.allSatisfy({ guidedCompletedSessionIDs.contains($0.id) }) {
+               plan.sessions.allSatisfy({
+                   GuidedWorkoutAvailability.isAlreadyLogged(
+                       $0, completed: guidedCompletedSessionIDs,
+                       loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+                   )
+               }) {
                 dismiss()
             }
         }) { session in
@@ -1065,18 +1087,20 @@ struct WorkoutSuggestionSheet: View {
                 session: session,
                 goal: store.settings.selectedGoal,
                 sessionsRemain: dayPlan.map { plan in
-                    plan.sessions.contains { $0.id != session.id && !guidedCompletedSessionIDs.contains($0.id) }
+                    // Reconciliation seam, not an id-only check — truthful done copy after a relaunch.
+                    plan.sessions.contains {
+                        $0.id != session.id && !GuidedWorkoutAvailability.isAlreadyLogged(
+                            $0, completed: guidedCompletedSessionIDs,
+                            loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+                        )
+                    }
                 } ?? false,
                 onComplete: {
-                    // Reuse the exact retroactive "Mark done" logging path so the guided session
-                    // counts identically, logging with the plan's committed intensity (not the drifting
-                    // readiness signal). The runner's one-shot latch keeps this from re-firing, and
-                    // recording the ID (on the shared store) keeps both the save bar and the Move-root
-                    // card from logging this session again. Dismissal happens when the user closes the
-                    // done screen.
-                    store.addWorkout(session.workout(intensity: store.committedGuidedIntensity ?? energy))
-                    store.recordCompletedExercises(session.catalogExerciseNames)
-                    store.markGuidedSessionCompleted(session.id)
+                    // Same plan-day-anchored guided completion the Move-root card uses: logs to the day
+                    // the plan was committed with the committed intensity, tagged as a guided log, plus
+                    // progression and the completed-id record. The runner's one-shot latch keeps this from
+                    // re-firing; dismissal happens when the user closes the done screen.
+                    store.completeGuidedRunnerSession(session)
                 }
             )
             .presentationDetents([.large])
@@ -1088,11 +1112,16 @@ struct WorkoutSuggestionSheet: View {
     private func runAdjustment() {
         guard let plan = dayPlan, isAdjusting == false else { return }
         let request = adjustRequest
+        // Identity of the plan this adjustment starts from. An adjustment preserves each session id, so
+        // this set still matches when it resolves — UNLESS the user reworked and committed a different
+        // plan (fresh ids) meanwhile, in which case `replaceGuidedWorkoutPlan` refuses the stale write.
+        let baseSessionIDs = Set(plan.sessions.map(\.id))
         isAdjusting = true
         Task {
             let adjusted = await store.adjustWorkoutDayPlan(plan, request: request)
-            // An adjustment keeps each session's id, so completions stay valid — replace in place.
-            store.replaceGuidedWorkoutPlan(adjusted)
+            // An adjustment keeps each session's id, so completions stay valid — replace in place, but
+            // only if the committed plan is still the one we started from.
+            store.replaceGuidedWorkoutPlan(adjusted, replacing: baseSessionIDs)
             adjustRequest = ""
             isAdjusting = false
         }

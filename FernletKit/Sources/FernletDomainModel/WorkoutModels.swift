@@ -34,6 +34,13 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
     public var unknownMuscleGroupTokens: [String] = []
     public var healthKitUUID: UUID?
     public var plannedWorkoutID: UUID?
+    /// Provenance marker: `true` iff this row was logged by the guided-workout flow (the Move-root
+    /// card runner, the Suggest sheet's runner, or its "Mark done"). It is what lets name-based
+    /// reconciliation match ONLY the guided flow's own rows — a manual Log-sheet entry or a planned
+    /// completion sharing a guided session's name ("Legs", "Push") must not make the guided card claim
+    /// itself done or refuse a rework. `nil` on every non-guided row (and encoded only when set, so
+    /// untagged rows stay byte-identical); never written `false`.
+    public var loggedFromGuidedSession: Bool?
     public var intensity: WorkoutIntensity {
         didSet { unknownIntensityToken = nil }
     }
@@ -85,6 +92,7 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         muscleGroups: Set<MuscleGroup> = [],
         healthKitUUID: UUID? = nil,
         plannedWorkoutID: UUID? = nil,
+        loggedFromGuidedSession: Bool? = nil,
         intensity: WorkoutIntensity,
         completedAt: Date = Date(),
         loggedAt: Date? = nil
@@ -104,6 +112,7 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         self.muscleGroups = muscleGroups
         self.healthKitUUID = healthKitUUID
         self.plannedWorkoutID = plannedWorkoutID
+        self.loggedFromGuidedSession = loggedFromGuidedSession
         self.intensity = intensity
         self.completedAt = completedAt
         self.loggedAt = loggedAt ?? completedAt
@@ -139,6 +148,7 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         unknownMuscleGroupTokens = muscleSplit.unknownTokens
         healthKitUUID = try container.decodeIfPresent(UUID.self, forKey: .healthKitUUID)
         plannedWorkoutID = try container.decodeIfPresent(UUID.self, forKey: .plannedWorkoutID)
+        loggedFromGuidedSession = try container.decodeIfPresent(Bool.self, forKey: .loggedFromGuidedSession)
         // Required key (was strict `decode` pre-compat): absence is corruption, not a newer build.
         let intensitySplit = try container.decodeTolerantRequiredEnum(
             WorkoutIntensity.self, forKey: .intensity, parkedTokenKey: .unknownIntensityToken, default: .moderate)
@@ -169,6 +179,8 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         try container.encode(unknownMuscleGroupTokens, forKey: .unknownMuscleGroupTokens)
         try container.encodeIfPresent(healthKitUUID, forKey: .healthKitUUID)
         try container.encodeIfPresent(plannedWorkoutID, forKey: .plannedWorkoutID)
+        // Encoded only when set (never written `false`), so untagged rows stay byte-identical.
+        try container.encodeIfPresent(loggedFromGuidedSession, forKey: .loggedFromGuidedSession)
         try container.encode(intensity, forKey: .intensity)
         try container.encodeIfPresent(unknownIntensityToken, forKey: .unknownIntensityToken)
         try container.encode(completedAt, forKey: .completedAt)
@@ -178,6 +190,7 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case id, name, type, mode, activityType, exercises, rpe, notes, duration
         case distanceMiles, activeEnergyKcal, effort, muscleGroups, healthKitUUID, plannedWorkoutID
+        case loggedFromGuidedSession
         case intensity, completedAt, loggedAt
         case unknownTypeToken, unknownModeToken, unknownActivityTypeToken
         case unknownMuscleGroupTokens, unknownIntensityToken

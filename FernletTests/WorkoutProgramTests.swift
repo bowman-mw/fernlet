@@ -568,7 +568,7 @@ struct WorkoutProgramTests {
         // unlogged — so the done state flags remaining movement rather than implying the whole day's done.
         #expect(GuidedWorkoutCardState.resolve(plan: day, completed: [am.id, pm.id]) == .allComplete(remainingMovement: true))
         // Once the cardio is logged too (by name), nothing's left and the plain done state stands.
-        #expect(GuidedWorkoutCardState.resolve(plan: day, completed: [am.id, pm.id], loggedWorkoutNames: ["Warm-up"]) == .allComplete(remainingMovement: false))
+        #expect(GuidedWorkoutCardState.resolve(plan: day, completed: [am.id, pm.id], loggedGuidedWorkoutNames: ["Warm-up"]) == .allComplete(remainingMovement: false))
 
         // The shared guidable filter agrees and skips the cardio session outright.
         #expect(GuidedWorkoutAvailability.firstGuidable(in: day, excluding: [])?.id == am.id)
@@ -585,10 +585,10 @@ struct WorkoutProgramTests {
     @Test func cardReconcilesANameMatchedLoggedWorkoutAfterRelaunch() {
         let s = session("Upper", [ex("Bench", sets: 3)])
         // Fresh plan instance, empty completed set — only the day record (by name) knows it's logged.
-        let state = GuidedWorkoutCardState.resolve(plan: plan([s]), completed: [], loggedWorkoutNames: ["Upper"])
+        let state = GuidedWorkoutCardState.resolve(plan: plan([s]), completed: [], loggedGuidedWorkoutNames: ["Upper"])
         #expect(state == .allComplete(remainingMovement: false))
         // …and firstGuidable must not re-offer it, so Start opens nothing to re-log.
-        #expect(GuidedWorkoutAvailability.firstGuidable(in: plan([s]), excluding: [], loggedWorkoutNames: ["Upper"]) == nil)
+        #expect(GuidedWorkoutAvailability.firstGuidable(in: plan([s]), excluding: [], loggedGuidedWorkoutNames: ["Upper"]) == nil)
     }
 
     /// The reconciliation seam is robust to regeneration: two generations of the "same" plan mint
@@ -597,22 +597,22 @@ struct WorkoutProgramTests {
         let first = session("Push", [ex("Bench", sets: 3)])
         let regenerated = session("Push", [ex("Bench", sets: 3)])   // identical content, fresh id
         #expect(first.id != regenerated.id)
-        #expect(GuidedWorkoutAvailability.isAlreadyLogged(regenerated, completed: [first.id], loggedWorkoutNames: []) == false)
-        #expect(GuidedWorkoutAvailability.isAlreadyLogged(regenerated, completed: [], loggedWorkoutNames: ["Push"]) == true)
+        #expect(GuidedWorkoutAvailability.isAlreadyLogged(regenerated, completed: [first.id], loggedGuidedWorkoutNames: []) == false)
+        #expect(GuidedWorkoutAvailability.isAlreadyLogged(regenerated, completed: [], loggedGuidedWorkoutNames: ["Push"]) == true)
     }
 
-    /// Finding 1 through the real store: logging a session's workout (exactly as the guided onComplete
-    /// does) leaves the day record carrying its name, so a fresh plan instance with an EMPTY completed
-    /// set still resolves to done via `store.loggedWorkoutNamesToday`.
-    @Test func loggedWorkoutNamesTodayReconcilesTheCardAfterRelaunch() {
+    /// Finding 1 through the real store: logging a TAGGED guided workout (exactly as the guided
+    /// onComplete does) leaves the day record carrying its name, so a fresh plan instance with an EMPTY
+    /// completed set still resolves to done via `store.loggedGuidedWorkoutNamesToday`.
+    @Test func loggedGuidedWorkoutNamesTodayReconcilesTheCardAfterRelaunch() {
         let store = makeTestStore()
         let s = session("Upper", [ex("Bench", sets: 3)])
-        store.addWorkout(s.workout(intensity: .moderate))
-        #expect(store.loggedWorkoutNamesToday.contains("Upper"))
+        store.addWorkout(s.workout(intensity: .moderate, loggedFromGuidedSession: true))
+        #expect(store.loggedGuidedWorkoutNamesToday.contains("Upper"))
         let state = GuidedWorkoutCardState.resolve(
             plan: plan([s]),
             completed: store.guidedCompletedSessionIDs,   // empty on a fresh run
-            loggedWorkoutNames: store.loggedWorkoutNamesToday
+            loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
         )
         #expect(state == .allComplete(remainingMovement: false))
     }
@@ -640,15 +640,19 @@ struct WorkoutProgramTests {
         #expect(store.currentGuidedWorkoutPlan != nil)
     }
 
-    /// Finding 2 invariant, relaunch flavor: a session logged only in the day record (no recorded id)
-    /// still pins the plan, because rework's guard also reconciles against `loggedWorkoutNamesToday`.
+    /// Finding 2 invariant, relaunch flavor: a guided session logged only in the day record (no recorded
+    /// id) still pins the plan, because rework's guard also reconciles against
+    /// `loggedGuidedWorkoutNamesToday`.
     @Test func reworkRefusesWhenAPlanSessionIsLoggedByNameOnly() {
         let store = makeTestStore()
         _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)   // pins today's day key
         let s = session("Upper", [ex("Bench", sets: 3)])
-        store.replaceGuidedWorkoutPlan(plan([s]))                   // a committed plan with a known session
+        // Inject a committed plan with a known session (its ids match the plan being replaced).
+        let baseIDs = Set(store.currentGuidedWorkoutPlan!.sessions.map(\.id))
+        store.replaceGuidedWorkoutPlan(plan([s]), replacing: baseIDs)
         #expect(store.canReworkTodaysGuidedPlan == true)
-        store.addWorkout(s.workout(intensity: .hard))              // relaunch-style: only the day record knows
+        // Relaunch-style: only the day record knows, and only a TAGGED guided log reconciles.
+        store.addWorkout(s.workout(intensity: .hard, loggedFromGuidedSession: true))
         #expect(store.guidedCompletedSessionIDs.isEmpty)
         #expect(store.canReworkTodaysGuidedPlan == false)
         #expect(store.reworkTodaysGuidedPlan() == false)
@@ -702,7 +706,8 @@ struct WorkoutProgramTests {
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
         _ = store.refreshCurrentDayIfNeeded(now: tomorrow)
         #expect(store.currentGuidedWorkoutPlan == nil)
-        store.replaceGuidedWorkoutPlan(plan([session("Upper", [ex("Bench", sets: 3)])]))
+        // The day guard fires first (the plan no longer belongs to today), before the identity check.
+        store.replaceGuidedWorkoutPlan(plan([session("Upper", [ex("Bench", sets: 3)])]), replacing: [])
         #expect(store.currentGuidedWorkoutPlan == nil)
     }
 
@@ -715,5 +720,78 @@ struct WorkoutProgramTests {
         #expect(store.currentGuidedWorkoutPlan != nil)
         #expect(store.reworkTodaysGuidedPlan() == true)   // releasable — nothing logged
         #expect(store.currentGuidedWorkoutPlan == nil)
+    }
+
+    // MARK: - Guided tag, plan-day anchoring, and adjustment identity (guided-flow review fixes)
+
+    /// New finding 1: a manual Log-sheet entry OR a planned-workout completion that shares a guided
+    /// session's name ("Legs") is UNTAGGED, so it must not make the guided flow claim itself done and
+    /// must not block a rework. Only a tagged guided log reconciles.
+    @Test func manualOrPlannedLogSharingAGuidedNameDoesNotBrickTheGuidedFlow() {
+        let store = makeTestStore()
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)
+        let s = session("Legs", [ex("Squat", sets: 3)])
+        store.replaceGuidedWorkoutPlan(plan([s]), replacing: Set(store.currentGuidedWorkoutPlan!.sessions.map(\.id)))
+
+        // A manual Log-sheet "Legs" (untagged) — not the guided flow's own row.
+        store.addWorkout(Workout(name: "Legs", type: .lower, exercises: "", rpe: nil, notes: "", duration: nil, intensity: .moderate))
+        #expect(store.loggedGuidedWorkoutNamesToday.contains("Legs") == false)
+        #expect(GuidedWorkoutAvailability.isAlreadyLogged(s, completed: [], loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday) == false)
+        #expect(store.canReworkTodaysGuidedPlan == true, "a manual same-name log must not brick the guided flow")
+
+        // A planned-workout completion named "Legs" (carries plannedWorkoutID, still untagged) — same.
+        let planned = PlannedWorkout(name: "Legs", split: .legs, source: .user, notes: "", duration: nil)
+        store.completePlannedWorkout(planned, date: store.todayKey)
+        #expect(store.loggedGuidedWorkoutNamesToday.contains("Legs") == false)
+        #expect(store.canReworkTodaysGuidedPlan == true, "a planned same-name completion must not brick the guided flow")
+    }
+
+    /// New finding 2: a guided completion belongs to the day its plan was committed. When a rest crosses
+    /// local midnight between commit and completion, the workout must file under the committed day (not
+    /// the rolled-over "today") and carry the committed intensity — so the day it belongs to is coherent
+    /// and the weekday-aliased next day resolves fresh.
+    @Test func guidedRunnerCompletionAnchorsToThePlansCommittedDayAndIntensityAfterRollover() {
+        let store = makeTestStore()
+        let base = store.todayKey
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)     // committed on `base`, at .hard
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        _ = store.refreshCurrentDayIfNeeded(now: tomorrow)            // midnight crossed while the sheet was open
+        #expect(store.todayKey != base)
+        #expect(store.currentGuidedWorkoutPlan == nil)               // reads through nil on the new day
+
+        store.completeGuidedRunnerSession(session("Upper", [ex("Bench", sets: 3)]))
+
+        // Filed under the committed day (`base`), tagged, at the committed intensity — NOT today.
+        let onBase = store.loadDay(for: base).workouts.first { $0.name == "Upper" }
+        #expect(onBase != nil, "guided completion must land on the plan's committed day")
+        #expect(onBase?.intensity == .hard, "must log the committed intensity, not a re-derived .moderate")
+        #expect(onBase?.loggedFromGuidedSession == true)
+        #expect(store.day.workouts.contains { $0.name == "Upper" } == false, "must not file under the rolled-over day")
+    }
+
+    /// New finding 3: an AI adjustment kicked off against plan P1 must not clobber a plan P2 the user
+    /// reworked-and-committed while the adjustment was in flight. `replaceGuidedWorkoutPlan` refuses when
+    /// the committed plan's identity (its session-id set) no longer matches the one the adjustment began
+    /// from; it still applies when the plan is unchanged.
+    @Test func replaceGuidedPlanRefusesWhenCommittedPlanChangedSinceAdjustmentBegan() {
+        let store = makeTestStore()
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)     // P1
+        let baseIDs = Set(store.currentGuidedWorkoutPlan!.sessions.map(\.id))
+
+        // Positive path first: an adjustment that preserves the ids (unchanged committed plan) applies.
+        var adjusted = store.currentGuidedWorkoutPlan!
+        adjusted.dayTitle = "Adjusted!"
+        store.replaceGuidedWorkoutPlan(adjusted, replacing: baseIDs)
+        #expect(store.currentGuidedWorkoutPlan?.dayTitle == "Adjusted!")
+
+        // Now the user reworks and commits a different plan (P2, fresh session ids)…
+        #expect(store.reworkTodaysGuidedPlan() == true)
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .light)    // P2
+        let p2IDs = store.currentGuidedWorkoutPlan?.sessions.map(\.id)
+
+        // …and the stale P1 adjustment finally resolves — it must be refused, leaving P2 intact.
+        store.replaceGuidedWorkoutPlan(plan([session("StaleP1", [ex("Bench", sets: 3)])]), replacing: baseIDs)
+        #expect(store.currentGuidedWorkoutPlan?.sessions.map(\.id) == p2IDs, "a stale adjustment must not clobber the reworked plan")
+        #expect(store.currentGuidedWorkoutPlan?.sessions.contains { $0.suggestion.name == "StaleP1" } == false)
     }
 }

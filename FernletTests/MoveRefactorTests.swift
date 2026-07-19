@@ -230,6 +230,23 @@ struct MoveRefactorTests {
         #expect(decoded.plannedWorkoutID == plannedWorkoutID)
     }
 
+    @Test func workoutRoundTripsWithAndWithoutGuidedTag() throws {
+        // Tagged guided log: the flag survives a round-trip.
+        let tagged = Workout(name: "Legs", type: .lower, exercises: "", rpe: nil, notes: "",
+                             duration: nil, loggedFromGuidedSession: true, intensity: .hard)
+        let taggedData = try JSONEncoder().encode(tagged)
+        #expect(try JSONDecoder().decode(Workout.self, from: taggedData).loggedFromGuidedSession == true)
+
+        // Untagged (the default): decodes back to nil, and the key is OMITTED from the blob so existing
+        // rows stay byte-identical.
+        let untagged = Workout(name: "Legs", type: .lower, exercises: "", rpe: nil, notes: "",
+                               duration: nil, intensity: .hard)
+        let untaggedData = try JSONEncoder().encode(untagged)
+        #expect(try JSONDecoder().decode(Workout.self, from: untaggedData).loggedFromGuidedSession == nil)
+        let json = String(data: untaggedData, encoding: .utf8) ?? ""
+        #expect(!json.contains("loggedFromGuidedSession"), "untagged rows must not encode the guided marker")
+    }
+
     @Test func inferredCategoryFavorsActivityTypeWhenActivityMode() {
         let workout = Workout(
             name: "Ride",
