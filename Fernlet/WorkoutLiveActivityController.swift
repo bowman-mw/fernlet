@@ -29,7 +29,7 @@ final class WorkoutLiveActivityController {
         do {
             activity = try Activity.request(
                 attributes: attributes,
-                content: ActivityContent(state: state, staleDate: nil)
+                content: ActivityContent(state: state, staleDate: state.staleDate(postedAt: Date()))
             )
         } catch {
             // Silent degrade: the in-app sheet remains the experience.
@@ -37,10 +37,13 @@ final class WorkoutLiveActivityController {
         }
     }
 
-    /// Push a fresh snapshot on a set/exercise transition. No-op if nothing is live.
+    /// Push a fresh snapshot on a set/exercise transition. No-op if nothing is live. A real `staleDate`
+    /// rides along so a jetsammed/force-quit process can't leave a frozen card on the Lock Screen for
+    /// hours — the widget dims to a gentle "paused" state once the snapshot goes stale.
     func update(state: WorkoutActivityAttributes.ContentState) {
         guard let activity else { return }
-        Task { await activity.update(ActivityContent(state: state, staleDate: nil)) }
+        let content = ActivityContent(state: state, staleDate: state.staleDate(postedAt: Date()))
+        Task { await activity.update(content) }
     }
 
     /// End the activity with a brief final state and dismiss the Lock Screen card immediately, so no
@@ -94,5 +97,31 @@ extension WorkoutActivityAttributes.ContentState {
             exerciseIndex: runner.exerciseIndex,
             totalExercises: runner.totalExercises
         )
+    }
+
+    /// Named stale-date budgets. These are deliberately generous: a legitimate long rest or long set
+    /// never trips them. They exist only to retire an *orphaned* activity (the process was jetsammed
+    /// while the user watched the Lock Screen countdown, or force-quit) instead of leaving a frozen
+    /// card on screen until the system's multi-hour auto-end.
+    enum Staleness {
+        /// While RESTING, stay fresh until this long PAST the rest deadline. Over-resting is a designed
+        /// state, so we don't mark stale the instant the timer hits 0:00 — ten minutes sits well beyond
+        /// any real between-set rest, so only a dead process ever reaches it.
+        static let restGrace: TimeInterval = 10 * 60
+        /// While WORKING, stay fresh for at most this long from when the snapshot was posted. A real set
+        /// runs a few minutes; thirty is long enough never to clip a genuine set, short enough that a
+        /// dead process stops haunting the Lock Screen within the half hour.
+        static let workingCap: TimeInterval = 30 * 60
+    }
+
+    /// When this snapshot should be treated as stale (paused/orphaned), given when it is being posted.
+    /// Pure and total, so it is unit-testable without a clock. Resting → the rest deadline plus a
+    /// grace; working (or a resting snapshot that is somehow missing its window) → the posting time
+    /// plus a generous single-step cap.
+    func staleDate(postedAt now: Date) -> Date {
+        if phase == .resting, let end = restEndsAt {
+            return end.addingTimeInterval(Staleness.restGrace)
+        }
+        return now.addingTimeInterval(Staleness.workingCap)
     }
 }

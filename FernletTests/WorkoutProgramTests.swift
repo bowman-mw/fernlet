@@ -463,6 +463,46 @@ struct WorkoutProgramTests {
         #expect(start <= end)                      // degenerate but valid: start...start
     }
 
+    // MARK: - Stale-date budget (orphaned-activity retirement)
+
+    /// While resting, the activity stays fresh until a grace PAST the rest deadline — never stale the
+    /// instant the timer hits 0:00, because over-resting is a designed state.
+    @Test func staleDateWhileRestingIsTheDeadlinePlusAGrace() throws {
+        let runner = makeRunner([ex("Squat", sets: 3, reps: "5")], restSeconds: 90)
+        runner.start()
+        runner.completeSet()                       // → resting
+        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        let end = try #require(state.restEndsAt)
+        // The resting branch keys off the rest deadline, not the posting time, so `postedAt` is moot.
+        let stale = state.staleDate(postedAt: Date(timeIntervalSince1970: 9_999))
+        #expect(stale == end.addingTimeInterval(WorkoutActivityAttributes.ContentState.Staleness.restGrace))
+        #expect(stale > end)                       // a live 0:00 is never treated as stale
+    }
+
+    /// While working, the activity stays fresh for the working cap measured from when it was posted —
+    /// long enough never to clip a real set, short enough a dead process can't haunt the Lock Screen.
+    @Test func staleDateWhileWorkingIsPostingTimePlusTheCap() {
+        let runner = makeRunner([ex("Squat", sets: 3, reps: "5")])
+        runner.start()                             // → working
+        let state = WorkoutActivityAttributes.ContentState(runner: runner)
+        let posted = Date(timeIntervalSince1970: 5_000)
+        #expect(state.staleDate(postedAt: posted)
+                == posted.addingTimeInterval(WorkoutActivityAttributes.ContentState.Staleness.workingCap))
+    }
+
+    /// Defensive: a resting snapshot that is somehow missing its window falls back to the working cap
+    /// rather than trapping — the helper is total.
+    @Test func staleDateFallsBackToTheCapWhenRestingHasNoWindow() {
+        let state = WorkoutActivityAttributes.ContentState(
+            exerciseName: "Squat", setNumber: 2, totalSets: 3, reps: "5",
+            phase: .resting, restStartedAt: nil, restEndsAt: nil,
+            exerciseIndex: 0, totalExercises: 1
+        )
+        let posted = Date(timeIntervalSince1970: 5_000)
+        #expect(state.staleDate(postedAt: posted)
+                == posted.addingTimeInterval(WorkoutActivityAttributes.ContentState.Staleness.workingCap))
+    }
+
     // MARK: Move-root "Start today's workout" card availability
 
     private func session(_ name: String, _ exercises: [PrescribedExercise], kind: SessionKind = .strength) -> WorkoutProgram.SessionSuggestion {

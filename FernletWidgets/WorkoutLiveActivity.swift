@@ -19,11 +19,14 @@ struct WorkoutLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WorkoutActivityAttributes.self) { context in
             // Lock Screen / banner: cream card + ink text, matching the app's identity.
-            WorkoutLockScreenView(attributes: context.attributes, state: context.state)
+            WorkoutLockScreenView(attributes: context.attributes, state: context.state, isStale: context.isStale)
                 .activityBackgroundTint(FernletWidgetPalette.card)
                 .activitySystemActionForegroundColor(FernletWidgetPalette.buttonFill)
         } dynamicIsland: { context in
             let state = context.state
+            // Orphaned (jetsammed / force-quit) activities go stale; render a gentle "paused" register
+            // instead of a frozen live timer or a stale "Set X of Y".
+            let isStale = context.isStale
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Label {
@@ -33,11 +36,12 @@ struct WorkoutLiveActivity: Widget {
                             .lineLimit(1)
                     } icon: {
                         Image(systemName: "leaf.fill")
-                            .foregroundStyle(FernletWidgetPalette.leaf)
+                            .foregroundStyle(isStale ? FernletWidgetPalette.leaf.opacity(0.5) : FernletWidgetPalette.leaf)
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    if !isSimpleStep(state) {
+                    // No live "Set X of Y" once the snapshot is stale — it would read as if still going.
+                    if !isStale && !isSimpleStep(state) {
                         Text("Set \(state.setNumber) of \(state.totalSets)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -45,14 +49,28 @@ struct WorkoutLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    Text(state.phase == .resting ? "Rest" : state.exerciseName)
-                        .font(.headline)
-                        .foregroundStyle(state.phase == .resting ? FernletWidgetPalette.leaf : .primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                    if isStale {
+                        Text("Paused")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else {
+                        Text(state.phase == .resting ? "Rest" : state.exerciseName)
+                            .font(.headline)
+                            .foregroundStyle(state.phase == .resting ? FernletWidgetPalette.leaf : .primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    if state.phase == .resting {
+                    if isStale {
+                        Text("Open Fernlet to pick it back up")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                    } else if state.phase == .resting {
                         VStack(spacing: 2) {
                             RestCountdownText(state: state,
                                               font: .system(size: 40, weight: .semibold, design: .rounded),
@@ -72,9 +90,13 @@ struct WorkoutLiveActivity: Widget {
                 }
             } compactLeading: {
                 Image(systemName: "leaf.fill")
-                    .foregroundStyle(FernletWidgetPalette.leaf)
+                    .foregroundStyle(isStale ? FernletWidgetPalette.leaf.opacity(0.5) : FernletWidgetPalette.leaf)
             } compactTrailing: {
-                if state.phase == .resting {
+                if isStale {
+                    // Degrade to a still pause glyph — never a frozen timer or set count.
+                    Image(systemName: "pause.circle")
+                        .foregroundStyle(.secondary)
+                } else if state.phase == .resting {
                     RestCountdownText(state: state,
                                       font: .caption2.monospacedDigit(),
                                       color: .primary)
@@ -89,10 +111,16 @@ struct WorkoutLiveActivity: Widget {
                         .foregroundStyle(FernletWidgetPalette.leaf)
                 }
             } minimal: {
-                if state.phase == .resting {
+                if isStale {
+                    Image(systemName: "pause.fill")
+                        .foregroundStyle(FernletWidgetPalette.leaf.opacity(0.5))
+                } else if state.phase == .resting {
+                    // The minimal slot is a tiny circle: clamp the timer's width and scale digits down,
+                    // or the Text reserves room for its widest possible value ("88:88") and overflows.
                     RestCountdownText(state: state,
                                       font: .caption2.monospacedDigit(),
-                                      color: FernletWidgetPalette.leaf)
+                                      color: FernletWidgetPalette.leaf,
+                                      maxWidth: 34)
                 } else {
                     Image(systemName: "leaf.fill")
                         .foregroundStyle(FernletWidgetPalette.leaf)
@@ -128,8 +156,23 @@ private struct RestCountdownText: View {
     let state: WorkoutActivityAttributes.ContentState
     var font: Font
     var color: Color
+    /// Minimal Dynamic Island slot only: clamp the timer to a tiny width and scale digits to fit. A
+    /// timer `Text` reserves width for its widest possible value, so without this it overflows the
+    /// minimal circle. Left `nil` everywhere the slot has room.
+    var maxWidth: CGFloat? = nil
 
     var body: some View {
+        if let maxWidth {
+            content
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(maxWidth: maxWidth)
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         if state.phase == .resting,
            let start = state.restStartedAt,
            let end = state.restEndsAt,
@@ -152,8 +195,50 @@ private struct RestCountdownText: View {
 private struct WorkoutLockScreenView: View {
     let attributes: WorkoutActivityAttributes
     let state: WorkoutActivityAttributes.ContentState
+    /// The activity outlived its process (jetsam / force-quit) and its snapshot is stale — render a
+    /// dimmed, gentle "paused" card rather than a frozen live timer.
+    var isStale: Bool = false
 
     var body: some View {
+        if isStale {
+            stalePausedCard
+        } else {
+            liveCard
+        }
+    }
+
+    /// Dimmed, no-pressure resting-place for an orphaned activity. No timer, no "Set X of Y".
+    private var stalePausedCard: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 5) {
+                Label {
+                    Text(attributes.workoutTitle)
+                        .font(.caption)
+                        .foregroundStyle(FernletWidgetPalette.inkSoft)
+                        .lineLimit(1)
+                } icon: {
+                    Image(systemName: "leaf.fill")
+                        .font(.caption)
+                        .foregroundStyle(FernletWidgetPalette.buttonFill.opacity(0.5))
+                }
+                Text("Paused")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(FernletWidgetPalette.inkSoft)
+                Text("Open Fernlet to pick it back up")
+                    .font(.subheadline)
+                    .foregroundStyle(FernletWidgetPalette.inkSoft)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "pause.circle")
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(FernletWidgetPalette.buttonFill.opacity(0.45))
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+    }
+
+    private var liveCard: some View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 5) {
                 Label {
@@ -208,19 +293,24 @@ private struct ExerciseProgressDots: View {
     let index: Int
     let total: Int
 
-    private var clampedTotal: Int { max(1, min(total, 8)) }
-    private var clampedIndex: Int { max(0, min(index, clampedTotal - 1)) }
+    // Dots are capped at 8 so a long session can't overflow the card…
+    private var dotTotal: Int { max(1, min(total, 8)) }
+    private var dotIndex: Int { max(0, min(index, dotTotal - 1)) }
+    // …but the LABEL reports the true position, uncapped — a 10-exercise day reads "Exercise 10 of 10",
+    // never a clamped "Exercise 8 of 8".
+    private var labelTotal: Int { max(1, total) }
+    private var labelIndex: Int { max(0, min(index, labelTotal - 1)) }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            Text("Exercise \(clampedIndex + 1) of \(clampedTotal)")
+            Text("Exercise \(labelIndex + 1) of \(labelTotal)")
                 .font(.caption2)
                 .foregroundStyle(FernletWidgetPalette.inkSoft)
                 .lineLimit(1)
             HStack(spacing: 4) {
-                ForEach(0..<clampedTotal, id: \.self) { i in
+                ForEach(0..<dotTotal, id: \.self) { i in
                     Circle()
-                        .fill(i <= clampedIndex
+                        .fill(i <= dotIndex
                               ? FernletWidgetPalette.buttonFill
                               : FernletWidgetPalette.buttonFill.opacity(0.22))
                         .frame(width: 6, height: 6)

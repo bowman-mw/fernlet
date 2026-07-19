@@ -180,8 +180,10 @@ final class WorkoutSessionRunner {
 /// a live rest countdown between sets. On natural completion it logs the session through the same
 /// path the retroactive "Mark done" button uses (via `onComplete`), so the workout still counts.
 ///
-/// (A Lock Screen / Dynamic Island Live Activity for this flow is intentionally NOT part of this
-/// build — it needs a real device — so nothing here promises one.)
+/// A Lock Screen / Dynamic Island Live Activity mirrors this flow, with a lifetime equal to this
+/// sheet's: `WorkoutLiveActivityController` starts it on the first working set, `update`s it on each
+/// set/exercise transition (via `syncLiveActivity`), and `end`s it on natural finish, abandon, or the
+/// sheet's `onDisappear`. It degrades silently to in-app-only when Live Activities are disabled.
 struct GuidedWorkoutSheet: View {
     @Environment(\.dismiss) private var dismiss
 
