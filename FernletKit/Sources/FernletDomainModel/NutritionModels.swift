@@ -1224,8 +1224,14 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
     public var macros: Macros
     public var micronutrients: Micronutrients
 
-    public var sourceURL: URL {
-        URL(string: sourceURLString) ?? URL(fileURLWithPath: "/")
+    /// The parsed source link, or `nil` when there's no usable one. An absent or unparseable
+    /// `sourceURLString` (e.g. the decode default of `""`) returns `nil` rather than fabricating a
+    /// `file:///` URL — a "no source" recipe should render no link at all, and a fabricated file URL
+    /// would crash `SFSafariViewController` if it ever reached an in-app Safari sheet. Scheme
+    /// filtering (only http/https is safe to open) stays a presentation-layer concern.
+    public var sourceURL: URL? {
+        guard !sourceURLString.isEmpty else { return nil }
+        return URL(string: sourceURLString)
     }
 
     public init(

@@ -165,6 +165,55 @@ struct RecipeShareCodecTests {
         }
     }
 
+    // MARK: - Safari-presentable URL guard (SFSafariViewController crashes on non-http(s) URLs)
+
+    @Test func safariPresentableGuardAcceptsWebSchemesOnly() throws {
+        // http/https are the only schemes SFSafariViewController accepts.
+        #expect(try #require(URL(string: "https://example.com/recipe")).isSafariPresentable)
+        #expect(try #require(URL(string: "http://example.com/recipe")).isSafariPresentable)
+        #expect(try #require(URL(string: "HTTPS://EXAMPLE.COM")).isSafariPresentable)   // scheme is case-insensitive
+        // Everything else must be rejected — these are exactly the shapes that crash the Safari sheet.
+        #expect(!(try #require(URL(string: "file:///etc/passwd")).isSafariPresentable))
+        #expect(!URL(fileURLWithPath: "/").isSafariPresentable)
+        #expect(!(try #require(URL(string: "javascript:alert(1)")).isSafariPresentable))
+        #expect(!(try #require(URL(string: "tel:1")).isSafariPresentable))
+        #expect(!(try #require(URL(string: "recipes.html")).isSafariPresentable))       // schemeless relative
+    }
+
+    @MainActor
+    @Test func importProximitySavedRecipeBlanksNonWebSourceURLButKeepsRecipe() throws {
+        let store = makeTestStore()
+        // A peer sends a saved recipe whose source URL is a file:// path — a real string that parses via
+        // URL(string:) but would crash the in-app Safari sheet. The recipe must survive; only the bad
+        // source link is blanked to "no source".
+        let malicious = RecipeDefinition(
+            name: "Shared Bowl",
+            servings: 2,
+            ingredients: [],
+            notes: "From a friend.",
+            source: MealLogSource.webImport,
+            createdAt: Date(timeIntervalSince1970: 1_779_664_800),
+            updatedAt: Date(timeIntervalSince1970: 1_779_664_800),
+            webImport: RecipeWebImport(
+                sourceURLString: "file:///etc/passwd",
+                ingredientLines: ["Oats", "Yogurt"],
+                macros: Macros(protein: 20, carbs: 30, fat: 5),
+                micronutrients: Micronutrients()
+            )
+        )
+        let payload = RecipeShareCodec.proximityPayload(for: malicious, foodItems: [])
+
+        let importedName = try store.importProximityRecipeShare(payload)
+        let imported = try #require(store.savedRecipes.first)
+        let importedWebImport = try #require(imported.webImport)
+
+        #expect(importedName == "Shared Bowl")
+        #expect(imported.name == "Shared Bowl")
+        #expect(importedWebImport.ingredientLines == ["Oats", "Yogurt"])   // recipe body preserved
+        #expect(importedWebImport.sourceURLString == "")                    // bad URL blanked
+        #expect(importedWebImport.sourceURL == nil)                         // derived link is now absent
+    }
+
     // MARK: - Retained trust policy enforces revoked keys at the envelope layer
     //
     // Regression for the manager-side weak-trust-policy deallocation (cloned from the heart-manager bug):

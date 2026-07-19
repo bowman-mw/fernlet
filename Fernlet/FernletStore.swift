@@ -2365,12 +2365,23 @@ final class FernletStore {
             guard let text = String(data: data, encoding: .utf8) else { throw RecipeImportError.invalidPayload }
             importedName = try importRecipe(from: text).name
         case .saved:
-            guard let savedPayload = payload.recipe.saved,
-                  URL(string: savedPayload.sourceURLString) != nil else {
+            guard let savedPayload = payload.recipe.saved else {
                 throw RecipeImportError.invalidPayload
             }
             let trimmedName = savedPayload.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmedName.isEmpty else { throw RecipeImportError.emptyRecipe }
+            // Sanitize the shared source link in place rather than rejecting the whole recipe (matching how
+            // the name/summary are trimmed above). A peer can send any string here — a file:///, javascript:,
+            // tel:, or schemeless value would later crash the in-app Safari sheet (SFSafariViewController
+            // only accepts http/https). Anything that isn't a real web link is blanked to "no source"; an
+            // empty/absent string was always allowed and stays allowed.
+            let sanitizedSourceURLString: String = {
+                let trimmed = savedPayload.sourceURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty,
+                      let url = URL(string: trimmed),
+                      url.isSafariPresentable else { return "" }
+                return trimmed
+            }()
             let now = Date()
             let recipe = RecipeDefinition(
                 name: trimmedName,
@@ -2381,7 +2392,7 @@ final class FernletStore {
                 createdAt: now,
                 updatedAt: now,
                 webImport: RecipeWebImport(
-                    sourceURLString: savedPayload.sourceURLString,
+                    sourceURLString: sanitizedSourceURLString,
                     ingredientLines: savedPayload.ingredients,
                     macros: Macros(
                         protein: max(savedPayload.protein, 0),

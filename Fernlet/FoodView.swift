@@ -504,19 +504,28 @@ struct SavedRecipeNotesSheet: View {
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                         if let sourceURL = webImport?.sourceURL {
-                            Button {
-                                showingSafari = true
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "safari")
-                                        .font(.caption)
-                                    Text(sourceURL.host() ?? sourceURL.absoluteString)
-                                        .font(.fernlet(.labelSmall))
-                                        .underline()
+                            if sourceURL.isSafariPresentable {
+                                Button {
+                                    showingSafari = true
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "safari")
+                                            .font(.caption)
+                                        Text(sourceURL.host() ?? sourceURL.absoluteString)
+                                            .font(.fernlet(.labelSmall))
+                                            .underline()
+                                    }
+                                    .foregroundStyle(Color.fern)
                                 }
-                                .foregroundStyle(Color.fern)
+                                .buttonStyle(.plain)
+                            } else {
+                                // A non-web source link (e.g. a file URL) can't open in an in-app Safari
+                                // sheet, so it's shown as calm, non-tappable text rather than a dead button.
+                                Text(sourceURL.host() ?? sourceURL.absoluteString)
+                                    .font(.fernlet(.labelSmall))
+                                    .foregroundStyle(Color.slate)
+                                    .lineLimit(1)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
 
@@ -584,7 +593,7 @@ struct SavedRecipeNotesSheet: View {
         }
         .background(Color.parchment)
         .sheet(isPresented: $showingSafari) {
-            if let sourceURL = webImport?.sourceURL {
+            if let sourceURL = webImport?.sourceURL, sourceURL.isSafariPresentable {
                 SafariView(url: sourceURL)
                     .ignoresSafeArea()
             }
@@ -2009,13 +2018,15 @@ struct FoodProductReviewSheet: View {
                         nutritionSummary(product)
                     }
 
-                    Button {
-                        showingSafari = true
-                    } label: {
-                        Label("Open page", systemImage: "safari")
-                            .frame(maxWidth: .infinity)
+                    if preview.sourceURL.isSafariPresentable {
+                        Button {
+                            showingSafari = true
+                        } label: {
+                            Label("Open page", systemImage: "safari")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    .buttonStyle(.bordered)
 
                     Button {
                         dismiss()
@@ -2038,8 +2049,10 @@ struct FoodProductReviewSheet: View {
         .background(Color.parchment)
         #if canImport(SafariServices)
         .sheet(isPresented: $showingSafari) {
-            SafariView(url: preview.sourceURL)
-                .ignoresSafeArea()
+            if preview.sourceURL.isSafariPresentable {
+                SafariView(url: preview.sourceURL)
+                    .ignoresSafeArea()
+            }
         }
         #endif
     }
@@ -2746,7 +2759,7 @@ struct RecipeDetailView: View {
         }
         .destructiveConfirmation($pendingDestructiveAction)
         .sheet(isPresented: $showingSafari) {
-            if let sourceURL = recipe.webImport?.sourceURL {
+            if let sourceURL = recipe.webImport?.sourceURL, sourceURL.isSafariPresentable {
                 SafariView(url: sourceURL)
                     .ignoresSafeArea()
             }
@@ -2854,19 +2867,30 @@ struct RecipeDetailView: View {
                             }
                         }
                     }
-                    Button {
-                        showingSafari = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "safari").font(.caption)
-                            Text(webImport.sourceURL.host() ?? webImport.sourceURL.absoluteString)
+                    if let sourceURL = webImport.sourceURL {
+                        if sourceURL.isSafariPresentable {
+                            Button {
+                                showingSafari = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "safari").font(.caption)
+                                    Text(sourceURL.host() ?? sourceURL.absoluteString)
+                                        .font(.fernlet(.labelSmall))
+                                        .underline()
+                                }
+                                .foregroundStyle(Color.fern)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 2)
+                        } else {
+                            // Non-web source (e.g. a file URL) can't open in Safari — show it as plain text.
+                            Text(sourceURL.host() ?? sourceURL.absoluteString)
                                 .font(.fernlet(.labelSmall))
-                                .underline()
+                                .foregroundStyle(Color.slate)
+                                .lineLimit(1)
+                                .padding(.top, 2)
                         }
-                        .foregroundStyle(Color.fern)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.top, 2)
                 }
             }
         } else {
@@ -3406,10 +3430,25 @@ import FernletDomainModel
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
 
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        SFSafariViewController(url: url)
+    func makeUIViewController(context: Context) -> UIViewController {
+        // Belt-and-braces: SFSafariViewController raises NSInvalidArgumentException for any non-http(s)
+        // URL, so a malformed source link that slipped past the call-site guard falls back to an empty
+        // controller instead of crashing the app. Presentation sites should still gate on
+        // `URL.isSafariPresentable` so this branch is never actually reached.
+        guard url.isSafariPresentable else { return UIViewController() }
+        return SFSafariViewController(url: url)
     }
 
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
 }
 #endif
+
+extension URL {
+    /// `SFSafariViewController` only accepts http/https URLs — any other scheme (`file:`, `javascript:`,
+    /// `tel:`, or a schemeless string) raises `NSInvalidArgumentException` on presentation. Every source
+    /// link must gate on this before it's made tappable or handed to `SafariView`.
+    var isSafariPresentable: Bool {
+        guard let scheme = scheme?.lowercased() else { return false }
+        return scheme == "http" || scheme == "https"
+    }
+}
