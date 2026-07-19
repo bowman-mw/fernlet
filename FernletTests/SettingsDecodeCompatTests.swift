@@ -274,6 +274,174 @@ struct SettingsDecodeCompatTests {
         #expect(settings.unknownHomeWidgetTokens == (0..<16).map { "future\($0)" })
     }
 
+    // MARK: - Generic unknown-KEY parking (systemic forward-compat, the counterpart to the token channels)
+
+    /// Round trip: a blob with all-known keys PLUS unknown scalar/object/array keys parks the unknowns
+    /// verbatim and re-emits them, byte-equivalent in structure, at the TOP LEVEL (never nested).
+    @Test func unknownTopLevelKeysAreParkedAndSurviveRoundTrip() throws {
+        let first = try decode("""
+        {
+          "bottleOz": 30,
+          "didMigrateMilestonesFirstAidWidgets": true,
+          "didMigrateMealPhotosWidget": true,
+          "futureScalarFlag": true,
+          "futureCount": 7,
+          "futureString": "hello",
+          "futureObject": {"nested": 1, "deep": {"x": "y"}},
+          "futureArray": [1, "two", false, null]
+        }
+        """)
+
+        // Exactly the five unknown keys are parked; the known `bottleOz` is NOT.
+        #expect(Set(first.parkedUnknownKeys.keys)
+            == ["futureScalarFlag", "futureCount", "futureString", "futureObject", "futureArray"])
+        #expect(first.parkedUnknownKeys["futureScalarFlag"] == .bool(true))
+        #expect(first.parkedUnknownKeys["futureCount"] == .number(7))
+        #expect(first.parkedUnknownKeys["futureString"] == .string("hello"))
+        #expect(first.parkedUnknownKeys["futureArray"] == .array([.number(1), .string("two"), .bool(false), .null]))
+        #expect(first.parkedUnknownKeys["futureObject"]
+            == .object(["nested": .number(1), "deep": .object(["x": .string("y")])]))
+        #expect(first.bottleOz == 30)
+
+        // Re-encode: every parked key reappears at the top level; no nested wrapper key is introduced.
+        let object = try encodeToObject(first)
+        for key in ["futureScalarFlag", "futureCount", "futureString", "futureObject", "futureArray"] {
+            #expect(object.keys.contains(key), "parked key \(key) must re-emit at top level")
+        }
+        #expect(!object.keys.contains("parkedUnknownKeys"), "parking must not add a wrapper key")
+
+        // A full decode round trip preserves the parked payload exactly (key set + values).
+        let second = try decode(JSONEncoder().encode(first))
+        #expect(second.parkedUnknownKeys == first.parkedUnknownKeys)
+    }
+
+    /// Known-key precedence: generic parking writes unknown keys at the top level, so "a parked key that
+    /// LATER becomes known" is just a top-level key this build now understands — it decodes normally and
+    /// is never parked, so the current version's value always wins and a parked entry can't shadow it.
+    @Test func knownKeysAreNeverParkedSoTheCurrentVersionAlwaysWins() throws {
+        let settings = try decode("""
+        {
+          "bottleOz": 48,
+          "companionName": "Fern",
+          "trulyUnknownKey": "parked"
+        }
+        """)
+        #expect(settings.bottleOz == 48)                        // normal decode…
+        #expect(settings.companionName == "Fern")
+        #expect(settings.parkedUnknownKeys["bottleOz"] == nil)  // …never parked, so it can't be shadowed
+        #expect(settings.parkedUnknownKeys["companionName"] == nil)
+        #expect(settings.parkedUnknownKeys.count == 1)
+        #expect(settings.parkedUnknownKeys["trulyUnknownKey"] == .string("parked"))
+    }
+
+    /// Migration-marker non-regression: the privacy-critical `didMigratePeriodVisibility` /
+    /// `periodTrackingVisible` / `intimacyTrackingVisible` are KNOWN keys — decoded, never parked — so
+    /// generic parking can never let a stale copy shadow the live gate. Pure decode still leaves a
+    /// pre-gate blob's migration UNRESOLVED (the pin runs later in `reconcilingSensitiveVisibility`,
+    /// covered by SensitiveSurfaceGate*Tests), and a fresh save still encodes the marker as a real key.
+    @Test func migrationMarkerIsAKnownKeyAndNeverParked() throws {
+        // Pre-gate blob (no marker, no visibility keys) that also carries an unrelated future key.
+        let preGate = try decode("""
+        {"hasCompletedOnboarding": true, "someFutureKey": 1}
+        """)
+        #expect(preGate.periodTrackingVisible == nil)          // migration unresolved on pure decode…
+        #expect(preGate.didMigratePeriodVisibility == false)   // …exactly as ef02375 established
+        #expect(preGate.parkedUnknownKeys["didMigratePeriodVisibility"] == nil)
+        #expect(preGate.parkedUnknownKeys["periodTrackingVisible"] == nil)
+        #expect(preGate.parkedUnknownKeys["intimacyTrackingVisible"] == nil)
+        #expect(preGate.parkedUnknownKeys.keys.contains("someFutureKey"))
+
+        // When the marker IS present it decodes normally and is never parked.
+        let marked = try decode("""
+        {"didMigratePeriodVisibility": true, "periodTrackingVisible": false, "futureX": "y"}
+        """)
+        #expect(marked.didMigratePeriodVisibility)
+        #expect(marked.periodTrackingVisible == false)
+        #expect(marked.parkedUnknownKeys["didMigratePeriodVisibility"] == nil)
+
+        // A fresh save still encodes the marker as a real (known) key — not parked, and per ef02375 it
+        // defaults to false ("no determination represented here").
+        let object = try encodeToObject(FernletSettings())
+        #expect(object["didMigratePeriodVisibility"] as? Bool == false)
+    }
+
+    /// The point of the feature: a NEWER build's unknown privacy-ish gate survives an edit made on THIS
+    /// (older) build — not flipped, not dropped — and re-appears for the newer build to re-adopt.
+    @Test func unknownFuturePrivacyGateSurvivesAKnownEditRoundTrip() throws {
+        var settings = try decode("""
+        {
+          "didMigrateMilestonesFirstAidWidgets": true,
+          "didMigrateMealPhotosWidget": true,
+          "someFutureVisibilityGate": false,
+          "intimacyTrackingVisible": true
+        }
+        """)
+        #expect(settings.parkedUnknownKeys["someFutureVisibilityGate"] == .bool(false))
+
+        // Mutate a KNOWN setting on this build, then re-encode + reload (the older-build round trip).
+        settings.bottleOz = 12
+        let reloaded = try decode(JSONEncoder().encode(settings))
+        #expect(reloaded.bottleOz == 12)
+        #expect(reloaded.parkedUnknownKeys["someFutureVisibilityGate"] == .bool(false))  // untouched
+        let object = try encodeToObject(settings)
+        #expect(object["someFutureVisibilityGate"] as? Bool == false)  // re-emitted for the newer build
+    }
+
+    /// Empty/absent parking: a legacy blob with no unknown keys decodes with empty parking and encodes
+    /// with NO parking artifact — parking is by-key write-back, not a nested container that would itself
+    /// become an unknown key to an even-older build.
+    @Test func legacyBlobWithNoUnknownKeysHasEmptyParkingAndNoArtifact() throws {
+        let settings = try decode("""
+        {
+          "didMigrateMilestonesFirstAidWidgets": true,
+          "didMigrateMealPhotosWidget": true,
+          "bottleOz": 24,
+          "homeWidgets": ["companion", "quickLog"]
+        }
+        """)
+        #expect(settings.parkedUnknownKeys.isEmpty)
+
+        let object = try encodeToObject(settings)
+        #expect(!object.keys.contains("parkedUnknownKeys"))
+
+        // A default-constructed settings likewise encodes with no parking artifact.
+        let fresh = try encodeToObject(FernletSettings())
+        #expect(!fresh.keys.contains("parkedUnknownKeys"))
+    }
+
+    /// Guards the hand-written `encode(to:)` against a dropped field: a representative value in each
+    /// optionality kind (non-optional + every Optional written with `encodeIfPresent`) must survive a
+    /// round trip. A field omitted from the custom encode would silently default here.
+    @Test func customEncodePreservesAllKnownFieldsIncludingOptionals() throws {
+        var settings = FernletSettings()
+        settings.bottleOz = 99
+        settings.companionName = "Fern"
+        settings.localDesignerID = UUID()
+        settings.calorieTargetOverride = 2100
+        settings.proteinTargetOverride = 180
+        settings.fatTargetOverride = 70
+        settings.periodTrackingVisible = false
+        settings.shopLastPublishedDayKey = "2026-07-18"
+        settings.activeWorkoutLocationID = settings.workoutLocations.first?.id
+        settings.unknownAIStatusToken = "hibernating"
+        settings.hasPromptedForPresence = true
+        settings.workoutProgression = ["squat": 3]
+
+        let reloaded = try decode(JSONEncoder().encode(settings))
+        #expect(reloaded.bottleOz == 99)
+        #expect(reloaded.companionName == "Fern")
+        #expect(reloaded.localDesignerID == settings.localDesignerID)
+        #expect(reloaded.calorieTargetOverride == 2100)
+        #expect(reloaded.proteinTargetOverride == 180)
+        #expect(reloaded.fatTargetOverride == 70)
+        #expect(reloaded.periodTrackingVisible == false)
+        #expect(reloaded.shopLastPublishedDayKey == "2026-07-18")
+        #expect(reloaded.activeWorkoutLocationID == settings.activeWorkoutLocationID)
+        #expect(reloaded.unknownAIStatusToken == "hibernating")
+        #expect(reloaded.hasPromptedForPresence)
+        #expect(reloaded.workoutProgression == ["squat": 3])
+    }
+
     // MARK: - Helpers
 
     private func decode(_ json: String) throws -> FernletSettings {

@@ -171,6 +171,26 @@ public nonisolated struct FernletSettings: Codable {
     /// progression (reps/sets climb as the exercise is repeated).
     public var workoutProgression: [String: Int] = [:]
 
+    /// Every top-level settings key this build does NOT know, captured verbatim on decode and written
+    /// back verbatim on encode. The GENERIC, systemic counterpart to the per-field `unknown…Token`
+    /// side channels above (and the TODO that used to sit in `init(from:)`): when a device on an OLDER
+    /// app version decodes a synced blob a NEWER version wrote, `Codable` would silently DROP every key
+    /// it lacks, and this device's next save would STRIP those keys from the synced blob — losing the
+    /// newer device's settings. That key-drop is exactly what once re-fired the period-visibility
+    /// migration. Parking round-trips a newer build's settings losslessly instead.
+    ///
+    /// Contract:
+    /// - Only keys with NO `CodingKeys` case land here. A key this build knows is decoded normally and
+    ///   is NEVER parked (`init(from:)` excludes every known key), so when a parked key later becomes
+    ///   known the current version's value always wins and a parked entry can never shadow it on encode.
+    /// - Semantically INVISIBLE: default empty, excluded from every user-facing behaviour (scoring, UI,
+    ///   the sensitive-surface gate). It carries no meaning to this build — only a future build's bytes.
+    /// - Written back at the TOP LEVEL by key (`encode(to:)`), NOT inside a nested container: a nested
+    ///   wrapper key would itself be an unknown key that an EVEN-OLDER build would drop.
+    /// - NOT a `CodingKeys` case, so it is never emitted under its own key and never mistaken for a
+    ///   known key when the parking set is computed.
+    public var parkedUnknownKeys: [String: JSONValue] = [:]
+
     /// The location whose equipment drives workout suggestions. Falls back to the first location
     /// (or a full gym) so this is always non-nil.
     public var activeWorkoutLocation: WorkoutLocation {
@@ -238,9 +258,11 @@ public nonisolated struct FernletSettings: Codable {
         // resolved device re-asserts its own values (fail-closed) instead of re-pinning. See
         // `FernletStore.reconcileSensitiveSurfaceVisibility`.
         //
-        // TODO: `FernletSettings` still has no GENERIC unknown-top-level-KEY parking — a pre-gate build
-        // silently drops every key it doesn't know on re-encode. The device-local guard closes only the
-        // privacy-critical visibility case; generic key parking is the systemic follow-up.
+        // GENERIC unknown-top-level-KEY parking is now implemented (see `parkedUnknownKeys` and the
+        // capture block at the end of this initializer): a pre-gate build no longer silently drops every
+        // key it doesn't know on re-encode. The device-local guard still closes the privacy-critical
+        // visibility case specifically (the markers below are KNOWN keys, decoded here and therefore
+        // never parkable); generic parking is the systemic backstop for every OTHER future key.
         periodTrackingVisible = try container.decodeIfPresent(Bool.self, forKey: .periodTrackingVisible)
         didMigratePeriodVisibility = try container.decodeIfPresent(Bool.self, forKey: .didMigratePeriodVisibility) ?? false
         intimacyTrackingVisible = try container.decodeIfPresent(Bool.self, forKey: .intimacyTrackingVisible) ?? true
@@ -319,6 +341,119 @@ public nonisolated struct FernletSettings: Codable {
         workoutLocations = decodedLocations.isEmpty ? [WorkoutLocation.fullGym] : decodedLocations
         activeWorkoutLocationID = try container.decodeIfPresent(UUID.self, forKey: .activeWorkoutLocationID)
         workoutProgression = try container.decodeIfPresent([String: Int].self, forKey: .workoutProgression) ?? [:]
+
+        // Generic unknown-key parking (see `parkedUnknownKeys`): capture every remaining top-level key
+        // this build doesn't know, with its raw JSON value, so a re-encode here round-trips a newer
+        // build's settings losslessly instead of dropping them. `knownKeys` is every `CodingKeys` case,
+        // all decoded above, so a key this build owns is EXCLUDED here and can never be parked — the
+        // current version always wins for its own keys. That specifically covers the privacy-critical
+        // `didMigratePeriodVisibility` / `periodTrackingVisible` / `intimacyTrackingVisible` markers, so
+        // parking can never let a stale copy of them shadow the live gate. This capture is deliberately
+        // UNCAPPED (unlike the bounded enum-token channels): a newer build may legitimately add many keys
+        // over versions, and dropping any of them would reintroduce the very loss this fixes; the blob's
+        // overall size is already bounded by the sync layer.
+        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
+        var parked: [String: JSONValue] = [:]
+        for key in dynamicContainer.allKeys where !knownKeys.contains(key.stringValue) {
+            parked[key.stringValue] = try dynamicContainer.decode(JSONValue.self, forKey: key)
+        }
+        parkedUnknownKeys = parked
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        // Every STORED property that participates in the synced wire format. `parkedUnknownKeys` is
+        // deliberately absent: it is written back at the top level by key (`encode(to:)`), never under a
+        // key of its own, and its absence here is also what lets it be excluded from the parked set.
+        case bottleOz, hydrationTarget, showDeveloperNotes, connectionInspectorMode,
+             unknownConnectionInspectorModeToken, companionAppearance, equippedItemIDsBySlot,
+             localDesignerID, ownedDesignerIDs, knownDesignerNames, selectedGoal,
+             unknownSelectedGoalToken, sickDays, intentDismissedDays, nutrientBubbleDismissedUntil,
+             aiStatus, unknownAIStatusToken, webNutritionLookupEnabled, weatherPromptsEnabled,
+             showCalories, hasCompletedOnboarding, periodTrackingVisible, didMigratePeriodVisibility,
+             intimacyTrackingVisible, hidePredictions, hideFertileWindow, periodAwareScoringEnabled,
+             periodContextPrimerSeen, stressAwarenessEnabled, userProfile, nutritionPreferences,
+             calorieTargetOverride, proteinTargetOverride, fatTargetOverride, quickLogItems,
+             unknownQuickLogTokens, homeWidgets, unknownHomeWidgetTokens,
+             didMigrateMilestonesFirstAidWidgets, didMigrateMealPhotosWidget, personalCareTasks,
+             proximityDisplayName, showProximityDebugTools, allowNearbyRecipeShares,
+             allowNearbyClothingShares, allowNearbyHearts, allowNearbyPresence, allowNearbyFriendState,
+             hasPromptedForPresence, shopLastPublishedDayKey, companionName, workoutProfile,
+             workoutLocations, activeWorkoutLocationID, workoutProgression
+    }
+
+    /// Custom encode (required so `parkedUnknownKeys` can be re-emitted at the top level). It writes the
+    /// SAME shape the compiler used to synthesize — non-optionals via `encode`, optionals via
+    /// `encodeIfPresent` (so a nil side channel stays absent, matching the legacy blob shape the previous
+    /// build decodes) — then writes every parked key back verbatim.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(bottleOz, forKey: .bottleOz)
+        try container.encode(hydrationTarget, forKey: .hydrationTarget)
+        try container.encode(showDeveloperNotes, forKey: .showDeveloperNotes)
+        try container.encode(connectionInspectorMode, forKey: .connectionInspectorMode)
+        try container.encodeIfPresent(unknownConnectionInspectorModeToken, forKey: .unknownConnectionInspectorModeToken)
+        try container.encode(companionAppearance, forKey: .companionAppearance)
+        try container.encode(equippedItemIDsBySlot, forKey: .equippedItemIDsBySlot)
+        try container.encodeIfPresent(localDesignerID, forKey: .localDesignerID)
+        try container.encode(ownedDesignerIDs, forKey: .ownedDesignerIDs)
+        try container.encode(knownDesignerNames, forKey: .knownDesignerNames)
+        try container.encode(selectedGoal, forKey: .selectedGoal)
+        try container.encodeIfPresent(unknownSelectedGoalToken, forKey: .unknownSelectedGoalToken)
+        try container.encode(sickDays, forKey: .sickDays)
+        try container.encode(intentDismissedDays, forKey: .intentDismissedDays)
+        try container.encode(nutrientBubbleDismissedUntil, forKey: .nutrientBubbleDismissedUntil)
+        try container.encode(aiStatus, forKey: .aiStatus)
+        try container.encodeIfPresent(unknownAIStatusToken, forKey: .unknownAIStatusToken)
+        try container.encode(webNutritionLookupEnabled, forKey: .webNutritionLookupEnabled)
+        try container.encode(weatherPromptsEnabled, forKey: .weatherPromptsEnabled)
+        try container.encode(showCalories, forKey: .showCalories)
+        try container.encode(hasCompletedOnboarding, forKey: .hasCompletedOnboarding)
+        try container.encodeIfPresent(periodTrackingVisible, forKey: .periodTrackingVisible)
+        try container.encode(didMigratePeriodVisibility, forKey: .didMigratePeriodVisibility)
+        try container.encode(intimacyTrackingVisible, forKey: .intimacyTrackingVisible)
+        try container.encode(hidePredictions, forKey: .hidePredictions)
+        try container.encode(hideFertileWindow, forKey: .hideFertileWindow)
+        try container.encode(periodAwareScoringEnabled, forKey: .periodAwareScoringEnabled)
+        try container.encode(periodContextPrimerSeen, forKey: .periodContextPrimerSeen)
+        try container.encode(stressAwarenessEnabled, forKey: .stressAwarenessEnabled)
+        try container.encode(userProfile, forKey: .userProfile)
+        try container.encode(nutritionPreferences, forKey: .nutritionPreferences)
+        try container.encodeIfPresent(calorieTargetOverride, forKey: .calorieTargetOverride)
+        try container.encodeIfPresent(proteinTargetOverride, forKey: .proteinTargetOverride)
+        try container.encodeIfPresent(fatTargetOverride, forKey: .fatTargetOverride)
+        try container.encode(quickLogItems, forKey: .quickLogItems)
+        try container.encode(unknownQuickLogTokens, forKey: .unknownQuickLogTokens)
+        try container.encode(homeWidgets, forKey: .homeWidgets)
+        try container.encode(unknownHomeWidgetTokens, forKey: .unknownHomeWidgetTokens)
+        try container.encode(didMigrateMilestonesFirstAidWidgets, forKey: .didMigrateMilestonesFirstAidWidgets)
+        try container.encode(didMigrateMealPhotosWidget, forKey: .didMigrateMealPhotosWidget)
+        try container.encode(personalCareTasks, forKey: .personalCareTasks)
+        try container.encode(proximityDisplayName, forKey: .proximityDisplayName)
+        try container.encode(showProximityDebugTools, forKey: .showProximityDebugTools)
+        try container.encode(allowNearbyRecipeShares, forKey: .allowNearbyRecipeShares)
+        try container.encode(allowNearbyClothingShares, forKey: .allowNearbyClothingShares)
+        try container.encode(allowNearbyHearts, forKey: .allowNearbyHearts)
+        try container.encode(allowNearbyPresence, forKey: .allowNearbyPresence)
+        try container.encode(allowNearbyFriendState, forKey: .allowNearbyFriendState)
+        try container.encode(hasPromptedForPresence, forKey: .hasPromptedForPresence)
+        try container.encodeIfPresent(shopLastPublishedDayKey, forKey: .shopLastPublishedDayKey)
+        try container.encode(companionName, forKey: .companionName)
+        try container.encode(workoutProfile, forKey: .workoutProfile)
+        try container.encode(workoutLocations, forKey: .workoutLocations)
+        try container.encodeIfPresent(activeWorkoutLocationID, forKey: .activeWorkoutLocationID)
+        try container.encode(workoutProgression, forKey: .workoutProgression)
+
+        // Re-emit every parked key at the TOP LEVEL (never nested). A parked key can never collide with
+        // a known key — decode excludes known keys from `parkedUnknownKeys` — but the `knownKeys` guard
+        // makes current-version-wins precedence explicit and defensive. When nothing is parked (every
+        // legacy blob) no second container is opened, so the encoded shape gains no parking artifact.
+        guard !parkedUnknownKeys.isEmpty else { return }
+        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
+        var dynamicContainer = encoder.container(keyedBy: DynamicCodingKey.self)
+        for (key, value) in parkedUnknownKeys where !knownKeys.contains(key) {
+            try dynamicContainer.encode(value, forKey: DynamicCodingKey(stringValue: key))
+        }
     }
 
     /// The split logic (and its defensive bounds) moved to `EnumDecodeCompat.splitRawTokens` when
@@ -461,4 +596,63 @@ public nonisolated enum AIStatus: String, Codable, CaseIterable, Identifiable {
         case .off: "Off"
         }
     }
+}
+
+/// A minimal, lossless representation of an arbitrary JSON value — the raw material `FernletSettings`
+/// parks for the top-level keys it doesn't yet understand (`parkedUnknownKeys`). It stores exactly the
+/// six JSON kinds, invents no semantics, and round-trips through `Codable` verbatim (numbers held as
+/// `Double`, which `JSONEncoder` re-emits without a spurious decimal for whole values). Kept in this
+/// file alongside the only thing that uses it. Mirrors the spirit of `EnumDecodeCompat`: preserve what
+/// you can't interpret, re-emit it untouched, never fabricate meaning for it.
+public nonisolated enum JSONValue: Codable, Hashable, Sendable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case null
+    case array([JSONValue])
+    case object([String: JSONValue])
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(Bool.self) {
+            // Bool BEFORE Double: a JSON bool must not be swallowed as a number (and a JSON number
+            // throws when decoded as Bool, so this order is unambiguous for the stdlib JSON coder).
+            self = .bool(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .number(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode([JSONValue].self) {
+            self = .array(value)
+        } else if let value = try? container.decode([String: JSONValue].self) {
+            self = .object(value)
+        } else {
+            throw DecodingError.dataCorruptedError(
+                in: container, debugDescription: "Unsupported JSON value while parking an unknown settings key")
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value): try container.encode(value)
+        case .number(let value): try container.encode(value)
+        case .bool(let value): try container.encode(value)
+        case .null: try container.encodeNil()
+        case .array(let value): try container.encode(value)
+        case .object(let value): try container.encode(value)
+        }
+    }
+}
+
+/// A `CodingKey` that admits any string key — lets `FernletSettings` enumerate the whole top-level
+/// container (to find keys with no `CodingKeys` case) and write parked keys back by name. `init(stringValue:)`
+/// is non-failable (it satisfies the failable protocol requirement) so the encode site needs no unwrap.
+private nonisolated struct DynamicCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+    init(stringValue: String) { self.stringValue = stringValue; self.intValue = nil }
+    init(intValue: Int) { self.stringValue = String(intValue); self.intValue = intValue }
 }
