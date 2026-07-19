@@ -170,8 +170,8 @@
 		68FE5E00000000000000B001 /* FernletWidgets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				68FE5E00000000000000B002 /* Exceptions for "FernletWidgets" folder in "FernletWidgets" target */,
 				68FE5E00000000000000B003 /* Exceptions for "FernletWidgets" folder in "Fernlet" target */,
+				68FE5E00000000000000B002 /* Exceptions for "FernletWidgets" folder in "FernletWidgets" target */,
 			);
 			path = FernletWidgets;
 			sourceTree = "<group>";
