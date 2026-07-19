@@ -27,14 +27,31 @@ struct FernletCompanionEntry: TimelineEntry {
     let date: Date
     let snapshot: WidgetSnapshot?
 
+    /// Whether the mirrored snapshot is for the SAME local day as THIS entry's date. Both the water
+    /// count and the companion mood gate on this, so a day-rollover entry (including the midnight
+    /// entry the provider appends) reads as a fresh, empty day rather than yesterday's state — with
+    /// the app closed, nothing else corrects it until launch.
+    private var reflectsCurrentDay: Bool {
+        guard let snapshot else { return false }
+        return WidgetDayGate.snapshotReflectsDay(snapshot.dateKey, at: date)
+    }
+
     /// Water progress only counts when the mirrored snapshot is for the CURRENT day; after a day
     /// rollover with the app closed, the fresh day starts at zero bottles.
     var bottleCount: Int {
-        guard let snapshot else { return 0 }
-        return snapshot.dateKey == WidgetDayKey.current(date) ? snapshot.bottleCount : 0
+        guard let snapshot, reflectsCurrentDay else { return 0 }
+        return snapshot.bottleCount
     }
 
     var hydrationTarget: Int { max(snapshot?.hydrationTarget ?? 4, 1) }
+
+    /// Day-gated companion mood — the SINGLE source every family reads for the glyph and label. A
+    /// stale (previous-day) snapshot yields `nil` (the neutral "Fernlet" treatment) instead of
+    /// yesterday's face, keeping mood and water internally consistent across a rollover.
+    var currentDayCompanionState: WidgetCompanionState? {
+        guard reflectsCurrentDay else { return nil }
+        return snapshot?.companionState
+    }
 }
 
 struct FernletCompanionProvider: TimelineProvider {
@@ -48,11 +65,23 @@ struct FernletCompanionProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<FernletCompanionEntry>) -> Void) {
-        let entry = FernletCompanionEntry(date: Date(), snapshot: WidgetSnapshotStore().read())
-        // Single entry; refreshes are pushed by the app via WidgetCenter.reloadTimelines on every
-        // snapshot mirror — the hourly policy just re-evaluates day rollover while the app is closed.
-        let nextHour = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date().addingTimeInterval(3600)
-        completion(Timeline(entries: [entry], policy: .after(nextHour)))
+        let snapshot = WidgetSnapshotStore().read()
+        let now = Date()
+        var entries = [FernletCompanionEntry(date: now, snapshot: snapshot)]
+
+        // A second entry pinned to the next local midnight, built from the SAME snapshot. Each entry
+        // decides what it renders via its own date-vs-dateKey gate (see FernletCompanionEntry), so
+        // once the day rolls over this entry shows the neutral mood + zero water WITHOUT WidgetKit
+        // having to fetch a fresh timeline first — the mood now self-corrects at midnight exactly as
+        // the water count already did. Refreshes are still pushed by the app via WidgetCenter on
+        // every snapshot mirror; the hourly policy only backstops day rollover while the app is closed.
+        let startOfToday = Calendar.current.startOfDay(for: now)
+        if let nextMidnight = Calendar.current.date(byAdding: .day, value: 1, to: startOfToday) {
+            entries.append(FernletCompanionEntry(date: nextMidnight, snapshot: snapshot))
+        }
+
+        let nextHour = Calendar.current.date(byAdding: .hour, value: 1, to: now) ?? now.addingTimeInterval(3600)
+        completion(Timeline(entries: entries, policy: .after(nextHour)))
     }
 }
 
@@ -301,12 +330,12 @@ private struct SmallCompanionView: View {
     let entry: FernletCompanionEntry
 
     var body: some View {
-        if let snapshot = entry.snapshot {
+        if entry.snapshot != nil {
             VStack(alignment: .leading, spacing: 0) {
                 // top row: companion glyph (left) + water ring (right)
                 HStack(alignment: .top) {
-                    CompanionGlyph(state: snapshot.companionState,
-                                   fill: FernletWidgetPalette.mood(snapshot.companionState))
+                    CompanionGlyph(state: entry.currentDayCompanionState,
+                                   fill: FernletWidgetPalette.mood(entry.currentDayCompanionState))
                         .frame(width: 52, height: 52)
                     Spacer(minLength: 8)
                     WaterRing(filled: entry.bottleCount, target: entry.hydrationTarget, lineWidth: 6)
@@ -398,15 +427,11 @@ private struct CircularCompanionView: View {
     let entry: FernletCompanionEntry
 
     var body: some View {
-        if let snapshot = entry.snapshot {
-            // Companion glyph is the primary circular option; the shape+negative-space reads in
-            // the single-tint Lock Screen render (white fill, system applies the vibrancy tint).
-            CompanionGlyph(state: snapshot.companionState, fill: .white)
-                .padding(3)
-        } else {
-            CompanionGlyph(state: nil, fill: .white)
-                .padding(3)
-        }
+        // Companion glyph is the primary circular option; the shape+negative-space reads in the
+        // single-tint Lock Screen render (white fill, system applies the vibrancy tint). No snapshot
+        // AND a stale (previous-day) snapshot both resolve to the neutral glyph via the day gate.
+        CompanionGlyph(state: entry.currentDayCompanionState, fill: .white)
+            .padding(3)
     }
 }
 
@@ -416,7 +441,7 @@ private struct RectangularCompanionView: View {
     let entry: FernletCompanionEntry
 
     private var moodLabel: String {
-        switch entry.snapshot?.companionState {
+        switch entry.currentDayCompanionState {
         case .thriving: return "Thriving"
         case .okay:     return "Okay"
         case .tired:    return "Tired"
@@ -427,9 +452,9 @@ private struct RectangularCompanionView: View {
     }
 
     var body: some View {
-        if let snapshot = entry.snapshot {
+        if entry.snapshot != nil {
             HStack(spacing: 10) {
-                CompanionGlyph(state: snapshot.companionState, fill: .white)
+                CompanionGlyph(state: entry.currentDayCompanionState, fill: .white)
                     .frame(width: 34, height: 34)
                 VStack(alignment: .leading, spacing: 5) {
                     Text("\(moodLabel) · \(entry.bottleCount) of \(entry.hydrationTarget) bottles")

@@ -89,6 +89,17 @@ enum WidgetDayKey {
     }
 }
 
+/// Pure day-gate shared by the companion entry's water + mood accessors. A mirrored snapshot only
+/// "counts" for a given timeline entry when its `dateKey` names the same local day as the entry's
+/// date; a stale (previous-day) snapshot therefore reads as a fresh, empty day — zero water and the
+/// neutral companion — until the app republishes. Kept as a free static function (no WidgetKit /
+/// TimelineEntry types) so the gate is checkable in isolation and reused verbatim by every family.
+enum WidgetDayGate {
+    static func snapshotReflectsDay(_ dateKey: String, at entryDate: Date) -> Bool {
+        dateKey == WidgetDayKey.current(entryDate)
+    }
+}
+
 enum WidgetBridgeFiles {
     static func containerDirectory(fileManager: FileManager = .default) -> URL {
         let base = fileManager.containerURL(forSecurityApplicationGroupIdentifier: fernletAppGroupIdentifier)
