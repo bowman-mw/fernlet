@@ -79,4 +79,25 @@ final class DataExportTests: XCTestCase {
             XCTAssertFalse(json.contains(token), "export leaked cycle/intimate token: \(token)")
         }
     }
+
+    /// The share-sheet completion seam (Item A) leans on `purgeDataExports()` to remove the plaintext
+    /// dump once the sheet is done with it. Directly: a written export — plus any older lingerer at the
+    /// same seam — is swept, without needing a full "delete everything" wipe to run.
+    func testPurgeDataExportsSweepsWrittenAndLingeringExports() throws {
+        let (store, _, _) = makeTestStoreWithRepositories()
+
+        // The file the user just shared.
+        let freshURL = try store.writeDataExportFile()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: freshURL.path), "precondition: fresh export not written")
+
+        // A lingerer from a previous day's export, in the same directory.
+        let staleURL = FernletStore.dataExportsDirectory.appendingPathComponent("Fernlet-data-2026-01-01.json")
+        try Data("{}".utf8).write(to: staleURL, options: [.atomic, .completeFileProtection])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: staleURL.path), "precondition: stale export not written")
+
+        XCTAssertTrue(store.purgeDataExports(), "purge reported failure")
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: freshURL.path), "the shared export survived the purge")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staleURL.path), "a lingering older export survived the purge")
+    }
 }

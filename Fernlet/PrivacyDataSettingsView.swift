@@ -150,7 +150,15 @@ struct PrivacyDataSettingsView: View {
             Text("Fernlet removed everything it stored on this device.")
         }
         .sheet(item: $exportPayload) { payload in
-            ActivityShareView(items: [payload.url])
+            ActivityShareView(items: [payload.url]) {
+                // The export is a full, UNENCRYPTED JSON dump of the user's decrypted data. Once the
+                // share sheet is done reading it — whether the user shared it or cancelled — remove it
+                // rather than letting it linger in tmp/ until the next "delete everything". Sweeping the
+                // whole exports directory also clears any older exports from previous days at the same
+                // seam. Runs on completion (after UIActivityViewController has finished copying the file
+                // into whatever activity read it), not on dismissal, so the share can't race the delete.
+                store?.purgeDataExports()
+            }
         }
         .task {
             #if DEBUG
@@ -360,11 +368,18 @@ struct PrivacyDataSettingsView: View {
         let url: URL
     }
 
-    /// Wraps the system share sheet so the export file can be saved/shared.
+    /// Wraps the system share sheet so the export file can be saved/shared. `onFinish` fires once the
+    /// activity completes or is cancelled — the seam where the plaintext export is cleaned up.
     private struct ActivityShareView: UIViewControllerRepresentable {
         let items: [Any]
+        var onFinish: () -> Void = {}
         func makeUIViewController(context: Context) -> UIActivityViewController {
-            UIActivityViewController(activityItems: items, applicationActivities: nil)
+            let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+            // Fires for both the shared-successfully and cancelled paths, after the chosen activity has
+            // finished reading the file — so deleting here can't strand a half-shared export or race a
+            // still-in-flight copy.
+            controller.completionWithItemsHandler = { _, _, _, _ in onFinish() }
+            return controller
         }
         func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
     }
