@@ -186,6 +186,7 @@ final class WorkoutSessionRunner {
 /// sheet's `onDisappear`. It degrades silently to in-app-only when Live Activities are disabled.
 struct GuidedWorkoutSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     let session: WorkoutProgram.SessionSuggestion
     /// True when other sessions in today's plan still need marking done after this one — the done
@@ -249,6 +250,16 @@ struct GuidedWorkoutSheet: View {
         // controller is @State-scoped to THIS presentation it can't end a later sheet's activity.
         .onDisappear {
             liveActivity.end(final: WorkoutActivityAttributes.ContentState(runner: runner))
+        }
+        // If the activity went stale while the phone sat locked (its staleDate passed), the Lock Screen
+        // reads "open Fernlet to pick it back up". Reopening the app with the runner still live should
+        // make good on that: re-post the current state so the staleDate re-arms and the surfaces go live
+        // again. `.onChange` doesn't fire on first presentation, and `update` no-ops until `start()` has
+        // set an activity, so an update can never run before the workout has actually begun; the guard on
+        // a live phase keeps `.ready`/`.done` from posting. Never touches the completion latch.
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active, runner.phase == .working || runner.phase == .resting else { return }
+            liveActivity.update(state: WorkoutActivityAttributes.ContentState(runner: runner))
         }
     }
 
