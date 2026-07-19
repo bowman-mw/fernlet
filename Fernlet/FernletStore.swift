@@ -527,15 +527,40 @@ final class FernletStore {
         if !visible {
             periodScrubHook?()
             diary.scrubHiddenHealthContext(periodVisible: false, intimacyVisible: isIntimacyTrackingVisible)
-        } else if sealedBackupPeriodReuploadDeferred,
-                  StoragePreferencesStore.currentPreferences().sealedBackupPeriodEnabled {
-            // The deferral banner's promised remedy (G5): the escrow adopt couldn't re-seal the period
-            // backup while it was hidden, so un-hiding is the moment the narrative store becomes pageable
-            // again — re-seal + re-upload now. The coordinator clears the deferral only on an ACTUAL
-            // re-seal success (the hidden-path no-op doesn't count), so a failure here keeps the banner
-            // honest and is retried at next launch. Gated on the pref so a backup the user has since
-            // turned off is never re-uploaded behind their back.
-            Task { await setSealedBackupEnabled(true, payloadType: .periodData) }
+        } else {
+            settlePeriodBackupAfterUnhide()
+        }
+    }
+
+    /// Settles BOTH halves of the sealed period backup at the one moment the sealed narrative store
+    /// becomes reachable again. Order is load-bearing:
+    ///
+    /// 1. **Restore first.** `restoreSealedBackupsIfNeeded` only ever restores into a fresh install, and by
+    ///    the time a user un-hides, the day blob has synced down and the device is permanently "not
+    ///    fresh" — so without this, someone who hides cycle tracking on one device and reinstalls on
+    ///    another never gets their sealed history back, and every other period seam re-uploads instead.
+    ///    The targeted restore drops only the whole-device freshness gate; a narrative store that already
+    ///    holds history still refuses, so this can add data back but never overwrite.
+    /// 2. **Re-upload second, and only if the restore left nothing retryable.** This is the deferral
+    ///    banner's promised remedy (G5) — the escrow adopt couldn't re-seal while hidden. But re-sealing
+    ///    pages the LOCAL narrative store, so running it while a restore is still pending would overwrite
+    ///    the good cloud backup with this device's empty store. A retryable outcome leaves the deferral
+    ///    flag set, and the launch follow-through retries both next launch. The coordinator clears the
+    ///    deferral only on an ACTUAL re-seal success, so a failure keeps the banner honest.
+    ///
+    /// Both halves are gated on the pref so a backup the user has since turned off is never touched.
+    private func settlePeriodBackupAfterUnhide() {
+        let preferences = StoragePreferencesStore.currentPreferences()
+        guard preferences.sealedBackupPeriodEnabled else { return }
+        let reuploadDeferred = sealedBackupPeriodReuploadDeferred
+        Task {
+            if preferences.iCloudSyncEnabled {
+                let outcome = await restorePeriodBackupTargeted()
+                guard !outcome.isRetryable else { return }
+            }
+            if reuploadDeferred {
+                await setSealedBackupEnabled(true, payloadType: .periodData)
+            }
         }
     }
 
@@ -2057,10 +2082,11 @@ final class FernletStore {
         await sealedBackupCoordinator.setSealedBackupEnabled(enabled, payloadType: payloadType)
     }
 
-    /// Pulls any sealed iCloud backups into the local stores at launch (and on the user's Retry).
+    /// Pulls any sealed iCloud backups into the local stores at launch (and on the user's Retry, which
+    /// passes `userInitiated: true` so the period half can use the targeted restore).
     /// Delegates to `SealedBackupCoordinator`.
-    func restoreSealedBackupsIfNeeded() async {
-        await sealedBackupCoordinator.restoreSealedBackupsIfNeeded()
+    func restoreSealedBackupsIfNeeded(userInitiated: Bool = false) async {
+        await sealedBackupCoordinator.restoreSealedBackupsIfNeeded(userInitiated: userInitiated)
     }
 
     /// WS-3 user-confirmed conflict resolution: adopt the synced (other-device) escrow key and re-upload
@@ -2086,15 +2112,30 @@ final class FernletStore {
         await sealedBackupCoordinator.restoreSealedBackupOutcome(payloadType: payloadType)
     }
 
+    /// Targeted period-only restore (un-hide + explicit Retry) — the compensating restore path for the
+    /// fresh-install-only launch pass. Delegates to `SealedBackupCoordinator`.
+    @discardableResult
+    func restorePeriodBackupTargeted(
+        narrativeRepository: MenstrualNarrativeRepository? = nil
+    ) async -> SealedBackupRestoreOutcome {
+        await sealedBackupCoordinator.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
+    }
+
     /// Decodes a decrypted sealed-backup payload into the local stores, returning records written.
     /// Delegates to `SealedBackupCoordinator`; kept as a wrapper for the restore tests.
     @discardableResult
     func applyRestoredPayload(
         _ plaintext: Data,
         payloadType: SealedBackupPayloadType,
-        narrativeRepository: MenstrualNarrativeRepository? = nil
+        narrativeRepository: MenstrualNarrativeRepository? = nil,
+        scope: SealedBackupCoordinator.RestoreScope = .freshInstall
     ) throws -> Int {
-        try sealedBackupCoordinator.applyRestoredPayload(plaintext, payloadType: payloadType, narrativeRepository: narrativeRepository)
+        try sealedBackupCoordinator.applyRestoredPayload(
+            plaintext,
+            payloadType: payloadType,
+            narrativeRepository: narrativeRepository,
+            scope: scope
+        )
     }
 
     /// Decodes the decrypted chunks of a sealed-backup payload into the local stores, returning records

@@ -272,4 +272,108 @@ struct SealedBackupRestoreTests {
         let outcome = await store.restoreSealedBackupOutcome(payloadType: .sensitiveNotes)
         #expect(outcome != .skippedStoreNotEmpty)
     }
+
+    // MARK: - Un-hide restore path (pre-merge review 2026-07-19, finding #2)
+
+    /// The bug: the G5 gate correctly skips the launch-time period restore while cycle tracking is
+    /// hidden, but there was NO compensating restore afterwards. `restoreSealedBackupsIfNeeded` only ever
+    /// restores into a fresh install, so once the day blob syncs down the device is permanently "not
+    /// fresh" and every remaining period seam (un-hide, escrow-adopt, launch follow-through) RE-UPLOADS
+    /// rather than restores — a user who hid period tracking on device A and reinstalled on device B could
+    /// never get their sealed cycle history back.
+    ///
+    /// Here the device is in use (populated days/meals/journal) but holds no cycle history. The launch
+    /// restore must still refuse it as non-fresh; the targeted un-hide restore must NOT be short-circuited
+    /// (with no CloudKit/escrow wired in a unit test it lands on a deferred outcome, exactly as
+    /// `restoreNotSkippedOnGenuinelyBlankDevice` does).
+    @MainActor
+    @Test func unhideRestoreRunsOnDeviceThatIsNoLongerAFreshInstall() async {
+        let store = makePopulatedTestStore()
+        store.settings.periodTrackingVisible = true
+        let narrativeRepository = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext
+        )
+
+        // Baseline: the launch/auto path is permanently blocked on this device — the bug's mechanism.
+        let launchOutcome = await store.restoreSealedBackupOutcome(payloadType: .periodData)
+        #expect(launchOutcome == .skippedStoreNotEmpty)
+
+        // The compensating path gets past the freshness gate.
+        let unhideOutcome = await store.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
+        #expect(unhideOutcome != .skippedStoreNotEmpty)
+    }
+
+    /// The un-hide restore relaxes ONLY the whole-device freshness gate. Cycle history the user already
+    /// has on this device is still never clobbered or duplicated — the narrative-store check (the
+    /// invariant that actually protects period data) still refuses.
+    @MainActor
+    @Test func unhideRestoreStillRefusesPopulatedNarrativeStore() async throws {
+        let store = makeTestStore()
+        store.settings.periodTrackingVisible = true
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        let narrativeRepository = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext
+        )
+        try narrativeRepository.insert(
+            MenstrualNarrative(hkExternalUUID: "local-1", dateKey: "2026-05-20", note: "Logged locally.", symptomFlags: []),
+            contentKey: key
+        )
+
+        let outcome = await store.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
+        #expect(outcome == .skippedStoreNotEmpty)
+        #expect(try narrativeRepository.narrativeCount() == 1)   // unchanged
+    }
+
+    /// The fail-closed-at-the-decrypt-seam property is preserved: this path decrypts cycle narratives and
+    /// writes them into the sealed store, so it must refuse while period tracking is hidden. Reported as
+    /// RETRYABLE, which is also what stops the caller from re-uploading this device's still-gated
+    /// narrative store over the cloud backup.
+    @MainActor
+    @Test func unhideRestoreRefusesWhilePeriodTrackingHidden() async {
+        let store = makeTestStore()
+        store.settings.periodTrackingVisible = false
+        let narrativeRepository = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext
+        )
+
+        let outcome = await store.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
+        #expect(outcome.didRestore == false)
+        #expect(outcome.isRetryable)
+    }
+
+    /// The write point honors the relaxed scope too (defense in depth cuts both ways): with
+    /// `.payloadStoreOnly` an in-use device with an EMPTY narrative store accepts the restored history,
+    /// where the default `.freshInstall` scope would refuse it.
+    @MainActor
+    @Test func applyRestoredPeriodWritesUnderPayloadStoreOnlyScopeOnInUseDevice() throws {
+        let store = makePopulatedTestStore()
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        let narrativeRepository = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext
+        )
+        let data = try JSONEncoder().encode([
+            MenstrualNarrative(hkExternalUUID: "backup-1", dateKey: "2026-06-01", note: "From backup.", symptomFlags: []),
+            MenstrualNarrative(hkExternalUUID: "backup-2", dateKey: "2026-06-02", note: "Also from backup.", symptomFlags: [])
+        ])
+
+        // Default scope: refused, because the device is in use.
+        #expect(throws: FernletStore.SealedBackupWiringError.storeNotEmpty) {
+            try store.applyRestoredPayload(data, payloadType: .periodData, narrativeRepository: narrativeRepository)
+        }
+        #expect(try narrativeRepository.narrativeCount() == 0)
+
+        // Targeted scope: accepted, because the narrative store itself is empty.
+        let count = try store.applyRestoredPayload(
+            data,
+            payloadType: .periodData,
+            narrativeRepository: narrativeRepository,
+            scope: .payloadStoreOnly
+        )
+        #expect(count == 2)
+        #expect(try narrativeRepository.narrativeCount() == 2)
+    }
 }

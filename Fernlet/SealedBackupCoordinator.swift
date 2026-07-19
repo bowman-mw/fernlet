@@ -116,6 +116,25 @@ final class SealedBackupCoordinator {
         case forOpening
     }
 
+    /// How strict the no-clobber gate is for a given restore.
+    ///
+    /// The launch/auto path requires a genuinely unused device (`.freshInstall`). The un-hide path
+    /// cannot use that gate at all: by the time a user un-hides cycle tracking the day blob has long
+    /// since synced down, so `isFreshInstallForRestore` is permanently false and the sealed period
+    /// backup would be unrestorable forever — defeating the point of having it.
+    ///
+    /// `.payloadStoreOnly` drops only the WHOLE-DEVICE freshness check and keeps the per-payload store
+    /// check, which is the invariant that actually protects period data: restore writes into nothing but
+    /// the sealed narrative store, so an empty narrative store means there is no cycle history to clobber
+    /// however much unrelated (food / journal / day) data the device holds. It is deliberately not
+    /// offered for `.sensitiveNotes`, whose Tier-2 writeback is a whole-store OVERWRITE.
+    enum RestoreScope {
+        /// Launch/auto restore — whole-device fresh install AND the payload's own store empty.
+        case freshInstall
+        /// Targeted single-payload restore — only the payload's own store must be empty.
+        case payloadStoreOnly
+    }
+
     /// Builds an `IdentityService` with the escrow key prepared per `escrowMode`, or nil if provisioning
     /// failed. For `.forOpening`, `escrowReady` reports whether a usable escrow key is present so the
     /// caller can short-circuit to a retryable "not synced yet" state without any network work.
@@ -210,7 +229,10 @@ final class SealedBackupCoordinator {
     /// reconcile the escrow key and pull any sealed iCloud backups into the local stores. No-ops unless
     /// iCloud sync is on. Best-effort and non-fatal: failures are surfaced as a retryable status (WS-4),
     /// audited, and retried next launch. Gated by `FERNLET_SKIP_SEALED_RESTORE` so UI tests can opt out.
-    func restoreSealedBackupsIfNeeded() async {
+    ///
+    /// `userInitiated` marks the user's explicit Retry (as opposed to the ambient launch pass) and lets
+    /// the period half fall back to the targeted, payload-scoped restore — see below.
+    func restoreSealedBackupsIfNeeded(userInitiated: Bool = false) async {
         guard ProcessInfo.processInfo.environment["FERNLET_SKIP_SEALED_RESTORE"] != "1" else { return }
         let prefs = StoragePreferencesStore.currentPreferences()
         guard prefs.iCloudSyncEnabled else { return }
@@ -224,7 +246,18 @@ final class SealedBackupCoordinator {
         // narrative store, so a read-side gate alone would miss it. Skipping only defers: the backup
         // stays in iCloud and restores if the user un-hides.
         if prefs.sealedBackupPeriodEnabled && host.isPeriodTrackingVisible {
-            _ = await restoreSealedBackupOutcome(payloadType: .periodData)
+            let outcome = await restoreSealedBackupOutcome(payloadType: .periodData)
+            // The pass above is fresh-install-only, so on a device that is already in use it can ONLY
+            // ever answer `.skippedStoreNotEmpty` — including when the sealed narrative store is empty and
+            // there really is a cycle history to pull down. That would make the restore banner's "tap
+            // Retry" a silent no-op that merely clears the banner. On an explicit user retry, fall back to
+            // the targeted, payload-scoped restore so Retry actually retries. (Ambient launches
+            // deliberately do NOT take this branch — auto-restore stays conservative.) When the narrative
+            // store genuinely holds history the fallback also answers `.skippedStoreNotEmpty`, so the
+            // no-clobber behavior is unchanged.
+            if userInitiated, outcome == .skippedStoreNotEmpty {
+                _ = await restorePeriodBackupTargeted()
+            }
         }
         // G5 follow-through: a persisted period re-upload deferral (the escrow adopt ran while period
         // tracking was hidden, or an earlier re-seal failed) is retried here once the narratives are
@@ -306,6 +339,48 @@ final class SealedBackupCoordinator {
         return outcome
     }
 
+    /// Targeted period-only restore. Driven by the two EXPLICIT user actions that should be able to pull
+    /// a sealed cycle history back onto an in-use device: un-hiding cycle tracking, and tapping Retry on
+    /// the restore banner. The ambient launch pass deliberately stays fresh-install-only.
+    ///
+    /// The G5 gate correctly skips the period restore at launch while cycle tracking is hidden, but the
+    /// launch path only ever restores into a fresh install — so a user who hides period tracking on one
+    /// device and reinstalls on another (iCloud sync on) could never get their sealed cycle history back:
+    /// the day blob syncs down first, `performRestore` permanently returns `.skippedStoreNotEmpty`, and
+    /// every other period seam (un-hide, escrow-adopt, launch follow-through) RE-UPLOADS rather than
+    /// restores. This is the missing compensating restore path.
+    ///
+    /// Narrower than the launch restore in every way that matters: period payload only, and it still
+    /// refuses a non-empty narrative store, so it can add the user's history back but never overwrite
+    /// history they already have. The visibility re-check keeps the fail-closed-at-the-decrypt-seam
+    /// property — this decrypts cycle narratives and writes them into the sealed store.
+    ///
+    /// Prefs gating (iCloud sync on, period backup enabled) lives with the caller, matching how
+    /// `restoreSealedBackupsIfNeeded` holds the prefs guards and `performRestore` stays pure.
+    @discardableResult
+    func restorePeriodBackupTargeted(
+        narrativeRepository: MenstrualNarrativeRepository? = nil
+    ) async -> SealedBackupRestoreOutcome {
+        // Fail-closed at the decrypt seam, same as the launch path. For the un-hide caller this is a
+        // defensive re-check (it flips visibility first, so this only fires on a re-hide that raced the
+        // task); for the Retry caller it is the real gate. Reported as retryable (un-hiding IS the retry)
+        // and deliberately NOT recorded as a UI status — there is nothing here for the user to act on.
+        // Crucially, `isRetryable` also stops the un-hide caller from re-uploading this device's
+        // still-gated (unpageable) narrative store over the cloud backup.
+        guard host.isPeriodTrackingVisible else {
+            FernletAuditLog.log("sealedBackup.targetedPeriodRestoreSkippedHidden")
+            return .deferredTransient
+        }
+        let outcome = await performRestore(
+            payloadType: .periodData,
+            scope: .payloadStoreOnly,
+            narrativeRepository: narrativeRepository
+        )
+        FernletAuditLog.log("sealedBackup.targetedPeriodRestoreAttempted")
+        host.recordSealedBackupRestoreOutcome(outcome, payloadType: .periodData)
+        return outcome
+    }
+
     /// Bool-returning restore kept for the restore tests and the `FernletStore` wrapper. Does NOT record
     /// a UI status (the launch/retry path uses `restoreSealedBackupOutcome` for that); returns whether
     /// records were actually written.
@@ -317,13 +392,20 @@ final class SealedBackupCoordinator {
     /// The actual restore. Splits every termination into a distinct outcome (WS-4): never marks restore
     /// "done" on a recoverable failure. The escrow key is loaded WITHOUT minting (WS-1) — its absence is
     /// reported as `.deferredKeyNotSynced` (retry), never a fabricated identity.
-    private func performRestore(payloadType: SealedBackupPayloadType) async -> SealedBackupRestoreOutcome {
+    private func performRestore(
+        payloadType: SealedBackupPayloadType,
+        scope: RestoreScope = .freshInstall,
+        narrativeRepository: MenstrualNarrativeRepository? = nil
+    ) async -> SealedBackupRestoreOutcome {
         FernletAuditLog.log("sealedBackup.restoreAttempt", context: ["payload": payloadType.rawValue])
+        // Resolved once and passed to BOTH the pre-network gate and the write, so they consult the same
+        // store (an injected repository is how the un-hide tests exercise this without a real device store).
+        let narrativeRepository = narrativeRepository ?? MenstrualNarrativeRepository()
         // Outer no-clobber check: this duplicates the AUTHORITATIVE gate inside applyRestoredChunks (which
         // re-checks under the same store before writing), but is kept deliberately as a pre-NETWORK
         // short-circuit — it skips the CloudKit fetch + decrypt entirely when the local store already holds
         // data. The inner check remains the source of truth against any TOCTOU between here and the write.
-        guard isEmptyStoreForRestore(payloadType: payloadType, narrativeRepository: MenstrualNarrativeRepository()) else {
+        guard isEmptyStoreForRestore(payloadType: payloadType, narrativeRepository: narrativeRepository, scope: scope) else {
             FernletAuditLog.log("sealedBackup.restoreSkippedNonEmpty", context: ["payload": payloadType.rawValue])
             return .skippedStoreNotEmpty
         }
@@ -343,7 +425,12 @@ final class SealedBackupCoordinator {
                 FernletAuditLog.log("sealedBackup.restoreNothingToRestore", context: ["payload": payloadType.rawValue])
                 return .nothingToRestore
             }
-            let restored = try applyRestoredChunks(chunks, payloadType: payloadType)
+            let restored = try applyRestoredChunks(
+                chunks,
+                payloadType: payloadType,
+                narrativeRepository: narrativeRepository,
+                scope: scope
+            )
             guard restored > 0 else {
                 FernletAuditLog.log("sealedBackup.restoreNothingToRestore", context: ["payload": payloadType.rawValue])
                 return .nothingToRestore
@@ -388,9 +475,15 @@ final class SealedBackupCoordinator {
     func applyRestoredPayload(
         _ plaintext: Data,
         payloadType: SealedBackupPayloadType,
-        narrativeRepository: MenstrualNarrativeRepository? = nil
+        narrativeRepository: MenstrualNarrativeRepository? = nil,
+        scope: RestoreScope = .freshInstall
     ) throws -> Int {
-        try applyRestoredChunks([plaintext], payloadType: payloadType, narrativeRepository: narrativeRepository)
+        try applyRestoredChunks(
+            [plaintext],
+            payloadType: payloadType,
+            narrativeRepository: narrativeRepository,
+            scope: scope
+        )
     }
 
     /// Decodes the decrypted chunks of a sealed-backup payload and writes them into the local stores,
@@ -411,7 +504,8 @@ final class SealedBackupCoordinator {
     func applyRestoredChunks(
         _ chunks: [Data],
         payloadType: SealedBackupPayloadType,
-        narrativeRepository: MenstrualNarrativeRepository? = nil
+        narrativeRepository: MenstrualNarrativeRepository? = nil,
+        scope: RestoreScope = .freshInstall
     ) throws -> Int {
         // Constructed here rather than as a default argument: `MenstrualNarrativeRepository` is
         // MainActor-isolated, and default-argument expressions evaluate in a nonisolated context.
@@ -420,7 +514,7 @@ final class SealedBackupCoordinator {
         let narrativeRepository = narrativeRepository ?? MenstrualNarrativeRepository()
         // No-clobber guard: refuse to overwrite/insert into a store that already holds user data,
         // regardless of how this method was reached.
-        guard isEmptyStoreForRestore(payloadType: payloadType, narrativeRepository: narrativeRepository) else {
+        guard isEmptyStoreForRestore(payloadType: payloadType, narrativeRepository: narrativeRepository, scope: scope) else {
             FernletAuditLog.log("sealedBackup.applySkippedNonEmpty", context: ["payload": payloadType.rawValue])
             throw SealedBackupWiringError.storeNotEmpty
         }
@@ -454,14 +548,16 @@ final class SealedBackupCoordinator {
     }
 
     /// Whether the local store is empty enough that restoring `payloadType` cannot clobber or
-    /// duplicate existing user data. Requires a fresh install for all payloads; sensitive-notes
-    /// additionally requires the (overwrite-style) Tier-2 store to be empty, and period-data the
-    /// sealed narrative store to be empty.
+    /// duplicate existing user data. At `.freshInstall` scope this requires a fresh install for all
+    /// payloads; sensitive-notes additionally requires the (overwrite-style) Tier-2 store to be empty,
+    /// and period-data the sealed narrative store to be empty. At `.payloadStoreOnly` scope only the
+    /// per-payload store check runs — see `RestoreScope` for why that is still no-clobber for period data.
     private func isEmptyStoreForRestore(
         payloadType: SealedBackupPayloadType,
-        narrativeRepository: MenstrualNarrativeRepository
+        narrativeRepository: MenstrualNarrativeRepository,
+        scope: RestoreScope
     ) -> Bool {
-        guard isFreshInstallForRestore() else { return false }
+        if scope == .freshInstall, !isFreshInstallForRestore() { return false }
         switch payloadType {
         case .sensitiveNotes:
             return host.tierTwoMemories.isEmpty

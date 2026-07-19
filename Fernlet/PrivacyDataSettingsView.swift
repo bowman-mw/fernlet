@@ -573,7 +573,10 @@ struct PrivacyDataSettingsView: View {
     private func retrySealedRestore() {
         guard let store else { return }
         FernletAuditLog.log("privacy.sealedBackup.retryRestore")
-        Task { await store.restoreSealedBackupsIfNeeded() }
+        // `userInitiated` lets the period half fall back to the targeted restore. Without it, Retry on an
+        // in-use device can only ever hit the fresh-install-only gate, so it would clear the banner
+        // without having retried anything.
+        Task { await store.restoreSealedBackupsIfNeeded(userInitiated: true) }
     }
 
     private func resolveEscrowConflict() {
