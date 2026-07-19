@@ -160,10 +160,17 @@ struct WidgetSnapshotStore {
             if snapshot.dateKey == dayKey {
                 snapshot.bottleCount = min(snapshot.bottleCount + 1, 30)
             } else {
-                // Day rolled over since the app last published: show the fresh day's first bottle.
-                // (Score/macros briefly show yesterday's values — the app corrects on next open.)
+                // Day rolled over since the app last published: show the fresh day's first bottle AND
+                // drop yesterday's mood/score/macros. Re-stamping dateKey makes the mood day-gate pass
+                // (WidgetDayGate.snapshotReflectsDay), so leaving companionStateRaw untouched would render
+                // yesterday's companion all day until the app republishes. Empty raw → nil companionState
+                // → the neutral "Fernlet" treatment; the app corrects with the real fresh-day snapshot on
+                // next open. (Score/macros aren't rendered by the widget, but are zeroed to stay coherent.)
                 snapshot.dateKey = dayKey
                 snapshot.bottleCount = 1
+                snapshot.companionStateRaw = ""
+                snapshot.score = 0
+                snapshot.macroSummary = WidgetSnapshot.MacroSummary(protein: 0, carbs: 0, fat: 0)
             }
             snapshot.computedAt = Date()
             guard let encoded = try? WidgetBridgeFiles.makeEncoder().encode(snapshot) else { return }

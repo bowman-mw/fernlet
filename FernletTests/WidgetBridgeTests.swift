@@ -213,4 +213,39 @@ struct WidgetBridgeTests {
         ))
         #expect(queue.records().count == 1)
     }
+
+    // MARK: - Optimistic +1-water bump (instant widget/Siri feedback before the app republishes)
+
+    @Test func optimisticWaterBumpIncrementsWithinTheSameDay() throws {
+        let dir = makeTempDirectory()
+        let store = WidgetSnapshotFileStore(directory: dir)
+        #expect(store.write(makeSnapshot(dateKey: "2026-07-05", bottleCount: 2)))
+
+        store.applyOptimisticWaterPlusOne(dayKey: "2026-07-05")
+
+        let bumped = try #require(store.read())
+        #expect(bumped.dateKey == "2026-07-05")
+        #expect(bumped.bottleCount == 3)
+        // A same-day bump leaves the published mood/score/macros alone.
+        #expect(bumped.companionStateRaw == "Okay")
+    }
+
+    @Test func optimisticWaterBumpRolloverRestampsDayAndClearsYesterdaysMood() throws {
+        let dir = makeTempDirectory()
+        let store = WidgetSnapshotFileStore(directory: dir)
+        // Yesterday's published snapshot carries a real mood + score + macros.
+        #expect(store.write(makeSnapshot(dateKey: "2026-07-05", bottleCount: 5)))
+
+        // The widget/Siri "+1 water" fires on a NEW day, before the app republishes.
+        store.applyOptimisticWaterPlusOne(dayKey: "2026-07-06")
+
+        let rolled = try #require(store.read())
+        #expect(rolled.dateKey == "2026-07-06")   // re-stamped to the fresh day
+        #expect(rolled.bottleCount == 1)          // fresh day's first bottle
+        // Re-stamping dateKey makes the a0bde6c mood day-gate pass, so yesterday's mood MUST be cleared
+        // here — otherwise the widget renders the wrong companion all day until the app opens.
+        #expect(rolled.companionStateRaw == "")   // empty raw → nil companionState → neutral treatment
+        #expect(rolled.score == 0)
+        #expect(rolled.macroSummary == WidgetSnapshot.MacroSummary(protein: 0, carbs: 0, fat: 0))
+    }
 }
