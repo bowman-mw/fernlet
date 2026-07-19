@@ -382,6 +382,37 @@ struct DeleteAllDataTests {
         #expect(outcome.incompleteStores.filter { $0 == "your cycle notes" }.count == 1)
     }
 
+    /// The guided-workout runner (new on this branch: it backs the interactive Live Activity) mirrors an
+    /// in-flight run to a process-wide app-group file that a foreground/launch reconcile re-reads — and a
+    /// naturally-finished run re-LOGS a workout into the store. Without clearing it, a run
+    /// in flight at wipe time survives "delete everything": the next reconcile re-adopts it (the run
+    /// reappears in the sheet/card) or re-logs it into the just-emptied store — which, with sync on,
+    /// re-uploads the resurrected day to iCloud. It is a live writer like the widget queue and the recipe
+    /// inbox, so the funnel must stop it.
+    ///
+    /// Process-wide app-group file (like the guided-run suite): clear it first, keep the suite serialized.
+    @Test func guidedRunInFlightDoesNotSurviveTheWipe() async {
+        let store = makeTestStore()
+        store.clearGuidedRun()
+        let s = WorkoutProgram.SessionSuggestion(
+            title: "Push", timeLabel: "", kind: .strength,
+            exercises: [PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true)],
+            suggestion: WorkoutSuggestion(name: "Push", exercises: "Bench 3x8", notes: "")
+        )
+        store.startGuidedRun(s)
+        #expect(store.guidedRunState != nil, "precondition: the guided run did not start")
+
+        await store.deleteAllData(includingHealthKitSamples: false)
+
+        // Cleared in memory…
+        #expect(store.guidedRunState == nil, "the in-flight guided run survived the wipe in memory")
+        // …and in the app-group file: a reconcile (the same path a relaunch/foreground takes) must find
+        // nothing to re-adopt or re-log. If the file survived, reconcile would set `guidedRunState` back.
+        store.reconcileGuidedRunFromAppGroup()
+        #expect(store.guidedRunState == nil, "the guided run survived the wipe in the app-group file")
+        #expect(store.day.workouts.isEmpty, "a guided run re-logged a workout after the wipe")
+    }
+
     /// Wires every sealed/reset hook to succeed, for tests that need an otherwise-complete wipe.
     /// HealthKit is left out because it only fires when the caller opts into deleting samples.
     private func wireSucceedingSealedHooks(_ store: FernletStore) {

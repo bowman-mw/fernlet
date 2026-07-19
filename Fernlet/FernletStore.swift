@@ -3164,7 +3164,13 @@ final class FernletStore {
         if let widgetSnapshotMirror, !widgetSnapshotMirror.clear() {
             outcome.incompleteStores.append("widget data")
         }
-        pendingWidgetActionQueue.clear()
+        // The pending widget-action queue (a "+1 cup" tapped from the widget/Siri before the wipe)
+        // drains on the next foreground and re-creates a day record. `clear()` now reports a failed
+        // empty-write, so a surviving row can't leave the dialog claiming a complete wipe. Names
+        // "widget data" like the mirror above; the dedupe below collapses the pair to one line.
+        if !pendingWidgetActionQueue.clear() {
+            outcome.incompleteStores.append("widget data")
+        }
 
         if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {
             outcome.incompleteStores.append("your storage settings")
@@ -3233,6 +3239,16 @@ final class FernletStore {
         // Group activities (hosted/joined rosters + join tokens) — device-local social data, never synced;
         // clear the sidecar too (the manager owns it, mirroring the clothing-shop clearAll seam).
         meshNetworkManager.activities.clearAll()
+        // The guided-workout runner mirrors an in-flight run to an app-group file that a
+        // foreground/launch `reconcileGuidedRunFromAppGroup` re-reads — and a naturally-finished run
+        // re-LOGS a workout back into the store (`finishGuidedRunLogging` → `addWorkout`; the dedup
+        // guards are empty on a just-wiped store, and with sync on the resurrected day re-uploads to
+        // iCloud). It is a live writer like the widget queue, so a wipe must stop it. Clear the file
+        // UNCONDITIONALLY: a Live-Activity finish can leave the run only in the file with
+        // `guidedRunState` already nil, so `abandonGuidedRun`'s non-nil guard is too weak here.
+        guidedRunState = nil
+        guidedRunStateStore.clear()
+        syncActivity { await GuidedWorkoutActivityBridge.end() }
         // Device-local sensitive-surface visibility resolution — reset to "unresolved" so a fresh start
         // re-derives from `sex` (resetDiary already restored the settings gate to its defaults).
         clearSensitiveVisibilityResolution()

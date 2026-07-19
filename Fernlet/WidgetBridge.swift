@@ -259,12 +259,18 @@ struct PendingWidgetActionQueue {
     /// Discards every queued row without applying it. Called by "delete everything": a widget "+1 cup"
     /// tapped before the wipe would otherwise drain on the next foreground and re-create a day record —
     /// silently rebuilding data the user just deleted, from a tap they made before deleting it.
-    func clear() {
+    ///
+    /// Returns false if the empty-array write or the coordination failed, so the wipe funnel can report
+    /// the queue as incompletely cleared instead of promising a complete deletion that a surviving row
+    /// silently undoes. Mirrors `SharedRecipeImportQueue.clear()`, which returns Bool and is checked.
+    func clear() -> Bool {
         var coordinatorError: NSError?
+        var success = false
         let coordinator = NSFileCoordinator()
         coordinator.coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordinatorError) { url in
-            write([], to: url)
+            success = write([], to: url)
         }
+        return success && coordinatorError == nil
     }
 
     @discardableResult
