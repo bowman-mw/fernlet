@@ -576,6 +576,43 @@ public final class DiaryStore {
         }
     }
 
+    /// Pure workout removal by id: mirrors `appendWorkout` (mutate the day + invalidate the cached
+    /// summary). The facade's `removeWorkout` runs the guided/planned/progression reversal around this.
+    /// Returns whether a row was actually removed.
+    @discardableResult
+    public func removeWorkout(id: UUID, date: String) -> Bool {
+        assert(!date.isEmpty, "workout date required")
+        var removed = false
+        batchSnapshotPersistence {
+            mutateDay(date: date) { day in
+                let before = day.workouts.count
+                day.workouts.removeAll { $0.id == id }
+                removed = day.workouts.count != before
+            }
+            if removed { invalidateDaySummary(for: date) }
+        }
+        return removed
+    }
+
+    /// Pure workout replace-by-id (edit). Mirrors `appendWorkout`; invalidates the cached summary.
+    /// Returns whether a matching row was found and replaced. Provenance is the caller's responsibility
+    /// — the facade re-asserts the fields the edit UI can't reach before calling here.
+    @discardableResult
+    public func updateWorkout(_ workout: Workout, date: String) -> Bool {
+        assert(!date.isEmpty, "workout date required")
+        var replaced = false
+        batchSnapshotPersistence {
+            mutateDay(date: date) { day in
+                if let index = day.workouts.firstIndex(where: { $0.id == workout.id }) {
+                    day.workouts[index] = workout
+                    replaced = true
+                }
+            }
+            if replaced { invalidateDaySummary(for: date) }
+        }
+        return replaced
+    }
+
     public func planWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
         assert(!date.isEmpty, "planned workout date required")
         mutateDay(date: date) { day in
@@ -672,6 +709,23 @@ public final class DiaryStore {
         guard deduped.isEmpty == false else { return }
         batchSnapshotPersistence {
             for name in deduped { settings.workoutProgression[name, default: 0] += 1 }
+        }
+    }
+
+    /// Exact reverse of `recordCompletedExercises`: decrement each name's progression by one, floored at
+    /// zero (a hit-zero entry is dropped so the map doesn't accrue dead keys). Deduped the same way as
+    /// the record path, so one call undoes exactly one `recordCompletedExercises` call. Used when a
+    /// guided workout is removed and its exact catalog exercise names are still recoverable.
+    public func decrementCompletedExercises(_ names: [String]) {
+        let deduped = Array(Set(names)).filter { $0.isEmpty == false }
+        guard deduped.isEmpty == false else { return }
+        batchSnapshotPersistence {
+            for name in deduped {
+                guard let current = settings.workoutProgression[name] else { continue }
+                let next = current - 1
+                if next <= 0 { settings.workoutProgression[name] = nil }
+                else { settings.workoutProgression[name] = next }
+            }
         }
     }
 

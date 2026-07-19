@@ -137,7 +137,12 @@ struct MoveView: View {
                                 }
                             }
                             ForEach(Array(store.day.workouts.enumerated()), id: \.element.id) { index, workout in
-                                WorkoutRow(workout: workout)
+                                WorkoutRow(
+                                    store: store,
+                                    workout: workout,
+                                    date: store.todayKey,
+                                    onChanged: { allDays = store.loadDays() }
+                                )
                                 if index < store.day.workouts.count - 1 {
                                     FernletRowDivider()
                                 }
@@ -1128,8 +1133,22 @@ struct WorkoutSuggestionSheet: View {
     }
 }
 
+/// A logged (completed) workout row. Beyond displaying the workout it carries the recoverability
+/// affordances a tester asked for: a one-tap Complete is easy to trigger by accident, so every logged
+/// row can be edited or removed. Remove confirms first (gentle copy, and it mentions putting a planned
+/// row back when the completion came from one). A workout that lives in Apple Health (`healthKitUUID`
+/// set — an import, or a Fernlet log already synced) can't be cleanly edited/removed here without
+/// orphaning or resurrecting the Health sample, so it shows a gentle "manage in Health" note instead.
 struct WorkoutRow: View {
+    var store: FernletStore
     var workout: Workout
+    var date: String
+    /// Called after a remove or edit so the parent can refresh caches it snapshots (calendar days, or a
+    /// past-day detail list that isn't observed).
+    var onChanged: () -> Void = {}
+
+    @State private var showRemoveConfirm = false
+    @State private var showEditSheet = false
 
     private var category: WorkoutType {
         WorkoutExerciseCatalog.inferredCategory(for: workout)
@@ -1137,6 +1156,18 @@ struct WorkoutRow: View {
 
     private var targetSummary: String {
         WorkoutExerciseCatalog.targetSummary(for: workout)
+    }
+
+    /// Health owns any row carrying a HealthKit UUID; those aren't editable/removable in Fernlet.
+    private var isHealthManaged: Bool { workout.healthKitUUID != nil }
+
+    /// A completion that consumed a planned row will restore it on remove — surfaced in the dialog copy.
+    private var restoresPlannedRow: Bool { workout.plannedWorkoutID != nil }
+
+    private var removeConfirmMessage: String {
+        restoresPlannedRow
+            ? "I'll put it back in your plan so you can redo it whenever you're ready."
+            : "This just clears it from your log — no worries, you can always add it again."
     }
 
     var body: some View {
@@ -1178,8 +1209,136 @@ struct WorkoutRow: View {
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
             }
+
+            if isHealthManaged {
+                HStack(spacing: 8) {
+                    Image(systemName: "heart.text.square")
+                        .font(.caption)
+                        .foregroundStyle(Color.slate)
+                    Text("This came from Health — manage it in the Health app.")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
+                .padding(.top, 2)
+            } else {
+                HStack(spacing: 10) {
+                    Button("Edit") { showEditSheet = true }
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                        .accessibilityIdentifier("workout.log.edit")
+                    Button("Remove", role: .destructive) { showRemoveConfirm = true }
+                        .font(.fernlet(.label))
+                        .accessibilityIdentifier("workout.log.remove")
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+            }
         }
         .padding(.vertical, 4)
+        .confirmationDialog("Remove this workout?", isPresented: $showRemoveConfirm, titleVisibility: .visible) {
+            Button("Remove", role: .destructive) {
+                store.removeWorkout(id: workout.id, date: date)
+                onChanged()
+            }
+            Button("Keep it", role: .cancel) {}
+        } message: {
+            Text(removeConfirmMessage)
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditWorkoutSheet(store: store, workout: workout, date: date, onSaved: onChanged)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
+    }
+}
+
+/// A small editor for an already-logged workout — the reversible half of the recoverability feature.
+/// It edits only the fields that make sense to correct after the fact (name, intensity, duration,
+/// notes) and reuses the manual Log sheet's field idiom (`SheetField`, `SheetTextEditor`, chips,
+/// `SheetSaveBar`). Everything else — provenance (planned/guided/Health), exercises, targets,
+/// timestamps — is carried straight through by editing a copy of the original and letting the store
+/// re-assert provenance on save.
+struct EditWorkoutSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var store: FernletStore
+    var workout: Workout
+    var date: String
+    var onSaved: () -> Void = {}
+
+    @State private var name: String
+    @State private var intensity: WorkoutIntensity
+    @State private var duration: String
+    @State private var notes: String
+
+    init(store: FernletStore, workout: Workout, date: String, onSaved: @escaping () -> Void = {}) {
+        self.store = store
+        self.workout = workout
+        self.date = date
+        self.onSaved = onSaved
+        _name = State(initialValue: workout.name)
+        _intensity = State(initialValue: workout.intensity)
+        _duration = State(initialValue: workout.duration.map(String.init) ?? "")
+        _notes = State(initialValue: workout.notes)
+    }
+
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text("Edit workout")
+                        .font(.fernlet(.displayMedium))
+                        .foregroundStyle(Color.bark)
+
+                    SheetField("Workout") {
+                        TextField("e.g. Upper strength", text: $name)
+                            .sheetTextInput()
+                            .accessibilityIdentifier("workout.edit.name")
+                    }
+
+                    SheetField("Intensity") {
+                        FlowLayout(spacing: 8) {
+                            ForEach(WorkoutIntensity.allCases) { level in
+                                Button(level.rawValue.capitalized) { intensity = level }
+                                    .buttonStyle(ChipButtonStyle(selected: intensity == level))
+                                    .accessibilityIdentifier("workout.edit.intensity.\(level.rawValue)")
+                            }
+                        }
+                    }
+
+                    SheetField("Duration (min)") {
+                        TextField("45", text: $duration)
+                            .sheetTextInput()
+                            .accessibilityIdentifier("workout.edit.duration")
+                    }
+
+                    SheetField("Workout notes") {
+                        SheetTextEditor(
+                            text: $notes,
+                            placeholder: "Pain, form issues, stopped early...",
+                            minHeight: 100
+                        )
+                    }
+                }
+                .padding(20)
+                .padding(.bottom, 10)
+            }
+
+            SheetSaveBar(disabled: trimmedName.isEmpty) {
+                var updated = workout
+                updated.name = trimmedName
+                updated.intensity = intensity
+                updated.duration = Int(duration.trimmingCharacters(in: .whitespacesAndNewlines))
+                updated.notes = notes
+                store.updateWorkout(updated, date: date)
+                onSaved()
+                dismiss()
+            }
+        }
+        .background(Color.parchment)
     }
 }
 
@@ -1879,9 +2038,13 @@ struct MoveDayDetailView: View {
     @State private var showWorkoutSheet = false
     @State private var showPlanSheet = false
     @State private var editingPlannedWorkout: PlannedWorkout?
+    // Past-day reads (`store.loadDay` for a non-today key) aren't observed, so a remove/edit on a past
+    // day needs an explicit nudge to re-render. Bumping this re-evaluates the body, re-reading `day`.
+    @State private var reloadToken = 0
 
     private var day: FernletDay {
-        store.loadDay(for: dateKey)
+        _ = reloadToken
+        return store.loadDay(for: dateKey)
     }
 
     private var isFuture: Bool {
@@ -1932,7 +2095,12 @@ struct MoveDayDetailView: View {
                             EmptyState(text: "No workouts logged")
                         } else {
                             ForEach(Array(day.workouts.enumerated()), id: \.element.id) { index, workout in
-                                WorkoutRow(workout: workout)
+                                WorkoutRow(
+                                    store: store,
+                                    workout: workout,
+                                    date: dateKey,
+                                    onChanged: { reloadToken += 1 }
+                                )
                                 if index < day.workouts.count - 1 { FernletRowDivider() }
                             }
                         }

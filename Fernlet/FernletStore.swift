@@ -1710,6 +1710,115 @@ final class FernletStore {
         diary.removePlannedWorkout(plannedWorkout, date: date)
     }
 
+    /// Removes a logged workout and reverses the bookkeeping its completion set up, so an accidental
+    /// "Complete" is fully recoverable. Returns `false` (no change) when the id isn't on `date`, or the
+    /// row is Health-managed. Health-managed rows (any row carrying a `healthKitUUID` — an Apple Health
+    /// import, or a Fernlet log already synced to Health) are refused: removing only our copy would
+    /// orphan the Health sample and the next Health refresh would resurrect it. The UI offers those rows
+    /// a "manage in Health" affordance instead of Remove.
+    ///
+    /// For a removable (Fernlet-only) row it also:
+    /// - clears the guided completion (session id + progression) when the row was guided-logged and the
+    ///   committed plan is still resolvable, so the Start card / "Mark done" honestly re-offer it;
+    /// - restores the planned row a completion consumed (best-effort; the original planned id is
+    ///   preserved so weekly copy-forward identity survives).
+    @discardableResult
+    func removeWorkout(id: UUID, date: String) -> Bool {
+        assert(!date.isEmpty, "workout date required")
+        guard let workout = diary.loadDay(for: date).workouts.first(where: { $0.id == id }) else { return false }
+        // Health owns any row carrying a HealthKit UUID; refuse so we never orphan / resurrect it.
+        guard workout.healthKitUUID == nil else { return false }
+
+        // Reverse the guided completion while the committed plan + the row's name are still resolvable.
+        if workout.loggedFromGuidedSession == true {
+            reverseGuidedCompletion(for: workout, date: date)
+        }
+
+        diary.removeWorkout(id: id, date: date)
+
+        // Put back the planned row this completion consumed. Idempotent: `planWorkout` replaces by id,
+        // and a repeat remove finds no row (so no double-restore on double-remove).
+        if let plannedID = workout.plannedWorkoutID {
+            diary.planWorkout(Self.reconstructPlannedWorkout(from: workout, plannedID: plannedID), date: date)
+        }
+        return true
+    }
+
+    /// Replaces a logged workout in place (used by the edit sheet, which only exposes
+    /// name/intensity/duration/notes). Provenance and timestamps the edit UI can't reach are re-asserted
+    /// from the stored row so a partial edit can't drop them. Health-managed rows are refused (not
+    /// editable — Health owns them). Returns `false` when the id isn't on `date` or the row is
+    /// Health-managed.
+    @discardableResult
+    func updateWorkout(_ workout: Workout, date: String) -> Bool {
+        assert(!date.isEmpty, "workout date required")
+        guard let existing = diary.loadDay(for: date).workouts.first(where: { $0.id == workout.id }) else { return false }
+        guard existing.healthKitUUID == nil else { return false }
+        var updated = workout
+        updated.plannedWorkoutID = existing.plannedWorkoutID
+        updated.healthKitUUID = existing.healthKitUUID
+        updated.loggedFromGuidedSession = existing.loggedFromGuidedSession
+        updated.completedAt = existing.completedAt
+        updated.loggedAt = existing.loggedAt
+        return diary.updateWorkout(updated, date: date)
+    }
+
+    /// Reverses `completeGuidedRunnerSession`'s bookkeeping for a removed guided-logged workout. Only
+    /// meaningful for today's committed plan — the session ids and the exact progression names live
+    /// there. A relaunch (fresh plan/ids) or an other-day removal has nothing to reverse against, so we
+    /// leave progression untouched rather than guess (the row's removal alone un-sees its name).
+    ///
+    /// Two guided sessions can share a `suggestion.name` ("Push"). We clear every same-name session id
+    /// (harmless: while any same-name row remains, name reconciliation still marks the session logged, so
+    /// no double-log window opens until the last same-name row is gone) but decrement progression by
+    /// exactly one session's worth per removal — one removed row undoes one completion.
+    private func reverseGuidedCompletion(for workout: Workout, date: String) {
+        guard date == todayKey, let plan = currentGuidedWorkoutPlan else { return }
+        let matching = plan.sessions.filter { $0.suggestion.name == workout.name }
+        guard let first = matching.first else { return }
+        for session in matching { guidedCompletedSessionIDs.remove(session.id) }
+        diary.decrementCompletedExercises(first.catalogExerciseNames)
+    }
+
+    /// Best-effort reverse of `PlannedWorkout.completedWorkout`, rebuilding the planned row a completion
+    /// consumed. The `Workout` carries these exactly: plannedWorkoutID (→ preserved planned id),
+    /// name, mode, activityType, exercises, muscleGroups, duration, distance/energy/effort targets.
+    /// Lossy fields it can't carry are approximated: `split` collapses through `WorkoutType`
+    /// (push/pull/upper all read back as `.upper`, legs/lower → `.lower`, etc.), `source` is recovered
+    /// from the boilerplate completion note (else `.user`), `createdAt` is taken from the completion
+    /// time, and the plan's own free-text notes are gone when the plan had exercises.
+    static func reconstructPlannedWorkout(from workout: Workout, plannedID: UUID) -> PlannedWorkout {
+        let source: WorkoutPlanSource =
+            workout.notes == WorkoutPlanSource.coach.completionNote ? .coach : .user
+        return PlannedWorkout(
+            id: plannedID,
+            name: workout.name,
+            split: Self.plannedSplit(for: workout.type),
+            source: source,
+            mode: workout.mode,
+            activityType: workout.activityType,
+            exercises: workout.exercises,
+            muscleGroups: workout.muscleGroups,
+            notes: "",
+            duration: workout.duration,
+            targetDistanceMiles: workout.distanceMiles,
+            targetEnergyKcal: workout.activeEnergyKcal,
+            targetEffort: workout.effort,
+            createdAt: workout.completedAt
+        )
+    }
+
+    /// Reverse of `WorkoutSplit.workoutType`, picking a representative split for each category. The
+    /// forward map is many-to-one, so the finer split (push vs pull vs upper) can't be recovered.
+    private static func plannedSplit(for type: WorkoutType) -> WorkoutSplit {
+        switch type {
+        case .upper, .armsBack, .mixed: return .upper
+        case .lower: return .lower
+        case .fullBody: return .fullBody
+        case .cardio, .run, .hike: return .cardio
+        }
+    }
+
     func refreshWorkoutsFromHealth() async {
         await healthSyncCoordinator.refreshWorkoutsFromHealth()
     }
