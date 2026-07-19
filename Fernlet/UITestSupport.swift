@@ -46,11 +46,18 @@ enum UITestSupport {
     /// The sheet is only reachable by a long-press on the hero companion, which XCUITest can't
     /// synthesize; this hook lets the item-creation flow (slot picker → Wardrobe → studio) be driven.
     static var shouldOpenCustomize: Bool { env["FERNLET_UI_TEST_OPEN_CUSTOMIZE"] == "1" }
+
+    /// `FERNLET_UI_TEST_SEED_STUDIO_CANVAS=1` — open the Creation Studio's editor with a pre-painted
+    /// canvas. XCUITest can't drive the custom zoomable canvas's paint gesture, and "Next" stays disabled
+    /// while the canvas is blank, so without this the naming / shop-listing confirmation step (and its
+    /// moderation alert) is unreachable from a UI test.
+    static var shouldSeedStudioCanvas: Bool { env["FERNLET_UI_TEST_SEED_STUDIO_CANVAS"] == "1" }
     #else
     static var shouldSeedDemoContent: Bool { false }
     static var bypassPrivateLockGate: Bool { false }
     static var initialSheet: FernletSheet? { nil }
     static var shouldOpenCustomize: Bool { false }
+    static var shouldSeedStudioCanvas: Bool { false }
     #endif
 }
 

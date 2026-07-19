@@ -5,22 +5,88 @@ import XCTest
 /// customization sheet is opened via a launch hook — its real entry is a long-press XCUITest can't send)
 /// and asserts the name/shop controls are NO LONGER on the editor and that it leads to a Next step.
 ///
-/// The confirmation screen itself is only reachable after painting (Next stays disabled on a blank
-/// canvas), and XCUITest can't drive the custom UIScrollView canvas's paint gesture — that half is
-/// covered by manual/on-device walkthrough. What this pins is exactly the requested move: name + shop
-/// are gone from the drawing screen.
+/// XCUITest can't drive the custom UIScrollView canvas's paint gesture, so reaching the confirmation
+/// screen (Next is disabled while the canvas is blank) uses the `FERNLET_UI_TEST_SEED_STUDIO_CANVAS`
+/// DEBUG hook, which opens the editor pre-painted.
 final class ItemCreationFlowUITests: XCTestCase {
     @MainActor
     func testNameAndShopAreOffTheEditorAndLeadToNext() {
+        let app = launchToStudioEditor(seedCanvas: false)
+
+        // Editor: the canvas is here, but the name + shop controls are NOT — they moved to the
+        // confirmation step. Instead the editor leads onward with a "Next" bar.
+        XCTAssertTrue(app.descendants(matching: .any)["studio.canvas"].waitForExistence(timeout: 20),
+                      "editor canvas did not render")
+        XCTAssertFalse(app.textFields["studio.confirm.name"].exists, "name field must NOT be on the editor screen")
+        XCTAssertFalse(app.descendants(matching: .any)["studio.confirm.listToggle"].exists,
+                       "shop listing must NOT be on the editor screen")
+        XCTAssertTrue(app.buttons["Next"].waitForExistence(timeout: 10),
+                      "editor should lead to a Next step, not save directly")
+
+        UXScreenProbe(app, "Studio · Editor (name/shop moved off)", in: self).capture()
+    }
+
+    /// A listing refused by the name gate must TELL the user, from the screen they are actually looking at.
+    /// The alert used to hang off the editor — by then the covered middle of the nav stack — so "Save to
+    /// closet" read as inert while the item was quietly saved-but-unlisted.
+    @MainActor
+    func testFlaggedNameShowsAlertOnTheConfirmationScreen() {
+        let app = launchToStudioEditor(seedCanvas: true)
+
+        let next = app.buttons["Next"]
+        XCTAssertTrue(next.waitForExistence(timeout: 20), "Next bar not found")
+        XCTAssertTrue(next.isEnabled, "seeded canvas should enable Next")
+        next.tap()
+
+        // Confirmation step: name it something the shop gate blocks, then ask to list it.
+        let nameField = app.textFields["studio.confirm.name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 6), "confirmation screen did not push")
+        nameField.tap()
+        // Resign the keyboard and let it finish leaving, so the following taps are aimed at the settled
+        // layout rather than the keyboard-compressed one.
+        nameField.typeText("shitty hat\n")
+        waitForKeyboardToDismiss(in: app)
+
+        let listToggle = app.switches["studio.confirm.listToggle"].firstMatch
+        XCTAssertTrue(listToggle.waitForExistence(timeout: 10), "shop listing toggle not found")
+        if listToggle.value as? String != "1" { listToggle.tap() }
+
+        let save = app.buttons["Save to closet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 10), "save bar not found")
+        save.tap()
+
+        // The refusal must surface here, on the topmost screen — not be swallowed by the covered editor.
+        let alert = app.alerts["Pick a friendlier name"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 6),
+                      "flagged-name alert must present on the confirmation screen")
+
+        UXScreenProbe(app, "Studio · Confirmation (flagged name)", in: self).capture()
+
+        alert.buttons["OK"].tap()
+
+        // Dismissing leaves the user on the confirmation screen so they can rename and retry.
+        XCTAssertTrue(nameField.waitForExistence(timeout: 4),
+                      "should stay on the confirmation screen to rename and retry")
+    }
+
+    // MARK: - Helpers
+
+    /// Drives customization sheet → Clothing slot → Wardrobe → "Design a new item".
+    @MainActor
+    private func launchToStudioEditor(seedCanvas: Bool) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-completeOnboarding"]
         app.launchEnvironment["FERNLET_UI_TEST_SEED_DEMO"] = "1"
         app.launchEnvironment["FERNLET_UI_TEST_OPEN_CUSTOMIZE"] = "1"
+        if seedCanvas { app.launchEnvironment["FERNLET_UI_TEST_SEED_STUDIO_CANVAS"] = "1" }
         app.launch()
+        expandSheetToFullHeight(in: app)
 
         // Open the Clothing slot picker (a custom slot → carries the Wardrobe route).
-        let clothing = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Clothing")).firstMatch
-        XCTAssertTrue(clothing.waitForExistence(timeout: 8), "customization sheet did not open")
+        guard let clothing = waitForButton(in: app, labelContaining: "Clothing", timeout: 30) else {
+            XCTFail("customization sheet did not open")
+            return app
+        }
         for _ in 0..<6 where !clothing.isHittable { app.swipeUp() }
         clothing.tap()
 
@@ -29,20 +95,80 @@ final class ItemCreationFlowUITests: XCTestCase {
         XCTAssertTrue(wardrobe.waitForExistence(timeout: 6), "Wardrobe route not found")
         wardrobe.tap()
 
-        let design = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Design a new item")).firstMatch
-        XCTAssertTrue(design.waitForExistence(timeout: 6), "Design a new item not found")
+        guard let design = waitForButton(in: app, labelContaining: "Design a new item", timeout: 10) else {
+            XCTFail("Design a new item not found")
+            return app
+        }
         design.tap()
 
-        // Editor: the canvas is here, but the name + shop controls are NOT — they moved to the
-        // confirmation step. Instead the editor leads onward with a "Next" bar.
-        XCTAssertTrue(app.descendants(matching: .any)["studio.canvas"].waitForExistence(timeout: 6),
-                      "editor canvas did not render")
-        XCTAssertFalse(app.textFields["studio.confirm.name"].exists, "name field must NOT be on the editor screen")
-        XCTAssertFalse(app.descendants(matching: .any)["studio.confirm.listToggle"].exists,
-                       "shop listing must NOT be on the editor screen")
-        XCTAssertTrue(app.buttons["Next"].waitForExistence(timeout: 4),
-                      "editor should lead to a Next step, not save directly")
+        // Don't hand back an app that hasn't arrived yet: every caller's first assertion is about the
+        // editor, and without this a slow push reads as a content failure rather than a slow push.
+        _ = app.descendants(matching: .any)["studio.canvas"].waitForExistence(timeout: 20)
 
-        UXScreenProbe(app, "Studio · Editor (name/shop moved off)", in: self).capture()
+        return app
+    }
+
+    /// Drags the customization sheet up to its large detent.
+    ///
+    /// The sheet is `[.medium, .large]` and opens at medium about half the time. At medium its lower
+    /// content sits over the presentation's dismiss region, so a tap aimed at a control near the bottom
+    /// of the sheet — the shop toggle, in particular — falls through and dismisses the whole sheet
+    /// instead of hitting the control. Interacting only at the large detent removes that entire class of
+    /// flake (and matches how the screen is actually used).
+    @MainActor
+    private func expandSheetToFullHeight(in app: XCUIApplication) {
+        let deadline = Date().addingTimeInterval(30)
+        repeat {
+            let grabber = app.buttons["Sheet Grabber"].firstMatch
+            if grabber.exists {
+                if (grabber.value as? String)?.localizedCaseInsensitiveContains("half") != true { return }
+                grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                    .press(forDuration: 0.05,
+                           thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.03)))
+                return
+            }
+            usleep(200_000)
+        } while Date() < deadline
+    }
+
+    /// Blocks until the software keyboard is gone, plus a beat for the layout to settle behind it.
+    @MainActor
+    private func waitForKeyboardToDismiss(in app: XCUIApplication) {
+        let deadline = Date().addingTimeInterval(5)
+        while app.keyboards.count > 0, Date() < deadline {
+            usleep(200_000)
+        }
+        usleep(700_000)
+    }
+
+    /// Waits for a button whose label contains `text`, re-resolving the query on every poll and scrolling
+    /// while it looks. Two distinct flakes made the naive wait unreliable here:
+    ///
+    ///  * `waitForExistence` on a cached `.firstMatch` of a predicate query does NOT re-resolve once it
+    ///    has missed, so it reported "not found" for an element plainly present a moment later.
+    ///  * The customization sheet opens at either the half or the full detent. At half, its lower rows
+    ///    are off-screen and absent from the accessibility hierarchy, so no amount of *waiting* finds
+    ///    them — the sheet has to be scrolled/expanded first.
+    ///
+    /// The initial settle window keeps the first swipe from landing before the sheet is up.
+    @MainActor
+    private func waitForButton(in app: XCUIApplication,
+                               labelContaining text: String,
+                               timeout: TimeInterval) -> XCUIElement? {
+        let predicate = NSPredicate(format: "label CONTAINS[c] %@", text)
+        let start = Date()
+        let deadline = start.addingTimeInterval(timeout)
+        var swipes = 0
+        repeat {
+            let element = app.buttons.matching(predicate).firstMatch
+            if element.exists { return element }
+            if Date().timeIntervalSince(start) > 3, swipes < 8 {
+                app.swipeUp()
+                swipes += 1
+            } else {
+                usleep(200_000)
+            }
+        } while Date() < deadline
+        return nil
     }
 }

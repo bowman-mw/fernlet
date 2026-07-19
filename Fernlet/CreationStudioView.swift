@@ -17,6 +17,8 @@ struct CreationStudioView: View {
     @State private var selectedColor: Int
     @State private var isShareable: Bool
     @State private var price: Int
+    /// Set only by `save()`, and presented from `confirmationScreen` (the topmost view when a listing is
+    /// refused) — see the `.alert` there for why it must not hang off the editor.
     @State private var shopAlert: ShopAlert?
     /// Per-slot draft ids for the create path, seeded for every slot up front so reads during body
     /// (the companion preview) never mutate state. Keyed by slot because `CustomItemService.upsert`
@@ -58,7 +60,11 @@ struct CreationStudioView: View {
         } else {
             let initialSlot = ItemSlot.body
             _slot = State(initialValue: initialSlot)
-            _pixels = State(initialValue: Self.blankPixels(for: initialSlot))
+            // The UI-test seed paints the canvas so "Next" is enabled: XCUITest can't synthesize the
+            // custom canvas's paint gesture, and a blank canvas leaves the confirmation step unreachable.
+            _pixels = State(initialValue: UITestSupport.shouldSeedStudioCanvas
+                            ? Self.seededPixels(for: initialSlot)
+                            : Self.blankPixels(for: initialSlot))
             _name = State(initialValue: "")
             _isShareable = State(initialValue: false)
             _price = State(initialValue: ClothingShopLimits.minPrice)
@@ -106,28 +112,6 @@ struct CreationStudioView: View {
         }
         .navigationDestination(isPresented: $showingConfirmation) {
             confirmationScreen
-        }
-        .alert(item: $shopAlert) { alert in
-            switch alert {
-            case .nameFlagged:
-                return Alert(
-                    title: Text("Pick a friendlier name"),
-                    message: Text("This name can't be used in your shop. Your item is saved — rename it and try listing again. (Private items can be named anything.)"),
-                    dismissButton: .default(Text("OK"))
-                )
-            case .capReached:
-                return Alert(
-                    title: Text("Your shop is full"),
-                    message: Text("You can list up to \(ClothingShopLimits.maxListedItems) items at once. Unlist one to make room. Your item is saved and ready whenever you are."),
-                    dismissButton: .default(Text("OK"))
-                )
-            case .storeBanned:
-                return Alert(
-                    title: Text("Your shop is closed"),
-                    message: Text("Your shop is paused because items you shared were reported. It reopens automatically after a while — your items are still saved."),
-                    dismissButton: .default(Text("OK"))
-                )
-            }
         }
     }
 
@@ -379,6 +363,33 @@ struct CreationStudioView: View {
         .safeAreaInset(edge: .bottom) {
             SheetSaveBar(label: "Save to closet", disabled: !canSave) { save() }
         }
+        // The moderation alert lives HERE, on the confirmation screen, not back on the editor: `save()`
+        // only ever runs from this screen's save bar, and a refused listing deliberately does NOT
+        // `dismiss()` (the user stays to rename and retry). An alert anchored to the editor — by then the
+        // covered middle of the stack (Wardrobe → editor → confirmation) — is not reliably presented, so
+        // the refusal read as an inert Save button while the item was quietly saved-but-unlisted.
+        .alert(item: $shopAlert) { alert in
+            switch alert {
+            case .nameFlagged:
+                return Alert(
+                    title: Text("Pick a friendlier name"),
+                    message: Text("This name can't be used in your shop. Your item is saved — rename it and try listing again. (Private items can be named anything.)"),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .capReached:
+                return Alert(
+                    title: Text("Your shop is full"),
+                    message: Text("You can list up to \(ClothingShopLimits.maxListedItems) items at once. Unlist one to make room. Your item is saved and ready whenever you are."),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .storeBanned:
+                return Alert(
+                    title: Text("Your shop is closed"),
+                    message: Text("Your shop is paused because items you shared were reported. It reopens automatically after a while — your items are still saved."),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
+        }
     }
 
     private var shopSection: some View {
@@ -586,6 +597,18 @@ struct CreationStudioView: View {
 
     private static func blankPixels(for slot: ItemSlot) -> [Int] {
         Array(repeating: ItemGridTexture.transparent, count: slot.gridCols * slot.gridRows)
+    }
+
+    /// A minimally-painted canvas (one filled row) used ONLY by the UI-test seed hook, so `canSave` is
+    /// true without a paint gesture. Release builds never reach this — `shouldSeedStudioCanvas` is a
+    /// hard-coded `false` outside DEBUG.
+    private static func seededPixels(for slot: ItemSlot) -> [Int] {
+        var pixels = blankPixels(for: slot)
+        let row = slot.gridRows / 2
+        for x in 0..<slot.gridCols {
+            pixels[row * slot.gridCols + x] = 0
+        }
+        return pixels
     }
 
     /// Builds an editor pixel buffer sized exactly to the item's slot grid (`gridCols * gridRows`),
