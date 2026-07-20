@@ -1,0 +1,16 @@
+# Cloudflare Pages header rules (https://developers.cloudflare.com/pages/configuration/headers/)
+
+# Baseline security headers for every page. The CSP forbids all external loads —
+# the site is deliberately self-contained (no JS, no cookies, no third-party requests).
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+# The AASA file (added at coach P0) must be served as JSON with no caching games.
+# This rule is inert until the file exists — keep it so universal links work on day one.
+/.well-known/apple-app-site-association
+  Content-Type: application/json
+  Cache-Control: max-age=3600

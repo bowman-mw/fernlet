@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Fernlet</title>
+<meta name="description" content="Fernlet's privacy policy: privacy-first, on-device by design. No servers, no ads, no tracking.">
+<style>
+:root{
+  --bg:#F5EFDF; --box:#FBF7EE; --ink:#3D2E1E; --soft:#61707A; --moss:#5E844D;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#1C1E1B; --box:#282A26; --ink:#F1EDE3; --soft:#BAC0C2; --moss:#7FB069; }
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+  line-height:1.65; font-size:1.04rem;
+}
+main{max-width:42rem; margin:0 auto; padding:3.2rem 1.4rem 3rem}
+h1{font-size:2rem; margin:0 0 1rem}
+h2{font-size:1.28rem; margin:2rem 0 .6rem}
+p, li{margin:0 0 1rem}
+ul{padding-left:1.2rem}
+hr{border:0; border-top:1px solid rgba(125,125,125,.3); margin:2rem 0}
+a{color:var(--moss); text-decoration-thickness:1px; text-underline-offset:2px}
+code{font-family:ui-monospace, Menlo, monospace; font-size:.92em}
+footer{margin-top:3rem; padding-top:1.2rem; border-top:1px solid rgba(125,125,125,.25); color:var(--soft); font-size:.92rem}
+footer nav a{margin-right:1.1rem}
+</style>
+</head>
+<body>
+<main>
+<h1>Fernlet Privacy Policy</h1>
+<p><strong>Effective date:</strong> July 19, 2026 <strong>Developer:</strong> Michael Bowman Olay <strong>Contact:</strong> fernletapp@gmail.com</p>
+<hr>
+<h2>The short version</h2>
+<p>Fernlet is a private, gentle self-care companion. It is built <strong>privacy-first, on-device by design</strong>. We — the developer — do not run servers that collect your health data, we do not sell or share your data, we do not use advertising or third-party analytics or tracking, and we never do face recognition. Most of what you log never leaves your phone. The parts that can be backed up go to <strong>your own</strong> iCloud account, not to us, and the most sensitive parts are encrypted on your device first so that not even Apple can read them.</p>
+<p>This policy explains, in plain language, exactly what data Fernlet handles and where it goes.</p>
+<hr>
+<h2>1. Who controls your data</h2>
+<p>Fernlet has no backend that we operate. Your data lives in three places, all under your control:</p>
+<ul>
+<li><strong>On your device</strong> — the default home for nearly everything you log.</li>
+<li><strong>Your personal iCloud account</strong> — if you turn on iCloud sync and/or encrypted backup. This is</li>
+<p>Apple's infrastructure tied to your Apple ID, not ours. We never receive a copy.</p>
+<li><strong>Directly between phones, in person</strong> — for the optional friend features, which work over a</li>
+<p>short-range peer-to-peer connection when two people are physically near each other.</p>
+</ul>
+<p>We, Michael Bowman Olay, do not receive, store, or have access to your health information, journal entries, photos, memories, cycle data, friend list, or location.</p>
+<h2>2. What Fernlet stores on your device</h2>
+<p>Almost everything, including:</p>
+<ul>
+<li><strong>Health &amp; activity you log:</strong> meals and their nutrition, workouts, hydration, hygiene, sleep,</li>
+<p>and your daily wellbeing score.</p>
+<li><strong>Journal entries</strong> and the gentle reflections derived from them.</li>
+<li><strong>Memories</strong> — short notes Fernlet keeps so it can respond to you thoughtfully over time.</li>
+<li><strong>Your companion's appearance, wardrobe, coins, and milestones.</strong></li>
+<li><strong>Cycle/period tracking</strong>, if you use it.</li>
+<li><strong>Photos</strong> you add to your private album.</li>
+<li><strong>App settings and preferences.</strong></li>
+</ul>
+<p>Sensitive categories — <strong>period/cycle data, sensitive memories, journal text, and any intimate-activity notes</strong> — are stored in an <strong>encrypted, sealed store</strong> on your device. These sealed categories are walled off inside the app so that on-device AI and any networking code cannot read the raw data.</p>
+<h2>3. HealthKit (Apple Health)</h2>
+<p>With your permission, Fernlet <strong>reads</strong> the following from Apple Health to reflect your day: heart rate, active energy, sleep analysis, step count, and workouts. Fernlet <strong>writes</strong> only the workouts you log (so they count toward your Apple activity rings). Fernlet <strong>never</strong> writes period, mood, journal, hydration, or hygiene data to Apple Health.</p>
+<p>Health data accessed through HealthKit is used only on your device to compute your companion's state and your derived trends. It is <strong>never</strong> used for advertising, never sold, and never shared with us or any third party. Deleting Fernlet does not delete samples Fernlet wrote to Apple Health — remove those in the Health app if you wish.</p>
+<h2>4. iCloud sync and encrypted backup (optional, you choose)</h2>
+<p>During setup you choose whether to keep your data <strong>only on this device</strong> or <strong>sync it to iCloud</strong>.</p>
+<ul>
+<li><strong>iCloud sync (optional):</strong> If enabled, your core app data (meals, workouts, journal entries,</li>
+<p>hydration, hygiene, sleep, scores, settings, derived signals, and core memories) is synced to <strong>your own iCloud private database</strong> using Apple's CloudKit. This is associated with your Apple ID under Apple's standard privacy model. We cannot see it. You can turn this off or delete the cloud copy at any time in Settings → Privacy &amp; Data. Deleting the cloud copy never deletes your local copy or your Apple Health history.</p>
+<li><strong>Encrypted sealed backup (separate, off by default):</strong> You may separately opt in to back up</li>
+<p><strong>sensitive memories</strong> and/or <strong>period data</strong>. Before this data leaves your device it is encrypted with a key derived from your device identity key (AES-256-GCM). Apple stores only unreadable ciphertext. Because the key lives in your iCloud Keychain, <strong>if you permanently lose access to your iCloud Keychain on all your devices, this encrypted data cannot be recovered.</strong> You are told this when you enable it. Period-data backup is a deliberate, clearly-warned opt-in because of the sensitivity of that information.</p>
+</ul>
+<h2>5. Photos</h2>
+<p>Photos in your Fernlet album are stored <strong>encrypted in the app's private storage</strong> and are <strong>never</strong> uploaded to CloudKit or sent to any AI or server. They are included in your standard iCloud <strong>device backup</strong> through the app container (the same way other app files are), unless you exclude Fernlet from device backup. You may explicitly export an individual photo to your system Photos library with a "Save to Photos" action — that is a one-time export you initiate, not automatic sync. Fernlet does <strong>no face recognition</strong> and no automated photo analysis of your private album.</p>
+<h2>6. Identity keys and friend features (in-person only)</h2>
+<p>To support optional in-person friend features, Fernlet generates a cryptographic identity for your device on first launch. The keys are stored in your Keychain (and your iCloud Keychain, so they can follow you to a new device). Your <strong>public key</strong> is the only persistent identifier shared with friends; your private keys never leave your device.</p>
+<p>The friend features work <strong>only when two people are physically near each other</strong>, over a short-range, encrypted, peer-to-peer connection — there is no friend server and no remote friend activity. When you add a friend in person, your devices exchange your display names, public keys, avatar appearances, and a <strong>fuzzy</strong> wellbeing vibe (e.g. "thriving," "okay," "struggling"). Friends <strong>never</strong> see your numeric score, your goals, your cycle information, or any raw health data. You can send "hearts," share recipes, and share custom companion clothing with nearby friends. All of this stays device-to-device.</p>
+<p>Optional coarse (approximate) location may be used only for gentle weather-based prompts and, if you choose, to tag an in-person group activity. Location is never tracked over time and never attached to your identity for us.</p>
+<h2>7. Artificial intelligence</h2>
+<p>Fernlet's AI features (for example, suggesting a workout, summarizing your day, or reflecting on a journal entry) run <strong>on your device</strong> using Apple's on-device models. Your journal text, memories, health data, photos, period data, and friend data are <strong>not</strong> sent to any external AI service.</p>
+<p>Some optional convenience features may look up <strong>non-personal reference data</strong> from public sources — for example, fetching the nutrition facts for a packaged product or a recipe you're importing. Those lookups send only the minimal query needed (such as a product name or a recipe URL) and never attach your identity, health data, or any sensitive information.</p>
+<p>Fernlet does not use AI to generate mental-health diagnoses or clinical labels, and it filters such language out of anything it stores.</p>
+<h2>8. What we do NOT do</h2>
+<ul>
+<li>We do <strong>not</strong> sell, rent, or trade your personal data.</li>
+<li>We do <strong>not</strong> use third-party advertising, ad networks, or cross-app/cross-site tracking.</li>
+<li>We do <strong>not</strong> embed third-party analytics SDKs that profile you.</li>
+<li>We do <strong>not</strong> perform face recognition or biometric identification of people in your photos.</li>
+<li>We do <strong>not</strong> operate a server that collects your health or journal data.</li>
+<li>We do <strong>not</strong> require an account or a login to use the app.</li>
+</ul>
+<h2>9. User-generated content and safety</h2>
+<p>If you create custom companion clothing and share it with friends in person, that content is governed by our in-app rules against objectionable content. You can <strong>report</strong> and <strong>block</strong> content and the people who share it; reporting hides the content on your device and blocks that person, and Fernlet keeps an on-device record used to limit abusive sharing. Because sharing is peer-to-peer, moderation actions take effect on-device. The full content rules are shown in the app, and use of the app is governed by Apple's standard Licensed Application End User License Agreement.</p>
+<h2>10. Your controls and rights</h2>
+<p>In Settings you can:</p>
+<ul>
+<li>Choose local-only storage or iCloud sync, and change it any time.</li>
+<li>Turn encrypted sealed backup on or off per category.</li>
+<li><strong>Export your data</strong> as a file you can save or share (this export excludes the encrypted sealed</li>
+<p>categories described in Section 2 to protect them).</p>
+<li>Delete your iCloud copy.</li>
+<li>Delete your data.</li>
+<li>Manage or wipe the memories Fernlet keeps.</li>
+</ul>
+<p>Depending on where you live, you may have additional rights (such as access, correction, deletion, or portability). Because we do not hold your data on our own servers, you exercise these rights directly in the app; contact us at fernletapp@gmail.com with any questions.</p>
+<h2>11. Children</h2>
+<p>Fernlet is not directed to children under 13. Intimate-tracking features are gated to users who indicate they are 18 or older and are hidden and off by default.</p>
+<h2>12. Data retention</h2>
+<p>Data is retained on your device until you delete it or delete the app. iCloud copies are retained in your iCloud account until you delete them in the app or in your Apple ID storage settings. We hold no copy to retain or delete.</p>
+<h2>13. Changes to this policy</h2>
+<p>If we make material changes, we will update the effective date above and surface the change in the app. Continued use after an update means you accept the revised policy.</p>
+<h2>14. Contact</h2>
+<p>Questions about this policy or your privacy: <strong>fernletapp@gmail.com</strong> Michael Bowman Olay</p>
+<hr>
+<p><em>Fernlet is a wellness and self-care companion, not a medical device. It does not provide medical advice, diagnosis, or treatment. If you are in crisis, contact your local emergency services or, in the US, call or text 988 (the Suicide &amp; Crisis Lifeline).</em></p>
+  <footer>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/support/">Support</a>
+    </nav>
+    <p>&copy; 2026 Michael Bowman Olay. This site sets no cookies and loads nothing from anywhere else.</p>
+  </footer>
+</main>
+</body>
+</html>

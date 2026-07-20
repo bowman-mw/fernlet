@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fernlet — a gentle self-care companion</title>
+<meta name="description" content="Fernlet is a privacy-first self-care companion for iPhone. A little creature reflects your day — food, movement, sleep, journaling — and everything stays on your device.">
+<meta property="og:title" content="Fernlet">
+<meta property="og:description" content="A gentle, privacy-first self-care companion for iPhone. Everything stays on your device.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fernlet.com/">
+<style>
+:root{
+  --bg:#F5EFDF; --box:#FBF7EE; --ink:#3D2E1E; --soft:#61707A; --moss:#5E844D;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#1C1E1B; --box:#282A26; --ink:#F1EDE3; --soft:#BAC0C2; --moss:#7FB069; }
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+  line-height:1.6; font-size:1.06rem;
+}
+main{max-width:40rem; margin:0 auto; padding:4.5rem 1.4rem 3rem}
+h1{font-size:2.6rem; margin:0 0 .4rem; letter-spacing:-.01em}
+.tagline{font-style:italic; color:var(--soft); margin:0 0 2.2rem; font-size:1.15rem}
+p{margin:0 0 1.1rem}
+.card{
+  background:var(--box); border-radius:18px; padding:1.3rem 1.4rem; margin:1.6rem 0;
+  box-shadow:0 2px 8px rgba(61,46,30,.06), 0 6px 24px rgba(61,46,30,.04);
+}
+.card h2{font-size:1.05rem; letter-spacing:.08em; text-transform:uppercase; color:var(--soft); margin:0 0 .6rem; font-family:ui-sans-serif, system-ui, sans-serif; font-weight:600}
+a{color:var(--moss); text-decoration-thickness:1px; text-underline-offset:2px}
+footer{margin-top:3.4rem; padding-top:1.2rem; border-top:1px solid rgba(125,125,125,.25); color:var(--soft); font-size:.92rem}
+footer nav a{margin-right:1.1rem}
+.leaf{color:var(--moss)}
+</style>
+</head>
+<body>
+<main>
+  <h1><span class="leaf">&#10047;</span> Fernlet</h1>
+  <p class="tagline">A gentle self-care companion — a tamagotchi of yourself.</p>
+
+  <p>Fernlet is an iPhone app where a little companion creature reflects how you're caring for
+  yourself — food, movement, sleep, journaling, rest. No streaks to lose, no optimization
+  pressure. Gentle, consistent care.</p>
+
+  <div class="card">
+    <h2>Privacy first, by construction</h2>
+    <p>Fernlet has no accounts, no ads, no tracking, and no servers of ours. What you log lives on
+    your phone; optional backup goes to <em>your own</em> iCloud, encrypted so not even Apple can
+    read the sensitive parts. Friend features work only in person, phone-to-phone.
+    The full story is in the <a href="/privacy/">privacy policy</a>.</p>
+  </div>
+
+  <div class="card">
+    <h2>Coming to the App&nbsp;Store</h2>
+    <p>Fernlet is in development and will be free. Questions or thoughts —
+    <a href="mailto:fernletapp@gmail.com">fernletapp@gmail.com</a>.</p>
+  </div>
+
+  <footer>
+    <nav>
+      <a href="/privacy/">Privacy policy</a>
+      <a href="/support/">Support</a>
+    </nav>
+    <p>&copy; 2026 Michael Bowman Olay. This site sets no cookies and loads nothing from anywhere else.</p>
+  </footer>
+</main>
+</body>
+</html>

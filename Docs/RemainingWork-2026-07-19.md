@@ -34,9 +34,13 @@ Conventions: file references are `path:line` at audit time. ✅ = resolved on th
   - **Pricing — DECIDED 2026-07-19: Fernlet is always free** (no IAP). EU DSA: declare
     **non-trader** — nothing gets published on EU product pages. (Coach-app monetization is a
     separate, later question — spec D7.)
-  - **fernlet.com** is owned but unhosted/empty — it now has three jobs: host the privacy-policy
-    page (the ASC public URL), and later the coach AASA + `/plan` static pages. A free static host
-    (GitHub Pages / Cloudflare Pages) satisfies all three and the "no operated servers" rule.
+  - **fernlet.com site: BUILT 2026-07-19** — the full static site lives in [`Site/`](../Site/README.md)
+    (landing, `/privacy/` generated from Privacy-Policy.md, `/support/`, 404, Cloudflare `_headers`
+    with the future-AASA content-type rule; zero JS/cookies/external requests, app theme colors,
+    dark mode). **Remaining is owner-only:** create the free Cloudflare Pages project, deploy
+    `Site/`, add the custom domain, switch nameservers at the registrar, then enter
+    `https://fernlet.com/privacy/` + `https://fernlet.com/support/` in App Store Connect. Coach
+    AASA + `/plan` pages get added at coach P0/P1 (deploy steps in the Site README).
   - **Age rating:** Apple's new 4+/9+/13+/16+/18+ questionnaire (mandatory since Jan 31 2026)
     covers medical/wellness topics + UGC; Fernlet's report/block flows satisfy the UGC
     requirements; intimacy features stay 18-gated in-app.
