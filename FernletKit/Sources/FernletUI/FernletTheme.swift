@@ -18,13 +18,16 @@ nonisolated public enum FernletThemeDefaults {
     public static let customDarkBackgroundKey = "fernletCustomDarkBackgroundHex"
 }
 
-public struct FernletThemePalette {
+// `nonisolated` on the type, not just on `current(_:)`: a provider closure reads the returned
+// `primaryText`/`background`/… too, and those stored properties would otherwise stay MainActor-isolated and
+// be rejected from the `@Sendable` closures that call them.
+nonisolated public struct FernletThemePalette {
     public let background: UIColor
     public let box: UIColor
     public let primaryText: UIColor
     public let secondaryText: UIColor
 
-    nonisolated public static func current(for interfaceStyle: UIUserInterfaceStyle) -> FernletThemePalette {
+    public static func current(for interfaceStyle: UIUserInterfaceStyle) -> FernletThemePalette {
         let isDarkMode = interfaceStyle == .dark
         let key = isDarkMode ? FernletThemeDefaults.customDarkBackgroundKey : FernletThemeDefaults.customLightBackgroundKey
         let defaultHex = isDarkMode ? FernletThemeDefaults.darkBackgroundHex : FernletThemeDefaults.lightBackgroundHex
@@ -49,7 +52,7 @@ public struct FernletThemePalette {
         )
     }
 
-    nonisolated private static func defaultPalette(background: UIColor, isDarkMode: Bool) -> FernletThemePalette {
+    private static func defaultPalette(background: UIColor, isDarkMode: Bool) -> FernletThemePalette {
         FernletThemePalette(
             background: background,
             box: UIColor(hex: isDarkMode ? FernletThemeDefaults.darkBoxHex : FernletThemeDefaults.lightBoxHex) ?? .systemBackground,
@@ -62,7 +65,7 @@ public struct FernletThemePalette {
         )
     }
 
-    nonisolated private static func boxColor(from background: UIColor, usesDarkSurfaces: Bool) -> UIColor {
+    private static func boxColor(from background: UIColor, usesDarkSurfaces: Bool) -> UIColor {
         var hue: CGFloat = 0
         var saturation: CGFloat = 0
         var brightness: CGFloat = 0
