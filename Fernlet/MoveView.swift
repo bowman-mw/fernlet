@@ -254,7 +254,7 @@ struct MoveView: View {
 /// work; pure cardio/mobility/rest carry descriptor lines with `sets == 0`.
 enum GuidedWorkoutAvailability {
     /// A session with real, set-based catalog exercises (the guided runner needs sets to time rests).
-    static func isGuidable(_ session: WorkoutProgram.SessionSuggestion) -> Bool {
+    nonisolated static func isGuidable(_ session: WorkoutProgram.SessionSuggestion) -> Bool {
         session.exercises.contains { $0.fromCatalog && $0.sets >= 1 }
     }
 
@@ -265,7 +265,7 @@ enum GuidedWorkoutAvailability {
     /// in `day.workouts` — so matching on that name keeps an already-logged guided session from being
     /// offered, and re-logged, again. Only tagged names are passed in, so a manual or planned "Legs"
     /// never counts.
-    static func isAlreadyLogged(
+    nonisolated static func isAlreadyLogged(
         _ session: WorkoutProgram.SessionSuggestion,
         completed: Set<UUID>,
         loggedGuidedWorkoutNames: Set<String>
@@ -276,7 +276,7 @@ enum GuidedWorkoutAvailability {
     /// The first guidable session not already logged today — what a "start guided workout" tap opens.
     /// `loggedGuidedWorkoutNames` reconciles against the day record so a relaunch can't re-open a logged
     /// session (its fresh id isn't in `completed`, but its name is already guided-logged).
-    static func firstGuidable(
+    nonisolated static func firstGuidable(
         in plan: WorkoutProgram.DayPlan,
         excluding completed: Set<UUID>,
         loggedGuidedWorkoutNames: Set<String> = []
