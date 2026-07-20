@@ -293,13 +293,13 @@ national tables are real, free, and good:
 
 ## 8. Open decisions
 
-| # | Decision | Recommendation |
+| # | Decision | Status |
 | --- | --- | --- |
-| D-L1 | Formality of address | Informal (tú / tu / du) everywhere, consistent with the companion voice. |
-| D-L2 | Localize exercise names? | Localize display names; matching/tokens stay canonical English via catalog IDs (§3.4-3). Gym vocabulary is heavily anglicized in all three markets, so keep English terms as searchable aliases. |
-| D-L3 | Regional data packs go/no-go | Do v1 aliases now; green-light CIQUAL/BLS packs after verifying BLS 4.0 redistribution terms for in-app embedding and confirming pack-vs-USDA ranking UX. |
-| D-L4 | Privacy-policy translation timing | Ship English policy with wave 1; translated+reviewed policies as fast-follow. |
-| D-L5 | Crisis-resource table | User signs off the final per-region hotline list before ship (safety copy). |
+| D-L1 | Formality of address | **DECIDED 2026-07-19:** informal (tú / tu / du) everywhere, consistent with the companion voice. |
+| D-L2 | Localize exercise names? | **DECIDED 2026-07-19:** localize display names; matching/tokens stay canonical English via catalog IDs (§3.4-3). English terms kept as searchable aliases. |
+| D-L3 | Regional data packs go/no-go | OPEN — do v1 aliases first; green-light CIQUAL/BLS packs after verifying BLS 4.0 redistribution terms for in-app embedding and confirming pack-vs-USDA ranking UX. |
+| D-L4 | Privacy-policy translation timing | **DECIDED 2026-07-19:** ship English policy with wave 1; translated+reviewed policies as fast-follow. |
+| D-L5 | Crisis-resource table | OPEN — user signs off the final per-region hotline list before ship (safety copy; pairs with the crisis-nudge build). |
 
 ## 9. Suggested execution order & rough effort
 

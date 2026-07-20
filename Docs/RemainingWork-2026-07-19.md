@@ -26,15 +26,17 @@ Conventions: file references are `path:line` at audit time. ✅ = resolved on th
 - **EULA/terms:** policy §9 now references the in-app safety rules and Apple's standard EULA; if a
   custom EULA is ever wanted, that's new work.
 - **Release-country / compliance checklist (researched 2026-07-19):**
-  - **Encryption declaration needs a deliberate decision:** `Fernlet/Info.plist` currently sets
-    `ITSAppUsesNonExemptEncryption=false` ("exempt only"), but the app ships custom at-rest
-    encryption of user data (ColumnCrypto, sealed stores). Defensible paths: claim the EAR
-    medical-end-use exemption, or reclassify mass-market 5D992.c (standard crypto ⇒ no BIS report
-    since the 2021 rule change) — the latter triggers the France/ANSSI declaration step in ASC
-    (uploadable in ASC since 2024). Pick one knowingly.
-  - **EU DSA trader status:** mandatory declaration for all developers; if monetized ("trader"),
-    verified name + address + phone + email are **published on the EU product page** (undeclared →
-    removed from EU storefronts). Solo-dev consideration: use a business/virtual address.
+  - **Encryption declaration — DECIDED 2026-07-19: mass-market 5D992.c.** Flip
+    `ITSAppUsesNonExemptEncryption` to true/non-exempt in ASC's flow, self-classify 5D992.c
+    (standard CryptoKit crypto ⇒ no BIS reporting since 2021), and file the one-time France/ANSSI
+    declaration via ASC. Rationale: the medical-end-use exemption would contradict the app's
+    wellness-not-medical positioning (MDR / App Review).
+  - **Pricing — DECIDED 2026-07-19: Fernlet is always free** (no IAP). EU DSA: declare
+    **non-trader** — nothing gets published on EU product pages. (Coach-app monetization is a
+    separate, later question — spec D7.)
+  - **fernlet.com** is owned but unhosted/empty — it now has three jobs: host the privacy-policy
+    page (the ASC public URL), and later the coach AASA + `/plan` static pages. A free static host
+    (GitHub Pages / Cloudflare Pages) satisfies all three and the "no operated servers" rule.
   - **Age rating:** Apple's new 4+/9+/13+/16+/18+ questionnaire (mandatory since Jan 31 2026)
     covers medical/wellness topics + UGC; Fernlet's report/block flows satisfy the UGC
     requirements; intimacy features stay 18-gated in-app.
@@ -72,19 +74,26 @@ Conventions: file references are `path:line` at audit time. ✅ = resolved on th
 7. **Friend avatars are a static leaf glyph** — `FriendProfilePlaceholder`
    (`Fernlet/ConnectView.swift:794`, used `:648`); every photo-wall post header looks identical.
 
-## 3. Product decisions needed (blocking their features)
+## 3. Product decisions — RESOLVED 2026-07-19 (owner decision round)
 
-- **Body photos with no Fernlet lock configured are zero-friction** —
-  `Fernlet/ProgressPhotoTimeline.swift:49` gates on `lockService.isLockConfigured` only. Decide:
-  require a lock for body photos, offer an inline lock-setup nudge, or accept as-is.
-- **Barcode web lookup** — `Fernlet/BarcodeScanView.swift:542` deliberately never resolves unknown
-  UPCs even with `webNutritionLookupEnabled` on. Alternatives: wire the lookup behind the existing
-  gate, or ship the offline USDA branded catalog (data prepped: 414k products, ODR + curated floor;
-  Swift side unstarted).
-- **`.aiResolved` inline FM meal-parse branch** — needs a product call before wiring.
-- **Goal-weight number reconcile** vs spec §6.
-- **Starter customization scope** (name + 4 colors).
-- **Home heart-bonus health-bar render** — bonus exists, no visual.
+All decided by the owner in the 2026-07-19 decision round; the first four are now the
+**implementation queue**:
+
+1. **Crisis nudge: SHIP** — add the `moodTrend == declining` trigger as a gentle ambient offer
+   routing to the existing First Aid surface (closes the June safety flag).
+2. **Body photos, no lock configured: inline lock-setup nudge** on first body photo — skippable,
+   never blocks (`ProgressPhotoTimeline.swift:49` gains the nudge path).
+3. **Barcode: wire the web UPC lookup** behind the existing `webNutritionLookupEnabled` opt-in —
+   **OpenFoodFacts API (free, keyless)** primary, USDA FoodData Central API (free key) as
+   US-branded fallback; sends barcode digits only. No subscription. The offline ODR branded
+   catalog stays the roadmap endgame.
+4. **Mesh admission prompt: WIRE `MeshAdmissionPromptSheet`** (don't delete the path).
+5. **Hearts copy: keep "for now"** — remote send-heart ships when the CloudKit dead-drop
+   foundation lands with coach P1.
+6. **Deferred without guilt** (parked, not blocking): `.aiResolved` inline FM branch ·
+   goal-weight reconcile vs spec §6 · starter customization scope · home heart-bonus render.
+7. **Day Detail: CLOSED as-is** — editing scope was decided "keep" in June; the modal/copy drift
+   is accepted.
 
 ## 4. Unstarted / partial feature work
 
