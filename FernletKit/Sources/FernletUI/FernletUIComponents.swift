@@ -12,16 +12,19 @@
 import SwiftUI
 
 public extension Color {
-    static let parchment = Color(UIColor { trait in
+    // The `@Sendable` on each dynamic provider is load-bearing, not decoration: without it the closure
+    // inherits this module's `defaultIsolation(MainActor.self)`, and UIKit resolving the color on
+    // SwiftUI's off-main render thread trips the Swift 6 executor check and traps. See FernletTheme.swift.
+    static let parchment = Color(UIColor { @Sendable trait in
         FernletThemePalette.current(for: trait.userInterfaceStyle).background
     })
-    static let cream = Color(UIColor { trait in
+    static let cream = Color(UIColor { @Sendable trait in
         FernletThemePalette.current(for: trait.userInterfaceStyle).box
     })
-    static let bark = Color(UIColor { trait in
+    static let bark = Color(UIColor { @Sendable trait in
         FernletThemePalette.current(for: trait.userInterfaceStyle).primaryText
     })
-    static let slate = Color(UIColor { trait in
+    static let slate = Color(UIColor { @Sendable trait in
         FernletThemePalette.current(for: trait.userInterfaceStyle).secondaryText
     })
     static let moss = Color(
@@ -60,9 +63,15 @@ public extension Color {
 
 public extension Color {
     /// Resolves to `light` in light mode, `dark` in dark mode.
+    ///
+    /// Both sides are bridged to `UIColor` up front rather than inside the provider: the provider runs on
+    /// whatever thread resolves the trait collection, and the SwiftUI `UIColor(Color)` bridge is not safe to
+    /// call there. Callers pass fixed literal colors, so resolving once is equivalent — and cheaper.
     init(light: Color, dark: Color) {
-        self.init(UIColor { trait in
-            trait.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light)
+        let lightUI = UIColor(light)
+        let darkUI = UIColor(dark)
+        self.init(UIColor { @Sendable trait in
+            trait.userInterfaceStyle == .dark ? darkUI : lightUI
         })
     }
 }

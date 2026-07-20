@@ -58,7 +58,9 @@ struct FernletApp: App {
     /// that pair an empty nav title with an in-content `ScreenHeader`.
     private static func configureNavigationBarAppearance() {
         // Mirror Color.bark so nav titles stay legible in dark mode instead of a fixed bark.
-        let bark = UIColor { trait in
+        // `@Sendable` keeps the provider off this target's MainActor default isolation — UIKit resolves it
+        // on whatever thread needs the color, and the executor check traps there. See FernletTheme.swift.
+        let bark = UIColor { @Sendable trait in
             FernletThemePalette.current(for: trait.userInterfaceStyle).primaryText
         }
         // Scale the serif faces with Dynamic Type via UIFontMetrics.

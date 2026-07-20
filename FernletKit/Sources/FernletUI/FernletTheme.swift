@@ -4,7 +4,12 @@ import SwiftUI
 import UIKit
 import FernletDomainModel
 
-public enum FernletThemeDefaults {
+// Everything in this file is resolved from inside `UIColor` dynamic-provider closures, which UIKit
+// invokes on whatever thread is resolving the trait collection — including SwiftUI's off-main view-graph
+// render thread on device. Under the target's `defaultIsolation(MainActor.self)` these would otherwise be
+// MainActor-isolated, and the Swift 6 executor check traps (SIGTRAP) the moment a color resolves off the
+// main thread. The computation is pure and thread-safe, so it is explicitly `nonisolated`.
+nonisolated public enum FernletThemeDefaults {
     public static let lightBackgroundHex = "#F5EFDF"
     public static let darkBackgroundHex = "#1C1E1B"
     public static let lightBoxHex = "#FBF7EE"
@@ -19,7 +24,7 @@ public struct FernletThemePalette {
     public let primaryText: UIColor
     public let secondaryText: UIColor
 
-    public static func current(for interfaceStyle: UIUserInterfaceStyle) -> FernletThemePalette {
+    nonisolated public static func current(for interfaceStyle: UIUserInterfaceStyle) -> FernletThemePalette {
         let isDarkMode = interfaceStyle == .dark
         let key = isDarkMode ? FernletThemeDefaults.customDarkBackgroundKey : FernletThemeDefaults.customLightBackgroundKey
         let defaultHex = isDarkMode ? FernletThemeDefaults.darkBackgroundHex : FernletThemeDefaults.lightBackgroundHex
@@ -44,7 +49,7 @@ public struct FernletThemePalette {
         )
     }
 
-    private static func defaultPalette(background: UIColor, isDarkMode: Bool) -> FernletThemePalette {
+    nonisolated private static func defaultPalette(background: UIColor, isDarkMode: Bool) -> FernletThemePalette {
         FernletThemePalette(
             background: background,
             box: UIColor(hex: isDarkMode ? FernletThemeDefaults.darkBoxHex : FernletThemeDefaults.lightBoxHex) ?? .systemBackground,
@@ -57,7 +62,7 @@ public struct FernletThemePalette {
         )
     }
 
-    private static func boxColor(from background: UIColor, usesDarkSurfaces: Bool) -> UIColor {
+    nonisolated private static func boxColor(from background: UIColor, usesDarkSurfaces: Bool) -> UIColor {
         var hue: CGFloat = 0
         var saturation: CGFloat = 0
         var brightness: CGFloat = 0
@@ -75,7 +80,7 @@ public struct FernletThemePalette {
 }
 
 public extension UIColor {
-    var relativeLuminance: CGFloat {
+    nonisolated var relativeLuminance: CGFloat {
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
@@ -87,18 +92,18 @@ public extension UIColor {
     /// Parses a 6-hex `RRGGBB` string (any surrounding non-alphanumerics, e.g. a leading `#`, are
     /// trimmed) into its 0–255 channel bytes. Returns `nil` for any malformed input. The single source
     /// of truth for hex→RGB used by both `UIColor(hex:)` and the item-texture pixel renderer.
-    static func rgbBytes(fromHex hex: String) -> (UInt8, UInt8, UInt8)? {
+    nonisolated static func rgbBytes(fromHex hex: String) -> (UInt8, UInt8, UInt8)? {
         let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         guard cleaned.count == 6, let value = Int(cleaned, radix: 16) else { return nil }
         return (UInt8((value >> 16) & 0xFF), UInt8((value >> 8) & 0xFF), UInt8(value & 0xFF))
     }
 
-    convenience init?(hex: String) {
+    nonisolated convenience init?(hex: String) {
         guard let rgb = UIColor.rgbBytes(fromHex: hex) else { return nil }
         self.init(red: CGFloat(rgb.0) / 255, green: CGFloat(rgb.1) / 255, blue: CGFloat(rgb.2) / 255, alpha: 1)
     }
 
-    var hexString: String? {
+    nonisolated var hexString: String? {
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
@@ -109,7 +114,7 @@ public extension UIColor {
 }
 
 private extension CGFloat {
-    var linearizedSRGB: CGFloat {
+    nonisolated var linearizedSRGB: CGFloat {
         self <= 0.03928 ? self / 12.92 : pow((self + 0.055) / 1.055, 2.4)
     }
 }
