@@ -1,3 +1,5 @@
+> **CLOSED 2026-07-19 — SHIPPED (code-complete).** All code items verified on `main`. Residuals carried to the tracker: real-device checks (#21 widget watchdog, Live Activity, body-photo Face ID re-prompt), #3 water-widget tester confirm, and the no-lock body-photo product decision. Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Fernlet — workout Live Activity + remaining phases, continuation prompt (2026-07-18)
 
 Paste the block below into a fresh session to continue.

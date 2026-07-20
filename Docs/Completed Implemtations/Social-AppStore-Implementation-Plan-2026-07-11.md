@@ -1,3 +1,5 @@
+> **CLOSED 2026-07-19 — SHIPPED.** All 6 phases verified on `main`; the A1 privacy-policy copy was finalized 2026-07-19 (contact + effective date + Apache-2.0 LICENSE). Deferred by scope: cloud cascading-trust for large group activities (tracker). Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Fernlet — App Store Blockers + Friend Social Layer — Implementation Plan (2026-07-11)
 
 Consolidates a 7-reader seam-map (Opus) + three deep design memos (Fable) on the hardest

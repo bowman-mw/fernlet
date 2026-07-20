@@ -1,3 +1,5 @@
+> **CLOSED 2026-07-19 — SHIPPED.** Feature A (goal preset cards) and Feature B1-B4 (guided-workout Live Activity, interactive Done-set/Skip-rest) are on `main`; the header's "planned only, nothing implemented" no longer applies. Only the real-device Live Activity verification remains (tracker). Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Plan — Goal presets + Workout Live Activity (2026-07-17)
 
 Two tester-requested features, **planned only, nothing implemented**. Both build on code that already

@@ -3,8 +3,14 @@
 **Status:** design review / options, 2026-06-29 (revised same day, after Increment 3). Captures the problem,
 the grounded options, and a recommended phased path so multi-device usage degrades gracefully when iCloud
 sync is off — with an offline **mesh sync** as the eventual goal. **Update:** the items/recipes append-only
-fix from Phase 1 has since shipped (commit `3250d33`); remaining work is the warning, owned-device pairing,
-and the per-row day split.
+fix from Phase 1 has since shipped (commit `3250d33`).
+**Update 2026-07-19 (code audit):** Phase 1 is fully shipped — the divergence warnings
+(`PrivacyDataSettingsView.swift:458`, `OnboardingStorageChoiceView.swift:81`) **and** the per-row day
+split (`CloudKitSync/DayRecordRepository.swift`, migration gate `daysMigratedToRows`) are on `main`.
+Still open: Phase 2 (owned-device pairing — no `relationshipType`/`ownedDevice` exists — plus mesh
+backup transfer and truly-offline escrow) and Phase 3 (mesh live-merge + a settings field-merge
+policy; settings remain a last-writer-wins blob). Tracked in
+[RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md).
 
 ## Problem
 

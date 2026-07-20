@@ -1,3 +1,5 @@
+> **CLOSED 2026-07-19 — SHIPPED.** Every listed item verified on `main` by code audit (progress-photo timeline + PhotoCaptureControl, zoomable clothing canvas, recipe detail + own photo, App Intents, widget mood gate, jitter fix). Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Fernlet 21-item UX build-out — continuation prompt (2026-07-17)
 
 Paste the block below into a fresh session to continue.

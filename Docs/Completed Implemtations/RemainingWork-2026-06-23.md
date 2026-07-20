@@ -1,3 +1,5 @@
+> **CLOSED 2026-07-19 — SUPERSEDED.** Replaced by the 2026-07-19 tracker after a full code audit; many items listed open here have since shipped (S3 wall, privacy policy, data export, reporting, 988 surface, sealed-backup chunking). Open remainder was carried forward. Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Fernlet — Remaining Work & Implementation Tracker (2026-06-23)
 
 Derived from a multi-agent spec-vs-code audit (18 feature areas, each verified against actual

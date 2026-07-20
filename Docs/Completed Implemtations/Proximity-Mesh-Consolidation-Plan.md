@@ -1,3 +1,5 @@
+> **CLOSED 2026-07-19 — COMPLETE.** By its own status the lower-risk consolidation landed; the remaining broader folder moves are explicitly optional (tracker, tech debt). Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Proximity + Mesh Consolidation Plan
 
 **Status:** Lower-risk consolidation complete; broader folder moves remain optional

@@ -1,3 +1,5 @@
+> **CLOSED 2026-07-19 — SHIPPED.** The per-row `DayRecord` split is on `main` (`CloudKitSync/DayRecordRepository.swift`, migration gate `daysMigratedToRows` in `CoreDataFernletRepository.swift`); the header's "planned, not started" no longer applies. Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Per-Row Day Storage Split — Plan (remove the 370-day cap)
 
 **Status:** planned, not started. Separate effort from the coin ledger (which already decoupled coins

@@ -1,3 +1,5 @@
+> **CLOSED 2026-07-19 — SHIPPED.** All 5 phases verified on `main` (payload registry, keep-friends prompt, MeshClothingShop, PresenceManager + `_fernlet-near`, SessionMessageStore/chat). Residuals carried to the tracker: `MeshAdmissionPromptSheet` has no call site (admission requests never surface), and the Phase-3b recipe-cap sender UX needs a targeted check. Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Proximity Mesh Redesign — Plan & Tracker (2026-07-10)
 
 Consolidates the proximity subsystem from four per-feature Multipeer radios into two standing

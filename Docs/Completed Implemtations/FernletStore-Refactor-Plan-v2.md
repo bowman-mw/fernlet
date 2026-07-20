@@ -1,3 +1,5 @@
+> **CLOSED 2026-07-19 — SHIPPED.** PR 0 (zero `ObservableObject` remain) and Phase 2 (`SavedRecipeService`, `AIRetryQueueService`, `DerivedSignalsService`, `ProximityTrustVault`) are on `main`; the successor workstreams it names (snapshot schema, mesh) also shipped. Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # FernletStore Refactor Plan (v2)
 
 **Status:** PR 0 complete in production code; Phase 1 ready · **Target file:** `Fernlet/Fernlet/FernletStore.swift` · **Supersedes:** v1

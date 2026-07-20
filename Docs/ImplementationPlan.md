@@ -1,5 +1,10 @@
 # Fernlet Implementation Plan
 
+> **Status note (2026-07-19):** per-phase completion statuses in this document are stale — much of
+> what it lists as pending has shipped (SQLite food catalog, the S3 module wall, App Store readiness
+> items, and more). Keep using it for phase definitions and rationale, but for what is actually left
+> consult [RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md).
+
 This plan assumes the current app is a single-target SwiftUI prototype with local `UserDefaults` persistence. The next implementation step is a local data model and storage layer integrated into the SwiftUI work ported from the website. That storage layer replaces Notion as an implementation dependency/source of truth. The production v3 spec still moves toward module-enforced privacy boundaries, typed persistence, HealthKit, on-device AI, and proximity features.
 
 ## Planning Assumptions

@@ -1,3 +1,5 @@
+> **CLOSED 2026-07-19 — SHIPPED.** Every listed item verified on `main`, including both planned features (goal preset cards `GoalPresetCards.swift`; workout Live Activity `FernletWidgets/WorkoutLiveActivity.swift`). Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Fernlet 21-item UX build-out — continuation prompt (2026-07-17, session 2)
 
 Paste the block below into a fresh session to continue.

@@ -187,6 +187,13 @@ The `ProximityHost` protocol also **breaks the `App ↔ Proximity` retain cycle*
 FernletStore` while the store lazily constructs them.
 
 ### 5e. Split `LocalFernletRepository.swift` (1,239 lines, 4 concerns)
+> **DONE (verified 2026-07-19).** Shipped with one deviation: `DerivedSignalFactory.swift` and the
+> tier-two memory engine landed in `LocalPersistence` (alongside `LogRecords.swift`), not
+> `StoreCore` — `StoreCore` instead holds the derived-signals *services*
+> (`DerivedSignalsService`/`DerivedSignalsRebuilder`). `LocalFernletRepository.swift` is now 440
+> lines in `LocalPersistence`; `FernletRepository.swift` + `FernletSnapshot.swift` live in
+> `FernletPersistence` as planned.
+
 → `FernletRepository.swift` (protocol + default ext) + `FernletSnapshot.swift` → `FernletPersistence`;
 `LocalFernletRepository.swift` + `LocalFernletDatabase` + `*LogRecord` → `LocalPersistence`;
 `DerivedSignalFactory.swift` + `TierTwoMemory.swift` → `StoreCore`; `RetryQueueModels.swift` → core.
@@ -556,7 +563,44 @@ move/rename of the symbols they scan must update their hardcoded paths/allowlist
 ### Remaining work (next session)
 1. (Optional) the 3 deferred AI-file inversions (§12 item 5) to put all 6 AI providers behind the wall:
    FoundationDishDecomposition, FoodProductWebImporter, LaunchPreparationService.
-2. Carving `FernletUI` is the blocker for the 6 app-resident Proximity UI files + the lock SwiftUI views
-   to finish moving into their modules.
-3. (Optional) harden the flaky `test_reload_updatesReloadingState`.
+   **Scoped 2026-07-19 (dependency map verified in code — use this as the recipe):**
+   - **LaunchPreparationService** (342 lines): sole app coupling is `FernletStore`, param-injected,
+     never stored — but the seam is **~16 members**, not the "7 methods" above: the 7 methods
+     (`reconcileGuidedRunFromAppGroup`, `purgeDataExports`, `storeCompanionThought`,
+     `backfillWorkoutsFromHealthIfNeeded`, `loadDays`, `loadDay(for:)`, `storeDaySummary`) PLUS
+     9 property reaches incl. a write (`photowallSeeds`) and nested paths
+     (`meshNetworkManager.meshPhotos`, `day.workouts/journals`, `settings.aiStatus`,
+     `derivedSignals`, `memories`, `todayKey`, `dailyScores`, `tierTwoMemories`). Flatten the
+     nested reaches into protocol members. Call sites: `ContentView.swift:22,178,1162`,
+     `FernletStoreLoader.swift:15,28`.
+   - **FoundationDishDecomposition** (243 lines): needs **four** downward moves, not two —
+     (a) `MealBuilder.mealFromIngredients` + its `componentSnapshots`/`totals` helpers → FoodCatalog
+     (verified data-pure; the struct's `@MainActor`+AIProviders import belongs to `meals(from:)`,
+     not these); (b) `DishTemplateLexicon.componentGramBounds` + `matchDetailsWithCount` +
+     `catalog` → FoodCatalog, WITH `DishTemplates.json` added to FoodCatalog `resources:` and the
+     `Bundle.main` load at `DishTemplateLexicon.swift:46` switched to `Bundle.module`
+     (`resolve`/`assemble` stay app-side until after (a)); (c) the plan-omitted
+     `MealPlausibility.maxSingleLogCalories/-Grams` consts (`MealResolutionService.swift:25-30`);
+     (d) the file itself.
+   - **FoodProductWebImporter** (948 lines): the blocker is a **dependency cycle** — it
+     `import AppServices` for `NutritionLabelScanner`/`NutritionLabelResult`, but AppServices
+     depends on AIProviders. Fix: `NutritionLabelResult` → FernletDomainModel (retype touches
+     `FoodCaptureRouter`, `BarcodeScanView`, `NutritionLabelCameraSheet`, `FoodView` ×6 sites +
+     2 test files) and a `NutritionLabelScanning` protocol (in AIProviders or DomainModel) that the
+     importer takes injected; the concrete scanner stays in AppServices. No other app refs.
+   - **S3BoundaryTests is move-tolerant** (matches floor files by basename across scanRoots incl.
+     AIProviders — `S3BoundaryTests.swift:21-29,48-50,235-244`); only the stale `// app-resident`
+     comments need touching. Moved symbols must become `public`.
+2. ~~Carving `FernletUI`~~ **DONE 2026-07-19.** `FernletUI` (theme palette + hex parsing, type
+   roles/fonts/metrics/motion, color tokens, screen/sheet primitives incl. FernletCard/SectionLabel/
+   EmptyState extracted from HomeView, ModelColors) and `FernletLockUI` (FernletLockSetupView /
+   FernletLockView / FernletNumericPad / fernletLockGate) are package targets; ProximityKit gained
+   `UI/` with the two app-free movers (KeepFriendsPromptSheet, FriendPhotoReviewSheet + saver).
+   App-navigation enums (FernletTab/FernletSheet) stayed app-side in `Fernlet/FernletNavigation.swift`
+   per §5c. **The remaining 5 Proximity UI files stay in the app by necessity, not by blocker:**
+   ConnectionInspector + the two inspector views + both recipe-share sheets hold `FernletStore`
+   references — they move only when a `ProximityHost`-style store inversion happens (§5d), which is
+   NOT a FernletUI concern. Wall check + targeted suites green.
+3. ~~(Optional) harden the flaky `test_reload_updatesReloadingState`~~ **Already hardened** (the
+   synchronous `MainActor.assumeIsolated` observation recording, verified 3/3 green 2026-07-19).
 4. DO NOT do step 10 (delete S3BoundaryTests / per-target test targets) — post-review.

@@ -1,13 +1,13 @@
 # Fernlet Privacy Policy
 
-> **DRAFT — requires legal review before publication.** Replace every `{{PLACEHOLDER}}`
-> with the real value, have counsel review, then (1) host this text at a public URL and enter
-> that URL in App Store Connect, and (2) embed the same text in the in-app Privacy Policy screen
-> (Settings → Privacy Policy). Keep the hosted copy and the in-app copy in sync.
+<!-- Maintainer note (not published prose): this text is finalized as of 2026-07-19. Before
+     submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
+     (2) keep it in sync with the in-app copy in Fernlet/PrivacyPolicyView.swift (Settings →
+     Privacy Policy). Any material change: update the effective date here AND in the view. -->
 
-**Effective date:** July 11, 2026
+**Effective date:** July 19, 2026
 **Developer:** Michael Bowman Olay
-**Contact:** _TODO: add a support/contact email before submission._
+**Contact:** fernletapp@gmail.com
 
 ---
 
@@ -141,8 +141,8 @@ If you create custom companion clothing and share it with friends in person, tha
 governed by our in-app rules against objectionable content. You can **report** and **block** content
 and the people who share it; reporting hides the content on your device and blocks that person, and
 Fernlet keeps an on-device record used to limit abusive sharing. Because sharing is peer-to-peer,
-moderation actions take effect on-device. See the in-app terms/EULA (to be published before release) for the full
-content rules.
+moderation actions take effect on-device. The full content rules are shown in the app, and use of
+the app is governed by Apple's standard Licensed Application End User License Agreement.
 
 ## 10. Your controls and rights
 
@@ -158,7 +158,7 @@ In Settings you can:
 
 Depending on where you live, you may have additional rights (such as access, correction, deletion,
 or portability). Because we do not hold your data on our own servers, you exercise these rights
-directly in the app; contact us using the contact details published on the App Store listing (a dedicated support email will be added before release) with any questions.
+directly in the app; contact us at fernletapp@gmail.com with any questions.
 
 ## 11. Children
 
@@ -178,7 +178,7 @@ app. Continued use after an update means you accept the revised policy.
 
 ## 14. Contact
 
-Questions about this policy or your privacy: _support contact to be added before release._
+Questions about this policy or your privacy: **fernletapp@gmail.com**
 Michael Bowman Olay
 
 ---
