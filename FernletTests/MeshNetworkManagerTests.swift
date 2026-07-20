@@ -389,6 +389,75 @@ struct MeshNetworkManagerTests {
         #expect(manager.currentMesh == nil)
         #expect(manager.meshError == nil)
     }
+
+    // MARK: - Invite tie-break
+
+    /// The core property: both peers browse AND advertise, so both discover each other, and
+    /// EXACTLY ONE must send the MC invitation. Zero invitations strands the pair forever (the
+    /// shipped bug); two invitations race and fail one side with errno 61.
+    @Test func shouldInitiateInvite_exactlyOneSideOfAPairInvites() {
+        let managerA = MeshNetworkManager(store: store)
+        let managerB = MeshNetworkManager(store: store)
+
+        let aInvitesB = managerA.shouldInitiateInvite(to: peerRepresenting(managerB))
+        let bInvitesA = managerB.shouldInitiateInvite(to: peerRepresenting(managerA))
+
+        #expect(aInvitesB != bInvitesA,
+                "Exactly one side of a discovered pair must initiate — got A:\(aInvitesB) B:\(bInvitesA)")
+    }
+
+    /// Regression for the mesh-wide deadlock: the tie-break used to compare our 16-char lowercase
+    /// hex fingerprint against the PEER'S display name. iOS 16+ reports `UIDevice.current.name` as
+    /// the generic "iPhone" without the user-assigned-device-name entitlement, and every hex
+    /// fingerprint sorts below "iPhone" ("f" < "i"), so the guard was false on both devices and
+    /// `invite` was unreachable. The decision must not consult displayName at all.
+    @Test func shouldInitiateInvite_isNotDefeatedByGenericDeviceName() {
+        let manager = MeshNetworkManager(store: store)
+        let localSessionID = manager.currentDiscoveryInfo()["sid"]!
+
+        // A peer that sorts BELOW us, presenting the generic iOS 16+ device name. The all-zeros
+        // UUID is lower than any generated one (v4 puts a "4" in the version nibble, so a real
+        // sid can never be all zeros) and is unambiguous about case, unlike a "0"-prefix trick:
+        // `UUID().uuidString` is UPPERCASE hex, so its first character ranges over [0-9A-F].
+        let lowerPeer = makePeer(displayName: "iPhone", sessionID: "00000000-0000-0000-0000-000000000000")
+        #expect(localSessionID > "00000000-0000-0000-0000-000000000000", "test premise")
+
+        #expect(manager.shouldInitiateInvite(to: lowerPeer),
+                "A lower-sorting peer must be invited regardless of its display name")
+    }
+
+    /// Never deadlock on a peer we cannot rank. A redundant invite is recoverable (errno 61 plus
+    /// the disconnect-retry path); mutual silence is not.
+    @Test func shouldInitiateInvite_defaultsToInvitingWhenPeerIsUnrankable() {
+        let manager = MeshNetworkManager(store: store)
+
+        #expect(manager.shouldInitiateInvite(to: makePeer(displayName: "iPhone", sessionID: nil)))
+        #expect(manager.shouldInitiateInvite(to: makePeer(displayName: "iPhone", sessionID: "")))
+    }
+
+    /// Builds the `MultipeerPeer` the OTHER manager would appear as, carrying the discovery info
+    /// it actually broadcasts — so the tie-break is exercised on real wire values.
+    private func peerRepresenting(_ manager: MeshNetworkManager) -> MultipeerPeer {
+        MultipeerPeer(
+            id: UUID(),
+            displayName: "iPhone",
+            discoveryInfo: manager.currentDiscoveryInfo(),
+            advertisedFingerprint: nil,
+            underlying: MCPeerID(displayName: "iPhone")
+        )
+    }
+
+    private func makePeer(displayName: String, sessionID: String?) -> MultipeerPeer {
+        var info: [String: String] = ["v": "1", "name": displayName]
+        if let sessionID { info["sid"] = sessionID }
+        return MultipeerPeer(
+            id: UUID(),
+            displayName: displayName,
+            discoveryInfo: info,
+            advertisedFingerprint: nil,
+            underlying: MCPeerID(displayName: displayName)
+        )
+    }
 }
 
 // MARK: - Helpers

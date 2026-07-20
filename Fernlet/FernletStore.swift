@@ -3492,6 +3492,14 @@ final class FernletStore {
         let snapshot: FernletSnapshot
         if let coreDataRepository = repository as? CoreDataFernletRepository {
             snapshot = await coreDataRepository.loadSnapshotAsync(todayKey: todayKey)
+            // A transient Core Data / CloudKit fetch failure — or a nil/undecodable payload — makes
+            // loadSnapshotAsync return the EMPTY read-only-recovery fallback. Applying that here would
+            // overwrite the live in-memory diary with nothing: every tab would repaint bare parchment
+            // and stay blank until the next successful remote-change reload restored it — the
+            // intermittent "page blanks out, then loads" symptom. Keep the data we already hold; the
+            // repository stays read-only (writes are skipped) until it recovers, and the next
+            // successful reload applies real data. `isReloadingFromRepository` is reset by the defer.
+            if coreDataRepository.isInReadOnlyRecovery { return }
         } else {
             snapshot = repository.loadSnapshot(todayKey: todayKey)
         }

@@ -306,7 +306,14 @@ struct ContentView: View {
         Binding(
             get: { activeSheet == nil ? store.recipeShareManager.pendingRecipeShares.first : nil },
             set: { newValue in
-                guard newValue == nil,
+                // Only a genuine user dismissal discards the incoming share. SwiftUI ALSO writes nil
+                // here when the getter goes nil because another sheet opened (`activeSheet != nil`) —
+                // that is suppression, not dismissal. The old setter could not tell them apart and
+                // called `dismissRecipeShare` on both, silently dropping an unreviewed recipe whenever
+                // any other sheet happened to open; the share sheet then re-opened to nothing. Gating
+                // on `activeSheet == nil` keeps the share queued through the suppression and lets it
+                // re-present once the other sheet closes.
+                guard newValue == nil, activeSheet == nil,
                       let first = store.recipeShareManager.pendingRecipeShares.first else { return }
                 store.recipeShareManager.dismissRecipeShare(first)
             }
@@ -355,13 +362,28 @@ struct ContentView: View {
             .background(sceneBackground.ignoresSafeArea())
     }
 
-    @ViewBuilder
+    /// Always the five-tab `pagedTabs`, unconditionally — its structural identity must never
+    /// change, or SwiftUI tears down and rebuilds every tab (losing all @State) on the swap.
+    ///
+    /// This used to be an `if isDisposableCameraSessionActive { SocialHubView(...) } else { pagedTabs }`.
+    /// Because a `@ViewBuilder` if/else is `_ConditionalContent<SocialHubView, TabView>` — two
+    /// different types in the same slot — flipping the condition removed the whole `TabView` and
+    /// inserted a bare `SocialHubView`, then reversed it at session end. Every tab (Home/Food/Move/
+    /// Journal/Private) was destroyed and rebuilt with empty @State, each painting `Color.parchment`
+    /// before its `.onAppear` `store.loadDays()` refilled it — the "blank then loads" symptom, fired
+    /// on every friend-mesh session edge (and every Social↔other tab hop during a session).
+    ///
+    /// The swap was also redundant: the disposable camera is NOT a separate top-level surface —
+    /// `FriendsView` (the body of the `.social` tab's `SocialHubView`) already swaps itself to
+    /// `DisposableCameraView` while `isInSession && sessionReady` (ConnectView.swift:36). So the
+    /// camera still takes over the Social tab full-bleed here; the takeover's *look* — dark
+    /// `sceneBackground`, suppressed bottom scrim, and the landscape tab-bar hide — is applied by
+    /// the modifiers in `mainInterface` that read `isDisposableCameraSessionActive`, entirely
+    /// independent of this slot's identity. Removing the swap also revives the connection-success
+    /// overlay + haptic in `FriendsView.onChange(of: isInSession)`, which the old swap defeated by
+    /// destroying that instance in the same transaction as the flip.
     private var mainTabContent: some View {
-        if isDisposableCameraSessionActive {
-            SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: .constant(false), tabResetToken: .constant(0))
-        } else {
-            pagedTabs
-        }
+        pagedTabs
     }
 
     private var pagedTabs: some View {
@@ -387,6 +409,15 @@ struct ContentView: View {
                 .tag(FernletTab.personal)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
+        // Restore the "locked takeover" the old mainTabContent swap provided implicitly. With the
+        // camera now rendered as the live `.social` PAGE (rather than a bare, TabView-less
+        // SocialHubView), interactive paging is active beneath it — a stray horizontal drag would
+        // swipe off the camera mid-session. That is worst in landscape, where the tab bar is hidden
+        // and the session is meant to be fully locked. Disabling the page scroll only while the
+        // camera session is active re-locks it without any identity change. The condition already
+        // requires `selectedTab == .social`, so paging stays enabled everywhere else — including when
+        // the user tap-navigates to another tab (in portrait) and swipes back toward Social.
+        .scrollDisabled(isDisposableCameraSessionActive)
     }
 
     private var isDisposableCameraSessionActive: Bool {

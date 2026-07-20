@@ -22,6 +22,7 @@ struct FriendListView: View {
     @State private var peerToBlock: ProximityTrustedPeerRecord?
     @State private var blockConfirmShown = false
     @State private var peerToReport: ProximityTrustedPeerRecord?
+    @FocusState private var nameFieldFocused: Bool
 
     var body: some View {
         List {
@@ -34,8 +35,17 @@ struct FriendListView: View {
                     .multilineTextAlignment(.trailing)
                     .foregroundStyle(Color.bark)
                     .submitLabel(.done)
-                    .onSubmit { store.setProximityDisplayName(displayName) }
-                    .onChange(of: displayName) { store.setProximityDisplayName(displayName) }
+                    .focused($nameFieldFocused)
+                    // Commit only when the user finishes — on Return, and when focus leaves the
+                    // field — never per keystroke. The old `.onChange` wrote the name to the synced
+                    // blob on every character AND fired on the `.onAppear` seed, and it would
+                    // persist a half-typed or empty name (which is also what a mesh peer sees, since
+                    // the display name rides the discovery broadcast) if the user navigated away
+                    // mid-edit. `commitDisplayName` rejects an empty value and restores the stored one.
+                    .onSubmit { commitDisplayName() }
+                    .onChange(of: nameFieldFocused) { _, focused in
+                        if !focused { commitDisplayName() }
+                    }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
@@ -68,14 +78,20 @@ struct FriendListView: View {
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
 
-            if filteredPeers.isEmpty {
+            // Compute the sorted/filtered list ONCE per render. It was previously re-derived on
+            // every access — `.isEmpty` here, the `ForEach`, and `filteredPeers.last?.id` inside
+            // each row — re-sorting and re-filtering the whole peer list O(n) times per render.
+            let peers = filteredPeers
+            let lastPeerID = peers.last?.id
+
+            if peers.isEmpty {
                 EmptyState(text: emptyStateText)
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             } else {
-                ForEach(filteredPeers) { peer in
+                ForEach(peers) { peer in
                     VStack(alignment: .leading, spacing: 0) {
                         peerRow(peer)
                             .contentShape(Rectangle())
@@ -92,7 +108,7 @@ struct FriendListView: View {
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                         }
 
-                        if peer.id != filteredPeers.last?.id {
+                        if peer.id != lastPeerID {
                             Divider()
                                 .overlay(Color.bark.opacity(0.07))
                                 .padding(.horizontal, 20)
@@ -126,12 +142,14 @@ struct FriendListView: View {
                             .tint(Color.moss)
                         }
 
-                        Button {
-                            peerToReport = peer
-                        } label: {
-                            Label("Report", systemImage: "flag")
+                        if peer.reportedAt == nil {
+                            Button {
+                                peerToReport = peer
+                            } label: {
+                                Label("Report", systemImage: "flag")
+                            }
+                            .tint(Color.goldenrod)
                         }
-                        .tint(Color.goldenrod)
                     }
                 }
             }
@@ -162,6 +180,8 @@ struct FriendListView: View {
             displayName = store.settings.proximityDisplayName
             store.recomputeCloseFriendsIfNeeded()
         }
+        // Catch a name edited right up to a navigation/tab change that never resigned focus.
+        .onDisappear { commitDisplayName() }
         .alert("Block peer?", isPresented: $blockConfirmShown) {
             Button("Block", role: .destructive) {
                 if let peer = peerToBlock {
@@ -482,6 +502,21 @@ struct FriendListView: View {
         }
     }
 
+    // MARK: - Display name
+
+    /// Persists the edited mesh display name, but only if it is non-empty after trimming — an empty
+    /// field falls back to the stored value rather than clearing the user's name (which also rides
+    /// the mesh discovery broadcast). Idempotent, so committing an unchanged name is a cheap no-op.
+    private func commitDisplayName() {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            displayName = store.settings.proximityDisplayName
+            return
+        }
+        guard trimmed != store.settings.proximityDisplayName else { return }
+        store.setProximityDisplayName(trimmed)
+    }
+
     // MARK: - Filtering
 
     private var filteredPeers: [ProximityTrustedPeerRecord] {
@@ -577,9 +612,19 @@ struct SendGoodVibesLabel: View {
 }
 
 private extension Date {
-    var relativeFormatted: String {
+    // A single shared formatter. `RelativeDateTimeFormatter` is expensive to construct, and this
+    // ran once per peer row ("Last seen …") plus again in the fuzzy-state chip, on every render —
+    // rebuilding a formatter each time. MainActor-isolated because the view reads it on the main
+    // actor and `RelativeDateTimeFormatter` is not Sendable.
+    @MainActor
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: self, relativeTo: Date())
+        return formatter
+    }()
+
+    @MainActor
+    var relativeFormatted: String {
+        Date.relativeFormatter.localizedString(for: self, relativeTo: Date())
     }
 }

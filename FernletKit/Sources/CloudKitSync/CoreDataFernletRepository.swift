@@ -461,6 +461,14 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         persistenceBlockedByDecodeFailure || persistenceBlockedByFetchFailure
     }
 
+    /// Whether the snapshot most recently returned by `loadSnapshotAsync` / `loadSnapshot` is the
+    /// EMPTY read-only-recovery fallback (a transient Core Data / CloudKit fetch or a payload decode
+    /// failed), rather than real data. A remote-change reload MUST consult this before applying the
+    /// returned snapshot over live in-memory state — applying the empty fallback blanks every screen
+    /// until the next successful reload. The latch is cleared by the next successful load, so reading
+    /// it immediately after a load reflects that load's outcome.
+    public var isInReadOnlyRecovery: Bool { isPersistenceBlocked }
+
     private func markPersistenceBlockedByDecodeFailure() {
         persistenceBlockedByDecodeFailure = true
         cachedDatabase = nil

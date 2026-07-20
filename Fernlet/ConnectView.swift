@@ -279,7 +279,9 @@ struct FriendsView: View {
     private var nearbyStatusBanner: some View {
         if manager.isSearching {
             VStack(spacing: 8) {
-                if manager.slots.isEmpty {
+                if let discoveryError = manager.discoveryError {
+                    discoveryFailureBanner(discoveryError)
+                } else if manager.slots.isEmpty {
                     HStack(spacing: 10) {
                         SearchingPulse(tint: Color.moss, size: 32, systemImage: "person.2")
                         Text("Looking for nearby friends…")
@@ -303,6 +305,40 @@ struct FriendsView: View {
                 }
             }
         }
+    }
+
+    /// Shown in place of the "Looking for nearby friends…" pulse when the radios failed to start.
+    ///
+    /// The transport already detects this (`MeshMultipeerSession`'s `didNotStart*` delegates) and
+    /// routes it to `manager.meshError`, but the only view that rendered `meshError` was
+    /// `DisposableCameraView` — which exists only *inside* a session. A discovery failure happens
+    /// before any session, so the message was set and never seen: the pulse span forever and the
+    /// mesh looked simply broken. On device the overwhelmingly likely cause is a declined Local
+    /// Network prompt, so lead with that and keep the raw reason as secondary detail.
+    private func discoveryFailureBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "wifi.exclamationmark")
+                .foregroundStyle(Color.terracotta)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Can't look for nearby friends")
+                    .font(.fernlet(.headerMedium))
+                    .foregroundStyle(Color.bark)
+                Text("Fernlet needs Local Network access to find friends in person. Check Settings › Fernlet › Local Network, then come back to this screen.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(message)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate.opacity(0.8))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 4)
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.35), lineWidth: 1))
+        .accessibilityIdentifier("friends.discoveryFailure")
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Cache soft-warning (spec §11: 900-photo warning ahead of the 1000 FIFO cap)

@@ -579,6 +579,44 @@ struct FernletTests {
         #expect(dayRow?.bottleCount == 2)
     }
 
+    /// A remote-change reload keys on `isInReadOnlyRecovery` to decide whether the snapshot it just
+    /// loaded is real data or the empty read-only fallback. This asserts the flag it depends on: a
+    /// transient fetch failure returns the empty snapshot AND reports recovery, and a subsequent
+    /// successful load returns the real data AND clears the flag. If this flag ever failed to track
+    /// the load outcome, `FernletStore.reloadFromRepository` would apply the empty snapshot over live
+    /// state and blank every screen (the "page blanks out, then loads" bug).
+    ///
+    /// A fresh repository on an EMPTY in-memory store. Deliberately never saves through it before the
+    /// assertions: a save runs `context.save()`, which fires a CloudKit remote-change whose debounced
+    /// subscription can repopulate the (cache-checked) load path mid-test — the exact race that makes
+    /// a save-then-fail sequence read cached real data instead of the forced failure under the
+    /// parallel suite. With no save, the cache stays cold and the forced fetch failure is
+    /// deterministic. `.failed` and `.missing`/`.found` set/clear the recovery latch via the same
+    /// `markPersistenceBlockedBy…` / `clearReadOnlyRecoveryFlags` calls in both the sync `loadSnapshot`
+    /// and the async `loadSnapshotAsync` that `reloadFromRepository` actually calls, so this is
+    /// faithful coverage of the flag that guard depends on.
+    @MainActor
+    @Test func coreDataRepositoryReportsReadOnlyRecoveryForEmptyFallback() {
+        let repository = CoreDataFernletRepository(
+            controller: PersistenceController(inMemory: true),
+            legacyRepository: LocalFernletRepository(fileURL: temporaryDatabaseURL("empty-coredata-recovery-flag-legacy"))
+        )
+        #expect(repository.isInReadOnlyRecovery == false)
+
+        // A failed fetch returns the empty fallback AND latches read-only recovery — the exact state
+        // in which reloadFromRepository must NOT apply the (empty) snapshot over live data.
+        repository.forceNextFetchFailureForTesting(CocoaError(.fileReadUnknown))
+        let fallback = repository.loadSnapshot(todayKey: "2026-05-16")
+        #expect(fallback.day.meals.isEmpty, "a failed fetch must return the empty fallback")
+        #expect(repository.isInReadOnlyRecovery, "a failed fetch must latch read-only recovery")
+
+        // A subsequent readable load (here: no record present → the legitimate empty case) clears the
+        // latch, so the next reload is free to apply real data.
+        repository.invalidateCache()
+        _ = repository.loadSnapshot(todayKey: "2026-05-16")
+        #expect(repository.isInReadOnlyRecovery == false, "a readable load must clear recovery")
+    }
+
     @MainActor
     @Test func coreDataRepositoryUpdatesPastDayAndLoadsAllDays() {
         let repository = CoreDataFernletRepository(

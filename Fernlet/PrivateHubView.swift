@@ -41,7 +41,7 @@ struct PrivateHubView: View {
     var body: some View {
         let visibleSections = PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility)
 
-        TabView(selection: $section) {
+        TabView(selection: clampedSection(visibleSections)) {
             JournalView(store: store, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                 .tag(PrivateHubSection.journal)
             if store.isPeriodTrackingVisible {
@@ -72,8 +72,23 @@ struct PrivateHubView: View {
         }
     }
 
-    /// Moves off a section the user can no longer see. Without this, hiding the section you are
-    /// currently on strands the paged TabView on a tag that no longer has a page.
+    /// A selection binding that can never point at a hidden (absent) page. The reader clamps a
+    /// stranded `section` to `.journal` AT RENDER TIME, so the paged `TabView` never binds to a tag
+    /// whose page is missing from the builder — which otherwise shows one frame of bare
+    /// `Color.parchment` before `resetUnavailableSectionIfNeeded()` runs a transaction later. This
+    /// closes both the same-transaction window (a visibility flip from a HealthKit body-profile
+    /// import or an Age/Gender edit, not just the Settings toggle) and the stale-selection window
+    /// after the tab shell rebuilds. The writer passes edits straight through.
+    private func clampedSection(_ visibleSections: [PrivateHubSection]) -> Binding<PrivateHubSection> {
+        Binding(
+            get: { visibleSections.contains(section) ? section : .journal },
+            set: { section = $0 }
+        )
+    }
+
+    /// Persists the corrected selection so `$section` (owned by an ancestor and read elsewhere)
+    /// converges on a real page. `clampedSection` already prevents the blank frame; this keeps the
+    /// stored value honest for the picker and any observer.
     private func resetUnavailableSectionIfNeeded() {
         guard !PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility).contains(section) else { return }
         section = .journal
