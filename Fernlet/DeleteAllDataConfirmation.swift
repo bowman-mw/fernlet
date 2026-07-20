@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletFoundation
+import FernletUI
 
 /// The one confirm dialog for "delete everything", shared by both Settings entry points.
 ///

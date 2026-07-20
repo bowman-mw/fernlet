@@ -15,6 +15,7 @@ import PrivateHealthStore
 import PrivateMemoryStore
 import PeriodContextBridge
 import HealthKitGateway
+import FernletUI
 
 struct ContentView: View {
     @Bindable var store: FernletStore

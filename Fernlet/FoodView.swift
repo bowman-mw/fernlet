@@ -9,6 +9,7 @@ import AppServices
 #if canImport(UIKit)
 import UIKit
 import PhotosUI
+import FernletUI
 #endif
 
 struct FoodView: View {

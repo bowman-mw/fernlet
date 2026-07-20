@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 
 /// Selectable goal preset cards for the Goal & nutrition settings — one per `GoalType`, each showing the
 /// paired **nutrition** and **training** setup that goal configures. Picking one goal therefore reads as

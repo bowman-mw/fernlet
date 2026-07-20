@@ -12,6 +12,7 @@ import StoreCore
 #if canImport(UIKit)
 import UIKit
 import FernletDomainModel
+import FernletUI
 #endif
 
 struct HomeView: View {
@@ -1788,34 +1789,7 @@ struct TrendsModal: View {
     }
 }
 
-struct FernletCard<Content: View>: View {
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        content
-            .padding(FernletMetrics.spaceMd)   // 16
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd, style: .continuous))   // 18
-            // Kept as the current single-layer `bark`-tinted shadow (not `fernletCardShadow()`): the
-            // two-layer barkShadow token renders differently, and this card primitive is used across 13
-            // files — swapping its shadow is a deliberate visual change, not a cleanup.
-            .shadow(color: .bark.opacity(0.08), radius: 12, x: 0, y: 5)
-    }
-}
-
-struct SectionLabel: View {
-    private let text: String
-
-    init(_ text: String) {
-        self.text = text
-    }
-
-    var body: some View {
-        Text(text.uppercased())
-            .font(.fernlet(.labelSmall))
-            .tracking(0.8)
-            .foregroundStyle(Color.slate)
-    }
-}
+// FernletCard / SectionLabel / EmptyState moved to FernletUI (FernletPrimitives.swift).
 
 struct ThoughtBubble: View {
     var text: String
@@ -2068,18 +2042,6 @@ struct HygieneCard: View {
             }
         }
         .buttonStyle(.plain)
-    }
-}
-
-struct EmptyState: View {
-    var text: String
-
-    var body: some View {
-        Text(text)
-            .font(.fernlet(.bubble))
-            .foregroundStyle(Color.slate)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, 18)
     }
 }
 

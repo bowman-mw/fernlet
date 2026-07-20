@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import SwiftUI
+import FernletUI
 
 /// A logged meal's photo as a classic polaroid — the #11 look the user picked: cream frame, rounded
 /// photo, the meal name on the strip, a soft shadow and a gentle tilt. Loads its bytes lazily off the

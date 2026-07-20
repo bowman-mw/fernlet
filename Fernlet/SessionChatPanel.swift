@@ -1,5 +1,6 @@
 import SwiftUI
 import ProximityKit
+import FernletUI
 
 /// The live-session chat panel (mesh redesign Phase 5, Docs/Proximity-Mesh-Redesign-2026-07-10.md).
 /// Presented from the in-session disposable-camera surface. Reads the observable

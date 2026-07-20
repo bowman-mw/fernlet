@@ -1,5 +1,5 @@
-import ProximityKit
 import SwiftUI
+import FernletUI
 import FernletDomainModel
 
 // Phase 2 friend minting (Docs/Proximity-Mesh-Redesign-2026-07-10.md): the per-participant
@@ -90,12 +90,18 @@ private struct KeepFriendRow: View {
 /// Compact standalone prompt for sessions that ended with no photos to review but with eligible
 /// new-friend candidates. Dismissing without choosing = skip all (the host clears the roster in
 /// onDismiss and mints only what was toggled).
-struct KeepFriendsPromptSheet: View {
+public struct KeepFriendsPromptSheet: View {
     let candidates: [MeshSessionRosterEntry]
     @Binding var keptFingerprints: Set<String>
     let done: () -> Void
 
-    var body: some View {
+    public init(candidates: [MeshSessionRosterEntry], keptFingerprints: Binding<Set<String>>, done: @escaping () -> Void) {
+        self.candidates = candidates
+        self._keptFingerprints = keptFingerprints
+        self.done = done
+    }
+
+    public var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {

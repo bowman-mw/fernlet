@@ -18,6 +18,7 @@
 import SwiftUI
 import FernletDomainModel
 import StoreCore
+import FernletUI
 
 struct MilestonesView: View {
     var store: FernletStore

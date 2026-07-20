@@ -1,6 +1,7 @@
 import ProximityKit
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 
 struct MeshAdmissionPromptSheet: View {
     let requests: [MeshAdmissionRequestPayload]

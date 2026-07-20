@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletDomainModel
 import ProximityKit
+import FernletUI
 
 /// Browse the shops of friends from your last session and buy items with coins. Catalogs are exchanged
 /// over the friend mesh while you're together; the shop OPENS when the session ends and stays browsable

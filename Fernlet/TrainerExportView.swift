@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 
 /// The Trainer / Nutritionist export review + consent screen (Phase 7). The user picks exactly what to
 /// include and sees precisely what is and is NEVER shared, then prepares a curated summary to hand to a

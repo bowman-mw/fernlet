@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletDomainModel
 import ProximityKit
+import FernletUI
 
 /// The Group Activities screen (Phase 6 / B5). A NavigationLink sub-screen off the Friends tab — NOT a
 /// top-level tab (the app's tab bar is a hand-rolled 6-item pager; a 7th would compress it, and nested

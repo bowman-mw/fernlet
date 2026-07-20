@@ -1,14 +1,12 @@
 // FernletFoundation
 //
-// Layer-0 of the FernletKit carve-up (plan §2). This target will hold the
-// cross-cutting primitives and the platform *seam protocols*
-// (`SecureKeyValueStore`, `BiometricGate`, `HealthSampleSource`,
-// `CloudSyncTransport`) plus `StoragePreferences`, `StartupTiming`, and
-// `FernletDate`, so nothing above it names Security / HealthKit / CloudKit
-// directly.
+// Layer-0 of the FernletKit carve-up (plan §2): the cross-cutting primitives
+// every higher layer may depend on, and nothing else. Today that is
+// `FernletDate` (locale-pinned day keys), `StoragePreferences`, `StartupTiming`,
+// `KeychainHelpers`, `FernletAuditLog`, `FernletLockError`, `MonotonicClock`,
+// and `BackupExclusion` — see the sibling files. Nothing here may import
+// HealthKit, CloudKit, or any higher FernletKit target.
 //
-// Phase 1 intentionally stands the package up EMPTY; real types migrate here in
-// a later, leaf-first extraction phase. This placeholder gives SPM a source
-// file so the target compiles and the app can link the product.
+// This file is the module's doc anchor; it deliberately declares no types.
 
 import Foundation

@@ -4,6 +4,7 @@ import CloudKitSync
 import FernletDomainModel
 import FernletFoundation
 import FernletScoring
+import FernletUI
 
 protocol ExistingCloudDataDetecting {
     func detectExistingData() async throws -> ExistingDataSummary?

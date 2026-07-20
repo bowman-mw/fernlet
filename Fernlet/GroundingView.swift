@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import FernletUI
 
 struct GroundingView: View {
     private struct GroundingStep {

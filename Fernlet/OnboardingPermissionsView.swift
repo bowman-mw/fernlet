@@ -2,6 +2,7 @@ import SwiftUI
 import FernletDomainModel
 import HealthKitGateway
 import AppServices
+import FernletUI
 
 struct OnboardingPermissionsView: View {
     var stepText: String

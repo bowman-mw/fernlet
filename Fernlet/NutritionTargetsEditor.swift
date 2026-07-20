@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 
 /// The Settings card for macro *targets*. It used to be a read-only summary that said targets "update
 /// automatically" — testers wanted to set their own. Calories, protein and fat are each editable;

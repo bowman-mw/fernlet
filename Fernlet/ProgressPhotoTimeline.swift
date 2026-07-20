@@ -2,6 +2,8 @@
 import SwiftUI
 import PrivateMediaStore
 import FernletLock
+import FernletUI
+import FernletLockUI
 
 /// The gym progress-photo timeline that lives under the Move tab (#11 piece 3). A private, at-rest-sealed
 /// strip of the user's own body photos, newest first, with an add affordance and a tap-through to a

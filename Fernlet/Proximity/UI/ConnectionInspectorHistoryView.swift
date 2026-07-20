@@ -2,6 +2,7 @@ import SwiftUI
 #if canImport(UIKit)
 import UIKit
 import FernletDomainModel
+import FernletUI
 #endif
 
 struct ConnectionInspectorHistoryView: View {

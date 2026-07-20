@@ -1,6 +1,7 @@
 import ProximityKit
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 
 private enum FriendListFilter: String, CaseIterable, Identifiable {
     case all = "All"

@@ -14,6 +14,7 @@ import UIKit
 import FernletDomainModel
 import PrivateStoreCore
 import FernletLock
+import FernletLockUI
 @testable import Fernlet
 
 // MARK: - Helpers

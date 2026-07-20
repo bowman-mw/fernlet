@@ -2,6 +2,7 @@ import SwiftUI
 import CloudKitSync
 import FernletFoundation
 import FernletDomainModel
+import FernletUI
 
 struct OnboardingStorageChoiceView: View {
     var stepText: String

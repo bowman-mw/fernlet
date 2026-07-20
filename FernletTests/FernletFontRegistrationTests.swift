@@ -2,6 +2,7 @@ import Testing
 import UIKit
 import SwiftUI
 @testable import Fernlet
+import FernletUI
 
 /// Verifies every bundled design-system font is registered (Info.plist `UIAppFonts`) and resolvable
 /// by the exact PostScript name used in `FernletFontName`. Because `Font.custom` silently falls back

@@ -10,6 +10,7 @@
 
 import SwiftUI
 import FernletScoring
+import FernletUI
 
 struct StressExplainerSheet: View {
     /// Nil during cold start (fewer than ~7 days of body signals).

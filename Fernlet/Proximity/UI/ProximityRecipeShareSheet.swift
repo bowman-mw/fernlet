@@ -2,6 +2,7 @@ import ProximityKit
 import SwiftUI
 import FernletDomainModel
 import FernletLock
+import FernletUI
 
 struct ProximityRecipeShareDraft: Identifiable, Equatable {
     let id = UUID()

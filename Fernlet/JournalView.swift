@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletFoundation
 import FernletDomainModel
+import FernletUI
 
 struct JournalView: View {
     var store: FernletStore

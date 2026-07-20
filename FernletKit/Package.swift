@@ -2,8 +2,11 @@
 import PackageDescription
 
 // FernletKit — the local Swift package for the SPM module carve-up (plan §6).
-// Phase 1 stands this up empty with a single Layer-0 `FernletFoundation` target;
-// later phases add the rest of the layered DAG that forms the S3 privacy wall.
+// The layered DAG below (21 targets, one umbrella product) IS the S3 privacy
+// wall: the walled AI (`AIProviders`) and iCloud-sync (`CloudKitSync`) targets
+// have no dependency edge to the sealed `Private*` stores, and the build runs
+// with `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` so a forbidden import
+// is a hard build error (see Scripts/spm-wall-check.sh).
 //
 // `defaultIsolation(MainActor.self)` is set per target up front: MainActor
 // isolation is NOT inherited from the app target's SWIFT_DEFAULT_ACTOR_ISOLATION
@@ -18,7 +21,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "AppServices", "ProximityKit"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI"]),
     ],
     dependencies: [
         // CryptoSwift supplies the memory-hard Scrypt KDF used by FernletLock's passphrase
@@ -64,6 +67,21 @@ let package = Package(
         .target(
             name: "FernletScoring",
             dependencies: ["FernletFoundation", "FernletDomainModel"]
+        ),
+        // Layer 1.5 — the SwiftUI design system: theme palette + hex parsing
+        // (FernletTheme), type roles/fonts/metrics/motion (FernletDesignSystem),
+        // the adaptive color tokens + screen/sheet primitives (FernletUIComponents,
+        // FernletPrimitives), and the domain-enum color extensions (ModelColors —
+        // the §5a strip re-added package-side). Depends only on DomainModel;
+        // deliberately NO app-navigation types (FernletTab/FernletSheet stay in the
+        // app). MainActor: SwiftUI surface. Fonts resolve by PostScript name — the
+        // font FILES stay registered by the app's Info.plist UIAppFonts.
+        .target(
+            name: "FernletUI",
+            dependencies: ["FernletDomainModel"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
         ),
         // Layer 2 — persistence contract: FernletRepository protocol + the
         // FernletSnapshot aggregate + the cycle-strip (forStorage factory). Pure
@@ -293,9 +311,21 @@ let package = Package(
         // FernletStore→ProximityHost conformance). Deps: PrivateMediaStore (MeshNetworkManager's
         // photo cache) + FernletDomainModel + FernletFoundation. defaultIsolation(MainActor.self)
         // (the managers are @Observable @MainActor).
+        // Layer 6.5 — the lock SwiftUI surface (setup, unlock, numeric pad, and the
+        // fernletLockGate modifier), moved out of the app so the lock feature is
+        // module-complete (SPM carve-up §14 remaining item 2). Kept separate from
+        // FernletLock (the service) so the design system stays a UI-only dependency
+        // and the service target stays presentation-free.
+        .target(
+            name: "FernletLockUI",
+            dependencies: ["FernletLock", "FernletUI", "FernletFoundation", "FernletDomainModel"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
+        ),
         .target(
             name: "ProximityKit",
-            dependencies: ["PrivateMediaStore", "FernletDomainModel", "FernletFoundation"],
+            dependencies: ["PrivateMediaStore", "FernletDomainModel", "FernletFoundation", "FernletUI"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
                 // Swift 6 language mode (the package default — no `.swiftLanguageMode(.v5)`).

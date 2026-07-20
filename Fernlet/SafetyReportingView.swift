@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import FernletUI
 
 struct SafetyReportingView: View {
     var body: some View {

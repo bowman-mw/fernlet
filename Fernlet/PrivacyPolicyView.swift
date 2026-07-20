@@ -6,20 +6,18 @@
 //  same substance as Docs/Privacy-Policy.md — in the app's voice and type system. The identical
 //  text must also be hosted at a public URL and entered in App Store Connect; keep the two in sync.
 //
-//  The developer name / contact / effective date below are the only values that need updating before
-//  submission (they default to the owned fernlet.com domain). A DEBUG-only banner flags that the copy
-//  is a draft pending final legal review; it does not appear in release builds.
+//  Copy finalized 2026-07-19. Any material change to the policy must update the effective date
+//  below AND in Docs/Privacy-Policy.md, and be surfaced in the app per the policy's own terms.
 //
 
 import SwiftUI
+import FernletUI
 
 struct PrivacyPolicyView: View {
-    // MARK: - The one-line facts to finalize before submission
+    // MARK: - Publication facts (keep in lockstep with Docs/Privacy-Policy.md)
     private static let developerName = "Michael Bowman Olay"
-    /// TODO before submission: add a real support/contact email. Until then the contact line names the
-    /// developer only, and App Store Connect still needs a support URL/email in the listing.
-    private static let supportEmail: String? = nil
-    private static let effectiveDate = "July 11, 2026"
+    private static let supportEmail: String? = "fernletapp@gmail.com"
+    private static let effectiveDate = "July 19, 2026"
 
     private static var contactClause: String {
         if let supportEmail { return "contact \(supportEmail)" }
@@ -29,9 +27,6 @@ struct PrivacyPolicyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                #if DEBUG
-                draftBanner
-                #endif
                 ForEach(Array(Self.blocks.enumerated()), id: \.offset) { _, block in
                     block.view
                 }
@@ -43,18 +38,6 @@ struct PrivacyPolicyView: View {
         .navigationTitle("Privacy Policy")
         .navigationBarTitleDisplayMode(.inline)
     }
-
-    #if DEBUG
-    private var draftBanner: some View {
-        Text("Draft — pending final review. Fill the developer name, contact, and effective date, "
-             + "have counsel review, then host the same text and link it in App Store Connect.")
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.bark)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.goldenrod.opacity(0.18), in: RoundedRectangle(cornerRadius: 12))
-    }
-    #endif
 
     // MARK: - Content (display copy)
 

@@ -1,8 +1,8 @@
 import SwiftUI
+import FernletUI
 import Photos
 import UIKit
 import FernletDomainModel
-import ProximityKit
 
 struct FriendPhotoTile: View {
     let photo: FriendPhotoPayload
@@ -44,7 +44,7 @@ struct FriendPhotoTile: View {
     }
 }
 
-struct FriendPhotoReviewSheet: View {
+public struct FriendPhotoReviewSheet: View {
     let photos: [FriendPhotoPayload]
     @Binding var selectedIDs: Set<UUID>
     /// Phase 2 friend minting: session participants eligible to be kept as friends
@@ -58,7 +58,25 @@ struct FriendPhotoReviewSheet: View {
     var loadImageData: ((FriendPhotoPayload) -> Data?)? = nil
     @State private var isSaving = false
 
-    var body: some View {
+    public init(
+        photos: [FriendPhotoPayload],
+        selectedIDs: Binding<Set<UUID>>,
+        friendCandidates: [MeshSessionRosterEntry] = [],
+        keptFriendFingerprints: Binding<Set<String>> = .constant([]),
+        saveSelected: @escaping () async -> Void,
+        discardAll: @escaping () -> Void,
+        loadImageData: ((FriendPhotoPayload) -> Data?)? = nil
+    ) {
+        self.photos = photos
+        self._selectedIDs = selectedIDs
+        self.friendCandidates = friendCandidates
+        self.keptFriendFingerprints = keptFriendFingerprints
+        self.saveSelected = saveSelected
+        self.discardAll = discardAll
+        self.loadImageData = loadImageData
+    }
+
+    public var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -127,8 +145,8 @@ struct FriendPhotoReviewSheet: View {
     }
 }
 
-enum FriendPhotoLibrarySaver {
-    static func save(_ photos: [FriendPhotoPayload]) async throws {
+public enum FriendPhotoLibrarySaver {
+    public static func save(_ photos: [FriendPhotoPayload]) async throws {
         guard !photos.isEmpty else { return }
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {

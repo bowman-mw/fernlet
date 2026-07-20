@@ -1,6 +1,7 @@
 import ProximityKit
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 
 /// The host's "someone wants to join" confirmation for Group Activities (Phase 6). A clone of
 /// `MeshAdmissionPromptSheet`: pure presentation, zero manager reference. It shows the first pending

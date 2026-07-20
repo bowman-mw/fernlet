@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 
 /// Manual editor for a suggested workout session: adjust sets / reps / rest per exercise, remove,
 /// reorder, and add exercises from the catalog. Saving replaces the session in today's committed plan

@@ -3,6 +3,7 @@ import FernletDomainModel
 import FernletLock
 import PrivateHealthStore
 import HealthKitGateway
+import FernletUI
 
 struct LogPeriodSheet: View {
     var periodStore: PeriodTrackerStore

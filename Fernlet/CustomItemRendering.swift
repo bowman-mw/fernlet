@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import CoreGraphics
 import FernletDomainModel
+import FernletUI
 
 /// Converts a palette-indexed `ItemGridTexture` into a crisp `CGImage` (one pixel per cell, nearest-
 /// neighbor on display). Generation is cheap (a few hundred cells), and callers cache the result in

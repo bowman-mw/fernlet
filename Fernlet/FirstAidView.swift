@@ -13,6 +13,7 @@ import SwiftUI
 import FernletDomainModel
 import FernletFoundation
 import HealthKitGateway
+import FernletUI
 
 /// The tools the First Aid sheet can open directly (e.g. from a gentle offer card).
 enum FirstAidTool: String, Hashable {

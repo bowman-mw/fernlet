@@ -17,6 +17,7 @@
 import SwiftUI
 import FernletDomainModel
 import FernletLock
+import FernletUI
 
 // MARK: - View modifier
 
@@ -193,7 +194,7 @@ struct FernletLockGateModifier: ViewModifier {
 
 // MARK: - View extension
 
-extension View {
+public extension View {
     /// Gates the view behind FernletLock.
     /// When `active` is false the content passes through unchanged.
     /// On disappear the content key is scrubbed; every re-entry re-prompts.

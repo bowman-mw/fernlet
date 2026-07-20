@@ -8,6 +8,7 @@ import UserNotifications
 #if canImport(UIKit)
 import UIKit
 import FernletDomainModel
+import FernletUI
 #endif
 
 @main

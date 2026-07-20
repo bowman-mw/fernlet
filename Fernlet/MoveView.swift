@@ -4,6 +4,7 @@ import FernletFoundation
 import FernletDomainModel
 import AIProviders
 import PrivateMediaStore
+import FernletUI
 
 struct MoveView: View {
     var store: FernletStore
@@ -2773,42 +2774,6 @@ struct WorkoutPlanSheet: View {
             return String(text[range])
         }
         return (fullMatch, groups)
-    }
-}
-
-struct GoalsCard: View {
-    var store: FernletStore
-    @Binding var activeSheet: FernletSheet?
-
-    var body: some View {
-        FernletCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    SectionLabel("Goals")
-                    Spacer()
-                    Button(store.goals.isEmpty ? "Plan goals" : "Recraft") { activeSheet = .goals }
-                        .font(.fernlet(.label))
-                }
-                if store.goals.isEmpty {
-                    Button { activeSheet = .goals } label: {
-                        Text("Tap to craft fitness goals")
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.bark.opacity(0.14), style: StrokeStyle(lineWidth: 1.5, dash: [6]))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    ForEach(store.goals) { goal in
-                        GoalRow(goal: goal)
-                    }
-                }
-            }
-        }
     }
 }
 

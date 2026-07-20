@@ -11,10 +11,11 @@ import Combine
 import FernletDomainModel
 import FernletFoundation
 import FernletLock
+import FernletUI
 
 // MARK: - Setup view
 
-struct FernletLockSetupView: View {
+public struct FernletLockSetupView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
 
@@ -27,7 +28,9 @@ struct FernletLockSetupView: View {
     @State private var errorMessage: String?
     @State private var showSuccess = false
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         NavigationStack {
             ZStack {
                 Color.parchment.ignoresSafeArea()
@@ -388,7 +391,7 @@ struct FernletLockSetupView: View {
 
 // MARK: - Unlock view
 
-struct FernletLockView: View {
+public struct FernletLockView: View {
     @Environment(FernletLockService.self) private var lockService
     var onUnlocked: () -> Void
     var onResetRequested: (() -> Void)?
@@ -400,7 +403,12 @@ struct FernletLockView: View {
     @State private var cooldownRemaining: TimeInterval = 0
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    var body: some View {
+    public init(onUnlocked: @escaping () -> Void, onResetRequested: (() -> Void)? = nil) {
+        self.onUnlocked = onUnlocked
+        self.onResetRequested = onResetRequested
+    }
+
+    public var body: some View {
         ZStack {
             Color.parchment.ignoresSafeArea()
 
@@ -704,7 +712,7 @@ private func pinDotsRow(current: String, total: Int) -> some View {
 
 // MARK: - Numeric pad
 
-struct FernletNumericPad: View {
+public struct FernletNumericPad: View {
     @Binding var value: String
     var maxLength: Int
 
@@ -715,7 +723,12 @@ struct FernletNumericPad: View {
         ["", "0", "⌫"]
     ]
 
-    var body: some View {
+    public init(value: Binding<String>, maxLength: Int) {
+        self._value = value
+        self.maxLength = maxLength
+    }
+
+    public var body: some View {
         VStack(spacing: 12) {
             ForEach(rows, id: \.self) { row in
                 HStack(spacing: 16) {
@@ -765,7 +778,7 @@ struct FernletNumericPad: View {
 
 // MARK: - Biometric helpers (shared by Setup + Unlock)
 
-func biometricName(_ type: LABiometryType) -> String {
+public func biometricName(_ type: LABiometryType) -> String {
     switch type {
     case .faceID: "Face ID"
     case .touchID: "Touch ID"
@@ -774,7 +787,7 @@ func biometricName(_ type: LABiometryType) -> String {
     }
 }
 
-func biometricSystemImage(_ type: LABiometryType) -> String {
+public func biometricSystemImage(_ type: LABiometryType) -> String {
     switch type {
     case .faceID: "faceid"
     case .touchID: "touchid"

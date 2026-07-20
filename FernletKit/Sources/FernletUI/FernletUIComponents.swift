@@ -1,15 +1,17 @@
 //
 //  FernletUIComponents.swift
-//  Fernlet
+//  FernletUI
 //
-//  Created by Coding Assistant on 5/17/26.
+//  The shared SwiftUI design system: adaptive color tokens and the reusable
+//  screen/sheet primitives. Carved out of the app target (SPM carve-up §14
+//  remaining item 2). App-navigation enums (`FernletTab`, `FernletSheet`) are
+//  deliberately NOT here — they are app concerns and live in
+//  `Fernlet/FernletNavigation.swift`.
 //
 
 import SwiftUI
-import FernletDomainModel
-import PrivateHealthStore
 
-extension Color {
+public extension Color {
     static let parchment = Color(UIColor { trait in
         FernletThemePalette.current(for: trait.userInterfaceStyle).background
     })
@@ -56,7 +58,7 @@ extension Color {
     static let parchmentInk = Color(red: 0.961, green: 0.937, blue: 0.878)
 }
 
-extension Color {
+public extension Color {
     /// Resolves to `light` in light mode, `dark` in dark mode.
     init(light: Color, dark: Color) {
         self.init(UIColor { trait in
@@ -65,7 +67,7 @@ extension Color {
     }
 }
 
-extension View {
+public extension View {
     /// Tags a screen or sheet root with a stable, queryable accessibility identifier for
     /// UX appearance tests, while keeping every descendant element individually
     /// accessible (`.contain`). Shipping accessibility identifiers is harmless for users.
@@ -75,109 +77,22 @@ extension View {
     }
 }
 
-enum FernletTab: String, CaseIterable, Hashable, Identifiable {
-    case home
-    case food
-    case move
-    case social
-    case personal
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .home: "Home"
-        case .food: "Food"
-        case .move: "Move"
-        case .social: "Friends"
-        case .personal: "Private"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .home: "leaf.fill"
-        case .food: "fork.knife"
-        case .move: "figure.walk"
-        case .social: "person.2.fill"
-        case .personal: "lock.fill"
-        }
-    }
-
-    var label: Label<Text, Image> {
-        Label(title, systemImage: systemImage)
-    }
-
-    var next: FernletTab? {
-        guard let index = Self.allCases.firstIndex(of: self) else { return nil }
-        let nextIndex = Self.allCases.index(after: index)
-        return nextIndex < Self.allCases.endIndex ? Self.allCases[nextIndex] : nil
-    }
-
-    var previous: FernletTab? {
-        guard let index = Self.allCases.firstIndex(of: self), index > Self.allCases.startIndex else { return nil }
-        let previousIndex = Self.allCases.index(before: index)
-        return Self.allCases[previousIndex]
-    }
-}
-
-enum FernletSheet: Identifiable {
-    case meal
-    case recipe
-    case water
-    case sleep
-    case journal
-    case quickExercise
-    case workout
-    case workoutSuggestion
-    case goals
-    case hygiene
-    case settings
-    case recipeBook
-    case trends
-    case stressExplainer
-    /// Calm first-aid tools (breathing / grounding / worry box); the optional tool deep-links
-    /// straight into one of them (gentle-offer cards use it).
-    case firstAid(FirstAidTool?)
-    case logPeriod(targetDate: Date?, editingEntry: CycleDayEntry?)
-    case logIntimacy
-    case editRecipe(RecipeDefinition)
-    case editSavedRecipe(RecipeDefinition)
-
-    var id: String {
-        switch self {
-        case .meal: "meal"
-        case .recipe: "recipe"
-        case .water: "water"
-        case .sleep: "sleep"
-        case .journal: "journal"
-        case .quickExercise: "quickExercise"
-        case .workout: "workout"
-        case .workoutSuggestion: "workoutSuggestion"
-        case .goals: "goals"
-        case .hygiene: "hygiene"
-        case .settings: "settings"
-        case .recipeBook: "recipeBook"
-        case .trends: "trends"
-        case .stressExplainer: "stressExplainer"
-        case .firstAid: "firstAid"
-        case .logPeriod: "logPeriod"
-        case .logIntimacy: "logIntimacy"
-        case .editRecipe(let r): "editRecipe-\(r.id)"
-        case .editSavedRecipe(let r): "editSavedRecipe-\(r.id)"
-        }
-    }
-}
-
-struct ScreenHeader: View {
+public struct ScreenHeader: View {
     var title: String
     var subtitle: String
-    var subtitleFirst = false
+    var subtitleFirst: Bool
     /// Optional stable accessibility identifier so UX appearance tests can anchor a
     /// screen's header (e.g. "screen.home"). Empty when unset — a no-op for users.
-    var identifier: String? = nil
+    var identifier: String?
 
-    var body: some View {
+    public init(title: String, subtitle: String, subtitleFirst: Bool = false, identifier: String? = nil) {
+        self.title = title
+        self.subtitle = subtitle
+        self.subtitleFirst = subtitleFirst
+        self.identifier = identifier
+    }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if subtitleFirst { subtitleView }
             Text(title)
@@ -202,19 +117,19 @@ struct ScreenHeader: View {
     }
 }
 
-struct HeaderActionButton: View {
+public struct HeaderActionButton: View {
     var title: String?
     var systemImage: String?
     var action: () -> Void
 
-    init(title: String? = nil, systemImage: String? = nil, action: @escaping () -> Void) {
+    public init(title: String? = nil, systemImage: String? = nil, action: @escaping () -> Void) {
         assert(title != nil || systemImage != nil, "header action needs title or image")
         self.title = title
         self.systemImage = systemImage
         self.action = action
     }
 
-    var body: some View {
+    public var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 if let systemImage {
@@ -240,15 +155,31 @@ struct HeaderActionButton: View {
     }
 }
 
-struct PolaroidTile: View {
+public struct PolaroidTile: View {
     var color: Color
     var caption: String
     var rotation: Double
-    var imageData: Data? = nil
-    var imageWidth: CGFloat = 98
-    var imageHeight: CGFloat = 86
+    var imageData: Data?
+    var imageWidth: CGFloat
+    var imageHeight: CGFloat
 
-    var body: some View {
+    public init(
+        color: Color,
+        caption: String,
+        rotation: Double,
+        imageData: Data? = nil,
+        imageWidth: CGFloat = 98,
+        imageHeight: CGFloat = 86
+    ) {
+        self.color = color
+        self.caption = caption
+        self.rotation = rotation
+        self.imageData = imageData
+        self.imageWidth = imageWidth
+        self.imageHeight = imageHeight
+    }
+
+    public var body: some View {
         VStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 3)
                 .fill(color)
@@ -275,7 +206,7 @@ struct PolaroidTile: View {
     }
 }
 
-extension View {
+public extension View {
     func fernletSheetStyle() -> some View {
         self
             .scrollContentBackground(.hidden)
@@ -304,10 +235,14 @@ extension View {
 
 // MARK: - Sheet Layout Components
 
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
+public struct FlowLayout: Layout {
+    var spacing: CGFloat
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    public init(spacing: CGFloat = 8) {
+        self.spacing = spacing
+    }
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
         var x: CGFloat = 0
         var y: CGFloat = 0
@@ -325,7 +260,7 @@ struct FlowLayout: Layout {
         return CGSize(width: width, height: y + rowHeight)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var x = bounds.minX
         var y = bounds.minY
         var rowHeight: CGFloat = 0
@@ -343,16 +278,16 @@ struct FlowLayout: Layout {
     }
 }
 
-struct SheetField<Content: View>: View {
+public struct SheetField<Content: View>: View {
     var label: String
     var content: Content
 
-    init(_ label: String, @ViewBuilder content: () -> Content) {
+    public init(_ label: String, @ViewBuilder content: () -> Content) {
         self.label = label
         self.content = content()
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label.uppercased())
                 .font(.fernlet(.labelSmall))
@@ -363,10 +298,14 @@ struct SheetField<Content: View>: View {
     }
 }
 
-struct ChipButtonStyle: ButtonStyle {
+public struct ChipButtonStyle: ButtonStyle {
     var selected: Bool
 
-    func makeBody(configuration: Configuration) -> some View {
+    public init(selected: Bool) {
+        self.selected = selected
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.fernlet(.label))
             .padding(.horizontal, 14)
@@ -384,16 +323,22 @@ struct ChipButtonStyle: ButtonStyle {
     }
 }
 
-struct SheetTextEditor: View {
+public struct SheetTextEditor: View {
     @Binding var text: String
     var placeholder: String
-    var minHeight: CGFloat = 120
+    var minHeight: CGFloat
+
+    public init(text: Binding<String>, placeholder: String, minHeight: CGFloat = 120) {
+        self._text = text
+        self.placeholder = placeholder
+        self.minHeight = minHeight
+    }
 
     // TextEditor (UITextView) has intrinsic insets: 5pt horizontal (lineFragmentPadding)
     // and 8pt top (textContainerInset). External padding of (9h, 6v) makes the text
     // land at 9+5=14pt horizontal and 6+8=14pt vertical — matching .padding(14) on
     // the placeholder so cursor and placeholder text are perfectly aligned.
-    var body: some View {
+    public var body: some View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(placeholder)
@@ -416,12 +361,18 @@ struct SheetTextEditor: View {
     }
 }
 
-struct HubSectionPicker<Section: Hashable>: View {
+public struct HubSectionPicker<Section: Hashable>: View {
     var sections: [Section]
     @Binding var selection: Section
     var label: (Section) -> String
 
-    var body: some View {
+    public init(sections: [Section], selection: Binding<Section>, label: @escaping (Section) -> String) {
+        self.sections = sections
+        self._selection = selection
+        self.label = label
+    }
+
+    public var body: some View {
         HStack(spacing: 4) {
             ForEach(sections.indices, id: \.self) { index in
                 let section = sections[index]
@@ -452,18 +403,23 @@ struct HubSectionPicker<Section: Hashable>: View {
     }
 }
 
-extension View {
+public extension View {
     func fernletTabBarCompaction(_ isCompact: Binding<Bool>, resetToken: Binding<Int>) -> some View {
         modifier(FernletTabBarCompactionModifier(isCompact: isCompact, resetToken: resetToken))
     }
 }
 
-struct FernletTabBarCompactionModifier: ViewModifier {
+public struct FernletTabBarCompactionModifier: ViewModifier {
     @Binding var isCompact: Bool
     @Binding var resetToken: Int
     @State private var scrollPosition = ScrollPosition(edge: .top)
 
-    func body(content: Content) -> some View {
+    public init(isCompact: Binding<Bool>, resetToken: Binding<Int>) {
+        self._isCompact = isCompact
+        self._resetToken = resetToken
+    }
+
+    public func body(content: Content) -> some View {
         content
             .scrollPosition($scrollPosition)
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
@@ -497,17 +453,23 @@ struct FernletTabBarCompactionModifier: ViewModifier {
     /// after 48pt of real downward travel; leave only once settled back under 8pt. The 8…48 dead
     /// band means a value dwelling anywhere in the old oscillation range cannot flip states, and
     /// requiring 48pt of travel means an unscrollable screen can never trigger compaction.
-    static func shouldCompact(isCompact: Bool, distanceScrolledPastTop: CGFloat) -> Bool {
+    public static func shouldCompact(isCompact: Bool, distanceScrolledPastTop: CGFloat) -> Bool {
         isCompact ? (distanceScrolledPastTop > 8) : (distanceScrolledPastTop > 48)
     }
 }
 
-struct SheetSaveBar: View {
-    var label: String = "Save"
-    var disabled: Bool = false
+public struct SheetSaveBar: View {
+    var label: String
+    var disabled: Bool
     var action: () -> Void
 
-    var body: some View {
+    public init(label: String = "Save", disabled: Bool = false, action: @escaping () -> Void) {
+        self.label = label
+        self.disabled = disabled
+        self.action = action
+    }
+
+    public var body: some View {
         HStack {
             Spacer()
             Button(label, action: action)
@@ -530,14 +492,20 @@ struct SheetSaveBar: View {
 /// stand-in for the system `ProgressView`. Two expanding rings behind a filled disc with an icon.
 /// Ported from the shop's private `SearchingPulse`; parameterized (tint / size / icon) so the
 /// friend-shop, connect, and recipe-share surfaces can share one component.
-struct SearchingPulse: View {
-    var tint: Color = .moss
+public struct SearchingPulse: View {
+    var tint: Color
     /// Outer frame edge; the ring and inner disc scale from it (defaults reproduce the shop's 80pt look).
-    var size: CGFloat = 80
-    var systemImage: String = "bag"
+    var size: CGFloat
+    var systemImage: String
     @State private var animate = false
 
-    var body: some View {
+    public init(tint: Color = .moss, size: CGFloat = 80, systemImage: String = "bag") {
+        self.tint = tint
+        self.size = size
+        self.systemImage = systemImage
+    }
+
+    public var body: some View {
         ZStack {
             ForEach(0..<2, id: \.self) { i in
                 Circle()
@@ -570,12 +538,18 @@ struct SearchingPulse: View {
 /// A circular "pressed metal" keepsake: a radial-gradient face, an inset highlight/shadow ring for
 /// the struck-coin look, and a thin inner ring. Purely decorative — reads as a memento, not a token.
 /// Shared by the Milestones keepsake shelf and the Home milestones doorway card.
-struct PressedMedallion: View {
+public struct PressedMedallion: View {
     let icon: String
     let tint: Color
-    var diameter: CGFloat = 88
+    var diameter: CGFloat
 
-    var body: some View {
+    public init(icon: String, tint: Color, diameter: CGFloat = 88) {
+        self.icon = icon
+        self.tint = tint
+        self.diameter = diameter
+    }
+
+    public var body: some View {
         ZStack {
             // Metal face: light catch top-left, deepening to a darker rim.
             Circle()
@@ -639,11 +613,16 @@ private extension Color {
 
 /// The small pressed-gold coin used in the coins-summary cards. Radial gold gradient with a soft
 /// inner highlight; the "coin" mark is a gentle leaf. Muted variant for the not-yet state.
-struct CoinGlyph: View {
-    var diameter: CGFloat = 46
-    var muted: Bool = false
+public struct CoinGlyph: View {
+    var diameter: CGFloat
+    var muted: Bool
 
-    var body: some View {
+    public init(diameter: CGFloat = 46, muted: Bool = false) {
+        self.diameter = diameter
+        self.muted = muted
+    }
+
+    public var body: some View {
         ZStack {
             Circle()
                 .fill(
@@ -677,10 +656,14 @@ struct CoinGlyph: View {
 /// Coin wallet — a compact parchment pill carrying the live spendable balance, echoing the shop's coin
 /// chips so every coin surface reads in one currency. Shared by the friend shop's toolbar and the
 /// Wardrobe header (the always-reachable balance surface now that the shop is a post-session window).
-struct CoinBalancePill: View {
+public struct CoinBalancePill: View {
     var balance: Int
 
-    var body: some View {
+    public init(balance: Int) {
+        self.balance = balance
+    }
+
+    public var body: some View {
         HStack(spacing: 6) {
             CoinGlyph(diameter: 14)
             Text("\(balance)")

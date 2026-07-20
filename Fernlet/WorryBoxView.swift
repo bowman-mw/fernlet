@@ -10,6 +10,7 @@
 
 import SwiftUI
 import PrivateMemoryStore
+import FernletUI
 
 // MARK: - Entry (First Aid)
 

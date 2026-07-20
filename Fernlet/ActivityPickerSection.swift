@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletDomainModel
 import HealthKitGateway
+import FernletUI
 
 struct ActivityPickerSection: View {
     @Binding var selectedActivityType: WorkoutActivityType?

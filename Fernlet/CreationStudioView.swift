@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 
 /// The Animal-Crossing-style fabric editor. The user paints a per-slot pixel grid from a fixed palette,
 /// names it, and saves it into their Wardrobe. New creations auto-equip so the result is immediately

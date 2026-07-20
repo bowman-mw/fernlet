@@ -3,6 +3,7 @@ import Testing
 import UIKit
 import MultipeerConnectivity
 import FernletDomainModel
+import ProximityKit
 @testable import Fernlet
 
 // MARK: - MeshNetworkManagerTests

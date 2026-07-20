@@ -1,6 +1,7 @@
 import Testing
 import CoreGraphics
 @testable import Fernlet
+import FernletUI
 
 /// Decision-logic tests for the bottom tab bar's compaction hysteresis
 /// (`FernletTabBarCompactionModifier.shouldCompact`). Pure function — no UI, no scroll view.

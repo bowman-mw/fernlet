@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletDomainModel
 import FernletScoring
+import FernletUI
 
 struct WaterSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -170,7 +171,7 @@ struct GoalsSheet: View {
                                 .sheetTextInput()
                         }
 
-                        Text("Goals are generated locally for now. They mirror the website's structure without sending health data to an external service.")
+                        Text("Goals are crafted entirely on your device — your health details never leave your phone.")
                             .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()

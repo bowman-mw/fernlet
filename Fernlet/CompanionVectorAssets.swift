@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 
 struct CompanionView: View {
     var state: CompanionState

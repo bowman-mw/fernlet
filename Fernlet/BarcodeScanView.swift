@@ -8,6 +8,7 @@ import PhotosUI
 import FernletDomainModel
 import FoodCatalog
 import AppServices
+import FernletUI
 
 // MARK: - Scan → resolve → remember flow
 

@@ -4,22 +4,22 @@ import SwiftUI
 import UIKit
 import FernletDomainModel
 
-enum FernletThemeDefaults {
-    static let lightBackgroundHex = "#F5EFDF"
-    static let darkBackgroundHex = "#1C1E1B"
-    static let lightBoxHex = "#FBF7EE"
-    static let darkBoxHex = "#282A26"
-    static let customLightBackgroundKey = "fernletCustomLightBackgroundHex"
-    static let customDarkBackgroundKey = "fernletCustomDarkBackgroundHex"
+public enum FernletThemeDefaults {
+    public static let lightBackgroundHex = "#F5EFDF"
+    public static let darkBackgroundHex = "#1C1E1B"
+    public static let lightBoxHex = "#FBF7EE"
+    public static let darkBoxHex = "#282A26"
+    public static let customLightBackgroundKey = "fernletCustomLightBackgroundHex"
+    public static let customDarkBackgroundKey = "fernletCustomDarkBackgroundHex"
 }
 
-struct FernletThemePalette {
-    let background: UIColor
-    let box: UIColor
-    let primaryText: UIColor
-    let secondaryText: UIColor
+public struct FernletThemePalette {
+    public let background: UIColor
+    public let box: UIColor
+    public let primaryText: UIColor
+    public let secondaryText: UIColor
 
-    static func current(for interfaceStyle: UIUserInterfaceStyle) -> FernletThemePalette {
+    public static func current(for interfaceStyle: UIUserInterfaceStyle) -> FernletThemePalette {
         let isDarkMode = interfaceStyle == .dark
         let key = isDarkMode ? FernletThemeDefaults.customDarkBackgroundKey : FernletThemeDefaults.customLightBackgroundKey
         let defaultHex = isDarkMode ? FernletThemeDefaults.darkBackgroundHex : FernletThemeDefaults.lightBackgroundHex
@@ -74,7 +74,7 @@ struct FernletThemePalette {
     }
 }
 
-extension UIColor {
+public extension UIColor {
     var relativeLuminance: CGFloat {
         var red: CGFloat = 0
         var green: CGFloat = 0

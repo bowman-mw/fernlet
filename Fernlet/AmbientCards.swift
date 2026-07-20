@@ -6,6 +6,7 @@ import FernletScoring
 import PrivateHealthStore
 import ProximityKit
 import AppServices
+import FernletUI
 
 /// Gentle, low-cost "ambient" home surfaces (spec §12): an at-most-once-a-day gentle offer
 /// (breathing / worry box / short walk), a looking-back journal card, a macro-gap meal nudge,

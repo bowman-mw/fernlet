@@ -10,6 +10,7 @@
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+import FernletUI
 #endif
 
 /// One phase of a breath cycle (e.g. "Breathe in" for 4 seconds toward the expanded circle).

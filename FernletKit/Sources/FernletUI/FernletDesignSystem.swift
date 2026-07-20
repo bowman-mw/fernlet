@@ -17,7 +17,7 @@ import SwiftUI
 /// The two-system type scale: **serif = the companion's world**, **sans = the interface layer**.
 /// Sizes mirror the design-system `--text-*` tokens; each role scales with Dynamic Type via the
 /// `relativeTo:` text style.
-enum FernletTextRole: CaseIterable {
+public enum FernletTextRole: CaseIterable {
     case wordmark        // Playfair Display Italic — app logo only (reserved design-export role, no call site yet)
     case display         // Fraunces SemiBold 36 — avatar state / hero
     case displayMedium   // Fraunces SemiBold 28 — section display
@@ -31,7 +31,7 @@ enum FernletTextRole: CaseIterable {
     case stat            // DM Sans Medium 14 tabular — numbers / stats
 }
 
-extension Font {
+public extension Font {
     /// Resolve a design-system type role to a bundled font at its canonical size, scaling with
     /// Dynamic Type relative to the nearest system text style.
     static func fernlet(_ role: FernletTextRole) -> Font {
@@ -53,17 +53,17 @@ extension Font {
 
 /// Exact PostScript names of the bundled fonts (see `Fernlet/Fonts` + Info.plist `UIAppFonts`).
 /// These are the instanced static weights — do not guess; they are verified by a test.
-enum FernletFontName {
-    static let playfairItalic        = "PlayfairDisplayItalic-Italic"
-    static let frauncesSemiBold      = "Fraunces-72ptSemiBoldNonWonky"
-    static let dmSerifDisplay        = "DMSerifDisplay-Regular"
-    static let instrumentSerif       = "InstrumentSerif-Regular"
-    static let instrumentSerifItalic = "InstrumentSerif-Italic"
-    static let dmSans                = "DMSans-14pt"
-    static let dmSansMedium          = "DMSans-14ptMedium"
+public enum FernletFontName {
+    public static let playfairItalic        = "PlayfairDisplayItalic-Italic"
+    public static let frauncesSemiBold      = "Fraunces-72ptSemiBoldNonWonky"
+    public static let dmSerifDisplay        = "DMSerifDisplay-Regular"
+    public static let instrumentSerif       = "InstrumentSerif-Regular"
+    public static let instrumentSerifItalic = "InstrumentSerif-Italic"
+    public static let dmSans                = "DMSans-14pt"
+    public static let dmSansMedium          = "DMSans-14ptMedium"
 
     /// Every bundled PostScript name — consumed by the registration self-check test.
-    static let all = [
+    public static let all = [
         playfairItalic, frauncesSemiBold, dmSerifDisplay,
         instrumentSerif, instrumentSerifItalic, dmSans, dmSansMedium,
     ]
@@ -71,7 +71,7 @@ enum FernletFontName {
 
 // MARK: - Color tokens
 
-extension Color {
+public extension Color {
     // New tokens added by the redesign. (parchment / cream / bark / slate / moss / fern / goldenrod /
     // terracotta already live in FernletUIComponents; these extend the palette.) Each is built through
     // the app's single `UIColor(hex:)` parser so there is one hex source of truth.
@@ -107,25 +107,25 @@ extension Color {
 
 // MARK: - Metrics (8pt grid + corner radii)
 
-enum FernletMetrics {
+public enum FernletMetrics {
     // Spacing — 8pt base grid
-    static let spaceXs: CGFloat = 4
-    static let spaceSm: CGFloat = 8
-    static let spaceMd: CGFloat = 16
-    static let spaceLg: CGFloat = 24
-    static let spaceXl: CGFloat = 40
-    static let spaceXxl: CGFloat = 64
+    public static let spaceXs: CGFloat = 4
+    public static let spaceSm: CGFloat = 8
+    public static let spaceMd: CGFloat = 16
+    public static let spaceLg: CGFloat = 24
+    public static let spaceXl: CGFloat = 40
+    public static let spaceXxl: CGFloat = 64
 
     // Corner radii
-    static let radiusSm: CGFloat = 10   // chips, tags
-    static let radiusMd: CGFloat = 18   // cards, modals
-    static let radiusLg: CGFloat = 28   // bottom sheets, floating panels
-    static let radiusXl: CGFloat = 40   // full-bleed cards, avatar container
+    public static let radiusSm: CGFloat = 10   // chips, tags
+    public static let radiusMd: CGFloat = 18   // cards, modals
+    public static let radiusLg: CGFloat = 28   // bottom sheets, floating panels
+    public static let radiusXl: CGFloat = 40   // full-bleed cards, avatar container
 }
 
 // MARK: - Shadow (warm bark-tinted, never cold gray)
 
-extension View {
+public extension View {
     /// Warm card shadow — the design-system `--shadow-card` (0 2px 8px + 0 6px 24px, bark-tinted).
     func fernletCardShadow() -> some View {
         self
@@ -144,11 +144,11 @@ extension View {
 /// Design-export motion vocabulary (reserved). These mirror the export's `--ease-*` / duration
 /// tokens; not every one has a call site yet, but they are the system's documented animation
 /// vocabulary — keep them even when currently unused (reserved, not dead code — do not re-flag).
-enum FernletMotion {
-    static let ui     = Animation.easeOut(duration: 0.25)   // UI transitions
-    static let avatar = Animation.spring(response: 0.4, dampingFraction: 0.7)   // avatar reactions
-    static let load   = Animation.easeOut(duration: 0.7)    // loading transitions
-    static let fast   = Animation.easeOut(duration: 0.15)   // quick feedback
+public enum FernletMotion {
+    public static let ui     = Animation.easeOut(duration: 0.25)   // UI transitions
+    public static let avatar = Animation.spring(response: 0.4, dampingFraction: 0.7)   // avatar reactions
+    public static let load   = Animation.easeOut(duration: 0.7)    // loading transitions
+    public static let fast   = Animation.easeOut(duration: 0.15)   // quick feedback
     /// Gentle overshoot spring matching `--ease-spring` (celebration bounce).
-    static let spring = Animation.spring(response: 0.35, dampingFraction: 0.62)
+    public static let spring = Animation.spring(response: 0.35, dampingFraction: 0.62)
 }

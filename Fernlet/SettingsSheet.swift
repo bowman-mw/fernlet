@@ -12,6 +12,8 @@ import FernletLock
 import FernletScoring
 import HealthKitGateway
 import AppServices
+import FernletUI
+import FernletLockUI
 
 struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss

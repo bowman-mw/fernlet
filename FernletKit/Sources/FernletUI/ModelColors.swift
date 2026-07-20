@@ -5,7 +5,7 @@
 import SwiftUI
 import FernletDomainModel
 
-extension MealType {
+public extension MealType {
     var color: Color {
         switch self {
         case .breakfast: .goldenrod
@@ -18,7 +18,7 @@ extension MealType {
     }
 }
 
-extension WorkoutSplit {
+public extension WorkoutSplit {
     var color: Color {
         switch self {
         case .workout: .terracotta
@@ -30,7 +30,7 @@ extension WorkoutSplit {
     }
 }
 
-extension WorkoutType {
+public extension WorkoutType {
     var color: Color {
         switch self {
         case .upper, .armsBack, .mixed:
@@ -45,7 +45,7 @@ extension WorkoutType {
     }
 }
 
-extension FeelingTag {
+public extension FeelingTag {
     var color: Color {
         switch self {
         case .bright: .sun
@@ -58,7 +58,7 @@ extension FeelingTag {
     }
 }
 
-extension TextureTag {
+public extension TextureTag {
     var color: Color {
         switch self {
         case .tension: .terracotta
@@ -68,7 +68,7 @@ extension TextureTag {
     }
 }
 
-extension CompanionPalette {
+public extension CompanionPalette {
     func color(for state: CompanionState) -> Color {
         switch self {
         case .state: state.color
@@ -80,7 +80,7 @@ extension CompanionPalette {
     }
 }
 
-extension CompanionAssetColor {
+public extension CompanionAssetColor {
     func color(for state: CompanionState) -> Color {
         switch self {
         case .state: state.color
@@ -96,7 +96,7 @@ extension CompanionAssetColor {
     }
 }
 
-extension CompanionState {
+public extension CompanionState {
     var color: Color {
         switch self {
         case .thriving: .moss

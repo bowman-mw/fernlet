@@ -6,6 +6,8 @@ import SwiftUI
 import UIKit
 import FernletDomainModel
 import HealthKitGateway
+import FernletUI
+import FernletLockUI
 
 @MainActor
 protocol PrivacyCloudDataManaging {

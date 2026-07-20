@@ -7,6 +7,7 @@ import Vision
 import FernletDomainModel
 import AppServices
 import FoodCatalog
+import FernletUI
 
 // MARK: - Auto-routing for the unified "Capture" front door
 //

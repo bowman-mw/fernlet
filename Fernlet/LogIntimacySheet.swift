@@ -4,6 +4,7 @@ import FernletDomainModel
 import FernletLock
 import PrivateHealthStore
 import HealthKitGateway
+import FernletUI
 
 struct LogIntimacySheet: View {
     /// The gated funnel for the sealed-note write. Reaches the same fail-closed decrypt/seam gate the

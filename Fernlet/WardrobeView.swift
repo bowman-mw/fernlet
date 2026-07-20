@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 
 /// The closet: every item the user owns, grouped by slot. Tap a row to edit; swipe to equip/unequip or
 /// delete. Items received from friends show "designed by <friend>". Pushed within the customization

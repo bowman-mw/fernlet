@@ -12,6 +12,7 @@
 
 import SwiftUI
 import FernletDomainModel
+import FernletUI
 
 struct QuickMoodRow: View {
     var store: FernletStore

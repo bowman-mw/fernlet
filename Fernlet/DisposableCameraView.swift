@@ -3,6 +3,7 @@ import AVFoundation
 import UIKit
 import FernletDomainModel
 import ProximityKit
+import FernletUI
 
 // MARK: - Camera preview (UIViewRepresentable)
 
