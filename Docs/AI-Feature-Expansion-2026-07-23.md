@@ -7,6 +7,11 @@ Scoping for seven features that ride on the provider ladder in
 against `main` @ `4916cd0`. Where a survey claim was refuted, the corrected fact is what appears
 here.
 
+**Revised 2026-07-24** — post-audit revision (99-agent verification pass) plus owner decisions D-A
+(recipe store), D-B (PCC consent), D-C (F6/F7 deferred), D-D (two-adapter BYOK). §1 below is now the
+**single canonical build order** for both this doc and the ladder doc. Superseded claims are struck
+through / marked in place.
+
 ---
 
 ## 0. What the survey changed
@@ -37,10 +42,11 @@ the seven features are cheaper than expected and two are considerably more expen
    contradicts the spec; building both as ambient nudges makes them small.
 
 4. **Cooking mode, scaling, and grocery list all block on one schema change, not three.**
-   `SavedRecipeRecord` ([Persistence.swift:355](../Fernlet/Persistence.swift)) is the only row
-   entity built from typed columns instead of the `idString + payloadData` JSON-blob shape used by
-   `CustomItemRecord`, `CoinLedgerRecord`, `MilestoneLedgerRecord`, and `DayRecord`. It hardcodes
-   `ingredients: []`. Migrate it once and all three unblock.
+   `SavedRecipeRecord` ([FernletKit/Sources/CloudKitSync/Persistence.swift:355](../FernletKit/Sources/CloudKitSync/Persistence.swift))
+   is the only row entity built from typed columns instead of the `idString + payloadData` JSON-blob
+   shape used by `CustomItemRecord`, `CoinLedgerRecord`, `MilestoneLedgerRecord`, and `DayRecord`. It
+   hardcodes `ingredients: []`. Migrate it once and **all four unblock** — F3, F4, F5, and (per D-A,
+   2026-07-24) synthesized recipe persistence.
 
 5. **The AI retry queue silently destroys any non-meal retry.**
    `AIAnalysisRetryRecord.payloadType` is a free `String` and `AIRetryQueueService`'s own comment
@@ -54,30 +60,66 @@ the seven features are cheaper than expected and two are considerably more expen
 
 ## 1. Build order
 
+**This is the single canonical, topologically-sorted build order for BOTH docs (revised
+2026-07-24).** The [AI-Provider-Ladder §9](AI-Provider-Ladder-2026-07-23.md) build order is
+superseded by this one and now points here; the ladder doc keeps only its ladder-specific track. The
+two previous, contradictory orders (this doc's tree omitted the ladder's recipe-creation feature; the
+ladder's §9 omitted STEP 0/0b/0c) are replaced.
+
 ```
-STEP 0   SavedRecipeRecord -> payloadData migration        blocks F3, F4, F5
-STEP 0b  retryOldestMeal payloadType dispatch              blocks any 2nd AI feature
-STEP 0c  CloudKit schema deploy process (none exists)      blocks every new entity/column
+STEP 0b  retryOldestMeal payloadType dispatch + meal-scoped badge   FIRST — tiny, unblocks everything
+STEP 0c  CloudKit schema deploy process (none exists)               process prerequisite
+STEP 0   SavedRecipeRecord -> payloadData migration                 additive-only (see §9.1); D-A prerequisite
+   |                                                                 for recipe synthesis, F3/F4/F5
    |
-   +-- STEP 1  F2 micronutrient suggestions   (independent, best warm-up)
-   +-- STEP 1  F1 photo -> recipe             (independent of the migration)
+   +== INCREMENT 1 — ships STANDALONE, all on-device, no cloud tier, no PCC/BYOK, no iOS 27 =========
+   |     F1(a)  decomposition -> createRecipe wire  (highest-value cheap win; §2.5)
+   |     F2     micronutrient suggestions           (independent, curated table; §3)
    |
-   +-- STEP 2  F4 recipe scaling              (after STEP 0)
-        +-- STEP 3  F3 grocery list           (Phase A share-text: NO STEP 0 dependency;
-        |                                      Phase B planner rides DayRecord payload — no deploy;
-        |                                      web-import aggregation + "cook for 6" need STEP 0/F4)
-        +-- STEP 3  F5 cooking mode           (after STEP 0; independent of F3 both ways)
+   +== PROVIDER-SEAM REFACTOR (no behavior change) ==================================================
+   |     AICapabilityTier, FernletModelRouter, AIDestination cases (clean build + EnumDecodeCompat),
+   |     audit-log fields + DEVICE-LOCAL persistence, the net-new quota counter, and the
+   |     keychain-purge leg in deleteAllData   (all detailed in the ladder doc)
    |
-   +-- STEP 4  F6 progressive overload        (per-set record is a hard prerequisite for F7)
-        +-- STEP 5  F7 deload detection       (after F6, and after its artifact is defined)
+   +== CLOUD TRACK — gated on iOS 27 GA (~Sept 2026); cannot ship above the on-device floor before ==
+   |     PCC entitlement (long pole) + first-use PCC consent sheet (D-B, same commit as the
+   |       Privacy-Policy:119 / spec-guardrail:894 amendments)
+   |     recipe synthesis (LADDER §4; persists via STEP 0-migrated SavedRecipeRecord, D-A)
+   |     workout personalization                 (each per-feature opt-in)
+   |
+   +== BYOK TRACK — after PCC, per D-D (two adapters only) ==========================================
+   |     Anthropic native LanguageModel package + one OpenAICompatible custom-endpoint adapter,
+   |     settings UI, keychain storage, BYOK spend guard, custom-endpoint host/ATS requirements
+   |
+   +== iOS 27 ON-DEVICE UPLIFT (ladder track, once iOS 27 is available) =============================
+   |     adopt the larger multimodal on-device model for the `standard` tier; revisit meal-photo
+   |     analysis (currently Vision/Core ML)   — LADDER §9 ladder-track item 4
+   |
+   +== EXPANSION FEATURES (after STEP 0) ===========================================================
+   |     F4 recipe scaling
+   |       +-- F3 grocery list   (Phase A share-text: NO STEP 0 dependency;
+   |       |                      Phase B planner rides DayRecord payload — no deploy;
+   |       |                      web-import aggregation + "cook for 6" need STEP 0/F4)
+   |       +-- F5 cooking mode   (after STEP 0; independent of F3 both ways)
+   |
+   +== DEFERRED (owner decision D-C, 2026-07-24) ===================================================
+         F6 progressive overload / per-set record   — pending a spec-level product decision
+         F7 deload detection                        — pending F6 and a defined artifact
 ```
 
 `grep -rn initializeCloudKitSchema` returns **zero** hits and no doc describes pushing the Core Data
 model to CloudKit's development or production environment. The container is
 `NSPersistentCloudKitContainer` against `iCloud.MBO.Fernlet`
-([Persistence.swift:183](../Fernlet/Persistence.swift)) with lightweight *local* migration
-configured at `:167-168` — that covers on-device SQLite, not server-side record types. **Batch every
-Core Data change in this doc into a single deploy.**
+([FernletKit/Sources/CloudKitSync/Persistence.swift:183](../FernletKit/Sources/CloudKitSync/Persistence.swift))
+with lightweight *local* migration configured at `:167-168` — that covers on-device SQLite, not
+server-side record types. **Batch every Core Data change in this doc into a single deploy**, and note
+STEP 0 modifies a **walled module** (`CloudKitSync`), so a wall check is required on that change.
+
+> **Ordering notes (2026-07-24):** STEP 0b → STEP 0c → STEP 0 are strict prerequisites at the top.
+> **Increment 1 (F1(a) + F2) is fully on-device** and ships before any cloud/provider work — it does
+> not require PCC, BYOK, iOS 27, or a CloudKit deploy. The **cloud recipe-synthesis** feature (the
+> ladder's text→recipe) is distinct from the on-device F1(a) wire and depends on STEP 0 (D-A). F6/F7
+> are **deferred (D-C)** and intentionally absent from the active order.
 
 ---
 
@@ -124,6 +166,14 @@ quantities in grams and `unit = RecipeUnit.gram` — which is structurally ident
 dish name is there too: `decomposition.name` already flows through at `:167-169`. **Wiring the
 decomposition tier into `createRecipe` is a handful of lines, not a new binder.** This is the
 single highest-value change in the whole document.
+
+> **Audit delta (2026-07-24): cheap, but not free.** The wire crosses a cross-SPM-package edit.
+> `ResolvedMeal` ([NutritionModels.swift:355](../FernletKit/Sources/FernletDomainModel/NutritionModels.swift))
+> carries only `{meal, confidence}`, so threading the built recipe back out requires **either** a
+> `FernletDomainModel` struct-field addition (the documented **clean-build hazard**) **or** two
+> return-signature changes. And `MealBuilder.createRecipe` is **`private static`** (`:127`) — it must
+> be reachable from the resolution path. Still the best warm-up, still increment 1, but budget the
+> package edit.
 
 **(b) Recognition is a general scene classifier plus a word list.** `VNClassifyImageRequest` returns
 taxonomy labels ("banana", "pizza", "laptop"), not dishes. Anything outside the 226-token list is
@@ -191,9 +241,14 @@ Not required for F1, but scope it honestly before anyone proposes it:
   `["MemoryAgent.swift": ["TierTwoMemoryRecord"]]` — one named file may name one named forbidden
   token, everything else still enforced. `MealPhotoPolaroid.swift:10` shows the closure-injection
   alternative (give a component sealed bytes without it naming the store).
-- **A working precedent for the whole shape exists**: `FoodProductWebImporter.swift` (948 lines, app
+- **A working precedent for the wall shape exists**: `FoodProductWebImporter.swift` (948 lines, app
   target) is a hard grep-wall floor file that performs network fetches *and* builds a
-  `FoundationModels` prompt, staying wall-clean by never naming a sealed store.
+  `FoundationModels` prompt, staying wall-clean by never naming a sealed store. **But do not copy its
+  SSRF posture (corrected 2026-07-24):** its `fetchHTML` / `fetchImage` (`:340`, `:522`) validate
+  **scheme-only, with no per-redirect-hop validation**, which makes it **weaker SSRF-wise than
+  `RecipeWebImporter`**. **`RecipeWebImporter` is the precedent to copy** (it does per-redirect-hop
+  `isPrivateOrLoopbackIPLiteral` validation); `FoodProductWebImporter` is a **counter-example to
+  fix**, not a template.
 
 ### 2.5 Bugs found in passing
 
@@ -204,7 +259,10 @@ Not required for F1, but scope it honestly before anyone proposes it:
 - **The meal sheet decodes when it doesn't have to.** [FoodView.swift:1221](../Fernlet/FoodView.swift)
   holds `@State mealPhoto: UIImage?` full-resolution for the whole sheet session, because `MealSheet`
   uses `onLibraryPick` rather than `onLibraryPickData`. The recipe surface already uses the byte path
-  (`:2805`, `:2820`). A 48 MP library pick decodes to ~190 MB.
+  (`:2805`, `:2820`). A 48 MP library pick decodes to ~190 MB. **Fix this as part of F1: switch the
+  meal sheet to `onLibraryPickData`.** This double-JPEG + full-res `UIImage` landmine (~190 MB on the
+  iPhone-11 floor) fires *more often* once F1 makes photo→recipe a first-class path, so the byte-path
+  switch belongs in the same increment.
 - **`MealPhotoRecognizer` is not grep-walled.** `S3BoundaryTests` discovers AI-facing files by the
   markers `LanguageModelSession` / `SystemLanguageModel` / `@Generable` / `import FoundationModels`.
   `MealPhotoRecognizer.swift` has none, and `FoodImageClassifier.swift` lives in `AppServices` which
@@ -296,11 +354,16 @@ base catalog trivial. `SQLiteBundledFoodSource` already has the per-source tunin
 - **Two reference tables disagree.** `NutritionLabelScanner`'s `dvReference` differs from
   `trackedNutrients` on calcium (1,300 vs 1,000) and potassium (4,700 vs 3,400). Reconcile before
   building on either. (Vitamin D is *not* a disagreement — both are 20.)
-- **`DiagnosticLanguage` will silently eat this feature's copy.** 26 lowercase substrings
+- **`DiagnosticLanguage` will silently eat this feature's copy — but it is also blind to this
+  feature's real risk vocabulary.** It is an **English-only substring gate**: 26 lowercase substrings
   ([DiagnosticLanguage.swift:15-23](../FernletKit/Sources/FernletDomainModel/DiagnosticLanguage.swift))
   including `period` and `cycle`, matched after normalizing to lowercase alphanumerics — which
-  **fuses tokens across separators**. The gate returns an empty string with no diagnostic. Any
-  nutrient copy must be tested against it.
+  **fuses tokens across separators**. The gate returns an empty string with no diagnostic. Two
+  consequences (revised 2026-07-24): (1) any nutrient copy must be **tested against it** so it isn't
+  silently blanked; (2) it does **not contain deficiency/supplement vocabulary** (`deficient`,
+  `deficiency`, `anemia`, `supplement` are not in the list) and it does not screen non-English model
+  output — so it will **not** catch clinical-sounding nutrient copy on its own. Nutrient copy must be
+  **reviewed separately**, not assumed safe because it passed this gate.
 - **`MemoryAgent` has a payload-kind allowlist.** `allowedPayloadKinds: Set<String> =
   ["companion-thought"]` ([MemoryAgent.swift:15](../FernletKit/Sources/AIContext/MemoryAgent.swift)),
   guarded at `:29`. A new nutrient payload kind gets an empty memory string until explicitly added —
@@ -346,10 +409,15 @@ to total sugar — fold into the reconciliation pass.
 
 The stale 1,000 / 3,400 are the NASEM adult-19–50 values — a different reference system, not typos.
 Standardizing on FDA DVs matches `NutritionLabelScanner.dvReference` (already 1,300 / 4,700) and
-what food packages print. **Behavior note:** raising the calcium and potassium denominators makes
-gaps for those two nutrients fire more readily, and gaps feed the companion score via
-`FernletScoring.micronutrientModifier` — expect a small scoring shift on upgrade. The shared table
-lands in `FernletDomainModel` and both consumers point at it in the same commit.
+what food packages print. **Behavior note (strengthened 2026-07-24): the change can only lower
+scores on existing users.** Raising the calcium (1,000→1,300) and potassium (3,400→4,700)
+denominators **lowers coverage ratios**, which pushes `micronutrientModifier`
+(`Scoring.swift:364-373`) in one direction on both of its branches: **more gap penalty** (the
+`.gap` branch, capped at **−0.05**) **and less covered bonus** (the covered branch,
+`min(covered.count * 0.01, 0.03)`, capped at **+0.03**). Net effect is one-directional — down — never
+up. It is small and hits only the narrow very-low-intake cohort, but it lands as an invisible rider
+on a table cleanup. **Ship it with a pinned scoring test and a release note — not silently.** The shared table lands in
+`FernletDomainModel` and both consumers point at it in the same commit.
 
 ---
 
@@ -567,6 +635,12 @@ run-state schema needs a second `start/end` pair anyway.
 
 ## 7. F6 — Progressive overload coach
 
+> **DEFERRED (owner decision D-C, 2026-07-24).** F6 is **not in the active build order** pending a
+> spec-level product decision: the per-set weight/1RM/tonnage record is the single feature closest to
+> the "optimization framing" the spec explicitly rejects
+> ([FernletSpecificationV3.md:65](FernletSpecificationV3.md)), and it is the largest schema-invasive
+> write. The survey content below is kept for when that go/no-go is made — do not schedule it before.
+
 **Re-labelled: LARGE, and larger than first stated.**
 
 ### 7.1 The blocker
@@ -636,6 +710,10 @@ Existing tests pin the behavior a redesign would change — `WorkoutProgramTests
 
 ## 8. F7 — Deload detection
 
+> **DEFERRED (owner decision D-C, 2026-07-24).** F7 is **not in the active build order** — it depends
+> on F6 (which is itself deferred) and still has no defined output artifact. The survey content below
+> is retained for later scoping.
+
 **Re-labelled: UNSIZEABLE, not small.** It is the only one of the seven with no defined output
 artifact, and its own verifier declared the survey unreliable and recommended re-surveying
 `PlannedWorkout` and `TierTwoMemoryEngine` before any scoping. **Do not schedule this until §8.3 is
@@ -703,13 +781,24 @@ already piggybacks on under a reserved key. There is no shared nudge registry.
 
 ### 9.1 STEP 0 — `SavedRecipeRecord` migration
 
-Columns today ([Persistence.swift:355-372](../Fernlet/Persistence.swift)): `idString`,
-`sourceURLString`, `name`, `ingredientsText`, `summary`, `servings`, `protein`, `carbs`, `fat`,
-`micronutrientsJSON`, `savedAt`. `SavedRecipeMapping.recipe` hardcodes `ingredients: []`.
+Columns today ([FernletKit/Sources/CloudKitSync/Persistence.swift:355-372](../FernletKit/Sources/CloudKitSync/Persistence.swift)):
+`idString`, `sourceURLString`, `name`, `ingredientsText`, `summary`, `servings`, `protein`, `carbs`,
+`fat`, `micronutrientsJSON`, `savedAt`. `SavedRecipeMapping.recipe` hardcodes `ingredients: []`.
 
 Migrate to the `idString + payloadData` JSON-blob shape used by every other row entity, with a
-read-both-shapes path. This unblocks structured ingredients on web imports (F3, F4) and a steps
-array (F5) in one change.
+read-both-shapes path. This unblocks structured ingredients on web imports (F3, F4), a steps array
+(F5), and synthesized recipes (D-A) in one change. Note `Persistence.swift` lives in the **walled
+`CloudKitSync` module**, so this change requires a **wall check**.
+
+> **NSPersistentCloudKitContainer constraint — additive-only (added 2026-07-24).** CloudKit's
+> mirrored schema **cannot remove or retype a deployed attribute**. The migration must therefore be
+> **strictly additive**: **add** a `payloadData` attribute alongside the existing typed columns;
+> **readers prefer `payloadData` and fall back to the legacy columns** when it is absent; **never
+> remove** the deployed legacy attributes. And because an **un-updated paired device keeps writing
+> legacy-shape rows** (it has no `payloadData` writer), the **read-both / write-both transition must
+> tolerate both shapes indefinitely** — there is no safe "flip the switch" cutover on a synced store.
+> STEP 0c (the CloudKit **production** schema deploy) **precedes** this — the new `payloadData`
+> attribute has to be deployed to the CloudKit prod environment before any device writes it.
 
 ### 9.2 STEP 0b — retry queue dispatch
 
@@ -744,11 +833,16 @@ design over a nutrient index.**
   grocery-list metadata pushes the one record these features all touch back in the direction the
   day-split work moved away from.
 - **Wire compatibility.** Three features want to add recipe fields; none mentioned the mesh. See §6.3.
-- **The 14-day window costs a full-history disk read on every save.** `rebuildDerivedSignals()`
+- **The 14-day window's per-save cost — corrected 2026-07-24.** `rebuildDerivedSignals()`
   ([FernletStore.swift:3344](../Fernlet/FernletStore.swift)) is
   `derivedSignalsService.rebuild(allDays: loadDays(), todayKey:)`, called from
-  `handleAfterSnapshotSave` (`:3353`). Logging one meal decodes every `DayRecord` the user has ever
-  written. F2 and F7 both widen what this window must carry — fix the read before widening it.
+  `handleAfterSnapshotSave` (`:3353`). ~~It costs a full-history disk read on every save.~~ It does
+  **not** re-read history from disk on every save: the default CoreData backend serves a **warm memo
+  patched in place** (`CoreDataFernletRepository.swift:211,224,530-537`, `invalidatesDayCache:false`).
+  The **real** cost is (1) an **uncapped in-memory sort per save** and (2) a **full re-decode after
+  each iCloud merge**. F2 and F7 both widen what this window must carry — **fix those two costs (the
+  per-save sort and the post-merge re-decode) before widening it**, not a disk read that is already
+  engineered away.
 - **The share extension is a fifth recipe write path** crossing a process boundary
   (`FernletShareExtension/SharedRecipeImportQueueWriter.swift` → app-group queue → drained on launch
   and foreground). Any recipe-shape change must cover it.
@@ -785,3 +879,7 @@ resolved the same day:
 7. **F7 — as recommended.** Deferred until F6's per-set record exists; leading artifact is a week
    of reduced `PlannedWorkout` rows — the only persisted, synced, forward-dated prescription in
    the app.
+   > **Superseded 2026-07-24 (D-C):** **both F6 and F7 are now DEFERRED** — not just F7-after-F6.
+   > F6 awaits a spec-level go/no-go (the per-set record is the closest thing to the optimization
+   > framing the spec rejects; see §7's banner), and F7 stays behind it. Neither is in the active
+   > build order (§1).
