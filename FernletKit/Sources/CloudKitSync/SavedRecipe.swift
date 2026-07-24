@@ -289,7 +289,16 @@ public struct SavedRecipeRepository {
                 // No usable legacy columns to compare against — trust the blob.
                 return payload.recipe
             }
-            let legacyDiverged = legacy != legacyProjection(of: payload.recipe)
+            // Precision-normalize before comparing. The blob's dates pass through `RowPayloadCoders`'
+            // `.iso8601` strategy, which truncates to whole seconds, while the Core Data `savedAt`
+            // column stores the full sub-second `Date`. A direct `!=` therefore false-positives as
+            // "divergence" on EVERY recipe created with a fractional-second `Date()` — i.e. every
+            // runtime creation path (web import, proximity accept, future edits) — which would silently
+            // discard the structured blob and defeat the whole point of STEP 0. Flooring both sides to
+            // whole-second resolution (matching the blob's own precision) removes the artifact while
+            // preserving real divergence: a genuine legacy edit still changes a whole-second field
+            // (name, lines, macros, or `savedAt`/`createdAt` by >= 1s) and is still caught.
+            let legacyDiverged = normalizedForDivergence(legacy) != normalizedForDivergence(legacyProjection(of: payload.recipe))
             return legacyDiverged ? legacy : payload.recipe
         }
         return legacyRecipe(from: record)
@@ -314,6 +323,25 @@ public struct SavedRecipeRepository {
             micronutrients: webImport?.micronutrients ?? Micronutrients(),
             savedAt: recipe.createdAt
         )
+    }
+
+    /// Floor a `Date` to whole seconds — exactly the resolution `RowPayloadCoders`' `.iso8601` strategy
+    /// stores (verified: ISO-8601-without-fractional truncates the sub-second part for every fractional
+    /// value). Used to align the full-precision legacy `savedAt` column against the whole-second dates a
+    /// decoded blob carries, so the staleness comparison doesn't false-positive on sub-second drift.
+    private static func flooredToWholeSecond(_ date: Date) -> Date {
+        Date(timeIntervalSinceReferenceDate: date.timeIntervalSinceReferenceDate.rounded(.down))
+    }
+
+    /// A copy of `recipe` with its date fields floored to whole seconds, for use ONLY in the divergence
+    /// comparison. `createdAt`/`updatedAt` are part of `RecipeDefinition`'s synthesized `Equatable`, and
+    /// both the legacy and projected representations force `updatedAt == createdAt == savedAt`, so a raw
+    /// compare hinges entirely on `savedAt`/`createdAt` precision.
+    private static func normalizedForDivergence(_ recipe: RecipeDefinition) -> RecipeDefinition {
+        var copy = recipe
+        copy.createdAt = flooredToWholeSecond(recipe.createdAt)
+        copy.updatedAt = flooredToWholeSecond(recipe.updatedAt)
+        return copy
     }
 
     /// The pre-STEP-0 read path, verbatim: reconstruct a `RecipeDefinition` from the legacy typed columns
@@ -365,12 +393,24 @@ public struct SavedRecipeRepository {
         record.setValue(webImport?.macros.protein ?? 0, forKey: "protein")
         record.setValue(webImport?.macros.carbs ?? 0, forKey: "carbs")
         record.setValue(webImport?.macros.fat ?? 0, forKey: "fat")
+        // Write `micronutrientsJSON` UNCONDITIONALLY (clearing it when there are no micros) so an
+        // in-place update that transitions a row from web-import to structured (`webImport == nil`,
+        // e.g. a future edit converting an imported recipe) cannot leave stale micronutrients behind.
+        // A leftover value would read back as a false divergence — the legacy projection yields an
+        // empty `Micronutrients()` while the stale column decodes real values — permanently poisoning
+        // the staleness check and hiding the user's structured edit. Every other legacy column is
+        // already written unconditionally; this restores that invariant for the one conditional writer.
         if let micros = webImport?.micronutrients,
            let data = try? JSONEncoder().encode(micros),
            let json = String(data: data, encoding: .utf8) {
             record.setValue(json, forKey: "micronutrientsJSON")
+        } else {
+            record.setValue(nil, forKey: "micronutrientsJSON")
         }
-        record.setValue(recipe.createdAt, forKey: "savedAt")
+        // Floor `savedAt` to whole seconds so the legacy column stores exactly the resolution the blob's
+        // `.iso8601`-encoded `createdAt` reads back at, keeping the two representations byte-consistent
+        // and the legacy-fallback read deterministic (whole-second dates on both paths).
+        record.setValue(Self.flooredToWholeSecond(recipe.createdAt), forKey: "savedAt")
 
         // --- Additive structured blob (STEP 0) ---
         let payload = SavedRecipePayload(recipe: recipe, lastPayloadEncodedAt: now)

@@ -219,6 +219,138 @@ struct SavedRecipePayloadMigrationTests {
         #expect(mapped.ingredients.count == recipe.ingredients.count)
     }
 
+    // MARK: - Fractional-second dates (regression for the iso8601-vs-column precision false-positive)
+
+    /// A structured recipe created with a real, fractional-second `Date()` (every runtime creation path
+    /// does) must still round-trip its STRUCTURED payload. Before the precision-normalization fix, the
+    /// full-precision `savedAt` column diverged from the blob's whole-second `createdAt` on every such
+    /// recipe, so the staleness guard false-positived and returned the empty legacy web-import husk.
+    @Test func structuredRecipeWithFractionalSecondDatesKeepsStructuredPayload() throws {
+        let (repository, _) = makeRepository()
+        let created = Date()                              // fractional sub-second component, like production
+        #expect(created.timeIntervalSinceReferenceDate != created.timeIntervalSinceReferenceDate.rounded(.down))
+        let recipe = RecipeDefinition(
+            id: try #require(UUID(uuidString: "00000000-0000-0000-0000-0000000020B1")),
+            name: "Fractional Bowl",
+            servings: 2,
+            ingredients: [
+                RecipeIngredient(foodItemId: UUID(), quantity: 100, unit: "g"),
+                RecipeIngredient(foodItemId: UUID(), quantity: 1, unit: "cup")
+            ],
+            notes: "Real timestamp.",
+            source: MealLogSource.manual,                  // NOT webImport
+            createdAt: created,
+            updatedAt: created,
+            webImport: nil
+        )
+        #expect(repository.upsert([recipe]))
+
+        let mapped = try #require(repository.load().first)
+        // The blob won (no false divergence): structured ingredients + real source survive, not the husk.
+        #expect(mapped.ingredients.count == 2)
+        #expect(mapped.source == MealLogSource.manual)
+        #expect(mapped.webImport == nil)
+        // Dates read back at the blob's whole-second resolution (an accepted, now-consistent decision).
+        #expect(mapped.createdAt == Date(timeIntervalSinceReferenceDate: created.timeIntervalSinceReferenceDate.rounded(.down)))
+    }
+
+    // MARK: - Update-in-place path (upsert over an existing row)
+
+    /// Updating an existing row (upsert hits the fetched record, not a fresh insert) with a fractional
+    /// `Date()` must also keep the blob authoritative — exercises the previously untested update branch
+    /// of `apply` where the micronutrients-clearing fix lives.
+    @Test func upsertOverExistingRowWithFractionalDatesKeepsBlobAuthoritative() throws {
+        let (repository, controller) = makeRepository()
+        let id = try #require(UUID(uuidString: "00000000-0000-0000-0000-0000000020B2"))
+        #expect(repository.upsert([makeWebImportRecipe(id: id)]))
+
+        // Second upsert of the SAME id => update path. Now a structured recipe with a real timestamp.
+        let created = Date()
+        let updated = RecipeDefinition(
+            id: id,
+            name: "Now Structured",
+            servings: 5,
+            ingredients: [RecipeIngredient(foodItemId: UUID(), quantity: 250, unit: "g")],
+            notes: "Converted to structured.",
+            source: MealLogSource.manual,
+            createdAt: created,
+            updatedAt: created,
+            webImport: nil
+        )
+        #expect(repository.upsert([updated]))
+
+        // Exactly one row (updated in place, not duplicated).
+        let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
+        #expect(try controller.container.viewContext.count(for: request) == 1)
+
+        let mapped = try #require(repository.load().first)
+        #expect(mapped.name == "Now Structured")
+        #expect(mapped.ingredients.count == 1)
+        #expect(mapped.source == MealLogSource.manual)
+        #expect(mapped.webImport == nil)
+    }
+
+    /// The webImport -> nil transition on an UPDATE must clear the stale `micronutrientsJSON` column.
+    /// Before the unconditional-write fix, the old micros survived, the legacy projection (empty micros)
+    /// diverged from them, legacy won, and the user's structured edit was replaced by a chimera row.
+    @Test func webImportToStructuredUpdateClearsStaleMicronutrients() throws {
+        let (repository, controller) = makeRepository()
+        let id = try #require(UUID(uuidString: "00000000-0000-0000-0000-0000000020B3"))
+        let savedAt = Date(timeIntervalSince1970: 1_779_588_000)   // whole-second: isolate the micros bug
+        let webRecipe = RecipeDefinition(
+            id: id, name: "Was Imported", servings: 2, ingredients: [], notes: "n",
+            source: MealLogSource.webImport, createdAt: savedAt, updatedAt: savedAt,
+            webImport: RecipeWebImport(
+                sourceURLString: "https://example.com/x", ingredientLines: ["a", "b"],
+                macros: Macros(protein: 10, carbs: 20, fat: 5),
+                micronutrients: Micronutrients(fiber: 9, iron: 3.3, potassium: 500)   // non-empty micros
+            )
+        )
+        #expect(repository.upsert([webRecipe]))
+
+        // Sanity: the column holds micros after the first write.
+        let record = try #require(try firstRecord(in: controller))
+        #expect(record.value(forKey: "micronutrientsJSON") as? String != nil)
+
+        // Update the SAME row to structured (webImport == nil).
+        let structured = RecipeDefinition(
+            id: id, name: "Now Structured", servings: 3,
+            ingredients: [RecipeIngredient(foodItemId: UUID(), quantity: 120, unit: "g")],
+            notes: "edited", source: MealLogSource.manual, createdAt: savedAt, updatedAt: savedAt,
+            webImport: nil
+        )
+        #expect(repository.upsert([structured]))
+
+        // The stale micros column is cleared, so no false divergence: the structured blob wins.
+        let updatedRecord = try #require(try firstRecord(in: controller))
+        #expect(updatedRecord.value(forKey: "micronutrientsJSON") as? String == nil)
+        let mapped = try #require(repository.load().first)
+        #expect(mapped.name == "Now Structured")
+        #expect(mapped.ingredients.count == 1)
+        #expect(mapped.source == MealLogSource.manual)
+        #expect(mapped.webImport == nil)
+    }
+
+    /// A legacy-only edit of the ONE conditionally-written column (`micronutrientsJSON`) must still be
+    /// detected as divergence, so legacy wins. Guards that micronutrients participate in the content
+    /// comparison (they feed `RecipeDefinition` equality via the webImport payload).
+    @Test func legacyMicronutrientsEditAloneIsDetectedAsDivergence() throws {
+        let (repository, controller) = makeRepository()
+        let recipe = makeWebImportRecipe(id: try #require(UUID(uuidString: "00000000-0000-0000-0000-0000000020B4")))
+        #expect(repository.upsert([recipe]))
+
+        // An un-updated device rewrites ONLY the legacy micronutrients column; the blob is now stale.
+        let record = try #require(try firstRecord(in: controller))
+        let edited = Micronutrients(fiber: 99, iron: 42, potassium: 4000)
+        let json = try #require(String(data: try JSONEncoder().encode(edited), encoding: .utf8))
+        record.setValue(json, forKey: "micronutrientsJSON")
+        try controller.container.viewContext.save()
+
+        // Divergence -> legacy wins, carrying the edited micronutrients (not the blob's originals).
+        let mapped = try #require(repository.load().first)
+        #expect(mapped.webImport?.micronutrients == edited)
+    }
+
     // MARK: - Helpers
 
     private func makeRepository() -> (SavedRecipeRepository, PersistenceController) {
