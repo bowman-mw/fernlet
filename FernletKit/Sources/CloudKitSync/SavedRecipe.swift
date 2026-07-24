@@ -57,6 +57,35 @@ nonisolated private struct LegacySavedRecipeDTO: Codable {
     }
 }
 
+/// STEP 0 (Docs/AI-Feature-Expansion-2026-07-23.md §9.1): the versioned JSON blob stored in the new
+/// additive `payloadData` column of `SavedRecipeRecord`. It carries the FULL structured
+/// `RecipeDefinition` — real structured `ingredients`, real `source`, optional `webImport` — that the
+/// legacy typed columns (which hardcode `ingredients: []` + `source: .webImport`) cannot represent, so
+/// non-web-import recipes and structured ingredients/steps can finally round-trip.
+///
+/// Tolerant decode: `container(keyedBy:)` ignores unknown future keys, and `RecipeDefinition`'s own
+/// `decodeIfPresent` discipline covers additive fields — an unknown key must never fail the decode.
+/// `lastPayloadEncodedAt` is the write-time stamp used by the staleness guard in
+/// `SavedRecipeRepository.recipe(from:)`.
+nonisolated struct SavedRecipePayload: Codable {
+    var schemaVersion: Int
+    var recipe: RecipeDefinition
+    var lastPayloadEncodedAt: Date
+
+    init(recipe: RecipeDefinition, lastPayloadEncodedAt: Date, schemaVersion: Int = 1) {
+        self.schemaVersion = schemaVersion
+        self.recipe = recipe
+        self.lastPayloadEncodedAt = lastPayloadEncodedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        recipe = try container.decode(RecipeDefinition.self, forKey: .recipe)
+        lastPayloadEncodedAt = try container.decodeIfPresent(Date.self, forKey: .lastPayloadEncodedAt) ?? .distantPast
+    }
+}
+
 /// Single source of truth for translating the legacy saved-recipe columns/fields (free-text
 /// ingredients + precomputed nutrition + source URL) into a `RecipeDefinition` with a `webImport`
 /// payload. Shared by the Core Data and legacy-JSON repositories so both migrate identically.
@@ -229,7 +258,68 @@ public struct SavedRecipeRepository {
         }
     }
 
+    /// READ-PREFER-PAYLOAD (STEP 0, §9.1). When the additive `payloadData` blob is present and decodes,
+    /// it is the structured truth (real ingredients, real source/webImport). We fall back to the legacy
+    /// typed columns — the exact behavior shipped before STEP 0 — when the blob is absent (a row written
+    /// by an un-updated device, which has no `payloadData` writer) or corrupt (decode fails), so a legacy
+    /// row always maps precisely as it does today and a corrupt blob never throws.
+    ///
+    /// STALENESS RULE (§9.1 point 6) — "prefer the side that is fresher; when in doubt, legacy wins."
+    /// An un-updated device can edit the legacy columns but cannot write `payloadData`, so after such an
+    /// edit the two diverge: fresh legacy columns, stale blob. We must NOT resurrect the stale structured
+    /// state over a real user edit, so we prefer the blob ONLY when the legacy columns still match what
+    /// THIS blob wrote alongside itself (`legacyProjection(of:)`). Any divergence means a legacy-only
+    /// writer touched the row after the blob was encoded, so the legacy columns are the fresher user
+    /// intent and win.
+    ///
+    /// We detect "the legacy columns were modified after `payloadData` was written" by content comparison
+    /// rather than a timestamp — the "or equivalent" the spec allows — because no legacy column records a
+    /// reliable legacy-*write* time: the only legacy date, `savedAt`, mirrors `createdAt` and an old
+    /// device's own `apply` re-stamps it from the (unchanged) creation date, so a pure timestamp check
+    /// can both MISS a real edit and, worse, FALSE-POSITIVE on a freshly written blob whose `createdAt`
+    /// happens to be at/after encode time (which would silently discard the structured blob). Content
+    /// divergence is comprehensive: it catches any legacy-visible change — name, source URL, ingredient
+    /// lines, summary, servings, macros, micronutrients, and `savedAt` itself (which feeds `createdAt`,
+    /// part of `RecipeDefinition` equality). `lastPayloadEncodedAt` is retained inside the blob as
+    /// write-time provenance for auditing and future conflict logic.
     private static func recipe(from record: NSManagedObject) -> RecipeDefinition? {
+        if let payloadData = record.value(forKey: "payloadData") as? Data,
+           let payload = try? RowPayloadCoders.makeDecoder().decode(SavedRecipePayload.self, from: payloadData) {
+            guard let legacy = legacyRecipe(from: record) else {
+                // No usable legacy columns to compare against — trust the blob.
+                return payload.recipe
+            }
+            let legacyDiverged = legacy != legacyProjection(of: payload.recipe)
+            return legacyDiverged ? legacy : payload.recipe
+        }
+        return legacyRecipe(from: record)
+    }
+
+    /// The legacy projection of a recipe: what `apply(_:to:)` writes to the typed columns and then reads
+    /// back through `SavedRecipeMapping.recipe`. Used only by the staleness guard to detect whether the
+    /// on-disk legacy columns still match the blob (no legacy-only edit) or have diverged (a legacy edit
+    /// happened, so legacy wins). Deterministic and side-effect-free, mirroring `apply` + `legacyRecipe`.
+    private static func legacyProjection(of recipe: RecipeDefinition) -> RecipeDefinition {
+        let webImport = recipe.webImport
+        return SavedRecipeMapping.recipe(
+            id: recipe.id,
+            sourceURLString: webImport?.sourceURLString ?? "",
+            name: recipe.name,
+            ingredientLines: (webImport?.ingredientLines ?? []).joined(separator: "\n").components(separatedBy: "\n"),
+            summary: recipe.notes,
+            servings: recipe.servings,
+            protein: webImport?.macros.protein ?? 0,
+            carbs: webImport?.macros.carbs ?? 0,
+            fat: webImport?.macros.fat ?? 0,
+            micronutrients: webImport?.micronutrients ?? Micronutrients(),
+            savedAt: recipe.createdAt
+        )
+    }
+
+    /// The pre-STEP-0 read path, verbatim: reconstruct a `RecipeDefinition` from the legacy typed columns
+    /// alone (always a `.webImport`-shaped recipe with empty structured `ingredients`). This is exactly
+    /// what an un-updated device produces and what STEP 0 must preserve indefinitely.
+    private static func legacyRecipe(from record: NSManagedObject) -> RecipeDefinition? {
         guard let idString = record.value(forKey: "idString") as? String,
               let id = UUID(uuidString: idString),
               let name = record.value(forKey: "name") as? String else {
@@ -260,7 +350,11 @@ public struct SavedRecipeRepository {
         )
     }
 
-    private static func apply(_ recipe: RecipeDefinition, to record: NSManagedObject) {
+    /// WRITE-BOTH (STEP 0, §9.1 point 3). Every write encodes the full structured `RecipeDefinition` into
+    /// the additive `payloadData` blob AND keeps populating every legacy typed column exactly as before —
+    /// so an un-updated paired device (which reads only the legacy columns) keeps working indefinitely.
+    private static func apply(_ recipe: RecipeDefinition, to record: NSManagedObject, now: Date = Date()) {
+        // --- Legacy typed columns (unchanged from pre-STEP-0) ---
         let webImport = recipe.webImport
         record.setValue(recipe.id.uuidString, forKey: "idString")
         record.setValue(webImport?.sourceURLString ?? "", forKey: "sourceURLString")
@@ -277,6 +371,14 @@ public struct SavedRecipeRepository {
             record.setValue(json, forKey: "micronutrientsJSON")
         }
         record.setValue(recipe.createdAt, forKey: "savedAt")
+
+        // --- Additive structured blob (STEP 0) ---
+        let payload = SavedRecipePayload(recipe: recipe, lastPayloadEncodedAt: now)
+        if let data = try? RowPayloadCoders.makeEncoder().encode(payload) {
+            record.setValue(data, forKey: "payloadData")
+        } else {
+            assertionFailure("saved recipe payload encode failed")
+        }
     }
 }
 

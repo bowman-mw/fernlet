@@ -482,7 +482,20 @@ nonisolated public final class PersistenceController {
             makeAttribute("carbs", type: .integer64AttributeType, defaultValue: 0),
             makeAttribute("fat", type: .integer64AttributeType, defaultValue: 0),
             makeAttribute("micronutrientsJSON", type: .stringAttributeType),
-            makeAttribute("savedAt", type: .dateAttributeType)
+            makeAttribute("savedAt", type: .dateAttributeType),
+            // STEP 0 (Docs/AI-Feature-Expansion-2026-07-23.md §9.1): the full structured
+            // `RecipeDefinition` (structured ingredients, real source, optional webImport) as a
+            // versioned JSON blob — the same `idString + payloadData` shape as DayRecord / CoinLedger /
+            // CustomItem / Milestone. Additive-only: the typed columns above are NEVER removed or
+            // retyped (CloudKit's mirrored schema is append-only, and un-updated paired devices keep
+            // writing legacy-shape rows forever). Writers populate BOTH; readers prefer this and fall
+            // back to the legacy columns. Plain binary, not external storage (CloudKit rejects external
+            // storage at store load) — one recipe is far under CloudKit's per-field budget. Adding an
+            // optional attribute is a lightweight inferred migration covered by the store options above
+            // (shouldMigrateStoreAutomatically / shouldInferMappingModelAutomatically). NOTE: this new
+            // attribute must go through the STEP 0c CloudKit prod-schema deploy ritual
+            // (Docs/CloudKit-Schema-Deploy.md) before any shipping build writes it.
+            makeAttribute("payloadData", type: .binaryDataAttributeType)
         ]
         return entity
     }
