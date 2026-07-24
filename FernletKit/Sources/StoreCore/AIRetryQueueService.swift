@@ -49,13 +49,20 @@ public final class AIRetryQueueService {
     /// Queue a meal-analysis retry. Future retry kinds (workout, recipe, daily-summary)
     /// should be added as new methods, not by overloading this one.
     public func queueMealRetry(_ meal: Meal, dayKey: String? = nil) {
-        guard !retryQueue.contains(where: { $0.sourceId == meal.id }) else { return }
+        // Dedupe only against meal records: this method never re-enqueues a meal already pending.
+        // Scoping to the meal kind keeps enqueue symmetric with the meal-scoped dispatch/eviction
+        // so a future non-meal record sharing (impossibly) the same UUID can't suppress a meal.
+        guard !retryQueue.contains(where: { $0.sourceId == meal.id && $0.payloadType == Self.mealPayloadType }) else { return }
         // Age out stale records first so the cap is reached only by genuinely-pending retries.
         let cutoff = now().addingTimeInterval(-Self.recordTTL)
         retryQueue.removeAll { $0.createdAt < cutoff }
         if retryQueue.count >= Self.maxQueueSize {
-            // Still full of fresh records: evict the oldest, but record it rather than dropping silently.
-            let dropped = retryQueue.removeFirst()
+            // Still full of fresh records: evict to make room, but record it rather than dropping
+            // silently. Prefer evicting the oldest *meal* record so a burst of meal failures can't
+            // destroy a queued non-meal (workout/recipe/…) record — the meal enqueue path only ever
+            // sheds its own kind. Fall back to the oldest overall only if no meal record exists.
+            let evictIndex = retryQueue.firstIndex { $0.payloadType == Self.mealPayloadType } ?? retryQueue.startIndex
+            let dropped = retryQueue.remove(at: evictIndex)
             FernletAuditLog.log("airetry.queue.evicted", context: ["sourceId": dropped.sourceId.uuidString])
         }
         retryQueue.append(AIAnalysisRetryRecord(

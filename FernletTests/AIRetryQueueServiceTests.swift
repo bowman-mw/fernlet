@@ -78,6 +78,22 @@ struct AIRetryQueueServiceTests {
         #expect(service.retryQueue.contains { $0.sourceId == meals[20].id })
     }
 
+    /// A meal-failure burst that overflows the cap evicts oldest *meal* records, never the queued
+    /// non-meal record — the meal enqueue path only sheds its own kind.
+    @Test func overflowEvictsMealsNotNonMealRecords() {
+        let nonMeal = makeRecord(payloadType: "workout")
+        let service = AIRetryQueueService(initial: [nonMeal])
+        for i in 0..<20 {
+            service.queueMealRetry(makeMeal(name: "m\(i)"))
+        }
+
+        #expect(service.retryQueue.count == 20)
+        // The non-meal record survived the burst.
+        #expect(service.retryQueue.contains { $0.sourceId == nonMeal.sourceId })
+        // Exactly one meal (the oldest) was evicted to make room.
+        #expect(service.mealPendingCount == 19)
+    }
+
     /// Records persisted before `dayKey` existed must still decode (optional field → nil).
     @Test func legacyRecordWithoutDayKeyDecodes() throws {
         let legacyJSON = """

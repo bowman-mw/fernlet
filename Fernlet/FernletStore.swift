@@ -877,7 +877,13 @@ final class FernletStore {
             hydrationTarget: settings.hydrationTarget,
             // Meals still pending AI resolution are placeholders that will be replaced by a
             // fresh-UUID resolved meal — exclude them so one logged meal isn't counted twice.
-            excludingMealIDs: Set(aiRetryQueueService.retryQueue.map(\.sourceId)),
+            // Scope to meal records: a non-meal retry's sourceId is not a meal id and must not be
+            // treated as an excluded meal.
+            excludingMealIDs: Set(
+                aiRetryQueueService.retryQueue
+                    .filter { $0.payloadType == AIRetryQueueService.mealPayloadType }
+                    .map(\.sourceId)
+            ),
             at: Date()
         )
         milestoneLedgerService.record(derived)
