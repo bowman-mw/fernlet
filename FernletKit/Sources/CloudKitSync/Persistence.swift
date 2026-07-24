@@ -74,6 +74,11 @@ nonisolated public final class PersistenceController {
         )
         configureViewContext(for: configuration.container)
         bindRemoteChanges(to: configuration.container)
+        #if DEBUG
+        // DEBUG-only, launch-argument-gated CloudKit schema deploy (see
+        // Docs/CloudKit-Schema-Deploy.md). Compiled out of Release builds entirely.
+        Self.initializeCloudKitSchemaIfRequested(inMemory: inMemory)
+        #endif
     }
 
     @MainActor
@@ -277,6 +282,68 @@ nonisolated public final class PersistenceController {
             }
         }
     }
+
+    #if DEBUG
+    /// DEBUG-only, launch-argument-gated CloudKit schema deploy.
+    ///
+    /// When the app is launched with the `INITIALIZE_CLOUDKIT_SCHEMA` argument, this pushes the
+    /// Core Data model to the CloudKit **development** schema for `iCloud.MBO.Fernlet` via
+    /// `NSPersistentCloudKitContainer.initializeCloudKitSchema(options:)`. Promotion of that
+    /// schema to production is an owner action in the CloudKit console — code cannot do it. See
+    /// Docs/CloudKit-Schema-Deploy.md for the full ritual.
+    ///
+    /// The whole method is wrapped in `#if DEBUG`, so it is compiled out of Release builds — the
+    /// deploy is impossible to trigger in a shipping binary. It runs against a throwaway scratch
+    /// store and forces CloudKit options on, so it works regardless of the user's iCloud toggle
+    /// (`PersistenceController.shared` forces sync off at cold launch) and never touches the real
+    /// store. The schema push targets the container identifier's Development environment; the
+    /// local store is only scratch space for the dummy objects `initializeCloudKitSchema` creates
+    /// and rolls back.
+    private static func initializeCloudKitSchemaIfRequested(inMemory: Bool) {
+        guard CloudKitSchemaDeploy.isRequested(arguments: ProcessInfo.processInfo.arguments) else { return }
+        guard !inMemory else {
+            FernletAuditLog.log("cloudkit.schema.initialize.skipped", context: ["reason": "in-memory-store"])
+            return
+        }
+
+        FernletAuditLog.log("cloudkit.schema.initialize.started")
+        print("[Fernlet] INITIALIZE_CLOUDKIT_SCHEMA: pushing the Core Data model to the CloudKit DEVELOPMENT schema for container iCloud.MBO.Fernlet…")
+
+        let container = NSPersistentCloudKitContainer(name: "Fernlet", managedObjectModel: makeManagedObjectModel())
+        let scratchURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CloudKitSchemaDeploy-\(UUID().uuidString).sqlite")
+        let description = container.persistentStoreDescriptions.first ?? NSPersistentStoreDescription()
+        description.url = scratchURL
+        description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.MBO.Fernlet")
+        container.persistentStoreDescriptions = [description]
+
+        // Load asynchronously — NSPersistentCloudKitContainer dispatches its load completion via
+        // the main actor on iOS 26+, so blocking on it here would deadlock. Do the schema push in
+        // the completion, then clean up the scratch store.
+        container.loadPersistentStores { _, error in
+            if let error {
+                FernletAuditLog.log("cloudkit.schema.initialize.failed", context: [
+                    "stage": "load",
+                    "errorType": "\(type(of: error))"
+                ])
+                print("[Fernlet] ❌ CloudKit schema deploy FAILED to load scratch store: \(error)")
+                return
+            }
+            do {
+                try container.initializeCloudKitSchema(options: [])
+                FernletAuditLog.log("cloudkit.schema.initialize.succeeded")
+                print("[Fernlet] ✅ CloudKit schema initialized in DEVELOPMENT. Next: verify the record types in the CloudKit console, then promote Development → Production (owner action in the console UI). See Docs/CloudKit-Schema-Deploy.md.")
+            } catch {
+                FernletAuditLog.log("cloudkit.schema.initialize.failed", context: [
+                    "stage": "initialize",
+                    "errorType": "\(type(of: error))"
+                ])
+                print("[Fernlet] ❌ CloudKit schema initialization FAILED: \(error). Ensure the simulator is signed into iCloud and the scheme's CloudKit environment is Development.")
+            }
+            try? FileManager.default.removeItem(at: scratchURL)
+        }
+    }
+    #endif
 
     private static func applyBackupExclusionIfNeeded(
         preferences: StoragePreferences,
