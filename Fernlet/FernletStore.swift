@@ -482,7 +482,9 @@ final class FernletStore {
     var storageLocation: String { diary.storageLocation }
 
     var pendingRetryCount: Int {
-        aiRetryQueueService.pendingCount
+        // Food-page badge: meal retries only. Non-meal records the Food "Retry oldest" button can't
+        // process must not inflate this count.
+        aiRetryQueueService.mealPendingCount
     }
 
     var isIntimateLoggingAllowed: Bool { diary.isIntimateLoggingAllowed }
@@ -2965,7 +2967,10 @@ final class FernletStore {
     }
 
     func retryOldestMeal() async {
-        guard let record = aiRetryQueueService.retryQueue.first else { return }
+        // Consume only meal-payload records. Records of any other payloadType are left in the queue
+        // untouched — the sourceId-miss clear below must never fire for a non-meal record, or the
+        // first workout/recipe/daily-summary retry ever enqueued would be silently destroyed.
+        guard let record = aiRetryQueueService.oldestMealRetry else { return }
         // Fallback meals can be queued for any date (back-filled logging), not just today, and
         // the record carries the day it belongs to. Resolve against that day and re-commit on the
         // same date instead of only ever looking in today's meals and silently discarding the rest.

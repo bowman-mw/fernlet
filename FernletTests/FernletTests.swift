@@ -137,6 +137,48 @@ struct FernletTests {
         #expect(store.pendingRetryCount == 0)
     }
 
+    /// STEP 0b: a non-meal retry enqueued ahead of a meal record must survive the meal retry path.
+    /// The meal is processed; the non-meal record is left untouched and is not counted by the badge.
+    @MainActor
+    @Test func retryOldestMealLeavesNonMealRecordsInQueue() async throws {
+        let url = temporaryDatabaseURL("retry-nonmeal-survives")
+        let repository = LocalFernletRepository(fileURL: url)
+        let todayDate = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 5, day: 17)))
+        let store = FernletStore(date: todayDate, repository: repository)
+
+        let meal = store.addMeal(from: "oatmeal")
+        store.queueMealRetry(meal)
+        let nonMeal = AIAnalysisRetryRecord(payloadType: "recipe-synthesis", sourceId: UUID(), note: "keep me")
+        // Non-meal record ahead of the meal record.
+        store.aiRetryQueueService.apply([nonMeal] + store.retryQueue)
+
+        #expect(store.retryQueue.count == 2)
+        #expect(store.pendingRetryCount == 1)  // badge counts only the meal record
+
+        await store.retryOldestMeal()
+
+        #expect(store.retryQueue.contains { $0.id == nonMeal.id })
+    }
+
+    /// STEP 0b: with only non-meal records queued, retryOldestMeal is a no-op — nothing is cleared.
+    /// (Under the old first-record logic the record's sourceId miss would silently destroy it.)
+    @MainActor
+    @Test func retryOldestMealIsNoOpWhenOnlyNonMealRecords() async throws {
+        let url = temporaryDatabaseURL("retry-nonmeal-noop")
+        let repository = LocalFernletRepository(fileURL: url)
+        let todayDate = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 5, day: 17)))
+        let store = FernletStore(date: todayDate, repository: repository)
+
+        let nonMeal = AIAnalysisRetryRecord(payloadType: "recipe-synthesis", sourceId: UUID(), note: "keep me")
+        store.aiRetryQueueService.apply([nonMeal])
+        #expect(store.pendingRetryCount == 0)
+
+        await store.retryOldestMeal()
+
+        #expect(store.retryQueue.count == 1)
+        #expect(store.retryQueue.first?.id == nonMeal.id)
+    }
+
     @Test func fernletVoiceMessagesAreNonEmpty() {
         for voice in FernletVoice.allCases {
             #expect(FernletVoice.message(for: voice).isEmpty == false)

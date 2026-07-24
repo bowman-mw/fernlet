@@ -148,4 +148,48 @@ struct AIRetryQueueServiceTests {
         #expect(service.retryQueue.count == 2)
         #expect(service.pendingCount == 2)
     }
+
+    // MARK: - STEP 0b: payloadType-scoped dispatch (non-meal records must survive the meal path)
+
+    /// `oldestMealRetry` skips a leading non-meal record and returns the first meal record.
+    @Test func oldestMealRetrySkipsNonMealRecords() {
+        let nonMeal = makeRecord(payloadType: "recipe-synthesis")
+        let mealRecord = makeRecord(payloadType: "meal")
+        let service = AIRetryQueueService(initial: [nonMeal, mealRecord])
+
+        #expect(service.oldestMealRetry?.id == mealRecord.id)
+    }
+
+    /// A queue of only non-meal records exposes no meal to consume.
+    @Test func oldestMealRetryIsNilWhenNoMealRecords() {
+        let service = AIRetryQueueService(initial: [
+            makeRecord(payloadType: "recipe-synthesis"),
+            makeRecord(payloadType: "workout"),
+        ])
+
+        #expect(service.oldestMealRetry == nil)
+    }
+
+    /// The Food-page badge count is scoped to meal records only.
+    @Test func mealPendingCountCountsOnlyMealRecords() {
+        let service = AIRetryQueueService(initial: [
+            makeRecord(payloadType: "recipe-synthesis"),
+            makeRecord(payloadType: "meal"),
+            makeRecord(payloadType: "meal"),
+            makeRecord(payloadType: "daily-summary"),
+        ])
+
+        #expect(service.mealPendingCount == 2)
+        // Total is unchanged — only the meal-facing accessor is scoped.
+        #expect(service.pendingCount == 4)
+    }
+
+    /// The tag written by `queueMealRetry` matches the constant the meal path dispatches on.
+    @Test func queueMealRetryUsesMealPayloadTypeConstant() {
+        let service = AIRetryQueueService()
+        service.queueMealRetry(makeMeal())
+
+        #expect(service.retryQueue.first?.payloadType == AIRetryQueueService.mealPayloadType)
+        #expect(service.oldestMealRetry != nil)
+    }
 }

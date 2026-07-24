@@ -13,6 +13,13 @@ public final class AIRetryQueueService {
     /// Records older than this are aged out so long-abandoned retries don't permanently occupy slots.
     private static let recordTTL: TimeInterval = 14 * 24 * 60 * 60  // 14 days
 
+    /// The `payloadType` tag written by `queueMealRetry` and the one the meal retry path consumes.
+    /// The queue is intentionally multi-kind (the type invites workout/recipe/daily-summary records);
+    /// the meal path must dispatch on this so it never consumes — or on a miss, destroys — a
+    /// non-meal record. Future retry kinds add their own constant + accessor rather than widening
+    /// this one.
+    public static let mealPayloadType = "meal"
+
     @ObservationIgnored private let now: () -> Date
     // Mutable so FernletStore can wire it after all stored properties are initialized.
     @ObservationIgnored public var onChange: () -> Void = {}
@@ -23,7 +30,21 @@ public final class AIRetryQueueService {
         self.onChange = onChange
     }
 
+    /// Total pending across every payload kind. Use `mealPendingCount` for the Food-page badge.
     public var pendingCount: Int { retryQueue.count }
+
+    /// Count of pending *meal* retries only — the number the Food page surfaces. Scoping this keeps a
+    /// non-meal record (which the Food "Retry oldest" button will never process) out of the badge.
+    public var mealPendingCount: Int {
+        retryQueue.reduce(into: 0) { $0 += ($1.payloadType == Self.mealPayloadType ? 1 : 0) }
+    }
+
+    /// The oldest pending meal retry, if any — the dispatch seam the meal retry path consumes.
+    /// Non-meal records are skipped (and thus never cleared by the meal path). A future dispatcher
+    /// adds sibling accessors (e.g. `oldestWorkoutRetry`) and routes on `payloadType`.
+    public var oldestMealRetry: AIAnalysisRetryRecord? {
+        retryQueue.first { $0.payloadType == Self.mealPayloadType }
+    }
 
     /// Queue a meal-analysis retry. Future retry kinds (workout, recipe, daily-summary)
     /// should be added as new methods, not by overloading this one.
@@ -38,7 +59,7 @@ public final class AIRetryQueueService {
             FernletAuditLog.log("airetry.queue.evicted", context: ["sourceId": dropped.sourceId.uuidString])
         }
         retryQueue.append(AIAnalysisRetryRecord(
-            payloadType: "meal",
+            payloadType: Self.mealPayloadType,
             sourceId: meal.id,
             dayKey: dayKey,
             note: FernletVoice.message(for: .mealAnalysisFailed)
