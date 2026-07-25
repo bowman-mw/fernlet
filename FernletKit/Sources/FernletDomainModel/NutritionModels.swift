@@ -351,15 +351,23 @@ public nonisolated enum MealResolutionConfidence: String, Codable {
     }
 }
 
-/// A meal produced by the resolver together with how much to trust it.
+/// A meal produced by the resolver together with how much to trust it, and — for the dish-
+/// decomposition tier — the multi-ingredient recipe the resolver built along the way. The recipe is
+/// carried (never auto-persisted): it is OFFERED in the pre-log review sheet and minted only if the
+/// user confirms, so it never silently pollutes the recipe book (F1(a); AI-Feature-Expansion §2.5).
 public nonisolated struct ResolvedMeal {
 
-    public init(meal: Meal, confidence: MealResolutionConfidence) {
+    public init(meal: Meal, confidence: MealResolutionConfidence, suggestedRecipe: RecipeDefinition? = nil) {
         self.meal = meal
         self.confidence = confidence
+        self.suggestedRecipe = suggestedRecipe
     }
     public var meal: Meal
     public var confidence: MealResolutionConfidence
+    /// The recipe the decomposition tier built from the same catalog-bound ingredients as `meal`,
+    /// scaled to a default yield — offered for review, not committed. `nil` for tiers that build no
+    /// recipe (single-ingredient decompositions, the keyword fallback).
+    public var suggestedRecipe: RecipeDefinition?
 }
 
 /// The full outcome of resolving a quick-log description: the meals (not yet committed), any
@@ -367,16 +375,30 @@ public nonisolated struct ResolvedMeal {
 /// fallback was used. `needsReview` decides whether the UI pauses for a pre-log review.
 public nonisolated struct MealResolution {
 
-    public init(meals: [Meal], createdRecipes: [RecipeDefinition], confidence: MealResolutionConfidence, isFallback: Bool) {
+    public init(
+        meals: [Meal],
+        createdRecipes: [RecipeDefinition],
+        confidence: MealResolutionConfidence,
+        isFallback: Bool,
+        suggestedRecipe: RecipeDefinition? = nil
+    ) {
         self.meals = meals
         self.createdRecipes = createdRecipes
         self.confidence = confidence
         self.isFallback = isFallback
+        self.suggestedRecipe = suggestedRecipe
     }
     public var meals: [Meal]
+    /// Recipes auto-minted as a side effect of resolution and persisted silently on commit (the legacy
+    /// multi-ingredient auto-mint). Distinct from `suggestedRecipe`, which is review-gated.
     public var createdRecipes: [RecipeDefinition]
     public var confidence: MealResolutionConfidence
     public var isFallback: Bool
+    /// The decomposition tier's built recipe, carried out to the review sheet where the user can edit
+    /// its name + yield and confirm before it is minted. NOT auto-persisted by `commitResolution` — it
+    /// reaches the recipe book only through a user confirm, so a decomposition that auto-commits (high
+    /// confidence, no review) never mints a recipe. `nil` for every other tier.
+    public var suggestedRecipe: RecipeDefinition?
 
     public var needsReview: Bool { confidence.needsReview || isFallback }
 }

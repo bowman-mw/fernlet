@@ -1599,6 +1599,16 @@ final class FernletStore {
         guard let data = image.jpegData(compressionQuality: 0.82) else { return nil }
         return mealPhotoStore.save(data)
     }
+
+    /// Byte-path meal-photo save mirroring `saveRecipePhoto(data:)` / `addProgressPhoto(data:)`: seals
+    /// the picked JPEG `Data` straight through the store's bounded ImageIO downscale (one normalize at
+    /// q0.8) instead of the `UIImage` overload's redundant full-resolution `jpegData(0.82)` pre-encode.
+    /// This is the double-JPEG-encode fix (§2.5) for the library-pick path — the ~190 MB / generation-
+    /// loss landmine on the iPhone-11 floor that F1 makes photo→recipe fire far more often. Fail-closed
+    /// (nil on non-image bytes or no key). Returns the new photo id.
+    @discardableResult func saveMealPhoto(data: Data) -> UUID? {
+        mealPhotoStore.save(data)
+    }
     #endif
 
     // MARK: - Progress photos (#11 — the Move-tab timeline)

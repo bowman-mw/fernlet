@@ -38,7 +38,11 @@ struct MealBuilder {
             guard resolved.isEmpty == false else { return nil }
 
             if resolved.count > 1 {
-                let recipe = createRecipe(for: item.name, resolvedIngredients: resolved)
+                let recipe = createRecipe(
+                    for: item.name,
+                    resolvedIngredients: resolved,
+                    servings: defaultRecipeServings(description: item.name)
+                )
                 createdRecipes.append(recipe)
                 availableRecipes.insert(recipe, at: 0)
                 return mealFromRecipe(recipe, mealType: plan.mealType, foodItems: foodItems)
@@ -124,27 +128,51 @@ struct MealBuilder {
         return MealLogSource.manual
     }
 
-    private static func createRecipe(
+    /// Builds a reusable recipe from catalog-bound ingredients that describe ONE plated serving (the
+    /// as-eaten portion the resolver produced). The recipe yields `servings` of that plate, so its
+    /// stored ingredient quantities are the per-serving portion scaled up by the yield: logging it back
+    /// through `mealFromRecipe` (which divides by `servings`) reproduces exactly one plate. Keeping
+    /// per-serving == the resolved portion is what lets the auto-mint's yield change from a hardcoded 1
+    /// to the F1(c) default chain WITHOUT altering any logged meal's macros (decision §11.5).
+    ///
+    /// Internal (was `private`) so the dish-decomposition resolver can build a review-offered recipe
+    /// from the same deduped ingredient pairs it already computes (F1(a) wire, §2.2a).
+    static func createRecipe(
         for itemName: String,
-        resolvedIngredients: [(FoodSelectionIngredient, FoodItem)]
+        resolvedIngredients: [(FoodSelectionIngredient, FoodItem)],
+        servings: Int = 4
     ) -> RecipeDefinition {
         let now = Date()
+        let yield = max(servings, 1)
         let recipeIngredients = resolvedIngredients.map { resolvedIngredient in
             RecipeIngredient(
                 foodItemId: resolvedIngredient.1.id,
-                quantity: resolvedIngredient.0.quantity,
+                // Per-serving plate portion × yield = the full batch the recipe makes.
+                quantity: resolvedIngredient.0.quantity * Double(yield),
                 unit: resolvedIngredient.0.unit
             )
         }
         return RecipeDefinition(
             name: itemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Meal item" : itemName.capitalized,
-            servings: 1,
+            servings: yield,
             ingredients: recipeIngredients,
             notes: "Created from meal logging.",
             source: "meal-log",
             createdAt: now,
             updatedAt: now
         )
+    }
+
+    /// The default yield for a recipe minted from a meal log (decision §11.5): the model's explicit
+    /// hint when present, else the matching dish template's natural unit count, else 4. A plate is one
+    /// serving of a recipe that usually makes several, so 4 is a saner reusable-recipe default than the
+    /// old hardcoded 1. Always ≥ 1.
+    static func defaultRecipeServings(description: String, hint: Int? = nil) -> Int {
+        if let hint, hint >= 1 { return hint }
+        if let template = DishTemplateLexicon.matchWithCount(description).0 {
+            return max(1, Int(template.defaultCount.rounded()))
+        }
+        return 4
     }
 
     static func totals(

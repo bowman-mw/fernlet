@@ -90,7 +90,7 @@ final class MealResolutionService {
                     MealDecompositionPayload(mealDescription: description, fallbackMealType: type),
                     catalog: host.foodCatalog
                 ) {
-                    return Self.plausibilityGated(MealResolution(meals: [resolved.meal], createdRecipes: [], confidence: resolved.confidence, isFallback: false))
+                    return Self.plausibilityGated(MealResolution(meals: [resolved.meal], createdRecipes: [], confidence: resolved.confidence, isFallback: false, suggestedRecipe: resolved.suggestedRecipe))
                 }
             } catch {}
 
@@ -182,7 +182,8 @@ final class MealResolutionService {
             meals: [merged],
             createdRecipes: resolution.createdRecipes,
             confidence: resolution.confidence,
-            isFallback: resolution.isFallback
+            isFallback: resolution.isFallback,
+            suggestedRecipe: resolution.suggestedRecipe
         )
     }
 
@@ -225,7 +226,8 @@ final class MealResolutionService {
             meals: resolution.meals,
             createdRecipes: resolution.createdRecipes,
             confidence: .low,
-            isFallback: resolution.isFallback
+            isFallback: resolution.isFallback,
+            suggestedRecipe: resolution.suggestedRecipe
         )
     }
 }

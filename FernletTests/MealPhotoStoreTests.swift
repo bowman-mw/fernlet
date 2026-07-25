@@ -194,6 +194,36 @@ struct MealPhotoStoreTests {
         #expect(!store.hasSealedData(forID: id))
     }
 
+    @Test func bytePathSaveMatchesTheUIImagePathButAvoidsTheExtraEncode() throws {
+        // F1 §2.5 double-encode fix: the meal sheet's library pick now seals the picked JPEG bytes
+        // straight through the store (one normalize at q0.8) instead of the UIImage overload's redundant
+        // `jpegData(0.82)` pre-encode. Both paths must produce an equivalent stored photo — same bounded
+        // dimensions — and the byte path (no generation-loss pre-encode) is never larger.
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // A "library pick": a fairly large source JPEG whose bytes the byte path seals directly.
+        let picked = jpeg(width: 2400, height: 1800)
+
+        // Byte path — what FernletStore.saveMealPhoto(data:) does: seal the picked bytes as-is.
+        let byteID = try #require(store.save(picked))
+        // Legacy UIImage path — what saveMealPhoto(_ image:) does: decode, re-encode at 0.82, then seal.
+        let image = try #require(UIImage(data: picked))
+        let reEncoded = try #require(image.jpegData(compressionQuality: 0.82))
+        let imageID = try #require(store.save(reEncoded))
+
+        let byteImage = try #require(store.imageData(for: byteID).flatMap(UIImage.init(data:)))
+        let uiImage = try #require(store.imageData(for: imageID).flatMap(UIImage.init(data:)))
+
+        // Both saved photos downscale to the same bounded size (longest side ≤ 1600).
+        #expect(byteImage.size == uiImage.size)
+        #expect(max(byteImage.size.width, byteImage.size.height) <= 1600)
+        // The byte path skips the extra full-resolution encode, so it is never the larger file.
+        let byteBytes = try #require(store.imageData(for: byteID)).count
+        let imageBytes = try #require(store.imageData(for: imageID)).count
+        #expect(byteBytes <= imageBytes)
+    }
+
     @Test func deleteRemovesTheFileAndDeleteAllClearsTheStore() throws {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }
