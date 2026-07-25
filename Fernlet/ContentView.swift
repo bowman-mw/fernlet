@@ -431,11 +431,6 @@ struct ContentView: View {
             && store.meshNetworkManager.isInSession
     }
 
-    private var isLandscapeDisposableCameraActive: Bool {
-        isDisposableCameraSessionActive
-            && store.isDisposableCameraLandscape
-    }
-
     private var isCustomTabBarCompact: Bool {
         !isDisposableCameraSessionActive && isHomeTabBarCompact
     }

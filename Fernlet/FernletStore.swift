@@ -91,7 +91,6 @@ final class FernletStore {
     var connectionSessionLogs: [ConnectionSessionLog]
     var showConnectionInspector = false
     var connectionInspector = ConnectionInspector()
-    var isDisposableCameraLandscape = false
     var savedRecipes: [RecipeDefinition] {
         savedRecipeService.savedRecipes
     }

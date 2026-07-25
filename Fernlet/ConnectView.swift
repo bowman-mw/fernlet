@@ -723,7 +723,7 @@ private struct FriendPhotoCarouselPostView: View {
                         circleActionButton(
                             systemName: manager.favoritePhotoID(for: post) == photo.id ? "heart.fill" : "heart",
                             tint: manager.favoritePhotoID(for: post) == photo.id ? Color.dustyRose : .white,
-                            accessibilityLabel: "Use this picture as the session cover"
+                            accessibilityLabel: "Favorite this photo"
                         ) { manager.toggleFavorite(photoID: photo.id, in: post) }
                     }
 
