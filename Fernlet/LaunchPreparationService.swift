@@ -304,7 +304,7 @@ final class LaunchPreparationService {
                 destination: .onDeviceFoundationModels,
                 modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                 includedFields: auditFields,
-                outcome: .schemaFailed
+                outcome: AIAuditOutcome.fromModelError(error)
             )
             return nil
         }
@@ -362,7 +362,7 @@ final class LaunchPreparationService {
                 modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                 includedFields: auditFields,
                 memorySummaryCharCount: auditMemoryChars,
-                outcome: .schemaFailed
+                outcome: AIAuditOutcome.fromModelError(error)
             )
             return nil
         }

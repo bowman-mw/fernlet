@@ -3331,10 +3331,13 @@ final class FernletStore {
 
         // The device-local AI audit log (Ladder §7.2) — a per-device ledger of AI-call metadata, never
         // synced/snapshot/exported. Clear the persisted file directly (guaranteed even if the actor sink
-        // was never wired) AND the in-memory session entries. Metadata-only with no failure signal, so
-        // it reports no incomplete store (matching the quota reset above). NOT the BYOK keychain leg,
-        // which lands with BYOK later.
-        aiAuditLogStore.clear()
+        // was never wired) AND the in-memory session entries. Unlike the plain UserDefaults quota reset
+        // above, a file removal HAS a real failure signal (like the widget-queue clear); a failed
+        // removal would leave the log on disk behind a dialog claiming a complete wipe, so report it as
+        // an incomplete store. NOT the BYOK keychain leg, which lands with BYOK later.
+        if !aiAuditLogStore.clear() {
+            outcome.incompleteStores.append("AI activity log")
+        }
         await AIAuditLog.shared.clear()
 
         if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {

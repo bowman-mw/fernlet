@@ -55,7 +55,8 @@ struct AIAuditLogTests {
         init(seed: [AIAuditEntry] = []) { self.seed = seed }
         func load() -> [AIAuditEntry] { lock.lock(); defer { lock.unlock() }; return seed }
         func save(_ entries: [AIAuditEntry]) { lock.lock(); defer { lock.unlock() }; stored = entries }
-        func clear() { lock.lock(); defer { lock.unlock() }; stored = []; seed = [] }
+        @discardableResult
+        func clear() -> Bool { lock.lock(); defer { lock.unlock() }; stored = []; seed = []; return true }
         var savedCount: Int { lock.lock(); defer { lock.unlock() }; return stored.count }
         var savedFirstKind: String? { lock.lock(); defer { lock.unlock() }; return stored.first?.payloadKind }
         var isCleared: Bool { lock.lock(); defer { lock.unlock() }; return stored.isEmpty && seed.isEmpty }
@@ -166,6 +167,20 @@ struct AIAuditLogTests {
         #expect(e?.memorySummaryCharCount == 7)
     }
 
+    // MARK: - Error → outcome classifier (guardrail refusal is a reachable outcome, not schemaFailed)
+
+    @Test func modelErrorMapperClassifiesCancellationAndGenericErrors() {
+        // A cancelled task threw nothing usable → the caller falls back.
+        #expect(AIAuditOutcome.fromModelError(CancellationError()) == .fellBack)
+        // Any other (non-guardrail) error is a schema / resolution failure. Guardrail refusals map to
+        // `.refused`, but `LanguageModelSession.GenerationError.guardrailViolation` is not constructible
+        // off-device in a unit test — the classifier's guardrail arm is exercised on-device.
+        struct Boom: Error {}
+        #expect(AIAuditOutcome.fromModelError(Boom()) == .schemaFailed)
+        let ns = NSError(domain: "test", code: 7)
+        #expect(AIAuditOutcome.fromModelError(ns) == .schemaFailed)
+    }
+
     // MARK: - configure adopts persisted history; clear sweeps memory + sink
 
     @Test func configureAdoptsPersistedHistory() async {
@@ -174,6 +189,36 @@ struct AIAuditLogTests {
         await log.configure(sink: sink)
         #expect(await log.entries.count == 1)
         #expect(await log.entries.first?.payloadKind == "survived-relaunch")
+    }
+
+    @Test func configureMergesPreConfigureSessionEntriesWithPersistedHistory() async {
+        // An AI call can record BEFORE the unstructured configure Task runs (sink still nil). Those
+        // session entries must be merged with — not overwritten by — the persisted history, and
+        // re-persisted so the next relaunch keeps them.
+        let sink = MockAuditSink(seed: [entry(payloadKind: "persisted")])
+        let log = AIAuditLog()
+        await log.record(payloadKind: "pre-configure", destination: .onDeviceFoundationModels, includedFields: [])
+        await log.configure(sink: sink)
+        let kinds = await log.entries.map(\.payloadKind)
+        #expect(kinds.contains("persisted"))
+        #expect(kinds.contains("pre-configure"))
+        #expect(kinds.count == 2)
+        // Persisted history stays oldest-first ahead of the newer session entry.
+        #expect(kinds.first == "persisted")
+        // The merged set was re-persisted (pending was non-empty), so it survives another load.
+        #expect(sink.savedCount == 2)
+    }
+
+    @Test func configureIsIdempotentAndDoesNotDuplicateEntriesOnSecondCall() async {
+        // A second configure (e.g. the two FernletStore inits) reloads the same file; dedupe-by-id keeps
+        // each entry once rather than doubling the log.
+        let seedEntry = entry(payloadKind: "seed")
+        let sink = MockAuditSink(seed: [seedEntry])
+        let log = AIAuditLog()
+        await log.configure(sink: sink)
+        await log.configure(sink: sink)
+        let ids = await log.entries.map(\.id)
+        #expect(ids == [seedEntry.id])
     }
 
     @Test func clearEmptiesMemoryAndSink() async {
@@ -214,13 +259,16 @@ struct AIAuditLogTests {
         #expect(loaded.last?.payloadKind == "k\(AIAuditLog.entryLimit + 19)")
     }
 
-    @Test func fileStoreClearEmptiesTheLog() {
+    @Test func fileStoreClearEmptiesTheLogAndReportsSuccess() {
         let url = tempURL("audit-clear")
         let store = FileAIAuditLogStore(fileURL: url)
         store.save([entry(payloadKind: "x")])
         #expect(!store.load().isEmpty)
-        store.clear()
+        #expect(store.clear() == true, "clear should report success when it removed the file")
         #expect(store.load().isEmpty)
+        // A second clear finds no file — that is a clean sweep, not a failure (the delete-all funnel
+        // clears the sink directly AND via the actor, so the redundant removal must not report failure).
+        #expect(store.clear() == true, "clear should report success when there was nothing to remove")
     }
 
     @Test func fileStoreToleratesMissingAndCorruptFile() {
@@ -247,7 +295,13 @@ struct AIAuditLogTests {
             workshop: WorkshopData()
         )
         let json = String(decoding: try JSONEncoder().encode(snapshot), as: UTF8.self).lowercased()
-        // Audit-unique field names must never appear in the synced blob.
+        // Audit-unique field names must never appear in the synced blob. `memorysummarycharcount` and
+        // `payloadkind` are ALWAYS encoded on an `AIAuditEntry` (not `encodeIfPresent`-omitted like the
+        // nil-able parked tokens / modelIdentifier), so their absence is the load-bearing canary that
+        // no audit entry can even be named by the snapshot type; the compile-time layering is the real
+        // guarantee, and these assertions witness it.
+        #expect(!json.contains("memorysummarycharcount"))
+        #expect(!json.contains("payloadkind"))
         #expect(!json.contains("modelidentifier"))
         #expect(!json.contains("outcomeparkedtoken"))
         #expect(!json.contains("destinationparkedtoken"))

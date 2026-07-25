@@ -1516,7 +1516,10 @@ struct MealSheet: View {
                         return
                     }
                     if store.allowsWebNutritionLookup {
-                        auditWebNutritionLookup(mealDescription)
+                        // No audit here: this only navigates to the product-search view, which auto-runs
+                        // the lookup on appear and records it at completion with the real outcome.
+                        // Recording at this navigation would double-log and pre-stamp `.succeeded` on a
+                        // lookup that hasn't happened yet.
                         path.append(.productSearch(mealDescription))
                         return
                     }
@@ -1767,17 +1770,6 @@ struct MealSheet: View {
             : "Turn on Web nutrition lookup in Settings to search the web for chain or packaged-food nutrition."
     }
 
-    private func auditWebNutritionLookup(_ mealDescription: String) {
-        let payload = WebNutritionLookupPayload(mealDescription: mealDescription)
-        Task {
-            await AIAuditLog.shared.record(
-                payloadKind: payload.payloadKind,
-                destination: .webNutritionLookup,
-                includedFields: payload.includedFieldNames
-            )
-        }
-    }
-
     #if canImport(UIKit)
     /// The single prominent capture affordance — "one button points at food." It opens the camera
     /// (the delightful default). Barcode/scan/import remain as quiet helpers beneath it.
@@ -1967,13 +1959,17 @@ struct FoodProductPageImportView: View {
             : "Turn on Web nutrition lookup in Settings before searching the web for nutrition."
     }
 
-    private func auditWebNutritionLookup(_ mealDescription: String) {
+    /// Records the web-nutrition lookup at COMPLETION with its real outcome (Ladder §7.2) — a persisted
+    /// "what left my device" entry must not pre-stamp `.succeeded` on a lookup that later failed. The
+    /// on-device model isn't involved (this is the web path), so `modelIdentifier` is intentionally nil.
+    private func auditWebNutritionLookup(_ mealDescription: String, outcome: AIAuditOutcome) {
         let payload = WebNutritionLookupPayload(mealDescription: mealDescription)
         Task {
             await AIAuditLog.shared.record(
                 payloadKind: payload.payloadKind,
                 destination: .webNutritionLookup,
-                includedFields: payload.includedFieldNames
+                includedFields: payload.includedFieldNames,
+                outcome: outcome
             )
         }
     }
@@ -2001,8 +1997,11 @@ struct FoodProductPageImportView: View {
         }
         isLoading = true
         notice = nil
-        auditWebNutritionLookup(lookupText)
         Task {
+            // Record the audit entry at completion with the real outcome: `.succeeded` when the lookup
+            // resolved a product, `.fellBack` when it produced nothing usable or threw and the user is
+            // dropped back to typing the meal in.
+            var outcome: AIAuditOutcome = .fellBack
             do {
                 if let url = normalizedURL {
                     preview = try await FoodProductWebImporter.preview(from: url)
@@ -2014,11 +2013,13 @@ struct FoodProductPageImportView: View {
                     product.lookupQuery = lookupText
                     importedProduct = product
                     showingProductReview = true
+                    outcome = .succeeded
                 }
             } catch {
                 notice = (error as? LocalizedError)?.errorDescription ?? "Could not import that product page."
             }
             isLoading = false
+            auditWebNutritionLookup(lookupText, outcome: outcome)
         }
     }
 

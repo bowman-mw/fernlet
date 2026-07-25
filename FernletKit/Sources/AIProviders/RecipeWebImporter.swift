@@ -251,7 +251,7 @@ public enum RecipeWebImporter {
                     destination: .onDeviceFoundationModels,
                     modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                     includedFields: auditFields,
-                    outcome: .schemaFailed
+                    outcome: AIAuditOutcome.fromModelError(error)
                 )
                 throw error
             }

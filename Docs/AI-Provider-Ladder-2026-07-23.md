@@ -471,14 +471,26 @@ needs:
 
 - a `modelIdentifier` field (which model, not just which vendor)
 - an outcome field (`succeeded` / `fellBack` / `refused` / `schemaFailed`)
-- **persistence, and it MUST be DEVICE-LOCAL ONLY** — it lands in `LocalPersistence`, **never**
-  `CloudKitSync`. A *synced* "what left my device" record is the wrong privacy semantics (it would
-  itself leave the device) and is the actual trigger for the `AIDestination` brick-vector. `AIContext`
-  depends only on `FernletDomainModel`, so the log has no wall-safe *synced* home anyway. A user
-  cannot meaningfully review "what left my device" from a log that dies with the process — this is
-  already tracked as a gap in [RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md). Any
-  `AIDestination` case additions ride the `EnumDecodeCompat` freeze/park pattern **and** need a clean
-  build (`FernletDomainModel` layout hazard).
+- **persistence, and it MUST be DEVICE-LOCAL ONLY** — **never** `CloudKitSync`. A *synced* "what left
+  my device" record is the wrong privacy semantics (it would itself leave the device) and is the actual
+  trigger for the `AIDestination` brick-vector. `AIContext` depends only on `FernletDomainModel`, so the
+  log has no wall-safe *synced* home anyway. A user cannot meaningfully review "what left my device"
+  from a log that dies with the process — this is already tracked as a gap in
+  [RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md). Any `AIDestination` case additions ride
+  the `EnumDecodeCompat` freeze/park pattern **and** need a clean build (`FernletDomainModel` layout
+  hazard).
+  > **As shipped (2026-07-24, commit `14c7adb` + audit-log review fixes):** the injectable
+  > `AIAuditLogPersisting` seam is declared in `AIContext`, but the concrete file-backed
+  > `FileAIAuditLogStore` landed in the **app target** (the composition root injects it), **not** in
+  > `LocalPersistence`. This keeps `LocalPersistence` free of an `AIContext` dependency and still
+  > satisfies the only hard rule — never `CloudKitSync`, no `Package.swift` DAG edge. The store writes a
+  > JSON ring buffer (cap 500, FIFO) to Application Support with `isExcludedFromBackup` set (so it
+  > cannot ride the device backup off-device), records at CALL COMPLETION with the resolved outcome
+  > (`succeeded`/`fellBack`/`refused`/`schemaFailed`, guardrail refusals mapped via
+  > `AIAuditOutcome.fromModelError`), and is swept by delete-all-data with an incomplete-store signal on
+  > removal failure. **When the future PCC/BYOK cloud rungs land, cloud calls must record at DISPATCH
+  > (payload already left the device) and update the outcome at completion** — the on-device
+  > record-at-completion shape is safe only because nothing leaves until the call returns.
 
 **Payload tests:** every new payload gets a test asserting its field set, mirroring the existing
 `FernletTests/S3BoundaryTests` grep-wall discipline. A forbidden field appearing in

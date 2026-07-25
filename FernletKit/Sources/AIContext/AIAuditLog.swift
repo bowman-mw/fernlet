@@ -1,6 +1,10 @@
 import Foundation
 import FernletDomainModel
 
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
+
 // MARK: - Outcome
 
 /// How an AI call turned out (Ladder §7.2). Persisted inside the device-local audit log, so it is a
@@ -19,6 +23,28 @@ public enum AIAuditOutcome: String, Codable, Sendable, CaseIterable {
 
     /// The frozen default an unknown persisted token decodes to (never fail the log).
     public static let freezeDefault: AIAuditOutcome = .succeeded
+
+    /// Classifies a thrown error from an AI call into an audit outcome (Ladder §7.2). A guardrail /
+    /// safety refusal maps to `.refused` — the one outcome the seam is otherwise unable to produce, so
+    /// without this mapping a live content refusal (a reachable case TODAY on the on-device model) is
+    /// silently misfiled as `.schemaFailed`. A cancelled task threw nothing usable and the caller falls
+    /// back, so it maps to `.fellBack`; everything else (schema non-conformance, decode, plausibility)
+    /// is `.schemaFailed`.
+    ///
+    /// Lives here — not duplicated at each call site — so the on-device catch blocks in both
+    /// `AIProviders` and the app target share one classifier. The `FoundationModels` reference is a
+    /// system-framework `canImport` guard: it adds no SwiftPM dependency edge and does not touch the
+    /// wall. When the future PCC / BYOK adapters land, extend this mapper (or a per-rung sibling) so a
+    /// vendor refusal reason also lands as `.refused` rather than a step-down-triggering schema failure.
+    public static func fromModelError(_ error: Error) -> AIAuditOutcome {
+        if error is CancellationError { return .fellBack }
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), let generation = error as? LanguageModelSession.GenerationError {
+            if case .guardrailViolation = generation { return .refused }
+        }
+        #endif
+        return .schemaFailed
+    }
 }
 
 // MARK: - Audit entry
@@ -48,8 +74,16 @@ public struct AIAuditEntry: Identifiable, Sendable, Codable {
     /// edge). The typed `destination` freezes to the floor, but the true token is kept here and
     /// re-encoded so a re-upgrade self-heals and a settings UI can still surface the real value. `nil`
     /// in the normal case.
+    ///
+    /// UI CONTRACT: any surface that displays `destination`/`outcome` MUST prefer the parked token when
+    /// it is non-nil. On a downgrade an unknown future `destination` freezes to `.onDeviceFoundationModels`
+    /// and an unknown `outcome` freezes to `.succeeded` — i.e. the freeze defaults read in the
+    /// PRIVACY-WORST direction (an external call would otherwise render as on-device + succeeded). The
+    /// parked token carries the truth; rendering the frozen enum without consulting it would understate
+    /// what actually left the device.
     public var destinationParkedToken: String?
-    /// Preserved raw token for an `outcome` written by a future build. Same discipline as above.
+    /// Preserved raw token for an `outcome` written by a future build. Same discipline and the same UI
+    /// contract as `destinationParkedToken` above (prefer this token when non-nil).
     public var outcomeParkedToken: String?
 
     /// Stable identifier for Apple's on-device Foundation model — the always-available floor. Used
@@ -150,8 +184,13 @@ public protocol AIAuditLogPersisting: Sendable {
     func load() -> [AIAuditEntry]
     /// Persist the given entries (the sink caps/prunes to the ring-buffer limit).
     func save(_ entries: [AIAuditEntry])
-    /// Erase the persisted log (delete-all-data).
-    func clear()
+    /// Erase the persisted log (delete-all-data). Returns `true` when the store is known-empty
+    /// afterward (removed, or nothing was there) and `false` when the erase failed and the log may
+    /// still be on disk — so the delete-all funnel can surface an incomplete-wipe signal instead of
+    /// claiming a clean sweep. A file-backed sink has a real removal-failure signal (unlike the plain
+    /// UserDefaults quota reset); a purely in-memory sink returns `true`.
+    @discardableResult
+    func clear() -> Bool
 }
 
 // MARK: - Audit log
@@ -172,17 +211,38 @@ public actor AIAuditLog {
 
     public init() {}
 
-    /// Wire the device-local persistence sink and adopt whatever survived the last relaunch. Any
-    /// entries recorded before configuration are session-only; at real app launch this runs before any
-    /// AI call, so the in-memory set is empty and simply adopts the persisted history.
+    /// Wire the device-local persistence sink and adopt whatever survived the last relaunch. At real
+    /// app launch this normally runs before any AI call, so the in-memory set is empty and simply adopts
+    /// the persisted history. But `configure` is dispatched from an unstructured `Task` at store init,
+    /// so an early AI call CAN record before it runs — those pending session entries are MERGED with the
+    /// persisted history (deduped by id, oldest first) and re-persisted rather than discarded, so a race
+    /// between the first record and configuration never silently drops an entry.
     public func configure(sink: AIAuditLogPersisting) {
         self.sink = sink
-        entries = Array(sink.load().suffix(Self.entryLimit))
+        let persisted = sink.load()
+        let pending = entries
+        var seen = Set<UUID>()
+        var merged: [AIAuditEntry] = []
+        for entry in persisted + pending where seen.insert(entry.id).inserted {
+            merged.append(entry)
+        }
+        entries = Array(merged.suffix(Self.entryLimit))
+        // Only re-persist when a pre-configure record actually happened; a plain adopt needs no write.
+        if pending.isEmpty == false {
+            sink.save(entries)
+        }
     }
 
     /// Records an AI call. Extract `payloadKind` and `includedFields` from the payload at the call site
     /// (before any actor hop) to avoid Sendable boundary issues. Persists immediately when a sink is
     /// wired.
+    ///
+    /// Today every rung is on-device, so recording at COMPLETION (with the resolved `outcome`) is
+    /// correct — nothing left the device until the call returned. When the future PCC / BYOK adapters
+    /// land this MUST change for those rungs: a cloud call that crashed or was killed mid-flight has
+    /// already sent its payload off-device, so it must record at DISPATCH and then update the outcome at
+    /// completion. A "what left my device" log that only records on success would tell exactly the one
+    /// lie it exists to prevent.
     public func record(
         payloadKind: String,
         destination: AIDestination,
@@ -208,6 +268,8 @@ public actor AIAuditLog {
 
     public func clear() {
         entries = []
-        sink?.clear()
+        // The removal-failure signal belongs to the delete-all funnel, which clears the sink directly
+        // and reports on it; the actor's job is only to wipe the in-memory working set.
+        _ = sink?.clear()
     }
 }
