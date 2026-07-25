@@ -221,11 +221,8 @@ public enum RecipeWebImporter {
                 sourceHost: sourceURL.host() ?? "unknown",
                 cleanedTextCharCount: text.count
             )
-            await AIAuditLog.shared.record(
-                payloadKind: payload.payloadKind,
-                destination: .onDeviceFoundationModels,
-                includedFields: payload.includedFieldNames
-            )
+            let auditKind = payload.payloadKind
+            let auditFields = payload.includedFieldNames
 
             let instructions = """
             Extract one cooking recipe from cleaned webpage text.
@@ -237,8 +234,27 @@ public enum RecipeWebImporter {
             \(text)
             """
             let session = LanguageModelSession(instructions: instructions)
-            let response = try await session.respond(to: prompt, generating: ExtractedRecipe.self)
-            return try response.content.importedRecipe(sourceURL: sourceURL, catalog: catalog)
+            do {
+                let response = try await session.respond(to: prompt, generating: ExtractedRecipe.self)
+                let recipe = try response.content.importedRecipe(sourceURL: sourceURL, catalog: catalog)
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: .onDeviceFoundationModels,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: .succeeded
+                )
+                return recipe
+            } catch {
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: .onDeviceFoundationModels,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: .schemaFailed
+                )
+                throw error
+            }
         }
         #endif
 

@@ -21,13 +21,8 @@ enum FoundationDishDecompositionModel {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             guard FoodSelectionAvailability.isFoundationModelAvailable else { return nil }
-            Task {
-                await AIAuditLog.shared.record(
-                    payloadKind: payload.payloadKind,
-                    destination: .onDeviceFoundationModels,
-                    includedFields: payload.includedFieldNames
-                )
-            }
+            let auditKind = payload.payloadKind
+            let auditFields = payload.includedFieldNames
             let instructions = """
             You are a nutrition assistant. Break a meal description into the foods that were actually eaten.
             Return each food as ONE component with: the ingredient (a simple, common name, e.g. "egg", \
@@ -50,8 +45,27 @@ enum FoundationDishDecompositionModel {
             Preferred meal type: \(payload.fallbackMealType?.rawValue ?? "Auto")
             """
             let session = LanguageModelSession(instructions: instructions)
-            let response = try await session.respond(to: prompt, generating: FoundationDishDecomposition.self)
-            return MealDecompositionResolver.resolve(from: response.content, payload: payload, catalog: catalog)
+            do {
+                let response = try await session.respond(to: prompt, generating: FoundationDishDecomposition.self)
+                let resolved = MealDecompositionResolver.resolve(from: response.content, payload: payload, catalog: catalog)
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: .onDeviceFoundationModels,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: resolved == nil ? .fellBack : .succeeded
+                )
+                return resolved
+            } catch {
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: .onDeviceFoundationModels,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: .schemaFailed
+                )
+                throw error
+            }
         }
         #endif
         return nil

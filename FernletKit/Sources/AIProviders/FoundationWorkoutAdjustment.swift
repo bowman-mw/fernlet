@@ -90,7 +90,6 @@ public enum FoundationWorkoutAdjustmentModel {
             guard FoodSelectionAvailability.isFoundationModelAvailable else { return nil }
             let auditKind = payload.payloadKind
             let auditFields = payload.includedFieldNames
-            Task { await AIAuditLog.shared.record(payloadKind: auditKind, destination: .onDeviceFoundationModels, includedFields: auditFields) }
 
             let instructions = """
             You adjust a strength workout to fit a person's request, e.g. "swap the squat", \
@@ -110,8 +109,27 @@ public enum FoundationWorkoutAdjustmentModel {
             \(candidates.map(\.promptLine).joined(separator: "\n"))
             """
             let session = LanguageModelSession(instructions: instructions)
-            let response = try await session.respond(to: prompt, generating: FoundationWorkoutPlan.self)
-            return response.content.resolved(candidates: candidates)
+            do {
+                let response = try await session.respond(to: prompt, generating: FoundationWorkoutPlan.self)
+                let resolved = response.content.resolved(candidates: candidates)
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: .onDeviceFoundationModels,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: resolved == nil ? .fellBack : .succeeded
+                )
+                return resolved
+            } catch {
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: .onDeviceFoundationModels,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: .schemaFailed
+                )
+                throw error
+            }
         }
         #endif
         return nil

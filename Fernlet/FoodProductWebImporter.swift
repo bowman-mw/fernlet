@@ -574,11 +574,8 @@ enum FoodProductWebImporter {
                 sourceHost: sourceURL.host() ?? "unknown",
                 cleanedTextCharCount: text.count
             )
-            await AIAuditLog.shared.record(
-                payloadKind: payload.payloadKind,
-                destination: .onDeviceFoundationModels,
-                includedFields: payload.includedFieldNames
-            )
+            let auditKind = payload.payloadKind
+            let auditFields = payload.includedFieldNames
 
             let instructions = """
             Extract nutrition facts for one packaged food product from webpage text.
@@ -593,23 +590,41 @@ enum FoodProductWebImporter {
             \(text)
             """
             let session = LanguageModelSession(instructions: instructions)
-            let response = try await session.respond(to: prompt, generating: ExtractedFoodProduct.self)
-            guard let product = response.content.importedProduct(sourceURL: sourceURL, fallbackName: fallbackName) else {
-                throw FoodProductWebImportError.nutritionNotFound
-            }
-            // Plausibility: per-field bounds + macro-calorie consistency
-            let p = product.macros.protein, c = product.macros.carbs, f = product.macros.fat
-            let macroCalories = p * 4 + c * 4 + f * 9
-            if let reportedCalories = product.calories {
-                let allowedLow = max(0, reportedCalories / 2 - 50)
-                let allowedHigh = reportedCalories * 2 + 100
-                guard reportedCalories >= 0 && reportedCalories <= 5000,
-                      p >= 0 && p <= 500, c >= 0 && c <= 1000, f >= 0 && f <= 500,
-                      macroCalories >= allowedLow && macroCalories <= allowedHigh else {
+            do {
+                let response = try await session.respond(to: prompt, generating: ExtractedFoodProduct.self)
+                guard let product = response.content.importedProduct(sourceURL: sourceURL, fallbackName: fallbackName) else {
                     throw FoodProductWebImportError.nutritionNotFound
                 }
+                // Plausibility: per-field bounds + macro-calorie consistency
+                let p = product.macros.protein, c = product.macros.carbs, f = product.macros.fat
+                let macroCalories = p * 4 + c * 4 + f * 9
+                if let reportedCalories = product.calories {
+                    let allowedLow = max(0, reportedCalories / 2 - 50)
+                    let allowedHigh = reportedCalories * 2 + 100
+                    guard reportedCalories >= 0 && reportedCalories <= 5000,
+                          p >= 0 && p <= 500, c >= 0 && c <= 1000, f >= 0 && f <= 500,
+                          macroCalories >= allowedLow && macroCalories <= allowedHigh else {
+                        throw FoodProductWebImportError.nutritionNotFound
+                    }
+                }
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: .onDeviceFoundationModels,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: .succeeded
+                )
+                return product
+            } catch {
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: .onDeviceFoundationModels,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: .schemaFailed
+                )
+                throw error
             }
-            return product
         }
         #endif
         throw FoodProductWebImportError.modelUnavailable

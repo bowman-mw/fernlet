@@ -166,6 +166,14 @@ final class FernletStore {
     /// Device-local, non-synced daily AI-call counter (Ladder §3.2). Drives the `.sleepy`/`.resting`
     /// overlay on `effectiveAIStatus`; deliberately outside the snapshot — usage never syncs.
     @ObservationIgnored private(set) lazy var aiCallQuotaStore: AICallQuotaStore = UserDefaultsAICallQuotaStore()
+    /// Test-injected override for `aiAuditLogStore` (a temp-path sink), so a delete-all test can assert
+    /// the wipe leg without touching the process-global Application Support file. `nil` in production.
+    @ObservationIgnored private var injectedAuditLogStore: AIAuditLogPersisting?
+    /// Device-local, non-synced AI audit-log sink (Ladder §7.2). Persists the ring buffer of AI-call
+    /// metadata to Application Support and is wired into `AIAuditLog.shared` at init so the log survives
+    /// relaunch. Deliberately outside the snapshot/CloudKit/export — a "what left my device" record
+    /// must never itself leave the device.
+    @ObservationIgnored private(set) lazy var aiAuditLogStore: AIAuditLogPersisting = injectedAuditLogStore ?? FileAIAuditLogStore()
     /// Tamper-resistant store bans (Keychain-backed; survives app delete+reinstall and clock changes).
     @ObservationIgnored private(set) lazy var moderationBanStore = ModerationBanStore()
     /// Device-local cache of friends' shared fuzzy state + appearance (Phase 4). Never synced.
@@ -305,8 +313,9 @@ final class FernletStore {
         static let intimacy = "sensitiveVisibilityResolvedIntimacyVisible"
     }
 
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil) {
         self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
+        self.injectedAuditLogStore = aiAuditLogStore
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
 
@@ -378,6 +387,7 @@ final class FernletStore {
         snapshotSaveCoordinator.subscribeRemote { [weak self] in
             await self?.reloadFromRepository()
         }
+        configureAIAuditLog()
     }
 
     private init(
@@ -427,6 +437,15 @@ final class FernletStore {
         snapshotSaveCoordinator.subscribeRemote { [weak self] in
             await self?.reloadFromRepository()
         }
+        configureAIAuditLog()
+    }
+
+    /// Wires the device-local AI audit-log sink into `AIAuditLog.shared` and adopts whatever survived
+    /// the last relaunch. Runs before any AI call could record, so the in-memory session set adopts the
+    /// persisted history rather than racing it. Device-local only — never synced/snapshot/exported.
+    private func configureAIAuditLog() {
+        let auditSink = aiAuditLogStore
+        Task { await AIAuditLog.shared.configure(sink: auditSink) }
     }
 
 
@@ -3309,6 +3328,14 @@ final class FernletStore {
         // fresh start isn't left in a stale `.sleepy`/`.resting` band from before the reset. `reset()`
         // has no failure signal (a plain UserDefaults removal), so it reports no incomplete store.
         aiCallQuotaStore.reset()
+
+        // The device-local AI audit log (Ladder §7.2) — a per-device ledger of AI-call metadata, never
+        // synced/snapshot/exported. Clear the persisted file directly (guaranteed even if the actor sink
+        // was never wired) AND the in-memory session entries. Metadata-only with no failure signal, so
+        // it reports no incomplete store (matching the quota reset above). NOT the BYOK keychain leg,
+        // which lands with BYOK later.
+        aiAuditLogStore.clear()
+        await AIAuditLog.shared.clear()
 
         if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {
             outcome.incompleteStores.append("your storage settings")

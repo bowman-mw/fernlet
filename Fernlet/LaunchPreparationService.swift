@@ -264,7 +264,6 @@ final class LaunchPreparationService {
             journalTagLabel: day.journals.last?.tag.label.lowercased()
         )
         let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
-        Task { await AIAuditLog.shared.record(payloadKind: auditKind, destination: .onDeviceFoundationModels, includedFields: auditFields) }
 
         var dataParts: [String] = []
         let mealLine = payload.mealNames.joined(separator: ", ")
@@ -291,8 +290,22 @@ final class LaunchPreparationService {
             )
             let response = try await session.respond(to: prompt)
             let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            await AIAuditLog.shared.record(
+                payloadKind: auditKind,
+                destination: .onDeviceFoundationModels,
+                modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                includedFields: auditFields,
+                outcome: text.isEmpty ? .fellBack : .succeeded
+            )
             return text.isEmpty ? nil : text
         } catch {
+            await AIAuditLog.shared.record(
+                payloadKind: auditKind,
+                destination: .onDeviceFoundationModels,
+                modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                includedFields: auditFields,
+                outcome: .schemaFailed
+            )
             return nil
         }
     }
@@ -315,7 +328,7 @@ final class LaunchPreparationService {
             filteredMemorySummary: filteredMemory
         )
         let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
-        Task { await AIAuditLog.shared.record(payloadKind: auditKind, destination: .onDeviceFoundationModels, includedFields: auditFields, memorySummaryCharCount: filteredMemory.count) }
+        let auditMemoryChars = filteredMemory.count
 
         let signalLine = signalSummaries.map { "\($0.signalName): \($0.value)" }.joined(separator: ", ")
         var contextParts = [signalLine]
@@ -333,8 +346,24 @@ final class LaunchPreparationService {
             )
             let response = try await session.respond(to: prompt)
             let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            await AIAuditLog.shared.record(
+                payloadKind: auditKind,
+                destination: .onDeviceFoundationModels,
+                modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                includedFields: auditFields,
+                memorySummaryCharCount: auditMemoryChars,
+                outcome: text.isEmpty ? .fellBack : .succeeded
+            )
             return text.isEmpty ? nil : text
         } catch {
+            await AIAuditLog.shared.record(
+                payloadKind: auditKind,
+                destination: .onDeviceFoundationModels,
+                modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                includedFields: auditFields,
+                memorySummaryCharCount: auditMemoryChars,
+                outcome: .schemaFailed
+            )
             return nil
         }
     }
