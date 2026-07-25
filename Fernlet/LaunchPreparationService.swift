@@ -112,6 +112,12 @@ final class LaunchPreparationService {
         // any orphaned activity still on screen.
         store.reconcileGuidedRunFromAppGroup()
 
+        // Same discipline for the cooking runner: a Next/Finish made from the Lock Screen / Siri while the
+        // app was gone must be picked up at launch, and an abandoned or finished cook must be retired here
+        // — otherwise an orphan cooking Live Activity lingers until the OS cap when relaunch lands anywhere
+        // but the Food tab. Cheap and independent of which tab is on screen (mirrors the guided call).
+        store.reconcileCookingRunFromAppGroup()
+
         // A plaintext "export my data" dump is written to tmp/ for the share sheet and purged when the
         // sheet closes — but a kill/crash/jettison mid-share leaves the full decrypted dump on disk. Launch
         // is a point where no share can be in flight, so sweep any survivor here (belt-and-braces with the

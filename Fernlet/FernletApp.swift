@@ -126,6 +126,10 @@ struct FernletApp: App {
                     if case .ready(let store) = loader.phase {
                         store.refreshCurrentDayIfNeeded()
                         store.reconcileGuidedRunFromAppGroup()
+                        // Same for a cooking Next/Finish made from the Live Activity / Siri while
+                        // backgrounded — reconcile even if the Food tab isn't the one on screen, so an
+                        // orphan cooking activity is retired and the walker/card stay in step.
+                        store.reconcileCookingRunFromAppGroup()
                     }
                 }
             }

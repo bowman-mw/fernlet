@@ -2845,6 +2845,11 @@ final class FernletStore {
     /// Activity. Session-scoped; never part of the synced blob. Directly mirrors `guidedRunState`.
     private(set) var cookingRunState: CookingRunState?
     @ObservationIgnored private let cookingRunStateStore = CookingRunStateStore()
+    /// Observer token for `.cookingRunAdvancedByIntent` — registered once in `activateWidgetBridge`. A
+    /// cooking App Intent (Live Activity / Siri) runs in this process but mutates only the app-group file;
+    /// this brings the in-memory walker into step the moment the file is written, so an in-app "Next"
+    /// can't land on stale state and clobber the intent's advance while the app is foregrounded.
+    @ObservationIgnored private var cookingIntentObserver: NSObjectProtocol?
 
     /// Begin cooking a recipe step-by-step. Builds the run from the recipe's ordered steps, anchors it
     /// to the day the cook began (a long session can cross local midnight), mirrors it to the app group,
@@ -2942,7 +2947,14 @@ final class FernletStore {
             // Clear the file BEFORE anything else so a crash can't re-surface a done run (mirrors the
             // guided finish path; a lost log beats a duplicate — though cooking's log is never automatic).
             cookingRunStateStore.clear()
-            cookingRunState = nil
+            // ADOPT the finished state (don't nil it) — exactly as the guided path keeps a completed run
+            // so the sheet can show its done screen. A Finish tapped from the Live Activity / Siri while
+            // the walker is foregrounded must land the cook on the finish/log screen (via
+            // `syncStageWithRun`), not `dismiss()` it: nil-ing here strands the meal-type/log step and,
+            // with it, the run's authoritative `startedDayKey` (a wrong day after a midnight rollover).
+            // The finished run is retired when the finish screen closes/logs (`endCookingRun`); the
+            // Food-root resume card is gated on `!isFinished`, so this never resurrects a resume card.
+            cookingRunState = fileState
             syncActivity { await CookingActivityBridge.end() }
             return
         }
@@ -3657,6 +3669,14 @@ final class FernletStore {
         guidedRunState = nil
         guidedRunStateStore.clear()
         syncActivity { await GuidedWorkoutActivityBridge.end() }
+        // The cooking runner is the SAME class of live writer: an in-flight cook is mirrored to its own
+        // app-group file that a foreground/launch `reconcileCookingRunFromAppGroup` re-reads and adopts
+        // (resurrecting a "Cooking in progress" resume card on a supposedly-wiped device — and leaving the
+        // recipe name + current step text on the Lock Screen). Cooking never auto-logs, so there is no
+        // re-log hazard, but the file + Live Activity must still be stopped unconditionally at the wipe.
+        cookingRunState = nil
+        cookingRunStateStore.clear()
+        syncActivity { await CookingActivityBridge.end() }
         // Device-local sensitive-surface visibility resolution — reset to "unresolved" so a fresh start
         // re-derives from `sex` (resetDiary already restored the settings gate to its defaults).
         clearSensitiveVisibilityResolution()
@@ -3686,6 +3706,15 @@ final class FernletStore {
     func activateWidgetBridge() {
         if widgetSnapshotMirror == nil {
             widgetSnapshotMirror = WidgetSnapshotMirror()
+        }
+        // Reconcile the cooking walker the instant an in-process App Intent (Live Activity "Next" / Siri)
+        // writes the advanced run, instead of only on the next scenePhase `.active`. Registered once.
+        if cookingIntentObserver == nil {
+            cookingIntentObserver = NotificationCenter.default.addObserver(
+                forName: .cookingRunAdvancedByIntent, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.reconcileCookingRunFromAppGroup() }
+            }
         }
         processPendingWidgetActions()
     }

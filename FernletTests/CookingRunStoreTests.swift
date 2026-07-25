@@ -89,6 +89,38 @@ struct CookingRunStoreTests {
         #expect(relaunched.cookingRunState == nil)
     }
 
+    // MARK: A Live-Activity / Siri Finish leaves the file finished — reconcile ADOPTS it (finish screen)
+
+    /// When the cook taps "Finish" on the Live Activity (or says "next step" on the last step), the intent
+    /// KEEPS the file marked `finished` (it can't retire it — only the app can). A subsequent reconcile
+    /// must ADOPT that finished state (not nil it) so the foregrounded walker flips to its finish/log
+    /// screen instead of dismissing — and so the run's authoritative `startedDayKey` survives for the log.
+    /// The file is still retired (clear-BEFORE), and the resume card stays gated off (`!isFinished`).
+    @Test func aFinishedRunLeftInTheFileIsAdoptedSoTheWalkerCanReachItsFinishScreen() throws {
+        clearSharedRun()
+        defer { clearSharedRun() }
+        let shared = CookingRunStateStore()
+
+        // The state the intent leaves behind: advanced past the last step, file KEPT marked finished.
+        let finished = CookingRunState(
+            recipeID: UUID(),
+            recipeName: "Ragù",
+            startedDayKey: "2026-07-20",
+            steps: [CookingRunState.Step(text: "Serve")],
+            stepIndex: 0,
+            finished: true
+        )
+        shared.write(finished)
+
+        let store = makeTestStore()
+        store.reconcileCookingRunFromAppGroup()
+
+        let run = try #require(store.cookingRunState)   // adopted, NOT dropped
+        #expect(run.isFinished == true)
+        #expect(run.startedDayKey == "2026-07-20")      // day-key anchor preserved for a post-midnight log
+        #expect(shared.read() == nil)                   // file retired (clear-BEFORE invariant)
+    }
+
     // MARK: Resume after kill — a recent run is adopted at its saved step, day key preserved
 
     @Test func aRecentRunIsAdoptedByAFreshStoreAtItsSavedStep() throws {

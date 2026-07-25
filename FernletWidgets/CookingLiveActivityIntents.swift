@@ -16,6 +16,18 @@
 
 import ActivityKit
 import AppIntents
+import Foundation
+
+extension Notification.Name {
+    /// Posted in the APP's process the instant a cooking App Intent (Live Activity "Next" / Siri "next
+    /// step" / "repeat step") writes the advanced run to the app group. `LiveActivityIntent.perform`
+    /// runs in-process but mutates only the file + activity — nothing tells `FernletStore`, so the in-app
+    /// walker would only catch up on the next scenePhase `.active` reconcile, and an in-app "Next" landing
+    /// before that reconcile writes stale in-memory state over the file, discarding the intent's advance.
+    /// The store observes this to reconcile IMMEDIATELY after the write, closing that window. Harmless in
+    /// the widget process (no observer there).
+    static let cookingRunAdvancedByIntent = Notification.Name("MBO.Fernlet.cookingRunAdvancedByIntent")
+}
 
 /// "Next" — advances to the next step, or finishes the cook when already on the last step. The exact
 /// pattern the guided workout uses for "Done set": mutate the shared app-group state, reflect it onto
@@ -69,6 +81,9 @@ enum CookingIntentRunner {
         // state. On a finish the file is kept (marked `finished`) so the app's reconcile can retire it
         // and end any lingering activity; the app clears it once it has.
         store.write(state)
+        // Signal the app (same process) to reconcile its in-memory walker NOW that the file is durable,
+        // rather than waiting for the next scenePhase round-trip — see `.cookingRunAdvancedByIntent`.
+        NotificationCenter.default.post(name: .cookingRunAdvancedByIntent, object: nil)
         await CookingActivityBridge.sync(to: state)
     }
 }
