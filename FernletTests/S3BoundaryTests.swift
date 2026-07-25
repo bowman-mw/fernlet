@@ -22,6 +22,11 @@ struct S3BoundaryTests {
         "Fernlet",
         "FernletKit/Sources/AIProviders",
         "FernletKit/Sources/AIContext",
+        // AppServices hosts the meal-photo recognition path (Vision classifier + recognizer) that
+        // composes an AI-bound meal description. These files carry no FoundationModels marker, so they
+        // are pinned as floor files below; the root is scanned so the floor `locate` can reach them and
+        // so any future AI-facing AppServices file is auto-covered.
+        "FernletKit/Sources/AppServices",
         // The widget extension is standalone (it can't link the FernletKit umbrella, so it can't
         // reach a sealed store by construction) — scanned anyway as belt-and-braces so future
         // widget code can't silently grow an AI-facing file that names sealed tokens.
@@ -47,7 +52,12 @@ struct S3BoundaryTests {
         "FoundationFoodSelection.swift",     // AIProviders prompt builder
         "LaunchPreparationService.swift",    // app-resident: memory -> AI launch path
         "FoundationDishDecomposition.swift", // app-resident prompt builder (previously uncovered)
-        "FoodProductWebImporter.swift"       // app-resident prompt builder (previously uncovered)
+        "FoodProductWebImporter.swift",      // app-resident prompt builder (previously uncovered)
+        // The meal-photo recognition path composes a text meal description that feeds the AI cascade.
+        // Neither file uses the FoundationModels API (no marker), so pin them explicitly — a rename/move
+        // that drops them out of coverage is then a hard failure, not a silent gap (F1(a), §2.5).
+        "MealPhotoRecognizer.swift",         // app-resident: composes the AI-bound meal description
+        "FoodImageClassifier.swift"          // AppServices: Vision classifier feeding that description
     ]
 
     /// Tokens naming a raw sealed/private store type, repository, controller, sealed value type, or a

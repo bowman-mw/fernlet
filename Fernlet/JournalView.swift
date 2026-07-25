@@ -833,7 +833,13 @@ struct DayDetailView: View {
                 DayMicronutrientBreakdownRow(name: "Saturated fat", value: $0, target: Double(store.nutritionTargets.saturatedFatLimit), unit: "g", isLimit: true)
             },
             dayMicronutrients.sugar.map {
-                DayMicronutrientBreakdownRow(name: "Sugar", value: $0, target: 50, unit: "g", isLimit: true)
+                // The 50 g reference is the FDA **added-sugars** DRV
+                // (`FDADailyValues.addedSugarsLimitGrams`). This row shows *total* sugar
+                // (`dayMicronutrients.sugar`), so applying the added-sugars ceiling here is
+                // an intentional over-strict approximation — the catalog does not separate
+                // added from total sugar per food. Kept as-is (not redesigned); the label
+                // stays "Sugar" because the value is total sugar, not added sugar.
+                DayMicronutrientBreakdownRow(name: "Sugar", value: $0, target: FDADailyValues.addedSugarsLimitGrams, unit: "g", isLimit: true)
             }
         ].compactMap { $0 }
         return Array((tracked + limitRows).prefix(12))

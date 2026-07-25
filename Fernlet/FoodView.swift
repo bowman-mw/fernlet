@@ -10,6 +10,7 @@ import AppServices
 import UIKit
 import PhotosUI
 import FernletUI
+import ImageIO
 #endif
 
 struct FoodView: View {
@@ -1219,6 +1220,12 @@ struct MealSheet: View {
     @State private var reviewContext: MealReviewContext?
     #if canImport(UIKit)
     @State private var mealPhoto: UIImage?
+    /// Sealed-ready JPEG bytes from a LIBRARY pick (the byte path, §2.5). Held so the photo is saved via
+    /// `store.saveMealPhoto(data:)` — a single bounded normalize — instead of decoding a 48 MP pick into
+    /// a ~190 MB full-res `UIImage` and re-encoding it. `mealPhoto` still holds a small downsampled
+    /// preview for the sheet + the "Identify from photo" classifier. `nil` on the camera path, whose
+    /// capture already hands back an in-memory `UIImage`.
+    @State private var mealPhotoData: Data?
     // Camera / library-fallback plumbing now lives in the shared `PhotoCaptureControl` (#11 piece 4),
     // which both the primary Capture button and the "try again" retry use.
     @State private var isIdentifyingPhoto = false
@@ -1324,18 +1331,22 @@ struct MealSheet: View {
             MealReviewSheet(
                 resolution: context.resolution,
                 store: store,
-                onConfirm: { reviewedMeals in
-                    // User reviewed it: commit their version, never re-queue an AI retry over it.
+                onConfirm: { reviewedMeals, confirmedRecipe in
+                    // User reviewed it: commit their version, never re-queue an AI retry over it. Any
+                    // legacy auto-mint recipes ride along as before; the decomposition tier's reviewed
+                    // recipe (confirmedRecipe) is minted here — and ONLY here — through the same
+                    // diary.recipes path, so it never reaches the book without an explicit confirm.
+                    let recipesToMint = context.resolution.createdRecipes + (confirmedRecipe.map { [$0] } ?? [])
                     let committed = store.commitResolution(
                         MealResolution(
                             meals: reviewedMeals,
-                            createdRecipes: context.resolution.createdRecipes,
+                            createdRecipes: recipesToMint,
                             confidence: context.resolution.confidence,
                             isFallback: false
                         )
                     )
                     #if canImport(UIKit)
-                    let photoAttached = attachPhoto(context.photo, to: committed)
+                    let photoAttached = attachPhoto(context.photo, data: context.photoData, to: committed)
                     #else
                     let photoAttached = true
                     #endif
@@ -1374,6 +1385,7 @@ struct MealSheet: View {
                 onMeal: {
                     captureChooser = nil
                     mealPhoto = context.image
+                    mealPhotoData = nil
                 },
                 onTypeInstead: {
                     captureChooser = nil
@@ -1422,7 +1434,7 @@ struct MealSheet: View {
                         // attached as the meal photo (no barcode/label rescan on an arbitrary library image).
                         PhotoCaptureControl(
                             onCameraCapture: { handleCapturedPhoto($0) },
-                            onLibraryPick: { mealPhoto = $0 }
+                            onLibraryPickData: { data, _ in setLibraryPickedMealPhoto(data) }
                         ) {
                             mealCapturePrimaryLabel
                         }
@@ -1522,6 +1534,7 @@ struct MealSheet: View {
     private func resolveTypedMeal(_ mealDescription: String, type: MealType?) {
         #if canImport(UIKit)
         let capturedPhoto = mealPhoto
+        let capturedPhotoData = mealPhotoData
         #endif
         isResolvingMeal = true
         Task {
@@ -1530,7 +1543,7 @@ struct MealSheet: View {
             if resolution.needsReview {
                 // Pause for a pre-log review instead of silently committing a low-confidence guess.
                 #if canImport(UIKit)
-                reviewContext = MealReviewContext(resolution: resolution, photo: capturedPhoto)
+                reviewContext = MealReviewContext(resolution: resolution, photo: capturedPhoto, photoData: capturedPhotoData)
                 #else
                 reviewContext = MealReviewContext(resolution: resolution)
                 #endif
@@ -1538,7 +1551,7 @@ struct MealSheet: View {
             }
             let meals = store.commitResolution(resolution)
             #if canImport(UIKit)
-            let photoAttached = attachPhoto(capturedPhoto, to: meals)
+            let photoAttached = attachPhoto(capturedPhoto, data: capturedPhotoData, to: meals)
             #else
             let photoAttached = true
             #endif
@@ -1560,6 +1573,9 @@ struct MealSheet: View {
         let resolution: MealResolution
         #if canImport(UIKit)
         var photo: UIImage?
+        /// Sealed-ready bytes from a library pick, carried so the review-confirm attach uses the byte
+        /// path too. `nil` on the camera path (which has only `photo`).
+        var photoData: Data?
         #endif
     }
 
@@ -1568,13 +1584,43 @@ struct MealSheet: View {
     /// but couldn't be sealed (fail-closed `saveMealPhoto` returned nil) — the meal still logged, but its
     /// photo was dropped, so the caller surfaces a gentle notice instead of dismissing on a silent loss.
     @discardableResult
-    private func attachPhoto(_ photo: UIImage?, to meals: [Meal]) -> Bool {
-        guard let photo else { return true }
-        guard let photoID = store.saveMealPhoto(photo) else { return false }
+    private func attachPhoto(_ photo: UIImage?, data: Data?, to meals: [Meal]) -> Bool {
+        // Prefer the byte path (single bounded normalize, no double encode) when a library pick handed
+        // back raw bytes; fall back to the UIImage overload for the camera path, which has no bytes.
+        let photoID: UUID?
+        if let data {
+            photoID = store.saveMealPhoto(data: data)
+        } else if let photo {
+            photoID = store.saveMealPhoto(photo)
+        } else {
+            return true
+        }
+        guard let photoID else { return false }
         for meal in meals {
             store.attachMealPhoto(mealID: meal.id, photoID: photoID)
         }
         return true
+    }
+
+    /// Library-pick sink for the meal photo (byte path). Holds the sealed-ready bytes for saving and a
+    /// bounded downsample for the preview/identify UI — the full-resolution bitmap is never materialised.
+    private func setLibraryPickedMealPhoto(_ data: Data) {
+        mealPhotoData = data
+        mealPhoto = Self.boundedPreviewImage(from: data) ?? UIImage(data: data)
+    }
+
+    /// Downsamples picked bytes to a bounded preview `UIImage` via ImageIO's thumbnail path (longest
+    /// side ≤ 1600 px), so a 48 MP library pick never decodes into a ~190 MB bitmap just to be shown in
+    /// the sheet. Mirrors `MealPhotoStore.normalizedJPEG`'s bound without reaching into the sealed store.
+    private static func boundedPreviewImage(from data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1600
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 
     /// "Identify from photo": Vision classification composes a description that runs the normal
@@ -1582,6 +1628,9 @@ struct MealSheet: View {
     /// silently committing. Nothing food-like → a gentle "want to type it?" fallback.
     private func identifyMealPhoto(_ photo: UIImage) {
         guard !isIdentifyingPhoto else { return }
+        // Capture the (photo, bytes) pair up front, before the recognition await, so a mid-identify photo
+        // swap can't pair this tap's image with someone else's live `mealPhotoData` (mirrors resolveTypedMeal).
+        let capturedPhotoData = mealPhotoData
         isIdentifyingPhoto = true
         notice = nil
         Task {
@@ -1594,7 +1643,7 @@ struct MealSheet: View {
                 notice = "Fernlet couldn't quite tell what's in this photo — want to type what you ate instead?"
             case .resolved(let described, let resolution):
                 description = described
-                reviewContext = MealReviewContext(resolution: resolution, photo: photo)
+                reviewContext = MealReviewContext(resolution: resolution, photo: photo, photoData: capturedPhotoData)
             }
         }
     }
@@ -1623,12 +1672,14 @@ struct MealSheet: View {
             switch route {
             case .barcode(let payload):
                 mealPhoto = image
+                mealPhotoData = nil
                 path.append(.captureBarcode(payload))
             case .label(let result):
                 path.append(.captureLabel(result))
             case .meal:
                 // Graceful default — land the photo in the meal composer (existing meal-photo path).
                 mealPhoto = image
+                mealPhotoData = nil
             case .ambiguous(let label):
                 // The router reaches `.ambiguous` only after its barcode scan came up empty, so the
                 // chooser's "Look up the barcode" branch already knows there's nothing to find.
@@ -1693,7 +1744,9 @@ struct MealSheet: View {
                     .fernletWrappingText()
                 PhotoCaptureControl(
                     onCameraCapture: { captureError = nil; handleCapturedPhoto($0) },
-                    onLibraryPick: { captureError = nil; mealPhoto = $0 }
+                    // Byte path (matches the primary control): downsample the pick and stash the sealed-
+                    // ready bytes so `attachPhoto` seals THIS image, not stale bytes from an earlier pick.
+                    onLibraryPickData: { data, _ in captureError = nil; setLibraryPickedMealPhoto(data) }
                 ) {
                     Label("Try again", systemImage: "arrow.clockwise")
                         .font(.fernlet(.label))
@@ -1772,7 +1825,9 @@ struct MealSheet: View {
                 .frame(height: 160)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-            Button { mealPhoto = nil } label: {
+            // Clear BOTH the preview image and the sealed-ready bytes: `attachPhoto` prefers the byte
+            // path, so leaving `mealPhotoData` set would re-attach a photo the user explicitly removed.
+            Button { mealPhoto = nil; mealPhotoData = nil } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title3)
                     .foregroundStyle(Color.bark)
@@ -2458,24 +2513,77 @@ struct MealReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     private let confidence: MealResolutionConfidence
-    var onConfirm: ([Meal]) -> Void
+    /// The decomposition tier's built recipe, offered here for review. `nil` when the resolution
+    /// carried no recipe (every non-decomposition tier, single-ingredient decompositions).
+    private let suggestedRecipe: RecipeDefinition?
+    /// Confirmed recipe (may be nil when the user opts out) is passed back alongside the reviewed meals
+    /// so the caller can persist it through the SAME `commitResolution`/`diary.recipes` path — minting
+    /// happens only on this confirm, never at resolve time.
+    var onConfirm: ([Meal], RecipeDefinition?) -> Void
     var onDiscard: () -> Void
     @State private var meals: [EditableReviewMeal]
     /// One-shot guard so a fast double-tap on "Log meal" can't fire onConfirm twice — which would
     /// append the same meal id twice and double its macros.
     @State private var isLogging = false
+    /// Editable recipe offer state (used only when `suggestedRecipe != nil`).
+    @State private var saveAsRecipe: Bool
+    @State private var recipeName: String
+    @State private var recipeServings: Int
 
     init(
         resolution: MealResolution,
         store: FernletStore,
-        onConfirm: @escaping ([Meal]) -> Void,
+        onConfirm: @escaping ([Meal], RecipeDefinition?) -> Void,
         onDiscard: @escaping () -> Void
     ) {
         self.store = store
         self.confidence = resolution.confidence
+        self.suggestedRecipe = resolution.suggestedRecipe
         self.onConfirm = onConfirm
         self.onDiscard = onDiscard
         _meals = State(initialValue: resolution.meals.map(EditableReviewMeal.init(base:)))
+        _saveAsRecipe = State(initialValue: resolution.suggestedRecipe != nil)
+        _recipeName = State(initialValue: resolution.suggestedRecipe?.name ?? "")
+        _recipeServings = State(initialValue: max(resolution.suggestedRecipe?.servings ?? 4, 1))
+    }
+
+    /// The recipe to mint, with the user's name + yield edits applied — or nil when there is no
+    /// suggested recipe or the user turned the offer off.
+    ///
+    /// The ingredient quantities are rebuilt from the user's REVIEWED per-serving component grams (each
+    /// × the chosen yield gives the full batch), not from the model's original decomposition. Components
+    /// can only be re-quantified in review, never added or removed, so their `foodItemId` set maps 1:1
+    /// onto the recipe's ingredients — keeping the promised invariant (per-serving == the plate) true
+    /// even when the user corrected a component's grams, instead of silently minting the pre-edit amounts.
+    private var confirmedRecipe: RecipeDefinition? {
+        guard saveAsRecipe, let base = suggestedRecipe else { return nil }
+        var recipe = base
+        let oldYield = max(base.servings, 1)
+        let newYield = max(recipeServings, 1)
+        // The reviewed per-serving grams, keyed by the catalog item they bound to.
+        var editedPerServing: [UUID: MealComponentCorrectionInput] = [:]
+        for component in meals.flatMap(\.components) {
+            if let foodItemId = component.foodItemId { editedPerServing[foodItemId] = component }
+        }
+        recipe.ingredients = base.ingredients.map { ingredient in
+            if let edited = editedPerServing[ingredient.foodItemId] {
+                return RecipeIngredient(
+                    id: ingredient.id,
+                    foodItemId: ingredient.foodItemId,
+                    quantity: edited.quantity * Double(newYield),
+                    unit: edited.unit
+                )
+            }
+            // No matching reviewed component (not expected for a decomposition recipe) — fall back to
+            // yield-scaling the model's original batch quantity so nothing is dropped.
+            let factor = Double(newYield) / Double(oldYield)
+            return RecipeIngredient(id: ingredient.id, foodItemId: ingredient.foodItemId, quantity: ingredient.quantity * factor, unit: ingredient.unit)
+        }
+        recipe.servings = newYield
+        let trimmed = recipeName.trimmingCharacters(in: .whitespacesAndNewlines)
+        recipe.name = trimmed.isEmpty ? base.name : trimmed
+        recipe.updatedAt = Date()
+        return recipe
     }
 
     var body: some View {
@@ -2525,6 +2633,10 @@ struct MealReviewSheet: View {
                             }
                         }
                     }
+
+                    if suggestedRecipe != nil {
+                        recipeOfferSection
+                    }
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -2533,10 +2645,49 @@ struct MealReviewSheet: View {
             SheetSaveBar(label: "Log meal", disabled: isLogging) {
                 guard !isLogging else { return }
                 isLogging = true
-                onConfirm(meals.map(\.applied))
+                onConfirm(meals.map(\.applied), confirmedRecipe)
             }
         }
         .background(Color.parchment)
+    }
+
+    /// Offers the decomposition-built recipe for saving to the recipe book: an opt-out toggle plus an
+    /// editable name and yield. Nothing here is persisted until the user taps "Log meal" (the offer is
+    /// carried back through `confirmedRecipe`), so declining or editing costs nothing.
+    @ViewBuilder private var recipeOfferSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Toggle(isOn: $saveAsRecipe) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Save as a recipe")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.bark)
+                    Text("Keep this in your recipe book to log again later.")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
+            }
+            .tint(Color.moss)
+            .accessibilityIdentifier("mealReview.saveAsRecipe")
+
+            if saveAsRecipe {
+                SheetField("Recipe name") {
+                    TextField("Recipe", text: $recipeName)
+                        .sheetTextInput()
+                        .accessibilityIdentifier("mealReview.recipeName")
+                }
+                SheetField("Makes") {
+                    Stepper(
+                        "\(recipeServings) serving\(recipeServings == 1 ? "" : "s")",
+                        value: $recipeServings,
+                        in: 1...24
+                    )
+                    .accessibilityIdentifier("mealReview.recipeServings")
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.cream.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var reviewMessage: String {

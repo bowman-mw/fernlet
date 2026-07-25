@@ -74,6 +74,11 @@ nonisolated public final class PersistenceController {
         )
         configureViewContext(for: configuration.container)
         bindRemoteChanges(to: configuration.container)
+        #if DEBUG
+        // DEBUG-only, launch-argument-gated CloudKit schema deploy (see
+        // Docs/CloudKit-Schema-Deploy.md). Compiled out of Release builds entirely.
+        Self.initializeCloudKitSchemaIfRequested(inMemory: inMemory)
+        #endif
     }
 
     @MainActor
@@ -278,6 +283,116 @@ nonisolated public final class PersistenceController {
         }
     }
 
+    #if DEBUG
+    /// One-shot guard so a second flagged, non-inMemory `PersistenceController` init in the same
+    /// process cannot push the schema twice. Only `shared` is non-inMemory in the app process
+    /// today, so this is belt-and-suspenders, but it keeps the (idempotent, additive) push from
+    /// firing redundantly if another controller is ever constructed. DEBUG-only dev tool, single
+    /// launch-time call path — `nonisolated(unsafe)` is sufficient.
+    nonisolated(unsafe) private static var schemaDeployDidRun = false
+
+    /// DEBUG-only, launch-argument-gated CloudKit schema deploy.
+    ///
+    /// When the app is launched with the `INITIALIZE_CLOUDKIT_SCHEMA` argument, this pushes the
+    /// Core Data model to the CloudKit **development** schema for `iCloud.MBO.Fernlet` via
+    /// `NSPersistentCloudKitContainer.initializeCloudKitSchema(options:)`. Promotion of that
+    /// schema to production is an owner action in the CloudKit console — code cannot do it. See
+    /// Docs/CloudKit-Schema-Deploy.md for the full ritual.
+    ///
+    /// The whole method is wrapped in `#if DEBUG`, so it is compiled out of Release builds — the
+    /// deploy is impossible to trigger in a shipping binary. It runs against a throwaway scratch
+    /// store and forces CloudKit options on, so it works regardless of the user's iCloud toggle
+    /// (`PersistenceController.shared` forces sync off at cold launch) and never touches the real
+    /// store. The schema push targets the container identifier's Development environment; the
+    /// local store is only scratch space for the dummy objects `initializeCloudKitSchema` creates
+    /// and rolls back.
+    ///
+    /// The entire throwaway-store flow (create → load → push → tear down) runs on a background
+    /// dispatch queue, never the main thread. `initializeCloudKitSchema` is a synchronous,
+    /// network-bound call and the load completion is delivered on the main actor on iOS 26+, so
+    /// running it inline at launch would freeze the main thread (and could trip a device launch
+    /// watchdog). Owning the container entirely inside the background closure also keeps the
+    /// non-`Sendable` `NSPersistentCloudKitContainer` from ever crossing an isolation boundary.
+    private static func initializeCloudKitSchemaIfRequested(inMemory: Bool) {
+        guard CloudKitSchemaDeploy.isRequested(arguments: ProcessInfo.processInfo.arguments) else { return }
+        guard !inMemory else {
+            FernletAuditLog.log("cloudkit.schema.initialize.skipped", context: ["reason": "in-memory-store"])
+            return
+        }
+        guard !schemaDeployDidRun else {
+            FernletAuditLog.log("cloudkit.schema.initialize.skipped", context: ["reason": "already-ran"])
+            return
+        }
+        schemaDeployDidRun = true
+
+        FernletAuditLog.log("cloudkit.schema.initialize.started")
+        print("[Fernlet] INITIALIZE_CLOUDKIT_SCHEMA: pushing the Core Data model to the CloudKit DEVELOPMENT schema for container iCloud.MBO.Fernlet…")
+
+        // Run the whole deploy off the main thread. The container is created and torn down inside
+        // this closure so it never crosses an isolation boundary; the store load completion is
+        // dispatched to the main actor on iOS 26+, and we wait for it from this background queue
+        // (never the main thread), so the wait cannot deadlock.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let container = NSPersistentCloudKitContainer(name: "Fernlet", managedObjectModel: makeManagedObjectModel())
+            let scratchURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("CloudKitSchemaDeploy-\(UUID().uuidString).sqlite")
+            let description = container.persistentStoreDescriptions.first ?? NSPersistentStoreDescription()
+            description.url = scratchURL
+            description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.MBO.Fernlet")
+            container.persistentStoreDescriptions = [description]
+
+            let loadSemaphore = DispatchSemaphore(value: 0)
+            var loadError: Error?
+            container.loadPersistentStores { _, error in
+                loadError = error
+                loadSemaphore.signal()
+            }
+            loadSemaphore.wait()
+
+            if let loadError {
+                FernletAuditLog.log("cloudkit.schema.initialize.failed", context: [
+                    "stage": "load",
+                    "errorType": "\(type(of: loadError))"
+                ])
+                print("[Fernlet] ❌ CloudKit schema deploy FAILED to load scratch store: \(loadError)")
+                cleanUpScratchStore(container: container, scratchURL: scratchURL)
+                return
+            }
+            do {
+                try container.initializeCloudKitSchema(options: [])
+                FernletAuditLog.log("cloudkit.schema.initialize.succeeded")
+                print("[Fernlet] ✅ CloudKit schema initialized in DEVELOPMENT. Next: verify the record types in the CloudKit console, then promote Development → Production (owner action in the console UI). See Docs/CloudKit-Schema-Deploy.md.")
+            } catch {
+                FernletAuditLog.log("cloudkit.schema.initialize.failed", context: [
+                    "stage": "initialize",
+                    "errorType": "\(type(of: error))"
+                ])
+                print("[Fernlet] ❌ CloudKit schema initialization FAILED: \(error). Ensure the simulator is signed into iCloud and the scheme's CloudKit environment is Development.")
+            }
+            cleanUpScratchStore(container: container, scratchURL: scratchURL)
+        }
+    }
+
+    /// Detach the throwaway store from its coordinator (stopping its CloudKit mirroring delegate)
+    /// and delete all three SQLite files. Detaching first is what stops the mirroring delegate from
+    /// continuing to mirror into a store whose backing file we then remove; deleting `-wal`/`-shm`
+    /// alongside the `.sqlite` avoids leaving sidecars behind in the temp dir.
+    private static func cleanUpScratchStore(container: NSPersistentCloudKitContainer, scratchURL: URL) {
+        let coordinator = container.persistentStoreCoordinator
+        for store in coordinator.persistentStores {
+            do {
+                try coordinator.remove(store)
+            } catch {
+                print("[Fernlet] CloudKit schema deploy: failed to detach scratch store: \(error)")
+            }
+        }
+        let fileManager = FileManager.default
+        for path in [scratchURL.path, scratchURL.path + "-wal", scratchURL.path + "-shm"] {
+            try? fileManager.removeItem(at: URL(fileURLWithPath: path))
+        }
+    }
+    #endif
+
     private static func applyBackupExclusionIfNeeded(
         preferences: StoragePreferences,
         storeDescription: NSPersistentStoreDescription,
@@ -367,7 +482,20 @@ nonisolated public final class PersistenceController {
             makeAttribute("carbs", type: .integer64AttributeType, defaultValue: 0),
             makeAttribute("fat", type: .integer64AttributeType, defaultValue: 0),
             makeAttribute("micronutrientsJSON", type: .stringAttributeType),
-            makeAttribute("savedAt", type: .dateAttributeType)
+            makeAttribute("savedAt", type: .dateAttributeType),
+            // STEP 0 (Docs/AI-Feature-Expansion-2026-07-23.md §9.1): the full structured
+            // `RecipeDefinition` (structured ingredients, real source, optional webImport) as a
+            // versioned JSON blob — the same `idString + payloadData` shape as DayRecord / CoinLedger /
+            // CustomItem / Milestone. Additive-only: the typed columns above are NEVER removed or
+            // retyped (CloudKit's mirrored schema is append-only, and un-updated paired devices keep
+            // writing legacy-shape rows forever). Writers populate BOTH; readers prefer this and fall
+            // back to the legacy columns. Plain binary, not external storage (CloudKit rejects external
+            // storage at store load) — one recipe is far under CloudKit's per-field budget. Adding an
+            // optional attribute is a lightweight inferred migration covered by the store options above
+            // (shouldMigrateStoreAutomatically / shouldInferMappingModelAutomatically). NOTE: this new
+            // attribute must go through the STEP 0c CloudKit prod-schema deploy ritual
+            // (Docs/CloudKit-Schema-Deploy.md) before any shipping build writes it.
+            makeAttribute("payloadData", type: .binaryDataAttributeType)
         ]
         return entity
     }

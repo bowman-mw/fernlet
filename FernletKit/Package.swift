@@ -109,6 +109,9 @@ let package = Package(
             // nonisolated layer-1 module. Only FoodCatalog.sqlite is owned here.
             resources: [
                 .copy("Resources/FoodCatalog.sqlite"),
+                // Hand-authored good-sources table for the F2 micronutrient nudge
+                // (CuratedNutrientSources). Small read-once JSON, loaded via Bundle.module.
+                .copy("Resources/CuratedNutrientSources.json"),
             ]
         ),
         // Layer 2.5 — shared sealed-storage substrate on the PROTECTED side of the

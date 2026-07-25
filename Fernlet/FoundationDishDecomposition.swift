@@ -177,7 +177,18 @@ enum MealDecompositionResolver {
             mealType: mealType,
             confidenceLabel: confidence.mealLabel
         )
-        return ResolvedMeal(meal: meal, confidence: confidence)
+        // F1(a) wire: the decomposition already computed the deduped, catalog-bound ingredient pairs a
+        // recipe needs — build one from the SAME pairs (macros stay catalog-bound, never model-emitted)
+        // and carry it out for review. Only a genuine multi-ingredient dish becomes a recipe; a single
+        // bound food is just a meal. The recipe is offered in the review sheet, minted only on confirm.
+        let suggestedRecipe = deduped.count > 1
+            ? MealBuilder.createRecipe(
+                for: dishName,
+                resolvedIngredients: deduped,
+                servings: MealBuilder.defaultRecipeServings(description: payload.mealDescription)
+            )
+            : nil
+        return ResolvedMeal(meal: meal, confidence: confidence, suggestedRecipe: suggestedRecipe)
     }
 
     /// Merges resolved components that point at the same catalog item, summing their grams.

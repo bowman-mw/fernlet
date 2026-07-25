@@ -351,15 +351,23 @@ public nonisolated enum MealResolutionConfidence: String, Codable {
     }
 }
 
-/// A meal produced by the resolver together with how much to trust it.
+/// A meal produced by the resolver together with how much to trust it, and — for the dish-
+/// decomposition tier — the multi-ingredient recipe the resolver built along the way. The recipe is
+/// carried (never auto-persisted): it is OFFERED in the pre-log review sheet and minted only if the
+/// user confirms, so it never silently pollutes the recipe book (F1(a); AI-Feature-Expansion §2.5).
 public nonisolated struct ResolvedMeal {
 
-    public init(meal: Meal, confidence: MealResolutionConfidence) {
+    public init(meal: Meal, confidence: MealResolutionConfidence, suggestedRecipe: RecipeDefinition? = nil) {
         self.meal = meal
         self.confidence = confidence
+        self.suggestedRecipe = suggestedRecipe
     }
     public var meal: Meal
     public var confidence: MealResolutionConfidence
+    /// The recipe the decomposition tier built from the same catalog-bound ingredients as `meal`,
+    /// scaled to a default yield — offered for review, not committed. `nil` for tiers that build no
+    /// recipe (single-ingredient decompositions, the keyword fallback).
+    public var suggestedRecipe: RecipeDefinition?
 }
 
 /// The full outcome of resolving a quick-log description: the meals (not yet committed), any
@@ -367,16 +375,30 @@ public nonisolated struct ResolvedMeal {
 /// fallback was used. `needsReview` decides whether the UI pauses for a pre-log review.
 public nonisolated struct MealResolution {
 
-    public init(meals: [Meal], createdRecipes: [RecipeDefinition], confidence: MealResolutionConfidence, isFallback: Bool) {
+    public init(
+        meals: [Meal],
+        createdRecipes: [RecipeDefinition],
+        confidence: MealResolutionConfidence,
+        isFallback: Bool,
+        suggestedRecipe: RecipeDefinition? = nil
+    ) {
         self.meals = meals
         self.createdRecipes = createdRecipes
         self.confidence = confidence
         self.isFallback = isFallback
+        self.suggestedRecipe = suggestedRecipe
     }
     public var meals: [Meal]
+    /// Recipes auto-minted as a side effect of resolution and persisted silently on commit (the legacy
+    /// multi-ingredient auto-mint). Distinct from `suggestedRecipe`, which is review-gated.
     public var createdRecipes: [RecipeDefinition]
     public var confidence: MealResolutionConfidence
     public var isFallback: Bool
+    /// The decomposition tier's built recipe, carried out to the review sheet where the user can edit
+    /// its name + yield and confirm before it is minted. NOT auto-persisted by `commitResolution` — it
+    /// reaches the recipe book only through a user confirm, so a decomposition that auto-commits (high
+    /// confidence, no review) never mints a recipe. `nil` for every other tier.
+    public var suggestedRecipe: RecipeDefinition?
 
     public var needsReview: Bool { confidence.needsReview || isFallback }
 }
@@ -652,18 +674,23 @@ public nonisolated struct NutrientReference {
 }
 
 public nonisolated enum MicronutrientGapAnalyzer {
+    // Recommended daily amounts come from the single shared `FDADailyValues` table
+    // (21 CFR 101.9), which the `NutritionLabelScanner` reads too. Calcium and
+    // potassium here previously carried the stale NASEM figures (1,000 / 3,400); they
+    // now match the FDA DVs the label prints (1,300 / 4,700). Omega-3 keeps the NASEM
+    // ALA Adequate Intake because FDA defines no omega-3 DV — see `FDADailyValues`.
     nonisolated(unsafe) public static let trackedNutrients: [NutrientReference] = [
-        NutrientReference(key: "fiber", name: "Fiber", unit: "g", recommendedDailyAmount: 28) { $0.fiber },
-        NutrientReference(key: "vitaminC", name: "Vitamin C", unit: "mg", recommendedDailyAmount: 90) { $0.vitaminC },
-        NutrientReference(key: "vitaminD", name: "Vitamin D", unit: "mcg", recommendedDailyAmount: 20) { $0.vitaminD },
-        NutrientReference(key: "vitaminB12", name: "Vitamin B12", unit: "mcg", recommendedDailyAmount: 2.4) { $0.vitaminB12 },
-        NutrientReference(key: "folate", name: "Folate", unit: "mcg DFE", recommendedDailyAmount: 400) { $0.folate },
-        NutrientReference(key: "calcium", name: "Calcium", unit: "mg", recommendedDailyAmount: 1_000) { $0.calcium },
-        NutrientReference(key: "iron", name: "Iron", unit: "mg", recommendedDailyAmount: 18) { $0.iron },
-        NutrientReference(key: "magnesium", name: "Magnesium", unit: "mg", recommendedDailyAmount: 420) { $0.magnesium },
-        NutrientReference(key: "potassium", name: "Potassium", unit: "mg", recommendedDailyAmount: 3_400) { $0.potassium },
-        NutrientReference(key: "zinc", name: "Zinc", unit: "mg", recommendedDailyAmount: 11) { $0.zinc },
-        NutrientReference(key: "omega3", name: "Omega-3", unit: "g", recommendedDailyAmount: 1.6) { $0.omega3 }
+        NutrientReference(key: "fiber", name: "Fiber", unit: "g", recommendedDailyAmount: FDADailyValues.fiberGrams) { $0.fiber },
+        NutrientReference(key: "vitaminC", name: "Vitamin C", unit: "mg", recommendedDailyAmount: FDADailyValues.vitaminCMilligrams) { $0.vitaminC },
+        NutrientReference(key: "vitaminD", name: "Vitamin D", unit: "mcg", recommendedDailyAmount: FDADailyValues.vitaminDMicrograms) { $0.vitaminD },
+        NutrientReference(key: "vitaminB12", name: "Vitamin B12", unit: "mcg", recommendedDailyAmount: FDADailyValues.vitaminB12Micrograms) { $0.vitaminB12 },
+        NutrientReference(key: "folate", name: "Folate", unit: "mcg DFE", recommendedDailyAmount: FDADailyValues.folateMicrogramsDFE) { $0.folate },
+        NutrientReference(key: "calcium", name: "Calcium", unit: "mg", recommendedDailyAmount: FDADailyValues.calciumMilligrams) { $0.calcium },
+        NutrientReference(key: "iron", name: "Iron", unit: "mg", recommendedDailyAmount: FDADailyValues.ironMilligrams) { $0.iron },
+        NutrientReference(key: "magnesium", name: "Magnesium", unit: "mg", recommendedDailyAmount: FDADailyValues.magnesiumMilligrams) { $0.magnesium },
+        NutrientReference(key: "potassium", name: "Potassium", unit: "mg", recommendedDailyAmount: FDADailyValues.potassiumMilligrams) { $0.potassium },
+        NutrientReference(key: "zinc", name: "Zinc", unit: "mg", recommendedDailyAmount: FDADailyValues.zincMilligrams) { $0.zinc },
+        NutrientReference(key: "omega3", name: "Omega-3", unit: "g", recommendedDailyAmount: FDADailyValues.omega3ALAGrams) { $0.omega3 }
     ]
 
     /// Fraction of meals that carry usable micronutrient data (>= 5 populated fields).

@@ -482,7 +482,9 @@ final class FernletStore {
     var storageLocation: String { diary.storageLocation }
 
     var pendingRetryCount: Int {
-        aiRetryQueueService.pendingCount
+        // Food-page badge: meal retries only. Non-meal records the Food "Retry oldest" button can't
+        // process must not inflate this count.
+        aiRetryQueueService.mealPendingCount
     }
 
     var isIntimateLoggingAllowed: Bool { diary.isIntimateLoggingAllowed }
@@ -875,7 +877,13 @@ final class FernletStore {
             hydrationTarget: settings.hydrationTarget,
             // Meals still pending AI resolution are placeholders that will be replaced by a
             // fresh-UUID resolved meal — exclude them so one logged meal isn't counted twice.
-            excludingMealIDs: Set(aiRetryQueueService.retryQueue.map(\.sourceId)),
+            // Scope to meal records: a non-meal retry's sourceId is not a meal id and must not be
+            // treated as an excluded meal.
+            excludingMealIDs: Set(
+                aiRetryQueueService.retryQueue
+                    .filter { $0.payloadType == AIRetryQueueService.mealPayloadType }
+                    .map(\.sourceId)
+            ),
             at: Date()
         )
         milestoneLedgerService.record(derived)
@@ -1409,6 +1417,19 @@ final class FernletStore {
         mealResolutionService.fallbackMicronutrients(for: description)
     }
 
+    /// Logs the curated food behind an F2 micronutrient nudge's "add it" affordance. Resolves the
+    /// source's PINNED catalog `FoodItem` (id first, normalized-name fallback second) and logs one
+    /// serving of it — so the logged meal carries the actual macros AND the nudged micronutrient.
+    /// This is the whole point of pinning an id: free-text logging of the display name re-parses it
+    /// with fabricated macros and binds an arbitrary branded row that often carries none of the
+    /// nudged nutrient, which would then suppress the nudge without moving the gap. Returns the
+    /// logged meal, or `nil` when the pinned food cannot be resolved against the bundled catalog
+    /// (a regeneration/packaging fault — the curated table is unit-pinned so this should not happen).
+    @discardableResult func logNutrientSuggestionFood(_ source: CuratedFoodSource, date: String? = nil) -> Meal? {
+        guard let foodItem = CuratedNutrientSources.shared.resolve(source, in: foodCatalog) else { return nil }
+        return diary.logNutrientSuggestionFoodItem(foodItem, date: date)
+    }
+
     @discardableResult func addResolvedMeal(from description: String, type: MealType? = nil, date: String? = nil) async -> Meal {
         let meals = await addResolvedMeals(from: description, type: type, date: date)
         guard let first = meals.first else {
@@ -1577,6 +1598,16 @@ final class FernletStore {
     @discardableResult func saveMealPhoto(_ image: UIImage) -> UUID? {
         guard let data = image.jpegData(compressionQuality: 0.82) else { return nil }
         return mealPhotoStore.save(data)
+    }
+
+    /// Byte-path meal-photo save mirroring `saveRecipePhoto(data:)` / `addProgressPhoto(data:)`: seals
+    /// the picked JPEG `Data` straight through the store's bounded ImageIO downscale (one normalize at
+    /// q0.8) instead of the `UIImage` overload's redundant full-resolution `jpegData(0.82)` pre-encode.
+    /// This is the double-JPEG-encode fix (§2.5) for the library-pick path — the ~190 MB / generation-
+    /// loss landmine on the iPhone-11 floor that F1 makes photo→recipe fire far more often. Fail-closed
+    /// (nil on non-image bytes or no key). Returns the new photo id.
+    @discardableResult func saveMealPhoto(data: Data) -> UUID? {
+        mealPhotoStore.save(data)
     }
     #endif
 
@@ -2965,7 +2996,10 @@ final class FernletStore {
     }
 
     func retryOldestMeal() async {
-        guard let record = aiRetryQueueService.retryQueue.first else { return }
+        // Consume only meal-payload records. Records of any other payloadType are left in the queue
+        // untouched — the sourceId-miss clear below must never fire for a non-meal record, or the
+        // first workout/recipe/daily-summary retry ever enqueued would be silently destroyed.
+        guard let record = aiRetryQueueService.oldestMealRetry else { return }
         // Fallback meals can be queued for any date (back-filled logging), not just today, and
         // the record carries the day it belongs to. Resolve against that day and re-commit on the
         // same date instead of only ever looking in today's meals and silently discarding the rest.
