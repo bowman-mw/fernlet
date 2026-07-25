@@ -543,6 +543,18 @@ public final class DiaryStore {
         )
     }
 
+    /// Logs the curated good-source food behind the F2 micronutrient nudge as a single serving.
+    /// Grounds the meal in the pinned catalog `FoodItem` (real macros + the actual micronutrient
+    /// profile that carries the nudged nutrient) — the same known-food shape as the barcode/label
+    /// paths — instead of re-parsing the display name as free text, which would fabricate macros and
+    /// bind an arbitrary branded row that often carries none of the nudged nutrient.
+    @discardableResult public func logNutrientSuggestionFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
+        logFoodItemMeal(
+            foodItem, mealType: mealType, date: date,
+            confidence: "Suggested food", note: "Added from a gentle nutrient nudge.", source: MealLogSource.manual
+        )
+    }
+
     /// Shared "one serving of this known food" meal construction for the product-shaped log paths.
     private func logFoodItemMeal(_ foodItem: FoodItem, mealType: MealType?, date: String?, confidence: String, note: String, source: String) -> Meal {
         let targetDate = date ?? todayKey

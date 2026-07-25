@@ -64,8 +64,8 @@
 
     { "nutrientKey": "omega3", "displayName": "salmon", "foodItemId": "00000000-0000-5000-8000-000000175168", "normalizedNameFallback": "fish salmon atlantic farmed cooked dry heat", "portionNote": "A fillet of salmon is one of the best omega-3 sources." },
     { "nutrientKey": "omega3", "displayName": "sardines", "foodItemId": "00000000-0000-5000-8000-000000175139", "normalizedNameFallback": "fish sardine atlantic canned in oil drained solids with bone", "portionNote": "Canned sardines are rich in omega-3." },
-    { "nutrientKey": "omega3", "displayName": "walnuts", "foodItemId": "00000000-0000-5000-8000-000000170187", "normalizedNameFallback": "nuts walnuts english", "portionNote": "A small handful of walnuts adds plant omega-3." },
-    { "nutrientKey": "omega3", "displayName": "chia seeds", "foodItemId": "00000000-0000-5000-8000-000000170554", "normalizedNameFallback": "seeds chia seeds dried", "portionNote": "A spoonful of chia seeds brings plant omega-3." },
-    { "nutrientKey": "omega3", "displayName": "ground flaxseed", "foodItemId": "00000000-0000-5000-8000-000002262075", "normalizedNameFallback": "flaxseed ground", "portionNote": "Ground flaxseed is a simple plant omega-3 source." }
+    { "nutrientKey": "omega3", "displayName": "mackerel", "foodItemId": "00000000-0000-5000-8000-000000171994", "normalizedNameFallback": "fish mackerel pacific and jack mixed species cooked dry heat", "portionNote": "A fillet of mackerel is one of the richest omega-3 sources." },
+    { "nutrientKey": "omega3", "displayName": "herring", "foodItemId": "00000000-0000-5000-8000-000000175117", "normalizedNameFallback": "fish herring atlantic cooked dry heat", "portionNote": "A serving of herring brings plenty of omega-3." },
+    { "nutrientKey": "omega3", "displayName": "rainbow trout", "foodItemId": "00000000-0000-5000-8000-000000173718", "normalizedNameFallback": "fish trout rainbow farmed cooked dry heat", "portionNote": "A fillet of rainbow trout adds omega-3." }
   ]
 }

@@ -508,18 +508,18 @@ public final class NutritionLabelScanner {
                 result.calories = bareCalories(in: lines, around: index)
             } else if result.saturatedFat == nil, matchesLabel(labelLine, "saturated fat") {
                 result.saturatedFat = extractGramsDouble(from: valueLine)
-                    ?? extractFromDailyValue(from: valueLine, dvReference: 20)
+                    ?? extractFromDailyValue(from: valueLine, dvReference: FDADailyValues.saturatedFatGrams)
             } else if result.transFat == nil, matchesLabel(labelLine, "trans fat") {
                 result.transFat = extractGramsDouble(from: valueLine)
             } else if result.fiber == nil, matchesLabel(labelLine, "dietary fiber") {
                 result.fiber = extractGramsDouble(from: valueLine)
-                    ?? extractFromDailyValue(from: valueLine, dvReference: 28)
+                    ?? extractFromDailyValue(from: valueLine, dvReference: FDADailyValues.fiberGrams)
             } else if result.addedSugar == nil, matchesLabel(labelLine, "added sugars") || matchesLabel(labelLine, "added sugar") {
                 result.addedSugar = extractGramsDouble(from: valueLine)
-                    ?? extractFromDailyValue(from: valueLine, dvReference: 50)
+                    ?? extractFromDailyValue(from: valueLine, dvReference: FDADailyValues.addedSugarsGrams)
             } else if result.cholesterol == nil, matchesLabel(labelLine, "cholesterol") {
                 result.cholesterol = extractMilligrams(from: valueLine)
-                    ?? extractFromDailyValue(from: valueLine, dvReference: 300)
+                    ?? extractFromDailyValue(from: valueLine, dvReference: FDADailyValues.cholesterolMilligrams)
             }
         }
     }

@@ -1417,6 +1417,19 @@ final class FernletStore {
         mealResolutionService.fallbackMicronutrients(for: description)
     }
 
+    /// Logs the curated food behind an F2 micronutrient nudge's "add it" affordance. Resolves the
+    /// source's PINNED catalog `FoodItem` (id first, normalized-name fallback second) and logs one
+    /// serving of it — so the logged meal carries the actual macros AND the nudged micronutrient.
+    /// This is the whole point of pinning an id: free-text logging of the display name re-parses it
+    /// with fabricated macros and binds an arbitrary branded row that often carries none of the
+    /// nudged nutrient, which would then suppress the nudge without moving the gap. Returns the
+    /// logged meal, or `nil` when the pinned food cannot be resolved against the bundled catalog
+    /// (a regeneration/packaging fault — the curated table is unit-pinned so this should not happen).
+    @discardableResult func logNutrientSuggestionFood(_ source: CuratedFoodSource, date: String? = nil) -> Meal? {
+        guard let foodItem = CuratedNutrientSources.shared.resolve(source, in: foodCatalog) else { return nil }
+        return diary.logNutrientSuggestionFoodItem(foodItem, date: date)
+    }
+
     @discardableResult func addResolvedMeal(from description: String, type: MealType? = nil, date: String? = nil) async -> Meal {
         let meals = await addResolvedMeals(from: description, type: type, date: date)
         guard let first = meals.first else {

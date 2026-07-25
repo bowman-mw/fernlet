@@ -420,13 +420,16 @@ struct AmbientCardsView: View {
                             .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
-                        // "add it": the smallest correct integration — reuse the existing
-                        // text→meal logging path (same as the forgotten-favorites chips),
-                        // prefilled with the top curated food. Only offered when a 14-day
-                        // gap named a food. Accepting consumes the per-nutrient suppression.
+                        // "add it": log one serving of the curated food, grounded in its PINNED
+                        // catalog FoodItem (real macros + the actual micronutrient profile that
+                        // carries the nudged nutrient) rather than re-parsing the display name as
+                        // free text — which fabricates macros and binds an arbitrary branded row
+                        // that often carries none of the nudged nutrient, suppressing the nudge
+                        // without moving the gap. Only offered when a 14-day gap named a food;
+                        // accepting consumes the per-nutrient suppression.
                         if let food = suggestion.foods.first {
                             Button {
-                                store.addMeal(from: food.displayName, date: store.todayKey)
+                                store.logNutrientSuggestionFood(food, date: store.todayKey)
                                 store.dismissNutrientBubble(gap.nutrientKey)
                             } label: {
                                 Text(NutrientNudgeCopy.addButtonLabel(food: food))

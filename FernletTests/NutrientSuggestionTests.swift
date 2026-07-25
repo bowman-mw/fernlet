@@ -95,6 +95,45 @@ struct NutrientSuggestionTests {
         }
     }
 
+    /// Every curated row's PINNED catalog `FoodItem` must actually carry a nonzero amount of the
+    /// nutrient it is a "good source" for. Resolving-but-empty rows were the F2-review bug: three
+    /// plant omega-3 rows (walnuts / chia / flaxseed) resolved fine yet carried no `omega3` in the
+    /// catalog (the catalog tags only fish with the `omega3` key), so logging them would credit zero
+    /// of the nutrient and then suppress the nudge for 14 days without moving the gap. This is also
+    /// what makes the future AI stage — which selects among all five per nutrient — safe.
+    @Test func everyCuratedRowsCatalogProfileCarriesItsNutrient() throws {
+        let sources = CuratedNutrientSources.bundled()
+        let catalog = FoodCatalog.bundled()
+        for source in sources.all {
+            let item = try #require(sources.resolve(source, in: catalog), "did not resolve: \(source.displayName)")
+            let reference = try #require(
+                MicronutrientGapAnalyzer.trackedNutrients.first { $0.key == source.nutrientKey },
+                "unknown nutrientKey: \(source.nutrientKey)"
+            )
+            let amount = reference.value(item.micronutrients) ?? 0
+            #expect(amount > 0, "\(source.displayName) carries no \(source.nutrientKey) in the catalog (amount \(amount))")
+        }
+    }
+
+    /// The "Add it" affordance logs the TOP curated food (`suggestion.foods.first`) via
+    /// `store.logNutrientSuggestionFood` → `diary.logNutrientSuggestionFoodItem`, which copies the
+    /// resolved `FoodItem`'s micronutrient profile verbatim into the logged meal's snapshot. So the
+    /// meal the accept path produces carries the nudged nutrient exactly when the resolved top food
+    /// does. Guards the original review finding that the old free-text `addMeal(from:)` path bound an
+    /// arbitrary branded row carrying none of the nutrient (e.g. potassium's "banana" → a branded
+    /// banana row with zero potassium).
+    @Test func acceptPathTopFoodCarriesTheNudgedNutrient() throws {
+        let sources = CuratedNutrientSources.bundled()
+        let catalog = FoodCatalog.bundled()
+        for nutrient in MicronutrientGapAnalyzer.trackedNutrients {
+            let top = try #require(sources.topSources(for: nutrient.key, count: 2).first, "no curated food for \(nutrient.key)")
+            let logged = try #require(sources.resolve(top, in: catalog), "top food did not resolve: \(top.displayName)")
+            // The meal snapshot the accept path writes IS `logged.micronutrients` (copied verbatim).
+            let amount = nutrient.value(logged.micronutrients) ?? 0
+            #expect(amount > 0, "accept-path meal for \(nutrient.key) (\(top.displayName)) carries no \(nutrient.key)")
+        }
+    }
+
     // MARK: - Copy safety (DiagnosticLanguage gate) + no cycle/period implication
 
     @Test func everyCuratedStringSurvivesTheDiagnosticGate() {
