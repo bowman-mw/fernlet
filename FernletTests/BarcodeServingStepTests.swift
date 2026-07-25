@@ -145,4 +145,41 @@ struct BarcodeServingStepTests {
         BarcodeServingMemory.setLastServings(0, for: "0012345678905", defaults: defaults)
         #expect(BarcodeServingMemory.lastServings(for: "0012345678905", defaults: defaults) == nil)
     }
+
+    // MARK: - Delete-all wipe (finding 2)
+
+    @Test func clearAllForgetsEveryRememberedCount() throws {
+        let suite = "test.barcodeServing.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        BarcodeServingMemory.setLastServings(2, for: "0012345678905", defaults: defaults)
+        BarcodeServingMemory.setLastServings(3, for: "0044000031457", defaults: defaults)
+        #expect(BarcodeServingMemory.lastServings(for: "0012345678905", defaults: defaults) == 2)
+
+        BarcodeServingMemory.clearAll(defaults: defaults)
+
+        #expect(BarcodeServingMemory.lastServings(for: "0012345678905", defaults: defaults) == nil)
+        #expect(BarcodeServingMemory.lastServings(for: "0044000031457", defaults: defaults) == nil)
+        #expect(defaults.dictionary(forKey: BarcodeServingMemory.defaultsKey) == nil)
+    }
+
+    @MainActor
+    @Test func storeResetAllClearsBarcodeServingMemory() {
+        // The per-GTIN memory is a `.standard`-backed device-local sidecar, so a full wipe must clear it
+        // like the other device-local ledgers (heart, closeness, moderation…). This drives the real
+        // store wipe path (`resetAll`, which `deleteAllData` also calls) to prove the wiring. It touches
+        // the shared `.standard` domain, so it cleans up with `defer`; only removals touch that key here,
+        // so the post-wipe assertion converges even under parallel suites.
+        let key = BarcodeServingMemory.defaultsKey
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+
+        BarcodeServingMemory.setLastServings(3, for: "0012345678905")
+
+        let store = makeTestStore()
+        store.resetAll()
+
+        #expect(BarcodeServingMemory.lastServings(for: "0012345678905") == nil)
+        #expect(UserDefaults.standard.dictionary(forKey: key) == nil)
+    }
 }

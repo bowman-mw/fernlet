@@ -678,7 +678,10 @@ struct WorkoutSheet: View {
             exerciseRows: exerciseRows,
             selectedActivityType: selectedActivityType,
             duration: duration,
-            distance: distance
+            distance: distance,
+            // A strength draft is "valid" exactly when an exercise is chosen — the same guard
+            // `addDraftExercise` (the Save-closure auto-commit) enforces. Only strength mode auto-commits.
+            hasPendingValidDraft: logMode == .strengthTraining && draftExercise != nil
         )
     }
 
@@ -722,11 +725,16 @@ enum WorkoutSheetRules {
         exerciseRows: [WorkoutExerciseEntry],
         selectedActivityType: WorkoutActivityType?,
         duration: String,
-        distance: String
+        distance: String,
+        hasPendingValidDraft: Bool = false
     ) -> Bool {
         switch mode {
         case .strengthTraining:
-            return workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || exerciseRows.isEmpty
+            // A typed-but-not-yet-"Added" draft counts as an exercise: the Save closure auto-commits it
+            // (mirroring WorkoutPlanSheet, which saves the identical lone-draft input), so a single valid
+            // draft must satisfy the has-exercises requirement or that auto-commit is unreachable.
+            let hasExercises = !exerciseRows.isEmpty || hasPendingValidDraft
+            return workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !hasExercises
         case .activity:
             guard selectedActivityType != nil else { return true }
             let parsedDuration = Int(duration.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0

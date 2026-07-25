@@ -1640,10 +1640,22 @@ struct MealSheet: View {
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(20)
         }
-        .sheet(item: $pendingScannedFood) { pending in
+        .sheet(item: $pendingScannedFood, onDismiss: {
+            // The serving step closed — whether the user tapped Log, tapped Cancel, or swiped it away.
+            // In every case the scan-log flow is finished, so exit the scanner instead of returning the
+            // user to the now-paused (frozen) viewfinder behind it. Its only re-arm is `onAppear`, which
+            // never fires while it sits under a sheet, so a bare sheet-dismiss would strand them. This is
+            // the single exit point mirroring the previous post-log `dismiss()`, now shared by every path.
+            dismiss()
+        }) { pending in
             BarcodeServingStepView(
                 foodItem: pending.item,
-                initialServings: BarcodeServingMemory.lastServings(for: pending.item.barcode) ?? 1
+                initialServings: BarcodeServingMemory.lastServings(for: pending.item.barcode) ?? 1,
+                onCancel: {
+                    // Abandon the log: drop the pending food. Clearing it dismisses this sheet, and the
+                    // sheet's `onDismiss` above then exits the scan-log flow.
+                    pendingScannedFood = nil
+                }
             ) { servings in
                 let meal: Meal
                 switch pending.kind {
@@ -1653,9 +1665,10 @@ struct MealSheet: View {
                     meal = store.logLabelScannedFoodItem(pending.item, mealType: mealType, servings: servings)
                 }
                 BarcodeServingMemory.setLastServings(servings, for: pending.item.barcode)
-                pendingScannedFood = nil
                 onLogged([meal])
-                dismiss()
+                // Clearing the pending food dismisses this sheet; the sheet's `onDismiss` then exits the
+                // scan-log flow (same net effect as the old explicit `dismiss()` here).
+                pendingScannedFood = nil
             }
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)

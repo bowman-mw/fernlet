@@ -32,6 +32,13 @@ enum BarcodeServingMemory {
         map[key] = servings
         defaults.set(map, forKey: defaultsKey)
     }
+
+    /// Forgets every remembered per-GTIN serving count. Invoked from the store's wipe paths
+    /// (`resetAll` / `deleteAllData`) so this device-local sidecar is cleared alongside the other
+    /// device-local ledgers (heart, closeness, moderation…) rather than surviving a "Delete all data".
+    static func clearAll(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: defaultsKey)
+    }
 }
 
 #if canImport(UIKit)
@@ -44,17 +51,25 @@ import FernletUI
 /// meal is logged. Prefilled with the last count used for this product so accepting the prefill is a
 /// single tap on Log. The macro preview scales live with the count so the impact is visible.
 struct BarcodeServingStepView: View {
-    @Environment(\.dismiss) private var dismiss
-
     let foodItem: FoodItem
     /// Fires with the confirmed serving count when the user taps Log. The caller performs the actual
     /// log (barcode vs. label provenance) and dismisses the surrounding flow.
     var onLog: (Double) -> Void
+    /// Fires when the user abandons the serving step (Cancel). The caller aborts the whole scan-log
+    /// flow — clearing the pending food and exiting the scanner — rather than just closing this sheet,
+    /// which would strand the user on a now-paused (frozen) viewfinder.
+    var onCancel: () -> Void
 
     @State private var servings: Double
 
-    init(foodItem: FoodItem, initialServings: Double, onLog: @escaping (Double) -> Void) {
+    init(
+        foodItem: FoodItem,
+        initialServings: Double,
+        onCancel: @escaping () -> Void,
+        onLog: @escaping (Double) -> Void
+    ) {
         self.foodItem = foodItem
+        self.onCancel = onCancel
         self.onLog = onLog
         // Preserve any positive prefill (a remembered half-serving stays 0.5); default to 1 only when
         // the caller has nothing useful to seed.
@@ -93,7 +108,7 @@ struct BarcodeServingStepView: View {
                                 .fernletWrappingText()
                         }
                         Spacer(minLength: 12)
-                        Button("Cancel") { dismiss() }
+                        Button("Cancel") { onCancel() }
                             .buttonStyle(.plain)
                             .font(.fernlet(.label))
                             .foregroundStyle(Color.slate)

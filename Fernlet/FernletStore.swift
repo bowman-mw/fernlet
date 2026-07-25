@@ -3681,6 +3681,11 @@ final class FernletStore {
         friendStateCache.clearAll()
         // Closeness signal (in-person interaction counts + close-slot assignment) — device-local; clear it.
         closenessLedger.clearAll()
+        // Per-GTIN last-used serving counts (feedback #13) are a device-local `UserDefaults` sidecar like
+        // the ledgers above — clear them so a remembered "2 servings" for a scanned product doesn't
+        // outlive a wipe. `deleteAllData` reaches this via its `resetAll()` call, so both wipe paths cover
+        // it. A plain `UserDefaults` removal has no failure signal, so it reports no incomplete store.
+        BarcodeServingMemory.clearAll()
         // Group activities (hosted/joined rosters + join tokens) — device-local social data, never synced;
         // clear the sidecar too (the manager owns it, mirroring the clothing-shop clearAll seam).
         meshNetworkManager.activities.clearAll()

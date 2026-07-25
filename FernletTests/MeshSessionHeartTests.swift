@@ -313,7 +313,18 @@ struct MeshSessionHeartTests {
 
     @Test func localCapabilitiesAdvertiseHearts() {
         let manager = store.meshNetworkManager
+
+        // Opted in → we can receive a mesh heart, so advertise `.hearts` (heart-reachable).
+        store.setAllowNearbyHearts(true)
         #expect(manager.localCapabilities().contains(ProximityCapability.hearts.rawValue))
+
+        // Opted out (the default) → the receiver silently drops every heart (`receiveSessionHeart`), so
+        // we must NOT appear heart-reachable; otherwise a sender "succeeds" and burns the 5-minute
+        // cooldown on a dropped heart. Only the hearts capability is gated on the opt-out — the always-on
+        // capabilities (e.g. photos) are still advertised.
+        store.setAllowNearbyHearts(false)
+        #expect(!manager.localCapabilities().contains(ProximityCapability.hearts.rawValue))
+        #expect(manager.localCapabilities().contains(ProximityCapability.photos.rawValue))
     }
 
     // MARK: - Helpers
