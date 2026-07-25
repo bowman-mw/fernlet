@@ -2847,6 +2847,38 @@ struct RecipeDetailView: View {
     /// detail doesn't re-query on every store-driven body re-eval, yet re-resolves after an edit.
     @State private var resolvedItems: [UUID: FoodItem] = [:]
 
+    /// Ephemeral "cook for N" yield (F4, decision §11.4): a purely view-time proportional transform
+    /// that NEVER mutates or persists the recipe. `nil` means "show the stored base yield"; it resets
+    /// to nil whenever the detail is dismissed, because it is plain `@State` on a fresh view instance.
+    /// The store log path (`onLog`) keeps its own reference to the original `recipe` and never reads
+    /// this, so logging while scaled records one serving exactly as it does un-scaled.
+    @State private var cookYield: Int?
+
+    /// The yield currently on screen: the ephemeral cook-for override, or the stored base yield.
+    private var effectiveYield: Int { cookYield ?? recipe.servings }
+
+    /// True only when a structured (scalable) recipe is being shown at a yield other than its stored
+    /// base — drives the scaled ingredient/total rendering and the "view only" note.
+    private var isScaled: Bool { RecipeScaling.isScalable(recipe) && effectiveYield != recipe.servings }
+
+    /// Whole-recipe totals AS DISPLAYED: base totals scaled to the cook-for yield for structured
+    /// recipes, or the base totals unchanged (web imports, and the un-scaled case). `perServing`
+    /// below is deliberately NOT derived from this — per-serving stays pinned to the base recipe, so
+    /// "total scales, per-serving does not".
+    private var displayTotals: MacroTotals {
+        guard isScaled else { return totals }
+        return RecipeScaling.scaledTotals(totals, baseServings: recipe.servings, targetYield: effectiveYield)
+    }
+
+    /// Structured ingredients AS DISPLAYED — quantities scaled to the cook-for yield, or the stored
+    /// quantities when un-scaled. Empty for web imports (those render free-text lines instead).
+    /// Scaling preserves each ingredient's `id`/`foodItemId`, so the `resolvedItems` name lookup and
+    /// the `ForEach` identity are unaffected.
+    private var displayIngredients: [RecipeIngredient] {
+        guard isScaled else { return recipe.ingredients }
+        return RecipeScaling.scaledIngredients(recipe, forYield: effectiveYield)
+    }
+
     /// Whole-recipe macros. Manual recipes resolve their ingredients through the catalog; web imports
     /// store per-serving macros under `webImport`, scaled back up here by the serving count.
     private var totals: MacroTotals {
@@ -2899,6 +2931,7 @@ struct RecipeDetailView: View {
                         .foregroundStyle(Color.slate)
                 }
                 macrosCard
+                yieldControl
                 ingredientsCard
                 if !recipe.notes.isEmpty { notesCard }
                 actionsRow
@@ -3014,10 +3047,45 @@ struct RecipeDetailView: View {
                         NutritionPill(title: "Calories", value: "\(perServing.calories)")
                     }
                 }
-                Text("Whole recipe: P \(totals.protein)g · C \(totals.carbs)g · F \(totals.fat)g\(store.settings.showCalories ? " · \(totals.calories) cal" : "")")
+                Text("Makes \(effectiveYield) serving\(effectiveYield == 1 ? "" : "s"): P \(displayTotals.protein)g · C \(displayTotals.carbs)g · F \(displayTotals.fat)g\(store.settings.showCalories ? " · \(displayTotals.calories) cal" : "")")
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
+        }
+    }
+
+    /// Ephemeral "cook for N" control (F4, §11.4). Shown only for structured recipes — web imports
+    /// have free-text ingredient lines with no quantities to rescale, so faking a scale would be a
+    /// lie; for them the control is hidden and a one-line note explains why. Everything here is view
+    /// state: nothing is written to the store, and dismissing the detail discards the override.
+    @ViewBuilder private var yieldControl: some View {
+        if RecipeScaling.isScalable(recipe) {
+            FernletCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel("Cook for")
+                    Stepper(
+                        "\(effectiveYield) serving\(effectiveYield == 1 ? "" : "s")",
+                        value: Binding(get: { effectiveYield }, set: { cookYield = $0 }),
+                        in: RecipeScaling.yieldRange
+                    )
+                    .accessibilityIdentifier("recipeDetail.cookForYield")
+                    if isScaled {
+                        Text("Scaled from \(recipe.servings) serving\(recipe.servings == 1 ? "" : "s") for this view only — your saved recipe is unchanged, and logging still records one serving.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                        Button("Reset to \(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")") { cookYield = nil }
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.moss)
+                            .accessibilityIdentifier("recipeDetail.cookForReset")
+                    }
+                }
+            }
+        } else if recipe.webImport != nil {
+            Text("Scaling isn't available for imported recipes — their ingredient amounts are free text.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
         }
     }
 
@@ -3078,7 +3146,7 @@ struct RecipeDetailView: View {
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                     } else {
-                        ForEach(recipe.ingredients) { ingredient in
+                        ForEach(displayIngredients) { ingredient in
                             HStack(alignment: .top, spacing: 8) {
                                 Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
                                 Text(ingredientLine(ingredient))
