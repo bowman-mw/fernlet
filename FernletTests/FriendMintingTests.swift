@@ -381,19 +381,40 @@ struct FriendMintingEligibilityTests {
         #expect(eligible.isEmpty)
     }
 
-    /// Legacy 8-char records (older builds) still exclude their 16-char roster counterparts.
-    @Test func legacyShortFingerprintRecordStillExcludes() {
+    /// Legacy 8-char records (older builds) still exclude their roster counterparts — but via the
+    /// vault's load-time normalization (fingerprint re-derived from the row's full signing key),
+    /// NOT via prefix matching, which was removed 2026-07-25 (32-bit bindings are grindable).
+    @Test func legacyShortFingerprintRecordStillExcludesAfterVaultNormalization() {
         let entry = makeRosterEntry()
         let legacyRecord = ProximityTrustedPeerRecord(
             displayName: "Alice",
             fingerprint: String(entry.fingerprint.prefix(8)),
-            signingPublicKey: Data([9, 9, 9]),   // different key bytes — only the fingerprint matches
+            signingPublicKey: entry.signingPublicKey,   // the same person: same key, short stored fp
             keyAgreementPublicKey: Data([8, 8, 8]),
             mode: .friend
         )
 
-        let eligible = FriendMintingReview.eligibleCandidates(roster: [entry], trustedPeers: [legacyRecord])
+        let vault = ProximityTrustVault(initialPeers: [legacyRecord])
+        #expect(vault.trustedPeers.first?.fingerprint == entry.fingerprint, "vault must re-derive the 16-char fingerprint on load")
+        let eligible = FriendMintingReview.eligibleCandidates(roster: [entry], trustedPeers: vault.trustedPeers)
         #expect(eligible.isEmpty)
+    }
+
+    /// The tightened matcher's other half: a record whose 8-char fingerprint prefix-matches the
+    /// roster entry but whose KEY is different (a ground/planted row) must no longer suppress the
+    /// keep-friends sheet — the real person stays offerable.
+    @Test func plantedShortPrefixRecordNoLongerExcludes() {
+        let entry = makeRosterEntry()
+        let planted = ProximityTrustedPeerRecord(
+            displayName: "Someone Else",
+            fingerprint: String(entry.fingerprint.prefix(8)),
+            signingPublicKey: Data([9, 9, 9]),
+            keyAgreementPublicKey: Data([8, 8, 8]),
+            mode: .friend
+        )
+
+        let eligible = FriendMintingReview.eligibleCandidates(roster: [entry], trustedPeers: [planted])
+        #expect(eligible.count == 1)
     }
 
     /// Defensive: a roster entry missing either key never reaches the sheet (a committed

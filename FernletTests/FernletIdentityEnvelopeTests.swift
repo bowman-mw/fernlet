@@ -205,7 +205,10 @@ struct FernletIdentityEnvelopeTests {
         }
     }
 
-    @Test func verifyAcceptsLegacyEightCharacterRecipientFingerprint() throws {
+    @Test func verifyRejectsLegacyEightCharacterRecipientFingerprint() throws {
+        // Tightened 2026-07-25 (bitchat-adoptions follow-up): an 8-hex recipient is a 32-bit,
+        // grindable binding. Only pre-2026-06-12 builds ever addressed envelopes this way, and
+        // those predate the mesh redesign entirely — rejecting is a deliberate compat break.
         let (alice, aid) = try makeIdentity()
         defer { cleanup(aid) }
         let (bob, bid) = try makeIdentity()
@@ -214,7 +217,9 @@ struct FernletIdentityEnvelopeTests {
         let legacyRecipient = String(bob.localFingerprint.prefix(8))
         let env = try signedEnvelope(sender: alice, recipientFingerprint: legacyRecipient)
 
-        #expect(try env.verify(identityService: bob, replayCache: ReplayCache()) == env.payload)
+        #expect(throws: FernletIdentityEnvelope.VerifyError.recipientMismatch) {
+            try env.verify(identityService: bob, replayCache: ReplayCache())
+        }
     }
 
     @Test func verifyRejectsReplay() throws {
@@ -477,7 +482,10 @@ struct FernletIdentityEnvelopeTests {
         }
     }
 
-    @Test func meshAdmissionTokenAcceptsLegacyEightCharacterJoinerFingerprint() throws {
+    @Test func meshAdmissionTokenRejectsLegacyEightCharacterJoinerFingerprint() throws {
+        // Tightened 2026-07-25: an admission token is an authorization artifact — its joiner
+        // binding must be the full 16-char fingerprint (and the full key bytes), never a
+        // grindable 32-bit prefix. Current builds always mint 16-char tokens.
         let (admitter, aid) = try makeIdentity()
         defer { cleanup(aid) }
         let (joiner, jid) = try makeIdentity()
@@ -491,11 +499,13 @@ struct FernletIdentityEnvelopeTests {
             grantedAt: grantedAt
         )
 
-        try token.verify(
-            joinerSigningPublicKey: joiner.localSigningPublicKey,
-            expectedMeshID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
-            now: grantedAt.addingTimeInterval(60)
-        )
+        #expect(throws: (any Error).self) {
+            try token.verify(
+                joinerSigningPublicKey: joiner.localSigningPublicKey,
+                expectedMeshID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+                now: grantedAt.addingTimeInterval(60)
+            )
+        }
     }
 
     @Test func verifyRejectsFriendPhotoWithoutSealing() throws {
