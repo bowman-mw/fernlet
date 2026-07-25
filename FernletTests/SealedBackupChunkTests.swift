@@ -21,6 +21,15 @@ import PrivateHealthStore
 import CloudKitSync
 @testable import Fernlet
 
+/// A throwaway `UserDefaults` suite per call, so the device-local `hasEverStoredNarrative` latch cannot
+/// leak between tests (same pattern as SealedBackupRestoreTests). In production the latch lives in
+/// `.standard`, which is process-global under the test runner AND persists in the simulator across
+/// runs — one narrative insert anywhere would otherwise mark every later repository as "already
+/// diverged", making the restore no-clobber gate throw `.storeNotEmpty` out of these tests' control.
+private func isolatedDefaults() -> UserDefaults {
+    UserDefaults(suiteName: "fernlet.tests.narrativeLatch.\(UUID().uuidString)") ?? .standard
+}
+
 struct SealedBackupChunkTests {
 
     // MARK: - Repository paging
@@ -29,7 +38,8 @@ struct SealedBackupChunkTests {
     @Test func pagedNarrativesCoverHistoryWithoutOverlapOrGaps() throws {
         let key = SymmetricKey(size: .bits256)
         let repo = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
         )
         let total = 7
         for index in 0..<total {
@@ -65,7 +75,8 @@ struct SealedBackupChunkTests {
     @Test func pagedNarrativesAreEmptyForZeroLimitOrLockedKey() throws {
         let key = SymmetricKey(size: .bits256)
         let repo = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
         )
         try repo.insert(MenstrualNarrative(hkExternalUUID: "u", dateKey: "2026-01-01"), contentKey: key)
 
@@ -118,7 +129,8 @@ struct SealedBackupChunkTests {
         let key = SymmetricKey(size: .bits256)
         store.activateSealedJournals(contentKey: key)
         let repo = MenstrualNarrativeRepository(
-            context: PrivatePersistenceController(inMemory: true).container.viewContext
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
         )
 
         let chunkA = try JSONEncoder().encode([
@@ -141,11 +153,18 @@ struct SealedBackupChunkTests {
     @MainActor
     @Test func applyRestoredChunksThrowsWhenPeriodKeyLocked() throws {
         let store = makeTestStore() // no lock activated → no content key
+        // An isolated empty repository, so the no-clobber gate passes and the failure this test pins
+        // is specifically the locked-key seam — not `.storeNotEmpty` from whatever the shared
+        // store/latch happens to hold.
+        let repo = MenstrualNarrativeRepository(
+            context: PrivatePersistenceController(inMemory: true).container.viewContext,
+            defaults: isolatedDefaults()
+        )
         let chunk = try JSONEncoder().encode([
             MenstrualNarrative(hkExternalUUID: "a1", dateKey: "2026-06-01", note: "a1")
         ])
-        #expect(throws: FernletStore.SealedBackupWiringError.self) {
-            try store.applyRestoredChunks([chunk], payloadType: .periodData)
+        #expect(throws: FernletStore.SealedBackupWiringError.locked) {
+            try store.applyRestoredChunks([chunk], payloadType: .periodData, narrativeRepository: repo)
         }
     }
 
