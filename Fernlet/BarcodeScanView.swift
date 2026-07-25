@@ -453,17 +453,20 @@ private extension View {
 
 // MARK: - Live viewfinder (VisionKit)
 
-private struct BarcodeDataScannerView: UIViewControllerRepresentable {
+struct BarcodeDataScannerView: UIViewControllerRepresentable {
     /// The parent latches this true the moment it hands any code off, pausing the live scanner so a
     /// second barcode can't be recognized behind the pushed screen. The parent clears it (re-arming
     /// the scanner) when the viewfinder reappears on pop-back.
     var paused: Bool = false
+    /// Defaults to the food-barcode set; the QR verify ceremony (bitchat adoptions Increment 4)
+    /// reuses this exact viewfinder with `[.qr]` instead of duplicating VisionKit plumbing.
+    var symbologies: [VNBarcodeSymbology] = BarcodeScanner.symbologies
     var onPayload: (String) -> Void
     var onUnavailable: () -> Void
 
     func makeUIViewController(context: Context) -> DataScannerViewController {
         let scanner = DataScannerViewController(
-            recognizedDataTypes: [.barcode(symbologies: BarcodeScanner.symbologies)],
+            recognizedDataTypes: [.barcode(symbologies: symbologies)],
             qualityLevel: .balanced,
             recognizesMultipleItems: false,
             isHighlightingEnabled: true
