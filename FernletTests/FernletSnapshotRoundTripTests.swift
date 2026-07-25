@@ -215,7 +215,7 @@ struct FernletSnapshotRoundTripTests {
                 AIAnalysisRetryRecord(id: try uuid("00000000-0000-0000-0000-000000001001"), payloadType: "meal", sourceId: meal1.id, createdAt: date0, lastAttemptAt: date1, attemptCount: 1, note: "Retry meal one"),
                 AIAnalysisRetryRecord(id: try uuid("00000000-0000-0000-0000-000000001002"), payloadType: "journal", sourceId: journals[0].id, createdAt: date1, lastAttemptAt: date2, attemptCount: 2, note: "Retry journal one")
             ],
-            connectionSessionLogs: try connectionLogs(startedAt: date0),
+            connectionSessionLogs: try connectionLogs(startedAt: recentConnectionLogDate()),
             trustedProximityPeers: try trustedPeers(date: date1),
             trainerAuditEvents: try trainerAuditEvents(date: date2)
         )
@@ -359,6 +359,15 @@ struct FernletSnapshotRoundTripTests {
             tags: ["baseline", "round-trip"],
             barcode: barcode
         )
+    }
+
+    /// Connection logs are the one snapshot slice with a wall-clock retention policy:
+    /// `ConnectionInspector.attachStore` (run inside `FernletStore` init) purges logs older than 60 days
+    /// against real `Date()`, so a fixed fixture date rots out of the window and the store loads back [].
+    /// Anchor the fixture an hour before now — truncated to whole seconds, because the repository's
+    /// ISO-8601 coder drops fractional seconds and the round-trip equality would fail otherwise.
+    private func recentConnectionLogDate() -> Date {
+        Date(timeIntervalSince1970: (Date().timeIntervalSince1970 - 3600).rounded(.down))
     }
 
     private func connectionLogs(startedAt: Date) throws -> [ConnectionSessionLog] {
