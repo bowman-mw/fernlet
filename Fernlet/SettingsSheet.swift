@@ -1088,7 +1088,7 @@ struct SettingsSheet: View {
                 HStack {
                     Text("Current")
                     Spacer()
-                    Text(store.settings.aiStatus.label)
+                    Text(store.effectiveAIStatus.label)
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                 }

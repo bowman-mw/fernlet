@@ -20,6 +20,7 @@ import StoreCore
 import DiaryStore
 import HealthKitGateway
 import AppServices
+import AIContext
 
 @MainActor
 @Observable
@@ -38,6 +39,14 @@ final class FernletStore {
     var settings: FernletSettings {
         get { diary.settings }
         set { diary.settings = newValue }
+    }
+    /// The AI status actually in effect: the stored (synced) user intent in `settings.aiStatus`
+    /// overlaid with this device's local daily call counter (`AICallQuotaStore`). The derived
+    /// `.sleepy` / `.resting` states are a read-only overlay — they are NEVER written back into the
+    /// synced settings, so one device's usage can't throttle another. Feed the AI status *label*
+    /// from this, not from the raw stored value.
+    var effectiveAIStatus: AIStatus {
+        AIStatusOverlay.effectiveStatus(intent: settings.aiStatus, quota: aiCallQuotaStore.currentQuota())
     }
     var recentMeals: [Meal] {
         get { diary.recentMeals }
@@ -154,6 +163,9 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var heartLedger = ProximityHeartLedger()
     /// Device-local moderation reports (never synced). Feeds item-hiding + the escalation/ban.
     @ObservationIgnored private(set) lazy var moderationLedger = ModerationLedger()
+    /// Device-local, non-synced daily AI-call counter (Ladder §3.2). Drives the `.sleepy`/`.resting`
+    /// overlay on `effectiveAIStatus`; deliberately outside the snapshot — usage never syncs.
+    @ObservationIgnored private(set) lazy var aiCallQuotaStore: AICallQuotaStore = UserDefaultsAICallQuotaStore()
     /// Tamper-resistant store bans (Keychain-backed; survives app delete+reinstall and clock changes).
     @ObservationIgnored private(set) lazy var moderationBanStore = ModerationBanStore()
     /// Device-local cache of friends' shared fuzzy state + appearance (Phase 4). Never synced.
