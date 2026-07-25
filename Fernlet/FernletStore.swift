@@ -329,9 +329,14 @@ final class FernletStore {
         static let intimacy = "sensitiveVisibilityResolvedIntimacyVisible"
     }
 
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, cookingRunDirectory: URL? = nil) {
         self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
         self.injectedAuditLogStore = aiAuditLogStore
+        // Test seam: redirect the shared cooking-run app-group file to a per-test temp dir so a parallel
+        // suite's file wipe can't race a cooking test's read (mirrors GuidedWorkoutRunStateStore(directory:)).
+        if let cookingRunDirectory {
+            self.cookingRunStateStore = CookingRunStateStore(directory: cookingRunDirectory)
+        }
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
 
@@ -1771,6 +1776,14 @@ final class FernletStore {
                 queue.remove(record)
                 continue
             }
+            // Already deferred for budget TODAY: the daily AI budget won't refresh until midnight, so
+            // re-fetching this (non-JSON-LD) page's HTML on every foreground is pure waste — skip it until
+            // the day-key changes. A JSON-LD page imports with no gate and is never stamped, so it still
+            // retries and succeeds. (The first budget miss of the day still had to attempt the fetch, since
+            // a JSON-LD-capable page can't be distinguished before fetching.)
+            if record.budgetDeferredDayKey == todayKey {
+                continue
+            }
 
             do {
                 // Ambient drain: userInvoked=false, so the `.sleepy` band falls back and the daily
@@ -1781,9 +1794,11 @@ final class FernletStore {
                 addSavedRecipe(RecipeDefinition(importedRecipe: importedRecipe))
                 queue.remove(record)
             } catch RecipeWebImportError.aiBudgetExhausted {
-                // Transient daily-budget fallback (clears at midnight) — NOT the page's fault. Leave the
-                // record untouched (no `markAttempt`, no removal) so tomorrow's drain retries it with a
-                // fresh budget instead of burning one of its finite attempts.
+                // Transient daily-budget fallback (clears at midnight) — NOT the page's fault. Don't burn
+                // an attempt or remove the record; just stamp it deferred-for-today so the rest of today's
+                // foreground drains skip re-fetching it. Tomorrow's key differs → it retries with a fresh
+                // budget.
+                queue.markBudgetDeferred(record, dayKey: todayKey)
                 FernletAuditLog.log("recipe.shareExtensionImport.deferred", context: [
                     "host": url.host() ?? "unknown",
                     "reason": "aiBudgetExhausted"
@@ -2844,7 +2859,11 @@ final class FernletStore {
     /// resume card reflect every transition, whether it came from the in-app buttons or the Live
     /// Activity. Session-scoped; never part of the synced blob. Directly mirrors `guidedRunState`.
     private(set) var cookingRunState: CookingRunState?
-    @ObservationIgnored private let cookingRunStateStore = CookingRunStateStore()
+    // `var` (not `let`) so a test can point the app-group cooking file at a per-test temp directory via
+    // the `cookingRunDirectory:` init override, mirroring the `GuidedWorkoutRunStateStore(directory:)`
+    // seam. Production leaves this at the default (the real app-group container). Isolating the file per
+    // test stops a parallel suite's `deleteAllData`/cooking-wipe from racing the shared real file.
+    @ObservationIgnored private var cookingRunStateStore = CookingRunStateStore()
     /// Observer token for `.cookingRunAdvancedByIntent` — registered once in `activateWidgetBridge`. A
     /// cooking App Intent (Live Activity / Siri) runs in this process but mutates only the app-group file;
     /// this brings the in-memory walker into step the moment the file is written, so an in-app "Next"

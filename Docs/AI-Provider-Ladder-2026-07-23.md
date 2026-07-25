@@ -126,6 +126,14 @@ regardless of settings — that is a hard rule, not a default.
 
 ### 3.2 Resolution order
 
+> **AS SHIPPED (2026-07-25).** The `.sleepy`/`.resting` bands and the step-down are live in
+> `FernletModelRouter`. Two surfacing facts worth pinning: (1) the resting band is user-visible — the
+> companion speaks via `FernletVoice.aiResting` and Settings reads `effectiveAIStatus` (not the raw
+> stored `aiStatus`), so a rate-limited/exhausted state is legible rather than a silent degrade; (2) the
+> `stepDown` retry terminates on a `contentRefusal` — a guardrail refusal is NOT a step-down trigger
+> (step 5 below), so a refusal maps to `.refused` in the audit log and falls back rather than re-trying
+> down the rungs.
+
 For a task at tier `T`:
 
 1. `settings.aiStatus == .off` → deterministic fallback. Stop.
@@ -492,12 +500,22 @@ needs:
   > `LocalPersistence`. This keeps `LocalPersistence` free of an `AIContext` dependency and still
   > satisfies the only hard rule — never `CloudKitSync`, no `Package.swift` DAG edge. The store writes a
   > JSON ring buffer (cap 500, FIFO) to Application Support with `isExcludedFromBackup` set (so it
-  > cannot ride the device backup off-device), records at CALL COMPLETION with the resolved outcome
-  > (`succeeded`/`fellBack`/`refused`/`schemaFailed`, guardrail refusals mapped via
-  > `AIAuditOutcome.fromModelError`), and is swept by delete-all-data with an incomplete-store signal on
-  > removal failure. **When the future PCC/BYOK cloud rungs land, cloud calls must record at DISPATCH
-  > (payload already left the device) and update the outcome at completion** — the on-device
-  > record-at-completion shape is safe only because nothing leaves until the call returns.
+  > cannot ride the device backup off-device), and is swept by delete-all-data with an incomplete-store
+  > signal on removal failure. Outcome is one of `succeeded`/`fellBack`/`refused`/`schemaFailed`
+  > (guardrail refusals mapped via `AIAuditOutcome.fromModelError`).
+  >
+  > **Dispatch vs completion recording (corrected 2026-07-25).** The recording point keys off
+  > `AIDestination.leavesDevice`, NOT a blanket "everything is on-device today":
+  > - **On-device rungs** (`onDeviceFoundationModels`, `leavesDevice == false`) record at CALL
+  >   COMPLETION with the resolved outcome — nothing left the device until the call returned.
+  > - **The web-nutrition rung** (`webNutritionLookup`, `leavesDevice == true`) egresses the meal
+  >   description to the search/import provider the moment the lookup begins, so it records at
+  >   **DISPATCH** with a provisional `.fellBack` and settles the real outcome at completion via
+  >   `AIAuditLog.updateOutcome(id:to:)` (see `FoodProductLookupSheet.loadPreview`) — a kill/crash
+  >   mid-lookup still leaves a "what left my device" entry. This is the SAME discipline the future
+  >   PCC/BYOK cloud rungs must follow; it is not deferred to them. (An earlier revision's claim that
+  >   completion-recording is "safe only because nothing leaves until the call returns" was false for the
+  >   web rung — the one shipped destination whose `leavesDevice == true`.)
 
 **Payload tests:** every new payload gets a test asserting its field set, mirroring the existing
 `FernletTests/S3BoundaryTests` grep-wall discipline. A forbidden field appearing in
@@ -560,12 +578,18 @@ needs:
 
 **Ladder-specific track (slots into the canonical order at "Provider-seam refactor" and later):**
 
+> **AS SHIPPED (2026-07-25).** Item 1 (provider-seam refactor + quota + device-local audit + every AI
+> call site routed through the seam) is shipped on `claude/ai-ladder-features` — see the shipped-status
+> note in [AI-Feature-Expansion §1](AI-Feature-Expansion-2026-07-23.md#1-build-order). The one part of
+> item 1 that did NOT ship is the **keychain-purge leg in `deleteAllData`**: there is no BYOK key to
+> purge until the BYOK track lands, so it moves to item 3, not item 1. Items 2–3 remain gated as written.
+
 1. **Provider-seam refactor** — `AICapabilityTier`, `FernletModelRouter`, the `AIDestination` cases
    (`EnumDecodeCompat` freeze/park + clean build), and audit-log fields + **device-local**
    persistence (§7.2). **No behavior change** — existing on-device paths route through the new seam.
    This step also builds the **net-new quota mechanism** (the local, non-synced day counter + reset +
-   `.sleepy`/`.resting` state derivation, §3.2) and the **keychain-purge leg in `deleteAllData`**
-   (§6.2).
+   `.sleepy`/`.resting` state derivation, §3.2). ~~and the keychain-purge leg in `deleteAllData` (§6.2)~~
+   — **the keychain-purge leg did NOT ship here; it belongs to the BYOK track (no key exists to purge yet).**
 2. **Cloud track — gated on iOS 27 GA (~Sept 2026), cannot ship above the on-device floor before
    then.** PCC entitlement (long pole, start the request early) + the **first-use PCC consent sheet
    (D-B)** landed in the same commit as the Privacy-Policy:119 and spec-guardrail:894 amendments;

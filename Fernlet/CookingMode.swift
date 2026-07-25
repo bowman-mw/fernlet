@@ -140,16 +140,29 @@ struct CookingModeView: View {
     @State private var timerFired = false
     @State private var timerTask: Task<Void, Never>?
 
-    init(store: FernletStore, recipe: RecipeDefinition, resuming: Bool = false, onLogToDay: @escaping (MealType, String) -> Void) {
+    init(store: FernletStore, recipe: RecipeDefinition, resuming: Bool = false, initialYield: Int? = nil, onLogToDay: @escaping (MealType, String) -> Void) {
         self.store = store
         self.recipe = recipe
         self.resuming = resuming
         self.onLogToDay = onLogToDay
-        _cookYield = State(initialValue: max(recipe.servings, 1))
+        // Carry the recipe detail's "Cook for N" into mise en place so the cook doesn't re-enter it; clamp
+        // to the scaler's range, and fall back to the recipe's base yield when none was passed (or resume).
+        _cookYield = State(initialValue: RecipeScaling.clampedYield(initialYield ?? max(recipe.servings, 1)))
         _stage = State(initialValue: resuming ? .cooking : .mise)
     }
 
-    private var steps: [RecipeStep] { recipe.steps ?? [] }
+    /// The steps the walker renders. While a run is active (including a resume), the AUTHORITATIVE walk is
+    /// the run's own frozen snapshot (`store.cookingRunState.steps`) — the cursor, the Live Activity, and
+    /// the App-Intent "Next" all advance against it. Rendering `recipe.steps` instead would desync the
+    /// text from the cursor if the recipe was edited (same device, or a synced edit) after the run began —
+    /// worst case a since-shortened recipe shows "Step 1 of 0" while the run still walks its snapshot.
+    /// Before a run exists (the mise screen) there is nothing frozen yet, so fall back to the recipe.
+    private var steps: [RecipeStep] {
+        if let runSteps = store.cookingRunState?.steps {
+            return runSteps.map { RecipeStep(text: $0.text, durationSeconds: $0.durationSeconds) }
+        }
+        return recipe.steps ?? []
+    }
     private var hasSteps: Bool { !steps.isEmpty }
     private var isScalable: Bool { RecipeScaling.isScalable(recipe) }
 
@@ -374,6 +387,19 @@ struct CookingModeView: View {
 
                         if let duration = step.durationSeconds, duration > 0 {
                             stepTimer(duration: duration)
+                        }
+
+                        // Mise en place scales ingredient amounts to the cook-for yield, but a step's PROSE
+                        // ("add 200 g flour") is authored text we don't rescale — so when cooking at a
+                        // different yield, say so once rather than let the step quietly disagree with the
+                        // scaled ingredient list. (A substitution fork's steps still name the swapped-out
+                        // ingredient for the same reason — a documented, accepted tradeoff.)
+                        if isScalable, cookYield != recipe.servings {
+                            Text("Amounts written into the steps reflect the original \(recipe.servings)-serving recipe, not the \(cookYield)-serving scale above.")
+                                .font(.fernlet(.bodySmall))
+                                .foregroundStyle(Color.slate)
+                                .fernletWrappingText()
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }

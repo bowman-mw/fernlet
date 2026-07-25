@@ -8,17 +8,29 @@ import FernletDomainModel
 /// advancing to a finish, the App-Intent transitions applied to the shared app-group state, the
 /// resume-after-kill adoption, discard, and abandoned-run retirement.
 ///
-/// Serialized: each test stands up real `FernletStore`s / the process-wide app-group cooking file, so
-/// running in parallel would race that file. Each test clears it first (and after). Mirrors
-/// GuidedWorkoutRunStoreTests exactly. Note: two `makeTestStore()` instances use SEPARATE in-memory
-/// Core Data stacks, so a "relaunch" store shares the app-group run file but NOT the recipe book —
-/// recipe-book resolution is asserted on the store that added the recipe.
+/// Serialized: the tests within this suite mutate one cooking file in sequence. That file is redirected
+/// to a per-test temp directory (`cookingDir`), so — unlike the earlier shape that hit the process-wide
+/// real app-group file — a *different* suite running concurrently (e.g. a `deleteAllData` cooking wipe)
+/// cannot race it. Each test still clears it first (and after). Note: two `makeStore()` instances use
+/// SEPARATE in-memory Core Data stacks but the SAME per-test cooking file, so a "relaunch" store shares
+/// the run file but NOT the recipe book — recipe-book resolution is asserted on the store that added it.
 @MainActor
 @Suite(.serialized)
 struct CookingRunStoreTests {
 
+    /// Per-test app-group cooking file, redirected to a unique temp dir so a PARALLEL suite (e.g. an
+    /// `AIAuditLogTests.deleteAllData…` run, which wipes the real cooking file) can't race the file this
+    /// suite reads. A fresh struct instance per test → a fresh directory per test. The store under test,
+    /// the direct `CookingRunStateStore`, and the App-Intent runner are ALL pointed here.
+    private let cookingDir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("CookingRunTests-\(UUID().uuidString)", isDirectory: true)
+
+    private func makeStore() -> FernletStore {
+        makeTestStore(cookingRunDirectory: cookingDir)
+    }
+
     private func clearSharedRun() {
-        CookingRunStateStore().clear()
+        CookingRunStateStore(directory: cookingDir).clear()
     }
 
     /// A manual recipe with three steps (one timed), added to the store's recipe book so `startCookingRun`
@@ -43,7 +55,7 @@ struct CookingRunStoreTests {
     @Test func startCookingRunMapsStepsAndAnchorsTheStartDay() throws {
         clearSharedRun()
         defer { clearSharedRun() }
-        let store = makeTestStore()
+        let store = makeStore()
         let recipe = addSteppedRecipe(store)
 
         store.startCookingRun(recipe, startDayKey: "2026-07-20")
@@ -73,7 +85,7 @@ struct CookingRunStoreTests {
     @Test func advancingToTheLastStepFinishesAndClearsTheFile() {
         clearSharedRun()
         defer { clearSharedRun() }
-        let store = makeTestStore()
+        let store = makeStore()
         let recipe = addSteppedRecipe(store)
         store.startCookingRun(recipe, startDayKey: store.todayKey)
 
@@ -84,7 +96,7 @@ struct CookingRunStoreTests {
         #expect(store.cookingRunState?.isFinished == true)
 
         // A finished run clears the app-group file, so a fresh store's reconcile surfaces NO resume card.
-        let relaunched = makeTestStore()
+        let relaunched = makeStore()
         relaunched.reconcileCookingRunFromAppGroup()
         #expect(relaunched.cookingRunState == nil)
     }
@@ -99,7 +111,7 @@ struct CookingRunStoreTests {
     @Test func aFinishedRunLeftInTheFileIsAdoptedSoTheWalkerCanReachItsFinishScreen() throws {
         clearSharedRun()
         defer { clearSharedRun() }
-        let shared = CookingRunStateStore()
+        let shared = CookingRunStateStore(directory: cookingDir)
 
         // The state the intent leaves behind: advanced past the last step, file KEPT marked finished.
         let finished = CookingRunState(
@@ -112,7 +124,7 @@ struct CookingRunStoreTests {
         )
         shared.write(finished)
 
-        let store = makeTestStore()
+        let store = makeStore()
         store.reconcileCookingRunFromAppGroup()
 
         let run = try #require(store.cookingRunState)   // adopted, NOT dropped
@@ -126,7 +138,7 @@ struct CookingRunStoreTests {
     @Test func aRecentRunIsAdoptedByAFreshStoreAtItsSavedStep() throws {
         clearSharedRun()
         defer { clearSharedRun() }
-        let store = makeTestStore()
+        let store = makeStore()
         let recipe = addSteppedRecipe(store)
         store.startCookingRun(recipe, startDayKey: "2026-07-20")
         store.cookingAdvanceStep()   // now on step 2 (index 1)
@@ -134,7 +146,7 @@ struct CookingRunStoreTests {
 
         // Simulate a relaunch: a fresh store reconciles the surviving app-group run (the run file is
         // process-wide; only the recipe book differs between the two in-memory stores).
-        let relaunched = makeTestStore()
+        let relaunched = makeStore()
         relaunched.reconcileCookingRunFromAppGroup()
 
         let run = try #require(relaunched.cookingRunState)
@@ -152,7 +164,7 @@ struct CookingRunStoreTests {
     @Test func discardClearsTheRunAndNothingResumes() {
         clearSharedRun()
         defer { clearSharedRun() }
-        let store = makeTestStore()
+        let store = makeStore()
         let recipe = addSteppedRecipe(store)
         store.startCookingRun(recipe, startDayKey: store.todayKey)
         store.cookingAdvanceStep()
@@ -160,7 +172,7 @@ struct CookingRunStoreTests {
         store.endCookingRun()
         #expect(store.cookingRunState == nil)
 
-        let relaunched = makeTestStore()
+        let relaunched = makeStore()
         relaunched.reconcileCookingRunFromAppGroup()
         #expect(relaunched.cookingRunState == nil)   // discarded → no resume card
     }
@@ -170,7 +182,7 @@ struct CookingRunStoreTests {
     @Test func nextIntentAdvancesTheSharedRunAndRepeatReFiresTheTimer() async throws {
         clearSharedRun()
         defer { clearSharedRun() }
-        let shared = CookingRunStateStore()
+        let shared = CookingRunStateStore(directory: cookingDir)
 
         // Seed the shared file at the timed step, as if the Live Activity / Siri is about to act on it.
         let seed = CookingRunState(
@@ -187,19 +199,19 @@ struct CookingRunStoreTests {
         shared.write(seed)
 
         // "Repeat step" re-fires the current step's timer without moving the cursor.
-        await CookingIntentRunner.repeatStep()
+        await CookingIntentRunner.repeatStep(directory: cookingDir)
         var reloaded = try #require(shared.read())
         #expect(reloaded.stepIndex == 1)
         #expect(reloaded.hasRunningTimer == true)
 
         // "Next" advances the cursor (and clears the timer).
-        await CookingIntentRunner.advance()
+        await CookingIntentRunner.advance(directory: cookingDir)
         reloaded = try #require(shared.read())
         #expect(reloaded.stepIndex == 2)
         #expect(reloaded.hasRunningTimer == false)
 
         // "Next" on the last step finishes.
-        await CookingIntentRunner.advance()
+        await CookingIntentRunner.advance(directory: cookingDir)
         reloaded = try #require(shared.read())
         #expect(reloaded.isFinished == true)
     }
@@ -210,12 +222,10 @@ struct CookingRunStoreTests {
         clearSharedRun()
         defer { clearSharedRun() }
         // The store's `write()` re-stamps `updatedAt` (so a live run can be aged), so a genuinely stale
-        // file must be written DIRECTLY at the same app-group path FernletStore reconciles from.
-        let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.MBO.Fernlet")
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let dir = base.appendingPathComponent("FernletWidgets", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let fileURL = dir.appendingPathComponent("CookingRunState.json")
+        // file must be written DIRECTLY at the same (per-test) path FernletStore reconciles from. When a
+        // directory is injected, `CookingRunStateStore` puts the file at `<dir>/CookingRunState.json`.
+        try FileManager.default.createDirectory(at: cookingDir, withIntermediateDirectories: true)
+        let fileURL = cookingDir.appendingPathComponent("CookingRunState.json")
 
         var stale = CookingRunState(
             recipeID: UUID(), recipeName: "Old", startedDayKey: "2026-07-01",
@@ -228,11 +238,11 @@ struct CookingRunStoreTests {
         try encoder.encode(stale).write(to: fileURL, options: .atomic)
 
         // Sanity: it's a valid, readable file — just old.
-        #expect(CookingRunStateStore().read() != nil)
+        #expect(CookingRunStateStore(directory: cookingDir).read() != nil)
 
-        let store = makeTestStore()
+        let store = makeStore()
         store.reconcileCookingRunFromAppGroup()
         #expect(store.cookingRunState == nil)              // aged out → retired
-        #expect(CookingRunStateStore().read() == nil)      // file cleared
+        #expect(CookingRunStateStore(directory: cookingDir).read() == nil)      // file cleared
     }
 }

@@ -2198,16 +2198,17 @@ struct FoodProductPageImportView: View {
     /// Records the web-nutrition lookup at COMPLETION with its real outcome (Ladder §7.2) — a persisted
     /// "what left my device" entry must not pre-stamp `.succeeded` on a lookup that later failed. The
     /// on-device model isn't involved (this is the web path), so `modelIdentifier` is intentionally nil.
-    private func auditWebNutritionLookup(_ mealDescription: String, outcome: AIAuditOutcome) {
+    /// Records the web-nutrition lookup at DISPATCH with a provisional `.fellBack` outcome and returns the
+    /// entry id, so the caller can settle the real outcome at completion. The description egresses at
+    /// request time, so the entry must exist before the network call — not only if it succeeds.
+    private func recordWebNutritionLookupDispatch(_ mealDescription: String) async -> UUID {
         let payload = WebNutritionLookupPayload(mealDescription: mealDescription)
-        Task {
-            await AIAuditLog.shared.record(
-                payloadKind: payload.payloadKind,
-                destination: .webNutritionLookup,
-                includedFields: payload.includedFieldNames,
-                outcome: outcome
-            )
-        }
+        return await AIAuditLog.shared.record(
+            payloadKind: payload.payloadKind,
+            destination: .webNutritionLookup,
+            includedFields: payload.includedFieldNames,
+            outcome: .fellBack
+        )
     }
 
     private func actionButton(label: String, systemImage: String, action: @escaping () -> Void) -> some View {
@@ -2234,9 +2235,12 @@ struct FoodProductPageImportView: View {
         isLoading = true
         notice = nil
         Task {
-            // Record the audit entry at completion with the real outcome: `.succeeded` when the lookup
-            // resolved a product, `.fellBack` when it produced nothing usable or threw and the user is
-            // dropped back to typing the meal in.
+            // `.webNutritionLookup.leavesDevice == true`: the meal description egresses to the search /
+            // import provider the moment this lookup begins, so the audit entry is recorded at DISPATCH
+            // (provisional `.fellBack`) — a kill/crash mid-lookup must still leave a "what left my device"
+            // record. The real outcome is written back at completion via `updateOutcome` (`.succeeded` when
+            // a product resolved, else the provisional `.fellBack`).
+            let auditID = await recordWebNutritionLookupDispatch(lookupText)
             var outcome: AIAuditOutcome = .fellBack
             do {
                 if let url = normalizedURL {
@@ -2255,7 +2259,7 @@ struct FoodProductPageImportView: View {
                 notice = (error as? LocalizedError)?.errorDescription ?? "Could not import that product page."
             }
             isLoading = false
-            auditWebNutritionLookup(lookupText, outcome: outcome)
+            await AIAuditLog.shared.updateOutcome(id: auditID, to: outcome)
         }
     }
 
@@ -3235,7 +3239,9 @@ struct RecipeDetailView: View {
             )
         }
         .fullScreenCover(isPresented: $showingCookingMode) {
-            CookingModeView(store: store, recipe: recipe, onLogToDay: onCookLog)
+            // Carry the detail page's ephemeral "Cook for N" into cooking mode so mise opens at that yield
+            // instead of re-defaulting to the base (nil → base yield inside CookingModeView).
+            CookingModeView(store: store, recipe: recipe, initialYield: cookYield, onLogToDay: onCookLog)
         }
     }
 

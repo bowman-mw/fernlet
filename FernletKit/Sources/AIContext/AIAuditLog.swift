@@ -235,14 +235,17 @@ public actor AIAuditLog {
 
     /// Records an AI call. Extract `payloadKind` and `includedFields` from the payload at the call site
     /// (before any actor hop) to avoid Sendable boundary issues. Persists immediately when a sink is
-    /// wired.
+    /// wired. Returns the new entry's id so a caller that recorded at DISPATCH can `updateOutcome` it at
+    /// completion.
     ///
-    /// Today every rung is on-device, so recording at COMPLETION (with the resolved `outcome`) is
-    /// correct — nothing left the device until the call returned. When the future PCC / BYOK adapters
-    /// land this MUST change for those rungs: a cloud call that crashed or was killed mid-flight has
-    /// already sent its payload off-device, so it must record at DISPATCH and then update the outcome at
-    /// completion. A "what left my device" log that only records on success would tell exactly the one
-    /// lie it exists to prevent.
+    /// The ON-DEVICE Foundation-model rungs (`destination.leavesDevice == false`) may record at
+    /// COMPLETION with the resolved `outcome` — nothing left the device until the call returned. But any
+    /// destination whose `leavesDevice == true` (the web-nutrition search rung today; PCC / BYOK when
+    /// those adapters land) MUST record at DISPATCH and then `updateOutcome` at completion: a call that
+    /// crashed or was killed mid-flight has already sent its payload off-device, so a log that only
+    /// recorded on success would tell exactly the one lie it exists to prevent. See
+    /// `FoodProductLookupSheet.loadPreview` for the web rung's dispatch-then-update pairing.
+    @discardableResult
     public func record(
         payloadKind: String,
         destination: AIDestination,
@@ -250,8 +253,8 @@ public actor AIAuditLog {
         includedFields: [String],
         memorySummaryCharCount: Int = 0,
         outcome: AIAuditOutcome = .succeeded
-    ) {
-        entries.append(AIAuditEntry(
+    ) -> UUID {
+        let entry = AIAuditEntry(
             timestamp: Date(),
             payloadKind: payloadKind,
             destination: destination,
@@ -259,10 +262,24 @@ public actor AIAuditLog {
             outcome: outcome,
             includedFields: includedFields,
             memorySummaryCharCount: memorySummaryCharCount
-        ))
+        )
+        entries.append(entry)
         if entries.count > Self.entryLimit {
             entries.removeFirst(entries.count - Self.entryLimit)
         }
+        sink?.save(entries)
+        return entry.id
+    }
+
+    /// Updates the outcome of a previously-recorded entry (the DISPATCH-then-completion pairing for an
+    /// off-device rung). A no-op when the id is unknown — e.g. the entry already aged out of the capped
+    /// ring — so a late completion never resurrects a dropped record. Re-persists when it changed.
+    public func updateOutcome(id: UUID, to outcome: AIAuditOutcome) {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        guard entries[index].outcome != outcome || entries[index].outcomeParkedToken != nil else { return }
+        entries[index].outcome = outcome
+        // A resolved outcome supersedes any parked future-build token (this build now owns the truth).
+        entries[index].outcomeParkedToken = nil
         sink?.save(entries)
     }
 

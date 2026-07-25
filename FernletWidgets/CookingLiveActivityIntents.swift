@@ -62,15 +62,17 @@ struct RepeatCookingStepIntent: LiveActivityIntent {
 /// then reflects it onto the activity. Guarded so a tap that races the app's own transition — or one
 /// that lands after the cook finished — is a harmless no-op.
 enum CookingIntentRunner {
-    static func advance() async {
-        let store = CookingRunStateStore()
+    // `directory` defaults to nil → the real app-group container. A test passes a temp dir so the intent
+    // path and the `FernletStore` under test share one isolated file, off the process-wide real one.
+    static func advance(directory: URL? = nil) async {
+        let store = CookingRunStateStore(directory: directory)
         guard var state = store.read(), !state.isFinished else { return }
         state.advance()
         await apply(state, store: store)
     }
 
-    static func repeatStep() async {
-        let store = CookingRunStateStore()
+    static func repeatStep(directory: URL? = nil) async {
+        let store = CookingRunStateStore(directory: directory)
         guard var state = store.read(), !state.isFinished else { return }
         state.startTimer(now: Date())
         await apply(state, store: store)

@@ -136,6 +136,10 @@ struct FernletDataExport: Codable {
         var servings: Int
         var ingredients: [String]?
         var notes: String?
+        /// User-authored (or web-import-parsed) ordered cooking steps (F5), rendered as readable lines —
+        /// a step's optional timer is appended as " (N min timer)". Omitted when the recipe has no steps.
+        /// Steps are the cook's own prose, so the export — a person's take-my-data dump — must carry them.
+        var steps: [String]?
         var createdAt: Date
     }
 
@@ -200,6 +204,7 @@ extension FernletStore {
                 name: r.name, servings: r.servings,
                 ingredients: Self.recipeIngredientLines(r, nameByFoodID: nameByFoodID),
                 notes: r.notes.isEmpty ? nil : r.notes,
+                steps: Self.recipeStepLines(r),
                 createdAt: r.createdAt)
         }
 
@@ -396,6 +401,18 @@ extension FernletStore {
             return measure   // food not resolvable → measure only (still better than a trap)
         }
         return lines.isEmpty ? nil : lines
+    }
+
+    /// Renders a recipe's ordered cooking steps (F5) to readable lines for the export: the step text, with
+    /// a step's optional passive timer appended as " (N min timer)". Returns nil when the recipe has no
+    /// steps, so the section is omitted rather than exported as an empty array.
+    static func recipeStepLines(_ recipe: RecipeDefinition) -> [String]? {
+        guard let steps = recipe.steps, !steps.isEmpty else { return nil }
+        return steps.map { step in
+            guard let seconds = step.durationSeconds, seconds > 0 else { return step.text }
+            let minutes = max(seconds / 60, 1)
+            return "\(step.text) (\(minutes) min timer)"
+        }
     }
 
     /// Whole numbers render without a trailing decimal; a non-finite / out-of-Int-range quantity falls

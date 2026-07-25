@@ -60,6 +60,16 @@ the seven features are cheaper than expected and two are considerably more expen
 
 ## 1. Build order
 
+> **SHIPPED STATUS (2026-07-25, branch `claude/ai-ladder-features`).** Under `main`: STEP 0b/0c/0,
+> F1(a), F2. On this branch: the **PROVIDER-SEAM REFACTOR** (commits `ee74c0b..5adcb96` — capability
+> tiers, `FernletModelRouter`, `AIDestination` cases, audit-log fields + device-local persistence, the
+> net-new quota counter, and every AI call site routed through the seam) and the **EXPANSION FEATURES**
+> F4 (scaling + substitution), F3 (Phase A share-text + Phase B planner), and F5 (cooking mode + Live
+> Activity + Siri intents). The CLOUD/BYOK/iOS-27 tracks remain gated as below; F6/F7 remain deferred
+> (D-C). NOTE: the seam block's listed **"keychain-purge leg in `deleteAllData`" did NOT ship** — there
+> is no BYOK key to purge yet (the delete-all comment defers it), so it belongs to the BYOK track, not
+> the shipped seam.
+
 **This is the single canonical, topologically-sorted build order for BOTH docs (revised
 2026-07-24).** The [AI-Provider-Ladder §9](AI-Provider-Ladder-2026-07-23.md) build order is
 superseded by this one and now points here; the ladder doc keeps only its ladder-specific track. The
@@ -473,9 +483,14 @@ already resolves the deduplicated union of `foodItemId`s across multiple recipes
 Check-off state lives in Notes/Reminders, not in Fernlet — the generated list is one-shot text, so
 nothing expires, and recipe edits after generation simply don't propagate (regenerate). The only
 persisted state is the *plan* (which recipes on which days), which rides the per-day row (§4.4) and
-degrades gracefully: a deleted recipe leaves a dangling ID that render drops. Web-imported recipes
-remain **absent from the data export** (`buildDataExport()` at `DataExportBuilder.swift:161` reads
-only `recipes`) — the plan's day-row field must be covered by the export when Phase B lands.
+degrades gracefully: a deleted recipe leaves a dangling ID that render drops. Web-imported recipe
+BODIES remain **absent from the data export** (`buildDataExport()` reads only the `recipes` array).
+
+> **AS SHIPPED (2026-07-25).** The plan's day-row field IS covered by the export: `DayExport.plannedMeals`
+> projects `FernletDay.plannedRecipeIDs` to recipe NAMES (unioning both recipe stores; dangling ids
+> drop). F5 cooking steps are also exported now — `RecipeExport.steps` renders each authored step
+> (timer appended as "(N min timer)"). Both are covered by `DataExportTests.testExportCarriesRecipeStepsAndPlannedMeals`.
+> Web-import recipe bodies staying absent is unchanged/by design.
 
 ### 4.4 Design
 
@@ -544,6 +559,11 @@ when the catalog can't supply the substitute, and `FoodItem.preferredRecipeUnit`
 **No provenance field exists** — no `parentRecipeID`, no `scaleFactor`, no applied-substitutions
 list. Decide whether scaling mutates in place or forks a new recipe before building.
 
+> **AS SHIPPED (resolved).** Scaling is a pure VIEW-TIME transform (`RecipeScaling`) that never mutates
+> or persists the recipe — "cook for N" on the detail page and mise en place, one serving still logged.
+> Substitution FORKS a new recipe carrying a `RecipeDefinition.parentRecipeID` annotation (strip-tolerant,
+> nothing depends on it). No in-place mutation of the base recipe.
+
 `MealBuilder` is `@MainActor`, lives in the app target, and imports `AIProviders`, so a scaling
 engine inside `AIProviders` or `FoodCatalog` can never call back into it.
 
@@ -552,6 +572,12 @@ engine inside `AIProviders` or `FoodCatalog` can never call back into it.
 ## 6. F5 — Cooking mode
 
 **Re-labelled: MEDIUM-LARGE.** The runtime half is genuinely cheap; the precondition is not.
+
+> **AS SHIPPED (2026-07-25).** F5 is shipped: `RecipeStep {text, durationSeconds?}` schema, web-import
+> step preservation, mesh wire-compat (old-decoder tested), mise-en-place → Next/Back walker → finish,
+> keep-screen-awake, single per-step passive timer, Live Activity + `NextCookingStepIntent`/
+> `RepeatCookingStepIntent`, and resume-after-kill. Section-by-section shipped notes below; the stale
+> planning claims in §6.1–§6.4 are corrected inline.
 
 ### 6.1 The runner is directly copyable
 
@@ -581,7 +607,15 @@ user-facing haptics toggle.
 `RecipeDefinition` has **no steps field** — the exact list is `id, name, servings, ingredients,
 notes, source, createdAt, updatedAt, webImport`. `notes` is one free-text String.
 
-Worse, **JSON-LD instructions are parsed and then destroyed.** `instructionsText(from:)`
+Worse, **JSON-LD instructions were parsed and then destroyed** (the pre-F5 state described here).
+
+> **AS SHIPPED (corrected 2026-07-25).** `RecipeDefinition.steps: [RecipeStep]?` now exists and JSON-LD
+> ordered steps are preserved via `orderedSteps(from:)` (order kept, per-step). The old flatten-then-
+> truncate path still exists but now feeds ONLY `briefSummary` — it no longer destroys the structured
+> steps. The old "`:556` flattens N steps into one string / steps are being discarded" text below is
+> STALE; it described the pre-F5 importer.
+
+`instructionsText(from:)`
 ([RecipeWebImporter.swift:551](../FernletKit/Sources/AIProviders/RecipeWebImporter.swift)) plus the
 two `instructionText` overloads at `:564`/`:574` already handle `HowToStep`/`HowToSection` shapes —
 but the array branch at `:556` does `values.compactMap(instructionText).joined(separator: " ")`,
@@ -594,6 +628,12 @@ Persisting steps hits two paths with different costs: manual recipes go into the
 saved/web recipes go into Core Data `SavedRecipeRecord`, which is the STEP 0 migration.
 
 ### 6.3 Other gaps
+
+> **AS SHIPPED (2026-07-25).** All four gaps below are closed: idle timer via `KeepScreenAwakeModifier`
+> (the app's sole `isIdleTimerDisabled` writer, restored on disappear/background); launch point via the
+> recipe-detail "Cook" action + the Food-root resume card; wire format via an optional `steps` key,
+> `SharedRecipePayload` still pinned `version 1`, with old-decoder tests (`RecipeStepsTests`); single
+> per-step timer = the deliberate v1 scope. Concurrent named timers remain out of scope.
 
 - **No idle-timer handling anywhere.** Exhaustive grep for `isIdleTimerDisabled` returns zero hits.
   A cooking screen that sleeps mid-recipe is a bad experience.
@@ -611,6 +651,13 @@ The completion leg is free: `FernletStore.logRecipe(_:mealType:date:)` (`:1639`)
 day-key parameter, which is the anchoring a long cooking session needs.
 
 ### 6.4 Interaction model (per decision §11.6)
+
+> **AS SHIPPED (2026-07-25).** Built as specified: mise en place first (F4-scaled), explicit Next/Back
+> walker (the timer never advances the step — on expiry it highlights Next + fires a haptic), Live
+> Activity + `NextCookingStepIntent`/`RepeatCookingStepIntent`, resume-after-kill, and a finish/log leg
+> whose meal log anchors to the run's `startedDayKey` (survives a midnight rollover). The in-app walker
+> renders from the run's own frozen step snapshot while a run is active (a mid-run recipe edit can't
+> desync the cursor from the text).
 
 **Opens with mise en place.** Before step one, a screen lists every ingredient and amount — scaled
 by the F4 transform when the cook chose a different yield. This reuses `RecipeDetailView`'s
@@ -832,6 +879,16 @@ design over a nutrient index.**
   `DayRecord` precisely to escape that record's size ceiling. Adding steps to every recipe plus
   grocery-list metadata pushes the one record these features all touch back in the direction the
   day-split work moved away from.
+  > **AS SHIPPED — WATCH ITEM (2026-07-25).** F5 steps DID land on the blob's `recipes` array for
+  > manual/peer recipes (~160 B/step; a 15-step recipe ≈ +2.4 KB; safe per-row on `SavedRecipeRecord.payloadData`).
+  > Accepted per §6.2 (both paths chosen knowingly). Two residual watch items, NOT defects but tracked:
+  > (1) an un-updated paired device re-encoding the blob STRIPS unknown fields — for manual-recipe steps
+  > that is real data loss, and there is no user-facing version-skew warning; (2) each F4 substitution
+  > FORK duplicates a full recipe (ingredients + notes + steps) into the still-uncapped, unpruned
+  > `recipes` array. A per-row escape for manual recipes should precede anything that raises recipe minting.
+  > Also (INFO): `deleteAllData` clears the AI audit sink+actor without an epoch guard, so a rare in-flight
+  > ambient completion finishing after the wipe can re-persist ONE metadata-only entry (kind/destination/
+  > outcome — no user values); ring-capped and cleared by the next wipe. Left as accepted.
 - **Wire compatibility.** Three features want to add recipe fields; none mentioned the mesh. See §6.3.
 - **The 14-day window's per-save cost — corrected 2026-07-24.** `rebuildDerivedSignals()`
   ([FernletStore.swift:3344](../Fernlet/FernletStore.swift)) is
