@@ -307,6 +307,21 @@ struct SettingsSheet: View {
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                     }
+                    // Away delivery (bitchat adoptions Increment 3): the one proximity feature
+                    // that touches the network, so it carries its own explicit opt-in — separate
+                    // from iCloud Sync (public dead-drop, not the synced store).
+                    Toggle(
+                        "Deliver hearts when apart",
+                        isOn: Binding(
+                            get: { store.settings.heartsAwayDelivery },
+                            set: { store.setHeartsAwayDelivery($0) }
+                        )
+                    )
+                    if store.settings.heartsAwayDelivery {
+                        Text("When a friend isn't nearby, a heart is sealed end-to-end and parked in iCloud under a rotating tag only that friend's device can recognize — delivered when they next open Fernlet.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                    }
                     // Phase 4a: the standing presence radio — rotating pairwise tags only.
                     Toggle(
                         "Nearby friends presence",

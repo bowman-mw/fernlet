@@ -147,6 +147,13 @@ public nonisolated struct FernletSettings: Codable {
     /// classified + torn down. Defaulting OFF makes the whole feature consent-gated (privacy-first) and
     /// removes that ambient-exchange window entirely; turning it off stops the heart listener immediately.
     public var allowNearbyHearts: Bool = false
+    /// Opt-IN away delivery for hearts (bitchat adoptions Increment 3): when a kept friend isn't
+    /// nearby, a heart is sealed end-to-end and left in a CloudKit public-database dead-drop only
+    /// that friend can find (rotating pairwise day tags; one-time prekeys when available),
+    /// delivered when their Fernlet next checks. Default OFF — this is the only proximity feature
+    /// that touches the network, so it gets its own consent, independent of the iCloud *sync*
+    /// storage preference.
+    public var heartsAwayDelivery: Bool = false
     /// Opt-IN presence layer (mesh redesign Phase 4a): while on — and only with the app open,
     /// unlocked, and on a main tab — Fernlet broadcasts rotating pairwise tags that ONLY a kept
     /// friend can recognize (never a name or a stable identifier), so kept friends see each other
@@ -331,6 +338,7 @@ public nonisolated struct FernletSettings: Codable {
         allowNearbyRecipeShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyRecipeShares) ?? true
         allowNearbyClothingShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyClothingShares) ?? true
         allowNearbyHearts = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyHearts) ?? false
+        heartsAwayDelivery = try container.decodeIfPresent(Bool.self, forKey: .heartsAwayDelivery) ?? false
         allowNearbyPresence = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyPresence) ?? false
         allowNearbyFriendState = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyFriendState) ?? false
         hasPromptedForPresence = try container.decodeIfPresent(Bool.self, forKey: .hasPromptedForPresence) ?? false
@@ -377,7 +385,7 @@ public nonisolated struct FernletSettings: Codable {
              unknownQuickLogTokens, homeWidgets, unknownHomeWidgetTokens,
              didMigrateMilestonesFirstAidWidgets, didMigrateMealPhotosWidget, personalCareTasks,
              proximityDisplayName, showProximityDebugTools, allowNearbyRecipeShares,
-             allowNearbyClothingShares, allowNearbyHearts, allowNearbyPresence, allowNearbyFriendState,
+             allowNearbyClothingShares, allowNearbyHearts, heartsAwayDelivery, allowNearbyPresence, allowNearbyFriendState,
              hasPromptedForPresence, shopLastPublishedDayKey, companionName, workoutProfile,
              workoutLocations, activeWorkoutLocationID, workoutProgression
     }
@@ -434,6 +442,7 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(allowNearbyRecipeShares, forKey: .allowNearbyRecipeShares)
         try container.encode(allowNearbyClothingShares, forKey: .allowNearbyClothingShares)
         try container.encode(allowNearbyHearts, forKey: .allowNearbyHearts)
+        try container.encode(heartsAwayDelivery, forKey: .heartsAwayDelivery)
         try container.encode(allowNearbyPresence, forKey: .allowNearbyPresence)
         try container.encode(allowNearbyFriendState, forKey: .allowNearbyFriendState)
         try container.encode(hasPromptedForPresence, forKey: .hasPromptedForPresence)

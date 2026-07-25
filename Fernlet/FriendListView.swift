@@ -22,6 +22,10 @@ struct FriendListView: View {
     @State private var peerToBlock: ProximityTrustedPeerRecord?
     @State private var blockConfirmShown = false
     @State private var peerToReport: ProximityTrustedPeerRecord?
+    // Away hearts (bitchat adoptions Increment 3): the first-use consent target + the local
+    // status line for queue outcomes (separate from the live-send heartSendState pipeline).
+    @State private var awayConsentPeer: ProximityTrustedPeerRecord?
+    @State private var awayStatus: String?
     @FocusState private var nameFieldFocused: Bool
 
     var body: some View {
@@ -431,14 +435,47 @@ struct FriendListView: View {
                 .foregroundStyle(reachable ? Color.moss : Color.slate)
         }
 
+        let awayEnabled = store.settings.heartsAwayDelivery
+        let pendingDrops = reachable ? 0 : store.heartDropService.pendingCount(for: peer)
+
         Button {
-            store.presenceManager.sendHeart(to: peer)
+            awayStatus = nil
+            if reachable {
+                store.presenceManager.sendHeart(to: peer)
+            } else if awayEnabled {
+                recordAwayOutcome(store.heartDropService.queueHeart(to: peer), firstName: firstName)
+            } else {
+                // First away-send: explicit consent before the one proximity feature that
+                // touches the network does anything (nothing-silent).
+                awayConsentPeer = peer
+            }
         } label: {
-            SendGoodVibesLabel(state: SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending))
+            SendGoodVibesLabel(state: SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable || awayEnabled, sending: sending))
         }
         .buttonStyle(.plain)
-        .disabled(onCooldown || !reachable || sending)
+        .disabled(onCooldown || sending)
         .accessibilityIdentifier("friends.sendHeart")
+        .alert(
+            "Deliver hearts when you're apart?",
+            isPresented: Binding(
+                get: { awayConsentPeer != nil },
+                set: { if !$0 { awayConsentPeer = nil } }
+            )
+        ) {
+            Button("Turn on") {
+                if let consented = awayConsentPeer {
+                    store.setHeartsAwayDelivery(true)
+                    recordAwayOutcome(
+                        store.heartDropService.queueHeart(to: consented),
+                        firstName: PresenceManager.firstName(of: consented.displayName)
+                    )
+                }
+                awayConsentPeer = nil
+            }
+            Button("Not now", role: .cancel) { awayConsentPeer = nil }
+        } message: {
+            Text("When a friend isn't nearby, Fernlet seals the heart end-to-end and parks it in iCloud under a rotating tag only that friend's device can recognize — never a name. It's delivered when they next open Fernlet. This is the only nearby feature that uses the network, and you can turn it off any time in Settings.")
+        }
 
         if onCooldown {
             Text("You just sent \(firstName) some warmth — hearts settle for a few minutes.")
@@ -448,11 +485,32 @@ struct FriendListView: View {
                 .frame(maxWidth: .infinity)
                 .fernletWrappingText()
         } else if !reachable {
-            Text("Hearts travel in person for now — they can be sent when you're together.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+            if awayEnabled {
+                Text(pendingDrops > 0
+                     ? (pendingDrops == 1
+                        ? "A heart is tucked away for \(firstName) — delivered when they next open Fernlet."
+                        : "\(pendingDrops) hearts are tucked away for \(firstName) — delivered when they next open Fernlet.")
+                     : "Not together right now — a heart sent now is delivered while you're apart.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .fernletWrappingText()
+            } else {
+                Text("Hearts travel in person for now — tap Send to turn on delivery while apart.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .fernletWrappingText()
+            }
+        }
+
+        if let awayStatus {
+            Text(awayStatus)
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.moss)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .fernletWrappingText()
         }
 
@@ -462,6 +520,19 @@ struct FriendListView: View {
                 .foregroundStyle(Color.moss)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .fernletWrappingText()
+        }
+    }
+
+    private func recordAwayOutcome(_ outcome: HeartDropService.QueueOutcome, firstName: String) {
+        switch outcome {
+        case .queued:
+            awayStatus = "Your heart is tucked away for \(firstName) — it'll be delivered while you're apart."
+        case .rateLimited:
+            awayStatus = "You just sent \(firstName) some warmth — hearts settle for a few minutes."
+        case .backlogFull:
+            awayStatus = "A few hearts are already waiting for \(firstName) — they'll arrive first."
+        case .disabled, .failed:
+            awayStatus = "Couldn't tuck that heart away just now."
         }
     }
 

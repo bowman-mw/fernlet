@@ -851,6 +851,12 @@ struct ContentView: View {
         } else {
             store.presenceManager.stop()
         }
+        // Away-hearts drop sync (bitchat adoptions Increment 3): piggybacks the same
+        // scene/tab/lock listener chain — reentrancy-guarded inside the service and a consent-
+        // gated no-op while `heartsAwayDelivery` is off, so this costs nothing when unused.
+        if scenePhase == .active {
+            store.heartDropService.syncNow()
+        }
     }
 
     /// Same tab set as hearts (Home/Food/Move/Social — everywhere but Private), same privacy

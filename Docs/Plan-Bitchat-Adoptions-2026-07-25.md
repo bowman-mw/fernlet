@@ -166,6 +166,24 @@ Seam notes (agent-confirmed 2026-07-25):
   `NotificationService.postSessionMessage`'s coalescing pattern is the template if a background
   fetch path ever lands.
 
+Implementation deviations (as built, 2026-07-25):
+- Bundle authenticity rides the SIGNED intro envelope (`IdentityRangingPayload
+  .heartDropPrekeyBundle`, additive JSON key) — no second standalone bundle signature to drift.
+- Recipient prekey retention = until bundle expiry (30 d) + 48 h grace, NOT delete-on-use: the
+  bundle broadcasts identically to every friend, so senders race the same prekeys; FS window =
+  bundle lifetime, still bounded and monthly-rotating (vs static-forever before).
+- Envelope `verify` gained an OPTIONAL replay cache: `ReplayCache` rejects `createdAt` older than
+  its 24 h window, which would kill every multi-day drop — the drop path passes nil and relies on
+  the 30 d durable dedup (checked BEFORE verify) instead. All live-radio paths still pass one.
+- The PresenceManager race-window fallback WAS wired after all (`queueAwayHeart` closure): a live
+  send that finds the friend gone hands the heart to the drop (which consumed the cooldown) and
+  reports `.sent`, rather than failing.
+- Cleanup needs no server query: the outbox remembers uploaded recordNames and deletes them at
+  the 14 d expiry. Reinstall orphans (outbox lost) linger as undecryptable blobs — accepted.
+- `syncOnce()` is the deterministic test seam; production uses fire-and-forget `syncNow()` off
+  the ContentView listener chain.
+- TODO capstone: add the new Settings toggle to SettingsSearchIndex if entries are manual.
+
 Known residual (documented, accepted): CloudKit public-DB records expose the writer's
 `creatorUserRecordID` to other queriers — an observer sees *that* an iCloud user wrote N drops on a
 day, never to whom. Inherent to CloudKit; consistent with the "no servers the user operates"

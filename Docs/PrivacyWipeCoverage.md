@@ -60,10 +60,10 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Worry device key | Keychain `com.fernlet.journal` | `deviceWorryKey` delete |
 | Private-media content key (shared, at-rest) | Keychain `com.fernlet.private-media` | `deleteKeychainRowForWipe` + `invalidateEncryptionKeyCache` per store |
 | Storage preferences | Keychain | `storagePreferencesResetHook` |
+| Away-hearts drop state: one-time prekeys (keychain `com.fernlet.heartdrop`), peer bundle cache, outbox, durable dedup, service identity cache | Keychain + sidecars | `heartDropService.wipeForDeleteAll` |
 
-Coming with bitchat adoptions Increment 3 (add tokens + rows in the same commit that lands the
-stores): heart-drop one-time prekeys (keychain), heart-drop outbox (sealed sidecar), heart-drop
-durable dedup (sidecar), `heartsAwayDelivery` consent setting.
+(The `heartsAwayDelivery` consent flag itself lives in FernletSettings inside the snapshot — the
+repository purge takes it.)
 
 ## Deliberate exceptions — surfaces that survive Delete everything BY DESIGN
 

@@ -66,6 +66,9 @@ struct PrivacyWipeCoverageTests {
         "deviceWorryKey",
         "deleteKeychainRowForWipe",
         "invalidateEncryptionKeyCache",
+        // Away-hearts dead-drop state (Increment 3): prekeys, peer bundles, outbox, dedup + the
+        // service's own identity cache
+        "heartDropService.wipeForDeleteAll",
         // Settings
         "storagePreferencesResetHook",
     ]

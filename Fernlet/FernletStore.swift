@@ -161,6 +161,13 @@ final class FernletStore {
         manager.heartLedger = heartLedger
         manager.onHeartSent = { [weak self] fingerprint in self?.closenessLedger.recordHeartSent(fingerprint: fingerprint) }
         manager.onHeartReceived = { [weak self] fingerprint in self?.closenessLedger.recordHeartReceived(fingerprint: fingerprint) }
+        // Away hearts (Increment 3): prekey-bundle gossip over the mesh intros, mirroring the
+        // presence path; the `heartsAway` capability advertises only under the user's consent.
+        manager.heartDropBundleProvider = { [weak self] in self?.heartDropService.currentLocalBundle() }
+        manager.onPeerPrekeyBundle = { [weak self] key, bundle in
+            self?.heartDropService.storePeerBundle(bundle, friendSigningKey: key)
+        }
+        manager.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
         return manager
     }()
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
@@ -203,6 +210,26 @@ final class FernletStore {
     /// Device-local closeness signal (in-person interaction counts) + close-slot assignment (Phase 5).
     /// Never synced — closeness is a private, per-device view.
     @ObservationIgnored private(set) lazy var closenessLedger = ClosenessLedger()
+    /// Offline "away" hearts via the CloudKit public-DB dead-drop (bitchat adoptions Increment 3).
+    /// All crypto lives on the ProximityKit side; `HeartDropCloudTransport` (CloudKitSync) ferries
+    /// only rotating day tags + sealed blobs — the S3 wall seam is `HeartDropTransporting` in
+    /// FernletDomainModel. Consent-gated by `settings.heartsAwayDelivery` at queue AND fetch;
+    /// shares the SAME heart ledger as the live paths so the 5-minute cooldown stays one gate.
+    @ObservationIgnored private(set) lazy var heartDropService: HeartDropService = {
+        let service = HeartDropService(
+            ledger: heartLedger,
+            isEnabled: { [weak self] in self?.settings.heartsAwayDelivery ?? false },
+            activeFriends: { [weak self] in
+                (self?.proximityTrustVault.trustedPeers ?? []).filter {
+                    $0.blockedAt == nil && $0.revokedAt == nil && !$0.keyAgreementPublicKey.isEmpty
+                }
+            },
+            localDayKey: { FernletDate.dayKey(for: $0) },
+            displayName: { [weak self] in self?.proximityDisplayName ?? "" }
+        )
+        service.transport = HeartDropCloudTransport()
+        return service
+    }()
     /// The standing presence radio (mesh redesign Phase 4a/4b): broadcasts rotating pairwise-DH
     /// tags so KEPT friends recognize each other nearby, and — Phase 4b — carries in-person hearts
     /// over on-demand short-lived pairwise connections (the standalone heart radio is deleted).
@@ -214,6 +241,16 @@ final class FernletStore {
         // Hearts sent/received in person feed the closeness signal (day-capped downstream).
         manager.onHeartSent = { [weak self] fingerprint in self?.closenessLedger.recordHeartSent(fingerprint: fingerprint) }
         manager.onHeartReceived = { [weak self] fingerprint in self?.closenessLedger.recordHeartReceived(fingerprint: fingerprint) }
+        // Away hearts (Increment 3): our prekey bundle rides the sealed presence intro; a friend's
+        // verified intro hands theirs to the drop cache; a race-window live-send failure falls
+        // back to queueing the drop instead of failing outright.
+        manager.heartDropBundleProvider = { [weak self] in self?.heartDropService.currentLocalBundle() }
+        manager.onPeerPrekeyBundle = { [weak self] key, bundle in
+            self?.heartDropService.storePeerBundle(bundle, friendSigningKey: key)
+        }
+        manager.queueAwayHeart = { [weak self] friend in
+            self?.heartDropService.queueHeart(to: friend) == .queued
+        }
         return manager
     }()
     @ObservationIgnored let derivedSignalsService = DerivedSignalsService()
@@ -1145,6 +1182,16 @@ final class FernletStore {
     /// when this is off (the presence radio itself keeps running under `allowNearbyPresence`).
     func setAllowNearbyHearts(_ value: Bool) {
         settings.allowNearbyHearts = value
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// Toggle away-delivery for hearts (bitchat adoptions Increment 3). Enforcement lives inside
+    /// `HeartDropService` (queue and fetch both consult the setting), so flipping this off stops
+    /// future syncs immediately; already-queued hearts stay in the outbox untouched until their
+    /// 14-day expiry (turning it back on resumes them — nothing is silently discarded).
+    func setHeartsAwayDelivery(_ value: Bool) {
+        settings.heartsAwayDelivery = value
+        if value { heartDropService.syncNow() }
         snapshotSaveCoordinator.schedule()
     }
 
@@ -3640,6 +3687,9 @@ final class FernletStore {
         } catch {
             outcome.incompleteStores.append("your nearby-friends identity")
         }
+        // Away-hearts dead-drop state (Increment 3): prekeys (keychain), peer bundle cache,
+        // outbox, durable dedup, and the service's own identity cache (the 4th live instance).
+        heartDropService.wipeForDeleteAll()
         // Orphaned at-rest keys: the journal/worry device keys (their sealed rows died with the
         // repository purge) and the shared private-media content key (every media store was emptied
         // above). All regenerate lazily on next use; keychain not-found counts as done, so these
