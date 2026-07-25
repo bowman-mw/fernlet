@@ -57,6 +57,11 @@ struct FernletDataExport: Codable {
         var hygiene: [String]?
         var journal: [JournalExport]?
         var health: Health?
+        /// Recipe names the user assigned to this day in the F3 shopping-list planner
+        /// (`FernletDay.plannedRecipeIDs`). Names only — a planned web-import recipe contributes its
+        /// name here without widening the standing gap that web-import recipe BODIES stay absent from
+        /// the `recipes` array (§4.3). Dangling ids (recipe since deleted) are dropped.
+        var plannedMeals: [String]?
 
         struct Wellbeing: Codable {
             var score: Double
@@ -162,10 +167,16 @@ extension FernletStore {
     func buildDataExport() -> FernletDataExport {
         let scoresByDay = Dictionary(dailyScores.map { ($0.dateKey, $0) }, uniquingKeysWith: { a, _ in a })
 
+        // Resolve planned-recipe ids to names for the export, unioning BOTH recipe stores exactly as the
+        // recipe-book UI does (manual/peer `recipes` + web-import `savedRecipes`). Names only; dangling
+        // ids resolve to nothing and drop.
+        let recipeNameByID = Dictionary(
+            (recipes + savedRecipes).map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+
         let dayExports: [FernletDataExport.DayExport] = loadDays().values
             .filter { $0.hasLoggedContent }
             .sorted { $0.date > $1.date }   // newest first
-            .map { day in Self.projectDay(day, score: scoresByDay[day.date], target: settings.hydrationTarget) }
+            .map { day in Self.projectDay(day, score: scoresByDay[day.date], target: settings.hydrationTarget, recipeNameByID: recipeNameByID) }
 
         let memoryExports = memories.map {
             FernletDataExport.MemoryExport(category: $0.category, note: $0.text, remembered: $0.sourceDate)
@@ -208,7 +219,7 @@ extension FernletStore {
         let about = FernletDataExport.About(
             exportedOn: todayKey,
             includes: [
-                "Daily logs (meals, workouts, sleep, water, hygiene, journal) grouped by day",
+                "Daily logs (meals, workouts, sleep, water, hygiene, journal, planned meals) grouped by day",
                 "Non-sensitive Apple Health context (steps, energy, sleep hours, heart rate)",
                 "Your wellbeing scores, core memories, goals, recipes, wardrobe, coins, and friends",
             ],
@@ -301,7 +312,7 @@ extension FernletStore {
 
     // MARK: - Projection helpers (static, pure)
 
-    private static func projectDay(_ day: FernletDay, score: DailyHealthScore?, target: Int) -> FernletDataExport.DayExport {
+    private static func projectDay(_ day: FernletDay, score: DailyHealthScore?, target: Int, recipeNameByID: [UUID: String] = [:]) -> FernletDataExport.DayExport {
         let meals = day.meals.map { m in
             FernletDataExport.MealExport(
                 name: m.name, type: m.mealType.rawValue, calories: m.calories,
@@ -328,6 +339,8 @@ extension FernletStore {
                 note: $0.note.isEmpty ? nil : $0.note)
         }
         let hygiene = day.hygiene.map(\.rawValue).sorted()
+        // Dangling planned ids (recipe since deleted) resolve to no name and drop silently (§4.3).
+        let plannedMeals = day.plannedRecipeIDs.compactMap { recipeNameByID[$0] }
 
         return FernletDataExport.DayExport(
             day: day.date,
@@ -342,7 +355,8 @@ extension FernletStore {
             water: day.bottleCount > 0 ? .init(bottles: day.bottleCount, targetBottles: target) : nil,
             hygiene: hygiene.isEmpty ? nil : hygiene,
             journal: journal.isEmpty ? nil : journal,
-            health: projectHealth(day.healthContext))
+            health: projectHealth(day.healthContext),
+            plannedMeals: plannedMeals.isEmpty ? nil : plannedMeals)
     }
 
     /// Non-sensitive Apple Health context only — activity + body. Cycle, intimate, and mindfulness
@@ -366,7 +380,11 @@ extension FernletStore {
         return health
     }
 
-    private static func recipeIngredientLines(_ recipe: RecipeDefinition, nameByFoodID: [UUID: String] = [:]) -> [String]? {
+    /// Collapses either recipe shape to `[String]`: a web import's free-text `ingredientLines`, or a
+    /// manual recipe's structured ingredients resolved to `"Name (2 cup)"`. The one both-shapes unifier
+    /// (§4.1); also reused by the F3 grocery composer for web-import per-recipe sections, so it is
+    /// `internal` (not `private`) to reach `GroceryListComposer` in the same target.
+    static func recipeIngredientLines(_ recipe: RecipeDefinition, nameByFoodID: [UUID: String] = [:]) -> [String]? {
         if let webImport = recipe.webImport, !webImport.ingredientLines.isEmpty {
             return webImport.ingredientLines
         }

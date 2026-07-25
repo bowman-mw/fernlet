@@ -671,6 +671,41 @@ public final class DiaryStore {
         deletePlannedWorkout(plannedWorkout, date: date)
     }
 
+    // MARK: - Planned recipes (F3 weekly shopping-list planner)
+
+    /// Assigns a recipe to a day in the shopping-list planner. Idempotent (a recipe already planned on
+    /// the day is not duplicated). Mirrors `planWorkout`'s per-day-row mutation exactly — the field
+    /// rides `DayRecord.payloadData` via Codable, so no schema change and per-row sync for free.
+    public func planRecipe(_ recipeID: UUID, date: String) {
+        assert(!date.isEmpty, "planned recipe date required")
+        mutateDay(date: date) { day in
+            guard !day.plannedRecipeIDs.contains(recipeID) else { return }
+            day.plannedRecipeIDs.append(recipeID)
+        }
+    }
+
+    /// Removes a recipe from a day's plan. A no-op if it was not planned there.
+    public func unplanRecipe(_ recipeID: UUID, date: String) {
+        assert(!date.isEmpty, "planned recipe date required")
+        mutateDay(date: date) { day in
+            day.plannedRecipeIDs.removeAll { $0 == recipeID }
+        }
+    }
+
+    /// The recipe ids planned across a run of day keys, de-duplicated but stable-ordered (first day a
+    /// recipe appears wins). Dangling ids (recipe since deleted) are NOT filtered here — the caller
+    /// resolves against the recipe stores and drops what no longer exists (§4.3).
+    public func plannedRecipeIDs(forDays dayKeys: [String]) -> [UUID] {
+        var seen = Set<UUID>()
+        var ordered: [UUID] = []
+        for key in dayKeys {
+            for id in loadDay(for: key).plannedRecipeIDs where seen.insert(id).inserted {
+                ordered.append(id)
+            }
+        }
+        return ordered
+    }
+
     public func setWorkoutProfile(_ profile: WorkoutProfile) {
         batchSnapshotPersistence { settings.workoutProfile = profile }
     }

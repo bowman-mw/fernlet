@@ -1838,6 +1838,20 @@ final class FernletStore {
         diary.deletePlannedWorkout(plannedWorkout, date: date)
     }
 
+    // MARK: - Planned recipes (F3 weekly shopping-list planner)
+
+    func planRecipe(_ recipeID: UUID, date: String) {
+        diary.planRecipe(recipeID, date: date)
+    }
+
+    func unplanRecipe(_ recipeID: UUID, date: String) {
+        diary.unplanRecipe(recipeID, date: date)
+    }
+
+    func plannedRecipeIDs(forDays dayKeys: [String]) -> [UUID] {
+        diary.plannedRecipeIDs(forDays: dayKeys)
+    }
+
     func completePlannedWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
         assert(!date.isEmpty, "planned workout date required")
         var workout = plannedWorkout.completedWorkout

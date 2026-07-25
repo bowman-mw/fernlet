@@ -3540,6 +3540,33 @@ struct RecipeBookSheet: View {
                     }
                     .buttonStyle(.plain)
 
+                    // F3 grocery list: a weekly planner (persists a per-day plan) and a one-off list
+                    // builder. Both aggregate through the shared Phase A pipeline and share to Notes.
+                    HStack(spacing: 12) {
+                        NavigationLink {
+                            WeeklyMealPlannerView(store: store)
+                        } label: {
+                            Label("Meal planner", systemImage: "calendar")
+                                .font(.fernlet(.label))
+                                .foregroundStyle(Color.moss)
+                                .frame(maxWidth: .infinity)
+                                .padding(14)
+                                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                        NavigationLink {
+                            ShoppingListBuilderView(store: store)
+                        } label: {
+                            Label("Shopping list", systemImage: "cart")
+                                .font(.fernlet(.label))
+                                .foregroundStyle(Color.moss)
+                                .frame(maxWidth: .infinity)
+                                .padding(14)
+                                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
                     TextField("Search recipes and products", text: $searchText)
                         .sheetTextInput()
                     let allManual = filteredManualRecipes
