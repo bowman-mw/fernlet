@@ -631,8 +631,15 @@ public enum RecipeWebImporter {
         }
         if let dictionary = value as? [String: Any] {
             // HowToSection: flatten its ordered sub-steps (never surface the section name as a step).
-            if let itemList = dictionary["itemListElement"] as? [Any] {
-                return itemList.flatMap(orderedSteps(from:))
+            // schema.org permits `itemListElement` to be either an array OR a single object, so recurse
+            // on the raw value rather than only matching `[Any]` — a single-object section would
+            // otherwise fall through to the text/name branch and emit the SECTION NAME as the step
+            // (dropping every real sub-step).
+            if let itemList = dictionary["itemListElement"], !(itemList is NSNull) {
+                // Presence of `itemListElement` marks this as a section; return its flattened sub-steps
+                // and do NOT fall through to the section's own `name` (that would surface the section
+                // heading as a step). An empty result drops the section, matching the array path.
+                return orderedSteps(from: itemList)
             }
             // HowToStep: prefer `text`, fall back to `name`.
             if let text = stringValue(dictionary["text"]) ?? stringValue(dictionary["name"]) {

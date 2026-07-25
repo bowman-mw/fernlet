@@ -117,7 +117,12 @@ public nonisolated enum RecipeSubstitution {
             createdAt: now,
             updatedAt: now,
             webImport: nil,
-            parentRecipeID: source.id
+            parentRecipeID: source.id,
+            // F5: carry the source's cooking steps into the fork. A one-ingredient swap leaves the
+            // step text broadly valid (and user-editable), so the "(adapted)" copy keeps its Cook
+            // walker instead of silently losing it. Without this the added `steps` field defaults to
+            // nil and manual-recipe steps vanish on fork.
+            steps: source.steps
         )
     }
 

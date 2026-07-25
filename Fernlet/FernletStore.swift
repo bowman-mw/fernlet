@@ -2847,7 +2847,9 @@ final class FernletStore {
         diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
     }
 
-    func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) {
+    // `steps` is REQUIRED (no default) — see the note on `DiaryStore.updateRecipe`: the stored steps are
+    // overwritten unconditionally, so a defaulted-nil would silently erase them.
+    func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]?) {
         diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
     }
 

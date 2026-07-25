@@ -958,7 +958,10 @@ public final class DiaryStore {
         }
     }
 
-    public func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) {
+    // `steps` is REQUIRED (no default): it is written unconditionally at line ~978, so a defaulted-nil
+    // would silently erase a recipe's stored steps for any caller that forgot to pass them. Callers must
+    // always pass the editor's current step list (nil/[] only when the user genuinely cleared them).
+    public func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]?) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         assert(!trimmedName.isEmpty, "recipe name required")
         guard let index = recipes.firstIndex(where: { $0.id == recipe.id }) else { return }

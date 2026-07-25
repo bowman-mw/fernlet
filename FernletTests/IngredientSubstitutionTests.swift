@@ -34,7 +34,7 @@ import FernletDomainModel
         )
     }
 
-    private func recipe(ingredients: [RecipeIngredient], name: String = "Weeknight Pasta") -> RecipeDefinition {
+    private func recipe(ingredients: [RecipeIngredient], name: String = "Weeknight Pasta", steps: [RecipeStep]? = nil) -> RecipeDefinition {
         RecipeDefinition(
             name: name,
             servings: 4,
@@ -42,7 +42,8 @@ import FernletDomainModel
             notes: "gentle",
             source: "manual",
             createdAt: Date(timeIntervalSince1970: 1_000),
-            updatedAt: Date(timeIntervalSince1970: 1_000)
+            updatedAt: Date(timeIntervalSince1970: 1_000),
+            steps: steps
         )
     }
 
@@ -232,6 +233,21 @@ import FernletDomainModel
         // Source recipe is byte-for-byte unchanged (never mutated).
         #expect(source == sourceSnapshot)
         #expect(source.parentRecipeID == nil)
+    }
+
+    @Test func forkCarriesSourceStepsIntoTheFork() {
+        // F5: a one-ingredient swap must not drop the source's cooking steps — the "(adapted)" copy
+        // keeps its Cook walker. Step text stays broadly valid after a substitution.
+        let butter = food(name: "Butter", servingUnit: "g")
+        let margarine = food(name: "Margarine", servingUnit: "g")
+        let butterIng = RecipeIngredient(foodItemId: butter.id, quantity: 50, unit: "g")
+        let steps = [RecipeStep(text: "Cream the fat and sugar."), RecipeStep(text: "Fold in flour.")]
+        let source = recipe(ingredients: [butterIng], steps: steps)
+
+        let newIng = RecipeSubstitution.substitutedIngredient(replacing: butterIng, originalFoodItem: butter, with: margarine)
+        let fork = try! #require(RecipeSubstitution.fork(source: source, replacing: butterIng.id, with: newIng))
+
+        #expect(fork.steps?.map(\.text) == ["Cream the fat and sugar.", "Fold in flour."])
     }
 
     @Test func forkReturnsNilForUnknownIngredient() {

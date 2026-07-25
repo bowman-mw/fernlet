@@ -410,13 +410,44 @@ struct CookingModeView: View {
         .background(Color.parchment)
     }
 
+    /// A dot row reads well only for short recipes; web imports routinely carry 20–40 steps, where a
+    /// fixed-size unbounded HStack of dots runs off-screen. Above the threshold fall back to a compact
+    /// capsule progress bar + "n / total" label that fits any step count.
+    private static let maxProgressDots = 12
+
+    @ViewBuilder
     private var progressDots: some View {
-        HStack(spacing: 8) {
-            ForEach(steps.indices, id: \.self) { index in
-                Circle()
-                    .fill(index <= stepIndex ? Color.moss : Color.moss.opacity(0.25))
-                    .frame(width: 8, height: 8)
+        if steps.count <= Self.maxProgressDots {
+            HStack(spacing: 8) {
+                ForEach(steps.indices, id: \.self) { index in
+                    Circle()
+                        .fill(index <= stepIndex ? Color.moss : Color.moss.opacity(0.25))
+                        .frame(width: 8, height: 8)
+                }
             }
+            .animation(.easeInOut(duration: 0.35), value: stepIndex)
+        } else {
+            compactProgressBar
+        }
+    }
+
+    private var compactProgressBar: some View {
+        let total = max(steps.count, 1)
+        let fraction = Double(stepIndex + 1) / Double(total)
+        return HStack(spacing: 10) {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.moss.opacity(0.25))
+                    Capsule()
+                        .fill(Color.moss)
+                        .frame(width: max(6, proxy.size.width * fraction))
+                }
+            }
+            .frame(height: 6)
+            Text("\(stepIndex + 1) / \(total)")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .monospacedDigit()
         }
         .animation(.easeInOut(duration: 0.35), value: stepIndex)
     }

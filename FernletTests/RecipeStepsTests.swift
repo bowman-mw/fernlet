@@ -101,6 +101,17 @@ struct RecipeStepsTests {
         #expect(steps.map(\.text) == ["Dice vegetables", "Measure spices", "Sauté aromatics", "Simmer"])
     }
 
+    @Test func webImportHowToSectionWithSingleObjectItemListFlattensNotSectionName() {
+        // schema.org permits `itemListElement` to be a single object rather than an array. The section's
+        // sub-step must still be surfaced, never the section NAME ("Prep").
+        let value: [Any] = [
+            ["@type": "HowToSection", "name": "Prep",
+             "itemListElement": ["@type": "HowToStep", "text": "Dice vegetables"]]
+        ]
+        let steps = RecipeWebImporter.orderedSteps(from: value)
+        #expect(steps.map(\.text) == ["Dice vegetables"])
+    }
+
     @Test func webImportPlainStringArrayIsOneStepPerElement() {
         let value: [Any] = ["Boil water", "Add pasta", "Drain and serve"]
         let steps = RecipeWebImporter.orderedSteps(from: value)
