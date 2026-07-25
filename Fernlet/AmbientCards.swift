@@ -3,6 +3,7 @@ import LocalPersistence
 import FernletFoundation
 import FernletDomainModel
 import FernletScoring
+import FoodCatalog
 import PrivateHealthStore
 import ProximityKit
 import AppServices
@@ -406,18 +407,38 @@ struct AmbientCardsView: View {
 
     @ViewBuilder
     private var micronutrientBubble: some View {
-        if let gap = activeNutrientGap() {
+        if let suggestion = activeNutrientSuggestion() {
+            let gap = suggestion.gap
             FernletCard {
                 HStack(alignment: .top, spacing: 12) {
                     ambientIcon("leaf", tint: .fern)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("A gentle nudge")
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(NutrientNudgeCopy.headline)
                             .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.fern)
-                        Text("\(gap.nutrientName) has been a little low lately. No pressure — a bit more when it's easy.")
+                        Text(nutrientCopy(for: suggestion))
                             .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
+                        // "add it": the smallest correct integration — reuse the existing
+                        // text→meal logging path (same as the forgotten-favorites chips),
+                        // prefilled with the top curated food. Only offered when a 14-day
+                        // gap named a food. Accepting consumes the per-nutrient suppression.
+                        if let food = suggestion.foods.first {
+                            Button {
+                                store.addMeal(from: food.displayName, date: store.todayKey)
+                                store.dismissNutrientBubble(gap.nutrientKey)
+                            } label: {
+                                Text(NutrientNudgeCopy.addButtonLabel(food: food))
+                                    .font(.fernlet(.label))
+                                    .foregroundStyle(Color.bark)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.fern.opacity(0.16), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Add \(food.displayName) to today")
+                        }
                     }
                     Spacer(minLength: 0)
                     Button {
@@ -436,11 +457,22 @@ struct AmbientCardsView: View {
         }
     }
 
-    private func activeNutrientGap() -> NutrientGap? {
-        store.derivedSignals
-            .flatMap(\.nutrientGaps)
-            .filter { $0.status == .gap && $0.windowDays >= 7 && $0.dataCoverageRatio >= 0.5 }
-            .first { store.isNutrientBubbleActive(for: $0.nutrientKey) }
+    private func nutrientCopy(for plan: NutrientNudgePlanner.Plan) -> String {
+        plan.namesFoods
+            ? NutrientNudgeCopy.suggestion(nutrientName: plan.gap.nutrientName, foods: plan.foods)
+            : NutrientNudgeCopy.passive(nutrientName: plan.gap.nutrientName)
+    }
+
+    /// Delegates to the pure `NutrientNudgePlanner` (which dedups the 7/14-day signals —
+    /// §3.5 bug fix — keeps the passive card on the 7-day window, and names curated foods
+    /// only for a 14-day gap, per decision §11.1). Suppression uses the same
+    /// per-nutrient-key `nutrientBubbleDismissedUntil` window as before.
+    private func activeNutrientSuggestion() -> NutrientNudgePlanner.Plan? {
+        NutrientNudgePlanner.plan(
+            from: store.derivedSignals.flatMap(\.nutrientGaps),
+            sources: CuratedNutrientSources.shared,
+            isActive: { store.isNutrientBubbleActive(for: $0) }
+        )
     }
 
     // MARK: - Shared
