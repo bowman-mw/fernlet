@@ -47,6 +47,12 @@ public struct MealPhotoStore {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
+    /// Delete-all seam (Docs/PrivacyWipeCoverage.md): drops the provider-cached media key after
+    /// the global wipe deletes the shared keychain row, so RAM matches the keychain until relaunch.
+    public func invalidateEncryptionKeyCache() {
+        keyProvider.invalidateCachedKey()
+    }
+
     /// Normalizes, seals and stores `data`, returning the new id. Returns nil — writing NOTHING — when
     /// the bytes aren't a decodable image or no encryption key is available: a photo is dropped rather
     /// than persisted in the clear (fail-closed, as with the sealed peer store).

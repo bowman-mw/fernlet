@@ -3565,6 +3565,13 @@ final class FernletStore {
         // their social data visibly surviving a wipe in the running session.
         meshNetworkManager.clothingShop.clearAll()
 
+        // 7b. More session-scoped social surfaces that would otherwise survive the wipe in a running
+        // session (PrivacyWipeCoverage gap, 2026-07-25): temp messages are memory-only but a wipe is a
+        // harder stop than the session end that normally clears them, and the presence radio keeps
+        // advertising/matching until stopped.
+        meshNetworkManager.sessionMessages.clear()
+        presenceManager.stop()
+
         // `resetAll()` reports any per-row store whose CloudKit delete failed (designs / recipes / coins
         // left on disk to re-sync) plus the Worry Box purge. Those used to be discarded, so a failed
         // delete there looked complete.
@@ -3616,6 +3623,33 @@ final class FernletStore {
             outcome.incompleteStores.append("AI activity log")
         }
         await AIAuditLog.shared.clear()
+
+        // 11. Proximity identity + sealed-content device keys (bitchat adoptions Increment 1,
+        // Docs/PrivacyWipeCoverage.md). `IdentityService.wipe()` had ZERO call sites before this, so
+        // the Ed25519/X25519 identity — which even survives an app reinstall via the keychain —
+        // outlived "Delete everything", leaving a post-wipe "fresh start" recognizable to every
+        // friend's trust vault. Wiping deliberately breaks every trust relationship (friends
+        // re-friend in person; same semantics as bitchat's panic wipe) and takes the backup-escrow
+        // rows under the same keychain service with it — their sealed backups were already deleted
+        // in step 2, so the keys are orphans. All three live IdentityService caches are wiped so RAM
+        // matches the keychain until relaunch.
+        do {
+            try meshNetworkManager.wipeIdentityForDeleteAll()
+            try presenceManager.wipeIdentityForDeleteAll()
+            try recipeShareManager.wipeIdentityForDeleteAll()
+        } catch {
+            outcome.incompleteStores.append("your nearby-friends identity")
+        }
+        // Orphaned at-rest keys: the journal/worry device keys (their sealed rows died with the
+        // repository purge) and the shared private-media content key (every media store was emptied
+        // above). All regenerate lazily on next use; keychain not-found counts as done, so these
+        // carry no incomplete-store signal.
+        KeychainItem.delete(for: .deviceJournalKey, service: KeychainItem.journalService)
+        KeychainItem.delete(for: .deviceWorryKey, service: KeychainItem.journalService)
+        KeychainPrivateMediaKeyProvider.deleteKeychainRowForWipe()
+        mealPhotoStore.invalidateEncryptionKeyCache()
+        progressPhotoStore.invalidateEncryptionKeyCache()
+        recipePhotoStore.invalidateEncryptionKeyCache()
 
         if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {
             outcome.incompleteStores.append("your storage settings")

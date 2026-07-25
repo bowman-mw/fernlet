@@ -11,6 +11,16 @@ public protocol PrivateMediaKeyProviding {
     /// The media-encryption key, generating and persisting one on first use.
     /// Returns nil only when the key cannot be created or read (e.g. keychain unavailable).
     func mediaKey() -> SymmetricKey?
+
+    /// Delete-all seam (Docs/PrivacyWipeCoverage.md): drop any in-memory copy of the key so a
+    /// post-wipe capture can't encrypt under a keychain row that no longer exists (such bytes
+    /// would surface as `.unreadable` after relaunch mints a fresh key). No-op by default —
+    /// in-memory test providers have nothing stale to drop.
+    func invalidateCachedKey()
+}
+
+extension PrivateMediaKeyProviding {
+    public func invalidateCachedKey() {}
 }
 
 /// Keychain-backed provider for `PrivateMediaStore`'s at-rest key.
@@ -48,5 +58,18 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
         guard status == errSecSuccess else { return nil }
         cachedKey = key
         return key
+    }
+
+    public func invalidateCachedKey() {
+        cachedKey = nil
+    }
+
+    /// Delete-all seam (Docs/PrivacyWipeCoverage.md): removes the shared at-rest media key row.
+    /// Static because the row is one keychain item shared by every `PrivateMediaStore` instance —
+    /// per-store `deleteAll()` must NEVER touch it (clearing one store would orphan the others'
+    /// remaining photos). Only the global delete-all calls this, after all stores were emptied.
+    /// `mediaKey()` mints a fresh key on next use; keychain not-found counts as done.
+    public static func deleteKeychainRowForWipe() {
+        KeychainItem.delete(account: account, service: service)
     }
 }
