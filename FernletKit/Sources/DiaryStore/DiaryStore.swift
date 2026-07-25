@@ -525,21 +525,24 @@ public final class DiaryStore {
     }
 
     /// Logs a product resolved from a barcode scan (user-item pairing or a barcode-carrying catalog)
-    /// as a single meal. Same shape as the saved-product path — one serving of a known food.
-    @discardableResult public func logBarcodeScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
+    /// as a single meal. `servings` scales the known per-serving macros/micros and is persisted as a
+    /// single editable component (see `logFoodItemMeal`) so the count can be corrected later.
+    @discardableResult public func logBarcodeScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil, servings: Double = 1) -> Meal {
         logFoodItemMeal(
             foodItem, mealType: mealType, date: date,
-            confidence: "Scanned product", note: "Logged from a barcode scan.", source: MealLogSource.barcodeScan
+            confidence: "Scanned product", note: "Logged from a barcode scan.", source: MealLogSource.barcodeScan,
+            servings: servings
         )
     }
 
     /// Logs a product whose macros came from a scanned nutrition label (the photo-capture label path)
-    /// as a single meal. Same shape as the barcode/saved-product paths — one serving of a known food —
-    /// but with truthful label-scan provenance instead of barcode-scan.
-    @discardableResult public func logLabelScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
+    /// as a single meal — truthful label-scan provenance. `servings` scales the per-serving macros/micros
+    /// and is persisted as a single editable component so the count can be corrected later.
+    @discardableResult public func logLabelScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil, servings: Double = 1) -> Meal {
         logFoodItemMeal(
             foodItem, mealType: mealType, date: date,
-            confidence: "Scanned label", note: "Logged from a nutrition label scan.", source: MealLogSource.labelScan
+            confidence: "Scanned label", note: "Logged from a nutrition label scan.", source: MealLogSource.labelScan,
+            servings: servings
         )
     }
 
@@ -556,15 +559,46 @@ public final class DiaryStore {
     }
 
     /// Shared "one serving of this known food" meal construction for the product-shaped log paths.
-    private func logFoodItemMeal(_ foodItem: FoodItem, mealType: MealType?, date: String?, confidence: String, note: String, source: String) -> Meal {
+    ///
+    /// `servings` is `nil` for the saved-product / nutrient-nudge paths — those keep the original
+    /// one-serving, no-component shape exactly. The scan paths pass an explicit count (default 1):
+    /// the per-serving macros/micros are scaled by it AND persisted as a single `.serving` component,
+    /// so the meal opens the component editor and the count stays correctable via MealCorrectionSheet.
+    /// The component's macros/micros are the already-scaled totals (the convention every consumer of
+    /// `MealComponentSnapshot` relies on — `MealBuilder.totals` sums them directly).
+    private func logFoodItemMeal(_ foodItem: FoodItem, mealType: MealType?, date: String?, confidence: String, note: String, source: String, servings: Double? = nil) -> Meal {
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "food product meal date required")
+        let loggedMacros: Macros
+        let loggedMicros: Micronutrients
+        let components: [MealComponentSnapshot]
+        if let servings {
+            let count = max(servings, 0)
+            loggedMacros = foodItem.macros.scaled(by: count)
+            loggedMicros = foodItem.micronutrients.scaled(by: count)
+            components = [
+                MealComponentSnapshot(
+                    foodItemId: foodItem.id,
+                    name: foodItem.name,
+                    quantity: count,
+                    unit: RecipeUnit.serving.rawValue,
+                    macros: loggedMacros,
+                    micronutrients: loggedMicros
+                )
+            ]
+        } else {
+            loggedMacros = foodItem.macros
+            loggedMicros = foodItem.micronutrients
+            components = []
+        }
         let meal = Meal(
             name: foodItem.name,
             mealType: mealType ?? MealParser.classifyMealType(foodItem.name),
-            macros: foodItem.macros,
-            micronutrientSnapshot: foodItem.micronutrients,
+            macros: loggedMacros,
+            micronutrientSnapshot: loggedMicros,
+            componentSnapshots: components,
             mealSource: .manual,
+            // Quality tracks the food's inherent per-serving protein, not how much was logged.
             quality: foodItem.macros.protein >= Macros.goodProteinThreshold ? .good : .ok,
             confidence: confidence,
             note: note,

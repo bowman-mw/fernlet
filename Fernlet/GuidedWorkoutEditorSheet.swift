@@ -15,6 +15,7 @@ struct GuidedWorkoutEditorSheet: View {
     @State private var rows: [PrescribedExercise]
     @State private var pickerSelection: ExerciseTarget?
     @State private var pickerResetToken = 0
+    @State private var showDiscardConfirm = false
 
     init(store: FernletStore, session: WorkoutProgram.SessionSuggestion) {
         self.store = store
@@ -23,6 +24,14 @@ struct GuidedWorkoutEditorSheet: View {
     }
 
     private var goal: GoalType { store.settings.selectedGoal }
+
+    /// The row list diverges from the session this editor opened on (reorder, add, remove, or a
+    /// sets/reps/rest tweak). `PrescribedExercise` is Equatable, so this is an honest compare.
+    private var isDirty: Bool { rows != session.exercises }
+
+    private func attemptCancel() {
+        if isDirty { showDiscardConfirm = true } else { dismiss() }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,6 +55,9 @@ struct GuidedWorkoutEditorSheet: View {
             SheetSaveBar(label: "Save changes") { save() }
         }
         .background(Color.parchment)
+        .keyboardDoneToolbar()
+        .interactiveDismissDisabled(isDirty)
+        .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
     }
 
     // MARK: Header
@@ -62,7 +74,7 @@ struct GuidedWorkoutEditorSheet: View {
             }
             Spacer()
             Button {
-                dismiss()
+                attemptCancel()
             } label: {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))

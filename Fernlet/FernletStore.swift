@@ -1744,12 +1744,12 @@ final class FernletStore {
         diary.logWebImportedFoodProduct(foodItem, mealType: mealType, date: date)
     }
 
-    @discardableResult func logBarcodeScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
-        diary.logBarcodeScannedFoodItem(foodItem, mealType: mealType, date: date)
+    @discardableResult func logBarcodeScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil, servings: Double = 1) -> Meal {
+        diary.logBarcodeScannedFoodItem(foodItem, mealType: mealType, date: date, servings: servings)
     }
 
-    @discardableResult func logLabelScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
-        diary.logLabelScannedFoodItem(foodItem, mealType: mealType, date: date)
+    @discardableResult func logLabelScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil, servings: Double = 1) -> Meal {
+        diary.logLabelScannedFoodItem(foodItem, mealType: mealType, date: date, servings: servings)
     }
 
     func savedRecipeShareText(for recipe: RecipeDefinition) -> String {

@@ -1436,6 +1436,17 @@ struct LockedMacroSummary: View {
     }
 }
 
+#if canImport(UIKit)
+/// A resolved scanned or label-parsed food awaiting the quick serving-count confirmation before it
+/// is logged. `kind` selects the truthful log path (barcode vs. nutrition-label provenance).
+private struct PendingScannedFood: Identifiable {
+    enum Kind { case barcode, label }
+    let id = UUID()
+    let item: FoodItem
+    let kind: Kind
+}
+#endif
+
 struct MealSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -1473,6 +1484,9 @@ struct MealSheet: View {
     /// Set when the router (or a chooser branch) couldn't read the photo — a calm retry prompt, never
     /// a hard error.
     @State private var captureError: String?
+    /// A resolved scanned/label-parsed food held for the quick serving-count confirm step before it is
+    /// logged — set by the barcode/label resolve callbacks instead of logging immediately.
+    @State private var pendingScannedFood: PendingScannedFood?
     #endif
 
     var body: some View {
@@ -1484,12 +1498,11 @@ struct MealSheet: View {
                         RecipeSheet(store: store, isEmbeddedInNavigationStack: true)
                     case .scanBarcode:
                         #if canImport(UIKit)
-                        // Barcode hit (or a just-remembered product) logs directly — scanning a
-                        // product is itself the explicit "log this" gesture, like a cached web product.
+                        // Barcode hit (or a just-remembered product): hand off to the quick serving
+                        // step, which logs once the count is confirmed (prefilled from last time, so
+                        // accepting is a single tap).
                         BarcodeResolveFlowView(store: store) { foodItem in
-                            let meal = store.logBarcodeScannedFoodItem(foodItem, mealType: mealType)
-                            onLogged([meal])
-                            dismiss()
+                            pendingScannedFood = PendingScannedFood(item: foodItem, kind: .barcode)
                         }
                         #else
                         EmptyView()
@@ -1501,19 +1514,15 @@ struct MealSheet: View {
                         // The auto-router already read this barcode from the captured photo — resolve
                         // it through the same catalog-hit / name-&-remember path as a live scan.
                         BarcodePayloadResolveView(store: store, payload: payload) { foodItem in
-                            let meal = store.logBarcodeScannedFoodItem(foodItem, mealType: mealType)
-                            onLogged([meal])
-                            dismiss()
+                            pendingScannedFood = PendingScannedFood(item: foodItem, kind: .barcode)
                         }
                     case .captureLabel(let result):
                         // The auto-router parsed a nutrition label — hand off to the existing
                         // name-it-&-remember screen with the macros pre-filled (no barcode, no rescan).
                         // Log via the label-scan path so provenance is truthful: this meal came from a
-                        // scanned nutrition label, not a barcode.
+                        // scanned nutrition label, not a barcode. The serving step confirms the count.
                         BarcodeNotFoundView(store: store, barcode: "", prefilledScan: result) { foodItem in
-                            let meal = store.logLabelScannedFoodItem(foodItem, mealType: mealType)
-                            onLogged([meal])
-                            dismiss()
+                            pendingScannedFood = PendingScannedFood(item: foodItem, kind: .label)
                         }
                     #else
                     case .captureBarcode, .captureLabel:
@@ -1627,6 +1636,27 @@ struct MealSheet: View {
                     captureChooser = nil
                 }
             )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
+        }
+        .sheet(item: $pendingScannedFood) { pending in
+            BarcodeServingStepView(
+                foodItem: pending.item,
+                initialServings: BarcodeServingMemory.lastServings(for: pending.item.barcode) ?? 1
+            ) { servings in
+                let meal: Meal
+                switch pending.kind {
+                case .barcode:
+                    meal = store.logBarcodeScannedFoodItem(pending.item, mealType: mealType, servings: servings)
+                case .label:
+                    meal = store.logLabelScannedFoodItem(pending.item, mealType: mealType, servings: servings)
+                }
+                BarcodeServingMemory.setLastServings(servings, for: pending.item.barcode)
+                pendingScannedFood = nil
+                onLogged([meal])
+                dismiss()
+            }
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(20)

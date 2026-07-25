@@ -4,6 +4,7 @@ import UIKit
 import FernletDomainModel
 import ProximityKit
 import FernletUI
+import os
 
 // MARK: - Camera preview (UIViewRepresentable)
 
@@ -97,9 +98,10 @@ final class CameraCaptureController: NSObject {
     @ObservationIgnored private let sessionQueue = DispatchQueue(label: "com.fernlet.disposable-camera.session")
     @ObservationIgnored private var shouldRunSession = false
     @ObservationIgnored private var sessionConfiguredOnQueue = false
-    // Set on main actor before capture; consumed once on AVFoundation queue.
-    // Single-flight guarantee (shutter disarms before capturePhoto returns) prevents races.
-    @ObservationIgnored nonisolated(unsafe) private var captureCompletion: CheckedContinuation<Data, Error>?
+    // Reserved on the main actor before capture; consumed once on the AVFoundation delegate
+    // queue. The lock owns the slot so both isolation domains touch it safely (the previous
+    // `nonisolated(unsafe) var` was a real data race). Single-flight is enforced by the reserve.
+    @ObservationIgnored private let captureCompletion = OSAllocatedUnfairLock<CheckedContinuation<Data, Error>?>(initialState: nil)
 
     override init() {
         super.init()
@@ -245,16 +247,23 @@ final class CameraCaptureController: NSObject {
                 cont.resume(throwing: CocoaError(.fileNoSuchFile))
                 return
             }
-            guard captureCompletion == nil else {
+            // Reserve the single-flight slot first (preserves the original error precedence:
+            // in-progress beats unavailable).
+            let reserved = captureCompletion.withLock { stored -> Bool in
+                guard stored == nil else { return false }
+                stored = cont
+                return true
+            }
+            guard reserved else {
                 cont.resume(throwing: CaptureError.captureInProgress)
                 return
             }
             guard canCapturePhoto, photoOutput.connection(with: .video) != nil else {
+                captureCompletion.withLock { $0 = nil }
                 cont.resume(throwing: CaptureError.cameraUnavailable)
                 return
             }
 
-            captureCompletion = cont
             let settings = AVCapturePhotoSettings()
             settings.flashMode = .off
             photoOutput.capturePhoto(with: settings, delegate: self)
@@ -268,8 +277,11 @@ extension CameraCaptureController: AVCapturePhotoCaptureDelegate {
         didFinishProcessingPhoto photo: AVCapturePhoto,
         error: Error?
     ) {
-        let cont = captureCompletion
-        captureCompletion = nil
+        let cont = captureCompletion.withLock { stored -> CheckedContinuation<Data, Error>? in
+            let pending = stored
+            stored = nil
+            return pending
+        }
         if let error {
             cont?.resume(throwing: error)
         } else if let data = photo.fileDataRepresentation() {
@@ -1024,6 +1036,8 @@ struct DisposableCameraView: View {
                     reviewPresented = false
                 } catch CocoaError.userCancelled {
                     photoSaveError = "Fernlet needs access to your Photo Library to save photos. Open Settings to grant access."
+                } catch is FriendPhotoLibrarySaver.NothingSavedError {
+                    photoSaveError = "None of the selected pictures could be saved. They may be corrupted — try choosing different ones."
                 } catch {
                     photoSaveError = "Could not save to your photo library. Please try again."
                 }
@@ -1031,7 +1045,7 @@ struct DisposableCameraView: View {
             discardAll: {
                 manager.deleteAllSessionPhotos()
                 finalizeFriendKeeps()
-                Task {
+                Task { @MainActor in
                     await manager.leaveSessionAfterNotifyingPeers()
                     reviewPresented = false
                 }

@@ -353,9 +353,15 @@ struct ContentView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !isLandscapeDisposableCameraActive {
+                if !isDisposableCameraSessionActive {
                     customTabBar
                         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: isCustomTabBarCompact)
+                        // Keep the floating tab bar pinned to the physical bottom (behind the
+                        // keyboard) instead of riding up above it. Scoping the keyboard-safe-area
+                        // ignore to the bar ONLY changes how safeAreaInset anchors the bar — the
+                        // main tab content still receives the keyboard region in its safe area, so
+                        // scroll views and focused fields inside the pages keep avoiding the keyboard.
+                        .ignoresSafeArea(.keyboard, edges: .bottom)
                 }
             }
             .tint(Color.moss)

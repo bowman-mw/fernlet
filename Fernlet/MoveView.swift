@@ -476,6 +476,7 @@ struct WorkoutSheet: View {
     @State private var notes = ""
     @State private var selectedActivityType: WorkoutActivityType?
     @State private var logMode: WorkoutMode = .strengthTraining
+    @State private var showDiscardConfirm = false
 
     var intensity: WorkoutIntensity {
         if logMode == .activity {
@@ -523,6 +524,7 @@ struct WorkoutSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            SheetCancelBar { attemptCancel() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Log workout")
@@ -610,6 +612,11 @@ struct WorkoutSheet: View {
             }
 
             SheetSaveBar(disabled: saveDisabled) {
+                // A typed-but-not-yet-added exercise draft would otherwise be silently dropped on Save —
+                // fold it into the rows first (guarded by the same validity addDraftExercise uses).
+                if logMode == .strengthTraining, draftExercise != nil {
+                    addDraftExercise()
+                }
                 var workout = Workout(
                     name: workoutName,
                     type: inferredCategory,
@@ -632,9 +639,27 @@ struct WorkoutSheet: View {
             }
         }
         .background(Color.parchment)
+        .keyboardDoneToolbar()
+        .interactiveDismissDisabled(isDirty)
+        .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
         .onChange(of: logMode) { _, _ in
             clearDraftExercise()
         }
+    }
+
+    /// Any user-visible field filled in, a row already added, or a draft exercise typed. Deliberately
+    /// shallow — a swipe-away guard, not a change-tracker.
+    private var isDirty: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !exerciseRows.isEmpty
+            || draftExercise != nil
+            || !rpe.isEmpty || !duration.isEmpty || !distance.isEmpty
+            || !energyKcal.isEmpty || !effort.isEmpty || !notes.isEmpty
+            || selectedActivityType != nil
+    }
+
+    private func attemptCancel() {
+        if isDirty { showDiscardConfirm = true } else { dismiss() }
     }
 
     private var workoutName: String {
@@ -730,11 +755,22 @@ struct QuickExerciseSheet: View {
     @State private var details = ""
     @State private var exerciseResetToken = 0
     @State private var rpe = ""
+    @State private var showDiscardConfirm = false
 
     private var entry: WorkoutExerciseEntry? {
         selectedExercise.map {
             WorkoutExerciseEntry(exercise: $0, sets: sets, reps: reps, weight: weight, speed: speed, incline: incline, details: details)
         }
+    }
+
+    private var isDirty: Bool {
+        selectedExercise != nil
+            || !sets.isEmpty || !reps.isEmpty || !weight.isEmpty
+            || !speed.isEmpty || !incline.isEmpty || !details.isEmpty || !rpe.isEmpty
+    }
+
+    private func attemptCancel() {
+        if isDirty { showDiscardConfirm = true } else { dismiss() }
     }
 
     private var intensity: WorkoutIntensity {
@@ -746,6 +782,7 @@ struct QuickExerciseSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            SheetCancelBar { attemptCancel() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Quick exercise")
@@ -783,6 +820,9 @@ struct QuickExerciseSheet: View {
             }
         }
         .background(Color.parchment)
+        .keyboardDoneToolbar()
+        .interactiveDismissDisabled(isDirty)
+        .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
     }
 }
 
@@ -1415,6 +1455,7 @@ struct EditWorkoutSheet: View {
     @State private var duration: String
     @State private var notes: String
     @State private var showHealthRefusalAlert = false
+    @State private var showDiscardConfirm = false
 
     init(store: FernletStore, workout: Workout, date: String, onSaved: @escaping () -> Void = {}) {
         self.store = store
@@ -1429,12 +1470,25 @@ struct EditWorkoutSheet: View {
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    /// Any editable field diverges from the row this sheet opened on.
+    private var isDirty: Bool {
+        name != workout.name
+            || intensity != workout.intensity
+            || duration != (workout.duration.map(String.init) ?? "")
+            || notes != workout.notes
+    }
+
+    private func attemptCancel() {
+        if isDirty { showDiscardConfirm = true } else { dismiss() }
+    }
+
     /// A guided-logged row's name is the guided card's reconciliation key, so it can't be renamed here
     /// (the store also pins it as a fail-closed backstop). The field is shown disabled with a gentle note.
     private var isGuided: Bool { workout.loggedFromGuidedSession == true }
 
     var body: some View {
         VStack(spacing: 0) {
+            SheetCancelBar { attemptCancel() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Edit workout")
@@ -1500,6 +1554,9 @@ struct EditWorkoutSheet: View {
             }
         }
         .background(Color.parchment)
+        .keyboardDoneToolbar()
+        .interactiveDismissDisabled(isDirty)
+        .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
         .alert("This one lives in Apple Health", isPresented: $showHealthRefusalAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -2460,7 +2517,12 @@ struct WorkoutPlanSheet: View {
     @State private var notes = ""
     @State private var selectedActivityType: WorkoutActivityType?
     @State private var logMode: WorkoutMode
+    @State private var showDiscardConfirm = false
     private let previousWeekPlan: PlannedWorkout?
+    /// A shallow snapshot of the seeded field values, so `isDirty` can tell an untouched sheet (whether
+    /// blank-new or opened on an existing plan) from one the user has changed. Row edits fold into
+    /// `plannedExerciseText`, so the string signature covers them without a deep row compare.
+    private let initialSignature: String
 
     init(store: FernletStore, dateKey: String, showsPlanSourceTag: Bool, editingPlan: PlannedWorkout? = nil) {
         self.store = store
@@ -2469,17 +2531,53 @@ struct WorkoutPlanSheet: View {
         self.editingPlan = editingPlan
         self.previousWeekPlan = store.previousWeekPlannedWorkout(for: dateKey)
         let copiedSplit = editingPlan?.split ?? store.copiedForwardWorkoutSplit(before: dateKey) ?? .fullBody
+        let seedMode = editingPlan?.mode ?? (copiedSplit == .workout ? .activity : .strengthTraining)
+        let seedName = editingPlan?.name ?? ""
+        let seedPlanned = editingPlan?.exercises ?? ""
+        let seedDuration = editingPlan?.duration.map(String.init) ?? ""
+        let seedDistance = editingPlan?.targetDistanceMiles.map { String($0) } ?? ""
+        let seedEnergy = editingPlan?.targetEnergyKcal.map { String($0) } ?? ""
+        let seedEffort = editingPlan?.targetEffort.map(String.init) ?? ""
+        let seedNotes = editingPlan?.notes ?? ""
+        let seedActivity = editingPlan?.activityType
         _split = State(initialValue: copiedSplit)
-        _logMode = State(initialValue: editingPlan?.mode ?? (copiedSplit == .workout ? .activity : .strengthTraining))
-        _name = State(initialValue: editingPlan?.name ?? "")
-        _plannedExerciseText = State(initialValue: editingPlan?.exercises ?? "")
-        _exerciseRows = State(initialValue: Self.exerciseEntries(from: editingPlan?.exercises ?? ""))
-        _duration = State(initialValue: editingPlan?.duration.map(String.init) ?? "")
-        _distance = State(initialValue: editingPlan?.targetDistanceMiles.map { String($0) } ?? "")
-        _energyKcal = State(initialValue: editingPlan?.targetEnergyKcal.map { String($0) } ?? "")
-        _effort = State(initialValue: editingPlan?.targetEffort.map(String.init) ?? "")
-        _notes = State(initialValue: editingPlan?.notes ?? "")
-        _selectedActivityType = State(initialValue: editingPlan?.activityType)
+        _logMode = State(initialValue: seedMode)
+        _name = State(initialValue: seedName)
+        _plannedExerciseText = State(initialValue: seedPlanned)
+        _exerciseRows = State(initialValue: Self.exerciseEntries(from: seedPlanned))
+        _duration = State(initialValue: seedDuration)
+        _distance = State(initialValue: seedDistance)
+        _energyKcal = State(initialValue: seedEnergy)
+        _effort = State(initialValue: seedEffort)
+        _notes = State(initialValue: seedNotes)
+        _selectedActivityType = State(initialValue: seedActivity)
+        self.initialSignature = Self.planSignature(
+            name: seedName, planned: seedPlanned, duration: seedDuration, distance: seedDistance,
+            energy: seedEnergy, effort: seedEffort, notes: seedNotes,
+            activity: seedActivity, split: copiedSplit, mode: seedMode
+        )
+    }
+
+    private static func planSignature(
+        name: String, planned: String, duration: String, distance: String,
+        energy: String, effort: String, notes: String,
+        activity: WorkoutActivityType?, split: WorkoutSplit, mode: WorkoutMode
+    ) -> String {
+        "\(name)\u{1f}\(planned)\u{1f}\(duration)\u{1f}\(distance)\u{1f}\(energy)\u{1f}\(effort)\u{1f}\(notes)\u{1f}\(activity?.rawValue ?? "")\u{1f}\(split)\u{1f}\(mode)"
+    }
+
+    private var isDirty: Bool {
+        if draftExercise != nil { return true }
+        let current = Self.planSignature(
+            name: name, planned: plannedExerciseText, duration: duration, distance: distance,
+            energy: energyKcal, effort: effort, notes: notes,
+            activity: selectedActivityType, split: split, mode: logMode
+        )
+        return current != initialSignature
+    }
+
+    private func attemptCancel() {
+        if isDirty { showDiscardConfirm = true } else { dismiss() }
     }
 
     private var targetDateTitle: String {
@@ -2517,6 +2615,7 @@ struct WorkoutPlanSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            SheetCancelBar { attemptCancel() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -2665,6 +2764,10 @@ struct WorkoutPlanSheet: View {
             }
 
             SheetSaveBar(label: editingPlan == nil ? "Save plan" : "Update plan") {
+                // Fold a typed-but-not-yet-added exercise draft into the plan so Save doesn't drop it.
+                if logMode == .strengthTraining, draftExercise != nil {
+                    addDraftExercise()
+                }
                 store.planWorkout(
                     PlannedWorkout(
                         id: editingPlan?.id ?? UUID(),
@@ -2688,6 +2791,9 @@ struct WorkoutPlanSheet: View {
             }
         }
         .background(Color.parchment)
+        .keyboardDoneToolbar()
+        .interactiveDismissDisabled(isDirty)
+        .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
         .onChange(of: logMode) { _, _ in
             clearDraftExercise()
         }

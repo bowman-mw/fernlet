@@ -107,6 +107,8 @@ struct FriendsView: View {
                         disconnectReviewPresented = false
                     } catch CocoaError.userCancelled {
                         photoSaveError = "Fernlet needs access to your Photo Library to save photos. Open Settings to grant access."
+                    } catch is FriendPhotoLibrarySaver.NothingSavedError {
+                        photoSaveError = "None of the selected pictures could be saved. They may be corrupted — try choosing different ones."
                     } catch {
                         photoSaveError = "Could not save to your photo library. Please try again."
                     }
@@ -114,7 +116,7 @@ struct FriendsView: View {
                 discardAll: {
                     manager.deleteAllSessionPhotos()
                     finalizeFriendKeeps()
-                    Task {
+                    Task { @MainActor in
                         await manager.leaveSessionAfterNotifyingPeers()
                         disconnectReviewPresented = false
                     }
@@ -768,6 +770,8 @@ private struct FriendPhotoCarouselPostView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             } catch CocoaError.userCancelled {
                 saveErrorMessage = "Fernlet needs access to your Photo Library to save photos. Open Settings to grant access."
+            } catch is FriendPhotoLibrarySaver.NothingSavedError {
+                saveErrorMessage = "This picture couldn't be saved. It may be corrupted."
             } catch {
                 saveErrorMessage = "Could not save to your photo library. Please try again."
             }
