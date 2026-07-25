@@ -1161,6 +1161,49 @@ public nonisolated struct RecipeIngredient: Identifiable, Codable, Equatable {
     }
 }
 
+/// One ordered cooking-mode instruction (F5, decision §11.6). `text` is the instruction; the optional
+/// `durationSeconds` is a PASSIVE per-step timer — when present, cooking mode shows a countdown that on
+/// expiry highlights the Next button and fires a haptic, but NEVER auto-advances the step. v1 supports
+/// a single per-step timer only (no concurrent named timers).
+///
+/// Additive + tolerant everywhere it travels: absent on every recipe authored before F5, decoded with
+/// `decodeIfPresent` on both the synced blob (`RecipeDefinition`) and the per-row `payloadData` path.
+public nonisolated struct RecipeStep: Identifiable, Codable, Equatable, Sendable {
+    public var id = UUID()
+    public var text: String
+    public var durationSeconds: Int?
+
+    public init(id: UUID = UUID(), text: String, durationSeconds: Int? = nil) {
+        self.id = id
+        self.text = text
+        self.durationSeconds = durationSeconds
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        text = try container.decode(String.self, forKey: .text)
+        durationSeconds = try container.decodeIfPresent(Int.self, forKey: .durationSeconds)
+    }
+}
+
+/// Shared normalizer for a recipe's cooking steps (F5). Trims each step's text, drops blank-text steps,
+/// and clamps a non-positive `durationSeconds` to `nil` (a passive timer needs a positive window).
+/// Returns `nil` when nothing survives so callers store "no steps" rather than an empty `[]`. Used by
+/// the manual editor path (`DiaryStore.addRecipe/updateRecipe`) and the share/mesh decode path.
+public nonisolated enum RecipeStepSanitizer {
+    public static func sanitized(_ steps: [RecipeStep]?) -> [RecipeStep]? {
+        guard let steps else { return nil }
+        let cleaned: [RecipeStep] = steps.compactMap { step in
+            let trimmed = step.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            let duration = (step.durationSeconds ?? 0) > 0 ? step.durationSeconds : nil
+            return RecipeStep(id: step.id, text: trimmed, durationSeconds: duration)
+        }
+        return cleaned.isEmpty ? nil : cleaned
+    }
+}
+
 public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable {
     case gram = "g"
     case milliliter = "ml"
@@ -1293,6 +1336,32 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
     public var updatedAt: Date
     /// Non-nil only for recipes imported from a web URL. See `RecipeWebImport`.
     public var webImport: RecipeWebImport?
+    /// Provenance for a recipe FORKED by ingredient substitution (F4, decision §11.4): the id of the
+    /// recipe this one was derived from. `nil` for every originally-authored/imported recipe.
+    ///
+    /// BLOB-STRIP LANDMINE (deliberate, accepted): this field is additive and tolerant-decoded, but it
+    /// is NON-LOAD-BEARING. An un-updated paired device that has no `parentRecipeID` in its
+    /// `RecipeDefinition` will decode a synced recipe (ignoring this key), then re-encode the shared
+    /// blob WITHOUT it — silently stripping the provenance link. That is acceptable: the fork is a
+    /// fully-independent recipe (its own id, its own ingredients); losing `parentRecipeID` loses only
+    /// the "derived from" annotation, never any recipe DATA. Likewise the proximity wire
+    /// (`SharedRecipePayload`) does not carry it, so a fork shared to a peer arrives as a standalone
+    /// recipe. Never make anything depend on this value being present.
+    public var parentRecipeID: UUID?
+
+    /// Ordered cooking-mode steps (F5, decision §11.6). `nil`/empty on every recipe authored before F5.
+    ///
+    /// BLOB-STRIP LANDMINE (deliberate, doc-accepted — §6.2 chose both persistence paths knowingly):
+    /// this field is additive and tolerant-decoded, but on the SYNCED BLOB path (manual/peer recipes in
+    /// `FernletSnapshot.recipes`) it is NON-LOAD-BEARING against an un-updated paired device. That older
+    /// device has no `steps` in its `RecipeDefinition`, so it decodes a synced recipe (ignoring this
+    /// key), then re-encodes the shared blob WITHOUT it — silently stripping the steps. Unlike
+    /// `parentRecipeID` (a mere annotation), for a MANUAL recipe this is REAL data loss of user-authored
+    /// steps. This is the documented tradeoff of the blob path; the per-row `SavedRecipeRecord.payloadData`
+    /// path (web/saved recipes) is safe because it round-trips the whole `RecipeDefinition` per row and an
+    /// un-updated device that lacks a `payloadData` writer never re-encodes another device's blob. Never
+    /// make correctness depend on `steps` surviving a round-trip through an older peer's synced blob.
+    public var steps: [RecipeStep]?
 
     /// True when this recipe was imported from the web (and therefore stores free-text ingredient
     /// lines + precomputed nutrition rather than structured `ingredients`).
@@ -1307,7 +1376,9 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         source: String,
         createdAt: Date,
         updatedAt: Date,
-        webImport: RecipeWebImport? = nil
+        webImport: RecipeWebImport? = nil,
+        parentRecipeID: UUID? = nil,
+        steps: [RecipeStep]? = nil
     ) {
         self.id = id
         self.name = name
@@ -1318,6 +1389,8 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.webImport = webImport
+        self.parentRecipeID = parentRecipeID
+        self.steps = steps
     }
 
     public init(from decoder: Decoder) throws {
@@ -1331,6 +1404,11 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         webImport = try container.decodeIfPresent(RecipeWebImport.self, forKey: .webImport)
+        // Tolerant + additive: absent on every recipe written before F4 and on rows re-encoded by an
+        // un-updated peer. Missing key -> nil (no provenance), never a decode failure.
+        parentRecipeID = try container.decodeIfPresent(UUID.self, forKey: .parentRecipeID)
+        // Tolerant + additive (F5). Missing key -> nil, never a decode failure. See the blob-strip note.
+        steps = try container.decodeIfPresent([RecipeStep].self, forKey: .steps)
     }
 }
 
@@ -1341,14 +1419,23 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
     public var servings: Int
     public var notes: String
     public var ingredients: [SharedRecipeIngredient]
+    /// Ordered cooking steps (F5). WIRE-COMPAT (§6.3): `version` STAYS 1 and this is an OPTIONAL key.
+    /// An older peer's `SharedRecipePayload` has no `steps` property, so its synthesized `Codable`
+    /// silently ignores this extra key and still sees `version == 1` — decoding minus steps, exactly the
+    /// required graceful degrade (proven by `RecipeShareStepsWireCompatTests`). A newer peer decodes it
+    /// (synthesized `Codable` treats a missing optional as nil), so a peer that authored no steps sends
+    /// none and one that did sends them. Do NOT bump `version` for this — `RecipeShareCodec.decodePayload`
+    /// rejects any version != 1, so a bump would make every steps-carrying recipe unreadable by old peers.
+    public var steps: [RecipeStep]?
 
-    public init(format: String = "fernlet.recipe", version: Int = 1, name: String, servings: Int, notes: String, ingredients: [SharedRecipeIngredient]) {
+    public init(format: String = "fernlet.recipe", version: Int = 1, name: String, servings: Int, notes: String, ingredients: [SharedRecipeIngredient], steps: [RecipeStep]? = nil) {
         self.format = format
         self.version = version
         self.name = name
         self.servings = servings
         self.notes = notes
         self.ingredients = ingredients
+        self.steps = steps
     }
 }
 

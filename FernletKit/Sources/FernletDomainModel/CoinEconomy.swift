@@ -18,6 +18,7 @@
 // Wall-safe: pure value types + math in `FernletDomainModel`, never a `Private*` store (S3 wall).
 
 import Foundation
+import FernletFoundation
 
 /// Forward-compat contract (deliberately NOT the freeze-and-park pattern used elsewhere): the
 /// ledger rows live in a per-row store, so a `kind` raw value only a NEWER build knows makes just
@@ -209,9 +210,18 @@ public nonisolated enum CoinEconomy {
         // and voiding it here would permanently lock out same-day-as-reset earning (matching the `< boundary`
         // void in `totals`).
         let resetBoundary = latestReset(in: existing)?.dayKey
+        // Never mint for a day in the FUTURE. Active days come from `hasLoggedContent`, which now counts
+        // a plan-only day (`plannedRecipeIDs`, F3) — and plans (like `plannedWorkouts` before them) can be
+        // placed on future dates. Reconcile runs over every stored row on each launch/foreground, so an
+        // uncapped mint would let a user plan meals/workouts N days forward and farm `coinsPerActiveDay`
+        // per future day (unplanning never revokes it — the earn row is append-only and keyed off the day,
+        // not its current content). Clamp to `<= today` (lexicographic `yyyy-MM-dd` compare == chronological)
+        // so only days that have actually arrived can accrue.
+        let today = FernletDate.dayKey(for: date)
         return activeDayKeys
             .subtracting(earnedDayKeys(in: existing))
             .filter { resetBoundary == nil || $0 >= resetBoundary! }
+            .filter { $0 <= today }
             .sorted()
             .map { CoinLedgerEntry.earn(dayKey: $0, amount: coinsPerActiveDay, at: date) }
     }

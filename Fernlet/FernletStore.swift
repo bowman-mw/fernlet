@@ -20,6 +20,7 @@ import StoreCore
 import DiaryStore
 import HealthKitGateway
 import AppServices
+import AIContext
 
 @MainActor
 @Observable
@@ -38,6 +39,14 @@ final class FernletStore {
     var settings: FernletSettings {
         get { diary.settings }
         set { diary.settings = newValue }
+    }
+    /// The AI status actually in effect: the stored (synced) user intent in `settings.aiStatus`
+    /// overlaid with this device's local daily call counter (`AICallQuotaStore`). The derived
+    /// `.sleepy` / `.resting` states are a read-only overlay — they are NEVER written back into the
+    /// synced settings, so one device's usage can't throttle another. Feed the AI status *label*
+    /// from this, not from the raw stored value.
+    var effectiveAIStatus: AIStatus {
+        AIStatusOverlay.effectiveStatus(intent: settings.aiStatus, quota: aiCallQuotaStore.currentQuota())
     }
     var recentMeals: [Meal] {
         get { diary.recentMeals }
@@ -154,6 +163,33 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var heartLedger = ProximityHeartLedger()
     /// Device-local moderation reports (never synced). Feeds item-hiding + the escalation/ban.
     @ObservationIgnored private(set) lazy var moderationLedger = ModerationLedger()
+    /// Device-local, non-synced daily AI-call counter (Ladder §3.2). Drives the `.sleepy`/`.resting`
+    /// overlay on `effectiveAIStatus`; deliberately outside the snapshot — usage never syncs.
+    @ObservationIgnored private(set) lazy var aiCallQuotaStore: AICallQuotaStore = UserDefaultsAICallQuotaStore()
+    /// Reports which AI rungs this device can physically reach (the cloud rungs report `false` on this
+    /// SDK). Built by `FernletAIComposition` — the concrete provider type is named ONLY in that helper
+    /// file, never here, so this store (which references many sealed `Private*` stores) is not flagged
+    /// AI-facing by the S3 grep-wall. Injectable so a test can simulate an incapable device.
+    @ObservationIgnored private(set) lazy var aiCapabilityProvider: AIDeviceCapabilityProviding = FernletAIComposition.defaultCapabilityProvider()
+    /// The routing gate every AI call site funnels through — the capability-capped `FernletModelRouter`
+    /// plus the device-local quota store plus the *current* stored AI intent. Rebuilt on each read so a
+    /// mid-session AI toggle is always reflected, and so the effective status is derived from the live
+    /// counter at dispatch time (§3.2). Never stored — it carries no state of its own.
+    var aiGate: FernletAIGate {
+        FernletAIGate(
+            router: FernletModelRouter(capabilityProvider: aiCapabilityProvider),
+            quotaStore: aiCallQuotaStore,
+            intent: settings.aiStatus
+        )
+    }
+    /// Test-injected override for `aiAuditLogStore` (a temp-path sink), so a delete-all test can assert
+    /// the wipe leg without touching the process-global Application Support file. `nil` in production.
+    @ObservationIgnored private var injectedAuditLogStore: AIAuditLogPersisting?
+    /// Device-local, non-synced AI audit-log sink (Ladder §7.2). Persists the ring buffer of AI-call
+    /// metadata to Application Support and is wired into `AIAuditLog.shared` at init so the log survives
+    /// relaunch. Deliberately outside the snapshot/CloudKit/export — a "what left my device" record
+    /// must never itself leave the device.
+    @ObservationIgnored private(set) lazy var aiAuditLogStore: AIAuditLogPersisting = injectedAuditLogStore ?? FileAIAuditLogStore()
     /// Tamper-resistant store bans (Keychain-backed; survives app delete+reinstall and clock changes).
     @ObservationIgnored private(set) lazy var moderationBanStore = ModerationBanStore()
     /// Device-local cache of friends' shared fuzzy state + appearance (Phase 4). Never synced.
@@ -293,8 +329,14 @@ final class FernletStore {
         static let intimacy = "sensitiveVisibilityResolvedIntimacyVisible"
     }
 
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, cookingRunDirectory: URL? = nil) {
         self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
+        self.injectedAuditLogStore = aiAuditLogStore
+        // Test seam: redirect the shared cooking-run app-group file to a per-test temp dir so a parallel
+        // suite's file wipe can't race a cooking test's read (mirrors GuidedWorkoutRunStateStore(directory:)).
+        if let cookingRunDirectory {
+            self.cookingRunStateStore = CookingRunStateStore(directory: cookingRunDirectory)
+        }
         let initSignpostID = StartupTiming.begin("FernletStore.init")
         defer { StartupTiming.end("FernletStore.init", signpostID: initSignpostID) }
 
@@ -366,6 +408,7 @@ final class FernletStore {
         snapshotSaveCoordinator.subscribeRemote { [weak self] in
             await self?.reloadFromRepository()
         }
+        configureAIAuditLog()
     }
 
     private init(
@@ -415,6 +458,15 @@ final class FernletStore {
         snapshotSaveCoordinator.subscribeRemote { [weak self] in
             await self?.reloadFromRepository()
         }
+        configureAIAuditLog()
+    }
+
+    /// Wires the device-local AI audit-log sink into `AIAuditLog.shared` and adopts whatever survived
+    /// the last relaunch. Runs before any AI call could record, so the in-memory session set adopts the
+    /// persisted history rather than racing it. Device-local only — never synced/snapshot/exported.
+    private func configureAIAuditLog() {
+        let auditSink = aiAuditLogStore
+        Task { await AIAuditLog.shared.configure(sink: auditSink) }
     }
 
 
@@ -1724,11 +1776,33 @@ final class FernletStore {
                 queue.remove(record)
                 continue
             }
+            // Already deferred for budget TODAY: the daily AI budget won't refresh until midnight, so
+            // re-fetching this (non-JSON-LD) page's HTML on every foreground is pure waste — skip it until
+            // the day-key changes. A JSON-LD page imports with no gate and is never stamped, so it still
+            // retries and succeeds. (The first budget miss of the day still had to attempt the fetch, since
+            // a JSON-LD-capable page can't be distinguished before fetching.)
+            if record.budgetDeferredDayKey == todayKey {
+                continue
+            }
 
             do {
-                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: foodCatalog, aiEnabled: settings.aiStatus != .off)
+                // Ambient drain: userInvoked=false, so the `.sleepy` band falls back and the daily
+                // budget is reserved for the user's own taps. A JSON-LD page still imports here without
+                // AI (that path runs before any gate check), so a resting device only defers pages that
+                // genuinely need the model.
+                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: foodCatalog, aiEnabled: settings.aiStatus != .off, userInvoked: false, gate: aiGate)
                 addSavedRecipe(RecipeDefinition(importedRecipe: importedRecipe))
                 queue.remove(record)
+            } catch RecipeWebImportError.aiBudgetExhausted {
+                // Transient daily-budget fallback (clears at midnight) — NOT the page's fault. Don't burn
+                // an attempt or remove the record; just stamp it deferred-for-today so the rest of today's
+                // foreground drains skip re-fetching it. Tomorrow's key differs → it retries with a fresh
+                // budget.
+                queue.markBudgetDeferred(record, dayKey: todayKey)
+                FernletAuditLog.log("recipe.shareExtensionImport.deferred", context: [
+                    "host": url.host() ?? "unknown",
+                    "reason": "aiBudgetExhausted"
+                ])
             } catch {
                 let description = (error as? LocalizedError)?.errorDescription ?? "Could not import that recipe."
                 queue.markAttempt(record, errorDescription: description)
@@ -1777,6 +1851,16 @@ final class FernletStore {
 
     func deletePlannedWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
         diary.deletePlannedWorkout(plannedWorkout, date: date)
+    }
+
+    // MARK: - Planned recipes (F3 weekly shopping-list planner)
+
+    func planRecipe(_ recipeID: UUID, date: String) {
+        diary.planRecipe(recipeID, date: date)
+    }
+
+    func unplanRecipe(_ recipeID: UUID, date: String) {
+        diary.unplanRecipe(recipeID, date: date)
     }
 
     func completePlannedWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
@@ -2766,6 +2850,159 @@ final class FernletStore {
         markGuidedSessionCompleted(state.sessionID)
     }
 
+    // MARK: Cooking mode — the active run (mirrored to the app group for the Live Activity + Siri)
+
+    /// The in-progress cooking session, or nil when none is active. Mirrored into the app-group
+    /// container (`cookingRunStateStore`) so the interactive Live Activity "Next" button — and the Siri
+    /// "next step" / "repeat step" intents — can advance the recipe walker from the Lock Screen, even
+    /// after the app is suspended or terminated. Observable so the cooking walker and the Food-root
+    /// resume card reflect every transition, whether it came from the in-app buttons or the Live
+    /// Activity. Session-scoped; never part of the synced blob. Directly mirrors `guidedRunState`.
+    private(set) var cookingRunState: CookingRunState?
+    // `var` (not `let`) so a test can point the app-group cooking file at a per-test temp directory via
+    // the `cookingRunDirectory:` init override, mirroring the `GuidedWorkoutRunStateStore(directory:)`
+    // seam. Production leaves this at the default (the real app-group container). Isolating the file per
+    // test stops a parallel suite's `deleteAllData`/cooking-wipe from racing the shared real file.
+    @ObservationIgnored private var cookingRunStateStore = CookingRunStateStore()
+    /// Observer token for `.cookingRunAdvancedByIntent` — registered once in `activateWidgetBridge`. A
+    /// cooking App Intent (Live Activity / Siri) runs in this process but mutates only the app-group file;
+    /// this brings the in-memory walker into step the moment the file is written, so an in-app "Next"
+    /// can't land on stale state and clobber the intent's advance while the app is foregrounded.
+    @ObservationIgnored private var cookingIntentObserver: NSObjectProtocol?
+
+    /// Begin cooking a recipe step-by-step. Builds the run from the recipe's ordered steps, anchors it
+    /// to the day the cook began (a long session can cross local midnight), mirrors it to the app group,
+    /// and requests the Live Activity. Replaces any cooking run already in progress (ending only the
+    /// cooking activity — a live WORKOUT activity is a different type and is left untouched). A recipe
+    /// with no steps is a no-op (the mise-only flow never enters the walker). Returns the run started.
+    @discardableResult
+    func startCookingRun(_ recipe: RecipeDefinition, startDayKey: String? = nil) -> CookingRunState? {
+        let domainSteps = recipe.steps ?? []
+        guard !domainSteps.isEmpty else { return nil }
+        let steps = domainSteps.map { CookingRunState.Step(text: $0.text, durationSeconds: $0.durationSeconds) }
+        let state = CookingRunState(
+            recipeID: recipe.id,
+            recipeName: recipe.name,
+            startedDayKey: startDayKey ?? todayKey,
+            steps: steps
+        )
+        cookingRunState = state
+        cookingRunStateStore.write(state)
+        CookingLiveActivityController.start(state)
+        return state
+    }
+
+    /// Advance to the next step (or finish) from the in-app walker — mirrors the Live Activity "Next"
+    /// button and the "next step" Siri intent.
+    func cookingAdvanceStep() {
+        guard var state = cookingRunState, !state.isFinished else { return }
+        state.advance()
+        applyCookingTransition(state)
+    }
+
+    /// Step back one step from the in-app walker (clamped at step 0).
+    func cookingGoBack() {
+        guard var state = cookingRunState, !state.isFinished else { return }
+        state.goBack()
+        applyCookingTransition(state)
+    }
+
+    /// Start (or restart, via the "repeat step" intent / in-app "Start timer") the current step's
+    /// passive timer, mirroring the window into the app group so the Live Activity renders the countdown.
+    func cookingStartTimer() {
+        guard var state = cookingRunState, !state.isFinished else { return }
+        state.startTimer(now: Date())
+        applyCookingTransition(state)
+    }
+
+    /// Clear the current step's timer (in-app "Reset timer") — the Live Activity drops the countdown.
+    func cookingClearTimer() {
+        guard var state = cookingRunState, !state.isFinished else { return }
+        state.clearTimer()
+        applyCookingTransition(state)
+    }
+
+    /// Shared handling after an in-app cooking transition: mirror to the group + reflect onto the
+    /// activity. On a finish the group file is cleared FIRST (so a racing foreground reconcile can't
+    /// resurrect a done run) and the activity ended; the in-memory state is kept so the walker can show
+    /// its finish screen. There is no automatic meal log — logging is the cook's explicit choice.
+    private func applyCookingTransition(_ state: CookingRunState) {
+        cookingRunState = state
+        if state.isFinished {
+            cookingRunStateStore.clear()
+            syncActivity { await CookingActivityBridge.end() }
+        } else {
+            cookingRunStateStore.write(state)
+            syncActivity { await CookingActivityBridge.sync(to: state) }
+        }
+    }
+
+    /// End the active cooking run (the walker's Close, a completed-and-logged session, or the resume
+    /// card's Discard). Clears the group file and ends the cooking activity. Idempotent.
+    func endCookingRun() {
+        guard cookingRunState != nil else {
+            // No in-memory run, but a group file (or orphan activity) may linger after a cold path.
+            cookingRunStateStore.clear()
+            syncActivity { await CookingActivityBridge.end() }
+            return
+        }
+        cookingRunState = nil
+        cookingRunStateStore.clear()
+        syncActivity { await CookingActivityBridge.end() }
+    }
+
+    /// Reconcile the in-memory cooking run with the app-group file — call on foreground and at launch so
+    /// a step advance made entirely from the Live Activity / Siri is picked up, and so a resume card can
+    /// appear after a cold launch. A finished run is retired (cleared + activity ended — cooking never
+    /// auto-logs); a recently-touched active run is adopted so the walker/card resume it; a run the
+    /// process merely outlived (untouched for hours) is retired. No file at all → retire any orphan
+    /// activity. Mirrors `reconcileGuidedRunFromAppGroup`.
+    func reconcileCookingRunFromAppGroup() {
+        guard let fileState = cookingRunStateStore.read() else {
+            syncActivity { await CookingActivityBridge.end() }
+            return
+        }
+        if fileState.isFinished {
+            // Clear the file BEFORE anything else so a crash can't re-surface a done run (mirrors the
+            // guided finish path; a lost log beats a duplicate — though cooking's log is never automatic).
+            cookingRunStateStore.clear()
+            // ADOPT the finished state (don't nil it) — exactly as the guided path keeps a completed run
+            // so the sheet can show its done screen. A Finish tapped from the Live Activity / Siri while
+            // the walker is foregrounded must land the cook on the finish/log screen (via
+            // `syncStageWithRun`), not `dismiss()` it: nil-ing here strands the meal-type/log step and,
+            // with it, the run's authoritative `startedDayKey` (a wrong day after a midnight rollover).
+            // The finished run is retired when the finish screen closes/logs (`endCookingRun`); the
+            // Food-root resume card is gated on `!isFinished`, so this never resurrects a resume card.
+            cookingRunState = fileState
+            syncActivity { await CookingActivityBridge.end() }
+            return
+        }
+        if Date().timeIntervalSince(fileState.updatedAt) > CookingRunState.abandonedAfter {
+            cookingRunState = nil
+            cookingRunStateStore.clear()
+            syncActivity { await CookingActivityBridge.end() }
+            return
+        }
+        cookingRunState = fileState
+    }
+
+    /// The RecipeDefinition an active cooking run refers to, resolved across the manual recipe book and
+    /// the saved/web recipes so the Food-root resume card can re-open cooking mode. Nil when the recipe
+    /// was deleted while the run outlived it — the card then only offers Discard.
+    func recipeForActiveCookingRun() -> RecipeDefinition? {
+        guard let id = cookingRunState?.recipeID else { return nil }
+        return recipes.first { $0.id == id } ?? savedRecipes.first { $0.id == id }
+    }
+
+    /// Whether the active cooking run's recipe is a saved/web recipe (logs via `logSavedRecipe`) rather
+    /// than a manual one (logs via `logRecipe`). Nil when there is no run or its recipe is gone.
+    func activeCookingRunIsSavedRecipe() -> Bool? {
+        guard let id = cookingRunState?.recipeID else { return nil }
+        if recipes.contains(where: { $0.id == id }) { return false }
+        if savedRecipes.contains(where: { $0.id == id }) { return true }
+        return nil
+    }
+
     func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {
         diary.completeOnboarding(profile: profile, preferences: preferences, goal: goal)
         // Onboarding is the fresh-install visibility determination point (the migration marker is
@@ -2774,12 +3011,66 @@ final class FernletStore {
         recordSensitiveVisibilityResolution()
     }
 
-    @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput]) -> RecipeDefinition {
-        diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients)
+    @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) -> RecipeDefinition {
+        diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
     }
 
-    func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput]) {
-        diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients)
+    // `steps` is REQUIRED (no default) — see the note on `DiaryStore.updateRecipe`: the stored steps are
+    // overwritten unconditionally, so a defaulted-nil would silently erase them.
+    func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]?) {
+        diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
+    }
+
+    // MARK: - F4 ingredient substitution (fork on explicit save; decision §11.4)
+
+    /// The numbered catalog candidate pool a substitution is chosen from — the same seam the meal
+    /// resolver uses (`FoodCatalog.candidates`), seeded here with the name of the ingredient being
+    /// replaced. Numbered so the model can pick BY NUMBER and code binds; never a source of quantities.
+    func substitutionCandidates(forIngredientNamed name: String, limit: Int = 12) -> [FoodSelectionCandidate] {
+        foodCatalog.candidates(for: name, limit: limit)
+    }
+
+    /// On-device AI substitution suggestions (standard tier, USER-INVOKED), routed through the shipped
+    /// `aiGate`. The model proposes substitute food NAMES from world knowledge; each is rebound here
+    /// through the local catalog (`foodCatalog.candidates(for:)`) — CODE supplies the real `FoodItem` +
+    /// its macros, the model never does. Returns `nil` when AI didn't run (off / resting / incapable) or
+    /// no proposed name resolved — the sheet then shows only its always-present manual catalog-search
+    /// list (the deterministic path). `foodCatalog` is thread-safe (`@unchecked Sendable`), so the
+    /// resolver is safe to invoke off the main actor from inside the model stage.
+    func aiSubstitutionSuggestions(
+        recipeName: String,
+        ingredientName: String
+    ) async -> [IngredientSubstitutionSuggestion]? {
+        let payload = IngredientSubstitutionPayload(
+            recipeName: recipeName,
+            ingredientToReplace: ingredientName
+        )
+        let catalog = foodCatalog
+        return (try? await FoundationIngredientSubstitutionModel.suggest(
+            payload,
+            gate: aiGate,
+            resolve: { catalog.candidates(for: $0, limit: 3) }
+        )) ?? nil
+    }
+
+    /// Persists an F4 substitution FORK for a BLOB (manual) recipe — the source lives in `diary.recipes`,
+    /// so the fork does too. The source recipe is untouched; the fork carries `parentRecipeID`. Called
+    /// only on explicit user save from the substitution preview.
+    func addForkedRecipe(_ recipe: RecipeDefinition) {
+        diary.insertRecipe(recipe)
+    }
+
+    /// Persists an F4 substitution FORK for a SAVED (Core Data / `SavedRecipeRecord`) recipe, so the fork
+    /// lands in the same store as its source. Only reachable for a structured saved recipe (web imports
+    /// have no structured ingredients to swap, so the swap affordance never appears for them).
+    ///
+    /// NOTE (forward plumbing, currently unexercised — review 2026-07-25 #5): every writer into
+    /// `savedRecipeService` today produces a web-import (`webImport != nil`), and Swap is gated on
+    /// `RecipeScaling.isScalable`, which requires `webImport == nil`. So no saved recipe is swappable yet
+    /// and this path never runs in production. It stays as ready plumbing for the first structured
+    /// (payloadData) saved-recipe feature; that feature is the one to add saved-fork persistence coverage.
+    func addForkedSavedRecipe(_ recipe: RecipeDefinition) {
+        savedRecipeService.add(recipe)
     }
 
     @discardableResult func saveCustomIngredient(_ ingredient: ManualRecipeIngredientInput) -> FoodItem? {
@@ -2922,7 +3213,9 @@ final class FernletStore {
                         fat: max(savedPayload.fat, 0)
                     ),
                     micronutrients: savedPayload.micronutrients
-                )
+                ),
+                // F5: preserve ordered cooking steps a peer sent (nil on older peers that carry none).
+                steps: Self.sanitizedSharedSteps(savedPayload.steps)
             )
             addSavedRecipe(recipe)
             importedName = recipe.name
@@ -2930,6 +3223,13 @@ final class FernletStore {
         // Accepting a friend's shared recipe feeds the closeness "share accepted" signal (day-capped).
         if let fingerprint { closenessLedger.recordShareAccepted(fingerprint: fingerprint) }
         return importedName
+    }
+
+    /// Normalizes cooking steps arriving over a share/mesh wire (F5) via the shared domain sanitizer:
+    /// trims text, drops blank steps, clamps a non-positive duration to nil, and yields nil when nothing
+    /// survives — so a peer that sent no (or only empty) steps produces a stepless recipe, not an empty `[]`.
+    static func sanitizedSharedSteps(_ steps: [RecipeStep]?) -> [RecipeStep]? {
+        RecipeStepSanitizer.sanitized(steps)
     }
 
     @discardableResult func importRecipe(from text: String) throws -> RecipeDefinition {
@@ -2968,7 +3268,9 @@ final class FernletStore {
                 notes: payload.notes.trimmingCharacters(in: .whitespacesAndNewlines),
                 source: "imported",
                 createdAt: now,
-                updatedAt: now
+                updatedAt: now,
+                // F5: preserve ordered cooking steps a peer sent (nil on older peers that carry none).
+                steps: Self.sanitizedSharedSteps(payload.steps)
             )
             recipes.insert(recipe, at: 0)
             return recipe
@@ -3292,6 +3594,23 @@ final class FernletStore {
             outcome.incompleteStores.append("widget data")
         }
 
+        // The device-local AI daily-call counter (`AICallQuotaStore`) is a per-device ledger like the
+        // widget mirror above — never synced, never in the snapshot. A wipe zeroes it so a post-wipe
+        // fresh start isn't left in a stale `.sleepy`/`.resting` band from before the reset. `reset()`
+        // has no failure signal (a plain UserDefaults removal), so it reports no incomplete store.
+        aiCallQuotaStore.reset()
+
+        // The device-local AI audit log (Ladder §7.2) — a per-device ledger of AI-call metadata, never
+        // synced/snapshot/exported. Clear the persisted file directly (guaranteed even if the actor sink
+        // was never wired) AND the in-memory session entries. Unlike the plain UserDefaults quota reset
+        // above, a file removal HAS a real failure signal (like the widget-queue clear); a failed
+        // removal would leave the log on disk behind a dialog claiming a complete wipe, so report it as
+        // an incomplete store. NOT the BYOK keychain leg, which lands with BYOK later.
+        if !aiAuditLogStore.clear() {
+            outcome.incompleteStores.append("AI activity log")
+        }
+        await AIAuditLog.shared.clear()
+
         if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {
             outcome.incompleteStores.append("your storage settings")
         }
@@ -3369,6 +3688,14 @@ final class FernletStore {
         guidedRunState = nil
         guidedRunStateStore.clear()
         syncActivity { await GuidedWorkoutActivityBridge.end() }
+        // The cooking runner is the SAME class of live writer: an in-flight cook is mirrored to its own
+        // app-group file that a foreground/launch `reconcileCookingRunFromAppGroup` re-reads and adopts
+        // (resurrecting a "Cooking in progress" resume card on a supposedly-wiped device — and leaving the
+        // recipe name + current step text on the Lock Screen). Cooking never auto-logs, so there is no
+        // re-log hazard, but the file + Live Activity must still be stopped unconditionally at the wipe.
+        cookingRunState = nil
+        cookingRunStateStore.clear()
+        syncActivity { await CookingActivityBridge.end() }
         // Device-local sensitive-surface visibility resolution — reset to "unresolved" so a fresh start
         // re-derives from `sex` (resetDiary already restored the settings gate to its defaults).
         clearSensitiveVisibilityResolution()
@@ -3398,6 +3725,15 @@ final class FernletStore {
     func activateWidgetBridge() {
         if widgetSnapshotMirror == nil {
             widgetSnapshotMirror = WidgetSnapshotMirror()
+        }
+        // Reconcile the cooking walker the instant an in-process App Intent (Live Activity "Next" / Siri)
+        // writes the advanced run, instead of only on the next scenePhase `.active`. Registered once.
+        if cookingIntentObserver == nil {
+            cookingIntentObserver = NotificationCenter.default.addObserver(
+                forName: .cookingRunAdvancedByIntent, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.reconcileCookingRunFromAppGroup() }
+            }
         }
         processPendingWidgetActions()
     }

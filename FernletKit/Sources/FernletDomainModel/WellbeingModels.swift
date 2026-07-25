@@ -20,6 +20,14 @@ public nonisolated struct FernletDay: Codable {
     public var unknownHygieneTokens: [String] = []
     public var completedPersonalCareTaskIDs: Set<String>
     public var healthContext: HealthDailyContext?
+    /// Recipe ids the user assigned to this day in the F3 weekly shopping-list planner. Mirrors the
+    /// `plannedWorkouts` precedent EXACTLY: it is a per-day-row field that rides `DayRecord.payloadData`
+    /// via Codable — NO Core Data schema change, NO CloudKit deploy, per-row sync for free — and is a
+    /// tolerant `decodeIfPresent` addition (absent on every day written before F3 → `[]`, never a decode
+    /// failure). The plan is the only persisted grocery-list state; the list itself stays a one-shot
+    /// share artifact. Render degrades gracefully: a deleted recipe leaves a DANGLING id here and the
+    /// planner/aggregator drop it silently (no such recipe in either store), so no cleanup pass is owed.
+    public var plannedRecipeIDs: [UUID]
 
     public init(
         date: String,
@@ -31,7 +39,8 @@ public nonisolated struct FernletDay: Codable {
         bottleCount: Int = 0,
         hygiene: Set<HygieneItem> = [],
         completedPersonalCareTaskIDs: Set<String>? = nil,
-        healthContext: HealthDailyContext? = nil
+        healthContext: HealthDailyContext? = nil,
+        plannedRecipeIDs: [UUID] = []
     ) {
         self.date = date
         self.meals = meals
@@ -43,6 +52,7 @@ public nonisolated struct FernletDay: Codable {
         self.hygiene = hygiene
         self.completedPersonalCareTaskIDs = completedPersonalCareTaskIDs ?? Set(hygiene.map(\.rawValue))
         self.healthContext = healthContext
+        self.plannedRecipeIDs = plannedRecipeIDs
     }
 
     public init(from decoder: Decoder) throws {
@@ -66,6 +76,16 @@ public nonisolated struct FernletDay: Codable {
         completedPersonalCareTaskIDs = try container.decodeIfPresent(Set<String>.self, forKey: .completedPersonalCareTaskIDs)
             ?? Set(hygiene.map(\.rawValue)).union(unknownHygieneTokens)
         healthContext = try container.decodeIfPresent(HealthDailyContext.self, forKey: .healthContext)
+        // Tolerant + additive (mirrors `plannedWorkouts`): absent on every day written before F3 and on
+        // rows re-encoded by an un-updated peer → `[]`, never a decode failure. Synthesized `encode`
+        // writes it back into the day row's payload so it syncs per-row like every other day field.
+        // LANDMINE (accepted, per-day-scoped): an un-updated paired device does not merely fail to READ
+        // this field — its synthesized `encode` re-writes the day row WITHOUT the key, so any day such a
+        // device touches loses its plan permanently. That is DATA loss (the user's meal plan), not just
+        // provenance loss. It's bounded to the days the old device edits and matches the `plannedWorkouts`
+        // precedent, so it's tolerated until every device is updated — but note it's a strip-on-write, not
+        // a decode default.
+        plannedRecipeIDs = try container.decodeIfPresent([UUID].self, forKey: .plannedRecipeIDs) ?? []
     }
 
     /// True when the day carries *any* recorded content — a logged meal/workout/planned-workout/journal,
@@ -81,7 +101,7 @@ public nonisolated struct FernletDay: Codable {
     public var hasLoggedContent: Bool {
         !(meals.isEmpty && workouts.isEmpty && plannedWorkouts.isEmpty && journals.isEmpty
           && sleep == nil && hygiene.isEmpty && unknownHygieneTokens.isEmpty
-          && completedPersonalCareTaskIDs.isEmpty
+          && completedPersonalCareTaskIDs.isEmpty && plannedRecipeIDs.isEmpty
           && bottleCount == 0 && !(healthContext?.hasContent ?? false))
     }
 }

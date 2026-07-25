@@ -101,6 +101,9 @@ struct RecipeShareCodecTests {
 
         #expect(payload.hasShareNotes)
         #expect(stripped.recipe.local?.notes == "")
+        // F5: user-authored steps are free text and must be withheld with the notes.
+        #expect(payload.recipe.local?.steps?.isEmpty == false)
+        #expect(stripped.recipe.local?.steps == nil)
         #expect(stripped.recipe.local?.name == payload.recipe.local?.name)
         #expect(stripped.recipe.local?.ingredients == payload.recipe.local?.ingredients)
     }
@@ -113,6 +116,8 @@ struct RecipeShareCodecTests {
 
         #expect(payload.hasShareNotes)
         #expect(stripped.recipe.saved?.summary == "")
+        // F5: a saved/web recipe's steps come from a public source, so they ride along.
+        #expect(stripped.recipe.saved?.steps == payload.recipe.saved?.steps)
         #expect(stripped.recipe.saved?.name == payload.recipe.saved?.name)
         #expect(stripped.recipe.saved?.ingredients == payload.recipe.saved?.ingredients)
     }
@@ -336,7 +341,11 @@ struct RecipeShareCodecTests {
             notes: "Chill before serving.",
             source: "manual",
             createdAt: Date(timeIntervalSince1970: 1_779_664_800),
-            updatedAt: Date(timeIntervalSince1970: 1_779_664_800)
+            updatedAt: Date(timeIntervalSince1970: 1_779_664_800),
+            steps: [
+                RecipeStep(text: "Combine oats and yogurt."),
+                RecipeStep(text: "Top with berries and chill.")
+            ]
         )
         return (recipe, [oats, yogurt, berries])
     }
@@ -357,7 +366,8 @@ struct RecipeShareCodecTests {
                 ingredientLines: ["Oats", "Greek yogurt", "Blueberries"],
                 macros: Macros(protein: 24, carbs: 42, fat: 6),
                 micronutrients: Micronutrients()
-            )
+            ),
+            steps: [RecipeStep(text: "Follow the linked recipe.")]
         )
     }
 

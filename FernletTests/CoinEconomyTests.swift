@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import FernletFoundation
 import FernletPersistence
 import CloudKitSync
 import StoreCore
@@ -107,6 +108,23 @@ struct CoinEconomyTests {
         let withResurrected = existing + [CoinLedgerEntry.earn(dayKey: "2026-05-01", amount: 5, at: day)]
         #expect(CoinEconomy.earned(in: withResurrected) == 0)
         #expect(CoinEconomy.balance(in: withResurrected) == 0)
+    }
+
+    @Test func futureActiveDaysAreNeverMinted() {
+        // A plan-only day (F3 planned recipes, or planned workouts) can sit on a FUTURE date, and it now
+        // counts as an active day via `hasLoggedContent`. Reconcile runs over EVERY stored row on each
+        // launch/foreground, so without a future cap a user could page the planner forward, plan a recipe
+        // per day, and farm `coinsPerActiveDay` for days that haven't happened (unplanning never revokes —
+        // the earn row is append-only and keyed off the day). Days strictly after `at:` must mint nothing;
+        // today and past active days still accrue.
+        let today = FernletDate.dayKey(for: day)              // 2026-05-28
+        let past = "2026-05-20"
+        let missing = CoinEconomy.missingEarnEntries(
+            activeDayKeys: [past, today, "2026-06-01", "2026-12-25"], existing: [], at: day)
+        #expect(missing.map(\.dayKey) == [past, today])       // sorted; both future days dropped
+        // And re-running with future days present still hands back nothing new for them.
+        #expect(CoinEconomy.missingEarnEntries(
+            activeDayKeys: ["2026-06-01", "2026-12-25"], existing: missing, at: day).isEmpty)
     }
 
     // MARK: - Structural idempotency (the heart of sync-safety)

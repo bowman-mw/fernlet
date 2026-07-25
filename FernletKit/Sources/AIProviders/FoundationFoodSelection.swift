@@ -22,7 +22,11 @@ public enum FoodSelectionAvailability {
 }
 
 public enum FoundationFoodSelectionModel {
-    public static func resolve(_ payload: FoodSelectionPayload) async throws -> FoodSelectionPlan? {
+    /// Meal food-selection (`standard` tier, user-invoked). Routes through `gate` right before the
+    /// model dispatch: the gate caps by device capability, applies the sleepy/resting budget, and
+    /// charges exactly one call. A `nil` gate result (resting / incapable / off) returns `nil` so the
+    /// caller's deterministic cascade takes over — the same signal the old availability guard gave.
+    public static func resolve(_ payload: FoodSelectionPayload, gate: FernletAIGate) async throws -> FoodSelectionPlan? {
         let description = payload.mealDescription
         let candidates = payload.candidates
         let fallbackType = payload.fallbackMealType
@@ -30,9 +34,8 @@ public enum FoundationFoodSelectionModel {
 
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            guard FoodSelectionAvailability.isFoundationModelAvailable else { return nil }
+            guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else { return nil }
             let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
-            Task { await AIAuditLog.shared.record(payloadKind: auditKind, destination: .onDeviceFoundationModels, includedFields: auditFields) }
             let instructions = """
             First split a meal description into meal items, like "grilled cheese" and "tomato soup".
             Then turn each meal item into food selections from the numbered candidate list only.
@@ -48,8 +51,27 @@ public enum FoundationFoodSelectionModel {
             \(candidates.map(\.promptLine).joined(separator: "\n"))
             """
             let session = LanguageModelSession(instructions: instructions)
-            let response = try await session.respond(to: prompt, generating: FoundationMealSelection.self)
-            return response.content.plan(fallbackDescription: description, fallbackType: fallbackType, candidates: candidates)
+            do {
+                let response = try await session.respond(to: prompt, generating: FoundationMealSelection.self)
+                let plan = response.content.plan(fallbackDescription: description, fallbackType: fallbackType, candidates: candidates)
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: destination,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: plan == nil ? .fellBack : .succeeded
+                )
+                return plan
+            } catch {
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: destination,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: AIAuditOutcome.fromModelError(error)
+                )
+                throw error
+            }
         }
         #endif
 

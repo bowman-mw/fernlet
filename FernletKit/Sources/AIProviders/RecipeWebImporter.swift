@@ -17,6 +17,9 @@ public nonisolated struct ImportedRecipe: Equatable {
     public var carbs: Int
     public var fat: Int
     public var micronutrients: Micronutrients
+    /// Ordered cooking steps parsed from JSON-LD `recipeInstructions` (F5). `nil` when the source had no
+    /// structured instructions. `summary` stays the short blurb; steps are a separate, ordered list.
+    public var steps: [RecipeStep]?
 
     public init(
         sourceURL: URL,
@@ -27,7 +30,8 @@ public nonisolated struct ImportedRecipe: Equatable {
         protein: Int,
         carbs: Int,
         fat: Int,
-        micronutrients: Micronutrients = Micronutrients()
+        micronutrients: Micronutrients = Micronutrients(),
+        steps: [RecipeStep]? = nil
     ) {
         self.sourceURL = sourceURL
         self.name = name
@@ -38,6 +42,7 @@ public nonisolated struct ImportedRecipe: Equatable {
         self.carbs = carbs
         self.fat = fat
         self.micronutrients = micronutrients
+        self.steps = steps
     }
 }
 
@@ -48,6 +53,11 @@ public enum RecipeWebImportError: LocalizedError {
     case noRecipeFound
     case modelUnavailable
     case incompleteRecipe
+    /// The device is capable of on-device extraction, but today's AI budget is spent
+    /// (`.resting` / `.sleepy` ambient) — a TRANSIENT state that clears at midnight. Distinct from
+    /// `.modelUnavailable` (a persistent device incapability) so a deferred queue can retry tomorrow
+    /// instead of burning a finite retry attempt on a state that isn't the page's fault.
+    case aiBudgetExhausted
 
     public var errorDescription: String? {
         switch self {
@@ -63,6 +73,8 @@ public enum RecipeWebImportError: LocalizedError {
             "On-device recipe extraction is not available on this device."
         case .incompleteRecipe:
             "The extracted recipe was missing a name or ingredients."
+        case .aiBudgetExhausted:
+            "The quiet helper is resting for today. I'll try this recipe again tomorrow."
         }
     }
 }
@@ -72,7 +84,14 @@ public enum RecipeWebImporter {
 
     /// - Parameter aiEnabled: When false, the FoundationModels fallback is skipped so that
     ///   users who have disabled AI are not silently opted in via recipe import.
-    public static func importRecipe(from url: URL, catalog: FoodCatalog, aiEnabled: Bool) async throws -> ImportedRecipe {
+    /// - Parameter gate: routes the on-device model dispatch (`standard` tier). The gate caps by device
+    ///   capability, applies the sleepy/resting budget, and charges one call; a persistent fallback
+    ///   surfaces as `.modelUnavailable`, a transient budget fallback as `.aiBudgetExhausted`.
+    /// - Parameter userInvoked: `true` for a foreground tap (the user pasted a recipe URL and is
+    ///   waiting); `false` for the ambient share-extension queue drain. Ambient work falls back in the
+    ///   `.sleepy` band (a user tap still runs), so the drain leaves the record queued for tomorrow
+    ///   rather than consuming a retry attempt on a state that clears at midnight.
+    public static func importRecipe(from url: URL, catalog: FoodCatalog, aiEnabled: Bool, userInvoked: Bool, gate: FernletAIGate) async throws -> ImportedRecipe {
         guard isSafePublicHTTPSURL(url) else {
             throw RecipeWebImportError.invalidURL
         }
@@ -87,7 +106,7 @@ public enum RecipeWebImporter {
         }
 
         let cleanedText = try cleanedBodyText(from: html)
-        return try await extractWithFoundationModel(from: cleanedText, sourceURL: url, catalog: catalog)
+        return try await extractWithFoundationModel(from: cleanedText, sourceURL: url, catalog: catalog, userInvoked: userInvoked, gate: gate)
     }
 
     private static func fetchHTML(from url: URL) async throws -> String {
@@ -210,22 +229,31 @@ public enum RecipeWebImporter {
         return String(normalized.prefix(12_000))
     }
 
-    private static func extractWithFoundationModel(from text: String, sourceURL: URL, catalog: FoodCatalog) async throws -> ImportedRecipe {
+    private static func extractWithFoundationModel(from text: String, sourceURL: URL, catalog: FoodCatalog, userInvoked: Bool, gate: FernletAIGate) async throws -> ImportedRecipe {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, visionOS 26.0, *) {
-            guard RecipeExtractionAvailability.isFoundationModelAvailable else {
-                throw RecipeWebImportError.modelUnavailable
+            let destination: AIDestination
+            switch gate.resolveRoute(tier: .standard, userInvoked: userInvoked) {
+            case .destination(let resolved):
+                destination = resolved
+            case .deterministicFallback(let reason):
+                // A transient daily-budget fallback (clears at midnight) is distinct from a persistent
+                // device incapability: the caller (share-extension queue) uses this to decide whether
+                // to retry tomorrow vs. give up.
+                switch reason {
+                case .resting, .sleepy:
+                    throw RecipeWebImportError.aiBudgetExhausted
+                default:
+                    throw RecipeWebImportError.modelUnavailable
+                }
             }
 
             let payload = RecipeExtractionPayload(
                 sourceHost: sourceURL.host() ?? "unknown",
                 cleanedTextCharCount: text.count
             )
-            await AIAuditLog.shared.record(
-                payloadKind: payload.payloadKind,
-                destination: .onDeviceFoundationModels,
-                includedFields: payload.includedFieldNames
-            )
+            let auditKind = payload.payloadKind
+            let auditFields = payload.includedFieldNames
 
             let instructions = """
             Extract one cooking recipe from cleaned webpage text.
@@ -237,8 +265,27 @@ public enum RecipeWebImporter {
             \(text)
             """
             let session = LanguageModelSession(instructions: instructions)
-            let response = try await session.respond(to: prompt, generating: ExtractedRecipe.self)
-            return try response.content.importedRecipe(sourceURL: sourceURL, catalog: catalog)
+            do {
+                let response = try await session.respond(to: prompt, generating: ExtractedRecipe.self)
+                let recipe = try response.content.importedRecipe(sourceURL: sourceURL, catalog: catalog)
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: destination,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: .succeeded
+                )
+                return recipe
+            } catch {
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: destination,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: AIAuditOutcome.fromModelError(error)
+                )
+                throw error
+            }
         }
         #endif
 
@@ -306,6 +353,8 @@ public enum RecipeWebImporter {
         let ingredients = stringArrayValue(dictionary["recipeIngredient"])
         let fullSummary = instructionsText(from: dictionary["recipeInstructions"])
         let summary = briefSummary(from: fullSummary)
+        // F5: keep the ordered steps separately (briefSummary above still destroys them into a blurb).
+        let steps = orderedSteps(from: dictionary["recipeInstructions"])
         guard let name, name.isEmpty == false, ingredients.isEmpty == false else {
             return nil
         }
@@ -336,7 +385,8 @@ public enum RecipeWebImporter {
             protein: protein,
             carbs: carbs,
             fat: fat,
-            micronutrients: micronutrients
+            micronutrients: micronutrients,
+            steps: steps.isEmpty ? nil : steps
         )
     }
 
@@ -559,6 +609,44 @@ public enum RecipeWebImporter {
             return instructionText(from: dictionary) ?? ""
         }
         return ""
+    }
+
+    /// F5: parse `recipeInstructions` into ORDERED steps rather than flattening them (which
+    /// `instructionsText` does for the `briefSummary`). Preserves step order and section order:
+    /// - a plain string array → one step per element, in order;
+    /// - an array of `HowToStep` dictionaries → one step each (`text`, falling back to `name`);
+    /// - `HowToSection` dictionaries (those with `itemListElement`) → their sub-steps flattened in
+    ///   place, so sections concatenate section-by-section in order;
+    /// - a single string → one step.
+    /// Web JSON-LD steps rarely carry per-step timing, so `durationSeconds` stays nil here (manual
+    /// entry supplies timers). Blank steps are dropped. Purely shape-based, like `instructionText`.
+    /// Public so `RecipeStepsTests` can drive it directly (plain `import AIProviders`, matching the other
+    /// importer tests) — it needs no network fetch or `FoodCatalog`, unlike the full import path.
+    public nonisolated static func orderedSteps(from value: Any?) -> [RecipeStep] {
+        if let string = stringValue(value) {
+            return [RecipeStep(text: string)]
+        }
+        if let values = value as? [Any] {
+            return values.flatMap(orderedSteps(from:))
+        }
+        if let dictionary = value as? [String: Any] {
+            // HowToSection: flatten its ordered sub-steps (never surface the section name as a step).
+            // schema.org permits `itemListElement` to be either an array OR a single object, so recurse
+            // on the raw value rather than only matching `[Any]` — a single-object section would
+            // otherwise fall through to the text/name branch and emit the SECTION NAME as the step
+            // (dropping every real sub-step).
+            if let itemList = dictionary["itemListElement"], !(itemList is NSNull) {
+                // Presence of `itemListElement` marks this as a section; return its flattened sub-steps
+                // and do NOT fall through to the section's own `name` (that would surface the section
+                // heading as a step). An empty result drops the section, matching the array path.
+                return orderedSteps(from: itemList)
+            }
+            // HowToStep: prefer `text`, fall back to `name`.
+            if let text = stringValue(dictionary["text"]) ?? stringValue(dictionary["name"]) {
+                return [RecipeStep(text: text)]
+            }
+        }
+        return []
     }
 
     nonisolated private static func instructionText(from value: Any) -> String? {

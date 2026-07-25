@@ -124,4 +124,32 @@ final class DataExportTests: XCTestCase {
         // Clean up so the shared tmp/ directory doesn't leak between tests.
         store.purgeDataExports()
     }
+
+    /// A user's authored cooking steps (F5) and their planner day-assignments (F3) are their own data, so
+    /// "export my data" must carry both: the recipe's `steps` (a step's timer rendered inline) and the
+    /// day's `plannedMeals` (recipe names). Guards against the export projection silently dropping either.
+    func testExportCarriesRecipeStepsAndPlannedMeals() throws {
+        let (store, _, _) = makeTestStoreWithRepositories()
+
+        let recipe = store.addRecipe(
+            name: "Ragù",
+            servings: 2,
+            notes: "",
+            ingredients: [ManualRecipeIngredientInput(name: "Onion", quantity: 1, unit: "each", protein: 1, carbs: 9, fat: 0)],
+            steps: [
+                RecipeStep(text: "Chop the onion"),
+                RecipeStep(text: "Simmer gently", durationSeconds: 600)
+            ])
+        // Assign it to today via the planner so the day carries a `plannedRecipeIDs` row.
+        store.planRecipe(recipe.id, date: store.todayKey)
+
+        let export = store.buildDataExport()
+
+        let exportedRecipe = try XCTUnwrap(export.recipes.first { $0.name == "Ragù" })
+        XCTAssertEqual(exportedRecipe.steps, ["Chop the onion", "Simmer gently (10 min timer)"],
+                       "authored cooking steps (with timers) must survive the export")
+
+        let plannedDay = try XCTUnwrap(export.days.first { $0.day == store.todayKey })
+        XCTAssertEqual(plannedDay.plannedMeals, ["Ragù"], "planner day-assignment must survive the export")
+    }
 }

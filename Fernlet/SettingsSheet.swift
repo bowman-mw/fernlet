@@ -1088,7 +1088,7 @@ struct SettingsSheet: View {
                 HStack {
                     Text("Current")
                     Spacer()
-                    Text(store.settings.aiStatus.label)
+                    Text(store.effectiveAIStatus.label)
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                 }
@@ -1118,7 +1118,16 @@ struct SettingsSheet: View {
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
-                Text(FernletVoice.message(for: store.settings.aiStatus == .off ? .aiUnavailable : .retryAvailable))
+                Text(FernletVoice.message(for: {
+                    // Reflect the EFFECTIVE status (intent overlaid with today's local budget): off shows
+                    // the switched-off copy, a spent budget (.sleepy/.resting) the resting copy, otherwise
+                    // the gentle retry note.
+                    switch store.effectiveAIStatus {
+                    case .off: return .aiUnavailable
+                    case .sleepy, .resting: return .aiResting
+                    case .ready: return .retryAvailable
+                    }
+                }()))
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()

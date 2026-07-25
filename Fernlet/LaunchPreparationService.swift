@@ -112,6 +112,12 @@ final class LaunchPreparationService {
         // any orphaned activity still on screen.
         store.reconcileGuidedRunFromAppGroup()
 
+        // Same discipline for the cooking runner: a Next/Finish made from the Lock Screen / Siri while the
+        // app was gone must be picked up at launch, and an abandoned or finished cook must be retired here
+        // — otherwise an orphan cooking Live Activity lingers until the OS cap when relaunch lands anywhere
+        // but the Food tab. Cheap and independent of which tab is on screen (mirrors the guided call).
+        store.reconcileCookingRunFromAppGroup()
+
         // A plaintext "export my data" dump is written to tmp/ for the share sheet and purged when the
         // sheet closes — but a kill/crash/jettison mid-share leaves the full decrypted dump on disk. Launch
         // is a point where no share can be in flight, so sweep any survivor here (belt-and-braces with the
@@ -178,10 +184,17 @@ final class LaunchPreparationService {
 
     // MARK: - Day summary
 
-    /// Generates day summaries for every logged day (except today) that is missing one, most recent
-    /// first. Gated to run at most once per calendar day per device (first open after midnight).
-    /// When Foundation Models is unavailable the day's slot is intentionally left empty (spec) rather
-    /// than filled with deterministic fallback text.
+    /// Most day summaries to generate in one launch. Each generation is an ambient model call that
+    /// charges the daily budget; on a first launch over a long history an uncapped backfill would burn
+    /// straight to the sleepy floor before the user does anything. Capping per run spreads the burn
+    /// across days (the once-per-day gate resumes tomorrow) so a fresh install's early mornings keep a
+    /// live budget for the user's own taps.
+    private static let daySummaryBackfillPerRunCap = 10
+
+    /// Generates day summaries for logged days (except today) missing one, most recent first, up to a
+    /// per-run cap. Gated to run at most once per calendar day per device (first open after midnight);
+    /// remaining days are picked up on subsequent days. When Foundation Models is unavailable the day's
+    /// slot is intentionally left empty (spec) rather than filled with deterministic fallback text.
     private func backfillDaySummaries(for store: FernletStore) async {
         let todayKey = store.todayKey
         if UserDefaults.standard.string(forKey: Self.daySummaryRunKeyDefault) == todayKey { return }
@@ -189,23 +202,28 @@ final class LaunchPreparationService {
         let dayKeys = store.loadDays().keys
             .filter { $0 != todayKey }
             .sorted(by: >)
+        var generated = 0
         for key in dayKeys {
             if let existing = store.dailyScores.first(where: { $0.dateKey == key })?.daySummaryText,
                !existing.isEmpty { continue }
             let day = store.loadDay(for: key)
             guard !day.meals.isEmpty || !day.workouts.isEmpty else { continue }
+            if generated >= Self.daySummaryBackfillPerRunCap { break }
             if let summary = await makeDaySummaryText(for: day, store: store), !summary.isEmpty {
                 store.storeDaySummary(summary, for: key)
+                generated += 1
             }
             // When the summary is nil, the slot is left empty on purpose (FM unavailable).
         }
+        // Once-per-calendar-day gate: any day still missing a summary is picked up on the next day's
+        // first launch, so a long backlog drains a bounded slice at a time instead of all at once.
         UserDefaults.standard.set(todayKey, forKey: Self.daySummaryRunKeyDefault)
     }
 
     private func makeDaySummaryText(for day: FernletDay, store: FernletStore) async -> String? {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *), isFoundationModelAvailable, store.settings.aiStatus != .off {
-            return await foundationModelsDaySummary(for: day)
+            return await foundationModelsDaySummary(for: day, gate: store.aiGate)
         }
         #endif
         // Spec: leave the day-summary slot empty when Foundation Models is unavailable.
@@ -252,8 +270,10 @@ final class LaunchPreparationService {
     private static let daySummaryRunKeyDefault = "fernlet.daySummary.lastRunKey"
 
     #if canImport(FoundationModels)
+    /// Day summary is an AMBIENT/background task (`standard` tier, runs at launch) → `userInvoked:
+    /// false`. In the sleepy band it takes the deterministic path (an empty slot, per spec).
     @available(iOS 26.0, *)
-    private func foundationModelsDaySummary(for day: FernletDay) async -> String? {
+    private func foundationModelsDaySummary(for day: FernletDay, gate: FernletAIGate) async -> String? {
         let sleep = day.sleep
         let sleepHours = sleep?.hours
         let payload = DaySummaryPayload(
@@ -264,7 +284,6 @@ final class LaunchPreparationService {
             journalTagLabel: day.journals.last?.tag.label.lowercased()
         )
         let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
-        Task { await AIAuditLog.shared.record(payloadKind: auditKind, destination: .onDeviceFoundationModels, includedFields: auditFields) }
 
         var dataParts: [String] = []
         let mealLine = payload.mealNames.joined(separator: ", ")
@@ -279,6 +298,8 @@ final class LaunchPreparationService {
         if !sleepDesc.isEmpty { dataParts.append("sleep: \(sleepDesc)") }
         if let tag = payload.journalTagLabel, !tag.isEmpty { dataParts.append("feeling: \(tag)") }
         guard !dataParts.isEmpty else { return nil }
+        // Ambient: route + charge one call. A fallback (sleepy/resting/incapable) leaves the slot empty.
+        guard let destination = gate.dispatch(tier: .standard, userInvoked: false) else { return nil }
 
         let prompt = """
         Write a brief day summary (under 50 words) for a wellness app called Fernlet.
@@ -291,8 +312,22 @@ final class LaunchPreparationService {
             )
             let response = try await session.respond(to: prompt)
             let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            await AIAuditLog.shared.record(
+                payloadKind: auditKind,
+                destination: destination,
+                modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                includedFields: auditFields,
+                outcome: text.isEmpty ? .fellBack : .succeeded
+            )
             return text.isEmpty ? nil : text
         } catch {
+            await AIAuditLog.shared.record(
+                payloadKind: auditKind,
+                destination: destination,
+                modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                includedFields: auditFields,
+                outcome: AIAuditOutcome.fromModelError(error)
+            )
             return nil
         }
     }
@@ -315,7 +350,12 @@ final class LaunchPreparationService {
             filteredMemorySummary: filteredMemory
         )
         let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
-        Task { await AIAuditLog.shared.record(payloadKind: auditKind, destination: .onDeviceFoundationModels, includedFields: auditFields, memorySummaryCharCount: filteredMemory.count) }
+        let auditMemoryChars = filteredMemory.count
+
+        // Thought bubble is an AMBIENT, memory-adjacent `light` task (journal/memory context stays
+        // on-device — `light` never escalates) → `userInvoked: false`. In the sleepy band it takes the
+        // deterministic thought path.
+        guard let destination = store.aiGate.dispatch(tier: .light, userInvoked: false) else { return nil }
 
         let signalLine = signalSummaries.map { "\($0.signalName): \($0.value)" }.joined(separator: ", ")
         var contextParts = [signalLine]
@@ -333,8 +373,24 @@ final class LaunchPreparationService {
             )
             let response = try await session.respond(to: prompt)
             let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            await AIAuditLog.shared.record(
+                payloadKind: auditKind,
+                destination: destination,
+                modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                includedFields: auditFields,
+                memorySummaryCharCount: auditMemoryChars,
+                outcome: text.isEmpty ? .fellBack : .succeeded
+            )
             return text.isEmpty ? nil : text
         } catch {
+            await AIAuditLog.shared.record(
+                payloadKind: auditKind,
+                destination: destination,
+                modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                includedFields: auditFields,
+                memorySummaryCharCount: auditMemoryChars,
+                outcome: AIAuditOutcome.fromModelError(error)
+            )
             return nil
         }
     }

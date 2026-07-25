@@ -40,8 +40,8 @@ extension FernletRepository {
 /// `bundledFoodItems` seeds an in-memory food catalog (the SQLite-backed bundle is not loaded in
 /// tests), so tests stay deterministic — pass the specific USDA items a test needs.
 @MainActor
-func makeTestStore(date: Date = .now, bundledFoodItems: [FoodItem] = []) -> FernletStore {
-    makeTestStoreWithRepositories(date: date, bundledFoodItems: bundledFoodItems).store
+func makeTestStore(date: Date = .now, bundledFoodItems: [FoodItem] = [], cookingRunDirectory: URL? = nil) -> FernletStore {
+    makeTestStoreWithRepositories(date: date, bundledFoodItems: bundledFoodItems, cookingRunDirectory: cookingRunDirectory).store
 }
 
 /// Like `makeTestStore`, but also returns the backing days repository and the in-memory journal
@@ -55,6 +55,7 @@ func makeTestStore(date: Date = .now, bundledFoodItems: [FoodItem] = []) -> Fern
 func makeTestStoreWithRepositories(
     date: Date = .now,
     bundledFoodItems: [FoodItem] = [],
+    cookingRunDirectory: URL? = nil,
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     let controller = PersistenceController(inMemory: true)
@@ -88,7 +89,8 @@ func makeTestStoreWithRepositories(
         coinLedgerRepository: CoinLedgerRepository(controller: controller),
         milestoneLedgerRepository: MilestoneLedgerRepository(controller: controller),
         journalNarrativeRepository: wrapNarrativeStore(journalNarrativeRepository),
-        foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems))
+        foodCatalog: FoodCatalog(source: InMemoryBundledFoodSource(bundledFoodItems)),
+        cookingRunDirectory: cookingRunDirectory
     )
     return (store, repository, journalNarrativeRepository)
 }

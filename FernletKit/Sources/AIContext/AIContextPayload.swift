@@ -150,6 +150,40 @@ public struct WorkoutAdjustmentPayload: AIContextPayload {
     }
 }
 
+// MARK: - Ingredient substitution payload
+
+/// Fields allowed for AI ingredient substitution (F4, decision §11.4).
+///
+/// Forbidden: journal text, period data, health metrics, TierTwo memories, narratives, and any user
+/// free-text beyond the two NAMES below. Only dish/ingredient names cross:
+/// - `recipeName` — the recipe's own title (a dish name), for world-knowledge context ("what pairs
+///   with a carbonara").
+/// - `ingredientToReplace` — the NAME of the catalog food being swapped out (e.g. "butter"). Not a
+///   quantity, not a macro, not user prose.
+///
+/// The model contributes WORLD KNOWLEDGE — it proposes substitute food *names* from general culinary
+/// knowledge ("butter → olive oil"), which the catalog has no taxonomy to derive (§5.2). No local
+/// candidate pool is sent: the caller rebinds each proposed name through `FoodCatalog.candidates(for:)`
+/// and binds the resolved food (with its macros) in code — the model never emits a food it invented, a
+/// quantity, or a macro. Sending only two dish/ingredient names also keeps the payload genuinely
+/// names-only.
+///
+/// This payload is deliberately NOT in `MemoryAgent.allowedPayloadKinds`: a substitution prompt must
+/// receive zero TierTwo behavioral context — it needs only names — so `MemoryAgent.filteredContext`
+/// returns an empty string for `"ingredient-substitution"` by default (fail-closed).
+public struct IngredientSubstitutionPayload: AIContextPayload {
+    public let payloadKind = "ingredient-substitution"
+    public let recipeName: String
+    public let ingredientToReplace: String
+
+    public var includedFieldNames: [String] { ["recipeName", "ingredientToReplace"] }
+
+    public init(recipeName: String, ingredientToReplace: String) {
+        self.recipeName = recipeName
+        self.ingredientToReplace = ingredientToReplace
+    }
+}
+
 // MARK: - Web page extraction payloads
 
 /// Fields allowed for on-device nutrition extraction from a product webpage.

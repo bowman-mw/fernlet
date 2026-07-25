@@ -9,6 +9,12 @@ public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
     public var attemptCount: Int
     public var lastAttemptAt: Date?
     public var lastErrorDescription: String?
+    /// The day-key on which this record last hit the daily AI budget (`aiBudgetExhausted`). The ambient
+    /// drain skips a record stamped with TODAY's key so a resting device stops re-fetching the page's HTML
+    /// on every foreground for a lookup it already knows the budget can't serve until midnight. A new day
+    /// (or a JSON-LD page, which imports with no gate and is never stamped) retries normally. Optional so
+    /// a record written by the share extension (which never sets it) decodes to nil. `nil` = never deferred.
+    public var budgetDeferredDayKey: String?
 
     public var url: URL? {
         URL(string: urlString)
@@ -20,7 +26,8 @@ public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
         queuedAt: Date = Date(),
         attemptCount: Int = 0,
         lastAttemptAt: Date? = nil,
-        lastErrorDescription: String? = nil
+        lastErrorDescription: String? = nil,
+        budgetDeferredDayKey: String? = nil
     ) {
         self.id = id
         self.urlString = url.absoluteString
@@ -28,6 +35,7 @@ public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
         self.attemptCount = attemptCount
         self.lastAttemptAt = lastAttemptAt
         self.lastErrorDescription = lastErrorDescription
+        self.budgetDeferredDayKey = budgetDeferredDayKey
     }
 }
 
@@ -87,6 +95,16 @@ public struct SharedRecipeImportQueue {
             if records[index].attemptCount >= 5 {
                 records.remove(at: index)
             }
+        }
+    }
+
+    /// Stamps a record as deferred-for-budget on `dayKey` (the drain hit `aiBudgetExhausted`). Unlike
+    /// `markAttempt`, this does NOT burn an attempt or remove the record — a budget miss is transient and
+    /// not the page's fault; it only tells the drain to stop re-fetching this page today.
+    public func markBudgetDeferred(_ record: SharedRecipeImportRecord, dayKey: String) {
+        modifyRecords { records in
+            guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
+            records[index].budgetDeferredDayKey = dayKey
         }
     }
 
@@ -181,7 +199,10 @@ extension RecipeDefinition {
                     fat: max(importedRecipe.fat, 0)
                 ),
                 micronutrients: importedRecipe.micronutrients
-            )
+            ),
+            // F5: preserve JSON-LD-parsed ordered cooking steps. Persisted per-row via the
+            // `SavedRecipeRecord.payloadData` blob (STEP 0), so they survive on this path.
+            steps: importedRecipe.steps
         )
     }
 }

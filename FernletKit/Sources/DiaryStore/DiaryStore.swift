@@ -671,6 +671,27 @@ public final class DiaryStore {
         deletePlannedWorkout(plannedWorkout, date: date)
     }
 
+    // MARK: - Planned recipes (F3 weekly shopping-list planner)
+
+    /// Assigns a recipe to a day in the shopping-list planner. Idempotent (a recipe already planned on
+    /// the day is not duplicated). Mirrors `planWorkout`'s per-day-row mutation exactly — the field
+    /// rides `DayRecord.payloadData` via Codable, so no schema change and per-row sync for free.
+    public func planRecipe(_ recipeID: UUID, date: String) {
+        assert(!date.isEmpty, "planned recipe date required")
+        mutateDay(date: date) { day in
+            guard !day.plannedRecipeIDs.contains(recipeID) else { return }
+            day.plannedRecipeIDs.append(recipeID)
+        }
+    }
+
+    /// Removes a recipe from a day's plan. A no-op if it was not planned there.
+    public func unplanRecipe(_ recipeID: UUID, date: String) {
+        assert(!date.isEmpty, "planned recipe date required")
+        mutateDay(date: date) { day in
+            day.plannedRecipeIDs.removeAll { $0 == recipeID }
+        }
+    }
+
     public func setWorkoutProfile(_ profile: WorkoutProfile) {
         batchSnapshotPersistence { settings.workoutProfile = profile }
     }
@@ -910,7 +931,7 @@ public final class DiaryStore {
 
     // MARK: - Recipes & ingredients (pure)
 
-    @discardableResult public func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput]) -> RecipeDefinition {
+    @discardableResult public func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) -> RecipeDefinition {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         assert(!trimmedName.isEmpty, "recipe name required")
         let now = Date()
@@ -929,14 +950,18 @@ public final class DiaryStore {
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
                 source: "manual",
                 createdAt: now,
-                updatedAt: now
+                updatedAt: now,
+                steps: RecipeStepSanitizer.sanitized(steps)
             )
             recipes.insert(recipe, at: 0)
             return recipe
         }
     }
 
-    public func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput]) {
+    // `steps` is REQUIRED (no default): it is written unconditionally at line ~978, so a defaulted-nil
+    // would silently erase a recipe's stored steps for any caller that forgot to pass them. Callers must
+    // always pass the editor's current step list (nil/[] only when the user genuinely cleared them).
+    public func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]?) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         assert(!trimmedName.isEmpty, "recipe name required")
         guard let index = recipes.firstIndex(where: { $0.id == recipe.id }) else { return }
@@ -953,7 +978,23 @@ public final class DiaryStore {
             recipes[index].servings = max(servings, 1)
             recipes[index].ingredients = recipeIngredients
             recipes[index].notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            recipes[index].steps = RecipeStepSanitizer.sanitized(steps)
             recipes[index].updatedAt = Date()
+        }
+    }
+
+    /// Inserts an ALREADY-BUILT recipe (structured ingredients already bound to catalog `foodItemId`s)
+    /// at the top of the book, persisting through the snapshot path — the store seam for an F4
+    /// substitution FORK, whose ingredients are assembled by `RecipeSubstitution.fork` rather than from
+    /// `ManualRecipeIngredientInput`. Unlike `addRecipe` it mints no `FoodItem`s: a fork references
+    /// existing catalog foods (the substitute is a resolved candidate), so nothing new enters `foodItems`.
+    public func insertRecipe(_ recipe: RecipeDefinition) {
+        batchSnapshotPersistence {
+            // Id-guard: a double-tapped "Save as new recipe" fires the same fork (fixed `id`) twice; without
+            // this the second insert would mint a duplicate-identity row into the synced blob (undefined
+            // `ForEach` behavior + delete-by-id ambiguity). First save wins; the retry is a no-op.
+            guard !recipes.contains(where: { $0.id == recipe.id }) else { return }
+            recipes.insert(recipe, at: 0)
         }
     }
 

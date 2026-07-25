@@ -255,7 +255,7 @@ enum FoodProductWebImporter {
         return slug.isEmpty ? (url.host() ?? url.absoluteString) : slug
     }
 
-    static func importProduct(from preview: ProductPagePreview) async throws -> ImportedFoodProduct {
+    static func importProduct(from preview: ProductPagePreview, gate: FernletAIGate) async throws -> ImportedFoodProduct {
         #if canImport(UIKit)
         if isDirectImageURL(preview.sourceURL),
            let product = await productFromNutritionLabelImage(
@@ -292,7 +292,7 @@ enum FoodProductWebImporter {
         }
         #endif
         let cleanedText = try cleanedBodyText(from: html)
-        return try await extractWithFoundationModel(from: cleanedText, fallbackName: preview.title, sourceURL: preview.sourceURL)
+        return try await extractWithFoundationModel(from: cleanedText, fallbackName: preview.title, sourceURL: preview.sourceURL, gate: gate)
     }
 
     static func structuredProduct(from html: String, sourceURL: URL) -> ImportedFoodProduct? {
@@ -563,10 +563,14 @@ enum FoodProductWebImporter {
         return true
     }
 
-    private static func extractWithFoundationModel(from text: String, fallbackName: String, sourceURL: URL) async throws -> ImportedFoodProduct {
+    /// Last-resort on-device model extraction (`standard` tier, user-invoked — the user searched for
+    /// / pasted a product). Routes through `gate`: capability cap + sleepy/resting budget + one-call
+    /// charge. A fallback result surfaces as `.modelUnavailable`, matching the prior
+    /// no-on-device-model behavior.
+    private static func extractWithFoundationModel(from text: String, fallbackName: String, sourceURL: URL, gate: FernletAIGate) async throws -> ImportedFoodProduct {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, visionOS 26.0, *) {
-            guard case .available = SystemLanguageModel.default.availability else {
+            guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else {
                 throw FoodProductWebImportError.modelUnavailable
             }
 
@@ -574,11 +578,8 @@ enum FoodProductWebImporter {
                 sourceHost: sourceURL.host() ?? "unknown",
                 cleanedTextCharCount: text.count
             )
-            await AIAuditLog.shared.record(
-                payloadKind: payload.payloadKind,
-                destination: .onDeviceFoundationModels,
-                includedFields: payload.includedFieldNames
-            )
+            let auditKind = payload.payloadKind
+            let auditFields = payload.includedFieldNames
 
             let instructions = """
             Extract nutrition facts for one packaged food product from webpage text.
@@ -593,23 +594,41 @@ enum FoodProductWebImporter {
             \(text)
             """
             let session = LanguageModelSession(instructions: instructions)
-            let response = try await session.respond(to: prompt, generating: ExtractedFoodProduct.self)
-            guard let product = response.content.importedProduct(sourceURL: sourceURL, fallbackName: fallbackName) else {
-                throw FoodProductWebImportError.nutritionNotFound
-            }
-            // Plausibility: per-field bounds + macro-calorie consistency
-            let p = product.macros.protein, c = product.macros.carbs, f = product.macros.fat
-            let macroCalories = p * 4 + c * 4 + f * 9
-            if let reportedCalories = product.calories {
-                let allowedLow = max(0, reportedCalories / 2 - 50)
-                let allowedHigh = reportedCalories * 2 + 100
-                guard reportedCalories >= 0 && reportedCalories <= 5000,
-                      p >= 0 && p <= 500, c >= 0 && c <= 1000, f >= 0 && f <= 500,
-                      macroCalories >= allowedLow && macroCalories <= allowedHigh else {
+            do {
+                let response = try await session.respond(to: prompt, generating: ExtractedFoodProduct.self)
+                guard let product = response.content.importedProduct(sourceURL: sourceURL, fallbackName: fallbackName) else {
                     throw FoodProductWebImportError.nutritionNotFound
                 }
+                // Plausibility: per-field bounds + macro-calorie consistency
+                let p = product.macros.protein, c = product.macros.carbs, f = product.macros.fat
+                let macroCalories = p * 4 + c * 4 + f * 9
+                if let reportedCalories = product.calories {
+                    let allowedLow = max(0, reportedCalories / 2 - 50)
+                    let allowedHigh = reportedCalories * 2 + 100
+                    guard reportedCalories >= 0 && reportedCalories <= 5000,
+                          p >= 0 && p <= 500, c >= 0 && c <= 1000, f >= 0 && f <= 500,
+                          macroCalories >= allowedLow && macroCalories <= allowedHigh else {
+                        throw FoodProductWebImportError.nutritionNotFound
+                    }
+                }
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: destination,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: .succeeded
+                )
+                return product
+            } catch {
+                await AIAuditLog.shared.record(
+                    payloadKind: auditKind,
+                    destination: destination,
+                    modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
+                    includedFields: auditFields,
+                    outcome: AIAuditOutcome.fromModelError(error)
+                )
+                throw error
             }
-            return product
         }
         #endif
         throw FoodProductWebImportError.modelUnavailable
