@@ -652,18 +652,23 @@ public nonisolated struct NutrientReference {
 }
 
 public nonisolated enum MicronutrientGapAnalyzer {
+    // Recommended daily amounts come from the single shared `FDADailyValues` table
+    // (21 CFR 101.9), which the `NutritionLabelScanner` reads too. Calcium and
+    // potassium here previously carried the stale NASEM figures (1,000 / 3,400); they
+    // now match the FDA DVs the label prints (1,300 / 4,700). Omega-3 keeps the NASEM
+    // ALA Adequate Intake because FDA defines no omega-3 DV — see `FDADailyValues`.
     nonisolated(unsafe) public static let trackedNutrients: [NutrientReference] = [
-        NutrientReference(key: "fiber", name: "Fiber", unit: "g", recommendedDailyAmount: 28) { $0.fiber },
-        NutrientReference(key: "vitaminC", name: "Vitamin C", unit: "mg", recommendedDailyAmount: 90) { $0.vitaminC },
-        NutrientReference(key: "vitaminD", name: "Vitamin D", unit: "mcg", recommendedDailyAmount: 20) { $0.vitaminD },
-        NutrientReference(key: "vitaminB12", name: "Vitamin B12", unit: "mcg", recommendedDailyAmount: 2.4) { $0.vitaminB12 },
-        NutrientReference(key: "folate", name: "Folate", unit: "mcg DFE", recommendedDailyAmount: 400) { $0.folate },
-        NutrientReference(key: "calcium", name: "Calcium", unit: "mg", recommendedDailyAmount: 1_000) { $0.calcium },
-        NutrientReference(key: "iron", name: "Iron", unit: "mg", recommendedDailyAmount: 18) { $0.iron },
-        NutrientReference(key: "magnesium", name: "Magnesium", unit: "mg", recommendedDailyAmount: 420) { $0.magnesium },
-        NutrientReference(key: "potassium", name: "Potassium", unit: "mg", recommendedDailyAmount: 3_400) { $0.potassium },
-        NutrientReference(key: "zinc", name: "Zinc", unit: "mg", recommendedDailyAmount: 11) { $0.zinc },
-        NutrientReference(key: "omega3", name: "Omega-3", unit: "g", recommendedDailyAmount: 1.6) { $0.omega3 }
+        NutrientReference(key: "fiber", name: "Fiber", unit: "g", recommendedDailyAmount: FDADailyValues.fiberGrams) { $0.fiber },
+        NutrientReference(key: "vitaminC", name: "Vitamin C", unit: "mg", recommendedDailyAmount: FDADailyValues.vitaminCMilligrams) { $0.vitaminC },
+        NutrientReference(key: "vitaminD", name: "Vitamin D", unit: "mcg", recommendedDailyAmount: FDADailyValues.vitaminDMicrograms) { $0.vitaminD },
+        NutrientReference(key: "vitaminB12", name: "Vitamin B12", unit: "mcg", recommendedDailyAmount: FDADailyValues.vitaminB12Micrograms) { $0.vitaminB12 },
+        NutrientReference(key: "folate", name: "Folate", unit: "mcg DFE", recommendedDailyAmount: FDADailyValues.folateMicrogramsDFE) { $0.folate },
+        NutrientReference(key: "calcium", name: "Calcium", unit: "mg", recommendedDailyAmount: FDADailyValues.calciumMilligrams) { $0.calcium },
+        NutrientReference(key: "iron", name: "Iron", unit: "mg", recommendedDailyAmount: FDADailyValues.ironMilligrams) { $0.iron },
+        NutrientReference(key: "magnesium", name: "Magnesium", unit: "mg", recommendedDailyAmount: FDADailyValues.magnesiumMilligrams) { $0.magnesium },
+        NutrientReference(key: "potassium", name: "Potassium", unit: "mg", recommendedDailyAmount: FDADailyValues.potassiumMilligrams) { $0.potassium },
+        NutrientReference(key: "zinc", name: "Zinc", unit: "mg", recommendedDailyAmount: FDADailyValues.zincMilligrams) { $0.zinc },
+        NutrientReference(key: "omega3", name: "Omega-3", unit: "g", recommendedDailyAmount: FDADailyValues.omega3ALAGrams) { $0.omega3 }
     ]
 
     /// Fraction of meals that carry usable micronutrient data (>= 5 populated fields).
