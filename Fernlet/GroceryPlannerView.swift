@@ -31,6 +31,10 @@ struct ShoppingListBuilderView: View {
     @State private var selectedIDs: Set<UUID> = []
     @State private var yieldByID: [UUID: Int] = [:]
     @State private var searchText = ""
+    /// Seed `selectedIDs` from `initialSelection` exactly once. Keying the seed off `selectedIDs.isEmpty`
+    /// re-seeds on every `onAppear` — so deselecting everything, pushing a detail, and popping back would
+    /// resurrect the whole week's plan. A one-shot flag makes an empty selection a stable user choice.
+    @State private var didSeed = false
 
     /// Both recipe stores unioned, exactly as the recipe-book UI does (manual/peer + web-import).
     private var allRecipes: [RecipeDefinition] {
@@ -99,7 +103,10 @@ struct ShoppingListBuilderView: View {
         .background(Color.parchment)
         .navigationTitle("")
         .onAppear {
-            if selectedIDs.isEmpty { selectedIDs = Set(initialSelection) }
+            if !didSeed {
+                didSeed = true
+                selectedIDs = Set(initialSelection)
+            }
         }
     }
 

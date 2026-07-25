@@ -79,6 +79,12 @@ public nonisolated struct FernletDay: Codable {
         // Tolerant + additive (mirrors `plannedWorkouts`): absent on every day written before F3 and on
         // rows re-encoded by an un-updated peer → `[]`, never a decode failure. Synthesized `encode`
         // writes it back into the day row's payload so it syncs per-row like every other day field.
+        // LANDMINE (accepted, per-day-scoped): an un-updated paired device does not merely fail to READ
+        // this field — its synthesized `encode` re-writes the day row WITHOUT the key, so any day such a
+        // device touches loses its plan permanently. That is DATA loss (the user's meal plan), not just
+        // provenance loss. It's bounded to the days the old device edits and matches the `plannedWorkouts`
+        // precedent, so it's tolerated until every device is updated — but note it's a strip-on-write, not
+        // a decode default.
         plannedRecipeIDs = try container.decodeIfPresent([UUID].self, forKey: .plannedRecipeIDs) ?? []
     }
 

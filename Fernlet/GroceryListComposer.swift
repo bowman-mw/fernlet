@@ -53,10 +53,13 @@ extension FernletStore {
     }
 
     private func groceryRecipeSource(for recipe: RecipeDefinition, yieldOverride: Int?) -> GroceryAggregation.RecipeSource {
-        if recipe.isWebImport {
-            // Web imports carry no structured ingredients (§4.2) and cannot be proportionally scaled —
-            // their free-text lines pass through the shipped unifier unchanged, under a per-recipe
-            // heading, until STEP 0 backfills structure.
+        // Take the free-text path ONLY when the web import actually carries free-text lines — NOT merely
+        // when `isWebImport` is true. A web import whose `ingredientLines` is empty but which carries
+        // structured `ingredients` (the STEP 0 backfill state, or a hand-repaired import) must fall through
+        // to structured resolution below; routing it here would call `recipeIngredientLines` with an empty
+        // `nameByFoodID` and emit nameless, measure-only lines that never merge. Free-text lines can't be
+        // proportionally scaled, so they pass through the shipped unifier unchanged under a per-recipe head.
+        if recipe.webImport?.ingredientLines.isEmpty == false {
             let lines = Self.recipeIngredientLines(recipe) ?? []
             return GroceryAggregation.RecipeSource(recipeName: recipe.name, freeTextLines: lines)
         }

@@ -692,20 +692,6 @@ public final class DiaryStore {
         }
     }
 
-    /// The recipe ids planned across a run of day keys, de-duplicated but stable-ordered (first day a
-    /// recipe appears wins). Dangling ids (recipe since deleted) are NOT filtered here — the caller
-    /// resolves against the recipe stores and drops what no longer exists (§4.3).
-    public func plannedRecipeIDs(forDays dayKeys: [String]) -> [UUID] {
-        var seen = Set<UUID>()
-        var ordered: [UUID] = []
-        for key in dayKeys {
-            for id in loadDay(for: key).plannedRecipeIDs where seen.insert(id).inserted {
-                ordered.append(id)
-            }
-        }
-        return ordered
-    }
-
     public func setWorkoutProfile(_ profile: WorkoutProfile) {
         batchSnapshotPersistence { settings.workoutProfile = profile }
     }

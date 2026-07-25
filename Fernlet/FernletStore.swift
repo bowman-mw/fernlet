@@ -1848,10 +1848,6 @@ final class FernletStore {
         diary.unplanRecipe(recipeID, date: date)
     }
 
-    func plannedRecipeIDs(forDays dayKeys: [String]) -> [UUID] {
-        diary.plannedRecipeIDs(forDays: dayKeys)
-    }
-
     func completePlannedWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
         assert(!date.isEmpty, "planned workout date required")
         var workout = plannedWorkout.completedWorkout
