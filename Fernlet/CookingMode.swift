@@ -1,0 +1,575 @@
+//
+//  CookingMode.swift
+//  Fernlet
+//
+//  F5 cooking mode (decision §11.6): a full-screen, hands-on cooking flow launched from a recipe's
+//  "Cook" action. It opens on a MISE EN PLACE screen (every ingredient + amount, scaled by the F4
+//  engine when the cook picks a different yield), then walks one step per screen with an explicit
+//  Next/Back pair and a per-step crossfade + progress dots (the GroundingView idiom). A step carrying
+//  `durationSeconds` shows a PASSIVE countdown that, on expiry, highlights Next and fires a haptic —
+//  it NEVER auto-advances the step. The finish screen offers to log the meal, anchored to the day the
+//  cook BEGAN (a long session crossing midnight logs to the start day). No Live Activity / Siri here —
+//  that is the next phase.
+//
+
+import SwiftUI
+import FernletDomainModel
+import FoodCatalog
+#if canImport(UIKit)
+import FernletUI
+import UIKit
+#endif
+
+// MARK: - Cook availability gate
+
+enum CookingModeAvailability {
+    /// The "Cook" action shows only when there is something to cook through: authored steps, structured
+    /// ingredients, or a web import's free-text ingredient lines (mise-en-place renders those as-is). A
+    /// recipe with none of the three (e.g. a bare structured recipe with an empty ingredient list) gets
+    /// no Cook action.
+    static func canCook(_ recipe: RecipeDefinition) -> Bool {
+        if let steps = recipe.steps, !steps.isEmpty { return true }
+        if !recipe.ingredients.isEmpty { return true }
+        if let lines = recipe.webImport?.ingredientLines, !lines.isEmpty { return true }
+        return false
+    }
+}
+
+#if canImport(UIKit)
+
+// MARK: - Keep-screen-awake modifier (first use of isIdleTimerDisabled in the app)
+
+/// Keeps the screen awake while `isActive` and the scene is frontmost, restoring the system idle timer
+/// on disappear or when the app backgrounds. Scoped tightly to the cooking-mode cover — a cook reading a
+/// step shouldn't have the screen dim mid-recipe, but we must never leave the idle timer disabled once
+/// they leave or background the app. This is the app's ONLY `isIdleTimerDisabled` writer.
+private struct KeepScreenAwakeModifier: ViewModifier {
+    let isActive: Bool
+    @Environment(\.scenePhase) private var scenePhase
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { apply(isActive && scenePhase == .active) }
+            .onDisappear { apply(false) }
+            .onChange(of: isActive) { _, newValue in apply(newValue && scenePhase == .active) }
+            .onChange(of: scenePhase) { _, newPhase in apply(isActive && newPhase == .active) }
+    }
+
+    private func apply(_ disabled: Bool) {
+        UIApplication.shared.isIdleTimerDisabled = disabled
+    }
+}
+
+extension View {
+    /// Keeps the screen awake while `active` (and the app is frontmost); restores the idle timer on
+    /// disappear/background. A small reusable modifier — the first `isIdleTimerDisabled` use in the app.
+    func keepsScreenAwake(_ active: Bool) -> some View {
+        modifier(KeepScreenAwakeModifier(isActive: active))
+    }
+}
+
+// MARK: - Per-step timer editor control (recipe editor)
+
+/// Compact optional-timer control for the recipe editor's Step rows. Edits `durationSeconds` in whole
+/// minutes; "no timer" is represented as `nil` (a passive countdown needs a positive window).
+struct StepTimerControl: View {
+    @Binding var durationSeconds: Int?
+
+    private var minutes: Int { max((durationSeconds ?? 0) / 60, 1) }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "timer")
+                .font(.caption)
+                .foregroundStyle(Color.slate)
+            if durationSeconds == nil {
+                Button("Add timer") { durationSeconds = 60 }
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.moss)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("recipeEditor.step.addTimer")
+            } else {
+                Stepper(
+                    "\(minutes) min timer",
+                    value: Binding(get: { minutes }, set: { durationSeconds = max($0, 1) * 60 }),
+                    in: 1...240
+                )
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.bark)
+                Button { durationSeconds = nil } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Color.slate.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove timer")
+            }
+        }
+    }
+}
+
+// MARK: - Cooking mode
+
+struct CookingModeView: View {
+    let store: FernletStore
+    let recipe: RecipeDefinition
+    /// Logs the finished meal, anchored to the day-key captured at session START. Routed per call site to
+    /// the right store method (manual `logRecipe` vs saved/web `logSavedRecipe`), each of which takes a
+    /// `date:` day-key so a session crossing midnight still logs to the day the cook began.
+    let onLogToDay: (MealType, String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private enum Stage: Equatable { case mise, cooking, finished }
+
+    @State private var stage: Stage = .mise
+    @State private var stepIndex = 0
+    @State private var cookYield: Int
+    @State private var resolvedItems: [UUID: FoodItem] = [:]
+    /// The day-key captured ONCE when cooking begins. Nil until `.onAppear` stamps it. Every completion
+    /// log anchors here, so a long session that rolls past midnight still logs to the start day.
+    @State private var startDayKey: String?
+
+    // Single per-step passive timer (v1 — no concurrent named timers).
+    @State private var timerStartedAt: Date?
+    @State private var timerEndsAt: Date?
+    @State private var timerFired = false
+    @State private var timerTask: Task<Void, Never>?
+
+    init(store: FernletStore, recipe: RecipeDefinition, onLogToDay: @escaping (MealType, String) -> Void) {
+        self.store = store
+        self.recipe = recipe
+        self.onLogToDay = onLogToDay
+        _cookYield = State(initialValue: max(recipe.servings, 1))
+    }
+
+    private var steps: [RecipeStep] { recipe.steps ?? [] }
+    private var hasSteps: Bool { !steps.isEmpty }
+    private var isScalable: Bool { RecipeScaling.isScalable(recipe) }
+
+    /// Ingredients as shown on the mise screen — scaled to the cook-for yield for structured recipes,
+    /// or the stored quantities otherwise. Empty for web imports (they render free-text lines instead).
+    private var displayIngredients: [RecipeIngredient] {
+        guard isScalable, cookYield != recipe.servings else { return recipe.ingredients }
+        return RecipeScaling.scaledIngredients(recipe, forYield: cookYield)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.parchment.ignoresSafeArea()
+            VStack(spacing: 0) {
+                header
+                Divider().overlay(Color.bark.opacity(0.08))
+                content
+            }
+        }
+        .keepsScreenAwake(true)
+        .task(id: recipe.ingredients.map(\.foodItemId)) {
+            let ids = recipe.ingredients.map(\.foodItemId)
+            guard !ids.isEmpty else { return }
+            resolvedItems = Dictionary(
+                store.foodCatalog.items(ids: ids).map { ($0.id, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+        }
+        .onAppear {
+            if startDayKey == nil { startDayKey = store.todayKey }
+        }
+        .onDisappear { cancelTimer() }
+    }
+
+    // MARK: Header
+
+    private var header: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Text("Close")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.slate)
+            }
+            .accessibilityIdentifier("cookingMode.close")
+            Spacer()
+            Text(stageTitle)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.bark)
+            Spacer()
+            // Balance the leading "Close" so the title stays centered.
+            Text("Close").font(.fernlet(.label)).foregroundStyle(.clear).accessibilityHidden(true)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+
+    private var stageTitle: String {
+        switch stage {
+        case .mise: return recipe.name
+        case .cooking: return "Step \(stepIndex + 1) of \(steps.count)"
+        case .finished: return recipe.name
+        }
+    }
+
+    // MARK: Content router
+
+    @ViewBuilder private var content: some View {
+        switch stage {
+        case .mise: miseEnPlace
+        case .cooking: cookingWalker
+        case .finished: finishScreen
+        }
+    }
+
+    // MARK: Mise en place
+
+    private var miseEnPlace: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Mise en place")
+                        .font(.fernlet(.displayMedium))
+                        .foregroundStyle(Color.bark)
+                    Text("Everything you'll need, laid out before you start.")
+                        .font(.fernlet(.body))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
+
+                if isScalable {
+                    FernletCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            SectionLabel("Cook for")
+                            Stepper(
+                                "\(cookYield) serving\(cookYield == 1 ? "" : "s")",
+                                value: Binding(get: { cookYield }, set: { cookYield = RecipeScaling.clampedYield($0) }),
+                                in: RecipeScaling.yieldRange
+                            )
+                            .accessibilityIdentifier("cookingMode.cookForYield")
+                            if cookYield != recipe.servings {
+                                Text("Scaled from \(recipe.servings) serving\(recipe.servings == 1 ? "" : "s") — amounts below adjust to match. Logging still records one serving.")
+                                    .font(.fernlet(.bodySmall))
+                                    .foregroundStyle(Color.slate)
+                                    .fernletWrappingText()
+                            }
+                        }
+                    }
+                }
+
+                FernletCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SectionLabel("Ingredients")
+                        ingredientList
+                    }
+                }
+            }
+            .padding(20)
+            .padding(.bottom, 12)
+        }
+        .safeAreaInset(edge: .bottom) {
+            primaryBar {
+                Button {
+                    beginCooking()
+                } label: {
+                    primaryButtonLabel(hasSteps ? "Start cooking" : "I'm ready")
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("cookingMode.start")
+            }
+        }
+    }
+
+    @ViewBuilder private var ingredientList: some View {
+        if let webImport = recipe.webImport, !webImport.ingredientLines.isEmpty {
+            // Web imports have free-text lines and no structured quantities to scale — render as-is.
+            ForEach(webImport.ingredientLines, id: \.self) { line in
+                ingredientRow(line)
+            }
+        } else if !displayIngredients.isEmpty {
+            ForEach(displayIngredients) { ingredient in
+                ingredientRow(ingredientLine(ingredient))
+            }
+        } else {
+            Text("No ingredients listed.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+        }
+    }
+
+    private func ingredientRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
+            Text(text)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+        }
+    }
+
+    private func ingredientLine(_ ingredient: RecipeIngredient) -> String {
+        let quantity = ingredient.quantity.formatted(.number.precision(.fractionLength(0...1)))
+        let name = resolvedItems[ingredient.foodItemId]?.name ?? "Ingredient"
+        return "\(quantity) \(ingredient.unit) · \(name)"
+    }
+
+    // MARK: Cooking walker
+
+    private var cookingWalker: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    if let step = currentStep {
+                        Text(step.text)
+                            .font(.fernlet(.header))
+                            .foregroundStyle(Color.bark)
+                            .fernletWrappingText()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .transition(.opacity)
+                            .id(stepIndex)
+
+                        if let duration = step.durationSeconds, duration > 0 {
+                            stepTimer(duration: duration)
+                        }
+                    }
+                }
+                .padding(24)
+            }
+            walkerFooter
+        }
+    }
+
+    private var currentStep: RecipeStep? {
+        steps.indices.contains(stepIndex) ? steps[stepIndex] : nil
+    }
+
+    private func stepTimer(duration: Int) -> some View {
+        FernletCard {
+            VStack(spacing: 12) {
+                if let started = timerStartedAt, let ends = timerEndsAt, started <= ends {
+                    // GuidedWorkout idiom: a fixed window clamps to 0:00 at expiry and stays valid however
+                    // long the cook over-runs it — a live `Date()` lower bound would invert past the deadline.
+                    Text(timerInterval: started...ends, countsDown: true)
+                        .font(.system(size: 60, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(timerFired ? Color.goldenrod : Color.bark)
+                        .accessibilityIdentifier("cookingMode.stepTimer")
+                    if timerFired {
+                        Text("Timer's up — tap Next when you're ready. Nothing advances on its own.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .multilineTextAlignment(.center)
+                            .fernletWrappingText()
+                    }
+                    Button { cancelTimer() } label: {
+                        Text("Reset timer").font(.fernlet(.labelSmall)).foregroundStyle(Color.moss)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text(formattedDuration(duration))
+                        .font(.system(size: 44, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.slate)
+                    Button { startStepTimer(duration) } label: {
+                        Label("Start \(formattedDuration(duration)) timer", systemImage: "timer")
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.cream)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                            .background(Color.moss, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("cookingMode.startStepTimer")
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var walkerFooter: some View {
+        VStack(spacing: 14) {
+            progressDots
+            HStack(spacing: 12) {
+                Button { goBack() } label: {
+                    secondaryLabel("Back", icon: "chevron.left")
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("cookingMode.back")
+
+                Button { goNext() } label: {
+                    HStack(spacing: 6) {
+                        Text(stepIndex == steps.count - 1 ? "Finish" : "Next")
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.cream)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(timerFired ? Color.goldenrod : Color.moss, in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("cookingMode.next")
+            }
+        }
+        .padding(20)
+        .background(Color.parchment)
+    }
+
+    private var progressDots: some View {
+        HStack(spacing: 8) {
+            ForEach(steps.indices, id: \.self) { index in
+                Circle()
+                    .fill(index <= stepIndex ? Color.moss : Color.moss.opacity(0.25))
+                    .frame(width: 8, height: 8)
+            }
+        }
+        .animation(.easeInOut(duration: 0.35), value: stepIndex)
+    }
+
+    // MARK: Finish
+
+    private var finishScreen: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 46, weight: .regular))
+                    .foregroundStyle(Color.moss)
+                Text("All done.")
+                    .font(.fernlet(.displayMedium))
+                    .foregroundStyle(Color.bark)
+                Text("Nicely cooked. Want to log \(recipe.name) as a meal?")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.slate)
+                    .multilineTextAlignment(.center)
+                    .fernletWrappingText()
+                    .frame(maxWidth: 300)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 48)
+            .padding(20)
+        }
+        .safeAreaInset(edge: .bottom) {
+            primaryBar {
+                VStack(spacing: 10) {
+                    Menu {
+                        ForEach(MealType.allCases) { mealType in
+                            Button(mealType.rawValue) { logMeal(mealType) }
+                        }
+                    } label: {
+                        primaryButtonLabel("Log this meal")
+                    }
+                    .accessibilityIdentifier("cookingMode.logMeal")
+                    Button { dismiss() } label: {
+                        Text("Not now")
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.slate)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: Shared bits
+
+    private func primaryBar<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .padding(20)
+            .background(Color.parchment)
+    }
+
+    private func primaryButtonLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.cream)
+            .frame(maxWidth: .infinity)
+            .padding(14)
+            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func secondaryLabel(_ title: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+            Text(title)
+        }
+        .font(.fernlet(.label))
+        .foregroundStyle(Color.moss)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+    }
+
+    // MARK: Navigation
+
+    private func beginCooking() {
+        if hasSteps {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                stepIndex = 0
+                stage = .cooking
+            }
+        } else {
+            // Mise-only recipe (ingredients but no steps): a single done screen, per §6.4.
+            withAnimation(.easeInOut(duration: 0.3)) { stage = .finished }
+        }
+    }
+
+    private func goNext() {
+        cancelTimer()
+        if stepIndex < steps.count - 1 {
+            withAnimation(.easeInOut(duration: 0.3)) { stepIndex += 1 }
+        } else {
+            withAnimation(.easeInOut(duration: 0.3)) { stage = .finished }
+        }
+    }
+
+    private func goBack() {
+        cancelTimer()
+        if stepIndex > 0 {
+            withAnimation(.easeInOut(duration: 0.3)) { stepIndex -= 1 }
+        } else {
+            withAnimation(.easeInOut(duration: 0.3)) { stage = .mise }
+        }
+    }
+
+    private func logMeal(_ mealType: MealType) {
+        onLogToDay(mealType, startDayKey ?? store.todayKey)
+        dismiss()
+    }
+
+    // MARK: Timer
+
+    private func startStepTimer(_ seconds: Int) {
+        cancelTimer()
+        let now = Date()
+        timerStartedAt = now
+        timerEndsAt = now.addingTimeInterval(TimeInterval(seconds))
+        timerFired = false
+        timerTask = Task { [seconds] in
+            try? await Task.sleep(for: .seconds(seconds))
+            if Task.isCancelled { return }
+            await MainActor.run {
+                guard !Task.isCancelled else { return }
+                timerFired = true
+                fireHaptic()
+            }
+        }
+    }
+
+    private func cancelTimer() {
+        timerTask?.cancel()
+        timerTask = nil
+        timerStartedAt = nil
+        timerEndsAt = nil
+        timerFired = false
+    }
+
+    private func fireHaptic() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    private func formattedDuration(_ seconds: Int) -> String {
+        let minutes = seconds / 60
+        let secs = seconds % 60
+        return String(format: "%d:%02d", minutes, secs)
+    }
+}
+
+#endif

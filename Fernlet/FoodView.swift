@@ -129,7 +129,8 @@ struct FoodView: View {
                                                                 shareText: store.recipeShareText(for: recipe),
                                                                 payload: store.proximityRecipeSharePayload(for: recipe)
                                                             )
-                                                        }
+                                                        },
+                                                        onCookLog: { mealType, day in store.logRecipe(recipe, mealType: mealType, date: day) }
                                                     )
                                                 } label: {
                                                     RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
@@ -176,7 +177,8 @@ struct FoodView: View {
                                                                 shareText: store.savedRecipeShareText(for: recipe),
                                                                 payload: store.proximityRecipeSharePayload(for: recipe)
                                                             )
-                                                        }
+                                                        },
+                                                        onCookLog: { mealType, day in store.logSavedRecipe(recipe, mealType: mealType, date: day) }
                                                     )
                                                 } label: {
                                                     SavedRecipeRow(recipe: recipe)
@@ -629,6 +631,9 @@ struct RecipeSheet: View {
     @State private var servings = 1
     @State private var notes = ""
     @State private var ingredients: [ManualRecipeIngredientInput] = []
+    /// F5 manual step entry. Held as `[RecipeStep]` directly (Identifiable + mutable `text`), sanitized
+    /// on save by `RecipeStepSanitizer` (drops blanks). Empty means "no cooking steps".
+    @State private var steps: [RecipeStep] = []
     @State private var expandedId: UUID?
     @State private var scannerPath = false
     @State private var didStartScanner = false
@@ -645,6 +650,7 @@ struct RecipeSheet: View {
             _servings = State(initialValue: recipe.servings)
             _notes = State(initialValue: recipe.notes)
             _ingredients = State(initialValue: loadedIngredients)
+            _steps = State(initialValue: recipe.steps ?? [])
             _expandedId = State(initialValue: loadedIngredients.first?.id)
         } else {
             let first = ManualRecipeIngredientInput()
@@ -767,6 +773,8 @@ struct RecipeSheet: View {
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
                     }
 
+                    stepsSection
+
                     if let editingRecipe {
                         Button(role: .destructive) {
                             store.deleteRecipe(editingRecipe)
@@ -786,7 +794,7 @@ struct RecipeSheet: View {
             if editingRecipe == nil {
                 HStack(spacing: 12) {
                     Button("Save recipe") {
-                        store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients)
+                        store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
                         dismiss()
                     }
                     .buttonStyle(.plain)
@@ -800,7 +808,7 @@ struct RecipeSheet: View {
                     .opacity(canSave ? 1 : 0.4)
 
                     Button("Log & save") {
-                        let recipe = store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients)
+                        let recipe = store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
                         store.logRecipe(recipe)
                         dismiss()
                     }
@@ -816,7 +824,7 @@ struct RecipeSheet: View {
                 .background(Color.parchment)
             } else {
                 SheetSaveBar(disabled: !canSave) {
-                    store.updateRecipe(editingRecipe!, name: name, servings: servings, notes: notes, ingredients: ingredients)
+                    store.updateRecipe(editingRecipe!, name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
                     dismiss()
                 }
             }
@@ -883,6 +891,109 @@ struct RecipeSheet: View {
             carbs: Int((Double(totals.carbs) / Double(divisor)).rounded()),
             fat: Int((Double(totals.fat) / Double(divisor)).rounded())
         )
+    }
+
+    /// F5 manual cooking-step editor: an ordered add / reorder (move up-down) / delete list plus an
+    /// optional per-step timer, matching the shipped ingredient-editor idiom (a plain VStack of cream
+    /// cards inside a ScrollView — reorder is chevron buttons rather than a `List.onMove`, since this
+    /// sheet has no `List`). Blank steps are dropped by `RecipeStepSanitizer` on save.
+    @ViewBuilder private var stepsSection: some View {
+        SheetField("Steps (optional)") {
+            VStack(spacing: 8) {
+                // Identity is the step id (stable under reorder/delete); the display index is recomputed
+                // per render so "Step N" and the up/down enable-state always reflect current position.
+                ForEach(steps) { step in
+                    let index = steps.firstIndex(where: { $0.id == step.id }) ?? 0
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Step \(index + 1)")
+                                .font(.fernlet(.labelSmall))
+                                .foregroundStyle(Color.slate)
+                            Spacer()
+                            Button { moveStep(step.id, by: -1) } label: {
+                                Image(systemName: "chevron.up")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(index == 0 ? Color.slate.opacity(0.3) : Color.moss)
+                                    .frame(minWidth: 34, minHeight: 34)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(index == 0)
+                            .accessibilityLabel("Move step \(index + 1) up")
+                            Button { moveStep(step.id, by: 1) } label: {
+                                Image(systemName: "chevron.down")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(index == steps.count - 1 ? Color.slate.opacity(0.3) : Color.moss)
+                                    .frame(minWidth: 34, minHeight: 34)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(index == steps.count - 1)
+                            .accessibilityLabel("Move step \(index + 1) down")
+                            Button { removeStep(step.id) } label: {
+                                Image(systemName: "xmark")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.slate)
+                                    .frame(minWidth: 34, minHeight: 34)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Remove step \(index + 1)")
+                        }
+                        SheetTextEditor(text: bindingForStepText(step.id), placeholder: "what to do in this step", minHeight: 60)
+                        StepTimerControl(durationSeconds: bindingForStepDuration(step.id))
+                    }
+                    .padding(14)
+                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("recipeEditor.step.\(index)")
+                }
+                Button {
+                    steps.append(RecipeStep(text: ""))
+                } label: {
+                    Label("Add step", systemImage: "plus")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                        .frame(maxWidth: .infinity)
+                        .padding(12)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("recipeEditor.addStep")
+            }
+        }
+    }
+
+    /// A by-id text binding (safe under reorder/delete — an index binding would target a shifted row).
+    private func bindingForStepText(_ id: UUID) -> Binding<String> {
+        Binding(
+            get: { steps.first(where: { $0.id == id })?.text ?? "" },
+            set: { newValue in
+                if let i = steps.firstIndex(where: { $0.id == id }) { steps[i].text = newValue }
+            }
+        )
+    }
+
+    private func bindingForStepDuration(_ id: UUID) -> Binding<Int?> {
+        Binding(
+            get: { steps.first(where: { $0.id == id })?.durationSeconds },
+            set: { newValue in
+                if let i = steps.firstIndex(where: { $0.id == id }) { steps[i].durationSeconds = newValue }
+            }
+        )
+    }
+
+    private func moveStep(_ id: UUID, by offset: Int) {
+        guard let index = steps.firstIndex(where: { $0.id == id }) else { return }
+        let target = index + offset
+        guard steps.indices.contains(target) else { return }
+        steps.swapAt(index, target)
+    }
+
+    private func removeStep(_ id: UUID) {
+        steps.removeAll { $0.id == id }
     }
 
     private func removeIngredient(_ id: UUID) {
@@ -2833,6 +2944,14 @@ struct RecipeDetailView: View {
     var onSaveFork: (RecipeDefinition) -> Void = { _ in }
     var onLog: (MealType) -> Void
     var onShare: () -> Void
+    /// Logs the meal on cooking-mode COMPLETION, anchored to the day-key captured when the cook STARTED
+    /// (F5, §6.4). Distinct from `onLog` (immediate, today): routed per call site to `logRecipe` (manual)
+    /// vs `logSavedRecipe` (saved/web), each with an explicit `date:`. A no-op default keeps any
+    /// non-updated call site compiling; the four real sites wire it.
+    var onCookLog: (MealType, String) -> Void = { _, _ in }
+
+    /// Presents the F5 full-screen cooking-mode flow (mise-en-place → step walker → finish/log).
+    @State private var showingCookingMode = false
 
     @State private var photo: UIImage?
     @State private var didLoadPhoto = false
@@ -2991,6 +3110,9 @@ struct RecipeDetailView: View {
                 originalFoodItem: resolvedItems[target.foodItemId],
                 onSaveFork: onSaveFork
             )
+        }
+        .fullScreenCover(isPresented: $showingCookingMode) {
+            CookingModeView(store: store, recipe: recipe, onLogToDay: onCookLog)
         }
     }
 
@@ -3226,6 +3348,19 @@ struct RecipeDetailView: View {
                     .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
             }
             .accessibilityIdentifier("recipeDetail.log")
+            if CookingModeAvailability.canCook(recipe) {
+                Button { showingCookingMode = true } label: {
+                    Label("Cook", systemImage: "flame")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                        .frame(maxWidth: .infinity)
+                        .padding(14)
+                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.moss.opacity(0.35), lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("recipeDetail.cook")
+            }
             HStack(spacing: 10) {
                 Button { onEdit() } label: {
                     secondaryActionLabel("Edit", icon: "pencil")
@@ -3593,7 +3728,8 @@ struct RecipeBookSheet: View {
                                                         shareText: store.recipeShareText(for: recipe),
                                                         payload: store.proximityRecipeSharePayload(for: recipe)
                                                     )
-                                                }
+                                                },
+                                                onCookLog: { mealType, day in store.logRecipe(recipe, mealType: mealType, date: day) }
                                             )
                                         } label: {
                                             RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
@@ -3644,7 +3780,8 @@ struct RecipeBookSheet: View {
                                                         shareText: store.savedRecipeShareText(for: recipe),
                                                         payload: store.proximityRecipeSharePayload(for: recipe)
                                                     )
-                                                }
+                                                },
+                                                onCookLog: { mealType, day in store.logSavedRecipe(recipe, mealType: mealType, date: day) }
                                             )
                                         } label: {
                                             SavedRecipeRow(recipe: recipe)
