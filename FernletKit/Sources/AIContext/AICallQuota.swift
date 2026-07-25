@@ -22,7 +22,7 @@ public struct AICallQuota: Sendable, Equatable {
     }
 
     /// An empty counter anchored to today.
-    public init(now: Date = Date(), calendar: Calendar = .current) {
+    public init(now: Date = Date(), calendar: Calendar = AICallQuota.dayKeyCalendar) {
         self.dayKey = AICallQuota.dayKey(for: now, calendar: calendar)
         self.count = 0
     }
@@ -32,19 +32,32 @@ public struct AICallQuota: Sendable, Equatable {
     /// `.resting` is entered at this many calls in a day (all work falls back).
     public static let restingThreshold = 60
 
-    public static func dayKey(for date: Date, calendar: Calendar = .current) -> String {
+    /// The calendar day keys are pinned to: Gregorian + `en_US_POSIX`, matching the app's canonical
+    /// `FernletDate.dayKey`. `Calendar.current` would follow a user's *preferred* calendar (Buddhist,
+    /// Japanese, …), so a mid-day calendar-preference change would mint a different key and silently
+    /// reset the counter, and the quota key could never be joined against app day keys. The timezone
+    /// is deliberately left at the device's current zone (evaluated fresh on each access) so
+    /// day-rollover matches `DayRecord`. See review finding #2 (Seam-core).
+    public static var dayKeyCalendar: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.locale = Locale(identifier: "en_US_POSIX")
+        c.timeZone = .current
+        return c
+    }
+
+    public static func dayKey(for date: Date, calendar: Calendar = AICallQuota.dayKeyCalendar) -> String {
         let c = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
     /// The count that is actually in effect at `now`: a counter left over from a previous day has
     /// rolled over to zero (we do not carry a stale day's tally into today).
-    public func effectiveCount(now: Date = Date(), calendar: Calendar = .current) -> Int {
+    public func effectiveCount(now: Date = Date(), calendar: Calendar = AICallQuota.dayKeyCalendar) -> Int {
         dayKey == AICallQuota.dayKey(for: now, calendar: calendar) ? count : 0
     }
 
     /// Returns a new quota with one call recorded, rolling the day over first if `now` is a new day.
-    public func recordingCall(now: Date = Date(), calendar: Calendar = .current) -> AICallQuota {
+    public func recordingCall(now: Date = Date(), calendar: Calendar = AICallQuota.dayKeyCalendar) -> AICallQuota {
         let today = AICallQuota.dayKey(for: now, calendar: calendar)
         if today == dayKey {
             return AICallQuota(dayKey: today, count: count + 1)
@@ -54,7 +67,7 @@ public struct AICallQuota: Sendable, Equatable {
 
     /// The quota-derived AI status at `now` — the *rate* component of the effective status. Never
     /// `.off` (that is user intent, applied by `AIStatusOverlay`).
-    public func derivedStatus(now: Date = Date(), calendar: Calendar = .current) -> AIStatus {
+    public func derivedStatus(now: Date = Date(), calendar: Calendar = AICallQuota.dayKeyCalendar) -> AIStatus {
         let n = effectiveCount(now: now, calendar: calendar)
         if n >= AICallQuota.restingThreshold { return .resting }
         if n >= AICallQuota.sleepyThreshold { return .sleepy }
@@ -71,7 +84,7 @@ public enum AIStatusOverlay {
         intent: AIStatus,
         quota: AICallQuota,
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = AICallQuota.dayKeyCalendar
     ) -> AIStatus {
         // `.off` is user intent and is never overridden by usage. Any enabled intent (`.ready`, or a
         // future build's `.sleepy`/`.resting` stored token) defers to the live rate derivation.

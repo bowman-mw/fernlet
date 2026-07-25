@@ -3304,6 +3304,12 @@ final class FernletStore {
             outcome.incompleteStores.append("widget data")
         }
 
+        // The device-local AI daily-call counter (`AICallQuotaStore`) is a per-device ledger like the
+        // widget mirror above — never synced, never in the snapshot. A wipe zeroes it so a post-wipe
+        // fresh start isn't left in a stale `.sleepy`/`.resting` band from before the reset. `reset()`
+        // has no failure signal (a plain UserDefaults removal), so it reports no incomplete store.
+        aiCallQuotaStore.reset()
+
         if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {
             outcome.incompleteStores.append("your storage settings")
         }

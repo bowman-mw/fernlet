@@ -11,39 +11,64 @@ import AIContext
 /// `UserDefaults.standard`, so device A's usage can never throttle device B.
 final class UserDefaultsAICallQuotaStore: AICallQuotaStore {
     private let defaults: UserDefaults
-    private let dayKeyDefaultsKey: String
-    private let countDefaultsKey: String
+    /// ONE defaults key holding the (dayKey, count) PAIR. Writing them as two separate keys made the
+    /// persist non-atomic: a kill between the two writes could pair a fresh dayKey with the previous
+    /// day's count (a user who started the day near the resting threshold), so the pair is stored as
+    /// a single dictionary value that lands (or not) as a unit. See review finding #3 (Seam-core).
+    private let pairDefaultsKey: String
+    /// `recordCall` is a read-modify-write; the protocol is `Sendable`, so serialize concurrent
+    /// callers to avoid a lost increment. `NSLock` is enough — the critical section is tiny and
+    /// UserDefaults is itself thread-safe.
+    private let lock = NSLock()
+
+    private static let dayKeyField = "d"
+    private static let countField = "c"
 
     init(
         defaults: UserDefaults = .standard,
-        dayKeyDefaultsKey: String = "fernlet.ai.quota.dayKey",
-        countDefaultsKey: String = "fernlet.ai.quota.count"
+        pairDefaultsKey: String = "fernlet.ai.quota.pair"
     ) {
         self.defaults = defaults
-        self.dayKeyDefaultsKey = dayKeyDefaultsKey
-        self.countDefaultsKey = countDefaultsKey
+        self.pairDefaultsKey = pairDefaultsKey
     }
 
     func currentQuota() -> AICallQuota {
-        let dayKey = defaults.string(forKey: dayKeyDefaultsKey) ?? AICallQuota.dayKey(for: Date())
-        let count = defaults.integer(forKey: countDefaultsKey)
-        return AICallQuota(dayKey: dayKey, count: count)
+        lock.lock()
+        defer { lock.unlock() }
+        return loadLocked()
     }
 
     @discardableResult
     func recordCall() -> AICallQuota {
-        let updated = currentQuota().recordingCall()
-        persist(updated)
+        lock.lock()
+        defer { lock.unlock() }
+        let updated = loadLocked().recordingCall()
+        persistLocked(updated)
         return updated
     }
 
     func reset() {
-        defaults.removeObject(forKey: dayKeyDefaultsKey)
-        defaults.removeObject(forKey: countDefaultsKey)
+        lock.lock()
+        defer { lock.unlock() }
+        defaults.removeObject(forKey: pairDefaultsKey)
     }
 
-    private func persist(_ quota: AICallQuota) {
-        defaults.set(quota.dayKey, forKey: dayKeyDefaultsKey)
-        defaults.set(quota.count, forKey: countDefaultsKey)
+    // MARK: - Locked helpers (call only while `lock` is held)
+
+    private func loadLocked() -> AICallQuota {
+        if let pair = defaults.dictionary(forKey: pairDefaultsKey),
+           let dayKey = pair[Self.dayKeyField] as? String {
+            let count = pair[Self.countField] as? Int ?? 0
+            return AICallQuota(dayKey: dayKey, count: count)
+        }
+        // No stored pair yet → an empty counter anchored to today.
+        return AICallQuota(dayKey: AICallQuota.dayKey(for: Date()), count: 0)
+    }
+
+    private func persistLocked(_ quota: AICallQuota) {
+        defaults.set(
+            [Self.dayKeyField: quota.dayKey, Self.countField: quota.count] as [String: Any],
+            forKey: pairDefaultsKey
+        )
     }
 }

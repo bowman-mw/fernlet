@@ -78,6 +78,18 @@ import FernletPersistence
 
     // MARK: - The counter never syncs
 
+    @Test func quotaTypeIsNotCodableSoItCannotRideAnyEncoder() {
+        // The STRUCTURAL guarantee behind "the counter never syncs": `AICallQuota` is deliberately not
+        // Codable, so it cannot be a `FernletSettings`/`FernletSnapshot` stored field and cannot ride
+        // any JSON encoder to CloudKit. If a future edit adds `: Codable` (or `Encodable`/`Decodable`)
+        // — the exact regression the substring canary below would MISS if the field were renamed —
+        // these casts start succeeding and the test fails. Routed through `Any` so the compiler can't
+        // fold the cast to a constant. See review finding #4 (Seam-core).
+        let quota: Any = AICallQuota(dayKey: "2026-07-24", count: 5)
+        #expect(!(quota is any Encodable))
+        #expect(!(quota is any Decodable))
+    }
+
     @Test func quotaCounterIsAbsentFromFernletSnapshotEncode() throws {
         let snapshot = FernletSnapshot(
             todayKey: "2026-07-24",
