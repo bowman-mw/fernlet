@@ -84,13 +84,41 @@ final class SettingsAppearanceUITests: XCTestCase {
                       "did not return to Settings after '\(title)'")
     }
 
-    /// Swipes the settings list up until the target row is hittable (bounded).
+    /// Swipes the settings list up until the target row sits clearly above the sheet's floating
+    /// bottom chrome (Done bar + scrim). Hittability alone is not enough: it can be sampled while
+    /// the list is still decelerating, after which the row settles back under the bottom band and
+    /// the tap lands on chrome instead of the row.
     @MainActor
     private func scrollToRow(_ label: String, app: XCUIApplication) -> XCUIElement {
         let row = app.buttons[label]
-        for _ in 0..<8 {
-            if row.exists && row.isHittable { return row }
-            app.swipeUp()
+        let window = app.windows.firstMatch
+        // Rows must sit fully inside this band before tapping: XCUITest taps the row's CENTER,
+        // and a row half-clipped by the sheet's floating Done bar (or the nav/search chrome) is
+        // "hittable" via its visible edge while the center tap lands on chrome.
+        let topClear: CGFloat = 150
+        let bottomClear: CGFloat = 170
+
+        // Inertia-free scroll: press-drag-hold produces a deterministic end position, unlike
+        // swipeUp() whose deceleration keeps moving rows after hittability is sampled.
+        func drag(dy: CGFloat) {
+            let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55))
+            let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55 + dy))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.25)
+        }
+
+        for _ in 0..<14 {
+            guard row.exists else { drag(dy: -0.3); continue }
+            let f = row.frame
+            let w = window.frame
+            if f.maxY > w.maxY - bottomClear {
+                drag(dy: -0.18)
+            } else if f.minY < w.minY + topClear {
+                drag(dy: 0.18)
+            } else if row.isHittable {
+                return row
+            } else {
+                drag(dy: -0.3)
+            }
         }
         return row
     }

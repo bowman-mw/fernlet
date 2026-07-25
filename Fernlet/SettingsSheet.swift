@@ -54,6 +54,8 @@ struct SettingsSheet: View {
     /// Settings search query (item 10). Non-empty swaps the Form for a results List; the search bar
     /// lives on the stable `settingsContent` so it persists across that swap.
     @State private var settingsSearch = ""
+    // Debug tab only: tier-2 records load post-render (repository decodes the whole DB per read).
+    @State private var debugTierTwoMemories: [TierTwoMemoryRecord]?
 
     var body: some View {
         NavigationStack {
@@ -62,7 +64,10 @@ struct SettingsSheet: View {
                 .navigationDestination(for: SettingsRoute.self) { route in
                     destination(for: route)
                 }
-                .searchable(text: $settingsSearch, prompt: "Search settings")
+                // navigationBarDrawer keeps the field at the top (classic settings idiom). The
+                // iOS 26 default docks a floating capsule over the sheet's bottom rows, where it
+                // swallows taps on whatever row settles behind it.
+                .searchable(text: $settingsSearch, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search settings")
                 .safeAreaInset(edge: .bottom) {
                     doneBar
                 }
@@ -1439,10 +1444,11 @@ struct SettingsSheet: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
-                let tier2 = store.tierTwoMemories
-                if tier2.isEmpty {
+                // Loaded post-render via .task: the repository decodes the whole database for
+                // this read, which is far too slow for a NavigationStack push's first body pass.
+                if let tier2 = debugTierTwoMemories, tier2.isEmpty {
                     FernletCard { EmptyState(text: "No tier 2 memories yet. They are extracted from journals when Foundation Models are available.") }
-                } else {
+                } else if let tier2 = debugTierTwoMemories {
                     ForEach(tier2) { record in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
@@ -1467,6 +1473,12 @@ struct SettingsSheet: View {
                         .padding(14)
                         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
                     }
+                } else {
+                    Button("Load tier 2 memories") {
+                        debugTierTwoMemories = store.tierTwoMemories
+                    }
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
                 }
             }
 
