@@ -47,6 +47,13 @@ public final class SavedRecipeService {
     }
 
     public func add(_ recipe: RecipeDefinition) {
+        // Id-guard: re-adding an already-present recipe (e.g. a double-tapped save routing the same fixed-id
+        // fork through here) must not create a duplicate-identity row in this append-only store — route it
+        // to the by-id update instead. `add` remains insert-at-top for genuinely new ids.
+        if savedRecipes.contains(where: { $0.id == recipe.id }) {
+            update(recipe)
+            return
+        }
         if let sourceURLString = recipe.webImport?.sourceURLString, !sourceURLString.isEmpty {
             // Replacing a same-source recipe means its old row must be explicitly deleted from the
             // append-only store (a full-replace save used to drop it implicitly).

@@ -160,9 +160,13 @@ public struct WorkoutAdjustmentPayload: AIContextPayload {
 ///   with a carbonara").
 /// - `ingredientToReplace` — the NAME of the catalog food being swapped out (e.g. "butter"). Not a
 ///   quantity, not a macro, not user prose.
-/// - `candidates` — the numbered local catalog pool the model must choose from BY NUMBER (same shape,
-///   and same allowlisted field name, as `FoodSelectionPayload.candidates`). The model returns
-///   candidate numbers only; code binds them and computes quantities.
+///
+/// The model contributes WORLD KNOWLEDGE — it proposes substitute food *names* from general culinary
+/// knowledge ("butter → olive oil"), which the catalog has no taxonomy to derive (§5.2). No local
+/// candidate pool is sent: the caller rebinds each proposed name through `FoodCatalog.candidates(for:)`
+/// and binds the resolved food (with its macros) in code — the model never emits a food it invented, a
+/// quantity, or a macro. Sending only two dish/ingredient names also keeps the payload genuinely
+/// names-only.
 ///
 /// This payload is deliberately NOT in `MemoryAgent.allowedPayloadKinds`: a substitution prompt must
 /// receive zero TierTwo behavioral context — it needs only names — so `MemoryAgent.filteredContext`
@@ -171,14 +175,12 @@ public struct IngredientSubstitutionPayload: AIContextPayload {
     public let payloadKind = "ingredient-substitution"
     public let recipeName: String
     public let ingredientToReplace: String
-    public let candidates: [FoodSelectionCandidate]
 
-    public var includedFieldNames: [String] { ["recipeName", "ingredientToReplace", "candidates"] }
+    public var includedFieldNames: [String] { ["recipeName", "ingredientToReplace"] }
 
-    public init(recipeName: String, ingredientToReplace: String, candidates: [FoodSelectionCandidate]) {
+    public init(recipeName: String, ingredientToReplace: String) {
         self.recipeName = recipeName
         self.ingredientToReplace = ingredientToReplace
-        self.candidates = candidates
     }
 }
 

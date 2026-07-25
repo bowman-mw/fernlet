@@ -964,6 +964,10 @@ public final class DiaryStore {
     /// existing catalog foods (the substitute is a resolved candidate), so nothing new enters `foodItems`.
     public func insertRecipe(_ recipe: RecipeDefinition) {
         batchSnapshotPersistence {
+            // Id-guard: a double-tapped "Save as new recipe" fires the same fork (fixed `id`) twice; without
+            // this the second insert would mint a duplicate-identity row into the synced blob (undefined
+            // `ForEach` behavior + delete-by-id ambiguity). First save wins; the retry is a no-op.
+            guard !recipes.contains(where: { $0.id == recipe.id }) else { return }
             recipes.insert(recipe, at: 0)
         }
     }

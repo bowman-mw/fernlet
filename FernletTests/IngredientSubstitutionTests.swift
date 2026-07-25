@@ -49,15 +49,17 @@ import FernletDomainModel
     // MARK: - Payload field set
 
     @Test func payloadIncludedFieldsAreNamesOnly() {
-        let payload = IngredientSubstitutionPayload(recipeName: "Pasta", ingredientToReplace: "butter", candidates: [])
-        #expect(payload.includedFieldNames == ["recipeName", "ingredientToReplace", "candidates"])
+        let payload = IngredientSubstitutionPayload(recipeName: "Pasta", ingredientToReplace: "butter")
+        // World-knowledge substitution sends ONLY the two names — no local candidate pool, so the payload
+        // is genuinely names-only (the model proposes names; code rebinds them through the catalog).
+        #expect(payload.includedFieldNames == ["recipeName", "ingredientToReplace"])
         #expect(payload.payloadKind == "ingredient-substitution")
     }
 
     @Test func payloadCarriesNoForbiddenFields() {
-        let payload = IngredientSubstitutionPayload(recipeName: "Pasta", ingredientToReplace: "butter", candidates: [])
+        let payload = IngredientSubstitutionPayload(recipeName: "Pasta", ingredientToReplace: "butter")
         let fields = Mirror(reflecting: payload).children.compactMap(\.label)
-        for forbidden in ["journalText", "journalEntry", "periodData", "tierTwoMemories", "narrative", "symptoms", "healthMetrics", "notes"] {
+        for forbidden in ["journalText", "journalEntry", "periodData", "tierTwoMemories", "narrative", "symptoms", "healthMetrics", "notes", "candidates"] {
             #expect(!fields.contains(forbidden))
         }
     }
@@ -97,6 +99,60 @@ import FernletDomainModel
         let a = FoodSelectionCandidate(id: 1, foodItem: food(name: "Oat milk"))
         let bound = FoundationIngredientSubstitutionModel.bind(picks: [(candidateNumber: 1, reason: "   ")], candidates: [a])
         #expect(bound.first?.reason == nil)
+    }
+
+    @Test func bindCapsOverlongReason() {
+        let a = FoodSelectionCandidate(id: 1, foodItem: food(name: "Oat milk"))
+        let long = String(repeating: "x", count: 500)
+        let bound = FoundationIngredientSubstitutionModel.bind(picks: [(candidateNumber: 1, reason: long)], candidates: [a])
+        #expect((bound.first?.reason?.count ?? 0) <= 120)
+    }
+
+    // MARK: - World-knowledge name rebinding (model names a food; code resolves it through the catalog)
+
+    @Test func bindNamesResolvesModelNamesThroughCatalog() {
+        // The model proposes butter substitutes BY NAME (world knowledge the catalog has no taxonomy for);
+        // `resolve` stands in for FoodCatalog.candidates and CODE supplies the real food + its macros.
+        let oliveOil = food(name: "Olive oil")
+        let coconutOil = food(name: "Coconut oil")
+        let table: [String: FoodItem] = ["olive oil": oliveOil, "coconut oil": coconutOil]
+        let bound = FoundationIngredientSubstitutionModel.bindNames(
+            picks: [(name: "olive oil", reason: "same fat role"), (name: "coconut oil", reason: nil)],
+            resolve: { name in
+                table[name.lowercased()].map { [FoodSelectionCandidate(id: 1, foodItem: $0)] } ?? []
+            }
+        )
+        #expect(bound.map(\.foodItem.name) == ["Olive oil", "Coconut oil"]) // model order kept
+        #expect(bound.first?.reason == "same fat role")
+    }
+
+    @Test func bindNamesDropsUnresolvableAndDedupesSameFood() {
+        let oliveOil = food(name: "Olive oil")
+        // "ghee" resolves to nothing (dropped); two different names that resolve to the SAME food dedupe.
+        let table: [String: FoodItem] = ["olive oil": oliveOil, "extra virgin olive oil": oliveOil]
+        let bound = FoundationIngredientSubstitutionModel.bindNames(
+            picks: [
+                (name: "ghee", reason: "nope"),
+                (name: "olive oil", reason: "first"),
+                (name: "extra virgin olive oil", reason: "dup food")
+            ],
+            resolve: { name in
+                table[name.lowercased()].map { [FoodSelectionCandidate(id: 1, foodItem: $0)] } ?? []
+            }
+        )
+        #expect(bound.map(\.foodItem.name) == ["Olive oil"]) // ghee dropped, duplicate food collapsed
+        #expect(bound.first?.reason == "first")
+    }
+
+    @Test func bindNamesTakesFirstCatalogMatchOnly() {
+        // resolve returns a ranked list; only the TOP match binds (code picks the food, not the model).
+        let best = food(name: "Greek yogurt")
+        let worse = food(name: "Yogurt drink")
+        let bound = FoundationIngredientSubstitutionModel.bindNames(
+            picks: [(name: "yogurt", reason: nil)],
+            resolve: { _ in [FoodSelectionCandidate(id: 1, foodItem: best), FoodSelectionCandidate(id: 2, foodItem: worse)] }
+        )
+        #expect(bound.map(\.foodItem.name) == ["Greek yogurt"])
     }
 
     // MARK: - Deterministic fallback

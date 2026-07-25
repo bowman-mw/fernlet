@@ -3,6 +3,7 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 import AIContext
+import FoodCatalog
 
 /// F4 ingredient substitution (decision §11.4). Lets the cook replace ONE structured ingredient in a
 /// recipe. The model (on-device, standard tier, user-invoked, through `FernletAIGate`) proposes
@@ -33,6 +34,8 @@ struct IngredientSubstitutionSheet: View {
     @State private var searchResults: [FoodSelectionCandidate] = []
     /// Non-nil once the cook has chosen a substitute — switches the sheet from picker to preview.
     @State private var pending: PendingFork?
+    /// Guards the save button against a double-tap firing `onSaveFork` twice before the sheet tears down.
+    @State private var didSave = false
 
     private var originalName: String { originalFoodItem?.name ?? "this ingredient" }
 
@@ -56,26 +59,43 @@ struct IngredientSubstitutionSheet: View {
             }
         }
         .task {
-            // Seed the search list + the AI suggestion pool from the ingredient's own name, once.
+            // Seed the search list from the ingredient's own name, once, then ask AI for world-knowledge
+            // swaps. When the original ingredient can't be resolved to a catalog food, there is nothing to
+            // gram-match or to name to the model: seed the list empty (the cook types a real food) and skip
+            // the AI call entirely so no phantom "this ingredient" query runs and no quota is charged.
             guard !didSeed else { return }
             didSeed = true
-            searchText = originalFoodItem?.name ?? ""
-            let seedCandidates = store.substitutionCandidates(forIngredientNamed: originalName)
-            searchResults = seedCandidates
+            guard let originalFoodItem else {
+                searchText = ""
+                searchResults = []
+                isLoadingAI = false
+                return
+            }
+            searchText = originalFoodItem.name
+            searchResults = store.substitutionCandidates(forIngredientNamed: originalFoodItem.name)
             let ai = await store.aiSubstitutionSuggestions(
                 recipeName: recipe.name,
-                ingredientName: originalName,
-                candidates: seedCandidates
+                ingredientName: originalFoodItem.name
             )
             aiSuggestions = ai ?? []
             isLoadingAI = false
         }
         .task(id: searchText) {
             // Live manual search — the deterministic path, always available. Skip the initial empty tick
-            // before seeding runs.
+            // before seeding runs. Debounced + run off the main actor: `FoodCatalog` FTS is a synchronous
+            // SQLite query (base + branded ODR sources) and the catalog is thread-safe, so keep keystroke
+            // bursts and the query off the render thread (mirrors the debounced food typeahead).
             guard didSeed else { return }
             let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            searchResults = trimmed.isEmpty ? [] : store.substitutionCandidates(forIngredientNamed: trimmed)
+            guard !trimmed.isEmpty else { searchResults = []; return }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            guard !Task.isCancelled else { return }
+            let catalog = store.foodCatalog
+            let results = await Task.detached(priority: .userInitiated) {
+                catalog.candidates(for: trimmed, limit: 12)
+            }.value
+            guard !Task.isCancelled else { return }
+            searchResults = results
         }
     }
 
@@ -178,6 +198,8 @@ struct IngredientSubstitutionSheet: View {
                     .fernletWrappingText()
 
                 Button {
+                    guard !didSave else { return }
+                    didSave = true
                     onSaveFork(pending.fork)
                     dismiss()
                 } label: {

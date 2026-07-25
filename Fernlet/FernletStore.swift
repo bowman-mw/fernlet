@@ -2851,19 +2851,26 @@ final class FernletStore {
     }
 
     /// On-device AI substitution suggestions (standard tier, USER-INVOKED), routed through the shipped
-    /// `aiGate`. Returns `nil` when AI didn't run (off / resting / incapable / model produced nothing) —
-    /// the sheet then shows only its always-present manual catalog-search list (the deterministic path).
+    /// `aiGate`. The model proposes substitute food NAMES from world knowledge; each is rebound here
+    /// through the local catalog (`foodCatalog.candidates(for:)`) — CODE supplies the real `FoodItem` +
+    /// its macros, the model never does. Returns `nil` when AI didn't run (off / resting / incapable) or
+    /// no proposed name resolved — the sheet then shows only its always-present manual catalog-search
+    /// list (the deterministic path). `foodCatalog` is thread-safe (`@unchecked Sendable`), so the
+    /// resolver is safe to invoke off the main actor from inside the model stage.
     func aiSubstitutionSuggestions(
         recipeName: String,
-        ingredientName: String,
-        candidates: [FoodSelectionCandidate]
+        ingredientName: String
     ) async -> [IngredientSubstitutionSuggestion]? {
         let payload = IngredientSubstitutionPayload(
             recipeName: recipeName,
-            ingredientToReplace: ingredientName,
-            candidates: candidates
+            ingredientToReplace: ingredientName
         )
-        return (try? await FoundationIngredientSubstitutionModel.suggest(payload, gate: aiGate)) ?? nil
+        let catalog = foodCatalog
+        return (try? await FoundationIngredientSubstitutionModel.suggest(
+            payload,
+            gate: aiGate,
+            resolve: { catalog.candidates(for: $0, limit: 3) }
+        )) ?? nil
     }
 
     /// Persists an F4 substitution FORK for a BLOB (manual) recipe — the source lives in `diary.recipes`,
@@ -2876,6 +2883,12 @@ final class FernletStore {
     /// Persists an F4 substitution FORK for a SAVED (Core Data / `SavedRecipeRecord`) recipe, so the fork
     /// lands in the same store as its source. Only reachable for a structured saved recipe (web imports
     /// have no structured ingredients to swap, so the swap affordance never appears for them).
+    ///
+    /// NOTE (forward plumbing, currently unexercised — review 2026-07-25 #5): every writer into
+    /// `savedRecipeService` today produces a web-import (`webImport != nil`), and Swap is gated on
+    /// `RecipeScaling.isScalable`, which requires `webImport == nil`. So no saved recipe is swappable yet
+    /// and this path never runs in production. It stays as ready plumbing for the first structured
+    /// (payloadData) saved-recipe feature; that feature is the one to add saved-fork persistence coverage.
     func addForkedSavedRecipe(_ recipe: RecipeDefinition) {
         savedRecipeService.add(recipe)
     }

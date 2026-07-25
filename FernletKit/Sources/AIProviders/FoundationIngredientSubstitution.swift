@@ -9,11 +9,13 @@ import FoundationModels
 
 /// On-device AI stage for F4 ingredient substitution (decision §11.4).
 ///
-/// The model contributes WORLD KNOWLEDGE only — "what could stand in for butter here" — by selecting
-/// from a numbered local candidate list. It returns candidate NUMBERS plus an optional short reason and
-/// NOTHING else: no quantity, no macro, no food it invented. Code binds each number back to the catalog
-/// `FoodItem` (`bind`), drops anything out of range or duplicated, and the caller computes the
-/// replacement quantity by gram-equivalence. This is the exact `FoundationFoodSelection` handoff shape.
+/// The model contributes WORLD KNOWLEDGE only — "what could stand in for butter here" — by proposing
+/// substitute food NAMES (the catalog has no dairy/allergen/ingredient-class taxonomy to derive them
+/// from; see §5.2). It returns names plus an optional short reason and NOTHING else: no quantity, no
+/// macro, no candidate it must bind. Code then rebinds each proposed name through the local catalog
+/// (`resolve` → `FoodCatalog.candidates(for:)`), takes the first real match, and the caller computes the
+/// replacement quantity by gram-equivalence. So the model names a food; CODE supplies the actual
+/// `FoodItem` and its macros — the model never emits a food it invented, a number, or a macro.
 ///
 /// Routing goes through the shipped `FernletAIGate` (standard tier, user-invoked): the gate caps by
 /// device capability, applies the sleepy/resting budget, and charges exactly one call. A `nil` gate
@@ -21,16 +23,16 @@ import FoundationModels
 /// manual catalog-search sheet).
 public enum FoundationIngredientSubstitutionModel {
 
-    /// Runs the substitution model for one ingredient. Returns the bound suggestions (ordered as the
-    /// model ranked them), or `nil` when AI did not run / produced nothing usable — the signal for the
+    /// Runs the substitution model for one ingredient. `resolve` maps a model-proposed food name to local
+    /// catalog candidates (the caller backs it with `FoodCatalog.candidates(for:)`); the first match for
+    /// each name is bound. Returns the bound suggestions (ordered as the model ranked them), or `nil` when
+    /// AI did not run / produced nothing usable (no name resolved to a real food) — the signal for the
     /// caller to fall back to manual catalog search.
     public static func suggest(
         _ payload: IngredientSubstitutionPayload,
-        gate: FernletAIGate
+        gate: FernletAIGate,
+        resolve: @Sendable (String) -> [FoodSelectionCandidate]
     ) async throws -> [IngredientSubstitutionSuggestion]? {
-        let candidates = payload.candidates
-        guard candidates.isEmpty == false else { return nil }
-
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else { return nil }
@@ -38,23 +40,21 @@ public enum FoundationIngredientSubstitutionModel {
             let auditFields = payload.includedFieldNames
             let instructions = """
             You help a home cook swap one ingredient in a recipe for another.
-            You are given the recipe name, the ingredient to replace, and a numbered list of candidate foods.
-            Pick the best few replacements FROM THE NUMBERED LIST ONLY, best first, using candidateNumber values.
-            Prefer foods that play a similar culinary role to the ingredient being replaced.
-            Give each pick a short, friendly reason (a few words). Never invent a food that is not in the list.
-            Do not output any quantities or nutrition numbers.
+            You are given the recipe name and the single ingredient to replace.
+            Using general culinary knowledge, name the best few real, common foods that could stand in for
+            it in THIS dish, best first (e.g. butter -> olive oil or coconut oil; buttermilk -> yogurt).
+            Output food NAMES only — plain grocery-store food names a cook could buy.
+            Give each pick a short, friendly reason (a few words). Never invent a food that does not exist.
+            Do not output any quantities, measurements, or nutrition numbers.
             """
             let prompt = """
             Recipe: \(payload.recipeName)
             Replace this ingredient: \(payload.ingredientToReplace)
-
-            Candidate foods:
-            \(candidates.map(\.promptLine).joined(separator: "\n"))
             """
             let session = LanguageModelSession(instructions: instructions)
             do {
                 let response = try await session.respond(to: prompt, generating: FoundationSubstitutionSuggestions.self)
-                let bound = response.content.bound(candidates: candidates)
+                let bound = response.content.bound(resolve: resolve)
                 await AIAuditLog.shared.record(
                     payloadKind: auditKind,
                     destination: destination,
@@ -88,6 +88,39 @@ public enum FoundationIngredientSubstitutionModel {
         candidates.map { IngredientSubstitutionSuggestion(foodItem: $0.foodItem, reason: nil) }
     }
 
+    /// Rebinds model-proposed substitute NAMES (world knowledge) to real catalog foods, then binds by
+    /// number. PUBLIC + pure so the world-knowledge → catalog handoff is unit-testable without
+    /// `FoundationModels`. For each name in model-ranked order: `resolve` maps it to local catalog
+    /// candidates and the FIRST match is taken (CODE supplies the food + its macros; the model supplied
+    /// only the name). Resolved foods are numbered into a pool and run through `bind`, so the drop /
+    /// dedupe / order / cap invariants are shared with the number-binding path. A name that resolves to
+    /// nothing is dropped.
+    public nonisolated static func bindNames(
+        picks: [(name: String, reason: String?)],
+        resolve: (String) -> [FoodSelectionCandidate],
+        limit: Int = 6
+    ) -> [IngredientSubstitutionSuggestion] {
+        var pool: [FoodSelectionCandidate] = []
+        var numberPicks: [(candidateNumber: Int, reason: String?)] = []
+        for pick in picks {
+            let trimmedName = pick.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedName.isEmpty, let food = resolve(trimmedName).first?.foodItem else { continue }
+            let number: Int
+            if let existing = pool.first(where: { $0.foodItem.id == food.id }) {
+                number = existing.id
+            } else {
+                number = pool.count + 1
+                pool.append(FoodSelectionCandidate(id: number, foodItem: food))
+            }
+            numberPicks.append((candidateNumber: number, reason: pick.reason))
+        }
+        return bind(picks: numberPicks, candidates: pool, limit: limit)
+    }
+
+    /// The longest substitution reason we display — the model's `reason` is free-form copy, so cap it
+    /// before it reaches a persisted-nothing UI label (it feeds no number, macro, or stored field).
+    nonisolated static let maxReasonLength = 120
+
     /// Binds model-emitted (candidateNumber, reason) pairs back to catalog candidates. PUBLIC + pure so
     /// the binding invariant is unit-testable without `FoundationModels`:
     /// - a number matching no candidate id is dropped (out-of-range / hallucinated),
@@ -104,7 +137,7 @@ public enum FoundationIngredientSubstitutionModel {
         for pick in picks {
             guard let candidate = candidates.first(where: { $0.id == pick.candidateNumber }) else { continue }
             guard seen.insert(candidate.foodItem.id).inserted else { continue }
-            let trimmed = pick.reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = (pick.reason?.trimmingCharacters(in: .whitespacesAndNewlines)).map { String($0.prefix(maxReasonLength)) }
             result.append(IngredientSubstitutionSuggestion(
                 foodItem: candidate.foodItem,
                 reason: (trimmed?.isEmpty == false) ? trimmed : nil
@@ -121,10 +154,10 @@ public enum FoundationIngredientSubstitutionModel {
 private struct FoundationSubstitutionSuggestions {
     var suggestions: [FoundationSubstitutionPick]
 
-    func bound(candidates: [FoodSelectionCandidate]) -> [IngredientSubstitutionSuggestion] {
-        FoundationIngredientSubstitutionModel.bind(
-            picks: suggestions.map { (candidateNumber: $0.candidateNumber, reason: $0.reason) },
-            candidates: candidates
+    func bound(resolve: (String) -> [FoodSelectionCandidate]) -> [IngredientSubstitutionSuggestion] {
+        FoundationIngredientSubstitutionModel.bindNames(
+            picks: suggestions.map { (name: $0.foodName, reason: $0.reason) },
+            resolve: resolve
         )
     }
 }
@@ -132,7 +165,7 @@ private struct FoundationSubstitutionSuggestions {
 @available(iOS 26.0, *)
 @Generable
 private struct FoundationSubstitutionPick {
-    var candidateNumber: Int
+    var foodName: String
     var reason: String
 }
 #endif
