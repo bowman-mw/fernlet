@@ -580,7 +580,7 @@ public extension FernletSettings {
     }
 }
 
-public nonisolated enum AIStatus: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum AIStatus: String, Codable, Sendable, CaseIterable, Identifiable {
     case ready
     case sleepy
     case resting

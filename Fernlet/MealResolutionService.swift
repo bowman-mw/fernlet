@@ -15,6 +15,9 @@ protocol MealResolutionContext: AnyObject {
     var recipes: [RecipeDefinition] { get }
     var foodCatalog: FoodCatalog { get }
     var todayKey: String { get }
+    /// Routes the on-device meal-resolution model calls through the provider ladder (capability cap +
+    /// device-local quota + audit). Rebuilt per read so a mid-session AI-toggle is reflected.
+    var aiGate: FernletAIGate { get }
 }
 
 /// Ceilings above which a single quick-log is treated as an implausible resolution — almost always a
@@ -84,11 +87,17 @@ final class MealResolutionService {
         let description = Self.canonicalizedQuery(rawDescription)
 
         if host.settings.aiStatus != .off {
+            // The two on-device meal-resolution model calls both route through the store's AI gate
+            // (`standard` tier, user-invoked): the gate applies the sleepy/resting budget and charges
+            // one call per model dispatch. The outer `.off` short-circuit is kept so an off user builds
+            // no AI candidates at all — the gate would also fall back, but this avoids the work.
+            let gate = host.aiGate
             // Primary (M1): model decomposes the dish from world knowledge, catalog supplies macros.
             do {
                 if let resolved = try await FoundationDishDecompositionModel.decompose(
                     MealDecompositionPayload(mealDescription: description, fallbackMealType: type),
-                    catalog: host.foodCatalog
+                    catalog: host.foodCatalog,
+                    gate: gate
                 ) {
                     return Self.plausibilityGated(MealResolution(meals: [resolved.meal], createdRecipes: [], confidence: resolved.confidence, isFallback: false, suggestedRecipe: resolved.suggestedRecipe))
                 }
@@ -98,7 +107,8 @@ final class MealResolutionService {
             let candidates = host.foodCatalog.candidates(for: description)
             do {
                 if let plan = try await FoundationFoodSelectionModel.resolve(
-                    FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type)
+                    FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type),
+                    gate: gate
                 ), let resolution = highConfidenceResolution(from: plan, candidates: candidates, description: description) {
                     return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
                 }

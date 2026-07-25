@@ -72,7 +72,11 @@ public enum RecipeWebImporter {
 
     /// - Parameter aiEnabled: When false, the FoundationModels fallback is skipped so that
     ///   users who have disabled AI are not silently opted in via recipe import.
-    public static func importRecipe(from url: URL, catalog: FoodCatalog, aiEnabled: Bool) async throws -> ImportedRecipe {
+    /// - Parameter gate: routes the on-device model dispatch (`standard` tier, user-invoked — the user
+    ///   pasted a recipe URL). The gate caps by device capability, applies the sleepy/resting budget,
+    ///   and charges one call; a fallback result surfaces as `.modelUnavailable`, matching the prior
+    ///   no-on-device-model behavior.
+    public static func importRecipe(from url: URL, catalog: FoodCatalog, aiEnabled: Bool, gate: FernletAIGate) async throws -> ImportedRecipe {
         guard isSafePublicHTTPSURL(url) else {
             throw RecipeWebImportError.invalidURL
         }
@@ -87,7 +91,7 @@ public enum RecipeWebImporter {
         }
 
         let cleanedText = try cleanedBodyText(from: html)
-        return try await extractWithFoundationModel(from: cleanedText, sourceURL: url, catalog: catalog)
+        return try await extractWithFoundationModel(from: cleanedText, sourceURL: url, catalog: catalog, gate: gate)
     }
 
     private static func fetchHTML(from url: URL) async throws -> String {
@@ -210,10 +214,10 @@ public enum RecipeWebImporter {
         return String(normalized.prefix(12_000))
     }
 
-    private static func extractWithFoundationModel(from text: String, sourceURL: URL, catalog: FoodCatalog) async throws -> ImportedRecipe {
+    private static func extractWithFoundationModel(from text: String, sourceURL: URL, catalog: FoodCatalog, gate: FernletAIGate) async throws -> ImportedRecipe {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, visionOS 26.0, *) {
-            guard RecipeExtractionAvailability.isFoundationModelAvailable else {
+            guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else {
                 throw RecipeWebImportError.modelUnavailable
             }
 
@@ -239,7 +243,7 @@ public enum RecipeWebImporter {
                 let recipe = try response.content.importedRecipe(sourceURL: sourceURL, catalog: catalog)
                 await AIAuditLog.shared.record(
                     payloadKind: auditKind,
-                    destination: .onDeviceFoundationModels,
+                    destination: destination,
                     modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                     includedFields: auditFields,
                     outcome: .succeeded
@@ -248,7 +252,7 @@ public enum RecipeWebImporter {
             } catch {
                 await AIAuditLog.shared.record(
                     payloadKind: auditKind,
-                    destination: .onDeviceFoundationModels,
+                    destination: destination,
                     modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                     includedFields: auditFields,
                     outcome: AIAuditOutcome.fromModelError(error)

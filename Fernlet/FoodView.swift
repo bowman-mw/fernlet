@@ -411,7 +411,7 @@ struct RecipeImportSheet: View {
 
         Task {
             do {
-                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: store.foodCatalog, aiEnabled: store.settings.aiStatus != .off)
+                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: store.foodCatalog, aiEnabled: store.settings.aiStatus != .off, gate: store.aiGate)
                 store.addSavedRecipe(RecipeDefinition(importedRecipe: importedRecipe))
                 notice = "\(importedRecipe.name) added to your recipes."
                 isImportingURL = false
@@ -2009,7 +2009,7 @@ struct FoodProductPageImportView: View {
                     preview = try await FoodProductWebSearch.preview(for: lookupText)
                 }
                 if let preview {
-                    var product = try await FoodProductWebImporter.importProduct(from: preview)
+                    var product = try await FoodProductWebImporter.importProduct(from: preview, gate: store.aiGate)
                     product.lookupQuery = lookupText
                     importedProduct = product
                     showingProductReview = true

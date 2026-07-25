@@ -31,17 +31,19 @@ import FernletDomainModel
         }
     }
 
-    @Test func sleepyFallsBackForNonEssentialButUserInvokedDeepRuns() {
+    @Test func sleepyFallsBackForAmbientButRunsForAnyUserInvokedTap() {
         let capable = router(onDevice: true)
-        // Non-essential tiers fall back in the sleepy band.
-        #expect(capable.resolve(tier: .light, effectiveStatus: .sleepy, userInvoked: true) == .deterministicFallback(.sleepy))
-        #expect(capable.resolve(tier: .standard, effectiveStatus: .sleepy, userInvoked: true) == .deterministicFallback(.sleepy))
-        // Deep, not user-invoked → falls back.
-        #expect(capable.resolve(tier: .deep, effectiveStatus: .sleepy, userInvoked: false) == .deterministicFallback(.sleepy))
-        // Deep, user-invoked → still runs (on-device today).
+        // Ambient/background work (userInvoked == false) falls back at every tier in the sleepy band.
+        for tier in AICapabilityTier.allCases {
+            #expect(capable.resolve(tier: tier, effectiveStatus: .sleepy, userInvoked: false) == .deterministicFallback(.sleepy))
+        }
+        // An explicit user tap still runs in the sleepy band — regardless of tier (meal resolve is
+        // `.standard`, and must still resolve to on-device when sleepy).
+        #expect(capable.resolve(tier: .light, effectiveStatus: .sleepy, userInvoked: true) == .destination(.onDeviceFoundationModels))
+        #expect(capable.resolve(tier: .standard, effectiveStatus: .sleepy, userInvoked: true) == .destination(.onDeviceFoundationModels))
         #expect(capable.resolve(tier: .deep, effectiveStatus: .sleepy, userInvoked: true) == .destination(.onDeviceFoundationModels))
-        // Deep, user-invoked, but no device model → deterministic (incapable).
-        #expect(router(onDevice: false).resolve(tier: .deep, effectiveStatus: .sleepy, userInvoked: true) == .deterministicFallback(.deviceIncapable))
+        // User-invoked, but no device model → deterministic (incapable).
+        #expect(router(onDevice: false).resolve(tier: .standard, effectiveStatus: .sleepy, userInvoked: true) == .deterministicFallback(.deviceIncapable))
     }
 
     @Test func readyOnCapableDeviceResolvesOnDeviceForEveryTierToday() {

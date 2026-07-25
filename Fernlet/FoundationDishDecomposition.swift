@@ -17,10 +17,14 @@ enum FoundationDishDecompositionModel {
     /// together with a confidence in how well it matches what was eaten.
     /// Returns `nil` when the model is unavailable, the result fails plausibility checks, or
     /// no components can be resolved to catalog entries.
-    static func decompose(_ payload: MealDecompositionPayload, catalog: FoodCatalog) async throws -> ResolvedMeal? {
+    /// Meal dish decomposition (`standard` tier, user-invoked — part of the quick-log resolve the user
+    /// initiated). Routes through `gate` at the model-dispatch point: capability cap + sleepy/resting
+    /// budget + one-call charge. `nil` (resting / incapable / off) falls through to the cascade's
+    /// deterministic tiers, exactly as the old availability guard did.
+    static func decompose(_ payload: MealDecompositionPayload, catalog: FoodCatalog, gate: FernletAIGate) async throws -> ResolvedMeal? {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            guard FoodSelectionAvailability.isFoundationModelAvailable else { return nil }
+            guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else { return nil }
             let auditKind = payload.payloadKind
             let auditFields = payload.includedFieldNames
             let instructions = """
@@ -50,7 +54,7 @@ enum FoundationDishDecompositionModel {
                 let resolved = MealDecompositionResolver.resolve(from: response.content, payload: payload, catalog: catalog)
                 await AIAuditLog.shared.record(
                     payloadKind: auditKind,
-                    destination: .onDeviceFoundationModels,
+                    destination: destination,
                     modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                     includedFields: auditFields,
                     outcome: resolved == nil ? .fellBack : .succeeded
@@ -59,7 +63,7 @@ enum FoundationDishDecompositionModel {
             } catch {
                 await AIAuditLog.shared.record(
                     payloadKind: auditKind,
-                    destination: .onDeviceFoundationModels,
+                    destination: destination,
                     modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                     includedFields: auditFields,
                     outcome: AIAuditOutcome.fromModelError(error)

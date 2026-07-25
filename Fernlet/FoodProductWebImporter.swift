@@ -255,7 +255,7 @@ enum FoodProductWebImporter {
         return slug.isEmpty ? (url.host() ?? url.absoluteString) : slug
     }
 
-    static func importProduct(from preview: ProductPagePreview) async throws -> ImportedFoodProduct {
+    static func importProduct(from preview: ProductPagePreview, gate: FernletAIGate) async throws -> ImportedFoodProduct {
         #if canImport(UIKit)
         if isDirectImageURL(preview.sourceURL),
            let product = await productFromNutritionLabelImage(
@@ -292,7 +292,7 @@ enum FoodProductWebImporter {
         }
         #endif
         let cleanedText = try cleanedBodyText(from: html)
-        return try await extractWithFoundationModel(from: cleanedText, fallbackName: preview.title, sourceURL: preview.sourceURL)
+        return try await extractWithFoundationModel(from: cleanedText, fallbackName: preview.title, sourceURL: preview.sourceURL, gate: gate)
     }
 
     static func structuredProduct(from html: String, sourceURL: URL) -> ImportedFoodProduct? {
@@ -563,10 +563,14 @@ enum FoodProductWebImporter {
         return true
     }
 
-    private static func extractWithFoundationModel(from text: String, fallbackName: String, sourceURL: URL) async throws -> ImportedFoodProduct {
+    /// Last-resort on-device model extraction (`standard` tier, user-invoked — the user searched for
+    /// / pasted a product). Routes through `gate`: capability cap + sleepy/resting budget + one-call
+    /// charge. A fallback result surfaces as `.modelUnavailable`, matching the prior
+    /// no-on-device-model behavior.
+    private static func extractWithFoundationModel(from text: String, fallbackName: String, sourceURL: URL, gate: FernletAIGate) async throws -> ImportedFoodProduct {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, visionOS 26.0, *) {
-            guard case .available = SystemLanguageModel.default.availability else {
+            guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else {
                 throw FoodProductWebImportError.modelUnavailable
             }
 
@@ -609,7 +613,7 @@ enum FoodProductWebImporter {
                 }
                 await AIAuditLog.shared.record(
                     payloadKind: auditKind,
-                    destination: .onDeviceFoundationModels,
+                    destination: destination,
                     modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                     includedFields: auditFields,
                     outcome: .succeeded
@@ -618,7 +622,7 @@ enum FoodProductWebImporter {
             } catch {
                 await AIAuditLog.shared.record(
                     payloadKind: auditKind,
-                    destination: .onDeviceFoundationModels,
+                    destination: destination,
                     modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                     includedFields: auditFields,
                     outcome: AIAuditOutcome.fromModelError(error)

@@ -166,6 +166,22 @@ final class FernletStore {
     /// Device-local, non-synced daily AI-call counter (Ladder §3.2). Drives the `.sleepy`/`.resting`
     /// overlay on `effectiveAIStatus`; deliberately outside the snapshot — usage never syncs.
     @ObservationIgnored private(set) lazy var aiCallQuotaStore: AICallQuotaStore = UserDefaultsAICallQuotaStore()
+    /// Reports which AI rungs this device can physically reach (the cloud rungs report `false` on this
+    /// SDK). Built by `FernletAIComposition` — the concrete provider type is named ONLY in that helper
+    /// file, never here, so this store (which references many sealed `Private*` stores) is not flagged
+    /// AI-facing by the S3 grep-wall. Injectable so a test can simulate an incapable device.
+    @ObservationIgnored private(set) lazy var aiCapabilityProvider: AIDeviceCapabilityProviding = FernletAIComposition.defaultCapabilityProvider()
+    /// The routing gate every AI call site funnels through — the capability-capped `FernletModelRouter`
+    /// plus the device-local quota store plus the *current* stored AI intent. Rebuilt on each read so a
+    /// mid-session AI toggle is always reflected, and so the effective status is derived from the live
+    /// counter at dispatch time (§3.2). Never stored — it carries no state of its own.
+    var aiGate: FernletAIGate {
+        FernletAIGate(
+            router: FernletModelRouter(capabilityProvider: aiCapabilityProvider),
+            quotaStore: aiCallQuotaStore,
+            intent: settings.aiStatus
+        )
+    }
     /// Test-injected override for `aiAuditLogStore` (a temp-path sink), so a delete-all test can assert
     /// the wipe leg without touching the process-global Application Support file. `nil` in production.
     @ObservationIgnored private var injectedAuditLogStore: AIAuditLogPersisting?
@@ -1757,7 +1773,7 @@ final class FernletStore {
             }
 
             do {
-                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: foodCatalog, aiEnabled: settings.aiStatus != .off)
+                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: foodCatalog, aiEnabled: settings.aiStatus != .off, gate: aiGate)
                 addSavedRecipe(RecipeDefinition(importedRecipe: importedRecipe))
                 queue.remove(record)
             } catch {

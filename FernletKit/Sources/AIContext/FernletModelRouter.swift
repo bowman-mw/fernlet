@@ -7,7 +7,8 @@ public enum AIDeterministicReason: String, Sendable, Equatable {
     case aiOff
     /// Daily budget exhausted (`.resting`, ≥60 calls) — everything falls back.
     case resting
-    /// Daily budget in the sleepy band (`.sleepy`, ≥30 calls) and this task is not a user-invoked deep task.
+    /// Daily budget in the sleepy band (`.sleepy`, ≥30 calls) and this task is ambient/background
+    /// rather than user-invoked (an explicit tap still runs in the sleepy band).
     case sleepy
     /// No rung on the tier's ladder is reachable on this device (e.g. no Apple Intelligence).
     case deviceIncapable
@@ -58,8 +59,10 @@ public struct FernletModelRouter: Sendable {
     ///   - tier: the minimum capability the task needs.
     ///   - effectiveStatus: `AIStatusOverlay.effectiveStatus(intent:quota:)` — stored intent already
     ///     combined with the device-local daily counter.
-    ///   - userInvoked: `true` when the user explicitly triggered this task (e.g. tapped "Build
-    ///     recipe"). A user-invoked `deep` task still runs in the `.sleepy` band.
+    ///   - userInvoked: `true` when the user explicitly triggered this task (e.g. tapped "Resolve
+    ///     meal", "Adjust workout", "Import recipe"); `false` for ambient/background work (day
+    ///     summaries, thought bubbles, memory work). A user-invoked task still runs in the `.sleepy`
+    ///     band; ambient work falls back.
     public func resolve(
         tier: AICapabilityTier,
         effectiveStatus: AIStatus,
@@ -72,8 +75,10 @@ public struct FernletModelRouter: Sendable {
         case .resting:
             return .deterministicFallback(.resting)
         case .sleepy:
-            // Non-essential tasks take the fallback; a user-invoked deep task still runs.
-            if !(tier == .deep && userInvoked) {
+            // Ladder §3.2 step 3, made precise: "non-essential" == ambient/background work, which
+            // takes the fallback in the sleepy band; anything the user explicitly invoked still runs
+            // (regardless of tier). Only the daily budget being fully spent (`.resting`) stops a tap.
+            if !userInvoked {
                 return .deterministicFallback(.sleepy)
             }
         case .ready:

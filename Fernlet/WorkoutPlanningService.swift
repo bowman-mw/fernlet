@@ -14,6 +14,9 @@ protocol WorkoutPlanningContext: AnyObject {
     var day: FernletDay { get }
     var todayKey: String { get }
     func loadDays() -> [String: FernletDay]
+    /// Routes the on-device workout-adjustment model call through the provider ladder (capability cap
+    /// + device-local quota + audit). Rebuilt per read so a mid-session AI-toggle is reflected.
+    var aiGate: FernletAIGate { get }
 }
 
 /// Workout split recommendation + day-plan generation + AI day-plan adjustment,
@@ -92,6 +95,9 @@ final class WorkoutPlanningService {
         guard trimmed.isEmpty == false, host.settings.aiStatus != .off else { return plan }
         let location = host.settings.activeWorkoutLocation
         let profile = host.settings.workoutProfile
+        // User-invoked adjustment (the person typed a request and tapped): routes through the store's
+        // AI gate at `standard` tier so the sleepy/resting budget + one-call-per-dispatch charge apply.
+        let gate = host.aiGate
 
         var sessions = plan.sessions
         for index in sessions.indices {
@@ -105,7 +111,7 @@ final class WorkoutPlanningService {
             let payload = WorkoutAdjustmentPayload(request: trimmed, currentExercises: currentNames, candidateCount: candidates.count)
             do {
                 if let adjusted = try await FoundationWorkoutAdjustmentModel.adjust(
-                    payload, candidates: candidates, currentLines: session.exercises.map(\.line)
+                    payload, candidates: candidates, currentLines: session.exercises.map(\.line), gate: gate
                 ) {
                     sessions[index] = WorkoutProgram.applyAdjustment(to: session, exercises: adjusted)
                 }

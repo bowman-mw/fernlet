@@ -78,16 +78,20 @@ public enum FoundationWorkoutAdjustmentModel {
     /// Adjusts a session's exercises to honour a natural-language request, constrained to the
     /// candidate list (equipment- and injury-filtered). Returns nil when the model is unavailable
     /// or produces nothing usable, leaving the original session intact.
+    /// Workout adjustment (`standard` tier, user-invoked). Routes through `gate` at the model-dispatch
+    /// point: capability cap + sleepy/resting budget + one-call charge. `nil` (resting / incapable /
+    /// off) leaves the original session intact, exactly as the old availability guard did.
     public static func adjust(
         _ payload: WorkoutAdjustmentPayload,
         candidates: [WorkoutAdjustmentCandidate],
-        currentLines: [String]
+        currentLines: [String],
+        gate: FernletAIGate
     ) async throws -> [PrescribedExercise]? {
         guard candidates.isEmpty == false else { return nil }
 
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            guard FoodSelectionAvailability.isFoundationModelAvailable else { return nil }
+            guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else { return nil }
             let auditKind = payload.payloadKind
             let auditFields = payload.includedFieldNames
 
@@ -114,7 +118,7 @@ public enum FoundationWorkoutAdjustmentModel {
                 let resolved = response.content.resolved(candidates: candidates)
                 await AIAuditLog.shared.record(
                     payloadKind: auditKind,
-                    destination: .onDeviceFoundationModels,
+                    destination: destination,
                     modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                     includedFields: auditFields,
                     outcome: resolved == nil ? .fellBack : .succeeded
@@ -123,7 +127,7 @@ public enum FoundationWorkoutAdjustmentModel {
             } catch {
                 await AIAuditLog.shared.record(
                     payloadKind: auditKind,
-                    destination: .onDeviceFoundationModels,
+                    destination: destination,
                     modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                     includedFields: auditFields,
                     outcome: AIAuditOutcome.fromModelError(error)

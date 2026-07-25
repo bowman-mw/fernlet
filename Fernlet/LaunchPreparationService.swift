@@ -205,7 +205,7 @@ final class LaunchPreparationService {
     private func makeDaySummaryText(for day: FernletDay, store: FernletStore) async -> String? {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *), isFoundationModelAvailable, store.settings.aiStatus != .off {
-            return await foundationModelsDaySummary(for: day)
+            return await foundationModelsDaySummary(for: day, gate: store.aiGate)
         }
         #endif
         // Spec: leave the day-summary slot empty when Foundation Models is unavailable.
@@ -252,8 +252,10 @@ final class LaunchPreparationService {
     private static let daySummaryRunKeyDefault = "fernlet.daySummary.lastRunKey"
 
     #if canImport(FoundationModels)
+    /// Day summary is an AMBIENT/background task (`standard` tier, runs at launch) → `userInvoked:
+    /// false`. In the sleepy band it takes the deterministic path (an empty slot, per spec).
     @available(iOS 26.0, *)
-    private func foundationModelsDaySummary(for day: FernletDay) async -> String? {
+    private func foundationModelsDaySummary(for day: FernletDay, gate: FernletAIGate) async -> String? {
         let sleep = day.sleep
         let sleepHours = sleep?.hours
         let payload = DaySummaryPayload(
@@ -278,6 +280,8 @@ final class LaunchPreparationService {
         if !sleepDesc.isEmpty { dataParts.append("sleep: \(sleepDesc)") }
         if let tag = payload.journalTagLabel, !tag.isEmpty { dataParts.append("feeling: \(tag)") }
         guard !dataParts.isEmpty else { return nil }
+        // Ambient: route + charge one call. A fallback (sleepy/resting/incapable) leaves the slot empty.
+        guard let destination = gate.dispatch(tier: .standard, userInvoked: false) else { return nil }
 
         let prompt = """
         Write a brief day summary (under 50 words) for a wellness app called Fernlet.
@@ -292,7 +296,7 @@ final class LaunchPreparationService {
             let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
             await AIAuditLog.shared.record(
                 payloadKind: auditKind,
-                destination: .onDeviceFoundationModels,
+                destination: destination,
                 modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                 includedFields: auditFields,
                 outcome: text.isEmpty ? .fellBack : .succeeded
@@ -301,7 +305,7 @@ final class LaunchPreparationService {
         } catch {
             await AIAuditLog.shared.record(
                 payloadKind: auditKind,
-                destination: .onDeviceFoundationModels,
+                destination: destination,
                 modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                 includedFields: auditFields,
                 outcome: AIAuditOutcome.fromModelError(error)
@@ -330,6 +334,11 @@ final class LaunchPreparationService {
         let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
         let auditMemoryChars = filteredMemory.count
 
+        // Thought bubble is an AMBIENT, memory-adjacent `light` task (journal/memory context stays
+        // on-device — `light` never escalates) → `userInvoked: false`. In the sleepy band it takes the
+        // deterministic thought path.
+        guard let destination = store.aiGate.dispatch(tier: .light, userInvoked: false) else { return nil }
+
         let signalLine = signalSummaries.map { "\($0.signalName): \($0.value)" }.joined(separator: ", ")
         var contextParts = [signalLine]
         if let tag = payload.journalTagLabel { contextParts.append("today feeling: \(tag)") }
@@ -348,7 +357,7 @@ final class LaunchPreparationService {
             let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
             await AIAuditLog.shared.record(
                 payloadKind: auditKind,
-                destination: .onDeviceFoundationModels,
+                destination: destination,
                 modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                 includedFields: auditFields,
                 memorySummaryCharCount: auditMemoryChars,
@@ -358,7 +367,7 @@ final class LaunchPreparationService {
         } catch {
             await AIAuditLog.shared.record(
                 payloadKind: auditKind,
-                destination: .onDeviceFoundationModels,
+                destination: destination,
                 modelIdentifier: AIAuditEntry.onDeviceFoundationModel,
                 includedFields: auditFields,
                 memorySummaryCharCount: auditMemoryChars,
