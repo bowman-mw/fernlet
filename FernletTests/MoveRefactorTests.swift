@@ -315,6 +315,13 @@ struct MoveRefactorTests {
         #expect(WorkoutSheetRules.saveDisabled(mode: .strengthTraining, workoutName: "", exerciseRows: [row], selectedActivityType: nil, duration: "", distance: ""))
         #expect(WorkoutSheetRules.saveDisabled(mode: .strengthTraining, workoutName: "Push", exerciseRows: [], selectedActivityType: nil, duration: "", distance: ""))
         #expect(!WorkoutSheetRules.saveDisabled(mode: .strengthTraining, workoutName: "Push", exerciseRows: [row], selectedActivityType: nil, duration: "", distance: ""))
+
+        // A typed-but-not-yet-"Added" valid draft (an exercise chosen) satisfies the has-exercises
+        // requirement, so Save enables on a name + lone draft — matching WorkoutPlanSheet and reaching
+        // the Save-closure auto-commit. No rows AND no draft stays disabled; a name is still required.
+        #expect(!WorkoutSheetRules.saveDisabled(mode: .strengthTraining, workoutName: "Push", exerciseRows: [], selectedActivityType: nil, duration: "", distance: "", hasPendingValidDraft: true))
+        #expect(WorkoutSheetRules.saveDisabled(mode: .strengthTraining, workoutName: "Push", exerciseRows: [], selectedActivityType: nil, duration: "", distance: "", hasPendingValidDraft: false))
+        #expect(WorkoutSheetRules.saveDisabled(mode: .strengthTraining, workoutName: "", exerciseRows: [], selectedActivityType: nil, duration: "", distance: "", hasPendingValidDraft: true))
     }
 
     @Test func saveDisabledActivityRequiresTypeAndDurationOrDistance() {

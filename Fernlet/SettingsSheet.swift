@@ -51,10 +51,142 @@ struct SettingsSheet: View {
     @State private var isDeletingEverything = false
     /// True after a clean wipe; its alert affirms success, then dismisses the sheet on OK.
     @State private var showDeleteSuccess = false
+    /// Settings search query (item 10). Non-empty swaps the Form for a results List; the search bar
+    /// lives on the stable `settingsContent` so it persists across that swap.
+    @State private var settingsSearch = ""
+    // Debug tab only: tier-2 records load post-render (repository decodes the whole DB per read).
+    @State private var debugTierTwoMemories: [TierTwoMemoryRecord]?
 
     var body: some View {
         NavigationStack {
-            Form {
+            settingsContent
+                .navigationTitle("Settings")
+                .navigationDestination(for: SettingsRoute.self) { route in
+                    destination(for: route)
+                }
+                // navigationBarDrawer keeps the field at the top (classic settings idiom). The
+                // iOS 26 default docks a floating capsule over the sheet's bottom rows, where it
+                // swallows taps on whatever row settles behind it.
+                .searchable(text: $settingsSearch, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search settings")
+                .safeAreaInset(edge: .bottom) {
+                    doneBar
+                }
+        }
+        .background(Color.parchment)
+        .overlay {
+            if isDeletingEverything {
+                DeletingEverythingOverlay()
+            }
+        }
+        // No swipe-to-dismiss mid-wipe: a wipe is multi-second and the sheet must not close (or re-run)
+        // out from under it.
+        .interactiveDismissDisabled(isDeletingEverything)
+        .destructiveConfirmation($pendingDestructiveAction)
+        .alert("Couldn't delete everything", isPresented: Binding(
+            get: { deleteAllFailure != nil },
+            set: { if !$0 { deleteAllFailure = nil } }
+        ), presenting: deleteAllFailure) { _ in
+            Button("OK", role: .cancel) { deleteAllFailure = nil }
+        } message: { outcome in
+            Text(DeleteAllDataConfirmation.failureMessage(for: outcome))
+        }
+        .alert("Everything deleted", isPresented: $showDeleteSuccess) {
+            Button("Done") { dismiss() }
+        } message: {
+            Text("Fernlet removed everything it stored on this device.")
+        }
+        .onAppear { healthKit.refresh() }
+    }
+
+    /// Whether the search field currently has a query. Drives the Form ⇄ results swap.
+    private var isSearching: Bool {
+        !settingsSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    @ViewBuilder
+    private var settingsContent: some View {
+        if isSearching {
+            searchResultsList
+        } else {
+            settingsForm
+        }
+    }
+
+    /// Search results: one value-based link per matching leaf (title + breadcrumb subtitle), routed
+    /// through the same `.navigationDestination`. A quiet row stands in when nothing matches.
+    private var searchResultsList: some View {
+        List {
+            let results = SettingsSearchIndex.results(for: settingsSearch)
+            if results.isEmpty {
+                Text("No matching settings")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.slate)
+                    .listRowBackground(Color.cream)
+            } else {
+                ForEach(results) { entry in
+                    NavigationLink(value: entry.route) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(entry.title)
+                                .font(.fernlet(.label))
+                                .foregroundStyle(Color.bark)
+                            Text(entry.breadcrumb)
+                                .font(.fernlet(.labelSmall))
+                                .foregroundStyle(Color.slate)
+                        }
+                    }
+                    .listRowBackground(Color.cream)
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Color.parchment)
+    }
+
+    /// The route factory: the single place each sub-page destination is built, replacing the former
+    /// inline closure destinations. Reuses `settingsDestination(title:)` for the scroll-wrapped tabs;
+    /// the standalone screens (Privacy & Data, App lock, …) return directly with their own chrome.
+    @ViewBuilder
+    private func destination(for route: SettingsRoute) -> some View {
+        switch route {
+        case .appearance:
+            settingsDestination(title: "Appearance") { appearanceTab }
+        case .goalNutrition:
+            settingsDestination(title: "Goal & nutrition") { generalTab }
+        case .layoutShortcuts:
+            settingsDestination(title: "Layout & shortcuts") { layoutTab }
+        case .health:
+            settingsDestination(title: "Health") { healthTab }
+        case .sleep:
+            settingsDestination(title: "Sleep") { sleepTab }
+        case .move:
+            settingsDestination(title: "Move") { moveTab }
+        case .coreMemory:
+            settingsDestination(title: "Core memory") { memoriesTab }
+        case .signals:
+            settingsDestination(title: "Signals") { signalsTab }
+        case .debug:
+            settingsDestination(title: "Debug") { debugTab }
+        case .connectionInspector:
+            settingsDestination(title: "Connection Inspector") { connectionInspectorTab }
+        case .connectionHistory:
+            ConnectionInspectorHistoryView(inspector: store.connectionInspector)
+        case .privacyData:
+            PrivacyDataSettingsView(store: store)
+                .environment(lockService)
+        case .privacyPolicy:
+            PrivacyPolicyView()
+        case .safetyReporting:
+            SafetyReportingView()
+        case .appLock:
+            AppLockSettingsView()
+                .environment(lockService)
+                .fernletLockGate(active: lockService.state != .notConfigured)
+                .environment(lockService)
+        }
+    }
+
+    private var settingsForm: some View {
+        Form {
                 Section {
                 } header: {
                     Text("Your data stays local by default. iCloud sync and web nutrition lookup are off unless you turn them on.")
@@ -67,29 +199,17 @@ struct SettingsSheet: View {
                 .listSectionSpacing(.compact)
 
                 Section("General") {
-                    NavigationLink("Appearance") {
-                        settingsDestination(title: "Appearance") { appearanceTab }
-                    }
-                    NavigationLink("Goal & nutrition") {
-                        settingsDestination(title: "Goal & nutrition") { generalTab }
-                    }
-                    NavigationLink("Layout & shortcuts") {
-                        settingsDestination(title: "Layout & shortcuts") { layoutTab }
-                    }
+                    NavigationLink("Appearance", value: SettingsRoute.appearance)
+                    NavigationLink("Goal & nutrition", value: SettingsRoute.goalNutrition)
+                    NavigationLink("Layout & shortcuts", value: SettingsRoute.layoutShortcuts)
                 }
                 .listRowBackground(Color.cream)
 
                 Section("Wellness") {
-                    NavigationLink("Health") {
-                        settingsDestination(title: "Health") { healthTab }
-                    }
-                    NavigationLink("Sleep") {
-                        settingsDestination(title: "Sleep") { sleepTab }
-                    }
-                    NavigationLink("Move") {
-                        settingsDestination(title: "Move") { moveTab }
-                    }
-                    .accessibilityIdentifier("settings.move")
+                    NavigationLink("Health", value: SettingsRoute.health)
+                    NavigationLink("Sleep", value: SettingsRoute.sleep)
+                    NavigationLink("Move", value: SettingsRoute.move)
+                        .accessibilityIdentifier("settings.move")
                 }
                 .listRowBackground(Color.cream)
 
@@ -137,41 +257,19 @@ struct SettingsSheet: View {
                 .listRowBackground(Color.cream)
 
                 Section("Advanced") {
-                    NavigationLink("Core memory") {
-                        settingsDestination(title: "Core memory") { memoriesTab }
-                    }
-                    NavigationLink("Signals") {
-                        settingsDestination(title: "Signals") { signalsTab }
-                    }
-                    NavigationLink("Debug") {
-                        settingsDestination(title: "Debug") { debugTab }
-                    }
-                    NavigationLink("Connection Inspector") {
-                        settingsDestination(title: "Connection Inspector") { connectionInspectorTab }
-                    }
-                    NavigationLink("Connection History") {
-                        ConnectionInspectorHistoryView(inspector: store.connectionInspector)
-                    }
+                    NavigationLink("Core memory", value: SettingsRoute.coreMemory)
+                    NavigationLink("Signals", value: SettingsRoute.signals)
+                    NavigationLink("Debug", value: SettingsRoute.debug)
+                    NavigationLink("Connection Inspector", value: SettingsRoute.connectionInspector)
+                    NavigationLink("Connection History", value: SettingsRoute.connectionHistory)
                 }
                 .listRowBackground(Color.cream)
 
                 Section {
-                    NavigationLink("Privacy & Data") {
-                        PrivacyDataSettingsView(store: store)
-                            .environment(lockService)
-                    }
-                    NavigationLink("Privacy Policy") {
-                        PrivacyPolicyView()
-                    }
-                    NavigationLink("Safety & reporting") {
-                        SafetyReportingView()
-                    }
-                    NavigationLink("App lock") {
-                        AppLockSettingsView()
-                            .environment(lockService)
-                            .fernletLockGate(active: lockService.state != .notConfigured)
-                            .environment(lockService)
-                    }
+                    NavigationLink("Privacy & Data", value: SettingsRoute.privacyData)
+                    NavigationLink("Privacy Policy", value: SettingsRoute.privacyPolicy)
+                    NavigationLink("Safety & reporting", value: SettingsRoute.safetyReporting)
+                    NavigationLink("App lock", value: SettingsRoute.appLock)
                     Toggle(
                         "Allow nearby recipe shares",
                         isOn: Binding(
@@ -246,35 +344,6 @@ struct SettingsSheet: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.parchment)
-            .navigationTitle("Settings")
-            .safeAreaInset(edge: .bottom) {
-                doneBar
-            }
-        }
-        .background(Color.parchment)
-        .overlay {
-            if isDeletingEverything {
-                DeletingEverythingOverlay()
-            }
-        }
-        // No swipe-to-dismiss mid-wipe: a wipe is multi-second and the sheet must not close (or re-run)
-        // out from under it.
-        .interactiveDismissDisabled(isDeletingEverything)
-        .destructiveConfirmation($pendingDestructiveAction)
-        .alert("Couldn't delete everything", isPresented: Binding(
-            get: { deleteAllFailure != nil },
-            set: { if !$0 { deleteAllFailure = nil } }
-        ), presenting: deleteAllFailure) { _ in
-            Button("OK", role: .cancel) { deleteAllFailure = nil }
-        } message: { outcome in
-            Text(DeleteAllDataConfirmation.failureMessage(for: outcome))
-        }
-        .alert("Everything deleted", isPresented: $showDeleteSuccess) {
-            Button("Done") { dismiss() }
-        } message: {
-            Text("Fernlet removed everything it stored on this device.")
-        }
-        .onAppear { healthKit.refresh() }
     }
 
     /// Turning cycle tracking OFF is confirmed; turning it back ON is not. Hiding is not destructive —
@@ -1375,10 +1444,11 @@ struct SettingsSheet: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
-                let tier2 = store.tierTwoMemories
-                if tier2.isEmpty {
+                // Loaded post-render via .task: the repository decodes the whole database for
+                // this read, which is far too slow for a NavigationStack push's first body pass.
+                if let tier2 = debugTierTwoMemories, tier2.isEmpty {
                     FernletCard { EmptyState(text: "No tier 2 memories yet. They are extracted from journals when Foundation Models are available.") }
-                } else {
+                } else if let tier2 = debugTierTwoMemories {
                     ForEach(tier2) { record in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
@@ -1403,6 +1473,12 @@ struct SettingsSheet: View {
                         .padding(14)
                         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
                     }
+                } else {
+                    Button("Load tier 2 memories") {
+                        debugTierTwoMemories = store.tierTwoMemories
+                    }
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
                 }
             }
 

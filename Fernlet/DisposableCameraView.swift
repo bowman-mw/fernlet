@@ -3,7 +3,9 @@ import AVFoundation
 import UIKit
 import FernletDomainModel
 import ProximityKit
+import AppServices
 import FernletUI
+import os
 
 // MARK: - Camera preview (UIViewRepresentable)
 
@@ -97,9 +99,10 @@ final class CameraCaptureController: NSObject {
     @ObservationIgnored private let sessionQueue = DispatchQueue(label: "com.fernlet.disposable-camera.session")
     @ObservationIgnored private var shouldRunSession = false
     @ObservationIgnored private var sessionConfiguredOnQueue = false
-    // Set on main actor before capture; consumed once on AVFoundation queue.
-    // Single-flight guarantee (shutter disarms before capturePhoto returns) prevents races.
-    @ObservationIgnored nonisolated(unsafe) private var captureCompletion: CheckedContinuation<Data, Error>?
+    // Reserved on the main actor before capture; consumed once on the AVFoundation delegate
+    // queue. The lock owns the slot so both isolation domains touch it safely (the previous
+    // `nonisolated(unsafe) var` was a real data race). Single-flight is enforced by the reserve.
+    @ObservationIgnored private let captureCompletion = OSAllocatedUnfairLock<CheckedContinuation<Data, Error>?>(initialState: nil)
 
     override init() {
         super.init()
@@ -245,16 +248,23 @@ final class CameraCaptureController: NSObject {
                 cont.resume(throwing: CocoaError(.fileNoSuchFile))
                 return
             }
-            guard captureCompletion == nil else {
+            // Reserve the single-flight slot first (preserves the original error precedence:
+            // in-progress beats unavailable).
+            let reserved = captureCompletion.withLock { stored -> Bool in
+                guard stored == nil else { return false }
+                stored = cont
+                return true
+            }
+            guard reserved else {
                 cont.resume(throwing: CaptureError.captureInProgress)
                 return
             }
             guard canCapturePhoto, photoOutput.connection(with: .video) != nil else {
+                captureCompletion.withLock { $0 = nil }
                 cont.resume(throwing: CaptureError.cameraUnavailable)
                 return
             }
 
-            captureCompletion = cont
             let settings = AVCapturePhotoSettings()
             settings.flashMode = .off
             photoOutput.capturePhoto(with: settings, delegate: self)
@@ -268,8 +278,11 @@ extension CameraCaptureController: AVCapturePhotoCaptureDelegate {
         didFinishProcessingPhoto photo: AVCapturePhoto,
         error: Error?
     ) {
-        let cont = captureCompletion
-        captureCompletion = nil
+        let cont = captureCompletion.withLock { stored -> CheckedContinuation<Data, Error>? in
+            let pending = stored
+            stored = nil
+            return pending
+        }
         if let error {
             cont?.resume(throwing: error)
         } else if let data = photo.fileDataRepresentation() {
@@ -340,7 +353,20 @@ struct IslandViewfinderMetrics: Equatable {
     }
     var openCornerRadius: CGFloat { 30 }
     private var topGap: CGFloat { deviceClass == .flat ? 12 : 18 }
-    var openCenterY: CGFloat { topInset + topGap + openSize.height / 2 }
+    /// Margin from the true screen top to the open housing's top edge on island devices — the
+    /// housing wraps the island band rather than floating below it.
+    private var openTopMargin: CGFloat { 3 }
+    /// Where the open housing rests.
+    /// - Dynamic Island: the housing top sits at the screen's top edge so the island pill rides
+    ///   inside its top band — one continuous camera-hardware shape (no detached "second island").
+    /// - Notch / flat: the detached floating card below the top inset — the intended look for
+    ///   devices that have no island to merge with.
+    var openCenterY: CGFloat {
+        switch deviceClass {
+        case .island: return openTopMargin + openSize.height / 2
+        case .notch, .flat: return topInset + topGap + openSize.height / 2
+        }
+    }
 
     var centerX: CGFloat { screenWidth / 2 }
 
@@ -364,7 +390,74 @@ struct IslandViewfinderMetrics: Equatable {
         )
     }
 
+    // MARK: - Preview glass (inset inside the housing shell)
+
+    /// Fraction of the near-black shell that walls the live-preview glass. Grows with openness so
+    /// the inset never swallows the housing while it's still island-sized.
+    private func shellInset(openness: Double) -> CGFloat { 13 * clamp(openness) + 2 }
+
+    /// Vertical gap from the housing's top edge down to the preview glass. On island devices the
+    /// open gap clears the whole island band + status LED (the housing top is at the screen top);
+    /// elsewhere it is the shell's decorative top gap.
+    private func ledGap(openness: Double) -> CGFloat {
+        let openMax: CGFloat = deviceClass == .island ? topInset + 22 : 34
+        return lerp(4, openMax, clamp(openness))
+    }
+
+    /// The live-preview window, inset inside the housing shell and pushed below the status LED.
+    /// A single, structurally-stable `CameraPreviewView` is positioned at this frame so the live
+    /// `AVCaptureSession` attachment survives rotation instead of being torn down and rebuilt.
+    func glassFrame(openness: Double) -> Frame {
+        let housing = frame(openness: openness)
+        let inset = shellInset(openness: openness)
+        let gap = ledGap(openness: openness)
+        let housingTop = housing.centerY - housing.size.height / 2
+        let w = max(0, housing.size.width - inset * 2)
+        let h = max(0, housing.size.height - gap - inset)
+        return Frame(
+            size: CGSize(width: w, height: h),
+            cornerRadius: max(3, housing.cornerRadius - inset),
+            centerY: housingTop + gap + h / 2
+        )
+    }
+
+    /// Opacity of the live preview — hidden while the housing is still island-sized, fading in as
+    /// the housing opens so the squished preview never shows.
+    func previewOpacity(openness: Double) -> Double {
+        max(0, min((openness - 0.3) / 0.6, 1))
+    }
+
+    /// Center Y of the status LED — rides in the closed island pill, then settles just below the
+    /// island band (island devices) or near the shell's top gap (notch / flat) as it opens.
+    func ledCenterY(openness: Double) -> CGFloat {
+        let openY: CGFloat
+        switch deviceClass {
+        case .island:
+            // Just below the island band, inside the merged housing.
+            openY = topInset * 0.5 + closedSize.height / 2 + 9
+        case .notch, .flat:
+            let housingTopOpen = openCenterY - openSize.height / 2
+            openY = housingTopOpen + ledGap(openness: 1) * 0.4 + 6
+        }
+        return lerp(closedCenterY, openY, clamp(openness))
+    }
+
+    private func clamp(_ v: Double) -> CGFloat { CGFloat(min(max(v, 0), 1)) }
     private func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat { a + (b - a) * t }
+}
+
+// MARK: - Orientation resolution
+
+/// Pure, testable hysteresis for the camera's layout orientation. A rotation animation drives the
+/// view's frame through a near-square shape; a raw `width > height` test would flip the layout twice
+/// per rotation, thrashing it. The [0.95, 1.05] aspect-ratio dead-band holds the current orientation
+/// until the frame is clearly one way or the other. Kept as a free value type (not on the `View`,
+/// which the Swift 6 SDK isolates to the main actor) so it stays nonisolated and unit-testable.
+enum DisposableCameraOrientation {
+    static func resolveLandscape(current: Bool, size: CGSize) -> Bool {
+        let ratio = size.width / max(size.height, 1)
+        return current ? ratio > 0.95 : ratio > 1.05
+    }
 }
 
 // MARK: - Disposable camera view
@@ -384,9 +477,13 @@ struct DisposableCameraView: View {
     @State private var photoSaveError: String? = nil
     @State private var activeRemovalProposal: MeshRemovalProposalPayload?
     @State private var previousWindTranslation: CGFloat = 0
+    // Orientation is @State (not a raw per-frame `size.width > size.height`) so a transient
+    // near-square frame mid-rotation can't flip the layout twice — see `Self.resolveLandscape`.
+    @State private var isLandscape = false
     @State private var renamingMesh = false
     @State private var newMeshName = ""
     @State private var leaveSessionConfirm = false
+    @Environment(\.scenePhase) private var scenePhase
 
     // Housing / LED palette. The camera surface is a standalone "hardware housing" scene rather
     // than a parchment card, so a couple of colors are literal rather than design-system tokens:
@@ -402,31 +499,18 @@ struct DisposableCameraView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let isLandscape = geometry.size.width > geometry.size.height
             ZStack {
+                // The camera "hardware" scene lives in a full-screen (safe-area-ignoring) layer so
+                // one preview node can span both orientations and, on island devices, the housing can
+                // reach up to the true screen top to wrap the island. A single `CameraPreviewView`
+                // inside `cameraStage` keeps stable structural identity across rotation, so the live
+                // `AVCaptureSession` is never detached/reattached (the old freeze/black flash).
                 Color(red: 0.13, green: 0.10, blue: 0.08)
                     .ignoresSafeArea()
-                    .overlay {
-                        // Portrait: the viewfinder grows out of the Dynamic Island as the camera is
-                        // wound (openness = armed ? 1 : windProgress) and retracts into it after a shot.
-                        // Landscape keeps the centered framed preview — the island is on the long edge
-                        // there, so a top-anchored animation doesn't apply.
-                        if !isLandscape {
-                            islandViewfinder(
-                                metrics: IslandViewfinderMetrics(
-                                    topInset: geometry.safeAreaInsets.top,
-                                    screenWidth: geometry.size.width
-                                )
-                            )
-                        }
-                    }
+                    .overlay { cameraStage(geometry: geometry) }
 
-                if isLandscape {
-                    viewfinderArea
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 18)
-                }
-
+                // Corner + edge chrome lives in the safe-area coordinate space so buttons never tuck
+                // under the island or the home indicator.
                 topControls
 
                 if isLandscape {
@@ -441,18 +525,24 @@ struct DisposableCameraView: View {
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
             }
-            .onAppear { updateLandscapeState(isLandscape) }
-            .onChange(of: isLandscape) { _, newValue in
-                updateLandscapeState(newValue)
+            .onAppear { updateOrientation(for: geometry.size) }
+            .onChange(of: geometry.size) { _, newSize in
+                updateOrientation(for: newSize)
             }
         }
         .onAppear { camera.startSession() }
         .onDisappear {
             camera.stopSession()
-            store.isDisposableCameraLandscape = false
         }
         .onChange(of: manager.pendingRemovalProposals) { _, _ in
             presentNextRemovalProposalIfNeeded()
+        }
+        // TF b19 item 6: a rising unread count means an inbound message arrived while the chat sheet
+        // was closed (the store only increments unread when it isn't being viewed). Signal it — a light
+        // haptic while the app is active, a best-effort local notification while it isn't.
+        .onChange(of: manager.sessionMessages.unreadCount) { oldValue, newValue in
+            guard newValue > oldValue else { return }
+            handleUnreadMessageArrival()
         }
         .sheet(isPresented: $reviewPresented, onDismiss: resumeCameraAfterCancelledReview) { reviewSheet }
         .sheet(isPresented: $showInfo) { infoSheet }
@@ -537,13 +627,26 @@ struct DisposableCameraView: View {
     }
 
     /// In-session chat entry point (Phase 5). Messages are live-session only and vanish at session end.
+    /// TF b19 item 6: a dot badge appears while there are unread inbound messages (cleared when the
+    /// panel opens).
     private var chatButton: some View {
-        Button { showChat = true } label: {
+        let hasUnread = manager.sessionMessages.hasUnread
+        return Button { showChat = true } label: {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 18))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.white.opacity(hasUnread ? 0.85 : 0.5))
+                .overlay(alignment: .topTrailing) {
+                    if hasUnread {
+                        Circle()
+                            .fill(Color.terracotta)
+                            .frame(width: 9, height: 9)
+                            .overlay(Circle().stroke(Self.housingBlack, lineWidth: 1.5))
+                            .offset(x: 5, y: -4)
+                            .accessibilityHidden(true)
+                    }
+                }
         }
-        .accessibilityLabel("Session messages")
+        .accessibilityLabel(hasUnread ? "Session messages, new message" : "Session messages")
         .accessibilityIdentifier("camera.chat")
     }
 
@@ -565,13 +668,17 @@ struct DisposableCameraView: View {
     }
 
     private var landscapeControls: some View {
+        // The film + wind cluster used to sit at `.topTrailing`, painting over the chat button in the
+        // same corner (topControls is drawn first, so the cluster stole its taps). It now rides a
+        // leading rail, vertically centered — the top corners belong to info (leading) and chat
+        // (trailing) alone, and the cluster clears the centered preview and the trailing shutter.
         ZStack {
-            HStack(spacing: 12) {
+            VStack(spacing: 14) {
                 filmCounterBadge
                 windIndicator(isLandscape: true)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            .padding(18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(.leading, 20)
 
             shutterButton
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
@@ -604,64 +711,159 @@ struct DisposableCameraView: View {
 
     // MARK: - Viewfinder
 
-    /// Portrait viewfinder that grows out of the Dynamic Island as the camera is wound. `openness`
-    /// tracks the wind: 0 while unwound (a black pill sitting where the island is), 1 once armed
-    /// (fully-open square). Winding animates it open; `disarm()` after a shot animates it back into
-    /// the island. Purely presentational — the wind gesture lives on the thumbwheel control.
-    private func islandViewfinder(metrics: IslandViewfinderMetrics) -> some View {
-        let openness = camera.isArmed ? 1.0 : camera.windProgress
-        let frame = metrics.frame(openness: openness)
-        // Hide the squished preview while the housing is still island-sized; fade it in as it opens.
-        let previewOpacity = max(0, min((openness - 0.3) / 0.6, 1))
-        // The live-preview square is inset from the near-black housing shell; the LED rides in the
-        // gap above it. Track the mockup's ~14pt shell / 30pt top gap, scaled down with openness so
-        // the inset never swallows the housing while it's still island-sized.
-        let shellInset: CGFloat = 13 * openness + 2
-        let ledGap: CGFloat = 30 * openness + 4
-        let showsPermissionPrompt = camera.needsCameraPermissionPrompt && openness > 0.85
+    /// The glass rect (in the full-screen overlay's coordinate space) for the live-preview window,
+    /// plus its corner radius and fade. Computed as a plain value for the current orientation +
+    /// openness so a single, structurally-stable `CameraPreviewView` can be repositioned across
+    /// rotation rather than recreated.
+    private struct GlassRect {
+        var rect: CGRect
+        var cornerRadius: CGFloat
+        var previewOpacity: Double
+    }
 
-        return RoundedRectangle(cornerRadius: frame.cornerRadius, style: .continuous)
-            .fill(Self.housingBlack)
-            .shadow(color: Color.black.opacity(0.55), radius: 16, y: 12)
-            .overlay {
-                // Live-preview window, inset inside the housing shell and pushed below the LED.
-                ZStack {
-                    CameraPreviewView(session: camera.session)
-                        .opacity(previewOpacity)
-                    islandViewfinderReticle
-                        .opacity(previewOpacity)
+    /// The whole "camera hardware" scene: the black housing (portrait only, wrapping the island),
+    /// ONE preview node, and the framing chrome. `openness` (armed → 1, else windProgress) drives
+    /// the open↔closed morph in BOTH orientations, so `disarm()` after a shot retracts the
+    /// viewfinder in landscape exactly as it does in the portrait island path.
+    private func cameraStage(geometry: GeometryProxy) -> some View {
+        let openness = camera.isArmed ? 1.0 : camera.windProgress
+        let metrics = IslandViewfinderMetrics(
+            topInset: geometry.safeAreaInsets.top,
+            screenWidth: geometry.size.width
+        )
+        let glass = glassRect(geometry: geometry, metrics: metrics, openness: openness)
+        let showsPermissionPrompt = camera.needsCameraPermissionPrompt
+            && (isLandscape || openness > 0.85)
+
+        return ZStack {
+            // Decorative hardware — flattened for VoiceOver, kept out of hit testing (the wind
+            // gesture lives on the thumbwheel). The child order here is fixed regardless of
+            // orientation: the housing shell is one optional slot, the preview always index 1, and
+            // the framing chrome one Group slot — so the `CameraPreviewView` UIView (and its live
+            // capture-session attachment) survives every rotation.
+            ZStack {
+                if !isLandscape {
+                    islandHousingShell(metrics: metrics, openness: openness)
                 }
-                .clipShape(
-                    RoundedRectangle(cornerRadius: max(3, frame.cornerRadius - shellInset), style: .continuous)
-                )
-                .padding(.top, ledGap)
-                .padding([.horizontal, .bottom], shellInset)
+
+                CameraPreviewView(session: camera.session)
+                    .frame(width: glass.rect.width, height: glass.rect.height)
+                    .clipShape(RoundedRectangle(cornerRadius: glass.cornerRadius, style: .continuous))
+                    .opacity(glass.previewOpacity)
+                    .position(x: glass.rect.midX, y: glass.rect.midY)
+
+                Group {
+                    if isLandscape {
+                        landscapeFraming(glass: glass)
+                    } else {
+                        islandFraming(metrics: metrics, glass: glass, openness: openness)
+                    }
+                }
             }
-            .overlay(alignment: .top) {
-                islandCameraLED(openness: openness)
-                    .padding(.top, ledGap * 0.4 + 3)
-            }
-            // The housing, preview, and LED are decorative: flattened for VoiceOver and kept out
-            // of hit testing (the wind gesture lives on the thumbwheel control).
             .allowsHitTesting(false)
             .accessibilityElement()
             .accessibilityLabel(camera.isArmed ? "Viewfinder ready" : "Wind to open the viewfinder")
             .accessibilityHidden(showsPermissionPrompt)
-            // The permission prompt is real UI, so it layers after the decorative flattening —
-            // its Open Settings button stays tappable and VoiceOver-reachable.
-            .overlay {
-                if showsPermissionPrompt {
-                    cameraPermissionPrompt
-                        .clipShape(
-                            RoundedRectangle(cornerRadius: max(3, frame.cornerRadius - shellInset), style: .continuous)
-                        )
-                        .padding(.top, ledGap)
-                        .padding([.horizontal, .bottom], shellInset)
-                }
+
+            // The permission prompt is real UI, so it layers after the decorative flattening — its
+            // Open Settings button stays tappable and VoiceOver-reachable.
+            if showsPermissionPrompt {
+                cameraPermissionPrompt
+                    .frame(width: glass.rect.width, height: glass.rect.height)
+                    .clipShape(RoundedRectangle(cornerRadius: glass.cornerRadius, style: .continuous))
+                    .position(x: glass.rect.midX, y: glass.rect.midY)
             }
-            .frame(width: frame.size.width, height: frame.size.height)
-            .position(x: metrics.centerX, y: frame.centerY)
-            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: openness)
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.82), value: openness)
+    }
+
+    /// Preview-glass geometry for the current orientation, in the full-screen overlay coordinate
+    /// space (origin = true top-left).
+    private func glassRect(
+        geometry: GeometryProxy,
+        metrics: IslandViewfinderMetrics,
+        openness: Double
+    ) -> GlassRect {
+        if isLandscape {
+            // Fit a 4:3 window inside the safe area (minus chrome padding), then shrink + fade it
+            // toward a compact element as the camera unwinds so it retracts after a shot and the
+            // user re-arms with the same wind affordance as portrait.
+            let sa = geometry.safeAreaInsets
+            let padH: CGFloat = 26, padV: CGFloat = 18
+            let availW = max(0, geometry.size.width - padH * 2)
+            let availH = max(0, geometry.size.height - padV * 2)
+            var w = availW
+            var h = availW * 3 / 4
+            if h > availH { h = availH; w = availH * 4 / 3 }
+            let scale = 0.4 + 0.6 * CGFloat(min(max(openness, 0), 1))
+            w *= scale
+            h *= scale
+            let centerX = sa.leading + geometry.size.width / 2
+            let centerY = sa.top + geometry.size.height / 2
+            return GlassRect(
+                rect: CGRect(x: centerX - w / 2, y: centerY - h / 2, width: w, height: h),
+                cornerRadius: 12,
+                previewOpacity: metrics.previewOpacity(openness: openness)
+            )
+        } else {
+            let g = metrics.glassFrame(openness: openness)
+            return GlassRect(
+                rect: CGRect(
+                    x: metrics.centerX - g.size.width / 2,
+                    y: g.centerY - g.size.height / 2,
+                    width: g.size.width,
+                    height: g.size.height
+                ),
+                cornerRadius: g.cornerRadius,
+                previewOpacity: metrics.previewOpacity(openness: openness)
+            )
+        }
+    }
+
+    /// The near-black housing shell behind the portrait preview. On island devices its top reaches
+    /// the screen edge so the island pill rides inside its top band (item 8); on notch / flat it is
+    /// the detached floating card.
+    private func islandHousingShell(metrics: IslandViewfinderMetrics, openness: Double) -> some View {
+        let housing = metrics.frame(openness: openness)
+        return RoundedRectangle(cornerRadius: housing.cornerRadius, style: .continuous)
+            .fill(Self.housingBlack)
+            .shadow(color: Color.black.opacity(0.55), radius: 16, y: 12)
+            .frame(width: housing.size.width, height: housing.size.height)
+            .position(x: metrics.centerX, y: housing.centerY)
+    }
+
+    /// Portrait framing chrome: reticle brackets over the glass + the status LED just below the
+    /// island band.
+    private func islandFraming(
+        metrics: IslandViewfinderMetrics,
+        glass: GlassRect,
+        openness: Double
+    ) -> some View {
+        ZStack {
+            islandViewfinderReticle
+                .frame(width: glass.rect.width, height: glass.rect.height)
+                .opacity(glass.previewOpacity)
+                .position(x: glass.rect.midX, y: glass.rect.midY)
+
+            islandCameraLED(openness: openness)
+                .position(x: metrics.centerX, y: metrics.ledCenterY(openness: openness))
+        }
+    }
+
+    /// Landscape framing chrome: corner brackets + a subtle rounded border that stays visible while
+    /// the viewfinder is retracted, so the shrunken glass reads as the wind/re-arm target.
+    private func landscapeFraming(glass: GlassRect) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: glass.cornerRadius, style: .continuous)
+                .stroke(Color.white.opacity(0.12 + 0.13 * glass.previewOpacity), lineWidth: 1)
+                .frame(width: glass.rect.width, height: glass.rect.height)
+                .position(x: glass.rect.midX, y: glass.rect.midY)
+
+            viewfinderBrackets
+                .frame(width: glass.rect.width, height: glass.rect.height)
+                .opacity(glass.previewOpacity)
+                .position(x: glass.rect.midX, y: glass.rect.midY)
+        }
     }
 
     /// The classic "camera on" green LED (#5EE06A) that rides at the top of the housing, breathing
@@ -688,18 +890,6 @@ struct DisposableCameraView: View {
     private var islandViewfinderReticle: some View {
         cornerBrackets(color: Color.white.opacity(0.7), length: 16, thickness: 2, margin: 8)
             .allowsHitTesting(false)
-    }
-
-    private var viewfinderArea: some View {
-        ZStack {
-            CameraPreviewView(session: camera.session)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            viewfinderBrackets
-            if camera.needsCameraPermissionPrompt {
-                cameraPermissionPrompt
-            }
-        }
-        .aspectRatio(4.0 / 3.0, contentMode: .fit)
     }
 
     private var cameraPermissionPrompt: some View {
@@ -935,12 +1125,13 @@ struct DisposableCameraView: View {
             }
     }
 
-    private func updateLandscapeState(_ isLandscape: Bool) {
-        store.isDisposableCameraLandscape = isLandscape
+    private func updateOrientation(for size: CGSize) {
+        let next = DisposableCameraOrientation.resolveLandscape(current: isLandscape, size: size)
+        guard next != isLandscape else { return }
+        isLandscape = next
         previousWindTranslation = 0
-        if !isLandscape {
-            camera.resetWind()
-        }
+        // A half-wound portrait viewfinder shouldn't carry its wind across a rotation.
+        if !next { camera.resetWind() }
     }
 
     // MARK: - Photo capture
@@ -1024,6 +1215,8 @@ struct DisposableCameraView: View {
                     reviewPresented = false
                 } catch CocoaError.userCancelled {
                     photoSaveError = "Fernlet needs access to your Photo Library to save photos. Open Settings to grant access."
+                } catch is FriendPhotoLibrarySaver.NothingSavedError {
+                    photoSaveError = "None of the selected pictures could be saved. They may be corrupted — try choosing different ones."
                 } catch {
                     photoSaveError = "Could not save to your photo library. Please try again."
                 }
@@ -1031,7 +1224,7 @@ struct DisposableCameraView: View {
             discardAll: {
                 manager.deleteAllSessionPhotos()
                 finalizeFriendKeeps()
-                Task {
+                Task { @MainActor in
                     await manager.leaveSessionAfterNotifyingPeers()
                     reviewPresented = false
                 }
@@ -1175,6 +1368,34 @@ struct DisposableCameraView: View {
                     }
                     .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
 
+                    // TF b19 item 5 tier 1: surface heart send state inline (no longer silent).
+                    if let status = sessionHeartStatusText {
+                        Text(status)
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.moss)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .fernletWrappingText()
+                            .accessibilityIdentifier("sessionInfo.heartStatus")
+                    }
+
+                    // TF b19 item 5 tier 1: actionable prompt for the older-build fallback that still
+                    // needs the presence radio (hearts on, Nearby Friends off). Hidden in the common
+                    // mesh path — replaces the old dead "Hearts travel in person for now" label.
+                    if sessionHeartsNeedPresence {
+                        Button {
+                            store.setAllowNearbyPresence(true)
+                        } label: {
+                            Text("Turn on Nearby Friends to send hearts")
+                                .font(.fernlet(.label))
+                                .foregroundStyle(Color.parchment)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("sessionInfo.enablePresence")
+                    }
+
                     if store.settings.showProximityDebugTools {
                         Button {
                             store.showConnectionInspector = true
@@ -1252,18 +1473,30 @@ struct DisposableCameraView: View {
         }
     }
 
-    /// A quiet one-tap heart beside a connected friend (mesh redesign Phase 4b — hearts ride the
-    /// presence radio). Enabled only while the 5-minute cooldown to them is clear AND they are
-    /// recognized nearby by presence and no send is in flight; no counts shown anywhere. A filled
-    /// check marks the cooldown — a state, never a number.
+    /// A quiet one-tap heart beside a connected friend. TF b19 item 5: in-session hearts now ride the
+    /// live mesh session (reliable — the peer is right here, already connected over a verified channel)
+    /// instead of the fragile on-demand presence connect. A session peer on an older build (no `hearts`
+    /// mesh capability) falls back to the presence path so nothing regresses. Enabled only while the
+    /// 5-minute cooldown to them is clear, they're reachable, and no send is in flight; no counts shown
+    /// anywhere. A filled check marks the cooldown — a state, never a number.
     private func sessionHeartButton(for friend: ProximityTrustedPeerRecord) -> some View {
         let onCooldown = !store.heartLedger.canSendHeart(to: friend.fingerprint)
-        let reachable = store.presenceManager.isReachable(fingerprint: friend.fingerprint)
+        // Prefer the mesh: a live session member with the `hearts` capability is always reachable over
+        // the already-connected channel — no dependence on the separate presence radio. Only the older-
+        // build fallback consults presence reachability.
+        let meshCapable = manager.canSendSessionHeart(toFingerprint: friend.fingerprint)
+        let reachable = meshCapable || store.presenceManager.isReachable(fingerprint: friend.fingerprint)
         let sending = sessionHeartSendInProgress
         let firstName = PresenceManager.firstName(of: friend.displayName)
         let state = SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending)
         return Button {
-            store.presenceManager.sendHeart(to: friend)
+            // Haptic acknowledgement so the tap is never silent (TF b19 item 5 tier 1).
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            if meshCapable {
+                manager.sendSessionHeart(to: friend)
+            } else {
+                store.presenceManager.sendHeart(to: friend)
+            }
         } label: {
             // Compact in-row form of the "Send good vibes" affordance (good-vibes 10c): a
             // dusty-rose/terracotta heart when ready, a soft-filled check within the cooldown,
@@ -1281,14 +1514,48 @@ struct DisposableCameraView: View {
                 ? "You just sent \(firstName) some warmth — hearts settle for a few minutes."
                 : reachable
                     ? "Send good vibes to \(friend.displayName)"
-                    : "Hearts travel in person for now."
+                    : "\(firstName) isn't reachable for a heart right now."
         )
     }
 
+    /// A send is in flight on EITHER transport (the mesh path — TF b19 item 5 — or the presence
+    /// fallback for older peers).
     private var sessionHeartSendInProgress: Bool {
+        if case .sending = manager.sessionHeartState { return true }
         switch store.presenceManager.heartSendState {
         case .connecting, .verifying: return true
         default: return false
+        }
+    }
+
+    /// Shared, single-line status for the in-session heart send (TF b19 item 5 tier 1 — surface the
+    /// send state instead of failing silently). Reflects the mesh path first, then the presence
+    /// fallback. Only one send runs at a time, so one line suffices for the whole participant list.
+    private var sessionHeartStatusText: String? {
+        switch manager.sessionHeartState {
+        case .sending(let name): return "Sending \(name) some warmth…"
+        case .sent(let name): return "Sent \(name) some good vibes."
+        case .failed(let message): return message
+        case .idle:
+            switch store.presenceManager.heartSendState {
+            case .idle: return nil
+            case .connecting(let name): return "Connecting to \(name)…"
+            case .verifying(let name): return "Saying hello to \(name)…"
+            case .sent(let name): return "Sent \(name) some good vibes."
+            case .failed(let message): return message
+            }
+        }
+    }
+
+    /// TF b19 item 5 tier 1: adopt the actionable `needsPresence` affordance (mirroring FriendListView)
+    /// only where the presence path still applies — i.e. a session friend on an OLDER build who can't
+    /// receive a mesh heart, while hearts are on but the Nearby Friends (presence) radio is off. In the
+    /// common case (both peers updated) hearts ride the mesh and need no presence, so this stays hidden.
+    private var sessionHeartsNeedPresence: Bool {
+        guard store.settings.allowNearbyHearts, !store.settings.allowNearbyPresence else { return false }
+        return manager.sessionParticipants.contains { participant in
+            guard !participant.isLocal, let friend = trustedFriend(for: participant) else { return false }
+            return !manager.canSendSessionHeart(toFingerprint: friend.fingerprint)
         }
     }
 
@@ -1306,6 +1573,30 @@ struct DisposableCameraView: View {
         case .cooldown: Color.dustyRose.opacity(0.16)
         case .notNearby: Color.bark.opacity(0.06)
         }
+    }
+
+    // MARK: - Incoming message signal (TF b19 item 6)
+
+    /// An inbound message arrived while the chat sheet was closed. While the app is active, a light
+    /// notification haptic is the reliable in-app nudge (the dot badge on the chat button is already
+    /// showing). While it isn't active, fire a best-effort local notification instead — Multipeer
+    /// Connectivity usually suspends in the background, so this rarely reaches us there, but we fire it
+    /// if it does. Never fires while the chat sheet is open (the store doesn't count those as unread).
+    private func handleUnreadMessageArrival() {
+        switch scenePhase {
+        case .active:
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        default:
+            postSessionMessageNotification()
+        }
+    }
+
+    private func postSessionMessageNotification() {
+        // The most recent inbound message drives the notification's sender name. It was already
+        // sanitized by SessionMessageStore.receiveIncoming; NotificationService re-sanitizes defensively.
+        guard let latest = manager.sessionMessages.messages.last(where: { !$0.isOutgoing }) else { return }
+        let name = latest.senderDisplayName
+        Task { await NotificationService.postSessionMessage(from: name) }
     }
 
     private var renameMeshSheet: some View {

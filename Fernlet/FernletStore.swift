@@ -91,7 +91,6 @@ final class FernletStore {
     var connectionSessionLogs: [ConnectionSessionLog]
     var showConnectionInspector = false
     var connectionInspector = ConnectionInspector()
-    var isDisposableCameraLandscape = false
     var savedRecipes: [RecipeDefinition] {
         savedRecipeService.savedRecipes
     }
@@ -155,6 +154,13 @@ final class FernletStore {
         manager.onFriendPhotoSession = { [weak self] fingerprint in
             self?.closenessLedger.recordPhotoSession(fingerprint: fingerprint)
         }
+        // TF b19 item 5: in-session hearts ride the live mesh session (reliable) instead of the fragile
+        // on-demand presence connect. Share the SAME device-local ledger the presence path uses so the
+        // 5-minute cooldown + received-heart dedup stay consistent across both transports, and route the
+        // sent/received closeness signals to the SAME hooks (day-capped downstream).
+        manager.heartLedger = heartLedger
+        manager.onHeartSent = { [weak self] fingerprint in self?.closenessLedger.recordHeartSent(fingerprint: fingerprint) }
+        manager.onHeartReceived = { [weak self] fingerprint in self?.closenessLedger.recordHeartReceived(fingerprint: fingerprint) }
         return manager
     }()
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
@@ -1744,12 +1750,12 @@ final class FernletStore {
         diary.logWebImportedFoodProduct(foodItem, mealType: mealType, date: date)
     }
 
-    @discardableResult func logBarcodeScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
-        diary.logBarcodeScannedFoodItem(foodItem, mealType: mealType, date: date)
+    @discardableResult func logBarcodeScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil, servings: Double = 1) -> Meal {
+        diary.logBarcodeScannedFoodItem(foodItem, mealType: mealType, date: date, servings: servings)
     }
 
-    @discardableResult func logLabelScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
-        diary.logLabelScannedFoodItem(foodItem, mealType: mealType, date: date)
+    @discardableResult func logLabelScannedFoodItem(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil, servings: Double = 1) -> Meal {
+        diary.logLabelScannedFoodItem(foodItem, mealType: mealType, date: date, servings: servings)
     }
 
     func savedRecipeShareText(for recipe: RecipeDefinition) -> String {
@@ -3675,6 +3681,11 @@ final class FernletStore {
         friendStateCache.clearAll()
         // Closeness signal (in-person interaction counts + close-slot assignment) — device-local; clear it.
         closenessLedger.clearAll()
+        // Per-GTIN last-used serving counts (feedback #13) are a device-local `UserDefaults` sidecar like
+        // the ledgers above — clear them so a remembered "2 servings" for a scanned product doesn't
+        // outlive a wipe. `deleteAllData` reaches this via its `resetAll()` call, so both wipe paths cover
+        // it. A plain `UserDefaults` removal has no failure signal, so it reports no incomplete store.
+        BarcodeServingMemory.clearAll()
         // Group activities (hosted/joined rosters + join tokens) — device-local social data, never synced;
         // clear the sidecar too (the manager owns it, mirroring the clothing-shop clearAll seam).
         meshNetworkManager.activities.clearAll()

@@ -240,6 +240,64 @@ public extension View {
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
     }
+
+    /// A keyboard accessory toolbar carrying a single moss "Done" (checkmark) button that dismisses the
+    /// keyboard globally. Attach at a *sheet root* so every text/number field inside gets a Done: the
+    /// numeric pads otherwise have no return key and float over the save bar. Resigning first responder
+    /// app-wide (rather than a per-field `FocusState`) is what lets one modifier cover a whole sheet.
+    func keyboardDoneToolbar() -> some View {
+        self.toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+                    )
+                } label: {
+                    Label("Done", systemImage: "checkmark.circle.fill")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                }
+            }
+        }
+    }
+
+    /// Standard "discard your unsaved changes?" dialog for entry sheets. Pair with
+    /// `.interactiveDismissDisabled(isDirty)` and a Cancel affordance that flips `isPresented` on when
+    /// dirty (dismiss directly when clean). Keeps the wording consistent across every workout/food sheet.
+    func discardConfirmation(isPresented: Binding<Bool>, onDiscard: @escaping () -> Void) -> some View {
+        self.confirmationDialog("Discard your changes?", isPresented: isPresented, titleVisibility: .visible) {
+            Button("Discard", role: .destructive, action: onDiscard)
+            Button("Keep editing", role: .cancel) {}
+        } message: {
+            Text("Anything you've typed here won't be saved.")
+        }
+    }
+}
+
+/// A slim top bar carrying a single leading "Cancel" button, for entry sheets that block interactive
+/// (swipe) dismiss while dirty and therefore need an explicit escape hatch. The `action` decides
+/// whether to dismiss directly or raise a discard confirmation.
+public struct SheetCancelBar: View {
+    let action: () -> Void
+
+    public init(action: @escaping () -> Void) {
+        self.action = action
+    }
+
+    public var body: some View {
+        HStack {
+            Button("Cancel", action: action)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.slate)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("sheet.cancel")
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 2)
+    }
 }
 
 // MARK: - Sheet Layout Components

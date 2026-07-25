@@ -25,6 +25,22 @@ struct PhotowallSelectionContext {
     let selectedAt: Date
     let derivedSignals: [DerivedSignalRecord]
     let recentActivityNames: [String]
+    /// Photo IDs the user has hearted (favorited) in the friend photo feed. Weighted higher by the
+    /// default ranking so hearted photos surface on the home photowall more often. Defaults to empty
+    /// (uniform selection) for callers/tests that don't supply favorites.
+    let favoriteIDs: Set<UUID>
+
+    init(
+        selectedAt: Date,
+        derivedSignals: [DerivedSignalRecord],
+        recentActivityNames: [String],
+        favoriteIDs: Set<UUID> = []
+    ) {
+        self.selectedAt = selectedAt
+        self.derivedSignals = derivedSignals
+        self.recentActivityNames = recentActivityNames
+        self.favoriteIDs = favoriteIDs
+    }
 }
 
 protocol PhotowallPhotoRanking {
@@ -44,6 +60,69 @@ struct RandomPhotowallPhotoRanking: PhotowallPhotoRanking {
     }
 }
 
+/// Pure, seedable weighted-shuffle used to order home-photowall candidates so hearted (favorited) friend
+/// photos surface more often than the rest — without ever starving the non-favorites (they keep 1× weight
+/// and stay reachable in every position). Extracted from the ranking so the favorites-weighting is
+/// deterministically unit-testable under a seeded generator.
+enum WeightedPhotowallOrdering {
+    /// Reorders `ids` by weighted random sampling WITHOUT replacement: at each step an id in `favoriteIDs`
+    /// is drawn with `favoriteWeight`× the probability of a non-favorite. Deterministic for a given
+    /// `generator` state. Empty `favoriteIDs` (or a non-positive weight) degrades to a uniform shuffle; an
+    /// all-favorites input is a uniform shuffle among the favorites. Every id stays reachable in every
+    /// position because all weights are strictly positive.
+    static func weightedOrder<R: RandomNumberGenerator>(
+        ids: [UUID],
+        favoriteIDs: Set<UUID>,
+        favoriteWeight: Double,
+        using generator: inout R
+    ) -> [UUID] {
+        let favoriteWeight = favoriteWeight > 0 ? favoriteWeight : 1
+        var remaining = ids
+        var result: [UUID] = []
+        result.reserveCapacity(remaining.count)
+        while !remaining.isEmpty {
+            let weights = remaining.map { favoriteIDs.contains($0) ? favoriteWeight : 1 }
+            let total = weights.reduce(0, +)
+            var threshold = Double.random(in: 0..<total, using: &generator)
+            var chosenIndex = remaining.count - 1
+            for index in weights.indices {
+                threshold -= weights[index]
+                if threshold < 0 {
+                    chosenIndex = index
+                    break
+                }
+            }
+            result.append(remaining.remove(at: chosenIndex))
+        }
+        return result
+    }
+}
+
+/// The home photowall's default ranking: a weighted shuffle that surfaces hearted (favorited) friend
+/// photos more often than the rest without starving them. Favorites carry `favoriteWeight`× the draw
+/// weight of a non-favorite; with no favorites this reduces to a plain uniform shuffle. The sampling
+/// itself lives in the pure, seedable `WeightedPhotowallOrdering` helper.
+struct FavoriteWeightedPhotowallPhotoRanking: PhotowallPhotoRanking {
+    /// How much likelier a favorited photo is to be drawn at each step than a non-favorite. ~3× per the
+    /// tester decision: favorites appear meaningfully more, others still show up.
+    var favoriteWeight: Double = 3
+
+    func rankedCandidates(
+        from photos: [FriendPhotoPayload],
+        context: PhotowallSelectionContext
+    ) -> [FriendPhotoPayload] {
+        var generator = SystemRandomNumberGenerator()
+        let order = WeightedPhotowallOrdering.weightedOrder(
+            ids: photos.map(\.id),
+            favoriteIDs: context.favoriteIDs,
+            favoriteWeight: favoriteWeight,
+            using: &generator
+        )
+        let byID = Dictionary(photos.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return order.compactMap { byID[$0] }
+    }
+}
+
 struct PhotowallPhotoSelector {
     private let defaults: UserDefaults
     private let historyKey: String
@@ -52,7 +131,7 @@ struct PhotowallPhotoSelector {
     init(
         defaults: UserDefaults = .standard,
         historyKey: String = "fernlet.homePhotowall.previousPhotoIDs",
-        ranking: any PhotowallPhotoRanking = RandomPhotowallPhotoRanking()
+        ranking: any PhotowallPhotoRanking = FavoriteWeightedPhotowallPhotoRanking()
     ) {
         self.defaults = defaults
         self.historyKey = historyKey
@@ -167,7 +246,8 @@ final class LaunchPreparationService {
             context: PhotowallSelectionContext(
                 selectedAt: Date(),
                 derivedSignals: store.derivedSignals,
-                recentActivityNames: store.day.workouts.map(\.name)
+                recentActivityNames: store.day.workouts.map(\.name),
+                favoriteIDs: store.meshNetworkManager.allFavoritePhotoIDs
             )
         )
 
