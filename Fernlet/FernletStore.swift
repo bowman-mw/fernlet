@@ -154,6 +154,13 @@ final class FernletStore {
         manager.onFriendPhotoSession = { [weak self] fingerprint in
             self?.closenessLedger.recordPhotoSession(fingerprint: fingerprint)
         }
+        // TF b19 item 5: in-session hearts ride the live mesh session (reliable) instead of the fragile
+        // on-demand presence connect. Share the SAME device-local ledger the presence path uses so the
+        // 5-minute cooldown + received-heart dedup stay consistent across both transports, and route the
+        // sent/received closeness signals to the SAME hooks (day-capped downstream).
+        manager.heartLedger = heartLedger
+        manager.onHeartSent = { [weak self] fingerprint in self?.closenessLedger.recordHeartSent(fingerprint: fingerprint) }
+        manager.onHeartReceived = { [weak self] fingerprint in self?.closenessLedger.recordHeartReceived(fingerprint: fingerprint) }
         return manager
     }()
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)

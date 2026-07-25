@@ -53,6 +53,31 @@ public enum NotificationService {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [dailyCheckInID])
     }
 
+    /// Identifier for the best-effort "new session message" local notification (TF b19 item 6).
+    /// A single fixed id so successive messages COALESCE into one pending notification rather than
+    /// stacking — the badge/haptic is the reliable in-app signal; this only fires the rare times a
+    /// message lands while the app is backgrounded mid-session (MultipeerConnectivity usually
+    /// suspends in the background, so this is genuinely best-effort).
+    public static let sessionMessageID = "fernlet.sessionMessage"
+
+    /// Best-effort local notification that a session message arrived while the app was NOT active
+    /// (TF b19 item 6). No-op unless notifications are already authorized (never prompts here — the
+    /// permission flow lives in onboarding/Settings). The `senderName` is defensively re-sanitized
+    /// (control/zero-width/bidi scalars out, length-capped) before it enters notification content,
+    /// even though the caller already hands over a sanitized transcript name.
+    public static func postSessionMessage(from senderName: String) async {
+        guard await isAuthorized() else { return }
+        var name = ItemNameModeration.sanitizedName(senderName)
+        if name.isEmpty { name = "a friend" }
+        let content = UNMutableNotificationContent()
+        content.title = "New message from \(name)"
+        content.body = "Open Fernlet to reply — session messages disappear when the session ends."
+        content.sound = .default
+        // nil trigger → deliver as soon as possible; the fixed id coalesces rapid arrivals.
+        let request = UNNotificationRequest(identifier: sessionMessageID, content: content, trigger: nil)
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+
     /// The currently scheduled daily check-in time, or `nil` when none is pending. The pending
     /// notification request IS the persistence for this preference (it survives relaunches), so
     /// Settings reads the truth from here instead of keeping a shadow flag that could drift —

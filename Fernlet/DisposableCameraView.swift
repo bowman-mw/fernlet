@@ -3,6 +3,7 @@ import AVFoundation
 import UIKit
 import FernletDomainModel
 import ProximityKit
+import AppServices
 import FernletUI
 import os
 
@@ -482,6 +483,7 @@ struct DisposableCameraView: View {
     @State private var renamingMesh = false
     @State private var newMeshName = ""
     @State private var leaveSessionConfirm = false
+    @Environment(\.scenePhase) private var scenePhase
 
     // Housing / LED palette. The camera surface is a standalone "hardware housing" scene rather
     // than a parchment card, so a couple of colors are literal rather than design-system tokens:
@@ -534,6 +536,13 @@ struct DisposableCameraView: View {
         }
         .onChange(of: manager.pendingRemovalProposals) { _, _ in
             presentNextRemovalProposalIfNeeded()
+        }
+        // TF b19 item 6: a rising unread count means an inbound message arrived while the chat sheet
+        // was closed (the store only increments unread when it isn't being viewed). Signal it — a light
+        // haptic while the app is active, a best-effort local notification while it isn't.
+        .onChange(of: manager.sessionMessages.unreadCount) { oldValue, newValue in
+            guard newValue > oldValue else { return }
+            handleUnreadMessageArrival()
         }
         .sheet(isPresented: $reviewPresented, onDismiss: resumeCameraAfterCancelledReview) { reviewSheet }
         .sheet(isPresented: $showInfo) { infoSheet }
@@ -618,13 +627,26 @@ struct DisposableCameraView: View {
     }
 
     /// In-session chat entry point (Phase 5). Messages are live-session only and vanish at session end.
+    /// TF b19 item 6: a dot badge appears while there are unread inbound messages (cleared when the
+    /// panel opens).
     private var chatButton: some View {
-        Button { showChat = true } label: {
+        let hasUnread = manager.sessionMessages.hasUnread
+        return Button { showChat = true } label: {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 18))
-                .foregroundStyle(Color.white.opacity(0.5))
+                .foregroundStyle(Color.white.opacity(hasUnread ? 0.85 : 0.5))
+                .overlay(alignment: .topTrailing) {
+                    if hasUnread {
+                        Circle()
+                            .fill(Color.terracotta)
+                            .frame(width: 9, height: 9)
+                            .overlay(Circle().stroke(Self.housingBlack, lineWidth: 1.5))
+                            .offset(x: 5, y: -4)
+                            .accessibilityHidden(true)
+                    }
+                }
         }
-        .accessibilityLabel("Session messages")
+        .accessibilityLabel(hasUnread ? "Session messages, new message" : "Session messages")
         .accessibilityIdentifier("camera.chat")
     }
 
@@ -1346,6 +1368,34 @@ struct DisposableCameraView: View {
                     }
                     .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
 
+                    // TF b19 item 5 tier 1: surface heart send state inline (no longer silent).
+                    if let status = sessionHeartStatusText {
+                        Text(status)
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.moss)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .fernletWrappingText()
+                            .accessibilityIdentifier("sessionInfo.heartStatus")
+                    }
+
+                    // TF b19 item 5 tier 1: actionable prompt for the older-build fallback that still
+                    // needs the presence radio (hearts on, Nearby Friends off). Hidden in the common
+                    // mesh path — replaces the old dead "Hearts travel in person for now" label.
+                    if sessionHeartsNeedPresence {
+                        Button {
+                            store.setAllowNearbyPresence(true)
+                        } label: {
+                            Text("Turn on Nearby Friends to send hearts")
+                                .font(.fernlet(.label))
+                                .foregroundStyle(Color.parchment)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("sessionInfo.enablePresence")
+                    }
+
                     if store.settings.showProximityDebugTools {
                         Button {
                             store.showConnectionInspector = true
@@ -1423,18 +1473,30 @@ struct DisposableCameraView: View {
         }
     }
 
-    /// A quiet one-tap heart beside a connected friend (mesh redesign Phase 4b — hearts ride the
-    /// presence radio). Enabled only while the 5-minute cooldown to them is clear AND they are
-    /// recognized nearby by presence and no send is in flight; no counts shown anywhere. A filled
-    /// check marks the cooldown — a state, never a number.
+    /// A quiet one-tap heart beside a connected friend. TF b19 item 5: in-session hearts now ride the
+    /// live mesh session (reliable — the peer is right here, already connected over a verified channel)
+    /// instead of the fragile on-demand presence connect. A session peer on an older build (no `hearts`
+    /// mesh capability) falls back to the presence path so nothing regresses. Enabled only while the
+    /// 5-minute cooldown to them is clear, they're reachable, and no send is in flight; no counts shown
+    /// anywhere. A filled check marks the cooldown — a state, never a number.
     private func sessionHeartButton(for friend: ProximityTrustedPeerRecord) -> some View {
         let onCooldown = !store.heartLedger.canSendHeart(to: friend.fingerprint)
-        let reachable = store.presenceManager.isReachable(fingerprint: friend.fingerprint)
+        // Prefer the mesh: a live session member with the `hearts` capability is always reachable over
+        // the already-connected channel — no dependence on the separate presence radio. Only the older-
+        // build fallback consults presence reachability.
+        let meshCapable = manager.canSendSessionHeart(toFingerprint: friend.fingerprint)
+        let reachable = meshCapable || store.presenceManager.isReachable(fingerprint: friend.fingerprint)
         let sending = sessionHeartSendInProgress
         let firstName = PresenceManager.firstName(of: friend.displayName)
         let state = SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending)
         return Button {
-            store.presenceManager.sendHeart(to: friend)
+            // Haptic acknowledgement so the tap is never silent (TF b19 item 5 tier 1).
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            if meshCapable {
+                manager.sendSessionHeart(to: friend)
+            } else {
+                store.presenceManager.sendHeart(to: friend)
+            }
         } label: {
             // Compact in-row form of the "Send good vibes" affordance (good-vibes 10c): a
             // dusty-rose/terracotta heart when ready, a soft-filled check within the cooldown,
@@ -1452,14 +1514,48 @@ struct DisposableCameraView: View {
                 ? "You just sent \(firstName) some warmth — hearts settle for a few minutes."
                 : reachable
                     ? "Send good vibes to \(friend.displayName)"
-                    : "Hearts travel in person for now."
+                    : "\(firstName) isn't reachable for a heart right now."
         )
     }
 
+    /// A send is in flight on EITHER transport (the mesh path — TF b19 item 5 — or the presence
+    /// fallback for older peers).
     private var sessionHeartSendInProgress: Bool {
+        if case .sending = manager.sessionHeartState { return true }
         switch store.presenceManager.heartSendState {
         case .connecting, .verifying: return true
         default: return false
+        }
+    }
+
+    /// Shared, single-line status for the in-session heart send (TF b19 item 5 tier 1 — surface the
+    /// send state instead of failing silently). Reflects the mesh path first, then the presence
+    /// fallback. Only one send runs at a time, so one line suffices for the whole participant list.
+    private var sessionHeartStatusText: String? {
+        switch manager.sessionHeartState {
+        case .sending(let name): return "Sending \(name) some warmth…"
+        case .sent(let name): return "Sent \(name) some good vibes."
+        case .failed(let message): return message
+        case .idle:
+            switch store.presenceManager.heartSendState {
+            case .idle: return nil
+            case .connecting(let name): return "Connecting to \(name)…"
+            case .verifying(let name): return "Saying hello to \(name)…"
+            case .sent(let name): return "Sent \(name) some good vibes."
+            case .failed(let message): return message
+            }
+        }
+    }
+
+    /// TF b19 item 5 tier 1: adopt the actionable `needsPresence` affordance (mirroring FriendListView)
+    /// only where the presence path still applies — i.e. a session friend on an OLDER build who can't
+    /// receive a mesh heart, while hearts are on but the Nearby Friends (presence) radio is off. In the
+    /// common case (both peers updated) hearts ride the mesh and need no presence, so this stays hidden.
+    private var sessionHeartsNeedPresence: Bool {
+        guard store.settings.allowNearbyHearts, !store.settings.allowNearbyPresence else { return false }
+        return manager.sessionParticipants.contains { participant in
+            guard !participant.isLocal, let friend = trustedFriend(for: participant) else { return false }
+            return !manager.canSendSessionHeart(toFingerprint: friend.fingerprint)
         }
     }
 
@@ -1477,6 +1573,30 @@ struct DisposableCameraView: View {
         case .cooldown: Color.dustyRose.opacity(0.16)
         case .notNearby: Color.bark.opacity(0.06)
         }
+    }
+
+    // MARK: - Incoming message signal (TF b19 item 6)
+
+    /// An inbound message arrived while the chat sheet was closed. While the app is active, a light
+    /// notification haptic is the reliable in-app nudge (the dot badge on the chat button is already
+    /// showing). While it isn't active, fire a best-effort local notification instead — Multipeer
+    /// Connectivity usually suspends in the background, so this rarely reaches us there, but we fire it
+    /// if it does. Never fires while the chat sheet is open (the store doesn't count those as unread).
+    private func handleUnreadMessageArrival() {
+        switch scenePhase {
+        case .active:
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        default:
+            postSessionMessageNotification()
+        }
+    }
+
+    private func postSessionMessageNotification() {
+        // The most recent inbound message drives the notification's sender name. It was already
+        // sanitized by SessionMessageStore.receiveIncoming; NotificationService re-sanitizes defensively.
+        guard let latest = manager.sessionMessages.messages.last(where: { !$0.isOutgoing }) else { return }
+        let name = latest.senderDisplayName
+        Task { await NotificationService.postSessionMessage(from: name) }
     }
 
     private var renameMeshSheet: some View {

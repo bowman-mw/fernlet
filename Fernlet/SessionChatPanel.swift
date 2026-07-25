@@ -35,6 +35,10 @@ struct SessionChatPanel: View {
                 }
             }
         }
+        // TF b19 item 6: an open panel keeps the unread badge at zero — the store suppresses unread
+        // counting while viewing, and clears the standing count the moment the panel appears.
+        .onAppear { manager.sessionMessages.beginViewing() }
+        .onDisappear { manager.sessionMessages.endViewing() }
     }
 
     // MARK: - Transcript
