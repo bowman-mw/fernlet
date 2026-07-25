@@ -150,6 +150,38 @@ public struct WorkoutAdjustmentPayload: AIContextPayload {
     }
 }
 
+// MARK: - Ingredient substitution payload
+
+/// Fields allowed for AI ingredient substitution (F4, decision §11.4).
+///
+/// Forbidden: journal text, period data, health metrics, TierTwo memories, narratives, and any user
+/// free-text beyond the two NAMES below. Only dish/ingredient names cross:
+/// - `recipeName` — the recipe's own title (a dish name), for world-knowledge context ("what pairs
+///   with a carbonara").
+/// - `ingredientToReplace` — the NAME of the catalog food being swapped out (e.g. "butter"). Not a
+///   quantity, not a macro, not user prose.
+/// - `candidates` — the numbered local catalog pool the model must choose from BY NUMBER (same shape,
+///   and same allowlisted field name, as `FoodSelectionPayload.candidates`). The model returns
+///   candidate numbers only; code binds them and computes quantities.
+///
+/// This payload is deliberately NOT in `MemoryAgent.allowedPayloadKinds`: a substitution prompt must
+/// receive zero TierTwo behavioral context — it needs only names — so `MemoryAgent.filteredContext`
+/// returns an empty string for `"ingredient-substitution"` by default (fail-closed).
+public struct IngredientSubstitutionPayload: AIContextPayload {
+    public let payloadKind = "ingredient-substitution"
+    public let recipeName: String
+    public let ingredientToReplace: String
+    public let candidates: [FoodSelectionCandidate]
+
+    public var includedFieldNames: [String] { ["recipeName", "ingredientToReplace", "candidates"] }
+
+    public init(recipeName: String, ingredientToReplace: String, candidates: [FoodSelectionCandidate]) {
+        self.recipeName = recipeName
+        self.ingredientToReplace = ingredientToReplace
+        self.candidates = candidates
+    }
+}
+
 // MARK: - Web page extraction payloads
 
 /// Fields allowed for on-device nutrition extraction from a product webpage.

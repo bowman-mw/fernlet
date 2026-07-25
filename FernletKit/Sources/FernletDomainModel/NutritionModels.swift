@@ -1293,6 +1293,18 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
     public var updatedAt: Date
     /// Non-nil only for recipes imported from a web URL. See `RecipeWebImport`.
     public var webImport: RecipeWebImport?
+    /// Provenance for a recipe FORKED by ingredient substitution (F4, decision §11.4): the id of the
+    /// recipe this one was derived from. `nil` for every originally-authored/imported recipe.
+    ///
+    /// BLOB-STRIP LANDMINE (deliberate, accepted): this field is additive and tolerant-decoded, but it
+    /// is NON-LOAD-BEARING. An un-updated paired device that has no `parentRecipeID` in its
+    /// `RecipeDefinition` will decode a synced recipe (ignoring this key), then re-encode the shared
+    /// blob WITHOUT it — silently stripping the provenance link. That is acceptable: the fork is a
+    /// fully-independent recipe (its own id, its own ingredients); losing `parentRecipeID` loses only
+    /// the "derived from" annotation, never any recipe DATA. Likewise the proximity wire
+    /// (`SharedRecipePayload`) does not carry it, so a fork shared to a peer arrives as a standalone
+    /// recipe. Never make anything depend on this value being present.
+    public var parentRecipeID: UUID?
 
     /// True when this recipe was imported from the web (and therefore stores free-text ingredient
     /// lines + precomputed nutrition rather than structured `ingredients`).
@@ -1307,7 +1319,8 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         source: String,
         createdAt: Date,
         updatedAt: Date,
-        webImport: RecipeWebImport? = nil
+        webImport: RecipeWebImport? = nil,
+        parentRecipeID: UUID? = nil
     ) {
         self.id = id
         self.name = name
@@ -1318,6 +1331,7 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.webImport = webImport
+        self.parentRecipeID = parentRecipeID
     }
 
     public init(from decoder: Decoder) throws {
@@ -1331,6 +1345,9 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         webImport = try container.decodeIfPresent(RecipeWebImport.self, forKey: .webImport)
+        // Tolerant + additive: absent on every recipe written before F4 and on rows re-encoded by an
+        // un-updated peer. Missing key -> nil (no provenance), never a decode failure.
+        parentRecipeID = try container.decodeIfPresent(UUID.self, forKey: .parentRecipeID)
     }
 }
 

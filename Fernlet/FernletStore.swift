@@ -2841,6 +2841,45 @@ final class FernletStore {
         diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients)
     }
 
+    // MARK: - F4 ingredient substitution (fork on explicit save; decision §11.4)
+
+    /// The numbered catalog candidate pool a substitution is chosen from — the same seam the meal
+    /// resolver uses (`FoodCatalog.candidates`), seeded here with the name of the ingredient being
+    /// replaced. Numbered so the model can pick BY NUMBER and code binds; never a source of quantities.
+    func substitutionCandidates(forIngredientNamed name: String, limit: Int = 12) -> [FoodSelectionCandidate] {
+        foodCatalog.candidates(for: name, limit: limit)
+    }
+
+    /// On-device AI substitution suggestions (standard tier, USER-INVOKED), routed through the shipped
+    /// `aiGate`. Returns `nil` when AI didn't run (off / resting / incapable / model produced nothing) —
+    /// the sheet then shows only its always-present manual catalog-search list (the deterministic path).
+    func aiSubstitutionSuggestions(
+        recipeName: String,
+        ingredientName: String,
+        candidates: [FoodSelectionCandidate]
+    ) async -> [IngredientSubstitutionSuggestion]? {
+        let payload = IngredientSubstitutionPayload(
+            recipeName: recipeName,
+            ingredientToReplace: ingredientName,
+            candidates: candidates
+        )
+        return (try? await FoundationIngredientSubstitutionModel.suggest(payload, gate: aiGate)) ?? nil
+    }
+
+    /// Persists an F4 substitution FORK for a BLOB (manual) recipe — the source lives in `diary.recipes`,
+    /// so the fork does too. The source recipe is untouched; the fork carries `parentRecipeID`. Called
+    /// only on explicit user save from the substitution preview.
+    func addForkedRecipe(_ recipe: RecipeDefinition) {
+        diary.insertRecipe(recipe)
+    }
+
+    /// Persists an F4 substitution FORK for a SAVED (Core Data / `SavedRecipeRecord`) recipe, so the fork
+    /// lands in the same store as its source. Only reachable for a structured saved recipe (web imports
+    /// have no structured ingredients to swap, so the swap affordance never appears for them).
+    func addForkedSavedRecipe(_ recipe: RecipeDefinition) {
+        savedRecipeService.add(recipe)
+    }
+
     @discardableResult func saveCustomIngredient(_ ingredient: ManualRecipeIngredientInput) -> FoodItem? {
         diary.saveCustomIngredient(ingredient)
     }

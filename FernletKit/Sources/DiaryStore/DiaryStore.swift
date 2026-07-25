@@ -957,6 +957,17 @@ public final class DiaryStore {
         }
     }
 
+    /// Inserts an ALREADY-BUILT recipe (structured ingredients already bound to catalog `foodItemId`s)
+    /// at the top of the book, persisting through the snapshot path — the store seam for an F4
+    /// substitution FORK, whose ingredients are assembled by `RecipeSubstitution.fork` rather than from
+    /// `ManualRecipeIngredientInput`. Unlike `addRecipe` it mints no `FoodItem`s: a fork references
+    /// existing catalog foods (the substitute is a resolved candidate), so nothing new enters `foodItems`.
+    public func insertRecipe(_ recipe: RecipeDefinition) {
+        batchSnapshotPersistence {
+            recipes.insert(recipe, at: 0)
+        }
+    }
+
     @discardableResult public func saveCustomIngredient(_ ingredient: ManualRecipeIngredientInput) -> FoodItem? {
         guard !ingredient.trimmedName.isEmpty else { return nil }
         return batchSnapshotPersistence {

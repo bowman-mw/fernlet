@@ -121,6 +121,7 @@ struct FoodView: View {
                                                         store: store,
                                                         recipe: recipe,
                                                         onEdit: { editingRecipe = recipe },
+                                                        onSaveFork: { store.addForkedRecipe($0) },
                                                         onLog: { mealType in store.logRecipe(recipe, mealType: mealType) },
                                                         onShare: {
                                                             recipeShareDraft = ProximityRecipeShareDraft(
@@ -167,6 +168,7 @@ struct FoodView: View {
                                                         store: store,
                                                         recipe: recipe,
                                                         onEdit: { editingSavedRecipe = recipe },
+                                                        onSaveFork: { store.addForkedSavedRecipe($0) },
                                                         onLog: { mealType in store.logSavedRecipe(recipe, mealType: mealType) },
                                                         onShare: {
                                                             recipeShareDraft = ProximityRecipeShareDraft(
@@ -2826,6 +2828,9 @@ struct RecipeDetailView: View {
     var store: FernletStore
     let recipe: RecipeDefinition
     var onEdit: () -> Void
+    /// Persists an F4 substitution FORK into the SAME store the source recipe lives in (blob vs saved).
+    /// Wired per call site; a no-op default keeps non-substitutable call sites compiling unchanged.
+    var onSaveFork: (RecipeDefinition) -> Void = { _ in }
     var onLog: (MealType) -> Void
     var onShare: () -> Void
 
@@ -2853,6 +2858,11 @@ struct RecipeDetailView: View {
     /// The store log path (`onLog`) keeps its own reference to the original `recipe` and never reads
     /// this, so logging while scaled records one serving exactly as it does un-scaled.
     @State private var cookYield: Int?
+
+    /// The BASE ingredient a swap targets (F4 substitution). Set from a "Swap" tap; drives the
+    /// substitution sheet. Always the stored base ingredient, never a scaled display copy — the fork is
+    /// built from the recipe's saved quantities, independent of the ephemeral cook-for view scale.
+    @State private var substitutionTarget: RecipeIngredient?
 
     /// The yield currently on screen: the ephemeral cook-for override, or the stored base yield.
     private var effectiveYield: Int { cookYield ?? recipe.servings }
@@ -2972,6 +2982,15 @@ struct RecipeDetailView: View {
                 SafariView(url: sourceURL)
                     .ignoresSafeArea()
             }
+        }
+        .sheet(item: $substitutionTarget) { target in
+            IngredientSubstitutionSheet(
+                store: store,
+                recipe: recipe,
+                original: target,
+                originalFoodItem: resolvedItems[target.foodItemId],
+                onSaveFork: onSaveFork
+            )
         }
     }
 
@@ -3153,6 +3172,25 @@ struct RecipeDetailView: View {
                                     .font(.fernlet(.body))
                                     .foregroundStyle(Color.bark)
                                     .fernletWrappingText()
+                                // Swap targets the STORED base ingredient (matched by id), not the scaled
+                                // display copy — a fork is built from saved quantities. Structured recipes
+                                // only; web imports have no swappable structured ingredients.
+                                if RecipeScaling.isScalable(recipe) {
+                                    Spacer(minLength: 6)
+                                    Button {
+                                        substitutionTarget = recipe.ingredients.first(where: { $0.id == ingredient.id }) ?? ingredient
+                                    } label: {
+                                        Label("Swap", systemImage: "arrow.triangle.2.circlepath")
+                                            .labelStyle(.iconOnly)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(Color.moss)
+                                            .frame(minWidth: 44, minHeight: 44)
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Swap \(resolvedItems[ingredient.foodItemId]?.name ?? "ingredient")")
+                                    .accessibilityIdentifier("recipeDetail.swapIngredient")
+                                }
                             }
                         }
                     }
@@ -3520,6 +3558,7 @@ struct RecipeBookSheet: View {
                                                 store: store,
                                                 recipe: recipe,
                                                 onEdit: { editingRecipe = recipe; dismiss() },
+                                                onSaveFork: { store.addForkedRecipe($0) },
                                                 onLog: { mealType in store.logRecipe(recipe, mealType: mealType); dismiss() },
                                                 onShare: {
                                                     recipeShareDraft = ProximityRecipeShareDraft(
@@ -3570,6 +3609,7 @@ struct RecipeBookSheet: View {
                                                 store: store,
                                                 recipe: recipe,
                                                 onEdit: { editingSavedRecipe = recipe; dismiss() },
+                                                onSaveFork: { store.addForkedSavedRecipe($0) },
                                                 onLog: { mealType in store.logSavedRecipe(recipe, mealType: mealType); dismiss() },
                                                 onShare: {
                                                     recipeShareDraft = ProximityRecipeShareDraft(
