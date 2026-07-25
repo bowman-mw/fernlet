@@ -931,7 +931,7 @@ public final class DiaryStore {
 
     // MARK: - Recipes & ingredients (pure)
 
-    @discardableResult public func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput]) -> RecipeDefinition {
+    @discardableResult public func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) -> RecipeDefinition {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         assert(!trimmedName.isEmpty, "recipe name required")
         let now = Date()
@@ -950,14 +950,15 @@ public final class DiaryStore {
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
                 source: "manual",
                 createdAt: now,
-                updatedAt: now
+                updatedAt: now,
+                steps: RecipeStepSanitizer.sanitized(steps)
             )
             recipes.insert(recipe, at: 0)
             return recipe
         }
     }
 
-    public func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput]) {
+    public func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         assert(!trimmedName.isEmpty, "recipe name required")
         guard let index = recipes.firstIndex(where: { $0.id == recipe.id }) else { return }
@@ -974,6 +975,7 @@ public final class DiaryStore {
             recipes[index].servings = max(servings, 1)
             recipes[index].ingredients = recipeIngredients
             recipes[index].notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            recipes[index].steps = RecipeStepSanitizer.sanitized(steps)
             recipes[index].updatedAt = Date()
         }
     }

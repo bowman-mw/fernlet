@@ -181,7 +181,10 @@ extension RecipeDefinition {
                     fat: max(importedRecipe.fat, 0)
                 ),
                 micronutrients: importedRecipe.micronutrients
-            )
+            ),
+            // F5: preserve JSON-LD-parsed ordered cooking steps. Persisted per-row via the
+            // `SavedRecipeRecord.payloadData` blob (STEP 0), so they survive on this path.
+            steps: importedRecipe.steps
         )
     }
 }

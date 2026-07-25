@@ -39,7 +39,9 @@ struct RecipeShareCodec {
                     carbs: macros.carbs,
                     fat: macros.fat
                 )
-            }
+            },
+            // F5: carry ordered steps on the wire (optional key, version stays 1 — old peers ignore it).
+            steps: recipe.steps
         )
     }
 
@@ -62,7 +64,8 @@ struct RecipeShareCodec {
                         protein: webImport.macros.protein,
                         carbs: webImport.macros.carbs,
                         fat: webImport.macros.fat,
-                        micronutrients: webImport.micronutrients
+                        micronutrients: webImport.micronutrients,
+                        steps: recipe.steps
                     )
                 )
             )

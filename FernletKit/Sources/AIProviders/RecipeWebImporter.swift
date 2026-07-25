@@ -17,6 +17,9 @@ public nonisolated struct ImportedRecipe: Equatable {
     public var carbs: Int
     public var fat: Int
     public var micronutrients: Micronutrients
+    /// Ordered cooking steps parsed from JSON-LD `recipeInstructions` (F5). `nil` when the source had no
+    /// structured instructions. `summary` stays the short blurb; steps are a separate, ordered list.
+    public var steps: [RecipeStep]?
 
     public init(
         sourceURL: URL,
@@ -27,7 +30,8 @@ public nonisolated struct ImportedRecipe: Equatable {
         protein: Int,
         carbs: Int,
         fat: Int,
-        micronutrients: Micronutrients = Micronutrients()
+        micronutrients: Micronutrients = Micronutrients(),
+        steps: [RecipeStep]? = nil
     ) {
         self.sourceURL = sourceURL
         self.name = name
@@ -38,6 +42,7 @@ public nonisolated struct ImportedRecipe: Equatable {
         self.carbs = carbs
         self.fat = fat
         self.micronutrients = micronutrients
+        self.steps = steps
     }
 }
 
@@ -348,6 +353,8 @@ public enum RecipeWebImporter {
         let ingredients = stringArrayValue(dictionary["recipeIngredient"])
         let fullSummary = instructionsText(from: dictionary["recipeInstructions"])
         let summary = briefSummary(from: fullSummary)
+        // F5: keep the ordered steps separately (briefSummary above still destroys them into a blurb).
+        let steps = orderedSteps(from: dictionary["recipeInstructions"])
         guard let name, name.isEmpty == false, ingredients.isEmpty == false else {
             return nil
         }
@@ -378,7 +385,8 @@ public enum RecipeWebImporter {
             protein: protein,
             carbs: carbs,
             fat: fat,
-            micronutrients: micronutrients
+            micronutrients: micronutrients,
+            steps: steps.isEmpty ? nil : steps
         )
     }
 
@@ -601,6 +609,37 @@ public enum RecipeWebImporter {
             return instructionText(from: dictionary) ?? ""
         }
         return ""
+    }
+
+    /// F5: parse `recipeInstructions` into ORDERED steps rather than flattening them (which
+    /// `instructionsText` does for the `briefSummary`). Preserves step order and section order:
+    /// - a plain string array → one step per element, in order;
+    /// - an array of `HowToStep` dictionaries → one step each (`text`, falling back to `name`);
+    /// - `HowToSection` dictionaries (those with `itemListElement`) → their sub-steps flattened in
+    ///   place, so sections concatenate section-by-section in order;
+    /// - a single string → one step.
+    /// Web JSON-LD steps rarely carry per-step timing, so `durationSeconds` stays nil here (manual
+    /// entry supplies timers). Blank steps are dropped. Purely shape-based, like `instructionText`.
+    /// Public so `RecipeStepsTests` can drive it directly (plain `import AIProviders`, matching the other
+    /// importer tests) — it needs no network fetch or `FoodCatalog`, unlike the full import path.
+    public nonisolated static func orderedSteps(from value: Any?) -> [RecipeStep] {
+        if let string = stringValue(value) {
+            return [RecipeStep(text: string)]
+        }
+        if let values = value as? [Any] {
+            return values.flatMap(orderedSteps(from:))
+        }
+        if let dictionary = value as? [String: Any] {
+            // HowToSection: flatten its ordered sub-steps (never surface the section name as a step).
+            if let itemList = dictionary["itemListElement"] as? [Any] {
+                return itemList.flatMap(orderedSteps(from:))
+            }
+            // HowToStep: prefer `text`, fall back to `name`.
+            if let text = stringValue(dictionary["text"]) ?? stringValue(dictionary["name"]) {
+                return [RecipeStep(text: text)]
+            }
+        }
+        return []
     }
 
     nonisolated private static func instructionText(from value: Any) -> String? {

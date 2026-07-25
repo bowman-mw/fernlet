@@ -2843,12 +2843,12 @@ final class FernletStore {
         recordSensitiveVisibilityResolution()
     }
 
-    @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput]) -> RecipeDefinition {
-        diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients)
+    @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) -> RecipeDefinition {
+        diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
     }
 
-    func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput]) {
-        diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients)
+    func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) {
+        diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
     }
 
     // MARK: - F4 ingredient substitution (fork on explicit save; decision §11.4)
@@ -3043,7 +3043,9 @@ final class FernletStore {
                         fat: max(savedPayload.fat, 0)
                     ),
                     micronutrients: savedPayload.micronutrients
-                )
+                ),
+                // F5: preserve ordered cooking steps a peer sent (nil on older peers that carry none).
+                steps: Self.sanitizedSharedSteps(savedPayload.steps)
             )
             addSavedRecipe(recipe)
             importedName = recipe.name
@@ -3051,6 +3053,13 @@ final class FernletStore {
         // Accepting a friend's shared recipe feeds the closeness "share accepted" signal (day-capped).
         if let fingerprint { closenessLedger.recordShareAccepted(fingerprint: fingerprint) }
         return importedName
+    }
+
+    /// Normalizes cooking steps arriving over a share/mesh wire (F5) via the shared domain sanitizer:
+    /// trims text, drops blank steps, clamps a non-positive duration to nil, and yields nil when nothing
+    /// survives — so a peer that sent no (or only empty) steps produces a stepless recipe, not an empty `[]`.
+    static func sanitizedSharedSteps(_ steps: [RecipeStep]?) -> [RecipeStep]? {
+        RecipeStepSanitizer.sanitized(steps)
     }
 
     @discardableResult func importRecipe(from text: String) throws -> RecipeDefinition {
@@ -3089,7 +3098,9 @@ final class FernletStore {
                 notes: payload.notes.trimmingCharacters(in: .whitespacesAndNewlines),
                 source: "imported",
                 createdAt: now,
-                updatedAt: now
+                updatedAt: now,
+                // F5: preserve ordered cooking steps a peer sent (nil on older peers that carry none).
+                steps: Self.sanitizedSharedSteps(payload.steps)
             )
             recipes.insert(recipe, at: 0)
             return recipe
