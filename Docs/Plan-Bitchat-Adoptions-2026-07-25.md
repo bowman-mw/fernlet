@@ -182,7 +182,9 @@ Implementation deviations (as built, 2026-07-25):
   the 14 d expiry. Reinstall orphans (outbox lost) linger as undecryptable blobs — accepted.
 - `syncOnce()` is the deterministic test seam; production uses fire-and-forget `syncNow()` off
   the ContentView listener chain.
-- TODO capstone: add the new Settings toggle to SettingsSearchIndex if entries are manual.
+- SettingsSearchIndex checked at capstone: the catalog is ROUTE-level (one entry per
+  `SettingsRoute`; individual toggles aren't leaves), so the inline "Deliver hearts when apart"
+  toggle needs no entry. RESOLVED.
 
 Known residual (documented, accepted): CloudKit public-DB records expose the writer's
 `creatorUserRecordID` to other queriers — an observer sees *that* an iCloud user wrote N drops on a
