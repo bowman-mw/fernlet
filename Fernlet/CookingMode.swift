@@ -116,35 +116,53 @@ struct CookingModeView: View {
     /// the right store method (manual `logRecipe` vs saved/web `logSavedRecipe`), each of which takes a
     /// `date:` day-key so a session crossing midnight still logs to the day the cook began.
     let onLogToDay: (MealType, String) -> Void
+    /// True when re-opening an in-progress run after a kill (the Food-root resume card path): skip mise
+    /// en place and jump straight into the walker at the run's saved step. The store already holds the
+    /// adopted `cookingRunState`, so we must NOT start a fresh run.
+    let resuming: Bool
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     private enum Stage: Equatable { case mise, cooking, finished }
 
-    @State private var stage: Stage = .mise
-    @State private var stepIndex = 0
+    @State private var stage: Stage
     @State private var cookYield: Int
     @State private var resolvedItems: [UUID: FoodItem] = [:]
-    /// The day-key captured ONCE when cooking begins. Nil until `.onAppear` stamps it. Every completion
-    /// log anchors here, so a long session that rolls past midnight still logs to the start day.
+    /// Fallback day-key for the mise-ONLY path (a recipe with no steps starts no run). Stamped in
+    /// `.onAppear`. When a run exists its `startedDayKey` is authoritative, so a long session that rolls
+    /// past midnight still logs to the day the cook began.
     @State private var startDayKey: String?
 
-    // Single per-step passive timer (v1 — no concurrent named timers).
-    @State private var timerStartedAt: Date?
-    @State private var timerEndsAt: Date?
+    // Single per-step passive timer (v1 — no concurrent named timers). The FIXED timer WINDOW lives in
+    // the shared `store.cookingRunState` (so the Live Activity renders it); only the "fired" flag +
+    // haptic task are local UI state, re-armed from the run's window on every change and on resume.
     @State private var timerFired = false
     @State private var timerTask: Task<Void, Never>?
 
-    init(store: FernletStore, recipe: RecipeDefinition, onLogToDay: @escaping (MealType, String) -> Void) {
+    init(store: FernletStore, recipe: RecipeDefinition, resuming: Bool = false, onLogToDay: @escaping (MealType, String) -> Void) {
         self.store = store
         self.recipe = recipe
+        self.resuming = resuming
         self.onLogToDay = onLogToDay
         _cookYield = State(initialValue: max(recipe.servings, 1))
+        _stage = State(initialValue: resuming ? .cooking : .mise)
     }
 
     private var steps: [RecipeStep] { recipe.steps ?? [] }
     private var hasSteps: Bool { !steps.isEmpty }
     private var isScalable: Bool { RecipeScaling.isScalable(recipe) }
+
+    /// The current cursor, driven by the shared run so a Live Activity / Siri advance moves the walker.
+    /// Falls back to 0 before the run exists (mise) and clamps into range defensively.
+    private var stepIndex: Int {
+        guard let index = store.cookingRunState?.stepIndex else { return 0 }
+        return min(max(index, 0), max(steps.count - 1, 0))
+    }
+
+    /// The FIXED per-step timer window from the shared run (nil when no timer is running).
+    private var timerStartedAt: Date? { store.cookingRunState?.timerStartedAt }
+    private var timerEndsAt: Date? { store.cookingRunState?.timerEndsAt }
 
     /// Ingredients as shown on the mise screen — scaled to the cook-for yield for structured recipes,
     /// or the stored quantities otherwise. Empty for web imports (they render free-text lines instead).
@@ -173,15 +191,46 @@ struct CookingModeView: View {
         }
         .onAppear {
             if startDayKey == nil { startDayKey = store.todayKey }
+            // A resume can land after the Live Activity finished the cook while the app was gone; pick
+            // that up and re-arm the local haptic to the run's live timer window.
+            store.reconcileCookingRunFromAppGroup()
+            syncStageWithRun()
+            armHaptic(for: store.cookingRunState)
         }
-        .onDisappear { cancelTimer() }
+        // The Live Activity "Next" / Siri "next step" advances the shared run in the background; on
+        // foreground, reconcile then re-derive stage + haptic so the walker re-renders in step.
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            store.reconcileCookingRunFromAppGroup()
+            syncStageWithRun()
+            armHaptic(for: store.cookingRunState)
+        }
+        // Discrete run transitions (in-app OR Live Activity, while foregrounded): keep stage + haptic
+        // in step. The run changes only on step/timer transitions — never per second — so this is cheap.
+        .onChange(of: store.cookingRunState) { _, newRun in
+            syncStageWithRun()
+            armHaptic(for: newRun)
+        }
+        .onDisappear { timerTask?.cancel() }
+    }
+
+    /// Reflect the shared run's terminal + liveness into the local stage: a run finished from the Live
+    /// Activity flips the walker to its finish screen; a run retired out from under an active walk (aged
+    /// out, or replaced by another recipe's cook) closes this cover so we never render an empty step.
+    private func syncStageWithRun() {
+        let run = store.cookingRunState
+        if run?.isFinished == true {
+            if stage == .cooking { withAnimation(.easeInOut(duration: 0.3)) { stage = .finished } }
+        } else if run == nil, stage == .cooking {
+            dismiss()
+        }
     }
 
     // MARK: Header
 
     private var header: some View {
         HStack {
-            Button { dismiss() } label: {
+            Button { closeCooking() } label: {
                 Text("Close")
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.slate)
@@ -356,7 +405,7 @@ struct CookingModeView: View {
                             .multilineTextAlignment(.center)
                             .fernletWrappingText()
                     }
-                    Button { cancelTimer() } label: {
+                    Button { store.cookingClearTimer() } label: {
                         Text("Reset timer").font(.fernlet(.labelSmall)).foregroundStyle(Color.moss)
                     }
                     .buttonStyle(.plain)
@@ -365,7 +414,7 @@ struct CookingModeView: View {
                         .font(.system(size: 44, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(Color.slate)
-                    Button { startStepTimer(duration) } label: {
+                    Button { store.cookingStartTimer() } label: {
                         Label("Start \(formattedDuration(duration)) timer", systemImage: "timer")
                             .font(.fernlet(.label))
                             .foregroundStyle(Color.cream)
@@ -485,7 +534,7 @@ struct CookingModeView: View {
                         primaryButtonLabel("Log this meal")
                     }
                     .accessibilityIdentifier("cookingMode.logMeal")
-                    Button { dismiss() } label: {
+                    Button { closeCooking() } label: {
                         Text("Not now")
                             .font(.fernlet(.label))
                             .foregroundStyle(Color.slate)
@@ -532,49 +581,72 @@ struct CookingModeView: View {
 
     private func beginCooking() {
         if hasSteps {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                stepIndex = 0
-                stage = .cooking
-            }
+            // Start the shared run FIRST (mirrors to the app group + requests the Live Activity), then
+            // flip the walker in. The run's cursor drives `stepIndex` from here on.
+            store.startCookingRun(recipe, startDayKey: startDayKey ?? store.todayKey)
+            withAnimation(.easeInOut(duration: 0.3)) { stage = .cooking }
         } else {
-            // Mise-only recipe (ingredients but no steps): a single done screen, per §6.4.
+            // Mise-only recipe (ingredients but no steps): a single done screen, per §6.4. No run, no
+            // Live Activity — there is nothing to walk.
             withAnimation(.easeInOut(duration: 0.3)) { stage = .finished }
         }
     }
 
     private func goNext() {
-        cancelTimer()
-        if stepIndex < steps.count - 1 {
-            withAnimation(.easeInOut(duration: 0.3)) { stepIndex += 1 }
-        } else {
-            withAnimation(.easeInOut(duration: 0.3)) { stage = .finished }
-        }
+        // Advance the shared run (clears its timer, advances the cursor, or finishes on the last step).
+        // A finish flips `stage` via `syncStageWithRun` on the resulting run change.
+        withAnimation(.easeInOut(duration: 0.3)) { store.cookingAdvanceStep() }
     }
 
     private func goBack() {
-        cancelTimer()
         if stepIndex > 0 {
-            withAnimation(.easeInOut(duration: 0.3)) { stepIndex -= 1 }
+            withAnimation(.easeInOut(duration: 0.3)) { store.cookingGoBack() }
         } else {
+            // Back from the first step leaves the walk and returns to mise en place. Set the stage
+            // BEFORE ending the run, so the run→nil change doesn't trip `syncStageWithRun`'s
+            // "retired mid-walk" dismiss.
             withAnimation(.easeInOut(duration: 0.3)) { stage = .mise }
+            store.endCookingRun()
         }
     }
 
     private func logMeal(_ mealType: MealType) {
-        onLogToDay(mealType, startDayKey ?? store.todayKey)
+        // A run's own `startedDayKey` is authoritative (survives a midnight rollover); the local
+        // `startDayKey` is the fallback for the mise-only path that never started a run.
+        let day = store.cookingRunState?.startedDayKey ?? startDayKey ?? store.todayKey
+        onLogToDay(mealType, day)
+        store.endCookingRun()
+        dismiss()
+    }
+
+    /// Header Close / finish "Not now": end the shared run (clear the app-group file + the Live Activity)
+    /// so no orphan resume card or activity lingers, then dismiss.
+    private func closeCooking() {
+        store.endCookingRun()
         dismiss()
     }
 
     // MARK: Timer
 
-    private func startStepTimer(_ seconds: Int) {
-        cancelTimer()
-        let now = Date()
-        timerStartedAt = now
-        timerEndsAt = now.addingTimeInterval(TimeInterval(seconds))
+    /// (Re)arm the local haptic + "fired" highlight to the shared run's FIXED timer window. Called on
+    /// appear, on every run change, and on foreground — so it works for an in-app start, a Siri "repeat
+    /// step", and a resume that lands with a timer already partway through (or already expired).
+    private func armHaptic(for run: CookingRunState?) {
+        timerTask?.cancel()
+        timerTask = nil
+        guard let start = run?.timerStartedAt, let end = run?.timerEndsAt, start <= end else {
+            timerFired = false
+            return
+        }
+        let remaining = end.timeIntervalSinceNow
+        if remaining <= 0 {
+            // Resumed after the timer already elapsed: highlight Next, but don't fire a late haptic.
+            timerFired = true
+            return
+        }
         timerFired = false
-        timerTask = Task { [seconds] in
-            try? await Task.sleep(for: .seconds(seconds))
+        timerTask = Task {
+            try? await Task.sleep(for: .seconds(remaining))
             if Task.isCancelled { return }
             await MainActor.run {
                 guard !Task.isCancelled else { return }
@@ -582,14 +654,6 @@ struct CookingModeView: View {
                 fireHaptic()
             }
         }
-    }
-
-    private func cancelTimer() {
-        timerTask?.cancel()
-        timerTask = nil
-        timerStartedAt = nil
-        timerEndsAt = nil
-        timerFired = false
     }
 
     private func fireHaptic() {

@@ -115,6 +115,11 @@
 		68FE5E00000000000000B003 /* Exceptions for "FernletWidgets" folder in "Fernlet" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				CookingActivityAttributes.swift,
+				CookingActivityBridge.swift,
+				CookingLiveActivityIntents.swift,
+				CookingRunState.swift,
+				CookingRunStateStore.swift,
 				GuidedWorkoutActivityBridge.swift,
 				GuidedWorkoutLiveActivityIntents.swift,
 				GuidedWorkoutRunState.swift,

@@ -32,5 +32,28 @@ struct FernletShortcuts: AppShortcutsProvider {
             shortTitle: "Write in journal",
             systemImageName: "book.closed"
         )
+        // F5 cooking mode — the hands-free voice path for the recipe walker. The same two
+        // LiveActivityIntents that back the Lock Screen "Next" button; here they answer Siri phrases so
+        // a cook with messy hands can advance or re-fire the step timer without touching the phone.
+        AppShortcut(
+            intent: NextCookingStepIntent(),
+            phrases: [
+                "Next step in \(.applicationName)",
+                "Next cooking step in \(.applicationName)",
+                "\(.applicationName) next step"
+            ],
+            shortTitle: "Next cooking step",
+            systemImageName: "chevron.right"
+        )
+        AppShortcut(
+            intent: RepeatCookingStepIntent(),
+            phrases: [
+                "Repeat step in \(.applicationName)",
+                "Repeat cooking step in \(.applicationName)",
+                "Restart my \(.applicationName) timer"
+            ],
+            shortTitle: "Repeat cooking step",
+            systemImageName: "arrow.counterclockwise"
+        )
     }
 }

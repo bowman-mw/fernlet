@@ -2835,6 +2835,143 @@ final class FernletStore {
         markGuidedSessionCompleted(state.sessionID)
     }
 
+    // MARK: Cooking mode — the active run (mirrored to the app group for the Live Activity + Siri)
+
+    /// The in-progress cooking session, or nil when none is active. Mirrored into the app-group
+    /// container (`cookingRunStateStore`) so the interactive Live Activity "Next" button — and the Siri
+    /// "next step" / "repeat step" intents — can advance the recipe walker from the Lock Screen, even
+    /// after the app is suspended or terminated. Observable so the cooking walker and the Food-root
+    /// resume card reflect every transition, whether it came from the in-app buttons or the Live
+    /// Activity. Session-scoped; never part of the synced blob. Directly mirrors `guidedRunState`.
+    private(set) var cookingRunState: CookingRunState?
+    @ObservationIgnored private let cookingRunStateStore = CookingRunStateStore()
+
+    /// Begin cooking a recipe step-by-step. Builds the run from the recipe's ordered steps, anchors it
+    /// to the day the cook began (a long session can cross local midnight), mirrors it to the app group,
+    /// and requests the Live Activity. Replaces any cooking run already in progress (ending only the
+    /// cooking activity — a live WORKOUT activity is a different type and is left untouched). A recipe
+    /// with no steps is a no-op (the mise-only flow never enters the walker). Returns the run started.
+    @discardableResult
+    func startCookingRun(_ recipe: RecipeDefinition, startDayKey: String? = nil) -> CookingRunState? {
+        let domainSteps = recipe.steps ?? []
+        guard !domainSteps.isEmpty else { return nil }
+        let steps = domainSteps.map { CookingRunState.Step(text: $0.text, durationSeconds: $0.durationSeconds) }
+        let state = CookingRunState(
+            recipeID: recipe.id,
+            recipeName: recipe.name,
+            startedDayKey: startDayKey ?? todayKey,
+            steps: steps
+        )
+        cookingRunState = state
+        cookingRunStateStore.write(state)
+        CookingLiveActivityController.start(state)
+        return state
+    }
+
+    /// Advance to the next step (or finish) from the in-app walker — mirrors the Live Activity "Next"
+    /// button and the "next step" Siri intent.
+    func cookingAdvanceStep() {
+        guard var state = cookingRunState, !state.isFinished else { return }
+        state.advance()
+        applyCookingTransition(state)
+    }
+
+    /// Step back one step from the in-app walker (clamped at step 0).
+    func cookingGoBack() {
+        guard var state = cookingRunState, !state.isFinished else { return }
+        state.goBack()
+        applyCookingTransition(state)
+    }
+
+    /// Start (or restart, via the "repeat step" intent / in-app "Start timer") the current step's
+    /// passive timer, mirroring the window into the app group so the Live Activity renders the countdown.
+    func cookingStartTimer() {
+        guard var state = cookingRunState, !state.isFinished else { return }
+        state.startTimer(now: Date())
+        applyCookingTransition(state)
+    }
+
+    /// Clear the current step's timer (in-app "Reset timer") — the Live Activity drops the countdown.
+    func cookingClearTimer() {
+        guard var state = cookingRunState, !state.isFinished else { return }
+        state.clearTimer()
+        applyCookingTransition(state)
+    }
+
+    /// Shared handling after an in-app cooking transition: mirror to the group + reflect onto the
+    /// activity. On a finish the group file is cleared FIRST (so a racing foreground reconcile can't
+    /// resurrect a done run) and the activity ended; the in-memory state is kept so the walker can show
+    /// its finish screen. There is no automatic meal log — logging is the cook's explicit choice.
+    private func applyCookingTransition(_ state: CookingRunState) {
+        cookingRunState = state
+        if state.isFinished {
+            cookingRunStateStore.clear()
+            syncActivity { await CookingActivityBridge.end() }
+        } else {
+            cookingRunStateStore.write(state)
+            syncActivity { await CookingActivityBridge.sync(to: state) }
+        }
+    }
+
+    /// End the active cooking run (the walker's Close, a completed-and-logged session, or the resume
+    /// card's Discard). Clears the group file and ends the cooking activity. Idempotent.
+    func endCookingRun() {
+        guard cookingRunState != nil else {
+            // No in-memory run, but a group file (or orphan activity) may linger after a cold path.
+            cookingRunStateStore.clear()
+            syncActivity { await CookingActivityBridge.end() }
+            return
+        }
+        cookingRunState = nil
+        cookingRunStateStore.clear()
+        syncActivity { await CookingActivityBridge.end() }
+    }
+
+    /// Reconcile the in-memory cooking run with the app-group file — call on foreground and at launch so
+    /// a step advance made entirely from the Live Activity / Siri is picked up, and so a resume card can
+    /// appear after a cold launch. A finished run is retired (cleared + activity ended — cooking never
+    /// auto-logs); a recently-touched active run is adopted so the walker/card resume it; a run the
+    /// process merely outlived (untouched for hours) is retired. No file at all → retire any orphan
+    /// activity. Mirrors `reconcileGuidedRunFromAppGroup`.
+    func reconcileCookingRunFromAppGroup() {
+        guard let fileState = cookingRunStateStore.read() else {
+            syncActivity { await CookingActivityBridge.end() }
+            return
+        }
+        if fileState.isFinished {
+            // Clear the file BEFORE anything else so a crash can't re-surface a done run (mirrors the
+            // guided finish path; a lost log beats a duplicate — though cooking's log is never automatic).
+            cookingRunStateStore.clear()
+            cookingRunState = nil
+            syncActivity { await CookingActivityBridge.end() }
+            return
+        }
+        if Date().timeIntervalSince(fileState.updatedAt) > CookingRunState.abandonedAfter {
+            cookingRunState = nil
+            cookingRunStateStore.clear()
+            syncActivity { await CookingActivityBridge.end() }
+            return
+        }
+        cookingRunState = fileState
+    }
+
+    /// The RecipeDefinition an active cooking run refers to, resolved across the manual recipe book and
+    /// the saved/web recipes so the Food-root resume card can re-open cooking mode. Nil when the recipe
+    /// was deleted while the run outlived it — the card then only offers Discard.
+    func recipeForActiveCookingRun() -> RecipeDefinition? {
+        guard let id = cookingRunState?.recipeID else { return nil }
+        return recipes.first { $0.id == id } ?? savedRecipes.first { $0.id == id }
+    }
+
+    /// Whether the active cooking run's recipe is a saved/web recipe (logs via `logSavedRecipe`) rather
+    /// than a manual one (logs via `logRecipe`). Nil when there is no run or its recipe is gone.
+    func activeCookingRunIsSavedRecipe() -> Bool? {
+        guard let id = cookingRunState?.recipeID else { return nil }
+        if recipes.contains(where: { $0.id == id }) { return false }
+        if savedRecipes.contains(where: { $0.id == id }) { return true }
+        return nil
+    }
+
     func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {
         diary.completeOnboarding(profile: profile, preferences: preferences, goal: goal)
         // Onboarding is the fresh-install visibility determination point (the migration marker is

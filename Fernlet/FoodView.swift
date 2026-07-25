@@ -23,6 +23,11 @@ struct FoodView: View {
     @State private var correctingMeal: Meal?
     @State private var showingRecipeBook = false
     @State private var recipeShareDraft: ProximityRecipeShareDraft?
+    /// The recipe to re-open cooking mode on when the user taps the Food-root resume card (set only for
+    /// an in-progress cooking run whose recipe still exists). Carries whether it's a saved/web recipe so
+    /// the completion log routes to the right store method.
+    @State private var cookingResume: CookingResumeTarget?
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
@@ -36,6 +41,28 @@ struct FoodView: View {
                     .padding(.top, 4)
 
                     MacroCard(totals: store.macroTotals, targets: store.nutritionTargets, showCalories: store.settings.showCalories)
+
+                    // A cooking session in progress takes precedence — it stays resumable even after an
+                    // app kill (the run survives in the app group though this view's state doesn't), so
+                    // this is driven by `cookingRunState` alone. Mirrors the Move-root Resume card.
+                    if let run = store.cookingRunState, !run.isFinished {
+                        CookingResumeCard(
+                            recipeName: run.recipeName,
+                            stepNumber: run.stepNumber,
+                            stepCount: run.stepCount,
+                            onResume: {
+                                if let recipe = store.recipeForActiveCookingRun(),
+                                   let isSaved = store.activeCookingRunIsSavedRecipe() {
+                                    cookingResume = CookingResumeTarget(recipe: recipe, isSaved: isSaved)
+                                } else {
+                                    // The recipe was deleted while the run outlived it — nothing to
+                                    // resume, so clear the run + any orphan Live Activity.
+                                    store.endCookingRun()
+                                }
+                            },
+                            onDiscard: { store.endCookingRun() }
+                        )
+                    }
 
                     if store.pendingRetryCount > 0 {
                         FernletScrollSection {
@@ -251,7 +278,30 @@ struct FoodView: View {
         .onAppear {
             store.markLaunchScreenDismissed()
             store.ensureBundledFoodItemsSeeded()
+            // Surface a resume card / retire an orphan cooking activity after a cold launch, and pick up
+            // any step advance made entirely from the Live Activity / Siri.
+            store.reconcileCookingRunFromAppGroup()
         }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            store.reconcileCookingRunFromAppGroup()
+        }
+        #if canImport(UIKit)
+        .fullScreenCover(item: $cookingResume) { target in
+            CookingModeView(
+                store: store,
+                recipe: target.recipe,
+                resuming: true,
+                onLogToDay: { mealType, day in
+                    if target.isSaved {
+                        store.logSavedRecipe(target.recipe, mealType: mealType, date: day)
+                    } else {
+                        store.logRecipe(target.recipe, mealType: mealType, date: day)
+                    }
+                }
+            )
+        }
+        #endif
     }
 
     private var recentRecipePreviews: [RecentRecipePreview] {
@@ -317,6 +367,79 @@ private enum RecentRecipePreview: Identifiable {
             recipe.createdAt
         case .saved(let recipe):
             recipe.createdAt
+        }
+    }
+}
+
+/// The target for the Food-root cooking resume cover: the recipe to re-open plus whether it's a
+/// saved/web recipe (routes the completion log to `logSavedRecipe` vs `logRecipe`). Identifiable by
+/// the recipe id so `fullScreenCover(item:)` keys on it.
+private struct CookingResumeTarget: Identifiable {
+    let recipe: RecipeDefinition
+    let isSaved: Bool
+    var id: UUID { recipe.id }
+}
+
+/// The Food-root "Cooking in progress" card — the cooking analogue of `ResumeWorkoutCard`. Appears
+/// whenever a cooking run survives in the app group (including after an app kill), offering Resume
+/// (re-open the walker at the saved step) and Discard (drop the run + any orphan Live Activity). The
+/// a11y ids live on the buttons, not a wrapping container, so they aren't overridden.
+private struct CookingResumeCard: View {
+    let recipeName: String
+    let stepNumber: Int
+    let stepCount: Int
+    var onResume: () -> Void
+    var onDiscard: () -> Void
+
+    var body: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Color.moss)
+                        .frame(width: 30)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Cooking in progress")
+                            .font(.fernlet(.headerMedium))
+                            .foregroundStyle(Color.bark)
+                        Text("\(recipeName) — step \(stepNumber) of \(stepCount). Pick up where you left off.")
+                            .font(.fernlet(.bubble))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                HStack(spacing: 12) {
+                    Button(action: onDiscard) {
+                        Text("Discard")
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.slate)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("cooking.discard")
+
+                    Button(action: onResume) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.body.weight(.semibold))
+                            Text("Resume")
+                                .font(.fernlet(.label))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("cooking.resume")
+                }
+            }
         }
     }
 }

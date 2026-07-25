@@ -20,6 +20,7 @@ struct FernletWidgetsBundle: WidgetBundle {
     var body: some Widget {
         FernletCompanionWidget()
         WorkoutLiveActivity()
+        CookingLiveActivity()
     }
 }
 
