@@ -1628,6 +1628,9 @@ struct MealSheet: View {
     /// silently committing. Nothing food-like → a gentle "want to type it?" fallback.
     private func identifyMealPhoto(_ photo: UIImage) {
         guard !isIdentifyingPhoto else { return }
+        // Capture the (photo, bytes) pair up front, before the recognition await, so a mid-identify photo
+        // swap can't pair this tap's image with someone else's live `mealPhotoData` (mirrors resolveTypedMeal).
+        let capturedPhotoData = mealPhotoData
         isIdentifyingPhoto = true
         notice = nil
         Task {
@@ -1640,7 +1643,7 @@ struct MealSheet: View {
                 notice = "Fernlet couldn't quite tell what's in this photo — want to type what you ate instead?"
             case .resolved(let described, let resolution):
                 description = described
-                reviewContext = MealReviewContext(resolution: resolution, photo: photo, photoData: mealPhotoData)
+                reviewContext = MealReviewContext(resolution: resolution, photo: photo, photoData: capturedPhotoData)
             }
         }
     }
@@ -1741,7 +1744,9 @@ struct MealSheet: View {
                     .fernletWrappingText()
                 PhotoCaptureControl(
                     onCameraCapture: { captureError = nil; handleCapturedPhoto($0) },
-                    onLibraryPick: { captureError = nil; mealPhoto = $0 }
+                    // Byte path (matches the primary control): downsample the pick and stash the sealed-
+                    // ready bytes so `attachPhoto` seals THIS image, not stale bytes from an earlier pick.
+                    onLibraryPickData: { data, _ in captureError = nil; setLibraryPickedMealPhoto(data) }
                 ) {
                     Label("Try again", systemImage: "arrow.clockwise")
                         .font(.fernlet(.label))
@@ -1820,7 +1825,9 @@ struct MealSheet: View {
                 .frame(height: 160)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-            Button { mealPhoto = nil } label: {
+            // Clear BOTH the preview image and the sealed-ready bytes: `attachPhoto` prefers the byte
+            // path, so leaving `mealPhotoData` set would re-attach a photo the user explicitly removed.
+            Button { mealPhoto = nil; mealPhotoData = nil } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title3)
                     .foregroundStyle(Color.bark)
@@ -2541,20 +2548,38 @@ struct MealReviewSheet: View {
     }
 
     /// The recipe to mint, with the user's name + yield edits applied — or nil when there is no
-    /// suggested recipe or the user turned the offer off. Rescaling the ingredients by the yield change
-    /// keeps each serving equal to the plate the decomposition resolved (per-serving is invariant).
+    /// suggested recipe or the user turned the offer off.
+    ///
+    /// The ingredient quantities are rebuilt from the user's REVIEWED per-serving component grams (each
+    /// × the chosen yield gives the full batch), not from the model's original decomposition. Components
+    /// can only be re-quantified in review, never added or removed, so their `foodItemId` set maps 1:1
+    /// onto the recipe's ingredients — keeping the promised invariant (per-serving == the plate) true
+    /// even when the user corrected a component's grams, instead of silently minting the pre-edit amounts.
     private var confirmedRecipe: RecipeDefinition? {
         guard saveAsRecipe, let base = suggestedRecipe else { return nil }
         var recipe = base
         let oldYield = max(base.servings, 1)
         let newYield = max(recipeServings, 1)
-        if newYield != oldYield {
-            let factor = Double(newYield) / Double(oldYield)
-            recipe.ingredients = base.ingredients.map {
-                RecipeIngredient(id: $0.id, foodItemId: $0.foodItemId, quantity: $0.quantity * factor, unit: $0.unit)
-            }
-            recipe.servings = newYield
+        // The reviewed per-serving grams, keyed by the catalog item they bound to.
+        var editedPerServing: [UUID: MealComponentCorrectionInput] = [:]
+        for component in meals.flatMap(\.components) {
+            if let foodItemId = component.foodItemId { editedPerServing[foodItemId] = component }
         }
+        recipe.ingredients = base.ingredients.map { ingredient in
+            if let edited = editedPerServing[ingredient.foodItemId] {
+                return RecipeIngredient(
+                    id: ingredient.id,
+                    foodItemId: ingredient.foodItemId,
+                    quantity: edited.quantity * Double(newYield),
+                    unit: edited.unit
+                )
+            }
+            // No matching reviewed component (not expected for a decomposition recipe) — fall back to
+            // yield-scaling the model's original batch quantity so nothing is dropped.
+            let factor = Double(newYield) / Double(oldYield)
+            return RecipeIngredient(id: ingredient.id, foodItemId: ingredient.foodItemId, quantity: ingredient.quantity * factor, unit: ingredient.unit)
+        }
+        recipe.servings = newYield
         let trimmed = recipeName.trimmingCharacters(in: .whitespacesAndNewlines)
         recipe.name = trimmed.isEmpty ? base.name : trimmed
         recipe.updatedAt = Date()
