@@ -178,10 +178,17 @@ final class LaunchPreparationService {
 
     // MARK: - Day summary
 
-    /// Generates day summaries for every logged day (except today) that is missing one, most recent
-    /// first. Gated to run at most once per calendar day per device (first open after midnight).
-    /// When Foundation Models is unavailable the day's slot is intentionally left empty (spec) rather
-    /// than filled with deterministic fallback text.
+    /// Most day summaries to generate in one launch. Each generation is an ambient model call that
+    /// charges the daily budget; on a first launch over a long history an uncapped backfill would burn
+    /// straight to the sleepy floor before the user does anything. Capping per run spreads the burn
+    /// across days (the once-per-day gate resumes tomorrow) so a fresh install's early mornings keep a
+    /// live budget for the user's own taps.
+    private static let daySummaryBackfillPerRunCap = 10
+
+    /// Generates day summaries for logged days (except today) missing one, most recent first, up to a
+    /// per-run cap. Gated to run at most once per calendar day per device (first open after midnight);
+    /// remaining days are picked up on subsequent days. When Foundation Models is unavailable the day's
+    /// slot is intentionally left empty (spec) rather than filled with deterministic fallback text.
     private func backfillDaySummaries(for store: FernletStore) async {
         let todayKey = store.todayKey
         if UserDefaults.standard.string(forKey: Self.daySummaryRunKeyDefault) == todayKey { return }
@@ -189,16 +196,21 @@ final class LaunchPreparationService {
         let dayKeys = store.loadDays().keys
             .filter { $0 != todayKey }
             .sorted(by: >)
+        var generated = 0
         for key in dayKeys {
             if let existing = store.dailyScores.first(where: { $0.dateKey == key })?.daySummaryText,
                !existing.isEmpty { continue }
             let day = store.loadDay(for: key)
             guard !day.meals.isEmpty || !day.workouts.isEmpty else { continue }
+            if generated >= Self.daySummaryBackfillPerRunCap { break }
             if let summary = await makeDaySummaryText(for: day, store: store), !summary.isEmpty {
                 store.storeDaySummary(summary, for: key)
+                generated += 1
             }
             // When the summary is nil, the slot is left empty on purpose (FM unavailable).
         }
+        // Once-per-calendar-day gate: any day still missing a summary is picked up on the next day's
+        // first launch, so a long backlog drains a bounded slice at a time instead of all at once.
         UserDefaults.standard.set(todayKey, forKey: Self.daySummaryRunKeyDefault)
     }
 

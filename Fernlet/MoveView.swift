@@ -826,7 +826,12 @@ struct WorkoutSuggestionSheet: View {
     private var guidedCompletedSessionIDs: Set<UUID> { store.guidedCompletedSessionIDs }
 
     private var aiAdjustAvailable: Bool {
-        store.settings.aiStatus != .off && FoodSelectionAvailability.isFoundationModelAvailable
+        // Key off the EFFECTIVE status (stored intent overlaid with today's local call budget), not the
+        // raw stored value: at `.resting` a user tap can only fall back to the unchanged plan, so the
+        // affordance is hidden rather than silently no-op'ing. `.sleepy` keeps it — a user-invoked
+        // adjustment still runs in the sleepy band (only ambient work falls back there).
+        let status = store.effectiveAIStatus
+        return status != .off && status != .resting && FoodSelectionAvailability.isFoundationModelAvailable
     }
 
     /// The session in the current plan worth *guiding* through — the first with real, set-based

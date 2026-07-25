@@ -158,4 +158,33 @@ import FernletDomainModel
         #expect(gate.dispatch(tier: .standard, userInvoked: true) == .onDeviceFoundationModels)
         #expect(spy.recordCallCount == 2)
     }
+
+    // MARK: - resolveRoute exposes WHY a task fell back (transient budget vs. persistent incapability)
+
+    /// The share-extension recipe queue leans on this distinction: a `.resting` / `.sleepy` fallback is
+    /// transient (clears at midnight) and must be retried tomorrow rather than burning a finite retry
+    /// attempt, while `.deviceIncapable` is persistent. If these reasons ever collapse, the queue would
+    /// silently drop shared recipes on a heavy-AI day.
+    @Test func resolveRouteReportsTransientBudgetFallbackReasons() {
+        // Resting → `.resting`, no charge.
+        let (resting, restingSpy) = makeGate(onDevice: true, intent: .ready, count: AICallQuota.restingThreshold)
+        #expect(resting.resolveRoute(tier: .standard, userInvoked: true) == .deterministicFallback(.resting))
+        #expect(restingSpy.recordCallCount == 0)
+
+        // Sleepy + ambient → `.sleepy`, no charge.
+        let (sleepy, sleepySpy) = makeGate(onDevice: true, intent: .ready, count: AICallQuota.sleepyThreshold)
+        #expect(sleepy.resolveRoute(tier: .standard, userInvoked: false) == .deterministicFallback(.sleepy))
+        #expect(sleepySpy.recordCallCount == 0)
+
+        // Persistent device incapability → `.deviceIncapable` (NOT a transient budget reason).
+        let (incapable, incapableSpy) = makeGate(onDevice: false, intent: .ready, count: 0)
+        #expect(incapable.resolveRoute(tier: .standard, userInvoked: true) == .deterministicFallback(.deviceIncapable))
+        #expect(incapableSpy.recordCallCount == 0)
+    }
+
+    @Test func resolveRouteChargesExactlyOnceOnDestinationLikeDispatch() {
+        let (gate, spy) = makeGate(onDevice: true, intent: .ready, count: 0)
+        #expect(gate.resolveRoute(tier: .standard, userInvoked: true) == .destination(.onDeviceFoundationModels))
+        #expect(spy.recordCallCount == 1)
+    }
 }

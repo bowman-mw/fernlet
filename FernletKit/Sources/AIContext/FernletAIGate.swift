@@ -50,14 +50,27 @@ public struct FernletAIGate: Sendable {
     ///     thought bubbles, memory work). In the `.sleepy` band ambient work falls back and
     ///     user-invoked work still runs.
     public func dispatch(tier: AICapabilityTier, userInvoked: Bool) -> AIDestination? {
+        if case .destination(let destination) = resolveRoute(tier: tier, userInvoked: userInvoked) {
+            return destination
+        }
+        return nil
+    }
+
+    /// Like `dispatch`, but returns the FULL resolution so a caller can distinguish a *transient*
+    /// budget fallback (`.resting` / `.sleepy`, which clears at midnight) from a *persistent* one
+    /// (`.deviceIncapable`, `.allRungsExhausted`). A deferred/queued task uses this to decide whether
+    /// to consume a bounded retry budget: a transient budget fallback should be retried tomorrow, not
+    /// counted as a failed attempt.
+    ///
+    /// Charges exactly one call when — and only when — a destination is chosen, identically to
+    /// `dispatch`. The charge happens at this single decision point, never per retry/decode below it.
+    public func resolveRoute(tier: AICapabilityTier, userInvoked: Bool) -> AIRouteResolution {
         let effective = AIStatusOverlay.effectiveStatus(intent: intent, quota: quotaStore.currentQuota())
-        switch router.resolve(tier: tier, effectiveStatus: effective, userInvoked: userInvoked) {
-        case .destination(let destination):
+        let resolution = router.resolve(tier: tier, effectiveStatus: effective, userInvoked: userInvoked)
+        if case .destination = resolution {
             // A real model call is about to be made → charge one call against today's budget.
             quotaStore.recordCall()
-            return destination
-        case .deterministicFallback:
-            return nil
         }
+        return resolution
     }
 }

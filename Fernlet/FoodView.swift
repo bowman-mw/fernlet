@@ -411,7 +411,7 @@ struct RecipeImportSheet: View {
 
         Task {
             do {
-                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: store.foodCatalog, aiEnabled: store.settings.aiStatus != .off, gate: store.aiGate)
+                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: store.foodCatalog, aiEnabled: store.settings.aiStatus != .off, userInvoked: true, gate: store.aiGate)
                 store.addSavedRecipe(RecipeDefinition(importedRecipe: importedRecipe))
                 notice = "\(importedRecipe.name) added to your recipes."
                 isImportingURL = false

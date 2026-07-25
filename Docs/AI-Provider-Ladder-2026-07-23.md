@@ -130,8 +130,15 @@ For a task at tier `T`:
 
 1. `settings.aiStatus == .off` → deterministic fallback. Stop.
 2. `aiStatus == .resting` (rate-limited or ≥60 calls today) → deterministic fallback. Stop.
-3. `aiStatus == .sleepy` (≥30 calls today) → non-essential tasks take the fallback; `deep` tasks
-   the user explicitly invoked still run.
+3. `aiStatus == .sleepy` (≥30 calls today) → **ambient/background tasks take the fallback; any task
+   the user explicitly invoked still runs** (regardless of tier). "Non-essential" is read as
+   ambient/background work (day summaries, thought bubbles, memory work, the share-extension queue
+   drain), *not* a tier distinction. (Revised 2026-07-24 from the earlier "`deep` tasks the user
+   explicitly invoked still run": under the literal tier reading the app's primary action — meal
+   logging, a `standard` user tap — would silently degrade after ~15–30 meals; the sleepy band is a
+   soft-throttle that reserves the tail of the budget for explicitly-invoked work, so it keys off
+   invocation class, not tier. Shipped in `FernletModelRouter.resolve`'s `.sleepy` branch: fall back
+   iff `!userInvoked`.)
 4. Resolve the preferred destination for `T`, capped by device capability (§10.1), the user's
    ceiling, and per-feature opt-in.
 5. On unavailable / error / timeout / schema-validation failure → **step down one rung**, retry once.

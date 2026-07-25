@@ -8,6 +8,10 @@ public enum FernletVoice: CaseIterable, Sendable {
     case journalAnalysisQueued
     case retryAvailable
     case aiUnavailable
+    /// The daily on-device AI budget is spent for today (`.sleepy` / `.resting` overlay). Distinct
+    /// from `.aiUnavailable` (AI switched off): the helper is capable and enabled, just resting until
+    /// the counter resets at midnight. Surfaced on quota fallback per Ladder §3.2 step 6.
+    case aiResting
 
     public static func message(for voice: FernletVoice) -> String {
         switch voice {
@@ -21,6 +25,8 @@ public enum FernletVoice: CaseIterable, Sendable {
             "A few saved notes can be revisited when you are ready."
         case .aiUnavailable:
             "The quiet helper is off right now, so Fernlet will use local fallbacks."
+        case .aiResting:
+            "The quiet helper is resting for today. Fernlet will use local care until tomorrow."
         }
     }
 }

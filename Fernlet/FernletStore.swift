@@ -1773,9 +1773,21 @@ final class FernletStore {
             }
 
             do {
-                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: foodCatalog, aiEnabled: settings.aiStatus != .off, gate: aiGate)
+                // Ambient drain: userInvoked=false, so the `.sleepy` band falls back and the daily
+                // budget is reserved for the user's own taps. A JSON-LD page still imports here without
+                // AI (that path runs before any gate check), so a resting device only defers pages that
+                // genuinely need the model.
+                let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: foodCatalog, aiEnabled: settings.aiStatus != .off, userInvoked: false, gate: aiGate)
                 addSavedRecipe(RecipeDefinition(importedRecipe: importedRecipe))
                 queue.remove(record)
+            } catch RecipeWebImportError.aiBudgetExhausted {
+                // Transient daily-budget fallback (clears at midnight) — NOT the page's fault. Leave the
+                // record untouched (no `markAttempt`, no removal) so tomorrow's drain retries it with a
+                // fresh budget instead of burning one of its finite attempts.
+                FernletAuditLog.log("recipe.shareExtensionImport.deferred", context: [
+                    "host": url.host() ?? "unknown",
+                    "reason": "aiBudgetExhausted"
+                ])
             } catch {
                 let description = (error as? LocalizedError)?.errorDescription ?? "Could not import that recipe."
                 queue.markAttempt(record, errorDescription: description)

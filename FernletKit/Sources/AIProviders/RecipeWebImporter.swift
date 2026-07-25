@@ -48,6 +48,11 @@ public enum RecipeWebImportError: LocalizedError {
     case noRecipeFound
     case modelUnavailable
     case incompleteRecipe
+    /// The device is capable of on-device extraction, but today's AI budget is spent
+    /// (`.resting` / `.sleepy` ambient) — a TRANSIENT state that clears at midnight. Distinct from
+    /// `.modelUnavailable` (a persistent device incapability) so a deferred queue can retry tomorrow
+    /// instead of burning a finite retry attempt on a state that isn't the page's fault.
+    case aiBudgetExhausted
 
     public var errorDescription: String? {
         switch self {
@@ -63,6 +68,8 @@ public enum RecipeWebImportError: LocalizedError {
             "On-device recipe extraction is not available on this device."
         case .incompleteRecipe:
             "The extracted recipe was missing a name or ingredients."
+        case .aiBudgetExhausted:
+            "The quiet helper is resting for today. I'll try this recipe again tomorrow."
         }
     }
 }
@@ -72,11 +79,14 @@ public enum RecipeWebImporter {
 
     /// - Parameter aiEnabled: When false, the FoundationModels fallback is skipped so that
     ///   users who have disabled AI are not silently opted in via recipe import.
-    /// - Parameter gate: routes the on-device model dispatch (`standard` tier, user-invoked — the user
-    ///   pasted a recipe URL). The gate caps by device capability, applies the sleepy/resting budget,
-    ///   and charges one call; a fallback result surfaces as `.modelUnavailable`, matching the prior
-    ///   no-on-device-model behavior.
-    public static func importRecipe(from url: URL, catalog: FoodCatalog, aiEnabled: Bool, gate: FernletAIGate) async throws -> ImportedRecipe {
+    /// - Parameter gate: routes the on-device model dispatch (`standard` tier). The gate caps by device
+    ///   capability, applies the sleepy/resting budget, and charges one call; a persistent fallback
+    ///   surfaces as `.modelUnavailable`, a transient budget fallback as `.aiBudgetExhausted`.
+    /// - Parameter userInvoked: `true` for a foreground tap (the user pasted a recipe URL and is
+    ///   waiting); `false` for the ambient share-extension queue drain. Ambient work falls back in the
+    ///   `.sleepy` band (a user tap still runs), so the drain leaves the record queued for tomorrow
+    ///   rather than consuming a retry attempt on a state that clears at midnight.
+    public static func importRecipe(from url: URL, catalog: FoodCatalog, aiEnabled: Bool, userInvoked: Bool, gate: FernletAIGate) async throws -> ImportedRecipe {
         guard isSafePublicHTTPSURL(url) else {
             throw RecipeWebImportError.invalidURL
         }
@@ -91,7 +101,7 @@ public enum RecipeWebImporter {
         }
 
         let cleanedText = try cleanedBodyText(from: html)
-        return try await extractWithFoundationModel(from: cleanedText, sourceURL: url, catalog: catalog, gate: gate)
+        return try await extractWithFoundationModel(from: cleanedText, sourceURL: url, catalog: catalog, userInvoked: userInvoked, gate: gate)
     }
 
     private static func fetchHTML(from url: URL) async throws -> String {
@@ -214,11 +224,23 @@ public enum RecipeWebImporter {
         return String(normalized.prefix(12_000))
     }
 
-    private static func extractWithFoundationModel(from text: String, sourceURL: URL, catalog: FoodCatalog, gate: FernletAIGate) async throws -> ImportedRecipe {
+    private static func extractWithFoundationModel(from text: String, sourceURL: URL, catalog: FoodCatalog, userInvoked: Bool, gate: FernletAIGate) async throws -> ImportedRecipe {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, visionOS 26.0, *) {
-            guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else {
-                throw RecipeWebImportError.modelUnavailable
+            let destination: AIDestination
+            switch gate.resolveRoute(tier: .standard, userInvoked: userInvoked) {
+            case .destination(let resolved):
+                destination = resolved
+            case .deterministicFallback(let reason):
+                // A transient daily-budget fallback (clears at midnight) is distinct from a persistent
+                // device incapability: the caller (share-extension queue) uses this to decide whether
+                // to retry tomorrow vs. give up.
+                switch reason {
+                case .resting, .sleepy:
+                    throw RecipeWebImportError.aiBudgetExhausted
+                default:
+                    throw RecipeWebImportError.modelUnavailable
+                }
             }
 
             let payload = RecipeExtractionPayload(
