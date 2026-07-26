@@ -414,7 +414,8 @@ struct HeartDropAppWiringTests {
         let problems: [HeartDropService.DeliveryProblem] = [
             .noAccount,
             .uploadFailing(since: Date(timeIntervalSince1970: 1_780_000_000)),
-            .undeliverable(count: 3)
+            .undeliverable(count: 3),
+            .storageUnavailable
         ]
         for problem in problems {
             #expect(AwayHeartsCopy.friendRowLine(for: problem)?.isEmpty == false, "no friend-row copy for \(problem)")
