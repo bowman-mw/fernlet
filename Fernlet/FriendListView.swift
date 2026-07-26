@@ -483,7 +483,11 @@ struct FriendListView: View {
         }
 
         if onCooldown {
-            Text("You just sent \(firstName) some warmth — hearts settle for a few minutes.")
+            // An unloaded ledger also reads as "on cooldown" (fail-closed refuse) — but the
+            // cooldown copy would be a lie there, so say what is actually wrong (Track A).
+            Text(store.heartLedger.isLoaded
+                 ? "You just sent \(firstName) some warmth — hearts settle for a few minutes."
+                 : "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
