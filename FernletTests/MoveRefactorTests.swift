@@ -378,4 +378,29 @@ struct MoveRefactorTests {
         #expect(!source.contains("addWorkoutFocusTag"))
         #expect(!source.contains("removeWorkoutFocusTag"))
     }
+
+    // MARK: - Coach plan-source tag gate (Increment 8, Plan-Prekeys-ProtectedLoad-CoachMesh)
+
+    /// The tag gate keys off coach-sourced plans actually existing in the user's days — NOT the
+    /// proximity audit, which every mode writes (a friend-mesh user is not a coach client).
+    @Test func coachPlanSourceTagRequiresACoachSourcedPlan() {
+        let coachPlan = PlannedWorkout(
+            name: "Week 3 push", split: .upper, source: .coach, notes: "", duration: nil)
+        let userPlan = PlannedWorkout(
+            name: "Own plan", split: .workout, source: .user, notes: "", duration: nil)
+
+        let emptyToday = FernletDay(date: "2026-07-26")
+        #expect(!MoveView.hasCoachSourcedPlans(in: [:], today: emptyToday))
+
+        // A friend-mesh user with only self-authored plans: no tag.
+        let userOnly = FernletDay(date: "2026-07-25", plannedWorkouts: [userPlan])
+        #expect(!MoveView.hasCoachSourcedPlans(in: ["2026-07-25": userOnly], today: emptyToday))
+
+        // A coach plan in a loaded day, or in today's (possibly not-yet-reloaded) day: tag.
+        let coachDay = FernletDay(date: "2026-07-24", plannedWorkouts: [coachPlan, userPlan])
+        #expect(MoveView.hasCoachSourcedPlans(
+            in: ["2026-07-25": userOnly, "2026-07-24": coachDay], today: emptyToday))
+        let coachToday = FernletDay(date: "2026-07-26", plannedWorkouts: [coachPlan])
+        #expect(MoveView.hasCoachSourcedPlans(in: [:], today: coachToday))
+    }
 }

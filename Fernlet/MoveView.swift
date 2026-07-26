@@ -59,10 +59,21 @@ struct MoveView: View {
         }
     }
 
-    private var hasRecentCoachInteraction: Bool {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: .now) ?? .now
-        return store.trainerAuditEvents.contains { event in
-            event.timestamp >= cutoff && [.peerAccepted, .envelopeReceived, .envelopeSent].contains(event.kind)
+    /// Gate for the Coach/User plan-source tag: coach-sourced plans actually exist in the
+    /// user's days. The previous gate scanned `trainerAuditEvents` — but that log is the
+    /// GENERIC proximity audit, written by every mode on every state transition and envelope,
+    /// so any friend-mesh user got tagged as having a coach (Increment 8 of
+    /// Docs/Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md).
+    private var showsCoachPlanSourceTag: Bool {
+        Self.hasCoachSourcedPlans(in: allDays, today: store.day)
+    }
+
+    /// Static so it is testable: a private view computed cannot be (the `AwayHeartsCopy`
+    /// precedent).
+    static func hasCoachSourcedPlans(in days: [String: FernletDay], today: FernletDay) -> Bool {
+        if today.plannedWorkouts.contains(where: { $0.source == .coach }) { return true }
+        return days.values.contains { day in
+            day.plannedWorkouts.contains { $0.source == .coach }
         }
     }
 
@@ -103,7 +114,7 @@ struct MoveView: View {
                         todayKey: store.todayKey,
                         selectedGoal: store.settings.selectedGoal,
                         goals: store.goals,
-                        showsPlanSourceTag: hasRecentCoachInteraction,
+                        showsPlanSourceTag: showsCoachPlanSourceTag,
                         onDayTapped: { key in path.append(key) }
                     )
 
@@ -114,7 +125,7 @@ struct MoveView: View {
                             ForEach(Array(store.day.plannedWorkouts.enumerated()), id: \.element.id) { index, plannedWorkout in
                                 PlannedWorkoutRow(
                                     plannedWorkout: plannedWorkout,
-                                    showsPlanSourceTag: hasRecentCoachInteraction,
+                                    showsPlanSourceTag: showsCoachPlanSourceTag,
                                     showsCompleteAction: true,
                                     onComplete: {
                                         store.completePlannedWorkout(plannedWorkout, date: store.todayKey)
@@ -176,7 +187,7 @@ struct MoveView: View {
             .background(Color.parchment)
             .navigationTitle("")
             .navigationDestination(for: String.self) { dateKey in
-                MoveDayDetailView(store: store, dateKey: dateKey, showsPlanSourceTag: hasRecentCoachInteraction)
+                MoveDayDetailView(store: store, dateKey: dateKey, showsPlanSourceTag: showsCoachPlanSourceTag)
                     .onDisappear { allDays = store.loadDays() }
             }
             #if canImport(UIKit)
