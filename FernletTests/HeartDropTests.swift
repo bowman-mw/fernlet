@@ -80,7 +80,8 @@ struct HeartDropTests {
     private func makeBundle(
         keyCount: Int = 1,
         created: Date,
-        lifetime: TimeInterval = 30 * 24 * 3600
+        lifetime: TimeInterval = 30 * 24 * 3600,
+        signedPrekey: HeartPrekeyStore.SignedPrekey? = nil
     ) -> HeartPrekeyStore.Bundle {
         let keys = (0..<keyCount).map { _ in
             HeartPrekeyStore.PrekeyEntry(
@@ -92,7 +93,17 @@ struct HeartDropTests {
             bundleID: UUID(),
             created: created,
             expires: created.addingTimeInterval(lifetime),
-            keys: keys
+            keys: keys,
+            signedPrekey: signedPrekey
+        )
+    }
+
+    private func makeSignedPrekey(created: Date) -> HeartPrekeyStore.SignedPrekey {
+        HeartPrekeyStore.SignedPrekey(
+            id: UUID(),
+            publicKey: Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation,
+            created: created,
+            expires: created.addingTimeInterval(7 * 24 * 3600)
         )
     }
 
@@ -1468,5 +1479,213 @@ struct HeartDropTests {
         service.wipeForDeleteAll()
         #expect(KeychainItem.load(account: "sidecarSealKey", service: prekeySvc) == nil)
         #expect(!FileManager.default.fileExists(atPath: outboxURL.path))
+    }
+
+    // MARK: - Signed prekey (Track B, Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26)
+
+    /// THE migration risk of Track B: `StoredState.signedPrekeys` must decode as absent from a
+    /// pre-change keychain blob. A decode failure would classify the blob as corrupt → empty →
+    /// mint fresh, stranding the private halves of prekeys already gossiped — every in-flight
+    /// drop would then silently fail to open.
+    @Test func preChangePrekeyBlobDecodesAndKeepsGossipedHalves() throws {
+        let svc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: svc) }
+        let clock = TestClock()
+
+        // The captured pre-change shape: {"bundles":[{"bundle":{…},"privateKeys":[…]}]} — no
+        // signedPrekeys key anywhere (asserted below so the fixture can't silently drift).
+        struct LegacyStoredBundle: Codable {
+            var bundle: HeartPrekeyStore.Bundle
+            var privateKeys: [Data]
+        }
+        struct LegacyStoredState: Codable {
+            var bundles: [LegacyStoredBundle]
+        }
+        let privateKey = Curve25519.KeyAgreement.PrivateKey()
+        let gossipedID = UUID()
+        let legacy = LegacyStoredState(bundles: [LegacyStoredBundle(
+            bundle: HeartPrekeyStore.Bundle(
+                bundleID: UUID(),
+                created: clock.date,
+                expires: clock.date.addingTimeInterval(30 * 24 * 3600),
+                keys: [HeartPrekeyStore.PrekeyEntry(
+                    id: gossipedID, publicKey: privateKey.publicKey.rawRepresentation)]),
+            privateKeys: [privateKey.rawRepresentation])])
+        let blob = try JSONEncoder().encode(legacy)
+        let json = try #require(String(data: blob, encoding: .utf8))
+        #expect(!json.contains("signedPrekey"), "fixture must really be the pre-change shape")
+        KeychainItem.store(
+            blob, account: "prekeyPrivateHalves", service: svc,
+            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly, synchronizable: false)
+
+        let store = HeartPrekeyStore(keychainService: svc, now: { clock.date })
+        #expect(store.privateKey(forPrekeyID: gossipedID) != nil,
+                "pre-change private halves stay resolvable")
+        let bundle = try #require(store.currentBundle())
+        #expect(bundle.keys.map(\.id).contains(gossipedID),
+                "the stored bundle survives — it is not minted over")
+        #expect(bundle.signedPrekey != nil, "and gains a fresh signed prekey")
+        #expect(store.privateKey(forPrekeyID: gossipedID) != nil)
+    }
+
+    /// Same shape as `senderDailyCapMatchesTheReceiverBudget`: the constants may move, the
+    /// invariants may not.
+    @Test func spkRetentionInvariantsHold() {
+        // A drop sealed at the very end of the SPK seal window can sit the full outbox lifetime
+        // (plus tolerated clock skew) before its last legitimate open. Retention must cover
+        // that whole gap — violating this silently loses hearts (the recipient just fails
+        // `open` and returns).
+        #expect(HeartPrekeyStore.spkRetention >=
+                HeartDropPeerBundleCache.maxSealSignedPrekeyAge
+                + HeartDropOutbox.entryLifetime
+                + HeartDropService.createdAtSkewTolerance)
+        // O2: nothing Track B introduces is ever the longest-lived key on the device.
+        #expect(HeartPrekeyStore.spkRetention <
+                HeartPrekeyStore.bundleLifetime + HeartPrekeyStore.expiryGrace)
+    }
+
+    @Test func signedPrekeyRotatesWeeklyAndRetainsRotatedOutHalves() throws {
+        let svc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: svc) }
+        let clock = TestClock()
+        let store = HeartPrekeyStore(keychainService: svc, now: { clock.date })
+
+        let spk0 = try #require(store.currentBundle()?.signedPrekey)
+        clock.advance(3 * 24 * 3600)
+        #expect(store.currentBundle()?.signedPrekey?.id == spk0.id, "stable inside the rotation window")
+
+        clock.advance(5 * 24 * 3600) // day 8 — past the rotation deadline
+        let spk1 = try #require(store.currentBundle()?.signedPrekey)
+        #expect(spk1.id != spk0.id)
+        #expect(store.privateKey(forPrekeyID: spk0.id) != nil,
+                "rotated-out halves stay resolvable for in-flight drops")
+
+        clock.advance(30 * 24 * 3600) // day 38 — both are past their 29-day retention
+        _ = store.currentBundle() // the prune tick
+        #expect(store.privateKey(forPrekeyID: spk0.id) == nil)
+        #expect(store.privateKey(forPrekeyID: spk1.id) == nil)
+    }
+
+    /// The two cache slots are independent: consuming one-time keys falls through to the SPK,
+    /// the SPK is reusable, an SPK-only refresh never wipes the one-time slot's consumption,
+    /// and older gossip rolls back neither slot.
+    @Test func signedPrekeySlotIsIndependentOfTheOneTimeSlot() throws {
+        let clock = TestClock()
+        let cache = HeartDropPeerBundleCache(fileURL: tempFile("bundles.json"), now: { clock.date })
+        let friend = Data([9])
+        let t0 = clock.date
+
+        let spk1 = makeSignedPrekey(created: t0)
+        cache.store(bundle: makeBundle(keyCount: 1, created: t0, signedPrekey: spk1),
+                    forFriendSigningKey: friend)
+
+        let first = try #require(cache.consumePrekey(forFriendSigningKey: friend))
+        #expect(first.isOneTime, "one-time keys carry the seal while any are left")
+        let second = try #require(cache.consumePrekey(forFriendSigningKey: friend))
+        #expect(!second.isOneTime)
+        #expect(second.id == spk1.id, "exhausted one-time slot falls through to the SPK")
+        #expect(cache.consumePrekey(forFriendSigningKey: friend)?.id == spk1.id, "the SPK is reusable")
+
+        // An SPK-only refresh (no one-time keys) rotates the SPK slot without touching the
+        // one-time slot — the consumed mark stays consumed.
+        clock.advance(3600)
+        let spk2 = makeSignedPrekey(created: clock.date)
+        cache.store(bundle: makeBundle(keyCount: 0, created: clock.date, signedPrekey: spk2),
+                    forFriendSigningKey: friend)
+        let third = try #require(cache.consumePrekey(forFriendSigningKey: friend))
+        #expect(third.id == spk2.id)
+        #expect(!third.isOneTime, "the one-time slot's consumption survived the SPK-only refresh")
+
+        // Older gossip (an intro built before the rotation, arriving late) rolls back neither.
+        cache.store(bundle: makeBundle(keyCount: 4, created: t0.addingTimeInterval(-3600), signedPrekey: spk1),
+                    forFriendSigningKey: friend)
+        let fourth = try #require(cache.consumePrekey(forFriendSigningKey: friend))
+        #expect(fourth.id == spk2.id, "older gossip must not roll back either slot")
+    }
+
+    /// The SPK has its own seal window (14 d), longer than the one-time bundle's 7 d — but past
+    /// it the cache falls back to the static key, exactly like a stale one-time bundle.
+    @Test func staleSignedPrekeyIsNotSealedTo() {
+        let clock = TestClock()
+        let cache = HeartDropPeerBundleCache(fileURL: tempFile("bundles.json"), now: { clock.date })
+        let friend = Data([9])
+        let spk = makeSignedPrekey(created: clock.date)
+        cache.store(bundle: makeBundle(keyCount: 1, created: clock.date, signedPrekey: spk),
+                    forFriendSigningKey: friend)
+
+        clock.advance(10 * 24 * 3600) // day 10: one-time slot stale (> 7 d), SPK fresh (≤ 14 d)
+        #expect(cache.consumePrekey(forFriendSigningKey: friend)?.id == spk.id)
+
+        clock.advance(5 * 24 * 3600) // day 15: SPK past its 14-day seal window too
+        #expect(cache.consumePrekey(forFriendSigningKey: friend) == nil)
+    }
+
+    /// The end-to-end coverage win, at the retention edge: a friend last seen 13 days ago gets
+    /// an SPK-sealed drop (not static), and the drop still opens after sitting almost the full
+    /// outbox lifetime — the scenario the retention invariant exists to protect. Past retention
+    /// the private half is gone (clean failure).
+    @Test func aHeartSealedToTheSignedPrekeyOpensAtTheRetentionEdge() async throws {
+        let (sender, senderID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: senderID) }
+        let (recipient, recipientID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: recipientID) }
+        let senderPrekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: senderPrekeySvc) }
+        let recipientPrekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: recipientPrekeySvc) }
+
+        let clock = TestClock()
+        let transport = MockDropTransport()
+        let recipientRecord = makeFriendRecord(of: recipient, name: "Bobby Fern")
+        let senderRecord = makeFriendRecord(of: sender, name: "Alice Fern")
+        let senderService = makeService(
+            identity: sender, prekeyService: senderPrekeySvc,
+            ledger: ProximityHeartLedger(fileURL: tempFile("s-ledger.json"), now: { clock.date }),
+            friends: { [recipientRecord] }, transport: transport, clock: clock)
+        let recipientLedger = ProximityHeartLedger(fileURL: tempFile("r-ledger.json"), now: { clock.date })
+        let recipientPrekeys = HeartPrekeyStore(keychainService: recipientPrekeySvc, now: { clock.date })
+        let recipientService = HeartDropService(
+            ledger: recipientLedger,
+            isEnabled: { true },
+            activeFriends: { [senderRecord] },
+            localDayKey: { FernletDate.dayKey(for: $0) },
+            displayName: { "Bobby" },
+            identity: recipient,
+            prekeys: recipientPrekeys,
+            peerBundles: HeartDropPeerBundleCache(fileURL: tempFile("rb.json"), now: { clock.date }),
+            outbox: HeartDropOutbox(fileURL: tempFile("ro.json"), now: { clock.date }),
+            dedup: HeartDropDedupStore(fileURL: tempFile("rd.json"), now: { clock.date }),
+            now: { clock.date }
+        )
+        recipientService.transport = transport
+
+        // Day 0: they meet; the sender caches the recipient's gossiped bundle (16 one-time
+        // keys + the SPK).
+        let bundle = try #require(recipientService.currentLocalBundle())
+        let spkID = try #require(bundle.signedPrekey?.id)
+        senderService.storePeerBundle(bundle, friendSigningKey: recipient.localSigningPublicKey)
+
+        // Day 13: the one-time slot is stale (7-day seal window) — without the SPK this heart
+        // would fall all the way back to the static key. The SPK (14-day window) carries it.
+        clock.advance(13 * 24 * 3600)
+        #expect(senderService.queueHeart(to: recipientRecord) == .queued)
+        await senderService.syncOnce()
+        #expect(transport.records.count == 1)
+        let wire = try #require(transport.records.first?.payload)
+        let expectedID = withUnsafeBytes(of: spkID.uuid) { Data($0) }
+        #expect(wire.subdata(in: 1..<17) == expectedID, "the wire names the SPK, not static (zeros)")
+
+        // Day 26.8: the drop sat almost its whole 14-day lifetime. SPK age is ~27 days — inside
+        // the 29-day retention, so it opens.
+        clock.advance(13 * 24 * 3600 + 20 * 3600)
+        await recipientService.syncOnce()
+        #expect(recipientLedger.receivedHearts.count == 1)
+        #expect(recipientLedger.receivedHearts.first?.senderFingerprint == sender.localFingerprint)
+
+        // Day 30: past retention the private half is pruned — the clean-failure side of the
+        // invariant (anything sealed this late is already outside every legitimate window).
+        clock.advance(4 * 24 * 3600)
+        _ = recipientPrekeys.currentBundle() // the prune tick
+        #expect(recipientPrekeys.privateKey(forPrekeyID: spkID) == nil)
     }
 }
