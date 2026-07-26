@@ -1,6 +1,7 @@
 import Foundation
 import CloudKit
 import FernletDomainModel
+import FernletFoundation
 
 /// CloudKit PUBLIC-database ferry for heart drops (bitchat adoptions Increment 3,
 /// Docs/Plan-Bitchat-Adoptions-2026-07-25.md) — the app's first public-DB use.
@@ -20,8 +21,18 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
     public static let recordType = "HeartDrop"
     static let tagField = "tag"
     static let payloadField = "payload"
-    /// CloudKit `IN` predicates degrade past ~portions of this; fetches chunk the tag list.
-    static let fetchChunkSize = 50
+    /// CloudKit `IN` predicates degrade past ~portions of this; fetches chunk the tag list. Kept
+    /// deliberately small: one query page is shared by every tag in a chunk, so a friend flooding
+    /// their own valid tag crowds out the other tags in the SAME chunk first. Smaller chunks mean
+    /// fewer peers can be starved by one hostile writer (the pickup window is 15 tags per friend
+    /// since it was aligned to the outbox lifetime, so this is ~1.3 friends per chunk).
+    static let fetchChunkSize = 20
+    /// Safety cap on records pulled in one `fetch(tags:)`. A truncated fetch is LOGGED, never
+    /// silent — the remaining records stay on the server and the next sync picks them up.
+    static let maxRecordsPerFetch = 500
+    /// Belt-and-braces bound on cursor follows per chunk, so a server that keeps handing back a
+    /// non-nil cursor can't spin the sync forever.
+    static let maxPagesPerChunk = 40
 
     // CKContainer/CKDatabase are documented thread-safe — the @unchecked Sendable is these two
     // immutable references only.
@@ -45,9 +56,14 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
         return saved.recordID.recordName
     }
 
+    /// Paginated: CloudKit returns one page plus a cursor, and dropping the cursor meant only the
+    /// first page of each chunk was ever read — one hostile writer flooding a single valid tag
+    /// could then starve every other tag in that chunk indefinitely.
     public func fetch(tags: [String]) async throws -> [HeartDropRecord] {
         guard !tags.isEmpty else { return [] }
         var results: [HeartDropRecord] = []
+        var truncated = false
+
         for chunk in stride(from: 0, to: tags.count, by: Self.fetchChunkSize).map({
             Array(tags[$0..<min($0 + Self.fetchChunkSize, tags.count)])
         }) {
@@ -55,13 +71,31 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
                 recordType: Self.recordType,
                 predicate: NSPredicate(format: "%K IN %@", Self.tagField, chunk)
             )
-            let (matches, _) = try await database.records(matching: query)
-            for (recordID, result) in matches {
-                guard let record = try? result.get(),
-                      let tag = record[Self.tagField] as? String,
-                      let payload = record[Self.payloadField] as? Data else { continue }
-                results.append(HeartDropRecord(tag: tag, payload: payload, recordName: recordID.recordName))
+            var page = try await database.records(matching: query)
+            var pagesRead = 1
+            while true {
+                for (recordID, result) in page.matchResults {
+                    guard let record = try? result.get(),
+                          let tag = record[Self.tagField] as? String,
+                          let payload = record[Self.payloadField] as? Data else { continue }
+                    results.append(HeartDropRecord(tag: tag, payload: payload, recordName: recordID.recordName))
+                }
+                guard results.count < Self.maxRecordsPerFetch else { truncated = true; break }
+                guard let cursor = page.queryCursor, pagesRead < Self.maxPagesPerChunk else {
+                    if page.queryCursor != nil { truncated = true }
+                    break
+                }
+                page = try await database.records(continuingMatchFrom: cursor)
+                pagesRead += 1
             }
+            if truncated { break }
+        }
+
+        if truncated {
+            FernletAuditLog.log("heartdrop.fetch.truncated", context: [
+                "records": "\(results.count)",
+                "tags": "\(tags.count)"
+            ])
         }
         return results
     }

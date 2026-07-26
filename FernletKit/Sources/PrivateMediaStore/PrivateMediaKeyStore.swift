@@ -64,11 +64,18 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
         cachedKey = nil
     }
 
-    /// Delete-all seam (Docs/PrivacyWipeCoverage.md): removes the shared at-rest media key row.
-    /// Static because the row is one keychain item shared by every `PrivateMediaStore` instance —
-    /// per-store `deleteAll()` must NEVER touch it (clearing one store would orphan the others'
-    /// remaining photos). Only the global delete-all calls this, after all stores were emptied.
-    /// `mediaKey()` mints a fresh key on next use; keychain not-found counts as done.
+    /// Removes the shared at-rest media key row. **Deliberately has no callers** — do not add one.
+    ///
+    /// The row is a single keychain item shared by EVERY `PrivateMediaStore`, including the friend
+    /// photo wall's cache, which survives "Delete everything" by design (product decision: friends'
+    /// shared photos are the friends' gift, removed one at a time). Delete-all used to call this on
+    /// the premise that every media store had been emptied first; that premise is false for exactly
+    /// the one store deliberately left full, so the call silently destroyed the wall — the photos
+    /// kept rendering from the in-memory key until relaunch, then `mediaKey()` minted a fresh key
+    /// and every retained photo decrypted to garbage. See Docs/PrivacyWipeCoverage.md.
+    ///
+    /// Kept as API only for a future caller that first empties the wall too. A key whose stores are
+    /// all empty protects nothing, so leaving the row in place leaks nothing.
     public static func deleteKeychainRowForWipe() {
         KeychainItem.delete(account: account, service: service)
     }

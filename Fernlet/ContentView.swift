@@ -854,8 +854,26 @@ struct ContentView: View {
         // Away-hearts drop sync (bitchat adoptions Increment 3): piggybacks the same
         // scene/tab/lock listener chain — reentrancy-guarded inside the service and a consent-
         // gated no-op while `heartsAwayDelivery` is off, so this costs nothing when unused.
+        //
+        // This chain fires on every tab switch, scene change and lock change, and each pass is a
+        // full public-database round trip (account check + upload flush + a tag query per friend +
+        // cleanup). `syncNow()` rate-limits itself to `HeartDropService.minimumSyncInterval` — the
+        // floor lives in the service so every caller inherits it. Sends are unaffected: `queueHeart`
+        // schedules its own pass directly, so a heart still leaves immediately.
         if scenePhase == .active {
             store.heartDropService.syncNow()
+            // Consent is off but our own records may still be on the public database. Retrying here
+            // is what keeps "off" eventually true; it self-cancels once nothing is outstanding.
+            //
+            // The condition is DERIVED (consent off AND the outbox still names uploaded records),
+            // not a flag the toggle set, so this one call covers three cases the old wiring missed:
+            // a purge that failed at toggle-off, a purge still owed from a PREVIOUS launch (a
+            // process flag died with the process; the outbox did not), and consent withdrawn on
+            // ANOTHER device — `heartsAwayDelivery` rides the synced snapshot, so it lands here as a
+            // state change that never runs this device's setter. The launch `.task` reaches this
+            // same chain (via `updateRecipeShareListener`), which is what makes the relaunch case
+            // fire without waiting for a scene transition.
+            store.retryHeartsAwayPurgeIfNeeded()
         }
     }
 

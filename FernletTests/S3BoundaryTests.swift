@@ -14,6 +14,10 @@ import FernletDomainModel
 /// new on-device-AI call site is auto-covered. A hard-coded FLOOR additionally pins the known boundary
 /// files — including the de-identification types that do not themselves use the API — and fails loudly
 /// if one is renamed/moved out of coverage (no silent fail-soft).
+///
+/// It also carries the proximity ↔ cloud rule (`proximityAndCloudSyncDoNotImportEachOther`), which the
+/// compiler wall structurally CANNOT enforce: `CloudKit` is an SDK framework, and
+/// `DIAGNOSE_MISSING_TARGET_DEPENDENCIES` only diagnoses missing dependencies on package targets.
 struct S3BoundaryTests {
     /// Roots scanned for AI-facing sources: the whole app target (which lives OUTSIDE the compiler
     /// wall) plus the two package modules that build/relay AI payloads (belt-and-suspenders — these are
@@ -194,6 +198,83 @@ struct S3BoundaryTests {
         // The exemption is token-scoped: it does NOT let the gate reach a different sealed store.
         let leakyGate = "import PrivateHealthStore\nfunc f(_ m: [TierTwoMemoryRecord]) {}"
         #expect(hits(leakyGate, file: "MemoryAgent.swift").contains("import PrivateHealthStore"))
+    }
+
+    /// The proximity ↔ cloud separation, which the plan credits to the compiler wall but the compiler
+    /// wall cannot enforce: `DIAGNOSE_MISSING_TARGET_DEPENDENCIES` diagnoses missing dependencies on
+    /// PACKAGE targets, and `CloudKit` is an SDK framework — importing it needs no package edge, so it
+    /// compiles clean from anywhere. This grep rule is the actual enforcement.
+    ///
+    /// Both directions matter, for different reasons:
+    /// - ProximityKit must not import CloudKit. The mesh subsystem is the one place that holds
+    ///   transport-verified peer identities and unsealed peer payloads; a CKDatabase call from inside
+    ///   it would put that data on a server without passing the app-layer seal/dead-drop seam. The
+    ///   heart dead-drop is the deliberate shape: ProximityKit defines `HeartDropTransporting` and the
+    ///   app injects CloudKitSync's implementation, which only ever sees rotating day tags + ciphertext.
+    /// - CloudKitSync must not import ProximityKit. It is the walled sync module; reaching the identity
+    ///   service or a wire payload type would let it sync something richer than the sealed blobs it is
+    ///   allowed to carry, and would invert that injection seam.
+    ///
+    /// Comments naming CloudKit are fine and expected (the dead-drop is documented in both modules) —
+    /// only an actual `import` line is a breach.
+    @Test func proximityAndCloudSyncDoNotImportEachOther() throws {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+
+        for (module, forbidden) in [
+            ("FernletKit/Sources/ProximityKit", "CloudKit"),
+            ("FernletKit/Sources/CloudKitSync", "ProximityKit")
+        ] {
+            let moduleURL = repoRoot.appendingPathComponent(module)
+            var scanned = 0
+            guard let enumerator = FileManager.default.enumerator(at: moduleURL, includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(module) — moved or renamed? The proximity/cloud wall is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                let source = try String(contentsOf: url, encoding: .utf8)
+                scanned += 1
+                let offending = Self.importedModules(in: source).filter { $0 == forbidden }
+                #expect(
+                    offending.isEmpty,
+                    "\(url.lastPathComponent) imports \(forbidden) — \(module) must reach it only through an injected seam (e.g. HeartDropTransporting), never directly."
+                )
+            }
+            // A broken path would otherwise pass vacuously.
+            #expect(scanned > 0, "Scanned zero Swift files under \(module) — discovery is broken.")
+        }
+    }
+
+    /// Fixture: the import matcher sees real import lines (including attributed ones) and does NOT see
+    /// a module named in prose, in a string, or as part of a longer module name.
+    @Test func importMatcherSeesOnlyRealImports() {
+        #expect(S3BoundaryTests.importedModules(in: "import CloudKit").contains("CloudKit"))
+        #expect(S3BoundaryTests.importedModules(in: "  @preconcurrency import CloudKit  ").contains("CloudKit"))
+        #expect(S3BoundaryTests.importedModules(in: "@testable import ProximityKit").contains("ProximityKit"))
+        #expect(S3BoundaryTests.importedModules(in: "import CloudKit.CKDatabase").contains("CloudKit"))
+
+        #expect(!S3BoundaryTests.importedModules(in: "// the CloudKit dead-drop (Increment 3)").contains("CloudKit"))
+        #expect(!S3BoundaryTests.importedModules(in: "/// Set by CloudKitSync's HeartDropCloudTransport").contains("CloudKit"))
+        #expect(!S3BoundaryTests.importedModules(in: "import CloudKitSync").contains("CloudKit"))
+        #expect(!S3BoundaryTests.importedModules(in: #"let s = "import CloudKit""#).contains("CloudKit"))
+    }
+
+    /// The modules `source` imports: the first path component of every `import` DECLARATION, so
+    /// submodule imports (`import CloudKit.CKDatabase`) still report their top-level module while a
+    /// longer module name (`CloudKitSync`) is never confused for it. Attribute prefixes
+    /// (`@preconcurrency`, `@testable`) are tolerated; anything after a leading `//` is not an import.
+    static func importedModules(in source: String) -> Set<String> {
+        var modules: Set<String> = []
+        for line in source.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("//") else { continue }
+            var tokens = trimmed.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+            while let first = tokens.first, first.hasPrefix("@") { tokens.removeFirst() }
+            guard tokens.first == "import", tokens.count >= 2 else { continue }
+            modules.insert(tokens[1].split(separator: ".").map(String.init).first ?? tokens[1])
+        }
+        return modules
     }
 
     /// F12: identifier-boundary matching must NOT fire on a sealed token embedded in a longer,

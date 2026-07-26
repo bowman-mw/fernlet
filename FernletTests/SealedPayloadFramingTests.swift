@@ -138,6 +138,150 @@ struct SealedPayloadFramingTests {
         #expect(opened == payload)
     }
 
+    // MARK: - The 0x7B compatibility invariant
+
+    // SealedPayloadFraming's load-bearing precondition (its file header): every legacy (unframed)
+    // sealed body in this codebase is a JSON OBJECT, first byte 0x7B, which is what makes 0x01/0x02
+    // collision-free frame tags. Before this it was prose, enforced by nothing — and the tolerant
+    // receive path (`hasFrameTag` + the sender's advertised `wire2`) silently mis-reads any sealed
+    // body that starts with a tag byte.
+    //
+    // The property that actually matters is that the four PRODUCTION seal sites all feed
+    // `JSONEncoder` output into `IdentityService.seal`:
+    //   • `ProximityCoordinator.sealIfNeeded` — every presence / recipe-share sealed payload;
+    //   • `ProximityCoordinator.encodeIdentityEnvelopeForTransport` — the sealed introduction, which
+    //     seals an encoded `FernletIdentityEnvelope` rather than a payload struct;
+    //   • `MeshNetworkManager.sendEnvelope(_:encodable:via:sealed:)`;
+    //   • `MeshNetworkManager.sendVerifyEnvelope(...)`.
+    // So the tests below encode a representative value of each sealed payload type (plus the envelope
+    // itself) exactly the way those sites do, and assert the leading byte.
+
+    /// One representative value per `PayloadType` in `FernletIdentityEnvelope.sealingRequiredTypes`
+    /// that has a concrete payload type in this repo. Values are shape-only — nothing is signed or
+    /// sent — because the assertion is about the ENCODING, not the contents.
+    private static func sealedPayloadRepresentatives() -> [(caseName: String, payload: any Encodable)] {
+        let now = Date(timeIntervalSince1970: 1_780_000_000)
+        let descriptor = ActivityDescriptor(
+            activityID: UUID(), hostFingerprint: "abc", hostSigningPublicKey: Data([1]),
+            title: "Sunset walk", activityTypeToken: "walk", coarseLocation: "the park",
+            createdAt: now, expiresAt: now.addingTimeInterval(3600)
+        )
+        let snapshot = ActivityRosterSnapshot(
+            activityID: descriptor.activityID, version: 1, participants: [], issuedAt: now,
+            hostSigningPublicKey: Data([1]), hostSignature: Data([2])
+        )
+        let token = ActivityJoinToken(
+            activityID: descriptor.activityID, activityParamsHash: Data([3]),
+            joinerFingerprint: "def", joinerSigningPublicKey: Data([4]),
+            hostFingerprint: "abc", hostSigningPublicKey: Data([1]),
+            grantedAt: now, expiresAt: now.addingTimeInterval(3600),
+            rosterVersionAtGrant: 1, hostSignature: Data([5])
+        )
+        return [
+            ("friendPhoto", FriendPhotoPayload(imageData: Data([1, 2, 3]), senderName: "Friend")),
+            ("recipeShare", SharedRecipePayload(name: "Soup", servings: 2, notes: "", ingredients: [])),
+            ("clothingCatalog", ClothingCatalogPayload(designerID: UUID(), displayName: "Friend", items: [])),
+            ("friendHeart", HeartPayload(sentAtDayKey: "2026-07-25")),
+            ("tempMessage", TempMessagePayload(text: "hi")),
+            ("itemReport", ModerationReportPayload(reports: [])),
+            ("friendState", FriendStatePayload(state: .okay, appearance: .standard)),
+            ("activityOffer", ActivityOfferPayload(descriptor: descriptor, rosterVersion: 1)),
+            ("activityJoinGrant", ActivityJoinGrantPayload(token: token, snapshot: snapshot)),
+            ("activityRosterSnapshot", ActivityRosterSnapshotPayload(snapshot: snapshot)),
+            ("activitySync", ActivitySyncPayload(held: [])),
+            ("workoutCompletion", TrainerExportPayload(bundle: Data([0x7B, 0x7D]))),
+            ("verifyChallenge", VerifyChallengePayload(qrNonce: Data([1]), challengeNonce: Data([2]))),
+            ("verifyResponse", VerifyResponsePayload(challengeNonce: Data([2]), signature: Data([3])))
+        ]
+    }
+
+    /// Sealed types with no concrete payload struct in this repo yet: the trainer plan/live wire is a
+    /// declared seam whose transport is deferred to the separate coach app (TrainerPayloads.swift), so
+    /// there is nothing to encode. `sealedPayloadTypeCoverageIsComplete` fails if a NEW sealed type
+    /// joins them without a representative here.
+    private static let uncoveredSealedTypes: Set<String> = [
+        "trainerPlan", "trainerPlanDelta", "workoutLiveUpdate"
+    ]
+
+    @Test func everySealedPayloadEncodesToAJSONObject() throws {
+        for (caseName, payload) in Self.sealedPayloadRepresentatives() {
+            let encoded = try JSONEncoder().encode(payload)
+            #expect(
+                encoded.first == 0x7B,
+                "\(caseName) does not encode to a JSON object — the wire2 frame tags stop being collision-free and a legacy body from this type can be mis-read as a frame."
+            )
+            // The receive-side consequence, stated directly.
+            #expect(!SealedPayloadFraming.hasFrameTag(encoded), "\(caseName) encodes to something the tolerant receive path would try to unframe.")
+        }
+    }
+
+    /// The tag bytes can never be the first byte of ANY JSON text, so the discriminator holds for
+    /// payload shapes this repo hasn't written yet (an array body, a bare string, a number).
+    @Test func framingTagsCannotCollideWithAnyJSONFirstByte() {
+        // RFC 8259: a JSON text starts with insignificant whitespace (only 0x20/0x09/0x0A/0x0D) or the
+        // first byte of a value — `{ [ "` , `-`, a digit, or the leading letter of true/false/null.
+        var possibleFirstBytes: Set<UInt8> = [0x20, 0x09, 0x0A, 0x0D,
+                                              0x7B, 0x5B, 0x22, 0x2D, 0x74, 0x66, 0x6E]
+        possibleFirstBytes.formUnion((UInt8(ascii: "0")...UInt8(ascii: "9")))
+
+        for byte in possibleFirstBytes.sorted() {
+            #expect(!SealedPayloadFraming.hasFrameTag(Data([byte])), "0x\(String(byte, radix: 16)) is a legal JSON first byte AND reads as a frame tag.")
+        }
+        // And the inverse: the two tags are outside that set entirely.
+        #expect(!possibleFirstBytes.contains(0x01))
+        #expect(!possibleFirstBytes.contains(0x02))
+        #expect(SealedPayloadFraming.hasFrameTag(Data([0x01])))
+        #expect(SealedPayloadFraming.hasFrameTag(Data([0x02])))
+    }
+
+    /// Coverage guard: every case listed in `FernletIdentityEnvelope.sealingRequiredTypes` must either
+    /// have a representative above or be a documented gap. `sealingRequiredTypes` is `private`, so this
+    /// reads the declaration from source — the same grep-wall stance as `PrivacyWipeCoverageTests`.
+    @Test func sealedPayloadTypeCoverageIsComplete() throws {
+        let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(
+            contentsOf: repoRoot.appendingPathComponent("FernletKit/Sources/ProximityKit/Wire/FernletIdentityEnvelope.swift"),
+            encoding: .utf8
+        )
+        guard let declaration = source.components(separatedBy: "\n")
+            .first(where: { $0.contains("sealingRequiredTypes: Set<PayloadType>") }),
+              let open = declaration.firstIndex(of: "["),
+              let close = declaration.lastIndex(of: "]") else {
+            Issue.record("Could not read `sealingRequiredTypes` from FernletIdentityEnvelope.swift — moved or reformatted? The 0x7B invariant is then unguarded.")
+            return
+        }
+        let required = Set(
+            declaration[declaration.index(after: open)..<close]
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { $0.hasPrefix(".") }
+                .map { String($0.dropFirst()) }
+        )
+        #expect(required.count >= 14, "Parsed only \(required.count) sealed types — the parse is broken, not the wall.")
+
+        let covered = Set(Self.sealedPayloadRepresentatives().map(\.caseName)).union(Self.uncoveredSealedTypes)
+        let unguarded = required.subtracting(covered).sorted()
+        #expect(unguarded.isEmpty, "Sealed payload type(s) \(unguarded) have no 0x7B representative — add one (or add to `uncoveredSealedTypes` with a reason). A sealed body that isn't a JSON object breaks the wire2 frame-tag discriminator.")
+    }
+
+    /// The sealed INTRODUCTION seals an encoded envelope, not a payload struct — so the invariant has
+    /// to hold for `FernletIdentityEnvelope` itself, over a real signed value.
+    @Test func theSealedIntroductionBodyIsAlsoAJSONObject() throws {
+        let (alice, aliceID) = try makeService()
+        defer { cleanup(aliceID) }
+
+        let envelope = try FernletIdentityEnvelope.signed(
+            identityService: alice,
+            senderDisplayName: "Alice",
+            payloadType: .identityIntroduction,
+            payloadSummary: PayloadSummary(title: PayloadType.identityIntroduction.rawValue),
+            payload: Data()
+        )
+        let encoded = try JSONEncoder().encode(envelope)
+        #expect(encoded.first == 0x7B)
+        #expect(!SealedPayloadFraming.hasFrameTag(encoded))
+    }
+
     @Test func legacySealOpenIsUnchanged() throws {
         let (alice, aliceID) = try makeService()
         defer { cleanup(aliceID) }

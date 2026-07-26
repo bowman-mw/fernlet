@@ -301,7 +301,10 @@ struct FriendsView: View {
                                 slot: slot,
                                 showDebugOverride: store.settings.showProximityDebugTools,
                                 onForceConnect: { manager.commitManualProximity(slotID: slot.id) },
-                                onMakeVerifyQR: { manager.makeLocalVerifyQRURL() },
+                                // The QR is minted FOR THIS ROW: only a challenge arriving on this
+                                // slot may answer it, so the manager binds the nonce to slot.id.
+                                onMakeVerifyQR: { manager.makeLocalVerifyQRURL(slotID: slot.id) },
+                                onDismissVerifyQR: { manager.clearActiveVerifyQR() },
                                 onScanVerified: { url in manager.beginQRVerification(with: url) }
                             )
                         }
@@ -886,6 +889,9 @@ private struct NearbySlotRow: View {
     // closures reach MeshNetworkManager through the parent. Defaults keep other construction
     // sites source-compatible.
     var onMakeVerifyQR: () -> URL? = { nil }
+    /// Fires whenever the display sheet goes away (Done, swipe-down, or the sheet dismissing
+    /// itself on backgrounding) so the manager stops honoring challenges for the shown QR.
+    var onDismissVerifyQR: () -> Void = {}
     var onScanVerified: (URL) -> Bool = { _ in false }
     @State private var verifyQRURL: URL?
     @State private var showVerifyScanner = false
@@ -933,7 +939,7 @@ private struct NearbySlotRow: View {
             .sheet(isPresented: Binding(
                 get: { verifyQRURL != nil },
                 set: { if !$0 { verifyQRURL = nil } }
-            )) {
+            ), onDismiss: onDismissVerifyQR) {
                 VerifyQRDisplaySheet(url: verifyQRURL, peerName: peerName)
             }
             .sheet(isPresented: $showVerifyScanner) {

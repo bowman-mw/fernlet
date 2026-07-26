@@ -32,6 +32,7 @@ struct VerifyQRDisplaySheet: View {
     let url: URL?
     let peerName: String
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         VStack(spacing: 20) {
@@ -66,6 +67,14 @@ struct VerifyQRDisplaySheet: View {
         .padding(24)
         .presentationDetents([.medium])
         .presentationBackground(Color.parchment)
+        // The ceremony is an in-person, eyes-on-both-screens moment: once the app leaves the
+        // foreground nobody is running it, so end the display (the caller's `onDismiss` then tells
+        // the mesh manager to stop honoring challenges for this QR). `.background` rather than
+        // `.inactive` — Control Center and the notification shade produce `.inactive` without the
+        // user ever leaving the ceremony.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { dismiss() }
+        }
     }
 }
 
