@@ -69,7 +69,7 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Private-media in-memory key caches (the emptied meal/progress/recipe stores) | Memory | `invalidateEncryptionKeyCache` per store |
 | Storage preferences | Keychain `com.fernlet.storage-preferences` | `storagePreferencesResetHook` |
 | Away-hearts drop records this device uploaded | CloudKit **public** DB | `heartDropService.purgeDeadDrop` (must run BEFORE the local wipe — the outbox holds the record names, and a public-DB record is creator-delete-only) |
-| Away-hearts drop state: one-time prekeys (keychain `com.fernlet.heartdrop`), peer bundle cache, outbox, durable dedup, service identity cache | Keychain + sidecars | `heartDropService.wipeForDeleteAll` |
+| Away-hearts drop state: one-time + signed prekeys (keychain `com.fernlet.heartdrop`, incl. the `sidecarSealKey` sidecar seal key — `deleteAll` is by service, all accounts), peer bundle cache, outbox **and its `HeartDropOutbox.json.corrupt` quarantine file**, durable dedup, service identity cache | Keychain + sidecars | `heartDropService.wipeForDeleteAll` (each sidecar's `ProtectedSidecar.wipe()` removes primary + quarantine paths) |
 
 (The `heartsAwayDelivery` consent flag itself lives in FernletSettings inside the snapshot — the
 repository purge takes it.)
