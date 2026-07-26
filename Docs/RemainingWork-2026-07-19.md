@@ -132,8 +132,18 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
 - **Meal-estimation overhaul residue** — M1 dish decomposition, SQLite catalog, and the web product
   importer shipped; the chain-restaurant importer extension and dynamic product-image discovery from
   [Meal-Estimation-Overhaul-Plan.md](Meal-Estimation-Overhaul-Plan.md) were not re-audited item-by-item.
-- **Send-heart remote delivery** (decided: CloudKit public-DB E2EE dead-drop + proximity hybrid) —
-  shares the dead-drop foundation with the coach track; unbuilt.
+- ✅ **Send-heart remote delivery SHIPPED 2026-07-25** (bitchat adoptions Increment 3, branch
+  `claude/bitchat-adoptions`, [Plan-Bitchat-Adoptions-2026-07-25.md](Plan-Bitchat-Adoptions-2026-07-25.md)):
+  CloudKit public-DB E2EE dead-drop + proximity hybrid, with one-time-prekey forward secrecy and
+  day-rotating HMAC tags; opt-in `heartsAwayDelivery` (default OFF). The same round also landed
+  wire2 sealed-payload compress+pad framing, the enforced privacy-wipe coverage checklist
+  (identity keys now die with delete-all), and the QR verification ceremony for non-UWB commits.
+  **OWNER ACTION before TestFlight:** promote the `HeartDrop` record type (`tag` queryable,
+  `payload` bytes) from the CloudKit Development schema to Production in the console — dev
+  auto-creates it on first save; production will not.
+- **BLE wake-on-proximity presence** — deferred by decision 2026-07-25; design sketch in
+  [Plan-Bitchat-Adoptions-2026-07-25.md](Plan-Bitchat-Adoptions-2026-07-25.md) §E (tags/envelopes
+  kept transport-agnostic for it); revisit with the Android/cross-platform transport work.
 - **Cloud cascading-trust for large group activities** — deferred by scope from the social plan.
 
 ## 5. Tech debt & cleanup

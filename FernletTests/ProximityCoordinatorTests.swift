@@ -369,7 +369,11 @@ struct ProximityCoordinatorTests {
         #expect(peerIdentity.displayName == "Remote Device")
     }
 
-    @Test func legacyAdvertisedFingerprintAcceptsCanonicalIdentityIntroduction() async throws {
+    @Test func legacyAdvertisedFingerprintNoLongerBindsToCanonicalIntroduction() async throws {
+        // Tightened 2026-07-25 (bitchat-adoptions follow-up): an advertised 8-char fingerprint is
+        // a grindable 32-bit binding, so the advertised-vs-derived check now requires the full
+        // 16 chars. Only pre-2026-06-12 builds advertised short values — a deliberate compat
+        // break with builds that predate the mesh redesign anyway.
         let (local, localServiceID) = try makeIdentity()
         defer { cleanup(localServiceID) }
         let (remote, remoteServiceID) = try makeIdentity()
@@ -387,11 +391,9 @@ struct ProximityCoordinatorTests {
         transport.simulateInboundData(data, from: peer)
         try await Task.sleep(nanoseconds: 10_000_000)
 
-        guard case .awaitingUserConfirmation(let peerIdentity) = coordinator.state else {
-            Issue.record("Expected awaiting user confirmation, got \(coordinator.state)")
-            return
+        if case .awaitingUserConfirmation = coordinator.state {
+            Issue.record("A legacy 8-char advertised fingerprint must no longer bind to a canonical identity introduction")
         }
-        #expect(peerIdentity.fingerprint == remote.localFingerprint)
     }
 
     @Test func inspectorRecordsRangingSamplesFromDistanceUpdates() async throws {

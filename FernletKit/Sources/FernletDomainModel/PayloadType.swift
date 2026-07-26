@@ -10,6 +10,14 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     // Handshake
     case identityIntroduction  = "fernlet.identity.intro.v1"
     case identityAcknowledge   = "fernlet.identity.ack.v1"
+    // QR verification ceremony (bitchat adoptions Increment 4, Docs/Plan-Bitchat-Adoptions-2026-07-25.md):
+    // upgrades a non-UWB `awaitingManualCommit` slot to ceremony grade — scan the peer's signed QR,
+    // then prove key possession + liveness over the live session. Both sealed (in
+    // `sealingRequiredTypes`); additive-safe (older clients park them).
+    /// Scanner → displayer: a fresh nonce bound to the scanned QR (`VerifyChallengePayload`). Sealed.
+    case verifyChallenge       = "fernlet.verify.challenge.v1"
+    /// Displayer → scanner: Ed25519 proof over the challenge + QR nonce (`VerifyResponsePayload`). Sealed.
+    case verifyResponse        = "fernlet.verify.response.v1"
     // Trainer
     case trainerPlan           = "fernlet.trainer.plan.v1"
     case trainerPlanDelta      = "fernlet.trainer.plan.delta.v1"
@@ -37,6 +45,13 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// A "good vibes" heart sent to a trusted friend in person (`HeartPayload` — id + day key only,
     /// no note, no numbers, no sender state). Always sealed to the recipient like a recipe share.
     case friendHeart           = "fernlet.friend.heart.v1"
+    /// An offline "away" heart (`HeartPayload` again), carried INSIDE a heart-drop outer seal via
+    /// the CloudKit public-DB dead-drop instead of a live radio (bitchat adoptions Increment 3).
+    /// Deliberately NOT in `sealingRequiredTypes`: the inner envelope rides with
+    /// `payloadEncryption == .none` because the dead-drop's outer prekey/static seal IS the
+    /// confidentiality layer, and the opener only ever parses bytes it unsealed itself. Never
+    /// dispatched on a live radio — no mesh/presence payload handler registers it.
+    case friendHeartDrop       = "fernlet.friend.heart.drop.v1"
     /// A live-session temporary chat message (`TempMessagePayload`, mesh redesign Phase 5). Exchanged
     /// ONLY while a friend session is active and VANISHES at session end — nothing retained on device,
     /// nothing synced, no dead-drop, no offline queue (owner decision). Always sealed to the recipient
@@ -110,6 +125,15 @@ public nonisolated enum ProximityCapability: String, Codable, CaseIterable, Send
     case friendState
     /// Small-group Group Activities: signed roster + invitee-key-bound join tokens (Phase 6).
     case activities
+    /// wire2 sealed-payload framing (bitchat adoptions Increment 2): sealed payload bodies between
+    /// two `wire2` peers are deflate-compressed and padded to size buckets BEFORE sealing, so an
+    /// observer can't size-class them. A wire format, not a user feature — advertised
+    /// unconditionally by every build that ships it.
+    case wire2
+    /// Offline "away" hearts via the CloudKit dead-drop (bitchat adoptions Increment 3): this peer
+    /// mints/gossips one-time prekey bundles and understands `friendHeartDrop`. Advertised only
+    /// when the user opted into away delivery (`heartsAwayDelivery`).
+    case heartsAway
 }
 
 public nonisolated enum PayloadEncryption: Codable, Equatable, Sendable {

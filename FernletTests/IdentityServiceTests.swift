@@ -135,16 +135,22 @@ struct IdentityServiceTests {
         #expect(fp.allSatisfy { $0.isHexDigit })
     }
 
-    @Test func fingerprintMatcherAcceptsLegacyEightCharacterPrefix() throws {
+    @Test func fingerprintMatcherRejectsLegacyEightCharacterPrefix() throws {
+        // Tightened 2026-07-25 (bitchat-adoptions follow-up): an 8-hex prefix is a 32-bit,
+        // grindable binding. The vault normalizes stored legacy rows back to 16 chars, so the
+        // matcher accepts ONLY exact 16-char equality (case-insensitive).
         let (svc, id) = makeService()
         defer { cleanup(id) }
         try svc.ensureProvisioned()
 
         let canonical = svc.localFingerprint
         let legacy = String(canonical.prefix(8))
-        #expect(IdentityService.fingerprintsMatch(canonical, legacy))
-        #expect(IdentityService.fingerprintsMatch(legacy, canonical))
-        #expect(!IdentityService.fingerprintsMatch(canonical, "deadbeef"))
+        #expect(!IdentityService.fingerprintsMatch(canonical, legacy))
+        #expect(!IdentityService.fingerprintsMatch(legacy, canonical))
+        #expect(!IdentityService.fingerprintsMatch(legacy, legacy), "even two identical short values must not match")
+        #expect(!IdentityService.fingerprintsMatch(canonical, String(canonical.dropLast()) ))
+        #expect(IdentityService.fingerprintsMatch(canonical, canonical))
+        #expect(IdentityService.fingerprintsMatch(canonical, canonical.uppercased()))
     }
 
     @Test func fingerprintOfDifferentKeysDiffers() {

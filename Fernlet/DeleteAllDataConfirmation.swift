@@ -106,12 +106,20 @@ enum DeleteAllDataConfirmation {
         // half of what survives. By product decision the wall has no bulk clear — pictures come off it
         // one at a time (`MeshNetworkManager.deletePhoto`) — so this funnel leaves the whole wall
         // intact and the copy says how to remove them, rather than implying they are gone.
+        //
+        // The Fernlet identity is NOT in the kept list any more. It used to be, and it was true then;
+        // the wipe now destroys the proximity keypairs (`wipeIdentityForDeleteAll`, bitchat adoptions
+        // Increment 1) precisely so a post-wipe "fresh start" isn't still recognizable to every
+        // friend's trust vault. Saying it survives would be the same says-more-than-it-does gap this
+        // dialog exists to close, in reverse — so the consequence is stated where the user needs it,
+        // next to the re-add sentence that the vault clear already required.
         paragraphs.append("""
-            Kept on purpose: your milestone counts, your lifetime care history, your Fernlet identity, \
-            your shared photos — both the ones friends sent you and the ones you shared with them — and \
-            any restriction on sharing your own designs. You remove those one at a time from the photo \
-            itself; there's no bulk delete. Your app lock stays set up. You'll need to add your friends \
-            again, and anyone you blocked will no longer be blocked — block them again if you meet.
+            Kept on purpose: your milestone counts, your lifetime care history, your shared photos — \
+            both the ones friends sent you and the ones you shared with them — and any restriction on \
+            sharing your own designs. You remove those one at a time from the photo itself; there's no \
+            bulk delete. Your app lock stays set up. This phone gets a brand-new Fernlet identity, so \
+            friends' phones won't recognize it: you'll need to add each other again in person, and \
+            anyone you blocked will no longer be blocked — block them again if you meet.
             """)
         if canDeleteHealthSamples {
             paragraphs.append(
@@ -135,11 +143,17 @@ enum DeleteAllDataConfirmation {
 
     /// Shown when a wipe came back incomplete. Naming the store that failed is the point: "something went
     /// wrong" would leave the user unable to tell whether their journal is gone.
+    ///
+    /// The closing line deliberately does NOT promise that retrying fixes everything, and does not say
+    /// the leftovers are "on your device". Both were true when every store was local; "hearts parked in
+    /// iCloud" is neither — those records sit on a CloudKit public database, and once the wipe cleared
+    /// the outbox the record names needed to delete them are gone, so a retry cannot reach them. They
+    /// age out on their own at the 14-day sender lifetime.
     static func failureMessage(for outcome: FernletStore.DeleteAllOutcome) -> String {
         """
         Fernlet deleted everything it could, but couldn't finish: \
         \(ListFormatter.localizedString(byJoining: outcome.incompleteStores)). \
-        Try again — if it keeps failing, this data may still be on your device.
+        Anything named there may still exist. Trying again can help for anything still on this phone.
         """
     }
 }

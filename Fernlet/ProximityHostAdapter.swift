@@ -14,4 +14,5 @@ extension FernletStore: ProximityHost {
     /// The live hearts opt-in — `PresenceManager` gates both the outbound send and the inbound
     /// drop on this (mesh redesign Phase 4b). Overrides the protocol's `true` default.
     var allowNearbyHearts: Bool { settings.allowNearbyHearts }
+    var heartsAwayDeliveryEnabled: Bool { settings.heartsAwayDelivery }
 }

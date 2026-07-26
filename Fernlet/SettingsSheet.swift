@@ -307,6 +307,49 @@ struct SettingsSheet: View {
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                     }
+                    // Away delivery (bitchat adoptions Increment 3): the one proximity feature
+                    // that touches the network, so it carries its own explicit opt-in — separate
+                    // from iCloud Sync (public dead-drop, not the synced store).
+                    Toggle(
+                        "Deliver hearts when apart",
+                        isOn: Binding(
+                            get: { store.settings.heartsAwayDelivery },
+                            set: { store.setHeartsAwayDelivery($0) }
+                        )
+                    )
+                    if store.settings.heartsAwayDelivery {
+                        Text("When a friend isn't nearby, a heart is sealed end-to-end and left in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — delivered when they next open Fernlet. This is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. Turning it off deletes the hearts still waiting there, so they won't be delivered later.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                        // Nothing-silent: the toggle being on is a promise of delivery, so every
+                        // state where that promise isn't being kept gets said out loud here.
+                        if let problem = awayDeliveryProblemText {
+                            HStack(alignment: .top, spacing: 10) {
+                                Text(problem)
+                                    .font(.fernlet(.bodySmall))
+                                    .foregroundStyle(Color.goldenrod)
+                                    // Identifiers sit on the leaves, not the HStack: an identifier
+                                    // on the container shadows its children for UI tests.
+                                    .accessibilityIdentifier("settings.heartsAway.problem")
+                                Spacer(minLength: 0)
+                                Button("Dismiss") {
+                                    store.heartDropService.acknowledgeDeliveryProblem()
+                                }
+                                .font(.fernlet(.labelSmall))
+                                .foregroundStyle(Color.moss)
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("settings.heartsAway.dismissProblem")
+                            }
+                        }
+                    } else if store.heartsAwayPurgePending {
+                        // Consent is off but our own sealed records are still on the public
+                        // database, because the delete didn't go through. Say so rather than let
+                        // "off" imply they were removed; the foreground listener retries.
+                        Text("Some hearts Fernlet left in the iCloud drop-off couldn't be removed yet — it'll keep trying while you're online.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.goldenrod)
+                            .accessibilityIdentifier("settings.heartsAway.purgePending")
+                    }
                     // Phase 4a: the standing presence radio — rotating pairwise tags only.
                     Toggle(
                         "Nearby friends presence",
@@ -344,6 +387,13 @@ struct SettingsSheet: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.parchment)
+    }
+
+    /// Why away hearts aren't being delivered right now, or nil when the drop-off is healthy.
+    /// Deliberately phrased for the feature (the friend row phrases the same conditions per friend):
+    /// this is the surface that has to answer "I turned it on — is it actually working?".
+    private var awayDeliveryProblemText: String? {
+        AwayHeartsCopy.settingsLine(for: store.heartDropService.deliveryProblem)
     }
 
     /// Turning cycle tracking OFF is confirmed; turning it back ON is not. Hiding is not destructive —

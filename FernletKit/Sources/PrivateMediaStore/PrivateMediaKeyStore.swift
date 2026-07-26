@@ -11,6 +11,16 @@ public protocol PrivateMediaKeyProviding {
     /// The media-encryption key, generating and persisting one on first use.
     /// Returns nil only when the key cannot be created or read (e.g. keychain unavailable).
     func mediaKey() -> SymmetricKey?
+
+    /// Delete-all seam (Docs/PrivacyWipeCoverage.md): drop any in-memory copy of the key so a
+    /// post-wipe capture can't encrypt under a keychain row that no longer exists (such bytes
+    /// would surface as `.unreadable` after relaunch mints a fresh key). No-op by default —
+    /// in-memory test providers have nothing stale to drop.
+    func invalidateCachedKey()
+}
+
+extension PrivateMediaKeyProviding {
+    public func invalidateCachedKey() {}
 }
 
 /// Keychain-backed provider for `PrivateMediaStore`'s at-rest key.
@@ -48,5 +58,25 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
         guard status == errSecSuccess else { return nil }
         cachedKey = key
         return key
+    }
+
+    public func invalidateCachedKey() {
+        cachedKey = nil
+    }
+
+    /// Removes the shared at-rest media key row. **Deliberately has no callers** — do not add one.
+    ///
+    /// The row is a single keychain item shared by EVERY `PrivateMediaStore`, including the friend
+    /// photo wall's cache, which survives "Delete everything" by design (product decision: friends'
+    /// shared photos are the friends' gift, removed one at a time). Delete-all used to call this on
+    /// the premise that every media store had been emptied first; that premise is false for exactly
+    /// the one store deliberately left full, so the call silently destroyed the wall — the photos
+    /// kept rendering from the in-memory key until relaunch, then `mediaKey()` minted a fresh key
+    /// and every retained photo decrypted to garbage. See Docs/PrivacyWipeCoverage.md.
+    ///
+    /// Kept as API only for a future caller that first empties the wall too. A key whose stores are
+    /// all empty protects nothing, so leaving the row in place leaks nothing.
+    public static func deleteKeychainRowForWipe() {
+        KeychainItem.delete(account: account, service: service)
     }
 }

@@ -60,6 +60,12 @@ public struct ProgressPhotoStore {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
+    /// Delete-all seam (Docs/PrivacyWipeCoverage.md): one call covers both this store and its
+    /// inner photo store — they share the same provider instance.
+    public func invalidateEncryptionKeyCache() {
+        keyProvider.invalidateCachedKey()
+    }
+
     /// The timeline, newest first.
     public func records() -> [ProgressPhotoRecord] {
         loadIndex().sorted { $0.capturedAt > $1.capturedAt }

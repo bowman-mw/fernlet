@@ -300,7 +300,12 @@ struct FriendsView: View {
                             NearbySlotRow(
                                 slot: slot,
                                 showDebugOverride: store.settings.showProximityDebugTools,
-                                onForceConnect: { manager.commitManualProximity(slotID: slot.id) }
+                                onForceConnect: { manager.commitManualProximity(slotID: slot.id) },
+                                // The QR is minted FOR THIS ROW: only a challenge arriving on this
+                                // slot may answer it, so the manager binds the nonce to slot.id.
+                                onMakeVerifyQR: { manager.makeLocalVerifyQRURL(slotID: slot.id) },
+                                onDismissVerifyQR: { manager.clearActiveVerifyQR() },
+                                onScanVerified: { url in manager.beginQRVerification(with: url) }
                             )
                         }
                     }
@@ -880,6 +885,18 @@ private struct NearbySlotRow: View {
         )
     }
 
+    // QR verification ceremony (bitchat adoptions Increment 4): row-local sheet state; the
+    // closures reach MeshNetworkManager through the parent. Defaults keep other construction
+    // sites source-compatible.
+    var onMakeVerifyQR: () -> URL? = { nil }
+    /// Fires whenever the display sheet goes away (Done, swipe-down, or the sheet dismissing
+    /// itself on backgrounding) so the manager stops honoring challenges for the shown QR.
+    var onDismissVerifyQR: () -> Void = {}
+    var onScanVerified: (URL) -> Bool = { _ in false }
+    @State private var verifyQRURL: URL?
+    @State private var showVerifyScanner = false
+    @State private var verifyMissed = false
+
     @ViewBuilder
     private var trailingControl: some View {
         switch slot.coordinator.state {
@@ -895,9 +912,46 @@ private struct NearbySlotRow: View {
                     .foregroundStyle(Color.slate)
             }
         case .awaitingManualCommit:
-            Button("Connect", action: onForceConnect)
-                .buttonStyle(ChipButtonStyle(selected: true))
-                .accessibilityIdentifier("friends.manualCommit.\(slot.id)")
+            HStack(spacing: 8) {
+                // Ceremony-grade alternative to the bare tap (Increment 4): scan proves the
+                // person holds the key; a successful round commits BOTH sides.
+                Menu {
+                    Button {
+                        verifyQRURL = onMakeVerifyQR()
+                    } label: {
+                        Label("Show my code", systemImage: "qrcode")
+                    }
+                    Button {
+                        showVerifyScanner = true
+                    } label: {
+                        Label("Scan their code", systemImage: "qrcode.viewfinder")
+                    }
+                } label: {
+                    Text("Verify")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.moss)
+                }
+                .accessibilityIdentifier("friends.verifyQR.menu.\(slot.id)")
+                Button("Connect", action: onForceConnect)
+                    .buttonStyle(ChipButtonStyle(selected: true))
+                    .accessibilityIdentifier("friends.manualCommit.\(slot.id)")
+            }
+            .sheet(isPresented: Binding(
+                get: { verifyQRURL != nil },
+                set: { if !$0 { verifyQRURL = nil } }
+            ), onDismiss: onDismissVerifyQR) {
+                VerifyQRDisplaySheet(url: verifyQRURL, peerName: peerName)
+            }
+            .sheet(isPresented: $showVerifyScanner) {
+                VerifyQRScanSheet { url in
+                    verifyMissed = !onScanVerified(url)
+                }
+            }
+            .alert("That code didn't match", isPresented: $verifyMissed) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Ask your friend to show their code again — codes expire after a few minutes — and make sure you're scanning the person shown in this row.")
+            }
         default:
             EmptyView()
         }

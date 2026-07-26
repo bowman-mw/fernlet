@@ -22,6 +22,10 @@ struct FriendListView: View {
     @State private var peerToBlock: ProximityTrustedPeerRecord?
     @State private var blockConfirmShown = false
     @State private var peerToReport: ProximityTrustedPeerRecord?
+    // Away hearts (bitchat adoptions Increment 3): the first-use consent target + the local
+    // status line for queue outcomes (separate from the live-send heartSendState pipeline).
+    @State private var awayConsentPeer: ProximityTrustedPeerRecord?
+    @State private var awayStatus: String?
     @FocusState private var nameFieldFocused: Bool
 
     var body: some View {
@@ -431,14 +435,52 @@ struct FriendListView: View {
                 .foregroundStyle(reachable ? Color.moss : Color.slate)
         }
 
+        let awayEnabled = store.settings.heartsAwayDelivery
+        // "Queued but not yet at the drop-off" — an uploaded heart drops out of this count, so it
+        // reads as "still waiting on us", not "still undelivered".
+        let pendingDrops = reachable ? 0 : store.heartDropService.pendingCount(for: peer)
+        // Nothing-silent: whenever delivery is not actually happening, the row must say so instead
+        // of repeating the "delivered while you're apart" promise.
+        let awayProblem = reachable ? nil : awayDeliveryProblemText
+
         Button {
-            store.presenceManager.sendHeart(to: peer)
+            awayStatus = nil
+            if reachable {
+                store.presenceManager.sendHeart(to: peer)
+            } else if awayEnabled {
+                recordAwayOutcome(store.heartDropService.queueHeart(to: peer), firstName: firstName)
+            } else {
+                // First away-send: explicit consent before the one proximity feature that
+                // touches the network does anything (nothing-silent).
+                awayConsentPeer = peer
+            }
         } label: {
-            SendGoodVibesLabel(state: SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending))
+            SendGoodVibesLabel(state: SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable || awayEnabled, sending: sending))
         }
         .buttonStyle(.plain)
-        .disabled(onCooldown || !reachable || sending)
+        .disabled(onCooldown || sending)
         .accessibilityIdentifier("friends.sendHeart")
+        .alert(
+            "Deliver hearts when you're apart?",
+            isPresented: Binding(
+                get: { awayConsentPeer != nil },
+                set: { if !$0 { awayConsentPeer = nil } }
+            )
+        ) {
+            Button("Turn on") {
+                if let consented = awayConsentPeer {
+                    store.setHeartsAwayDelivery(true)
+                    recordAwayOutcome(
+                        store.heartDropService.queueHeart(to: consented),
+                        firstName: PresenceManager.firstName(of: consented.displayName)
+                    )
+                }
+                awayConsentPeer = nil
+            }
+            Button("Not now", role: .cancel) { awayConsentPeer = nil }
+        } message: {
+            Text("When a friend isn't nearby, Fernlet seals the heart end-to-end and leaves it in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — never a name. It's delivered when they next open Fernlet.\n\nThis is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. It's the only nearby feature that uses the network, and you can turn it off any time in Settings — which also deletes the hearts still waiting there.")
+        }
 
         if onCooldown {
             Text("You just sent \(firstName) some warmth — hearts settle for a few minutes.")
@@ -448,11 +490,42 @@ struct FriendListView: View {
                 .frame(maxWidth: .infinity)
                 .fernletWrappingText()
         } else if !reachable {
-            Text("Hearts travel in person for now — they can be sent when you're together.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+            if awayEnabled {
+                if let awayProblem {
+                    Text(awayProblem)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.goldenrod)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .fernletWrappingText()
+                        .accessibilityIdentifier("friends.awayProblem")
+                } else {
+                    Text(pendingDrops > 0
+                         ? (pendingDrops == 1
+                            ? "A heart is tucked away for \(firstName) — delivered when they next open Fernlet."
+                            : "\(pendingDrops) hearts are tucked away for \(firstName) — delivered when they next open Fernlet.")
+                         : "Not together right now — a heart sent now is delivered while you're apart.")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(Color.slate)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .fernletWrappingText()
+                }
+            } else {
+                Text("Hearts travel in person for now — tap Send to turn on delivery while apart.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .fernletWrappingText()
+            }
+        }
+
+        if let awayStatus {
+            Text(awayStatus)
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.moss)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .fernletWrappingText()
         }
 
@@ -462,6 +535,37 @@ struct FriendListView: View {
                 .foregroundStyle(Color.moss)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .fernletWrappingText()
+        }
+    }
+
+    /// The one honest sentence for whatever is stopping away hearts right now, or nil when delivery
+    /// is healthy. `queueHeart` returns `.queued` even when the drop-off is unreachable — the heart
+    /// really is saved — so this is what keeps the row from promising an arrival it can't make.
+    private var awayDeliveryProblemText: String? {
+        guard store.settings.heartsAwayDelivery else { return nil }
+        return AwayHeartsCopy.friendRowLine(for: store.heartDropService.deliveryProblem)
+    }
+
+    private func recordAwayOutcome(_ outcome: HeartDropService.QueueOutcome, firstName: String) {
+        switch outcome {
+        case .queued:
+            // The heart IS saved, so say so — but never alongside a delivery promise the service is
+            // currently unable to keep.
+            if let problem = awayDeliveryProblemText {
+                awayStatus = "\(firstName)'s heart is tucked away and safe. \(problem)"
+            } else {
+                awayStatus = "Your heart is tucked away for \(firstName) — it'll be delivered while you're apart."
+            }
+        case .rateLimited:
+            awayStatus = "You just sent \(firstName) some warmth — hearts settle for a few minutes."
+        case .dailyLimitReached:
+            // Distinct from `.rateLimited` on purpose: the wait is until tomorrow, and the
+            // five-minute copy would be a lie the user would sit through and disbelieve.
+            awayStatus = "\(firstName) has had all of today's hearts from you — send another tomorrow."
+        case .backlogFull:
+            awayStatus = "A few hearts are already waiting for \(firstName) — they'll arrive first."
+        case .disabled, .failed:
+            awayStatus = "Couldn't tuck that heart away just now."
         }
     }
 
@@ -626,5 +730,50 @@ private extension Date {
     @MainActor
     var relativeFormatted: String {
         Date.relativeFormatter.localizedString(for: self, relativeTo: Date())
+    }
+}
+
+/// Copy for "away hearts are not being delivered right now", in ONE place.
+///
+/// Two surfaces answer the same question — a friend's row ("will this heart reach them?") and the
+/// Settings toggle ("I turned this on, is it working?") — and the review round that added
+/// `HeartDropService.DeliveryProblem` exists precisely because the app used to promise delivery it
+/// wasn't making. Two hand-written mappings would drift into two different explanations of the same
+/// condition, and a view's private computed cannot be tested; this can.
+enum AwayHeartsCopy {
+    /// Friend-scoped: read directly under a heart button, so it speaks about hearts travelling.
+    static func friendRowLine(for problem: HeartDropService.DeliveryProblem?) -> String? {
+        switch problem {
+        case nil:
+            return nil
+        case .noAccount:
+            return "Hearts can't travel while you're apart until this iPhone is signed in to iCloud."
+        case .uploadFailing(let since):
+            return "Hearts sent since \(dayLabel(since)) haven't reached the drop-off yet — Fernlet keeps trying."
+        case .undeliverable(let count):
+            return count == 1
+                ? "A heart couldn't be delivered before it expired."
+                : "\(count) hearts couldn't be delivered before they expired."
+        }
+    }
+
+    /// Feature-scoped: sits under the toggle, so it speaks about the feature's health.
+    static func settingsLine(for problem: HeartDropService.DeliveryProblem?) -> String? {
+        switch problem {
+        case nil:
+            return nil
+        case .noAccount:
+            return "Not signed in to iCloud — hearts can't be delivered yet."
+        case .uploadFailing(let since):
+            return "Hearts sent since \(dayLabel(since)) haven't reached the drop-off yet. Fernlet keeps trying."
+        case .undeliverable(let count):
+            return count == 1
+                ? "A heart couldn't be delivered before it expired."
+                : "\(count) hearts couldn't be delivered before they expired."
+        }
+    }
+
+    private static func dayLabel(_ date: Date) -> String {
+        date.formatted(date: .abbreviated, time: .omitted)
     }
 }

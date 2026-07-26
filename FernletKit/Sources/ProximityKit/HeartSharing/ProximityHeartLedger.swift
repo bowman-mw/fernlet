@@ -137,6 +137,26 @@ public final class ProximityHeartLedger {
         return true
     }
 
+    /// Records a dead-drop heart (bitchat adoptions Increment 3). Same id-dedup and retention as
+    /// the live path, but deliberately NOT the 5-minute receive window: a multi-day pickup batch
+    /// legitimately lands seconds apart and must not collapse to one heart. The receive-side
+    /// flood bound lives in `HeartDropDedupStore`'s per-sender per-day budget instead.
+    ///
+    /// It also does not ARM that window (`lastReceivedAt`), which is the live path's key: picking
+    /// up a days-old drop must not swallow the next in-person heart from the same friend.
+    @discardableResult
+    public func recordReceivedDropHeart(id: UUID, senderDisplayName: String, senderFingerprint: String) -> Bool {
+        guard !receivedHearts.contains(where: { $0.id == id }) else { return false }
+        receivedHearts.append(ReceivedHeartRecord(
+            id: id,
+            senderDisplayName: senderDisplayName,
+            senderFingerprint: senderFingerprint,
+            receivedAt: now()
+        ))
+        pruneAndSave()
+        return true
+    }
+
     // MARK: - Surfacing
 
     /// The heart whose Home bubble should show: the oldest undismissed heart still glowing.

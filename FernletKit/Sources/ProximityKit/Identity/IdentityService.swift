@@ -116,10 +116,17 @@ public final class IdentityService {
 
     /// X25519 ECDH → HKDF-SHA256 → ChaCha20-Poly1305 seal with forward secrecy.
     /// Wire form: ephemeralPubKey (32 B) || sealedBox.combined (nonce 12 B || ciphertext || tag 16 B).
-    public func seal(_ plaintext: Data, to peerKeyAgreementPublicKey: Data) throws -> Data {
+    /// `format: .wire2` deflate-compresses + bucket-pads the plaintext before sealing
+    /// (`SealedPayloadFraming`); pass it only when the peer advertised the `wire2` capability.
+    public func seal(_ plaintext: Data, to peerKeyAgreementPublicKey: Data, format: SealedPayloadFormat = .legacy) throws -> Data {
         guard let senderKey = keyAgreementKey else { throw IdentityError.notProvisioned }
         guard let peerPubKey = try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: peerKeyAgreementPublicKey) else {
             throw IdentityError.sealFailed
+        }
+        let body: Data
+        switch format {
+        case .legacy: body = plaintext
+        case .wire2:  body = SealedPayloadFraming.frame(plaintext)
         }
 
         let ephemeralKey = Curve25519.KeyAgreement.PrivateKey()
@@ -132,7 +139,7 @@ public final class IdentityService {
         )
 
         let sealedBox = try ChaChaPoly.seal(
-            plaintext,
+            body,
             using: symKey,
             authenticating: senderKey.publicKey.rawRepresentation
         )
@@ -140,7 +147,10 @@ public final class IdentityService {
     }
 
     /// Inverse of seal. `peerKeyAgreementPublicKey` is the sender's long-term X25519 public key.
-    public func open(_ ciphertext: Data, from peerKeyAgreementPublicKey: Data) throws -> Data {
+    /// `format: .wire2` unframes tolerantly — a decrypted body without a frame tag passes through
+    /// unchanged, covering the handshake race where a wire2-capable sender sealed legacy before
+    /// it learned our capabilities. Pass `.wire2` only when the SENDER advertised `wire2`.
+    public func open(_ ciphertext: Data, from peerKeyAgreementPublicKey: Data, format: SealedPayloadFormat = .legacy) throws -> Data {
         guard let recipientKey = keyAgreementKey else { throw IdentityError.notProvisioned }
         // Wire format: eskPub (32 B) || combined (nonce 12 B || ciphertext || tag 16 B)
         guard ciphertext.count >= 32 + 12 + 16 else { throw IdentityError.openFailed }
@@ -159,12 +169,70 @@ public final class IdentityService {
             outputByteCount: 32
         )
 
+        let plaintext: Data
         do {
             let sealedBox = try ChaChaPoly.SealedBox(combined: combined)
-            return try ChaChaPoly.open(sealedBox, using: symKey, authenticating: peerKeyAgreementPublicKey)
+            plaintext = try ChaChaPoly.open(sealedBox, using: symKey, authenticating: peerKeyAgreementPublicKey)
         } catch {
             throw IdentityError.openFailed
         }
+        switch format {
+        case .legacy:
+            return plaintext
+        case .wire2:
+            guard SealedPayloadFraming.hasFrameTag(plaintext) else { return plaintext }
+            return try SealedPayloadFraming.unframe(plaintext)
+        }
+    }
+
+    // MARK: - Heart drops (bitchat adoptions Increment 3)
+
+    /// UTC day index for heart-drop tag rotation (bitchat's day-rotating courier recipient tags).
+    public nonisolated static func heartDropDayEpoch(at date: Date) -> UInt64 {
+        UInt64(max(0, date.timeIntervalSince1970) / 86_400)
+    }
+
+    /// Static-static pair secret for heart-drop day tags — mirrors `presencePairSecret` with its
+    /// own salt so presence tags and drop tags can never collide across protocols. sharedInfo
+    /// stays EMPTY: both sides must derive the same key (symmetry requirement).
+    public func heartDropPairSecret(with friendKeyAgreementPublicKey: Data) throws -> SymmetricKey {
+        guard let myKey = keyAgreementKey else { throw IdentityError.notProvisioned }
+        guard let friendKey = try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: friendKeyAgreementPublicKey) else {
+            throw IdentityError.sealFailed
+        }
+        let shared = try myKey.sharedSecretFromKeyAgreement(with: friendKey)
+        return shared.hkdfDerivedSymmetricKey(
+            using: SHA256.self,
+            salt: Data("fernlet.heartdrop.v1".utf8),
+            sharedInfo: Data(),
+            outputByteCount: 32
+        )
+    }
+
+    /// A drop's public-DB record tag: HMAC-SHA256 over a domain string + the day epoch + the
+    /// SENDER's KA key (the sender term gives direction asymmetry, so my outgoing tag for a
+    /// friend never equals my expected incoming tag from them), truncated to 16 bytes, hex.
+    /// Uncorrelatable across days without the pair secret.
+    public nonisolated static func heartDropTag(
+        pairSecret: SymmetricKey,
+        dayEpoch: UInt64,
+        senderKeyAgreementPublicKey: Data
+    ) -> String {
+        var message = Data("fernlet.heartdrop.day.v1".utf8)
+        withUnsafeBytes(of: dayEpoch.bigEndian) { message.append(contentsOf: $0) }
+        message.append(senderKeyAgreementPublicKey)
+        let mac = HMAC<SHA256>.authenticationCode(for: message, using: pairSecret)
+        return Data(mac).prefix(16).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// ECDH against the static KA private, for opening static-fallback drops — the private key
+    /// itself never leaves this service (`HeartDropSealer.open` takes this as a closure).
+    public func heartDropStaticAgreement(withEphemeralPublicKey ephemeralPublicKey: Data) throws -> SharedSecret {
+        guard let myKey = keyAgreementKey else { throw IdentityError.notProvisioned }
+        guard let ephemeralKey = try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: ephemeralPublicKey) else {
+            throw IdentityError.openFailed
+        }
+        return try myKey.sharedSecretFromKeyAgreement(with: ephemeralKey)
     }
 
     // MARK: - Presence tags (mesh redesign Phase 4a)
@@ -664,12 +732,20 @@ public final class IdentityService {
         return String(hex.prefix(16))
     }
 
-    /// Matches canonical 16-char fingerprints and legacy 8-char values stored by older builds.
-    /// Fingerprints remain display and routing metadata only; authorization uses full key bytes.
+    /// Case-insensitive equality of canonical 16-char fingerprints — nothing else matches.
+    ///
+    /// The legacy 8-char prefix acceptance is GONE (bitchat-adoptions follow-up, 2026-07-25):
+    /// an 8-hex-char binding is a 32-bit target, GPU-grindable to collide, which is the same
+    /// weak-identity-binding class as bitchat's 2025 favorites-impersonation flaw. The only
+    /// legitimate 8-char values ever persisted were trust-vault rows kept between 2026-05-26
+    /// and 2026-06-12, and `ProximityTrustVault.normalized` re-derives those back to 16 chars
+    /// from the row's full signing key on every load — so prefix acceptance had no remaining
+    /// honest caller, only downside if an un-normalized source ever appeared. Fingerprints
+    /// remain display and routing metadata; authorization uses full key bytes.
     public nonisolated static func fingerprintsMatch(_ first: String, _ second: String) -> Bool {
         let lhs = first.lowercased()
         let rhs = second.lowercased()
-        guard [8, 16].contains(lhs.count), [8, 16].contains(rhs.count) else { return false }
-        return lhs.hasPrefix(rhs) || rhs.hasPrefix(lhs)
+        guard lhs.count == 16, rhs.count == 16 else { return false }
+        return lhs == rhs
     }
 }

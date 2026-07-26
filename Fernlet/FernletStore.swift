@@ -161,6 +161,13 @@ final class FernletStore {
         manager.heartLedger = heartLedger
         manager.onHeartSent = { [weak self] fingerprint in self?.closenessLedger.recordHeartSent(fingerprint: fingerprint) }
         manager.onHeartReceived = { [weak self] fingerprint in self?.closenessLedger.recordHeartReceived(fingerprint: fingerprint) }
+        // Away hearts (Increment 3): prekey-bundle gossip over the mesh intros, mirroring the
+        // presence path; the `heartsAway` capability advertises only under the user's consent.
+        manager.heartDropBundleProvider = { [weak self] in self?.heartDropService.currentLocalBundle() }
+        manager.onPeerPrekeyBundle = { [weak self] key, bundle in
+            self?.heartDropService.storePeerBundle(bundle, friendSigningKey: key)
+        }
+        manager.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
         return manager
     }()
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
@@ -203,6 +210,26 @@ final class FernletStore {
     /// Device-local closeness signal (in-person interaction counts) + close-slot assignment (Phase 5).
     /// Never synced — closeness is a private, per-device view.
     @ObservationIgnored private(set) lazy var closenessLedger = ClosenessLedger()
+    /// Offline "away" hearts via the CloudKit public-DB dead-drop (bitchat adoptions Increment 3).
+    /// All crypto lives on the ProximityKit side; `HeartDropCloudTransport` (CloudKitSync) ferries
+    /// only rotating day tags + sealed blobs — the S3 wall seam is `HeartDropTransporting` in
+    /// FernletDomainModel. Consent-gated by `settings.heartsAwayDelivery` at queue AND fetch;
+    /// shares the SAME heart ledger as the live paths so the 5-minute cooldown stays one gate.
+    @ObservationIgnored private(set) lazy var heartDropService: HeartDropService = {
+        let service = HeartDropService(
+            ledger: heartLedger,
+            isEnabled: { [weak self] in self?.settings.heartsAwayDelivery ?? false },
+            activeFriends: { [weak self] in
+                (self?.proximityTrustVault.trustedPeers ?? []).filter {
+                    $0.blockedAt == nil && $0.revokedAt == nil && !$0.keyAgreementPublicKey.isEmpty
+                }
+            },
+            localDayKey: { FernletDate.dayKey(for: $0) },
+            displayName: { [weak self] in self?.proximityDisplayName ?? "" }
+        )
+        service.transport = HeartDropCloudTransport()
+        return service
+    }()
     /// The standing presence radio (mesh redesign Phase 4a/4b): broadcasts rotating pairwise-DH
     /// tags so KEPT friends recognize each other nearby, and — Phase 4b — carries in-person hearts
     /// over on-demand short-lived pairwise connections (the standalone heart radio is deleted).
@@ -214,6 +241,16 @@ final class FernletStore {
         // Hearts sent/received in person feed the closeness signal (day-capped downstream).
         manager.onHeartSent = { [weak self] fingerprint in self?.closenessLedger.recordHeartSent(fingerprint: fingerprint) }
         manager.onHeartReceived = { [weak self] fingerprint in self?.closenessLedger.recordHeartReceived(fingerprint: fingerprint) }
+        // Away hearts (Increment 3): our prekey bundle rides the sealed presence intro; a friend's
+        // verified intro hands theirs to the drop cache; a race-window live-send failure falls
+        // back to queueing the drop instead of failing outright.
+        manager.heartDropBundleProvider = { [weak self] in self?.heartDropService.currentLocalBundle() }
+        manager.onPeerPrekeyBundle = { [weak self] key, bundle in
+            self?.heartDropService.storePeerBundle(bundle, friendSigningKey: key)
+        }
+        manager.queueAwayHeart = { [weak self] friend in
+            self?.heartDropService.queueHeart(to: friend) == .queued
+        }
         return manager
     }()
     @ObservationIgnored let derivedSignalsService = DerivedSignalsService()
@@ -1146,6 +1183,95 @@ final class FernletStore {
     func setAllowNearbyHearts(_ value: Bool) {
         settings.allowNearbyHearts = value
         snapshotSaveCoordinator.schedule()
+    }
+
+    /// Toggle away-delivery for hearts (bitchat adoptions Increment 3). Enforcement lives inside
+    /// `HeartDropService` (queue and fetch both consult the setting), so flipping this off stops
+    /// future syncs immediately.
+    ///
+    /// Turning it OFF also PURGES the dead-drop: the sealed records this device already uploaded are
+    /// deleted from the CloudKit public database and the outbox is cleared. Leaving them was the old
+    /// behavior and it was wrong — public-database records have no TTL, and once consent is gone
+    /// nothing in the app is allowed to name them again, so the copies would sit there forever with
+    /// nobody able to remove them. Consequence the Settings copy has to state: queued hearts that
+    /// never made it out are dropped, not resumed on re-enable.
+    ///
+    /// The purge is best-effort over the network, so a failure is not swallowed: the outbox keeps the
+    /// record names, `heartsAwayPurgePending` re-derives from them, Settings says so, and the
+    /// foreground listener retries via `retryHeartsAwayPurgeIfNeeded()`.
+    func setHeartsAwayDelivery(_ value: Bool) {
+        settings.heartsAwayDelivery = value
+        if value {
+            // Re-enabling supersedes any pending purge: whatever survived is back under consent and
+            // the service's own cleanup deletes it at the outbox expiry. Nothing to clear here —
+            // `heartsAwayPurgePending` reads the consent flag, so it is already false.
+            heartDropService.syncNow()
+        } else {
+            Task { [weak self] in await self?.purgeHeartDropRecords() }
+        }
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// True when consent is off but this device still has sealed hearts on the public database that a
+    /// failed purge could not delete. Surfaced in Settings and retried on the next foreground.
+    ///
+    /// DERIVED from the outbox, never stored — the outbox already IS the durable record of what we
+    /// uploaded, and a second on-disk flag would only add another trace of a feature the user has
+    /// just opted out of. The in-memory flag this replaces was wrong on two paths:
+    /// - it died with the process, so a purge that failed offline and was followed by an app kill was
+    ///   forgotten entirely: nothing retried it, and this device's records sat on the public database
+    ///   until they aged out while the user read "off" as "removed";
+    /// - `heartsAwayDelivery` lives in the SYNCED snapshot, so withdrawing consent on another device
+    ///   arrives here as a state change and never runs the setter a flag would have been set in.
+    /// Reading it re-derives on both, because both are visible in (consent flag, outbox).
+    var heartsAwayPurgePending: Bool {
+        // Short-circuits on consent so the derived read can never be true while the feature is on,
+        // which is what makes it safe to drive the retry directly off this value.
+        guard !settings.heartsAwayDelivery else { return false }
+        return heartDropService.hasStrandedDeadDropRecords()
+    }
+
+    /// True while a purge is between its capture and its remote delete. The retry seam fires from a
+    /// listener chain that re-enters on every scene/tab/lock event, and each `purgeDeadDrop()` bumps
+    /// the service's purge generation — so an unguarded second call would supersede the first
+    /// mid-flight and multiply the delete round trips instead of finishing the one already running.
+    @ObservationIgnored private var isPurgingHeartDropRecords = false
+
+    /// Set when a WIPE-time purge failed: this device knowingly left sealed hearts on the CloudKit
+    /// public database and, after `wipeForDeleteAll()`, can no longer name them. See the delete-all
+    /// call site for why it is process-local and one-way.
+    @ObservationIgnored private var strandedDeadDropRecordsFromWipe = false
+
+    /// Retry seam for the foreground listener chain (ContentView), driven entirely by the derived
+    /// state above: it costs nothing when nothing is outstanding, it picks up a purge owed from a
+    /// previous launch, and it picks up consent withdrawn on another device — none of which the
+    /// old setter-only wiring could see.
+    func retryHeartsAwayPurgeIfNeeded() {
+        Task { [weak self] in await self?.retryHeartsAwayPurgeNow() }
+    }
+
+    /// Awaitable form of the retry seam, mirroring `HeartDropService.syncOnce()` vs `syncNow()`:
+    /// production fires and forgets, tests await a settled state. Spinning on the fire-and-forget
+    /// version instead made the purge tests flaky under full-suite load, where every `@MainActor`
+    /// suite competes for the actor the detached Task needs.
+    @discardableResult
+    func retryHeartsAwayPurgeNow() async -> Bool {
+        guard heartsAwayPurgePending, !isPurgingHeartDropRecords else { return false }
+        await purgeHeartDropRecords()
+        return true
+    }
+
+    private func purgeHeartDropRecords() async {
+        guard !isPurgingHeartDropRecords else { return }
+        isPurgingHeartDropRecords = true
+        defer { isPurgingHeartDropRecords = false }
+        // Re-checked here, not only at the call site: the setter's task and a foreground retry can
+        // both be in flight, and the user may have turned the feature back ON in between — purging
+        // then would delete hearts they now expect to be delivered.
+        guard !settings.heartsAwayDelivery else { return }
+        // No bookkeeping on the result: a failed purge leaves the entries (and their record names)
+        // in the outbox, which is exactly what `heartsAwayPurgePending` reads.
+        await heartDropService.purgeDeadDrop()
     }
 
     /// Toggle the nearby-friends presence layer (mirrors `setAllowNearbyRecipeShares`). Turning
@@ -3426,7 +3552,6 @@ final class FernletStore {
     /// - the moderation self-ban — a safety mechanism; letting a wipe undo a block would make "delete
     ///   my data" an abuse vector.
     /// - the milestone ledger — lifetime care counts, product call that they outlive a reset.
-    /// - the mesh identity keypair — wiping it would force every friend to re-add you.
     /// - the shared-photo wall (`PrivateMediaStore` via `meshNetworkManager`) — BOTH the photos friends
     ///   sent you and the ones you shared with them (a photo you shared is cached under your own
     ///   fingerprint, so it is not "someone else's gift" — it is still kept). By product decision the wall
@@ -3565,6 +3690,13 @@ final class FernletStore {
         // their social data visibly surviving a wipe in the running session.
         meshNetworkManager.clothingShop.clearAll()
 
+        // 7b. More session-scoped social surfaces that would otherwise survive the wipe in a running
+        // session (PrivacyWipeCoverage gap, 2026-07-25): temp messages are memory-only but a wipe is a
+        // harder stop than the session end that normally clears them, and the presence radio keeps
+        // advertising/matching until stopped.
+        meshNetworkManager.sessionMessages.clear()
+        presenceManager.stop()
+
         // `resetAll()` reports any per-row store whose CloudKit delete failed (designs / recipes / coins
         // left on disk to re-sync) plus the Worry Box purge. Those used to be discarded, so a failed
         // delete there looked complete.
@@ -3616,6 +3748,82 @@ final class FernletStore {
             outcome.incompleteStores.append("AI activity log")
         }
         await AIAuditLog.shared.clear()
+
+        // 11. Proximity identity + sealed-content device keys (bitchat adoptions Increment 1,
+        // Docs/PrivacyWipeCoverage.md). `IdentityService.wipe()` had ZERO call sites before this, so
+        // the Ed25519/X25519 identity — which even survives an app reinstall via the keychain —
+        // outlived "Delete everything", leaving a post-wipe "fresh start" recognizable to every
+        // friend's trust vault. Wiping deliberately breaks every trust relationship (friends
+        // re-friend in person; same semantics as bitchat's panic wipe) and takes the backup-escrow
+        // rows under the same keychain service with it — their sealed backups were already deleted
+        // in step 2, so the keys are orphans. All three live IdentityService caches are wiped so RAM
+        // matches the keychain until relaunch.
+        do {
+            try meshNetworkManager.wipeIdentityForDeleteAll()
+            try presenceManager.wipeIdentityForDeleteAll()
+            try recipeShareManager.wipeIdentityForDeleteAll()
+        } catch {
+            outcome.incompleteStores.append("your nearby-friends identity")
+        }
+        // Away-hearts dead-drop (Increment 3). The REMOTE purge has to run BEFORE the local wipe:
+        // the sealed records this device uploaded to the CloudKit public database are addressable
+        // only by the record names held in the outbox, and recipients cannot delete a sender's
+        // records — so wiping first would strand them there permanently, with nothing left in the
+        // app able to name them. The local wipe below still runs on failure (privacy wins over a
+        // retry we can no longer offer), which is precisely why a failure has to be REPORTED: after
+        // this point the remote copies are unaddressable, and the dialog promises they are gone.
+        // Flagged as in-flight so the foreground retry seam — whose listener chain can fire during a
+        // multi-second wipe — does not start a second, competing purge over the same records.
+        isPurgingHeartDropRecords = true
+        let deadDropPurged = await heartDropService.purgeDeadDrop()
+        isPurgingHeartDropRecords = false
+        if !deadDropPurged {
+            // Latched, because the local wipe below destroys the record names those copies are
+            // addressed by and only a record's creator may delete it from the public database: after
+            // this point nothing — not this process, not a reinstall — can ever retry. That is
+            // precisely why it must not be forgotten. The failure alert invites the user to try
+            // again, and a second wipe finds an empty outbox, so without this latch the retry would
+            // come back reporting a CLEAN, complete deletion over records this device knowingly left
+            // on a public database.
+            //
+            // Why latch rather than repair: repair needs the record names to survive the wipe, and
+            // nothing at this layer can keep only those — the outbox entries that hold them also
+            // hold each recipient's signing key and the sealed heart itself, so retaining the outbox
+            // would leave a durable trace of who the user sends hearts to across the wipe they just
+            // asked for. Privacy wins; the honesty debt is paid here instead. (A minimal
+            // record-names-only retention seam in ProximityKit would let us have both.)
+            //
+            // Process-local on purpose: persisting it would re-create an on-disk trace of a feature
+            // the user just erased, and since it can never legitimately become false again that
+            // trace would be permanent.
+            strandedDeadDropRecordsFromWipe = true
+        }
+        if strandedDeadDropRecordsFromWipe {
+            outcome.incompleteStores.append("hearts parked in iCloud")
+        }
+        // Then the local state: prekeys (keychain), peer bundle cache, outbox, durable dedup, and
+        // the service's own identity cache (the 4th live instance).
+        heartDropService.wipeForDeleteAll()
+        // No `heartsAwayPurgePending` reset needed: it derives from the outbox this just emptied, so
+        // the Settings "it'll keep trying" notice cannot outlive the wipe that made retrying
+        // impossible — which is the honest reading, since nothing addressable is left.
+        // Orphaned at-rest keys: the journal/worry device keys, whose sealed rows died with the
+        // repository purge. They regenerate lazily on next use; keychain not-found counts as done,
+        // so they carry no incomplete-store signal.
+        KeychainItem.delete(for: .deviceJournalKey, service: KeychainItem.journalService)
+        KeychainItem.delete(for: .deviceWorryKey, service: KeychainItem.journalService)
+        // The shared private-media content key (`com.fernlet.private-media`) is deliberately NOT
+        // deleted, and must not be re-added here. It is ONE keychain row behind EVERY
+        // `PrivateMediaStore` — including `MeshNetworkManager.photoCacheStore`, which holds the
+        // friend photo wall this funnel keeps by design (see the survivors list above). Deleting it
+        // would not orphan a key, it would shred the wall: the next `mediaKey()` finds no row, mints
+        // a fresh random one, and every retained photo decrypts to garbage — permanently, with no
+        // failure signal anywhere. A key whose OTHER stores were just emptied protects nothing extra,
+        // so keeping it discloses nothing. The cache invalidations below stay: they are still correct
+        // hygiene for the emptied stores (next read re-fetches the surviving row).
+        mealPhotoStore.invalidateEncryptionKeyCache()
+        progressPhotoStore.invalidateEncryptionKeyCache()
+        recipePhotoStore.invalidateEncryptionKeyCache()
 
         if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {
             outcome.incompleteStores.append("your storage settings")

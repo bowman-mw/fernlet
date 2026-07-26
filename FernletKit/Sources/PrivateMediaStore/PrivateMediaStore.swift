@@ -52,6 +52,12 @@ public struct PrivateMediaStore {
         self.decoder.dateDecodingStrategy = .iso8601
     }
 
+    /// Delete-all seam (Docs/PrivacyWipeCoverage.md): drops this store's provider-cached media
+    /// key after the shared keychain row is deleted, so RAM matches the keychain until relaunch.
+    public func invalidateEncryptionKeyCache() {
+        keyProvider.invalidateCachedKey()
+    }
+
     public func load() -> [FriendPhotoPayload] {
         guard let data = try? Data(contentsOf: indexURL), !data.isEmpty,
               let photos = try? decoder.decode([FriendPhotoPayload].self, from: data) else { return [] }
