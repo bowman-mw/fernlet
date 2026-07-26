@@ -97,6 +97,21 @@ These are the wire-level pieces both apps implement. All of them extend existing
 
 ### 3.3 The coach↔trainee connection — hybrid iMessage + CloudKit
 
+> ⚠️ **SUPERSEDED on the channel priority (owner, 2026-07-26).** This section, §3.6, §6 and §8 are
+> written around the hybrid being primary. It is not. The **in-person mesh session is the primary
+> channel**: coach and trainee meet, work out, and the coach hands over the next week's workouts plus
+> any recipes, weekly. The hybrid below is the **secondary/off-week fallback** — for when a session is
+> missed, so the trainee still has next week's workouts.
+>
+> Two consequences worth reading before building against this section: pairing/trust bootstrap now
+> always happens **in person**, so the remote channel never has to establish trust for a new pair
+> (which removes much of what §3.2's App Attest gate existed to solve); and the weekly cadence bounds
+> the remote channel to covering a missed week or two.
+>
+> See "Coach channel model" in
+> [Docs/Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md](Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md).
+> **These four sections need revising to match before implementation.**
+
 **This hybrid is the primary trainer↔trainee connection.** iMessage (a universal link) is the
 human-visible delivery surface — the conversation, the summary text, the card. A CloudKit
 public-database dead-drop (§3.4) is the programmatic layer underneath — large-plan overflow,

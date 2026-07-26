@@ -6,9 +6,18 @@ plus a spot-check of the shipped code. bitchat remains the pattern reference (Un
 copied verbatim.
 
 Three tracks. **Track A ships first because it fixes bugs that are live today**; B is a coverage
-improvement to a property that is degraded but working; C is mostly a decision record plus one
-two-line UI fix. B lands after A because both edit `HeartDropPeerBundleCache` and A rewrites its
-load/persist seam — doing B first means rewriting B.
+improvement to a property that is degraded but working. B lands after A because both edit
+`HeartDropPeerBundleCache` and A rewrites its load/persist seam — doing B first means rewriting B.
+
+**Track C changed shape on 2026-07-26.** It was written as a decision record plus one small UI fix,
+on the assumption that the in-person coach session might never ship. The owner has since confirmed
+the opposite: **the in-person mesh session is the primary coach channel**, with iMessage + CloudKit
+as the off-week fallback. Track C is therefore real build work — read "Coach channel model" at the
+top of Track C before anything else in it, and note that it now contradicts
+`Docs/FernletCoach-Specification-2026-07-19.md`, which still has the priority the other way round.
+
+A and C are independent and can proceed in either order or in parallel; A/B share files, C does not
+touch them.
 
 ## Spot-check corrections to the research passes
 
@@ -29,25 +38,31 @@ Read before trusting the increments below; these are the places the reports were
 
 | Decision | Call |
 | --- | --- |
-| Track order | **A (durability) → B (signed prekey) → C (coach posture).** A fixes live data-loss; B is coverage; C is mostly "write down what not to do". |
+| Track order | **A (durability) → B (signed prekey); C (coach) is independent.** A fixes live data-loss and must precede B (shared files). C no longer depends on either — it became real build work when the in-person session was confirmed as the primary coach channel, so it can run in parallel or first if the coach feature is the priority. |
 | Sidecar failure model | **Refuse, don't merge.** bitchat merges a pending snapshot because its router accumulates real messages during a locked BLE wake. Fernlet has no writer that runs while a sidecar is unloaded, so every store fails closed instead. Saves ~400 lines of merge bookkeeping. |
 | Sidecar protection class | **Stays `.completeFileProtection`.** Seal at rest, do NOT relax to `completeUntilFirstUserAuthentication`. Sealing alone is a strict gain; sealing + AFU key is a net loss (see Increment 4 rationale). |
 | Per-friend disjoint prekey sets (research "Design B") | **Not doing.** It tightens the FS window on drops that already have FS while doing nothing about the drops that have none. Reasoning and the conditions that would reopen it are in "Not doing". |
 | `prekeyBundle` PayloadType / second FernletDomainModel clean build | **Not doing this round.** Only the per-friend mesh path needs it, and per-friend is not shipping. |
-| Coach proximity session / coach QR ceremony | **Not doing.** Blocked behind the App Attest prototype the coach spec makes a hard gate (§3.2/§8), and the QR ceremony is structurally bound to the friend-mesh `PeerSlot`. |
+| Coach proximity session / coach QR ceremony | **REQUIRED — reversed 2026-07-26 (owner).** The in-person mesh is the PRIMARY coach channel, not a deferred nice-to-have. See "Coach channel model" below; Increment 10 is promoted from optional to blocking. |
+| O1 outbox vs restore | **Device-scoped.** `ThisDeviceOnly` seal key + `isExcludedFromBackup` on the sidecars, so file and key share one fate. Also removes today's cleartext friend-graph from the iCloud backup. |
+| O2 signed-prekey window | **14 d seal window → 29 d retention**, plus an invariant test that `spkRetention < bundleLifetime + expiryGrace` — so nothing this change introduces is ever the longest-lived key on the device. |
+| O3 push / `CKQuerySubscription` for hearts | **No.** A subscription hands CloudKit a standing registration of your whole pairwise tag set — a durable server-side description of the social graph, strictly worse than today's burst of foreground queries. If latency is the complaint, post a local notification when a foreground fetch lands a heart (`NotificationService` already does this elsewhere). **Consequence: the protection-class relaxation is off the table and Track A stays pure bug-fixing.** |
+| O4 corrupt outbox | **Salvage element-wise, DISCARD the remainder, audit-log the count.** Do not quarantine to a file: nobody can act on a corrupt outbox blob, and keeping one creates a second friend-key privacy surface the wipe would have to own. Requires per-row decodability (NDJSON or a lossy array decode) — `[Entry]` fails atomically. |
+| O5 ledger in this round | **Yes.** Track A's product is "no heart sidecar silently resets"; four of five stores makes it a convention, not an invariant, and leaves the broken pattern for the next reader to copy. |
+| O6 coach `channelTag` | **Neither pole — rotate on a COARSE epoch (monthly, or weekly).** Same construction as the hearts day tag with a bigger divisor. Subscriptions churn 12–52×/year instead of 365, while an observer's correlation window drops from the whole relationship to one epoch. Resolves the §3.4 conflict without sacrificing either goal. |
 | `ProximityMode.trainer` + the four reserved trainer `PayloadType` cases | **Do not delete.** `.trainer` is the decode freeze-default for `ProximityTrustedPeerRecord.mode` (`ProximityPersistenceRecords.swift:91-92`). Removing it is both a FernletDomainModel clean-build change and a persisted-compat break on every existing vault row. |
 
-### OPEN — owner questions, do not assume an answer
+### RESOLVED — owner, 2026-07-26
 
-| # | Question | Why it blocks |
-| --- | --- | --- |
-| O1 | **Must the away-hearts outbox survive an iCloud/iTunes restore onto a new device?** | Sets the seal key's accessibility in Increment 4. Today's plaintext file *does* ride an encrypted backup. A `ThisDeviceOnly` key does not, so restoring would leave an unreadable outbox and permanently strand this device's public-DB records. Options: (a) `ThisDeviceOnly` key **+ `isExcludedFromBackup` on the sidecars** so file and key share one fate (recommended — matches the ledger's device-scoped philosophy and the already-accepted reinstall-orphan stance, plan doc :182); (b) non-ThisDeviceOnly `AfterFirstUnlock` key so key and bytes ride the same backup (weaker, inconsistent with `HeartPrekeyStore`); (c) accept the regression and quarantine on restore. |
-| O2 | **Signed-prekey retention point on the coverage/window curve.** `sealWindow = 21 d → retention = 36 d` (best coverage; private half lives *longer* than today's one-time keys) or `sealWindow = 14 d → retention = 29 d` (window better than today, coverage doubled not tripled). | Sets the constants Increment 6 asserts in its invariant test. Values call, not technical. |
-| O3 | **Is the push / `CKQuerySubscription` upgrade actually wanted?** | If no, the protection-class relaxation never happens and Track A is justified purely as bug-fixing. If yes, it needs a feasibility spike first: subscriptions match a *static* predicate, but drop tags rotate daily and there are `pickupWindowDays + 1 = 15` live tags per friend (`HeartDropService.swift:62`), i.e. 15×friends subscriptions created and torn down every UTC day against the public database. Note also that received hearts surface only in-app (bubble/glow) — a background fetch delivers into a UI nobody is looking at. |
-| O4 | **Corrupt outbox: element-wise salvage or wholesale quarantine?** | Salvage preserves `recordName`s across an additive schema change, which is the highest-consequence loss in the subsystem. Quarantine never half-trusts a damaged file but creates a second privacy surface `wipeForDeleteAll` must know about. Increment 2 assumes salvage-then-quarantine-the-remainder; say so if that is wrong. |
-| O5 | **Should `ProximityHeartLedger` adopt the sidecar helper in the same round?** | Same bug, same subsystem, ~20 lines once the helper exists; a wiped ledger re-opens the 5-minute receive gate and loses "who sent me warmth". Technically outside Track A's stated scope. Increment 3 includes it; drop it if you want the round narrower. |
-| O6 | **Coach `channelTag`: static or rotating?** | Coach spec §3.4 specifies a *static* per-relationship tag so `CKQuerySubscription` can push serverlessly. The hearts round deliberately chose day-rotating tags so a public-DB observer cannot correlate a channel over time. A static tag hands an observer "this pseudonymous pair exchanged N records over six months". This is a real conflict in the spec and should be resolved before anyone writes coach transport code. |
-| O7 | **Is the in-person `.trainer` proximity session wanted at all**, or is the shipped `ShareLink` file export the permanent answer for trainer bundles? | Determines whether Increment 10's latent defects ever need fixing. AirDrop is in-person too, and the export is already `.completeFileProtection`. |
+O1-O6 are answered in the locked table above; the reasoning that produced each is in this session's
+walkthrough. **O7 was not answered but CORRECTED** — the question assumed the in-person session was
+optional. It is the primary channel. See below.
+
+Two values are deliberately still soft, and neither blocks a build: O2's exact constants (14 d/29 d is
+the recommendation; the invariant test is what actually matters) and O6's epoch length (monthly vs
+weekly — pick when the coach transport is written, since it trades push latency against correlation
+window).
+
 
 ---
 
@@ -356,6 +371,62 @@ SPK-only bundle entirely. Extend — do not merely keep passing — the existing
 
 # Track C — coach path (Increments 8-10)
 
+## Coach channel model (owner, 2026-07-26) — READ THIS FIRST
+
+An earlier draft of this plan asked whether the in-person `.trainer` session was wanted at all and
+recommended dropping it. **That was wrong, and it inverts this track.** The owner's model:
+
+> The **in-person mesh session is the PRIMARY channel.** Coach and trainee meet, work out together,
+> and the coach hands over the next week's workouts plus any recipes. Then repeat, weekly.
+> **iMessage + CloudKit are the SECONDARY channel**, for off weeks — if you can't make the in-person
+> session, you still get next week's workouts.
+
+Consequences, in order of how much they change:
+
+1. **Increment 10 is promoted from "only if" to BLOCKING.** The three defects it lists are not latent
+   any more; they sit on the primary path. Nothing about the coach feature works until they are fixed:
+   the non-UWB handshake hang (`ProximityCoordinator.swift:564-580` — a coach or trainee on a
+   non-UWB iPhone can never complete the handshake, and `tapToConfirm()` has no UI), the absent
+   verification ceremony, and `TrainerExportPayload`'s bound sitting after decrypt instead of before.
+2. **A coach verification ceremony is now required work, not a deferred idea.** This is the single
+   biggest piece. The QR ceremony is structurally bound to the friend mesh: `beginQRVerification`
+   matches on `manualCommitPeer(of:)` i.e. `state == .awaitingManualCommit`, and
+   `pendingQRVerifications` is keyed by `PeerSlot.id`, a friend-mesh construct. A coach session has no
+   slot. So this is either a coach-side slot equivalent or a second ceremony implementation — and
+   whichever it is, **carry the fix from this round's review with it**: the displayed nonce must be
+   bound to the specific peer the sheet was opened for, the signature must happen *after* that check,
+   and a wrong-peer challenge must be dropped WITHOUT clearing the nonce. That defect is easy to
+   reintroduce in a fresh implementation, and on a coach channel the blast radius is larger than on
+   the friend mesh.
+3. **Trust bootstrap is always in person — and that is a genuine security win.** Because pairing
+   happens at a session, the remote channel is only ever used between parties that already verified
+   face to face. The CloudKit fallback never has to bootstrap trust, only to carry payloads for an
+   already-established pair. That removes the hardest problem from the remote channel and is worth
+   stating explicitly in the coach spec, which currently reasons about remote pairing.
+4. **The weekly cadence bounds the remote channel's requirements.** The fallback only has to cover a
+   missed week, occasionally two. A 14-day record lifetime — the same `HeartDropOutbox.entryLifetime`
+   the hearts channel already uses — is a natural fit, so R1's derived-pickup-window rule transfers
+   directly rather than needing new constants.
+5. **Recipes ride the coach channel too.** That is new scope this plan had not accounted for. Recipes
+   currently move over the friend mesh as `PayloadType.recipeShare`
+   (`ProximityRecipeShareManager`), which is friend-scoped and consent-gated as a friend feature.
+   A coach handing over recipes needs either a coach-scoped reuse of that payload type or its own —
+   and the "a coach is NOT a friend" rule means it must not simply borrow the friend path's trust
+   policy or consent surface. Decide this before writing the coach session.
+6. **Payload size changes the R-list.** A week of workouts plus recipes is orders of magnitude larger
+   than a 256-byte heart. `TrainerExportPayload.maxBundleBytes` is 2 MiB; the hearts wire cap is
+   8 KiB. R3's "hard size cap enforced before decrypt/inflate" still applies, but the number is a
+   coach number, and the inflate-bomb guard matters far more here than it does for hearts.
+
+### ⚠️ This contradicts the coach spec — fix that too
+
+`Docs/FernletCoach-Specification-2026-07-19.md` states the opposite channel priority: §3.3 makes the
+hybrid iMessage + CloudKit connection primary, §6's channel-policy table is written around it, and §8
+phases the work accordingly. **The spec is now stale on its most load-bearing decision.** Whoever
+picks up implementation should revise §3.3, §3.6, §6 and §8 to make the in-person mesh primary and the
+remote channel the off-week fallback, before building against it. A pointer has been added at the
+spec's §3.3 so a reader of that document is not misled.
+
 ## (a) What the coach path already inherits from shared code — with proof
 
 Strictly, *nothing executes* today: `begin(role:mode:)` (`ProximityCoordinator.swift:199`) has three
@@ -400,7 +471,9 @@ One **live user-visible** bug, and it is coach-shaped only by name:
   mesh, turning on the Coach/User plan-source tag (:106, :117, :179) for someone with no coach. It is
   the only production consumer of that log and it is measuring the wrong thing.
 
-Three latent defects, unreachable today, that would bite the day `.trainer` is switched on:
+Three defects that are unreachable *today* only because no production code starts a `.trainer`
+session. Since the in-person session is the PRIMARY coach channel (see "Coach channel model"), these
+are **blocking work for the coach feature**, not curiosities — Increment 10 owns them:
 
 - **A non-UWB device can never complete a trainer handshake.** `handleDistance` guards
   `ranging.isHardwareSupported` (`ProximityCoordinator.swift:564`) before the tap gate (:577), so with
@@ -492,12 +565,14 @@ the mirror-image sealer/dedup/transport from the same source, and must not fork 
 **Trainer mode comes from the separate coaching app.** That is a constraint on this whole track, not a
 detail, and it changes what "apply the hardening to the coach mesh" can even mean:
 
-- **This repo may never call `begin(mode: .trainer)` at all.** Today no production code does
-  (`MeshNetworkManager.swift:1551`, `PresenceManager.swift:651`,
-  `ProximityRecipeShareManager.swift:401` are all `.friend`). If the coach app is the advertiser, the
-  trainee side is at most the browser/client half — and per coach spec §3.3 the primary channel is
-  iMessage + CloudKit, not MultipeerConnectivity, so the in-person `.trainer` session may never ship
-  on either side. Increment 10 stays gated behind O7 for exactly this reason.
+- **This repo DOES need a `.trainer` coordinator — but probably only the browser/client half.** Today
+  no production code calls `begin(mode: .trainer)` (`MeshNetworkManager.swift:1551`,
+  `PresenceManager.swift:651`, `ProximityRecipeShareManager.swift:401` are all `.friend`). Since the
+  in-person session is the primary channel (see "Coach channel model") and the coach app is the one
+  that advertises, Fernlet is the **browser** side: it discovers the coach, completes the handshake and
+  the ceremony, and receives the week's plan and recipes. Decide the role split explicitly and write it
+  down — `begin(role:mode:)` takes both, and getting it backwards means two advertisers that never
+  find each other.
 - **Half the implementation is in a repo this plan cannot review.** A defect in the coach app's
   dead-drop opener is invisible to Fernlet's test suite, its wall check, and its review rounds. So the
   hardening has to travel by two mechanisms, and only one of them is code:
@@ -519,15 +594,42 @@ detail, and it changes what "apply the hardening to the coach mesh" can even mea
   capability handshake are the mechanisms; neither has ever been exercised across a release boundary
   the way two separate App Store apps will exercise it.
 
-## Increment 10 — coach coordinator defects (ONLY if a live `.trainer` session ever ships)
+## Increment 10 — coach coordinator defects (BLOCKING: this is the primary channel)
 
-Gated on **O7** and on the App Attest prototype. If it happens: the non-UWB hang
-(`ProximityCoordinator.swift:564-580`) needs the friend path's `awaitingManualCommit` fallback or a
-real `tapToConfirm` UI — which is also the precondition for reusing the QR ceremony; a real
-`localCapabilities` array must be passed at coordinator construction; `TrainerExportPayload`'s bound
-moves to a pre-decrypt gate. Expect the ceremony reuse to be bigger than it looks: it is slot-bound
-(`pendingQRVerifications` keyed by slot id) and slots are a friend-mesh construct, so this is either a
-coach-side slot equivalent or a second ceremony implementation.
+Promoted from optional on 2026-07-26. These are not latent defects on a path that may never ship —
+they are on the path the coach feature runs on. In dependency order:
+
+1. **Non-UWB handshake hang.** `handleDistance` guards `ranging.isHardwareSupported`
+   (`ProximityCoordinator.swift:564`) before the tap gate (:577), so with no UWB there is no distance
+   stream and `.awaitingTapConfirmation` (entered at :277) only advances via `tapToConfirm()` (:298) —
+   a public API with **zero production callers**. The session hangs to timeout. Fix by giving the
+   trainer path the friend path's `awaitingManualCommit` fallback, or by building a real tap UI. This
+   is also the precondition for (2), because the QR ceremony keys off `awaitingManualCommit`.
+   **Note this is not a rare edge case for a coach feature**: the coach and the trainee each need a
+   UWB-capable iPhone for the current path to work at all.
+2. **A verification ceremony for the coach session.** See "Coach channel model" item 2 above for the
+   structural problem (slot-bound) and, more importantly, for the defect that must not be
+   reintroduced (per-peer nonce binding, sign-after-check, wrong-peer drop must not clear).
+3. **Real capabilities at construction.** `"caps": mode == .trainer ? "plan,live,delta" : "share"`
+   (`ProximityCoordinator.swift:1086`) is a stale discovery-info string nothing parses. A coach
+   coordinator must pass a real `localCapabilities` array (pattern: `MeshNetworkManager
+   .localCapabilities()`) or **wire2 silently degrades to legacy for the entire coach channel with no
+   failure signal** — the exact silent-downgrade class this round's review already had to fix once.
+4. **`TrainerExportPayload`'s bound moves before the crypto.** `isWellFormed` (:38) runs only after
+   the envelope is decrypted and (under wire2) inflated. The hearts round landed the opposite
+   ordering — `HeartDropSealer.open` gates size at :88-89 before key agreement, and `openIncoming`
+   re-gates at :396. Coach payloads are far larger, so the inflate-bomb exposure is correspondingly
+   worse.
+5. **A trust policy that is not the friend policy.** All six production injections use
+   `FriendSessionTrustPolicy`, whose `isTrustedProximityPeer` returns `true` unconditionally (:25) and
+   whose block check reads the **friend** vault. Injecting it into a coach coordinator is the "a coach
+   is NOT a friend" violation the coach spec §3.2 forbids. `ProximityTrustVault` (:46-50) already
+   implements remembered-trust semantics and is the natural starting point.
+
+**Sequencing note:** (1) and (5) are prerequisites for a working session; (2) is the security gate on
+it; (3) and (4) are correctness fixes that can land alongside. None of this touches
+FernletDomainModel, so no clean build is implied — with the exception of any new coach payload type,
+which does.
 
 ---
 
@@ -564,7 +666,7 @@ coach-side slot equivalent or a second ceremony implementation.
 | **Relaxing sidecar file protection to `completeUntilFirstUserAuthentication`** | Strict privacy loss until a background writer exists: it hands an AFU-state attacker both the ciphertext and the key that opens it. bitchat relaxes because it genuinely wakes on BLE; Fernlet does not wake at all. Push does not *justify* the relaxation — it merely makes it unavoidable for whichever store a woken pass must write. |
 | **Push / `CKQuerySubscription` for hearts** | See **O3**. Received hearts surface only in-app, so a push-woken fetch delivers into a UI nobody is looking at; the foreground `syncNow()` would have fetched it seconds later anyway. And subscriptions match a static predicate while tags rotate daily across 15 live tags per friend. Needs a feasibility spike before it is treated as a planned v2. Note Increments 1-4 are the prerequisite for *any* background path (a `BGAppRefreshTask` hits the identical locked-device problem), so they should land regardless of how O3 resolves. |
 | **Pre-generalizing `SealedDropSealer` / `SealedDropDedupStore` / `SealedDropTransporting`** | The generalizations are right but doing them without a second consumer means guessing the parameterization *and* re-risking an already-deployed wire format for no delivered feature. Do them inside coach P1, when the coach service exists to pin the shape. |
-| **Coach dead-drop, coach vault, coach trust policy** | Blocked on the App Attest offline peer-verify prototype (coach spec §3.2/§8 makes it a hard gate) and on **O6**. Increment 9 is the checklist for when it unblocks. |
-| **Live `.trainer` proximity session, coach QR ceremony, the two latent coordinator defects** | See **O7**. Fixing unreachable code invites the code to look alive; fix it as part of the session work or not at all. |
+| **Coach dead-drop (the off-week fallback), coach vault, coach trust policy** | Still deferred, but the ordering changed: it is now the SECONDARY channel, so it follows the in-person session rather than leading. O6 is resolved (coarse-rotating tag). The App Attest gate (coach spec §3.2/§8) is worth re-examining — with pairing always happening in person, the remote channel never bootstraps trust, which is much of what attestation was there to solve. Increment 9 is the checklist for when it unblocks. |
+| ~~Live `.trainer` proximity session, coach QR ceremony, the coordinator defects~~ | **NO LONGER DEFERRED (owner, 2026-07-26).** The in-person session is the PRIMARY coach channel, so this is Increment 10 and it is blocking. The instinct behind the old entry still holds though: fix these *as part of* the session work, in one branch, so the code never looks alive before it is. |
 | **`ClosenessLedger` / `FriendStateCache` / `ModerationLedger` sidecar adoption** | Same load-any-failure-as-empty shape, materially lower stakes. Tracker line, not this round. |
 | **Design "C" — bundle refresh over the dead-drop itself** | `HeartDropTransporting` is already a generic `{tag, payload}` seam, so a bundle-refresh record under a separate tag namespace needs **zero** protocol or wall change. This — not per-friend disjointness — is what would make forward secrecy hold for the friends away-hearts exists for, since re-gossip today only happens in person. Costs a second public-DB record type (owner console promotion), a polling budget, and a real privacy call on what a bundle record under a pairwise tag reveals to someone who already holds that tag. **Deserves its own design round.** |
