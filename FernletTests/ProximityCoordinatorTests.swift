@@ -220,7 +220,12 @@ struct ProximityCoordinatorTests {
         #expect(transport.sentData.count == 1)
     }
 
-    @Test func rssiFallbackRequiresManualTap() async throws {
+    /// Increment 10 (Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26): without UWB there is no
+    /// distance stream, so the trainer tap gate could never fire and the session hung to timeout
+    /// (`tapToConfirm()` has no production caller). A non-UWB trainer session now auto-advances
+    /// to the identity exchange once the transport connects; the human gate moves to the
+    /// explicit post-identity confirmation. (This test previously pinned the hang.)
+    @Test func nonUWBTrainerAutoAdvancesPastTheTapGate() async throws {
         let (identity, serviceID) = try makeIdentity()
         defer { cleanup(serviceID) }
         let transport = MockMultipeerTransport()
@@ -231,10 +236,27 @@ struct ProximityCoordinatorTests {
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
         try await Task.sleep(nanoseconds: 10_000_000)
-        ranging.simulateDistance(0.01)
+
+        #expect(coordinator.state == .awaitingIdentityIntroduction(peer: peer))
+        #expect(transport.sentData.count == 1, "the identity introduction went out without a tap")
+    }
+
+    /// The UWB tap gate is unchanged: with hardware support, the session WAITS for the physical
+    /// tap (dwell or `tapToConfirm`) — the fallback must never bypass a gate that can fire.
+    @Test func uwbTrainerStillWaitsForTheTap() async throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { cleanup(serviceID) }
+        let transport = MockMultipeerTransport()
+        let ranging = MockRangingProvider() // isHardwareSupported: true
+        let coordinator = makeCoordinator(identity: identity, transport: transport, ranging: ranging)
+        let peer = makePeer(name: "Peer")
+
+        await coordinator.begin(role: .browser, mode: .trainer)
+        transport.simulateConnected(peer: peer)
         try await Task.sleep(nanoseconds: 10_000_000)
 
         #expect(coordinator.state == .awaitingTapConfirmation(peer: peer))
+        #expect(transport.sentData.isEmpty)
 
         await coordinator.tapToConfirm()
         #expect(coordinator.state == .awaitingIdentityIntroduction(peer: peer))
