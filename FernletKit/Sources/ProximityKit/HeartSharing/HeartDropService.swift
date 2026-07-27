@@ -32,6 +32,9 @@ public final class HeartDropService {
         /// from `.rateLimited` because it is honest: the wait is until tomorrow, not five minutes.
         case dailyLimitReached
         case disabled
+        /// A sidecar the queue depends on is unavailable (Track A): the heart is refused rather
+        /// than accepted into a state that could not be durably recorded.
+        case storageUnavailable
         case failed
     }
 
@@ -46,6 +49,10 @@ public final class HeartDropService {
         case uploadFailing(since: Date)
         /// Hearts given up on: they hit the outbox lifetime without ever reaching the drop.
         case undeliverable(count: Int)
+        /// A heart sidecar cannot be read or written right now (locked-device read, failing
+        /// write, or an unrecoverable store that had to be quarantined). Track A's
+        /// nothing-silent surface: queued hearts are not flowing and new ones are refused.
+        case storageUnavailable
     }
 
     /// Fetch looks back exactly as far as the sender keeps retrying, DERIVED from the outbox
@@ -63,8 +70,9 @@ public final class HeartDropService {
 
     /// How far outside the pickup window a drop's signed `createdAt` may sit before the drop is
     /// refused — clock skew tolerance, and the clamp that keeps the receive-side flood budget
-    /// bounded to a handful of day buckets per sender.
-    static let createdAtSkewTolerance: TimeInterval = 24 * 3600
+    /// bounded to a handful of day buckets per sender. Public: a term in the signed-prekey
+    /// retention invariant test.
+    public static let createdAtSkewTolerance: TimeInterval = 24 * 3600
     /// Upload retries on one heart before delivery is reported as failing.
     public static let failingAttemptThreshold = 3
     /// Floor between unforced `syncNow()` passes. Drops are days-scale by nature, so a minute of
@@ -132,9 +140,12 @@ public final class HeartDropService {
         self.identity = identity
         try? identity.ensureProvisioned()
         self.prekeys = prekeys ?? HeartPrekeyStore(now: now)
-        self.peerBundles = peerBundles ?? HeartDropPeerBundleCache(now: now)
-        self.outbox = outbox ?? HeartDropOutbox(now: now)
-        self.dedup = dedup ?? HeartDropDedupStore(now: now)
+        // Production stores are sealed at rest (Increment 4); tests that inject their own
+        // stores choose their own seal (usually none, or a UUID-scoped keychain service).
+        self.peerBundles = peerBundles
+            ?? HeartDropPeerBundleCache(seal: HeartDropSidecarSeal.production(), now: now)
+        self.outbox = outbox ?? HeartDropOutbox(seal: HeartDropSidecarSeal.production(), now: now)
+        self.dedup = dedup ?? HeartDropDedupStore(seal: HeartDropSidecarSeal.production(), now: now)
         self.now = now
     }
 
@@ -161,6 +172,15 @@ public final class HeartDropService {
     public func queueHeart(to friend: ProximityTrustedPeerRecord) -> QueueOutcome {
         guard isEnabled(), friend.blockedAt == nil, friend.revokedAt == nil,
               !friend.keyAgreementPublicKey.isEmpty else { return .disabled }
+        // Storage health BEFORE anything irreversible (Track A): an outbox that cannot durably
+        // record the heart, or a ledger whose 5-minute gate cannot be checked or armed, refuses
+        // the heart honestly instead of promising a delivery nothing can keep. Retried on access
+        // and by every sync pass; the peer-bundle cache is deliberately NOT gated — its failure
+        // mode is the static-key fallback, availability over FS.
+        guard outbox.retryLoad(), ledger.isLoaded || ledger.retryLoad() else {
+            refreshStorageProblemNow()
+            return .storageUnavailable
+        }
         let sentAt = now()
         // The daily cap is checked BEFORE the 5-minute gate on purpose: when both apply, "your
         // hearts for today are sent" is the state that actually persists, and telling the user to
@@ -194,18 +214,21 @@ public final class HeartDropService {
             return .failed
         }
 
-        // Forward secrecy when a gossiped prekey is available; static fallback otherwise
-        // (availability over FS — the friend may never have gossiped a bundle to us yet).
-        // Consumed as late as possible, and handed back on every path that fails after it.
+        // Forward secrecy when a gossiped prekey is available — a one-time key first, else the
+        // medium-term signed prekey (Track B); static fallback otherwise (availability over FS —
+        // the friend may never have gossiped a bundle to us yet). Consumed as late as possible,
+        // and handed back on every path that fails after it. Only a ONE-TIME key is returnable:
+        // the signed prekey is reusable, so there is nothing to un-burn (and the cache's
+        // returnPrekey guard would no-op on it only by accident of its consumption check).
         let prekey = peerBundles.consumePrekey(forFriendSigningKey: friend.signingPublicKey)
         func returnPrekey() {
-            guard let prekey else { return }
+            guard let prekey, prekey.isOneTime else { return }
             peerBundles.returnPrekey(id: prekey.id, forFriendSigningKey: friend.signingPublicKey)
         }
 
         guard let wire = try? HeartDropSealer.seal(
             innerEnvelopeJSON: envelopeJSON,
-            toPrekey: prekey,
+            toPrekey: prekey.map { (id: $0.id, publicKey: $0.publicKey) },
             orStaticKey: friend.keyAgreementPublicKey
         ) else {
             returnPrekey()
@@ -224,13 +247,27 @@ public final class HeartDropService {
             wire: wire,
             createdAt: sentAt
         )
-        guard outbox.enqueue(entry) else {
+        switch outbox.enqueue(entry) {
+        case .queued:
+            break
+        case .backlogFull:
             returnPrekey()
             return .backlogFull
+        case .storageUnavailable:
+            returnPrekey()
+            refreshStorageProblemNow()
+            return .storageUnavailable
         }
         outboxRevision += 1
         ledger.recordHeartSent(to: friend.fingerprint) // consume-on-queue keeps the 5-min gate honest
-        FernletAuditLog.log("heartdrop.queued", context: ["prekey": prekey == nil ? "static" : "one-time"])
+        // The fallback mix ("signed" vs "static" especially) is the field telemetry that would
+        // ever justify reopening per-friend prekey sets — keep the three cases distinguishable.
+        let prekeyKind: String
+        switch prekey {
+        case nil: prekeyKind = "static"
+        case .some(let used): prekeyKind = used.isOneTime ? "one-time" : "signed"
+        }
+        FernletAuditLog.log("heartdrop.queued", context: ["prekey": prekeyKind])
         scheduleSync()
         return .queued
     }
@@ -305,6 +342,14 @@ public final class HeartDropService {
     /// just-cleared ledger/dedup/outbox (the "writers that resurrect data after a wipe" class).
     private func runSync() async {
         guard let transport, isEnabled() else { return }
+        // The sync pass is the natural storage-recovery tick (Track A): re-attempt any failed
+        // load (never overwriting a file that couldn't be read) and re-persist any value whose
+        // last write failed — for the outbox that write can carry a record name that exists
+        // nowhere else.
+        outbox.retryLoad()
+        dedup.retryLoad()
+        peerBundles.retryLoad()
+        ledger.retryLoad()
         let accountAvailable = await transport.accountAvailable()
         guard !Task.isCancelled, isEnabled() else { return }
         guard accountAvailable else {
@@ -331,7 +376,17 @@ public final class HeartDropService {
                     FernletAuditLog.log("heartdrop.upload.orphaned")
                     return
                 }
-                outbox.markUploaded(id: entry.id, recordName: recordName)
+                if !outbox.markUploaded(id: entry.id, recordName: recordName) {
+                    // The write-failure sibling of the cancellation orphan above (the live bug
+                    // Track A closes): the device locked across the await and the
+                    // `.completeFileProtection` write failed. The name survives in the outbox's
+                    // memory as the truth and a later persist commits it — but until then it is
+                    // not durable, so say so and stop uploading more.
+                    FernletAuditLog.log("heartdrop.upload.orphaned", context: ["reason": "persistFailed"])
+                    outboxRevision += 1
+                    refreshStorageProblemNow()
+                    break
+                }
             } catch {
                 outbox.recordAttempt(id: entry.id) // retried next sync until the outbox expiry
             }
@@ -341,8 +396,26 @@ public final class HeartDropService {
 
     // MARK: - Delivery health (nothing-silent)
 
+    /// True when any sidecar is `.unavailable` (unloaded or write-owed) or the outbox had to
+    /// discard/quarantine data. Every one of these states breaks the "queued means delivered"
+    /// promise, so all of them surface (Increment 3, nothing-silent).
+    private var storageUnavailable: Bool {
+        !outbox.isAvailable || !dedup.isAvailable || !peerBundles.isAvailable
+            || !ledger.isLoaded || outbox.dataLossOccurred
+    }
+
+    /// Synchronous raise for paths that discover a storage problem outside a sync pass
+    /// (a refused queue, a failed `markUploaded`) — the next pass re-derives it either way.
+    private func refreshStorageProblemNow() {
+        if storageUnavailable { deliveryProblem = .storageUnavailable }
+    }
+
     private func refreshDeliveryProblem(accountAvailable: Bool) {
-        if undeliveredCount > 0 {
+        if storageUnavailable {
+            // Outranks everything: while a sidecar can't be read or written, the other signals
+            // are either unknowable or stale.
+            deliveryProblem = .storageUnavailable
+        } else if undeliveredCount > 0 {
             deliveryProblem = .undeliverable(count: undeliveredCount)
         } else if !accountAvailable {
             // Surfaced even with an empty outbox: with no account, away hearts can be neither
@@ -357,10 +430,30 @@ public final class HeartDropService {
         }
     }
 
-    /// Clears a surfaced delivery problem once the user has seen it. The underlying condition
-    /// re-raises it on the next sync if it is still true.
+    /// Clears the delivery problem the user actually SAW. Selective on purpose: while
+    /// `.storageUnavailable` is surfaced it outranks `.undeliverable`, so a blanket clear here
+    /// would zero an undelivered-hearts count the user was never shown — it must surface once
+    /// storage recovers (review finding, 2026-07-26). The underlying condition re-raises on the
+    /// next sync if it is still true.
     public func acknowledgeDeliveryProblem() {
+        switch deliveryProblem {
+        case .undeliverable:
+            undeliveredCount = 0
+        case .storageUnavailable:
+            // The sticky data-loss marker is a nudge, not a record; seen = done. An actual
+            // still-unavailable sidecar re-raises on the next sync regardless.
+            outbox.acknowledgeDataLoss()
+        case .noAccount, .uploadFailing, nil:
+            break
+        }
+        deliveryProblem = nil
+    }
+
+    /// The purge/consent-off variant: with the feature off, every pending signal is moot, so
+    /// everything clears — the pre-selective behavior both purge paths relied on.
+    private func clearAllDeliveryState() {
         undeliveredCount = 0
+        outbox.acknowledgeDataLoss()
         deliveryProblem = nil
     }
 
@@ -390,6 +483,12 @@ public final class HeartDropService {
     }
 
     private func openIncoming(_ record: HeartDropRecord, expectedSender: ProximityTrustedPeerRecord?) {
+        // Storage pre-check (Track A): accepting a drop spends durable state at three seams —
+        // the dedup mark, the daily-budget mark, and the ledger record. If any of them can't
+        // persist, leave the record on the server untouched; the next sync re-fetches it.
+        // Consuming the dedup/budget marks and then failing the ledger write would burn the
+        // envelope id and lose the heart.
+        guard dedup.isAvailable, ledger.isLoaded else { return }
         // Size gate before any decryption or inflation — the public database accepts writes from
         // any authenticated iCloud user, so a fat record under a known tag is a denial-of-service
         // attempt, not a heart.
@@ -434,10 +533,22 @@ public final class HeartDropService {
             FernletAuditLog.log("heartdrop.rejected", context: ["reason": "createdAt-outside-window"])
             return
         }
-        guard dedup.acceptIfWithinDailyBudget(
+        switch dedup.acceptIfWithinDailyBudget(
             senderFingerprint: sender.fingerprint,
             dayEpoch: IdentityService.heartDropDayEpoch(at: createdAt)
-        ) else { return }
+        ) {
+        case .accepted:
+            break
+        case .budgetExhausted:
+            // By-design discard: the dedup mark stays, so a re-fetch stays discarded.
+            return
+        case .storageUnavailable:
+            // The dedup mark landed but the budget write failed. Without the undo the envelope
+            // id is burned while the heart was never surfaced — lost forever. Un-mark (commit-
+            // on-failure) and leave the record on the server for a later pass.
+            dedup.unrecord(envelopeID: envelope.envelopeID)
+            return
+        }
 
         if ledger.recordReceivedDropHeart(
             id: heart.id,
@@ -488,13 +599,21 @@ public final class HeartDropService {
         // suspension point long enough for the user to turn away-hearts back on and send: wiping
         // the outbox on resume would silently destroy that heart, and with it the record name of an
         // already-uploaded one, stranding that record on the public database forever.
-        let doomed = outbox.snapshot()
+        //
+        // Nil snapshot = the outbox never LOADED, so what is on the public database is UNKNOWN.
+        // Report failure so the derived retry seam tries again — an unknown answer must never
+        // read as "nothing to purge" (Track A). A dirty-but-loaded outbox (memory is the truth,
+        // a write is owed) DOES purge: the user withdrew consent, so getting the records off the
+        // public database now outranks waiting for the write to recover — the removal commits in
+        // memory and re-persists with the dirty value (review finding, 2026-07-26).
+        _ = outbox.retryLoad()
+        guard outbox.isLoaded, let doomed = outbox.snapshot() else { return false }
         let recordNames = doomed.compactMap(\.recordName)
         guard !recordNames.isEmpty else {
             // No await between the capture and here, so nothing can have raced in.
             outbox.removeUnchanged(doomed)
             outboxRevision += 1
-            acknowledgeDeliveryProblem()
+            clearAllDeliveryState()
             return true
         }
         guard let transport else { return false }
@@ -512,7 +631,7 @@ public final class HeartDropService {
         // has to re-validate: a superseded purge must not clear a delivery problem raised since it
         // started, or the nothing-silent promise breaks on exactly the re-enable path.
         if generation == purgeGeneration, !isEnabled() {
-            acknowledgeDeliveryProblem()
+            clearAllDeliveryState()
         }
         FernletAuditLog.log("heartdrop.purged", context: [
             "records": "\(recordNames.count)", "entries": "\(removed)"
@@ -521,21 +640,25 @@ public final class HeartDropService {
     }
 
     /// Sealed hearts THIS DEVICE has sitting on the CloudKit public database right now — derived
-    /// from the outbox's uploaded record names, never from a process-local flag.
+    /// from the outbox's uploaded record names, never from a process-local flag. NIL while the
+    /// outbox is unloaded: the answer is unknown, and an unknown reported as zero is exactly the
+    /// "the UI says it's gone when it isn't" lie the derived form exists to kill (Track A).
     ///
     /// Two things need the derived form: a purge owed from a previous launch (a process flag dies
     /// with the process, the record names do not), and consent withdrawn on ANOTHER device, which
     /// arrives by settings sync and so never runs the local setter that would have set a flag.
     /// Reads `outboxRevision` so an observing view re-derives when the outbox changes.
-    public func uploadedDeadDropRecordCount() -> Int {
+    public func uploadedDeadDropRecordCount() -> Int? {
         _ = outboxRevision
-        return outbox.uploadedRecordNames().count
+        return outbox.uploadedRecordNames()?.count
     }
 
     /// True when a dead-drop purge is still owed: this device has records out there that only this
-    /// device can name (recipients cannot delete a sender's public-DB records).
+    /// device can name (recipients cannot delete a sender's public-DB records). While the outbox
+    /// is unloaded the answer is unknown and this fails CLOSED (true): the retry seam keeps
+    /// trying, and `purgeDeadDrop()` itself reports failure until the outbox can be read.
     public func hasStrandedDeadDropRecords() -> Bool {
-        uploadedDeadDropRecordCount() > 0
+        uploadedDeadDropRecordCount().map { $0 > 0 } ?? true
     }
 
     // MARK: - Delete-all seam (Docs/PrivacyWipeCoverage.md)

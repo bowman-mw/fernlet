@@ -483,7 +483,11 @@ struct FriendListView: View {
         }
 
         if onCooldown {
-            Text("You just sent \(firstName) some warmth — hearts settle for a few minutes.")
+            // An unloaded ledger also reads as "on cooldown" (fail-closed refuse) — but the
+            // cooldown copy would be a lie there, so say what is actually wrong (Track A).
+            Text(store.heartLedger.isLoaded
+                 ? "You just sent \(firstName) some warmth — hearts settle for a few minutes."
+                 : "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)
@@ -564,6 +568,9 @@ struct FriendListView: View {
             awayStatus = "\(firstName) has had all of today's hearts from you — send another tomorrow."
         case .backlogFull:
             awayStatus = "A few hearts are already waiting for \(firstName) — they'll arrive first."
+        case .storageUnavailable:
+            // Track A nothing-silent: the heart was REFUSED (not saved), so no "tucked away".
+            awayStatus = "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."
         case .disabled, .failed:
             awayStatus = "Couldn't tuck that heart away just now."
         }
@@ -754,6 +761,8 @@ enum AwayHeartsCopy {
             return count == 1
                 ? "A heart couldn't be delivered before it expired."
                 : "\(count) hearts couldn't be delivered before they expired."
+        case .storageUnavailable:
+            return "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."
         }
     }
 
@@ -770,6 +779,8 @@ enum AwayHeartsCopy {
             return count == 1
                 ? "A heart couldn't be delivered before it expired."
                 : "\(count) hearts couldn't be delivered before they expired."
+        case .storageUnavailable:
+            return "Fernlet couldn't read its saved hearts just now. Unlock and reopen, and it will retry."
         }
     }
 

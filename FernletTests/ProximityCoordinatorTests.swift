@@ -195,32 +195,32 @@ struct ProximityCoordinatorTests {
         #expect(coordinator.state == .idle)
     }
 
-    @Test func rangingTapConfirmationMovesToIdentityIntroduction() async throws {
+    /// `tapToConfirm()` remains a manual override during the transient connecting window (a
+    /// future tap UI could use it); the dwell-driven pre-identity tap detector retired with the
+    /// gate — identity now comes first on every hardware class (see the auto-advance tests).
+    @Test func tapToConfirmStillAdvancesTheTransientGate() async throws {
         let (identity, serviceID) = try makeIdentity()
         defer { cleanup(serviceID) }
         let transport = MockMultipeerTransport()
-        let ranging = MockRangingProvider()
-        let start = Date()
-        var tick = -1
-        let coordinator = makeCoordinator(identity: identity, transport: transport, ranging: ranging) {
-            tick += 1
-            return start.addingTimeInterval(Double(tick) * 0.5)
-        }
+        let coordinator = makeCoordinator(identity: identity, transport: transport)
         let peer = makePeer(name: "Peer")
         await coordinator.begin(role: .browser, mode: .trainer)
-        transport.simulateConnected(peer: peer)
+        transport.simulateConnecting(peer: peer)
         try await Task.sleep(nanoseconds: 10_000_000)
+        #expect(coordinator.state == .awaitingTapConfirmation(peer: peer))
 
-        ranging.simulateDistance(0.04)
-        ranging.simulateDistance(0.04)
-        ranging.simulateDistance(0.04)
-        try await Task.sleep(nanoseconds: 10_000_000)
-
+        await coordinator.tapToConfirm()
         #expect(coordinator.state == .awaitingIdentityIntroduction(peer: peer))
-        #expect(transport.sentData.count == 1)
     }
 
-    @Test func rssiFallbackRequiresManualTap() async throws {
+    /// Increment 10 (Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26): the pre-identity trainer
+    /// tap gate could never fire on ANY hardware — the distance stream needs an NI ranging
+    /// session, which only starts after the identity exchange the gate itself blocked
+    /// (`startRangingIfPossible` runs in `handleIdentityEnvelope`), and `tapToConfirm()` has no
+    /// production caller — so every trainer session hung to timeout. The session now
+    /// auto-advances to the identity exchange on connect; the human gate is the explicit
+    /// post-identity confirmation. (An earlier test here pinned the hang.)
+    @Test func nonUWBTrainerAutoAdvancesPastTheTapGate() async throws {
         let (identity, serviceID) = try makeIdentity()
         defer { cleanup(serviceID) }
         let transport = MockMultipeerTransport()
@@ -231,13 +231,34 @@ struct ProximityCoordinatorTests {
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
         try await Task.sleep(nanoseconds: 10_000_000)
-        ranging.simulateDistance(0.01)
+
+        #expect(coordinator.state == .awaitingIdentityIntroduction(peer: peer))
+        #expect(transport.sentData.count == 1, "the identity introduction went out without a tap")
+    }
+
+    /// The auto-advance is hardware-blind (the UWB path had the identical structural hang) and
+    /// covers BOTH entry points: the fresh `.connected` entry, and the connecting-then-connected
+    /// two-step the real MC session delegate always produces — which is the advertiser/coach-app
+    /// side of the handshake, where the tap gate is seated BEFORE the connected event arrives.
+    @Test func trainerTapGateAutoAdvancesFromTheAlreadyWaitingEntry() async throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { cleanup(serviceID) }
+        let transport = MockMultipeerTransport()
+        let ranging = MockRangingProvider() // UWB-capable: the hang was not hardware-specific
+        let coordinator = makeCoordinator(identity: identity, transport: transport, ranging: ranging)
+        let peer = makePeer(name: "Peer")
+
+        await coordinator.begin(role: .browser, mode: .trainer)
+        transport.simulateConnecting(peer: peer)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        #expect(coordinator.state == .awaitingTapConfirmation(peer: peer),
+                "precondition: the gate is seated before the connected event")
+
+        transport.simulateConnected(peer: peer)
         try await Task.sleep(nanoseconds: 10_000_000)
 
-        #expect(coordinator.state == .awaitingTapConfirmation(peer: peer))
-
-        await coordinator.tapToConfirm()
         #expect(coordinator.state == .awaitingIdentityIntroduction(peer: peer))
+        #expect(transport.sentData.count == 1, "the already-waiting gate advanced on connect")
     }
 
     @Test func identityIntroductionWithRangingTokenStartsRanging() async throws {

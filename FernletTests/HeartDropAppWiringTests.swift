@@ -147,9 +147,11 @@ struct HeartDropAppWiringTests {
 
         store.setHeartsAwayDelivery(false)
 
-        #expect(await waitUntil { transport.records.isEmpty },
+        // One combined wait: the transport's records clear INSIDE the purge's await, but the
+        // derived pending state only settles once the purge task resumes and prunes the outbox —
+        // asserting it un-awaited raced that continuation under full-suite load.
+        #expect(await waitUntil { transport.records.isEmpty && !store.heartsAwayPurgePending },
                 "our sealed records were left on the public database after consent was withdrawn")
-        #expect(!store.heartsAwayPurgePending)
     }
 
     /// A purge that fails over the network is remembered rather than swallowed, and the foreground
@@ -414,7 +416,8 @@ struct HeartDropAppWiringTests {
         let problems: [HeartDropService.DeliveryProblem] = [
             .noAccount,
             .uploadFailing(since: Date(timeIntervalSince1970: 1_780_000_000)),
-            .undeliverable(count: 3)
+            .undeliverable(count: 3),
+            .storageUnavailable
         ]
         for problem in problems {
             #expect(AwayHeartsCopy.friendRowLine(for: problem)?.isEmpty == false, "no friend-row copy for \(problem)")

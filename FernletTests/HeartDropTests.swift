@@ -80,7 +80,8 @@ struct HeartDropTests {
     private func makeBundle(
         keyCount: Int = 1,
         created: Date,
-        lifetime: TimeInterval = 30 * 24 * 3600
+        lifetime: TimeInterval = 30 * 24 * 3600,
+        signedPrekey: HeartPrekeyStore.SignedPrekey? = nil
     ) -> HeartPrekeyStore.Bundle {
         let keys = (0..<keyCount).map { _ in
             HeartPrekeyStore.PrekeyEntry(
@@ -92,7 +93,17 @@ struct HeartDropTests {
             bundleID: UUID(),
             created: created,
             expires: created.addingTimeInterval(lifetime),
-            keys: keys
+            keys: keys,
+            signedPrekey: signedPrekey
+        )
+    }
+
+    private func makeSignedPrekey(created: Date) -> HeartPrekeyStore.SignedPrekey {
+        HeartPrekeyStore.SignedPrekey(
+            id: UUID(),
+            publicKey: Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation,
+            created: created,
+            expires: created.addingTimeInterval(7 * 24 * 3600)
         )
     }
 
@@ -459,10 +470,10 @@ struct HeartDropTests {
         for index in 0..<HeartDropOutbox.maxPendingPerFriend {
             let accepted = outbox.enqueue(HeartDropOutbox.Entry(
                 id: UUID(), friendSigningKey: friend, tag: "t\(index)", wire: Data([1]), createdAt: currentTime))
-            #expect(accepted)
+            #expect(accepted == .queued)
         }
-        #expect(!outbox.enqueue(HeartDropOutbox.Entry(
-            id: UUID(), friendSigningKey: friend, tag: "overflow", wire: Data([1]), createdAt: currentTime)))
+        #expect(outbox.enqueue(HeartDropOutbox.Entry(
+            id: UUID(), friendSigningKey: friend, tag: "overflow", wire: Data([1]), createdAt: currentTime)) == .backlogFull)
         #expect(outbox.pendingCount(friendSigningKey: friend) == HeartDropOutbox.maxPendingPerFriend)
 
         currentTime = currentTime.addingTimeInterval(HeartDropOutbox.entryLifetime + 60)
@@ -496,9 +507,9 @@ struct HeartDropTests {
         #expect(outbox.pendingCount(friendSigningKey: friend) == 0)
         #expect(outbox.hasCapacity(forFriendSigningKey: friend))
         #expect(outbox.enqueue(HeartDropOutbox.Entry(
-            id: UUID(), friendSigningKey: friend, tag: "ninth", wire: Data([1]), createdAt: currentTime)))
+            id: UUID(), friendSigningKey: friend, tag: "ninth", wire: Data([1]), createdAt: currentTime)) == .queued)
         // ...and the delivered entries are still retained for cleanup.
-        #expect(outbox.uploadedRecordNames().count == HeartDropOutbox.maxPendingPerFriend)
+        #expect(outbox.uploadedRecordNames()?.count == HeartDropOutbox.maxPendingPerFriend)
     }
 
     /// The daily cap counts UPLOADED entries too — they are precisely the ones already spending the
@@ -542,7 +553,7 @@ struct HeartDropTests {
         }
         outbox.markUploaded(id: uploaded, recordName: "rec-1")
 
-        let captured = outbox.snapshot()
+        let captured = outbox.snapshot() ?? []
         outbox.markUploaded(id: racing, recordName: "rec-2") // uploaded mid-purge
         let newcomer = UUID()
         outbox.enqueue(HeartDropOutbox.Entry(
@@ -550,7 +561,7 @@ struct HeartDropTests {
 
         #expect(outbox.removeUnchanged(captured) == 2) // the uploaded one and the still-waiting one
         #expect(outbox.uploadedRecordNames() == ["rec-2"])
-        #expect(Set(outbox.snapshot().map(\.id)) == [racing, newcomer])
+        #expect(Set((outbox.snapshot() ?? []).map(\.id)) == [racing, newcomer])
     }
 
     @Test func dedupIsDurableAndBudgetsPerSenderDay() {
@@ -566,12 +577,12 @@ struct HeartDropTests {
 
         let today = IdentityService.heartDropDayEpoch(at: clock.date)
         for _ in 0..<HeartDropDedupStore.maxAcceptedPerSenderPerDay {
-            #expect(reloaded.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: today))
+            #expect(reloaded.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: today) == .accepted)
         }
-        #expect(!reloaded.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: today))
-        #expect(reloaded.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: today + 1))
+        #expect(reloaded.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: today) == .budgetExhausted)
+        #expect(reloaded.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: today + 1) == .accepted)
         // A different sender has its own budget.
-        #expect(reloaded.acceptIfWithinDailyBudget(senderFingerprint: "xyz", dayEpoch: today))
+        #expect(reloaded.acceptIfWithinDailyBudget(senderFingerprint: "xyz", dayEpoch: today) == .accepted)
     }
 
     /// Counters prune BY DAY. The old size-tripped `removeAll()` could be provoked deliberately to
@@ -582,19 +593,19 @@ struct HeartDropTests {
         let day = IdentityService.heartDropDayEpoch(at: clock.date)
 
         for _ in 0..<HeartDropDedupStore.maxAcceptedPerSenderPerDay {
-            #expect(dedup.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: day))
+            #expect(dedup.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: day) == .accepted)
         }
-        #expect(!dedup.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: day))
+        #expect(dedup.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: day) == .budgetExhausted)
 
         // Traffic from many other senders does not clear the map.
         for index in 0..<200 {
-            #expect(dedup.acceptIfWithinDailyBudget(senderFingerprint: "sender-\(index)", dayEpoch: day))
+            #expect(dedup.acceptIfWithinDailyBudget(senderFingerprint: "sender-\(index)", dayEpoch: day) == .accepted)
         }
-        #expect(!dedup.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: day))
+        #expect(dedup.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: day) == .budgetExhausted)
 
         // Past retention the day bucket is pruned and the same key is spendable again.
         clock.advance(HeartDropDedupStore.retention + 86_400)
-        #expect(dedup.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: day))
+        #expect(dedup.acceptIfWithinDailyBudget(senderFingerprint: "abc", dayEpoch: day) == .accepted)
     }
 
     // MARK: - Service end-to-end
@@ -1193,5 +1204,661 @@ struct HeartDropTests {
         #expect(!ledger.recordReceivedHeart(
             id: UUID(), senderDisplayName: "Fern", senderFingerprint: "abc"))
         #expect(ledger.receivedHearts.count == 2)
+    }
+
+    // MARK: - Sidecar durability (Track A, Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26)
+
+    /// A shared switchable I/O gate for simulating "protected data unavailable" per store.
+    nonisolated final class IOGate: @unchecked Sendable {
+        var failReads = false
+        var failWrites = false
+        func readData(_ url: URL) throws -> Data {
+            if failReads { throw CocoaError(.fileReadNoPermission) }
+            return try Data(contentsOf: url)
+        }
+        func writeData(_ data: Data, _ url: URL) throws {
+            if failWrites { throw CocoaError(.fileWriteNoPermission) }
+            try data.write(to: url, options: [.atomic])
+        }
+    }
+
+    /// The live data-loss bug: an outbox whose file could not be READ used to look empty, and
+    /// the next persist overwrote the real entries. Now the read failure refuses the queue, the
+    /// file survives untouched, and recovery reads it back.
+    @Test func unreadableOutboxRefusesHeartsAndNeverOverwritesTheFile() async throws {
+        let (sender, senderID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: senderID) }
+        let (recipient, recipientID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: recipientID) }
+        let prekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: prekeySvc) }
+
+        let clock = TestClock()
+        let outboxURL = tempFile("outbox.json")
+        let io = IOGate()
+        // Seed one real entry through a healthy outbox instance.
+        let seeder = HeartDropOutbox(fileURL: outboxURL, now: { clock.date })
+        #expect(seeder.enqueue(HeartDropOutbox.Entry(
+            id: UUID(), friendSigningKey: Data([7]), tag: "t", wire: Data([1]),
+            createdAt: clock.date)) == .queued)
+
+        io.failReads = true
+        let transport = MockDropTransport()
+        let recipientRecord = makeFriendRecord(of: recipient, name: "Bobby Fern")
+        let service = makeService(
+            identity: sender, prekeyService: prekeySvc,
+            ledger: ProximityHeartLedger(fileURL: tempFile("ledger.json"), now: { clock.date }),
+            friends: { [recipientRecord] }, transport: transport, clock: clock,
+            outbox: HeartDropOutbox(
+                fileURL: outboxURL, now: { clock.date },
+                readData: io.readData, writeData: io.writeData))
+
+        #expect(service.queueHeart(to: recipientRecord) == .storageUnavailable)
+        #expect(service.deliveryProblem == .storageUnavailable, "a refused queue surfaces immediately")
+        #expect(service.uploadedDeadDropRecordCount() == nil, "an unloaded outbox reports UNKNOWN, not zero")
+        #expect(service.hasStrandedDeadDropRecords(), "unknown fails closed: a purge may still be owed")
+        await service.syncOnce()
+        let onDisk = try JSONDecoder().decode([HeartDropOutbox.Entry].self, from: Data(contentsOf: outboxURL))
+        #expect(onDisk.count == 1, "nothing may overwrite the file that could not be read")
+
+        io.failReads = false
+        #expect(service.queueHeart(to: recipientRecord) == .queued, "recovery on the next access")
+        await service.syncOnce()
+        #expect(transport.records.count == 2, "both the seeded and the new heart upload after recovery")
+        #expect(service.deliveryProblem == nil)
+    }
+
+    /// The flush live bug (Increment 3): the device locks across the upload await, the
+    /// `.completeFileProtection` write of the record name fails — the name must survive in
+    /// memory as the truth, surface as a delivery problem, and commit durably once writes
+    /// recover. Losing it strands a public-DB record nothing can ever delete.
+    @Test func markUploadedWriteFailureSurfacesAndCommitsOnRecovery() async throws {
+        let (sender, senderID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: senderID) }
+        let (recipient, recipientID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: recipientID) }
+        let prekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: prekeySvc) }
+
+        let clock = TestClock()
+        let outboxURL = tempFile("outbox.json")
+        let io = IOGate()
+        let transport = MockDropTransport()
+        let recipientRecord = makeFriendRecord(of: recipient, name: "Bobby Fern")
+        let service = makeService(
+            identity: sender, prekeyService: prekeySvc,
+            ledger: ProximityHeartLedger(fileURL: tempFile("ledger.json"), now: { clock.date }),
+            friends: { [recipientRecord] }, transport: transport, clock: clock,
+            outbox: HeartDropOutbox(
+                fileURL: outboxURL, now: { clock.date },
+                readData: io.readData, writeData: io.writeData))
+
+        #expect(service.queueHeart(to: recipientRecord) == .queued)
+        io.failWrites = true // the device "locks" before the upload's record name can persist
+        await service.syncOnce()
+
+        #expect(transport.records.count == 1, "the upload itself succeeded")
+        #expect(service.deliveryProblem == .storageUnavailable,
+                "the un-persisted record name is a surfaced problem, not a silent continue")
+        #expect(service.uploadedDeadDropRecordCount() == 1,
+                "the name survives in memory as the truth")
+
+        io.failWrites = false
+        await service.syncOnce() // the sync pass re-persists the dirty value
+        #expect(service.deliveryProblem == nil)
+        // A relaunch (fresh instance on the same file) still knows the record name — durability.
+        let relaunched = HeartDropOutbox(fileURL: outboxURL, now: { clock.date })
+        #expect(relaunched.uploadedRecordNames() == transport.records.map(\.recordName))
+    }
+
+    /// Corrupt-outbox salvage (locked decision O4): keep the rows that parse — above all a
+    /// `recordName`, the one thing that can never be reconstructed — and discard the remainder.
+    @Test func corruptOutboxSalvageKeepsTheRecordName() throws {
+        let clock = TestClock()
+        let url = tempFile("outbox.json")
+        let seeder = HeartDropOutbox(fileURL: url, now: { clock.date })
+        let id = UUID()
+        #expect(seeder.enqueue(HeartDropOutbox.Entry(
+            id: id, friendSigningKey: Data([7]), tag: "t", wire: Data([1]),
+            createdAt: clock.date)) == .queued)
+        #expect(seeder.markUploaded(id: id, recordName: "rec-precious"))
+
+        // Corrupt the array by splicing in a row that is not an Entry.
+        var rows = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [Any]
+        rows.append(["bogus": true])
+        try JSONSerialization.data(withJSONObject: rows).write(to: url)
+
+        let recovered = HeartDropOutbox(fileURL: url, now: { clock.date })
+        #expect(recovered.uploadedRecordNames() == ["rec-precious"])
+        #expect(recovered.dataLossOccurred, "the discarded row is not silent")
+    }
+
+    /// The dedup store fails CLOSED while unavailable: nothing is accepted, so no double
+    /// delivery ever (the record stays on the server and is re-fetched once storage recovers).
+    @Test func unavailableDedupRefusesAcceptsAndPreservesItsFile() throws {
+        let clock = TestClock()
+        let url = tempFile("dedup.json")
+        let io = IOGate()
+        let seeder = HeartDropDedupStore(fileURL: url, now: { clock.date })
+        let seen = UUID()
+        #expect(seeder.recordIfNew(envelopeID: seen))
+
+        io.failReads = true
+        let broken = HeartDropDedupStore(
+            fileURL: url, now: { clock.date }, readData: io.readData, writeData: io.writeData)
+        #expect(!broken.recordIfNew(envelopeID: UUID()))
+        #expect(broken.acceptIfWithinDailyBudget(senderFingerprint: "f", dayEpoch: 1) == .storageUnavailable)
+
+        io.failReads = false
+        #expect(broken.retryLoad())
+        #expect(!broken.recordIfNew(envelopeID: seen), "the preserved file still remembers the seen id")
+        #expect(broken.recordIfNew(envelopeID: UUID()))
+    }
+
+    /// The peer-bundle cache fails toward AVAILABILITY: while its sidecar is unavailable,
+    /// `consumePrekey` returns nil and the heart seals to the static key — delivery is preserved,
+    /// only forward secrecy degrades (the documented fallback).
+    @Test func unavailablePeerCacheFallsBackToTheStaticSeal() async throws {
+        let (sender, senderID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: senderID) }
+        let (recipient, recipientID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: recipientID) }
+        let prekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: prekeySvc) }
+
+        let clock = TestClock()
+        let io = IOGate()
+        let cacheURL = tempFile("bundles.json")
+        // Seed a cached bundle, then break reads: the cache is unavailable at consume time.
+        let seededCache = HeartDropPeerBundleCache(fileURL: cacheURL, now: { clock.date })
+        seededCache.store(bundle: makeBundle(created: clock.date), forFriendSigningKey: recipient.localSigningPublicKey)
+
+        io.failReads = true
+        let transport = MockDropTransport()
+        let recipientRecord = makeFriendRecord(of: recipient, name: "Bobby Fern")
+        let service = makeService(
+            identity: sender, prekeyService: prekeySvc,
+            ledger: ProximityHeartLedger(fileURL: tempFile("ledger.json"), now: { clock.date }),
+            friends: { [recipientRecord] }, transport: transport, clock: clock,
+            peerBundles: HeartDropPeerBundleCache(
+                fileURL: cacheURL, now: { clock.date },
+                readData: io.readData, writeData: io.writeData),
+            outbox: HeartDropOutbox(fileURL: tempFile("outbox.json"), now: { clock.date }))
+
+        #expect(service.queueHeart(to: recipientRecord) == .queued, "availability over FS")
+        await service.syncOnce()
+        #expect(transport.records.count == 1)
+        // The wire's 16-byte prekey id slot is all-zeros = sealed to the static key.
+        let wire = try #require(transport.records.first?.payload)
+        #expect(wire.subdata(in: 1..<17) == Data(count: 16))
+    }
+
+    /// The ledger adoption (O5): an unreadable ledger refuses sends fail-closed instead of
+    /// re-opening the 5-minute gate, and its file survives for recovery.
+    @Test func unreadableLedgerFailsClosedAndRecovers() throws {
+        let clock = TestClock()
+        let url = tempFile("ledger.json")
+        let io = IOGate()
+        let seeder = ProximityHeartLedger(fileURL: url, now: { clock.date })
+        seeder.recordHeartSent(to: "friend-1")
+        #expect(!seeder.canSendHeart(to: "friend-1"))
+
+        io.failReads = true
+        let broken = ProximityHeartLedger(
+            fileURL: url, now: { clock.date }, readData: io.readData, writeData: io.writeData)
+        #expect(!broken.isLoaded)
+        #expect(!broken.canSendHeart(to: "friend-1"), "an unloaded gate refuses rather than allows")
+        #expect(!broken.recordReceivedHeart(id: UUID(), senderDisplayName: "F", senderFingerprint: "x"))
+
+        io.failReads = false
+        #expect(broken.retryLoad())
+        #expect(!broken.canSendHeart(to: "friend-1"), "the preserved file still arms the gate")
+        clock.advance(5 * 60 + 1) // past the 5-minute rate window
+        #expect(broken.canSendHeart(to: "friend-1"))
+    }
+
+    /// Consent-off still short-circuits before any storage check: an opted-out device reports
+    /// `.disabled`, never a storage problem it has no business surfacing.
+    @Test func consentOffShortCircuitsBeforeStorageChecks() throws {
+        let (sender, senderID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: senderID) }
+        let (recipient, recipientID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: recipientID) }
+        let prekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: prekeySvc) }
+
+        let clock = TestClock()
+        let io = IOGate()
+        io.failReads = true
+        let outboxURL = tempFile("outbox.json")
+        try FileManager.default.createDirectory(
+            at: outboxURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode([HeartDropOutbox.Entry]()).write(to: outboxURL)
+        let recipientRecord = makeFriendRecord(of: recipient, name: "Bobby Fern")
+        let service = makeService(
+            identity: sender, prekeyService: prekeySvc,
+            ledger: ProximityHeartLedger(fileURL: tempFile("ledger.json"), now: { clock.date }),
+            friends: { [recipientRecord] }, transport: MockDropTransport(),
+            enabled: { false }, clock: clock,
+            outbox: HeartDropOutbox(
+                fileURL: outboxURL, now: { clock.date },
+                readData: io.readData, writeData: io.writeData))
+
+        #expect(service.queueHeart(to: recipientRecord) == .disabled)
+    }
+
+    /// End-to-end with the at-rest seal (Increment 4): the sidecar files are ciphertext on disk,
+    /// hearts still round-trip, and the delete-all wipe removes the seal key with the prekeys.
+    @Test func sealedSidecarsRoundTripAndWipeRemovesTheKey() async throws {
+        let (sender, senderID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: senderID) }
+        let (recipient, recipientID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: recipientID) }
+        let prekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: prekeySvc) }
+
+        let clock = TestClock()
+        let seal = HeartDropSidecarSeal.make(keychainService: prekeySvc)
+        let outboxURL = tempFile("outbox.json")
+        let transport = MockDropTransport()
+        let recipientRecord = makeFriendRecord(of: recipient, name: "Bobby Fern")
+        let service = makeService(
+            identity: sender, prekeyService: prekeySvc,
+            ledger: ProximityHeartLedger(fileURL: tempFile("ledger.json"), now: { clock.date }),
+            friends: { [recipientRecord] }, transport: transport, clock: clock,
+            peerBundles: HeartDropPeerBundleCache(fileURL: tempFile("bundles.json"), seal: seal, now: { clock.date }),
+            outbox: HeartDropOutbox(fileURL: outboxURL, seal: seal, now: { clock.date }))
+
+        #expect(service.queueHeart(to: recipientRecord) == .queued)
+        let raw = try Data(contentsOf: outboxURL)
+        #expect(raw.starts(with: Data("FSC1".utf8)), "the outbox is ciphertext at rest")
+        await service.syncOnce()
+        #expect(transport.records.count == 1)
+
+        // Delete-all: the prekey wipe (same keychain service) takes the seal key with it.
+        service.wipeForDeleteAll()
+        #expect(KeychainItem.load(account: "sidecarSealKey", service: prekeySvc) == nil)
+        #expect(!FileManager.default.fileExists(atPath: outboxURL.path))
+    }
+
+    // MARK: - Signed prekey (Track B, Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26)
+
+    /// THE migration risk of Track B: `StoredState.signedPrekeys` must decode as absent from a
+    /// pre-change keychain blob. A decode failure would classify the blob as corrupt → empty →
+    /// mint fresh, stranding the private halves of prekeys already gossiped — every in-flight
+    /// drop would then silently fail to open.
+    @Test func preChangePrekeyBlobDecodesAndKeepsGossipedHalves() throws {
+        let svc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: svc) }
+        let clock = TestClock()
+
+        // The captured pre-change shape: {"bundles":[{"bundle":{…},"privateKeys":[…]}]} — no
+        // signedPrekeys key anywhere (asserted below so the fixture can't silently drift).
+        struct LegacyStoredBundle: Codable {
+            var bundle: HeartPrekeyStore.Bundle
+            var privateKeys: [Data]
+        }
+        struct LegacyStoredState: Codable {
+            var bundles: [LegacyStoredBundle]
+        }
+        let privateKey = Curve25519.KeyAgreement.PrivateKey()
+        let gossipedID = UUID()
+        let legacy = LegacyStoredState(bundles: [LegacyStoredBundle(
+            bundle: HeartPrekeyStore.Bundle(
+                bundleID: UUID(),
+                created: clock.date,
+                expires: clock.date.addingTimeInterval(30 * 24 * 3600),
+                keys: [HeartPrekeyStore.PrekeyEntry(
+                    id: gossipedID, publicKey: privateKey.publicKey.rawRepresentation)]),
+            privateKeys: [privateKey.rawRepresentation])])
+        let blob = try JSONEncoder().encode(legacy)
+        let json = try #require(String(data: blob, encoding: .utf8))
+        #expect(!json.contains("signedPrekey"), "fixture must really be the pre-change shape")
+        KeychainItem.store(
+            blob, account: "prekeyPrivateHalves", service: svc,
+            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly, synchronizable: false)
+
+        let store = HeartPrekeyStore(keychainService: svc, now: { clock.date })
+        #expect(store.privateKey(forPrekeyID: gossipedID) != nil,
+                "pre-change private halves stay resolvable")
+        let bundle = try #require(store.currentBundle())
+        #expect(bundle.keys.map(\.id).contains(gossipedID),
+                "the stored bundle survives — it is not minted over")
+        #expect(bundle.signedPrekey != nil, "and gains a fresh signed prekey")
+        #expect(store.privateKey(forPrekeyID: gossipedID) != nil)
+    }
+
+    /// Same shape as `senderDailyCapMatchesTheReceiverBudget`: the constants may move, the
+    /// invariants may not.
+    @Test func spkRetentionInvariantsHold() {
+        // A drop sealed at the very end of the SPK seal window can sit the full outbox lifetime
+        // (plus tolerated clock skew) before its last legitimate open. Retention must cover
+        // that whole gap — violating this silently loses hearts (the recipient just fails
+        // `open` and returns).
+        #expect(HeartPrekeyStore.spkRetention >=
+                HeartDropPeerBundleCache.maxSealSignedPrekeyAge
+                + HeartDropOutbox.entryLifetime
+                + HeartDropService.createdAtSkewTolerance)
+        // O2: nothing Track B introduces is ever the longest-lived key on the device.
+        #expect(HeartPrekeyStore.spkRetention <
+                HeartPrekeyStore.bundleLifetime + HeartPrekeyStore.expiryGrace)
+    }
+
+    @Test func signedPrekeyRotatesWeeklyAndRetainsRotatedOutHalves() throws {
+        let svc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: svc) }
+        let clock = TestClock()
+        let store = HeartPrekeyStore(keychainService: svc, now: { clock.date })
+
+        let spk0 = try #require(store.currentBundle()?.signedPrekey)
+        clock.advance(3 * 24 * 3600)
+        #expect(store.currentBundle()?.signedPrekey?.id == spk0.id, "stable inside the rotation window")
+
+        clock.advance(5 * 24 * 3600) // day 8 — past the rotation deadline
+        let spk1 = try #require(store.currentBundle()?.signedPrekey)
+        #expect(spk1.id != spk0.id)
+        #expect(store.privateKey(forPrekeyID: spk0.id) != nil,
+                "rotated-out halves stay resolvable for in-flight drops")
+
+        clock.advance(30 * 24 * 3600) // day 38 — both are past their 29-day retention
+        _ = store.currentBundle() // the prune tick
+        #expect(store.privateKey(forPrekeyID: spk0.id) == nil)
+        #expect(store.privateKey(forPrekeyID: spk1.id) == nil)
+    }
+
+    /// The two cache slots are independent: consuming one-time keys falls through to the SPK,
+    /// the SPK is reusable, an SPK-only refresh never wipes the one-time slot's consumption,
+    /// and older gossip rolls back neither slot.
+    @Test func signedPrekeySlotIsIndependentOfTheOneTimeSlot() throws {
+        let clock = TestClock()
+        let cache = HeartDropPeerBundleCache(fileURL: tempFile("bundles.json"), now: { clock.date })
+        let friend = Data([9])
+        let t0 = clock.date
+
+        let spk1 = makeSignedPrekey(created: t0)
+        cache.store(bundle: makeBundle(keyCount: 1, created: t0, signedPrekey: spk1),
+                    forFriendSigningKey: friend)
+
+        let first = try #require(cache.consumePrekey(forFriendSigningKey: friend))
+        #expect(first.isOneTime, "one-time keys carry the seal while any are left")
+        let second = try #require(cache.consumePrekey(forFriendSigningKey: friend))
+        #expect(!second.isOneTime)
+        #expect(second.id == spk1.id, "exhausted one-time slot falls through to the SPK")
+        #expect(cache.consumePrekey(forFriendSigningKey: friend)?.id == spk1.id, "the SPK is reusable")
+
+        // An SPK-only refresh (no one-time keys) rotates the SPK slot without touching the
+        // one-time slot — the consumed mark stays consumed.
+        clock.advance(3600)
+        let spk2 = makeSignedPrekey(created: clock.date)
+        cache.store(bundle: makeBundle(keyCount: 0, created: clock.date, signedPrekey: spk2),
+                    forFriendSigningKey: friend)
+        let third = try #require(cache.consumePrekey(forFriendSigningKey: friend))
+        #expect(third.id == spk2.id)
+        #expect(!third.isOneTime, "the one-time slot's consumption survived the SPK-only refresh")
+
+        // Older gossip (an intro built before the rotation, arriving late) rolls back neither.
+        cache.store(bundle: makeBundle(keyCount: 4, created: t0.addingTimeInterval(-3600), signedPrekey: spk1),
+                    forFriendSigningKey: friend)
+        let fourth = try #require(cache.consumePrekey(forFriendSigningKey: friend))
+        #expect(fourth.id == spk2.id, "older gossip must not roll back either slot")
+    }
+
+    /// The SPK has its own seal window (14 d), longer than the one-time bundle's 7 d — but past
+    /// it the cache falls back to the static key, exactly like a stale one-time bundle.
+    @Test func staleSignedPrekeyIsNotSealedTo() {
+        let clock = TestClock()
+        let cache = HeartDropPeerBundleCache(fileURL: tempFile("bundles.json"), now: { clock.date })
+        let friend = Data([9])
+        let spk = makeSignedPrekey(created: clock.date)
+        cache.store(bundle: makeBundle(keyCount: 1, created: clock.date, signedPrekey: spk),
+                    forFriendSigningKey: friend)
+
+        clock.advance(10 * 24 * 3600) // day 10: one-time slot stale (> 7 d), SPK fresh (≤ 14 d)
+        #expect(cache.consumePrekey(forFriendSigningKey: friend)?.id == spk.id)
+
+        clock.advance(5 * 24 * 3600) // day 15: SPK past its 14-day seal window too
+        #expect(cache.consumePrekey(forFriendSigningKey: friend) == nil)
+    }
+
+    /// The end-to-end coverage win, at the retention edge: a friend last seen 13 days ago gets
+    /// an SPK-sealed drop (not static), and the drop still opens after sitting almost the full
+    /// outbox lifetime — the scenario the retention invariant exists to protect. Past retention
+    /// the private half is gone (clean failure).
+    @Test func aHeartSealedToTheSignedPrekeyOpensAtTheRetentionEdge() async throws {
+        let (sender, senderID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: senderID) }
+        let (recipient, recipientID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: recipientID) }
+        let senderPrekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: senderPrekeySvc) }
+        let recipientPrekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: recipientPrekeySvc) }
+
+        let clock = TestClock()
+        let transport = MockDropTransport()
+        let recipientRecord = makeFriendRecord(of: recipient, name: "Bobby Fern")
+        let senderRecord = makeFriendRecord(of: sender, name: "Alice Fern")
+        let senderService = makeService(
+            identity: sender, prekeyService: senderPrekeySvc,
+            ledger: ProximityHeartLedger(fileURL: tempFile("s-ledger.json"), now: { clock.date }),
+            friends: { [recipientRecord] }, transport: transport, clock: clock)
+        let recipientLedger = ProximityHeartLedger(fileURL: tempFile("r-ledger.json"), now: { clock.date })
+        let recipientPrekeys = HeartPrekeyStore(keychainService: recipientPrekeySvc, now: { clock.date })
+        let recipientService = HeartDropService(
+            ledger: recipientLedger,
+            isEnabled: { true },
+            activeFriends: { [senderRecord] },
+            localDayKey: { FernletDate.dayKey(for: $0) },
+            displayName: { "Bobby" },
+            identity: recipient,
+            prekeys: recipientPrekeys,
+            peerBundles: HeartDropPeerBundleCache(fileURL: tempFile("rb.json"), now: { clock.date }),
+            outbox: HeartDropOutbox(fileURL: tempFile("ro.json"), now: { clock.date }),
+            dedup: HeartDropDedupStore(fileURL: tempFile("rd.json"), now: { clock.date }),
+            now: { clock.date }
+        )
+        recipientService.transport = transport
+
+        // Day 0: they meet; the sender caches the recipient's gossiped bundle (16 one-time
+        // keys + the SPK).
+        let bundle = try #require(recipientService.currentLocalBundle())
+        let spkID = try #require(bundle.signedPrekey?.id)
+        senderService.storePeerBundle(bundle, friendSigningKey: recipient.localSigningPublicKey)
+
+        // Day 13: the one-time slot is stale (7-day seal window) — without the SPK this heart
+        // would fall all the way back to the static key. The SPK (14-day window) carries it.
+        clock.advance(13 * 24 * 3600)
+        #expect(senderService.queueHeart(to: recipientRecord) == .queued)
+        await senderService.syncOnce()
+        #expect(transport.records.count == 1)
+        let wire = try #require(transport.records.first?.payload)
+        let expectedID = withUnsafeBytes(of: spkID.uuid) { Data($0) }
+        #expect(wire.subdata(in: 1..<17) == expectedID, "the wire names the SPK, not static (zeros)")
+
+        // Day 26.8: the drop sat almost its whole 14-day lifetime. SPK age is ~27 days — inside
+        // the 29-day retention, so it opens.
+        clock.advance(13 * 24 * 3600 + 20 * 3600)
+        await recipientService.syncOnce()
+        #expect(recipientLedger.receivedHearts.count == 1)
+        #expect(recipientLedger.receivedHearts.first?.senderFingerprint == sender.localFingerprint)
+
+        // Day 30: past retention the private half is pruned — the clean-failure side of the
+        // invariant (anything sealed this late is already outside every legitimate window).
+        clock.advance(4 * 24 * 3600)
+        _ = recipientPrekeys.currentBundle() // the prune tick
+        #expect(recipientPrekeys.privateKey(forPrekeyID: spkID) == nil)
+    }
+
+    // MARK: - Review-round fixes (2026-07-26 adversarial review)
+
+    /// The published `receivedHearts` mirror must follow the sidecar when it recovers through
+    /// one of its OWN paths (the unlock notification, an on-access read) — with away-hearts
+    /// off (the default) no sync pass ever runs, and a stale-empty mirror makes on-disk hearts
+    /// invisible for the whole session.
+    @Test func ledgerMirrorFollowsSidecarInternalRecovery() async throws {
+        let clock = TestClock()
+        let url = tempFile("ledger.json")
+        let io = IOGate()
+        let seeder = ProximityHeartLedger(fileURL: url, now: { clock.date })
+        #expect(seeder.recordReceivedHeart(id: UUID(), senderDisplayName: "Fern", senderFingerprint: "abc"))
+
+        io.failReads = true
+        let broken = ProximityHeartLedger(
+            fileURL: url, now: { clock.date }, readData: io.readData, writeData: io.writeData)
+        #expect(broken.receivedHearts.isEmpty)
+
+        io.failReads = false
+        clock.advance(6) // past the on-access retry floor
+        // A view-body read (`canSendHeart`) is enough to recover the sidecar; the mirror must
+        // follow without anyone calling the ledger's own retryLoad().
+        _ = broken.canSendHeart(to: "someone")
+        let mirrored = await waitUntil { broken.receivedHearts.count == 1 }
+        #expect(mirrored, "the published mirror stayed stale-empty after sidecar-internal recovery")
+    }
+
+    /// A crafted over-cap bundle must not ride the SPK-only branch into the sidecar: only a
+    /// stripped carrier (no one-time keys) is stored alongside the SPK.
+    @Test func oversizedBundleCannotRideTheSPKOnlyBranch() throws {
+        let clock = TestClock()
+        let cache = HeartDropPeerBundleCache(fileURL: tempFile("bundles.json"), now: { clock.date })
+        let friend = Data([9])
+        let spk = makeSignedPrekey(created: clock.date)
+        let oversized = makeBundle(
+            keyCount: HeartDropPeerBundleCache.maxBundleKeys + 1,
+            created: clock.date, signedPrekey: spk)
+
+        cache.store(bundle: oversized, forFriendSigningKey: friend)
+        let consumed = try #require(cache.consumePrekey(forFriendSigningKey: friend))
+        #expect(!consumed.isOneTime, "none of the over-cap one-time keys may be stored")
+        #expect(consumed.id == spk.id, "the (bounded) SPK itself still stores")
+    }
+
+    /// Eviction must not destroy a row whose one-time bundle expired while its SPK is still
+    /// inside the 14-day seal window — that silently degraded exactly the away-friends the SPK
+    /// exists for.
+    @Test func evictionKeepsARowWhoseSPKIsStillSealable() throws {
+        let clock = TestClock()
+        let cache = HeartDropPeerBundleCache(fileURL: tempFile("bundles.json"), now: { clock.date })
+        let friend = Data([9])
+        let spk = makeSignedPrekey(created: clock.date)
+        // A short-lived one-time bundle + a fresh SPK.
+        cache.store(bundle: makeBundle(keyCount: 1, created: clock.date, lifetime: 3600, signedPrekey: spk),
+                    forFriendSigningKey: friend)
+
+        clock.advance(2 * 3600) // the bundle is expired; the SPK is 2 h old
+        // Any store() runs the eviction pass — this one is for a different peer.
+        cache.store(bundle: makeBundle(keyCount: 1, created: clock.date), forFriendSigningKey: Data([8]))
+
+        #expect(cache.consumePrekey(forFriendSigningKey: friend)?.id == spk.id,
+                "eviction destroyed a still-sealable signed prekey with its expired carrier")
+    }
+
+    /// Acknowledging a storage banner must not zero the undelivered-hearts count the user was
+    /// never shown — it has to surface once storage recovers.
+    @Test func acknowledgingStorageProblemPreservesTheUndeliveredCount() async throws {
+        let (sender, senderID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: senderID) }
+        let (recipient, recipientID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: recipientID) }
+        let prekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: prekeySvc) }
+
+        let clock = TestClock()
+        let io = IOGate()
+        let transport = MockDropTransport()
+        let recipientRecord = makeFriendRecord(of: recipient, name: "Bobby Fern")
+        let service = makeService(
+            identity: sender, prekeyService: prekeySvc,
+            ledger: ProximityHeartLedger(fileURL: tempFile("ledger.json"), now: { clock.date }),
+            friends: { [recipientRecord] }, transport: transport, clock: clock,
+            outbox: HeartDropOutbox(
+                fileURL: tempFile("outbox.json"), now: { clock.date },
+                readData: io.readData, writeData: io.writeData))
+
+        // One heart expires un-uploaded → undeliverable(1).
+        transport.failUploads = true
+        #expect(service.queueHeart(to: recipientRecord) == .queued)
+        clock.advance(HeartDropOutbox.entryLifetime + 60)
+        transport.failUploads = false
+        await service.syncOnce()
+        #expect(service.deliveryProblem == .undeliverable(count: 1))
+
+        // Storage breaks mid-sync (an upload's recordAttempt write fails) → storage outranks.
+        transport.failUploads = true
+        #expect(service.queueHeart(to: recipientRecord) == .queued)
+        io.failWrites = true
+        await service.syncOnce()
+        #expect(service.deliveryProblem == .storageUnavailable)
+
+        // The user dismisses the STORAGE banner. The undelivered count they never saw survives.
+        service.acknowledgeDeliveryProblem()
+        io.failWrites = false
+        transport.failUploads = false
+        await service.syncOnce()
+        #expect(service.deliveryProblem == .undeliverable(count: 1),
+                "dismissing the storage banner destroyed the undelivered-hearts count")
+    }
+
+    /// A dedup mark whose downstream budget write failed must be undone, or the envelope id is
+    /// burned while the heart was never surfaced.
+    @Test func dedupUnrecordReopensAnEnvelopeAfterAStorageFailure() throws {
+        let clock = TestClock()
+        let io = IOGate()
+        let dedup = HeartDropDedupStore(
+            fileURL: tempFile("dedup.json"), now: { clock.date },
+            readData: io.readData, writeData: io.writeData)
+        let id = UUID()
+        #expect(dedup.recordIfNew(envelopeID: id))
+
+        io.failWrites = true // storage breaks between the two marks
+        #expect(dedup.acceptIfWithinDailyBudget(senderFingerprint: "f", dayEpoch: 1) == .storageUnavailable)
+        dedup.unrecord(envelopeID: id) // what openIncoming now does on that outcome
+
+        io.failWrites = false
+        #expect(dedup.retryLoad(), "the commit-on-failure removal re-persists")
+        #expect(dedup.recordIfNew(envelopeID: id), "the envelope id is fresh again — the heart re-delivers")
+    }
+
+    /// Consent withdrawal outranks a failing write: a dirty-but-loaded outbox still purges its
+    /// records off the public database (memory is the truth), rather than leaving them there
+    /// until the write recovers.
+    @Test func purgeProceedsFromADirtyOutbox() async throws {
+        let (sender, senderID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: senderID) }
+        let (recipient, recipientID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: recipientID) }
+        let prekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: prekeySvc) }
+
+        let clock = TestClock()
+        let io = IOGate()
+        let transport = MockDropTransport()
+        let recipientRecord = makeFriendRecord(of: recipient, name: "Bobby Fern")
+        let gate = ConsentGate()
+        let service = makeService(
+            identity: sender, prekeyService: prekeySvc,
+            ledger: ProximityHeartLedger(fileURL: tempFile("ledger.json"), now: { clock.date }),
+            friends: { [recipientRecord] }, transport: transport,
+            enabled: { gate.enabled }, clock: clock,
+            outbox: HeartDropOutbox(
+                fileURL: tempFile("outbox.json"), now: { clock.date },
+                readData: io.readData, writeData: io.writeData))
+
+        #expect(service.queueHeart(to: recipientRecord) == .queued)
+        await service.syncOnce()
+        #expect(transport.records.count == 1)
+
+        // Break writes and dirty the outbox (a failed-upload attempt write).
+        transport.failUploads = true
+        clock.advance(5 * 60 + 1) // past the ledger's per-friend send gate
+        #expect(service.queueHeart(to: recipientRecord) == .queued) // still ready at enqueue time
+        io.failWrites = true
+        await service.syncOnce() // recordAttempt's write fails → dirty
+        #expect(service.deliveryProblem == .storageUnavailable)
+
+        gate.enabled = false
+        #expect(await service.purgeDeadDrop(), "a dirty outbox must still purge — memory is the truth")
+        #expect(transport.records.isEmpty, "the uploaded record left the public database")
+        #expect(!service.hasStrandedDeadDropRecords())
     }
 }

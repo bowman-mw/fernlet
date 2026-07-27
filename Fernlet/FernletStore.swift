@@ -1247,16 +1247,32 @@ final class FernletStore {
     /// previous launch, and it picks up consent withdrawn on another device — none of which the
     /// old setter-only wiring could see.
     func retryHeartsAwayPurgeIfNeeded() {
-        Task { [weak self] in await self?.retryHeartsAwayPurgeNow() }
+        Task { [weak self] in
+            guard let self else { return }
+            // Coalesce, don't stack: the listener chain re-enters on every scene/tab/lock
+            // event, and a purge already in flight covers this one — waiting here would turn a
+            // burst of foreground events into a queue of sequential delete round trips over the
+            // same records. If the purge is still owed afterwards, the next event retries.
+            guard !self.isPurgingHeartDropRecords else { return }
+            await self.retryHeartsAwayPurgeNow()
+        }
     }
 
     /// Awaitable form of the retry seam, mirroring `HeartDropService.syncOnce()` vs `syncNow()`:
     /// production fires and forgets, tests await a settled state. Spinning on the fire-and-forget
     /// version instead made the purge tests flaky under full-suite load, where every `@MainActor`
     /// suite competes for the actor the detached Task needs.
+    ///
+    /// An in-flight purge is WAITED OUT, not declined (same pattern as `syncOnce()`'s
+    /// `while isSyncing`): the toggle-off purge task can still be unwinding its failure when the
+    /// retry arrives — under load that window stretches, and declining there meant a retry the
+    /// caller was owed silently never ran (it also made the purge tests flaky in exactly that
+    /// window). The reentrancy guard's job is preventing CONCURRENT purges, not refusing
+    /// successors.
     @discardableResult
     func retryHeartsAwayPurgeNow() async -> Bool {
-        guard heartsAwayPurgePending, !isPurgingHeartDropRecords else { return false }
+        while isPurgingHeartDropRecords { await Task.yield() }
+        guard heartsAwayPurgePending else { return false }
         await purgeHeartDropRecords()
         return true
     }

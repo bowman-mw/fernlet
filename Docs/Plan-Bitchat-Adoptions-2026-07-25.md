@@ -97,9 +97,11 @@ records, implementing a protocol declared in **FernletDomainModel** — already 
 ProximityKit and CloudKitSync, and already the deliberate home of `HeartPayload` for exactly this
 Phase-6 seam. FernletDomainModel is NOT MainActor-defaulted, so the protocol must be
 `nonisolated`/`Sendable`-clean. CloudKitSync never imports ProximityKit (which deps
-PrivateMediaStore); ProximityKit never imports CloudKit. S3BoundaryTests has no CloudKit-import
-rule — the compiler wall is the enforcement, and CloudKitSync is the only module with
-`import CloudKit` today. Transport reuses the existing injection precedent
+PrivateMediaStore); ProximityKit never imports CloudKit. ~~S3BoundaryTests has no CloudKit-import
+rule — the compiler wall is the enforcement~~ *(stale as of 2026-07-26:
+`FernletTests/S3BoundaryTests.swift` now enforces both directions — ProximityKit ⊬ CloudKit and
+CloudKitSync ⊬ ProximityKit — with comment-vs-import discrimination tested)*; CloudKitSync is the
+only module with `import CloudKit` today. Transport reuses the existing injection precedent
 (`CloudKitRecordDatabase` protocol + `SystemCloudKitRecordDatabase`) for testability; container
 `iCloud.MBO.Fernlet`; this is the app's FIRST use of the public database (private-only today);
 entitlements already carry CloudKit + aps. The envelope is transport-agnostic by construction
@@ -126,7 +128,9 @@ Sealed side (ProximityKit):
   wire2-framed (padded → hearts are all 256 B-class, indistinguishable). Outer:
   `[v1][prekeyID 16 B or zeros][eph pub 32][nonce 12][ct‖tag]`; ECDH against prekey when one is
   unconsumed, else **static-KA fallback** (availability over FS; flagged in header).
-- **HeartDropOutbox** — persisted, sealed at rest; entries `{id, friendKey, envelope, tag, created,
+- **HeartDropOutbox** — persisted, sealed at rest *(the seal shipped 2026-07-26 with
+  Plan-Prekeys-ProtectedLoad-CoachMesh Track A Increment 4 — the 2026-07-25 v1 wrote plaintext
+  JSON under `.completeFileProtection` only)*; entries `{id, friendKey, envelope, tag, created,
   attempts, ckRecordName?}`; retry on foreground/reachability; expire 14 d; registered in the wipe
   registry. Heart *rate limiting stays in ProximityHeartLedger* (5 min/friend, consume-on-send) —
   the outbox is downstream of it.

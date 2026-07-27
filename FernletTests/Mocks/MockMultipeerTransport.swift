@@ -91,6 +91,14 @@ final class MockMultipeerTransport: MultipeerTransport {
         stateSubject.send(.awaitingLocalAcceptance(invite))
     }
 
+    /// The MC-realistic two-step: a `.connecting` event lands before `.connected` (the real
+    /// session delegate always reports both), which is what puts a trainer coordinator into
+    /// `.awaitingTapConfirmation` BEFORE the connected event — the second of the tap-gate
+    /// auto-advance's two entry points.
+    func simulateConnecting(peer: MultipeerPeer) {
+        stateSubject.send(.connecting(peer))
+    }
+
     func simulateConnected(peer: MultipeerPeer) {
         connectedPeers = [peer]
         stateSubject.send(.connected(peer))

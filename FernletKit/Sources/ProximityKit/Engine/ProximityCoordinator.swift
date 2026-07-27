@@ -495,7 +495,22 @@ public final class ProximityCoordinator {
             updateInspectorPeer(transportPeer: peer)
             updateInspectorTransport(state: "connected")
             if case .connected = state { return }
-            if case .awaitingTapConfirmation = state { return }
+            if case .awaitingTapConfirmation(let waiting) = state {
+                // Increment 10 (coach path, Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26):
+                // the pre-identity tap gate could never fire on ANY hardware — the distance
+                // stream needs an NI ranging session, which only starts after the identity
+                // exchange this gate blocks (`startRangingIfPossible` runs in
+                // `handleIdentityEnvelope`), and `tapToConfirm()` has no production caller —
+                // so every trainer session hung here to timeout. Once the transport is actually
+                // connected, auto-advance to the identity exchange; the human gate is the
+                // explicit post-identity confirmation (plus the verification ceremony on a
+                // first pairing), mirroring the friend path's identity-first architecture.
+                if currentMode == .trainer {
+                    inspector?.recordCoordinatorEvent("tap gate auto-advanced on connect — explicit confirmation gates the session")
+                    await finishTapConfirmation(for: waiting)
+                }
+                return
+            }
             if case .awaitingIdentityIntroduction = state { return }
             if case .awaitingProximityCommit = state { return }
             if case .awaitingManualCommit = state { return }
@@ -507,6 +522,9 @@ public final class ProximityCoordinator {
                 return
             }
             transition(to: .awaitingTapConfirmation(peer: peer))
+            // Same auto-advance for the fresh entry (see above).
+            inspector?.recordCoordinatorEvent("tap gate auto-advanced on connect — explicit confirmation gates the session")
+            await finishTapConfirmation(for: peer)
         case .disconnected:
             updateInspectorTransport(state: "notConnected", disconnected: true)
             await end(.transportLost)
@@ -667,6 +685,24 @@ public final class ProximityCoordinator {
 
     private func handleInbound(_ message: MultipeerInboundMessage) async {
         currentTransportPeer = message.peer
+
+        // Increment 10 (coach path): hard wire-size gate BEFORE the envelope is decoded,
+        // decrypted, or inflated — the hearts ordering (`HeartDropSealer.open` gates size before
+        // key agreement). `TrainerExportPayload.isWellFormed` can only run after decrypt+inflate,
+        // which is the wrong layer for a bound: coach payloads are ~1000× a heart, so the
+        // inflate-bomb exposure is correspondingly worse. Trainer-scoped: the friend channel
+        // legitimately carries 10 MB photo payloads under its own receiver cap.
+        if currentMode == .trainer, message.data.count > TrainerExportPayload.maxTrainerWireBytes {
+            trustPolicy?.recordTrainerAudit(TrainerAuditEvent(
+                kind: .envelopeRejected,
+                peerFingerprint: message.peer.advertisedFingerprint,
+                peerDisplayName: message.peer.displayName,
+                message: "Rejected oversized inbound blob (\(message.data.count) bytes) before decode"
+            ))
+            inspector?.recordError(domain: "Envelope", message: "oversized inbound blob", recoverable: false)
+            fail("oversized inbound payload")
+            return
+        }
 
         // SEALED-INTRODUCTION rule (Phase 4b): on a presence-heart connection the identity
         // intro/ack arrives sealed to us. Open it first; a wrapper we cannot decrypt is a
@@ -1077,13 +1113,17 @@ public final class ProximityCoordinator {
             advertisedRole = "peer"
         }
 
+        // No "caps" entry: the old `"plan,live,delta"`/`"share"` string was stale discovery-info
+        // no reader ever parsed. Real capability negotiation is `IdentityRangingPayload
+        // .capabilities` (wire2 keys off it) — a future coach coordinator must pass a real
+        // `localCapabilities` array there (pattern: `MeshNetworkManager.localCapabilities()`),
+        // or wire2 silently degrades to legacy for the whole channel.
         return [
             "v": "1",
             "role": advertisedRole,
             "sid": sessionID,
             "fp": identity.localFingerprint,
-            "name": String(displayName.prefix(32)),
-            "caps": mode == .trainer ? "plan,live,delta" : "share"
+            "name": String(displayName.prefix(32))
         ]
     }
 
