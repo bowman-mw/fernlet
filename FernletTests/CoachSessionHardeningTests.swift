@@ -141,11 +141,12 @@ struct CoachSessionHardeningTests {
         #expect(coordinator.state != .failed(reason: "oversized inbound payload"))
     }
 
-    /// The wire cap is derived from the bundle cap, never hand-written — and it must clear
-    /// `SealedPayloadFraming`'s 16 MiB inflate guard by a wide margin.
+    /// The wire cap is derived from the bundle cap, never hand-written — and the margin is
+    /// pinned against the REAL inflate guard, so a future `maxInflatedByteCount` change can't
+    /// silently erode it.
     @Test func trainerWireCapInvariantsHold() {
         #expect(TrainerExportPayload.maxTrainerWireBytes == 2 * TrainerExportPayload.maxBundleBytes)
-        #expect(TrainerExportPayload.maxTrainerWireBytes < 16 * 1024 * 1024 / 2)
+        #expect(TrainerExportPayload.maxTrainerWireBytes < SealedPayloadFraming.maxInflatedByteCount / 2)
     }
 
     // MARK: - Coach trust policy (Increment 10 item 5)
@@ -192,6 +193,24 @@ struct CoachSessionHardeningTests {
         #expect(friendPolicy.isTrustedProximityPeer(signingPublicKey: friend.localSigningPublicKey))
         #expect(friendPolicy.isTrustedProximityPeer(signingPublicKey: stranger.localSigningPublicKey),
                 "the friend policy answers true unconditionally — exactly why it must never be injected into a coach coordinator")
+    }
+
+    /// `.trainer` is the decode FREEZE DEFAULT for a mode this build doesn't know
+    /// (`ProximityPersistenceRecords` parks the real token in `unknownModeToken`), and the
+    /// record's contract demands any privilege-deriving reader of stored mode re-audit that
+    /// default. A record synced from a NEWER build under a future mode must read "not a coach"
+    /// — never silently auto-confirm as one (adversarial review finding, 2026-07-27).
+    @Test func aFreezeDefaultedUnknownModeNeverAutoConfirmsAsACoach() throws {
+        let (peer, peerID) = try makeIdentity()
+        defer { cleanup(peerID) }
+
+        var frozen = makeRecord(peer, name: "Future Mode Peer", mode: .trainer)
+        frozen.unknownModeToken = "someFutureMode" // what the tolerant decoder parks
+        let vault = ProximityTrustVault(initialPeers: [frozen])
+        let policy = CoachSessionTrustPolicy(vault: vault)
+
+        #expect(!policy.isTrustedProximityPeer(signingPublicKey: peer.localSigningPublicKey),
+                "a freeze-defaulted record must not grant coach auto-confirm")
     }
 
     // MARK: - Wire2 capability negotiation pin (Increment 10 item 3)
@@ -398,6 +417,47 @@ struct CoachSessionHardeningTests {
 
     /// Scanner side: a coach session has exactly one counterpart — a valid QR from anyone else
     /// is refused outright rather than searched for a match.
+    /// The scanner's signature + freshness gate is load-bearing, not decorative: a stale
+    /// (photographed-days-ago) QR and a tampered one (someone else's payload rewritten to claim
+    /// the session peer's keys) must both be refused before any challenge is minted.
+    @Test func scannerRefusesStaleAndTamperedQRs() throws {
+        nonisolated final class Clock: @unchecked Sendable {
+            var date = Date()
+        }
+        let clock = Clock()
+        let (a, aID, b, _, ids) = try makeCeremonies(clock: { clock.date })
+        defer { ids.forEach(cleanup) }
+
+        // Stale: the QR was minted, then the freshness window passed before the scan.
+        let staleURL = try #require(a.makeDisplayURL(forPeerSigningKey: aID.localSigningPublicKey))
+        clock.date = clock.date.addingTimeInterval(ProximityVerifyQR.freshnessWindow + 1)
+        #expect(b.beginVerification(
+            scannedURL: staleURL, expectedPeerSigningKey: aID.localSigningPublicKey) == nil)
+
+        // Tampered: a payload re-written to claim the session peer's signing key no longer
+        // matches its own signature.
+        let freshURL = try #require(a.makeDisplayURL(forPeerSigningKey: aID.localSigningPublicKey))
+        let payload = try #require(ProximityVerifyQR.parse(freshURL))
+        let forged = ProximityVerifyQR.Payload(
+            version: payload.version,
+            signingPublicKey: payload.signingPublicKey,
+            keyAgreementPublicKey: payload.keyAgreementPublicKey,
+            timestamp: payload.timestamp,
+            nonce: Data((0..<16).map { _ in UInt8.random(in: .min ... .max) }), // re-minted nonce
+            signature: payload.signature // …but the old signature
+        )
+        var components = URLComponents()
+        components.scheme = ProximityVerifyQR.urlScheme
+        components.host = ProximityVerifyQR.urlHost
+        components.queryItems = [URLQueryItem(
+            name: "d",
+            value: ProximityVerifyQR.base64URLEncode(try JSONEncoder().encode(forged)))]
+        let forgedURL = try #require(components.url)
+        #expect(b.beginVerification(
+            scannedURL: forgedURL, expectedPeerSigningKey: aID.localSigningPublicKey) == nil,
+            "a payload that fails its own signature must never open a round")
+    }
+
     @Test func scannerRefusesAQRFromAnyoneButTheSessionPeer() throws {
         let (_, aID, b, _, ids) = try makeCeremonies()
         defer { ids.forEach(cleanup) }
