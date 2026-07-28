@@ -424,6 +424,64 @@ struct ProximityVerificationTests {
         manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: nil)
     }
 
+    // MARK: - Review 2026-07-27: fixed-length transcript fields
+
+    /// The signed transcript concatenates `domain ‖ scannerKA ‖ challengeNonce ‖ qrNonce` with NO
+    /// length prefixes, so it is unambiguous only while every field is fixed-length. `qrNonce` was
+    /// pinned by the equality check against the live display nonce, but `challengeNonce` and the
+    /// scanner's KA key came straight off the wire unchecked — an unbounded, unstructured signing
+    /// oracle over the long-term identity key. Nothing is signed now until this holds.
+    @Test func challengeWellFormednessPinsEveryTranscriptFieldLength() {
+        let nonce = Data(repeating: 7, count: ProximityVerifySignature.nonceByteCount)
+        let scannerKA = Data(repeating: 9, count: ProximityVerifySignature.publicKeyByteCount)
+        let good = VerifyChallengePayload(qrNonce: nonce, challengeNonce: nonce)
+        #expect(ProximityVerifySignature.isWellFormedChallenge(good, scannerKeyAgreementPublicKey: scannerKA))
+
+        // An oversized challenge nonce — the 4 KB signing-oracle shape.
+        let fatNonce = VerifyChallengePayload(qrNonce: nonce, challengeNonce: Data(repeating: 1, count: 4096))
+        #expect(!ProximityVerifySignature.isWellFormedChallenge(fatNonce, scannerKeyAgreementPublicKey: scannerKA))
+        // …and a short one, which would let two different splits produce identical signed bytes.
+        let shortNonce = VerifyChallengePayload(qrNonce: nonce, challengeNonce: Data([1, 2, 3]))
+        #expect(!ProximityVerifySignature.isWellFormedChallenge(shortNonce, scannerKeyAgreementPublicKey: scannerKA))
+        // A wrong-length QR nonce is refused for the same reason.
+        let shortQR = VerifyChallengePayload(qrNonce: Data([4, 5]), challengeNonce: nonce)
+        #expect(!ProximityVerifySignature.isWellFormedChallenge(shortQR, scannerKeyAgreementPublicKey: scannerKA))
+        // A non-Curve25519 scanner key shifts the field boundary too.
+        #expect(!ProximityVerifySignature.isWellFormedChallenge(good, scannerKeyAgreementPublicKey: Data([1, 2, 3])))
+        #expect(!ProximityVerifySignature.isWellFormedChallenge(good, scannerKeyAgreementPublicKey: Data()))
+    }
+
+    /// `canonicalBytes` concatenates the QR's two public keys with no length prefix, so
+    /// "non-empty" was not a strong enough shape check — both must be exactly 32 bytes.
+    @Test func qrValidationRequiresExactCurve25519KeyLengths() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+
+        let made = try ProximityVerifyQR.makeURL(identity: identity)
+        let genuine = try #require(ProximityVerifyQR.parse(made.url))
+        #expect(ProximityVerifyQR.isValid(genuine))
+
+        // A short key alone is enough to refuse it, before any signature math is trusted.
+        let shortKA = ProximityVerifyQR.Payload(
+            version: genuine.version,
+            signingPublicKey: genuine.signingPublicKey,
+            keyAgreementPublicKey: Data([1, 2, 3]),
+            timestamp: genuine.timestamp,
+            nonce: genuine.nonce,
+            signature: genuine.signature
+        )
+        #expect(!ProximityVerifyQR.isValid(shortKA))
+
+        let longSigning = ProximityVerifyQR.Payload(
+            version: genuine.version,
+            signingPublicKey: genuine.signingPublicKey + Data([0]),
+            keyAgreementPublicKey: genuine.keyAgreementPublicKey,
+            timestamp: genuine.timestamp,
+            nonce: genuine.nonce,
+            signature: genuine.signature
+        )
+        #expect(!ProximityVerifyQR.isValid(longSigning))
+    }
 }
 
 /// Ceremony drops are silent by design (no UI, no state change), so the audit trail is the only

@@ -24,6 +24,7 @@ import Security
 import ProximityKit
 import FernletFoundation
 import FernletDomainModel
+import CloudKitSync
 @testable import Fernlet
 
 @MainActor
@@ -1860,5 +1861,161 @@ struct HeartDropTests {
         #expect(await service.purgeDeadDrop(), "a dirty outbox must still purge — memory is the truth")
         #expect(transport.records.isEmpty, "the uploaded record left the public database")
         #expect(!service.hasStrandedDeadDropRecords())
+    }
+
+    // MARK: - Review 2026-07-27 regressions
+
+    /// The durable dedup mark used to be spent BEFORE the sender match, the signature check and the
+    /// createdAt window — so any record landing under a friend's tag consumed a slot in the
+    /// 8192-entry store regardless of whether it authenticated. That store evicts oldest-first, so a
+    /// flood under one valid tag evicted the marks of genuine drops still inside the 14-day pickup
+    /// window, and those re-delivered as duplicate hearts. The mark now happens only after the
+    /// gates pass, all of which are free here (the envelope is already decoded).
+    @Test func anUnauthenticatedDropUnderAFriendsTagBurnsNoDedupMark() async throws {
+        let (alice, aliceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: aliceID) }
+        let (bob, bobID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: bobID) }
+        let (mallory, malloryID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: malloryID) }
+        let bobPrekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: bobPrekeySvc) }
+
+        let transport = MockDropTransport()
+        let bobLedger = ProximityHeartLedger(fileURL: tempFile("bob-ledger.json"))
+        let aliceRecord = makeFriendRecord(of: alice, name: "Alice Fern")
+        // Held so the test can ask the store directly whether the mark was spent.
+        let dedup = HeartDropDedupStore(fileURL: tempFile("bob-dedup.json"))
+
+        let bobService = HeartDropService(
+            ledger: bobLedger,
+            isEnabled: { true },
+            activeFriends: { [aliceRecord] },
+            localDayKey: { FernletDate.dayKey(for: $0) },
+            displayName: { "Bobby" },
+            identity: bob,
+            prekeys: HeartPrekeyStore(keychainService: bobPrekeySvc),
+            peerBundles: HeartDropPeerBundleCache(fileURL: tempFile("bob-bundles.json")),
+            outbox: HeartDropOutbox(fileURL: tempFile("bob-outbox.json")),
+            dedup: dedup
+        )
+        bobService.transport = transport
+
+        // Mallory learns Alice's tag for Bob and plants a heart signed with HER OWN identity under
+        // it. The tag binds the pair; only the inner signature binds the person.
+        let sentAt = Date()
+        let payload = try JSONEncoder().encode(HeartPayload(sentAtDayKey: FernletDate.dayKey(for: sentAt)))
+        let forged = try FernletIdentityEnvelope.signed(
+            identityService: mallory,
+            senderDisplayName: "Definitely Alice",
+            recipientFingerprint: bob.localFingerprint,
+            payloadType: .friendHeartDrop,
+            payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: PayloadType.friendHeartDrop.rawValue),
+            payload: payload,
+            createdAt: sentAt,
+            expiresAt: sentAt.addingTimeInterval(HeartDropOutbox.entryLifetime)
+        )
+        let wire = try HeartDropSealer.seal(
+            innerEnvelopeJSON: try JSONEncoder().encode(forged),
+            toPrekey: nil,
+            orStaticKey: bob.localKeyAgreementPublicKey
+        )
+        // Bob's EXPECTED INCOMING tag from Alice — the friend is the sender term.
+        let tag = IdentityService.heartDropTag(
+            pairSecret: try bob.heartDropPairSecret(with: alice.localKeyAgreementPublicKey),
+            dayEpoch: IdentityService.heartDropDayEpoch(at: sentAt),
+            senderKeyAgreementPublicKey: alice.localKeyAgreementPublicKey
+        )
+        transport.records.append(HeartDropRecord(tag: tag, payload: wire, recordName: "forged-1"))
+
+        await bobService.syncOnce()
+        #expect(bobLedger.receivedHearts.isEmpty, "A drop signed by someone other than the tag's owner is rejected")
+        #expect(
+            dedup.recordIfNew(envelopeID: forged.envelopeID),
+            "The rejected drop spent no dedup slot — the id is still fresh"
+        )
+    }
+
+    /// Retention used to run ONLY inside `currentBundle()`, whose caller is consent-gated — so
+    /// turning away hearts off froze the expiry filters and every X25519 private half ever minted
+    /// stayed in the keychain until a full delete-all, defeating the bounded-FS-window property for
+    /// exactly the user who opted out.
+    @Test func retainedPrekeysStillExpireAfterConsentIsWithdrawn() throws {
+        let clock = TestClock()
+        let prekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: prekeySvc) }
+        let prekeys = HeartPrekeyStore(keychainService: prekeySvc, now: { clock.date })
+
+        let bundle = try #require(prekeys.currentBundle())
+        let oneTimeID = try #require(bundle.keys.first).id
+        let spkID = try #require(bundle.signedPrekey).id
+        #expect(prekeys.privateKey(forPrekeyID: oneTimeID) != nil)
+        #expect(prekeys.privateKey(forPrekeyID: spkID) != nil)
+
+        // Past every retention window, with consent off the whole time.
+        clock.advance(HeartPrekeyStore.bundleLifetime + HeartPrekeyStore.expiryGrace + 3600)
+        prekeys.pruneRetainedKeys()
+
+        #expect(prekeys.privateKey(forPrekeyID: oneTimeID) == nil, "The one-time half is gone")
+        #expect(prekeys.privateKey(forPrekeyID: spkID) == nil, "The signed-prekey half is gone")
+    }
+
+    /// The consent-off path has to BE a retention tick, or a user who never opens another proximity
+    /// session never runs one. `currentLocalBundle()` prunes before its disabled short-circuit.
+    @Test func consentOffBundleRequestStillPrunesRetainedKeys() throws {
+        let clock = TestClock()
+        let (identity, identityID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: identityID) }
+        let prekeySvc = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: prekeySvc) }
+
+        let gate = ConsentGate(enabled: true)
+        let service = makeService(
+            identity: identity, prekeyService: prekeySvc,
+            ledger: ProximityHeartLedger(fileURL: tempFile("ledger.json"), now: { clock.date }),
+            friends: { [] }, transport: MockDropTransport(),
+            enabled: { gate.enabled }, clock: clock)
+
+        let bundle = try #require(service.currentLocalBundle())
+        let oneTimeID = try #require(bundle.keys.first).id
+        // Fresh reader each time: `HeartPrekeyStore` caches its decoded state in memory, so a
+        // long-lived instance would answer from the pre-prune copy rather than the keychain.
+        #expect(HeartPrekeyStore(keychainService: prekeySvc, now: { clock.date })
+            .privateKey(forPrekeyID: oneTimeID) != nil)
+
+        gate.enabled = false
+        clock.advance(HeartPrekeyStore.bundleLifetime + HeartPrekeyStore.expiryGrace + 3600)
+        #expect(service.currentLocalBundle() == nil, "Consent off still advertises nothing")
+        #expect(
+            HeartPrekeyStore(keychainService: prekeySvc, now: { clock.date })
+                .privateKey(forPrekeyID: oneTimeID) == nil,
+            "…but the retention filter ran on the way out"
+        )
+    }
+
+    /// One flooded tag must not starve the friends whose tags sit in later query chunks. The fetch
+    /// budget is split evenly across chunks instead of spent first-come, so every chunk is queried.
+    @Test func fetchBudgetIsSplitAcrossChunksSoNoChunkStarves() {
+        // 90 tags (≈6 friends × the 15-day pickup window) chunk at the `IN`-predicate size.
+        let tags = (0..<90).map { "tag-\($0)" }
+        let chunks = HeartDropCloudTransport.chunked(tags)
+        #expect(chunks.count == 5)
+        #expect(chunks.flatMap { $0 } == tags, "Chunking loses no tag")
+
+        let budget = HeartDropCloudTransport.perChunkBudget(chunkCount: chunks.count)
+        #expect(budget == HeartDropCloudTransport.maxRecordsPerFetch / 5)
+        #expect(
+            budget * chunks.count <= HeartDropCloudTransport.maxRecordsPerFetch,
+            "The split never exceeds the total safety cap"
+        )
+        // The starvation property: a flooder can take at most its own chunk's share, so every
+        // other chunk keeps a positive budget of its own.
+        #expect(budget > 0)
+
+        // Degenerate shapes stay safe.
+        #expect(HeartDropCloudTransport.perChunkBudget(chunkCount: 0) == HeartDropCloudTransport.maxRecordsPerFetch)
+        #expect(HeartDropCloudTransport.perChunkBudget(chunkCount: 10_000) == 1, "Never a zero budget")
+        #expect(HeartDropCloudTransport.chunked([]).isEmpty)
     }
 }

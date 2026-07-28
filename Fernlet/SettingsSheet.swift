@@ -1494,9 +1494,14 @@ struct SettingsSheet: View {
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
 
-                // Loaded post-render via .task: the repository decodes the whole database for
-                // this read, which is far too slow for a NavigationStack push's first body pass.
-                if let tier2 = debugTierTwoMemories, tier2.isEmpty {
+                // Loaded post-render by the `.task` on this section: the repository decodes the
+                // whole database for this read, which is far too slow for a NavigationStack push's
+                // first body pass. Until it lands, say so — the previous three-branch form rendered
+                // neither the list nor the empty state on the initial push, which reads as a broken
+                // page rather than a deliberate on-demand load.
+                if debugTierTwoMemories == nil {
+                    FernletCard { EmptyState(text: "Loading tier 2 memories…") }
+                } else if let tier2 = debugTierTwoMemories, tier2.isEmpty {
                     FernletCard { EmptyState(text: "No tier 2 memories yet. They are extracted from journals when Foundation Models are available.") }
                 } else if let tier2 = debugTierTwoMemories {
                     ForEach(tier2) { record in
@@ -1523,13 +1528,13 @@ struct SettingsSheet: View {
                         .padding(14)
                         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
                     }
-                } else {
-                    Button("Load tier 2 memories") {
-                        debugTierTwoMemories = store.tierTwoMemories
-                    }
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
                 }
+            }
+            // The load the comment above describes. Runs once per push, after the first frame, so
+            // the whole-database decode never blocks the navigation animation.
+            .task {
+                guard debugTierTwoMemories == nil else { return }
+                debugTierTwoMemories = store.tierTwoMemories
             }
 
             VStack(alignment: .leading, spacing: 12) {

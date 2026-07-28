@@ -1481,6 +1481,10 @@ struct DisposableCameraView: View {
     /// anywhere. A filled check marks the cooldown — a state, never a number.
     private func sessionHeartButton(for friend: ProximityTrustedPeerRecord) -> some View {
         let onCooldown = !store.heartLedger.canSendHeart(to: friend.fingerprint)
+        // `canSendHeart` is fail-closed (Track A): an UNLOADED ledger also answers false, and the
+        // cooldown copy would be a lie there — nothing was sent. Say what is actually wrong, exactly
+        // as the friend row does (FriendListView's `onCooldown` branch).
+        let ledgerUnavailable = onCooldown && !store.heartLedger.isLoaded
         // Prefer the mesh: a live session member with the `hearts` capability is always reachable over
         // the already-connected channel — no dependence on the separate presence radio. Only the older-
         // build fallback consults presence reachability.
@@ -1510,11 +1514,13 @@ struct DisposableCameraView: View {
         .buttonStyle(.plain)
         .disabled(onCooldown || !reachable || sending)
         .accessibilityLabel(
-            onCooldown
-                ? "You just sent \(firstName) some warmth — hearts settle for a few minutes."
-                : reachable
-                    ? "Send good vibes to \(friend.displayName)"
-                    : "\(firstName) isn't reachable for a heart right now."
+            ledgerUnavailable
+                ? "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."
+                : onCooldown
+                    ? "You just sent \(firstName) some warmth — hearts settle for a few minutes."
+                    : reachable
+                        ? "Send good vibes to \(friend.displayName)"
+                        : "\(firstName) isn't reachable for a heart right now."
         )
     }
 

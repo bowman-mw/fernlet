@@ -309,6 +309,71 @@ struct MeshSessionHeartTests {
         #expect(manager.sessionHeartState.isFailed)
     }
 
+    /// Regression (review 2026-07-27): the cooldown CANNOT deduplicate concurrent taps, because
+    /// consume-on-send arms the ledger only after the wire write returns. Two taps in the same
+    /// runloop turn therefore both saw a clear cooldown and both dispatched — the recipient's own
+    /// 5-minute receive window then silently discarded the second, while the sender was told
+    /// "Sent … good vibes" twice for one delivered heart. An in-flight claim taken BEFORE the
+    /// await is what actually closes the window; `recordHeartSent` deliberately stays after it, so
+    /// a failed send never burns the five minutes.
+    @Test func aSecondTapDuringAnInFlightSendIsRefusedNotDuplicated() {
+        let manager = store.meshNetworkManager
+        let ledger = isolatedLedger()
+        manager.heartLedger = ledger
+        store.setAllowNearbyHearts(true)
+
+        var sends = 0
+        manager.onSessionHeartSendForTesting = { _ in sends += 1 }
+
+        let fp = uniqueFingerprint()
+        manager.addSlotForTesting(
+            coordinator: throwawayCoordinator(), peer: makeMultipeerPeer(name: "Capable"),
+            fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
+        )
+        let friend = friendRecord(fingerprint: fp, name: "Capable")
+
+        // Both calls land before the first send's Task can resume, so the ledger is still unarmed
+        // for the second — exactly the window the old re-check could not see.
+        manager.sendSessionHeart(to: friend)
+        manager.sendSessionHeart(to: friend)
+
+        #expect(sends == 1, "Only one heart is dispatched for two taps in the same turn")
+        #expect(manager.sessionHeartState.isFailed, "The refused second tap says so instead of claiming a send")
+        #expect(ledger.canSendHeart(to: fp), "The refusal burns no cooldown — the send hasn't completed yet")
+    }
+
+    /// The claim must not outlive the session that took it: the delivery task's own `defer` never
+    /// runs if its slot died mid-flight, and a stale claim would refuse the FIRST heart of the next
+    /// session.
+    @Test func sessionEndClearsAStrandedInFlightHeartClaim() {
+        let manager = store.meshNetworkManager
+        manager.heartLedger = isolatedLedger()
+        store.setAllowNearbyHearts(true)
+
+        var sends = 0
+        manager.onSessionHeartSendForTesting = { _ in sends += 1 }
+
+        let fp = uniqueFingerprint()
+        let firstPeer = makeMultipeerPeer(name: "Capable")
+        manager.addSlotForTesting(
+            coordinator: throwawayCoordinator(), peer: firstPeer,
+            fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
+        )
+        let friend = friendRecord(fingerprint: fp, name: "Capable")
+        manager.sendSessionHeart(to: friend)
+        #expect(sends == 1)
+
+        // The session ends (removeSlot funnel) with the claim still held, then a new session
+        // re-seats the same friend.
+        manager.evictSlotForTesting(peerID: firstPeer.id)
+        manager.addSlotForTesting(
+            coordinator: throwawayCoordinator(), peer: makeMultipeerPeer(name: "Capable"),
+            fingerprint: fp, verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: heartsCap
+        )
+        manager.sendSessionHeart(to: friend)
+        #expect(sends == 2, "A fresh session's first heart is not refused by a stranded claim")
+    }
+
     // MARK: - Capability advertisement
 
     @Test func localCapabilitiesAdvertiseHearts() {

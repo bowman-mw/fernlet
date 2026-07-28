@@ -182,4 +182,35 @@ struct BarcodeServingStepTests {
         #expect(BarcodeServingMemory.lastServings(for: "0012345678905") == nil)
         #expect(UserDefaults.standard.dictionary(forKey: key) == nil)
     }
+
+    // MARK: - Serving floor (review 2026-07-27)
+
+    /// The store used to clamp with `max(servings, 0)`, so a 0 passed straight through and wrote a
+    /// meal contributing nothing, with a `.serving` component of quantity 0 in the correction
+    /// sheet. The UI's save bar happens to disable at <= 0, but the invariant belongs where the
+    /// data is written — the log methods are public API with a defaulted `servings`. Note the
+    /// normalization is to ONE serving, not to an epsilon: `Macros` fields are `Int`, so a 0.01
+    /// floor would still round every macro to zero and leave the row contributing nothing.
+    @MainActor
+    @Test func nonPositiveServingsNormalizeToOneServing() throws {
+        let store = makeTestStore()
+        let item = Self.sampleItem()
+
+        for badCount in [0.0, -3.0] {
+            let meal = store.logBarcodeScannedFoodItem(item, mealType: .snack, servings: badCount)
+            let component = try #require(meal.componentSnapshots.first)
+            #expect(component.quantity == 1, "A logged meal never records a zero serving count")
+            #expect(meal.macros == item.macros, "…and never records macros that contribute nothing")
+            #expect(meal.macros.protein == 5)
+        }
+
+        // The label path shares the same construction, so it inherits the same rule.
+        let labelMeal = store.logLabelScannedFoodItem(item, mealType: .snack, servings: 0)
+        #expect(try #require(labelMeal.componentSnapshots.first).quantity == 1)
+
+        // A genuine fractional count is untouched — this normalizes bad input, it doesn't round.
+        let half = store.logBarcodeScannedFoodItem(item, mealType: .snack, servings: 0.5)
+        #expect(try #require(half.componentSnapshots.first).quantity == 0.5)
+        #expect(half.macros == item.macros.scaled(by: 0.5))
+    }
 }

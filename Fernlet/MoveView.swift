@@ -64,8 +64,17 @@ struct MoveView: View {
     /// GENERIC proximity audit, written by every mode on every state transition and envelope,
     /// so any friend-mesh user got tagged as having a coach (Increment 8 of
     /// Docs/Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md).
-    private var showsCoachPlanSourceTag: Bool {
-        Self.hasCoachSourcedPlans(in: allDays, today: store.day)
+    ///
+    /// CACHED, not computed: the body reads it in four places, and the scan walks every loaded
+    /// day's planned workouts — years of history, several times per frame, on every scroll
+    /// (review finding, 2026-07-27). It is recomputed exactly where `allDays` is refreshed, via
+    /// `refreshAllDays()`, so it can never drift from the data it summarizes.
+    @State private var showsCoachPlanSourceTag = false
+
+    /// The single seam for reloading `allDays` — keeps the derived coach-tag gate in step.
+    private func refreshAllDays() {
+        allDays = store.loadDays()
+        showsCoachPlanSourceTag = Self.hasCoachSourcedPlans(in: allDays, today: store.day)
     }
 
     /// Static so it is testable: a private view computed cannot be (the `AwayHeartsCopy`
@@ -129,14 +138,14 @@ struct MoveView: View {
                                     showsCompleteAction: true,
                                     onComplete: {
                                         store.completePlannedWorkout(plannedWorkout, date: store.todayKey)
-                                        allDays = store.loadDays()
+                                        refreshAllDays()
                                     },
                                     onEdit: {
                                         path.append(store.todayKey)
                                     },
                                     onDelete: {
                                         store.deletePlannedWorkout(plannedWorkout, date: store.todayKey)
-                                        allDays = store.loadDays()
+                                        refreshAllDays()
                                     }
                                 )
                                 if index < store.day.plannedWorkouts.count - 1 || !store.day.workouts.isEmpty {
@@ -148,7 +157,7 @@ struct MoveView: View {
                                     store: store,
                                     workout: workout,
                                     date: store.todayKey,
-                                    onChanged: { allDays = store.loadDays() }
+                                    onChanged: { refreshAllDays() }
                                 )
                                 if index < store.day.workouts.count - 1 {
                                     FernletRowDivider()
@@ -188,7 +197,7 @@ struct MoveView: View {
             .navigationTitle("")
             .navigationDestination(for: String.self) { dateKey in
                 MoveDayDetailView(store: store, dateKey: dateKey, showsPlanSourceTag: showsCoachPlanSourceTag)
-                    .onDisappear { allDays = store.loadDays() }
+                    .onDisappear { refreshAllDays() }
             }
             #if canImport(UIKit)
             .navigationDestination(for: ProgressPhotoRecord.self) { record in
@@ -208,7 +217,7 @@ struct MoveView: View {
             #endif
         }
         .onAppear {
-            allDays = store.loadDays()
+            refreshAllDays()
             progressPhotos = store.progressPhotoRecords()
             store.reconcileGuidedRunFromAppGroup()
         }
@@ -245,10 +254,10 @@ struct MoveView: View {
         }
         .task {
             await store.refreshWorkoutsFromHealth()
-            allDays = store.loadDays()
+            refreshAllDays()
         }
-        .onChange(of: store.day.workouts.count) { allDays = store.loadDays() }
-        .onChange(of: store.day.plannedWorkouts.count) { allDays = store.loadDays() }
+        .onChange(of: store.day.workouts.count) { refreshAllDays() }
+        .onChange(of: store.day.plannedWorkouts.count) { refreshAllDays() }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             // The app can foreground across local midnight without re-firing `onAppear`. Roll the store
@@ -256,7 +265,7 @@ struct MoveView: View {
             // day hasn't changed), then pick up any guided-run progress made from the Live Activity.
             store.refreshCurrentDayIfNeeded()
             store.reconcileGuidedRunFromAppGroup()
-            allDays = store.loadDays()
+            refreshAllDays()
         }
     }
 }

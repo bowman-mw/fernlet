@@ -29,7 +29,8 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
     static let fetchChunkSize = 20
     /// Safety cap on records pulled in one `fetch(tags:)`. A truncated fetch is LOGGED, never
     /// silent — the remaining records stay on the server and the next sync picks them up.
-    static let maxRecordsPerFetch = 500
+    /// Public alongside `perChunkBudget` so the anti-starvation split is assertable in tests.
+    public static let maxRecordsPerFetch = 500
     /// Belt-and-braces bound on cursor follows per chunk, so a server that keeps handing back a
     /// non-nil cursor can't spin the sync forever.
     static let maxPagesPerChunk = 40
@@ -48,6 +49,30 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
         (try? await container.accountStatus()) == .available
     }
 
+    // MARK: - Fetch budgeting (pure, so the starvation rule is unit-testable without CloudKit)
+
+    /// Splits the tag list into `IN`-predicate-sized query chunks.
+    public static func chunked(_ tags: [String]) -> [[String]] {
+        stride(from: 0, to: tags.count, by: fetchChunkSize).map {
+            Array(tags[$0..<min($0 + fetchChunkSize, tags.count)])
+        }
+    }
+
+    /// Each chunk's share of `maxRecordsPerFetch`.
+    ///
+    /// The budget is split EVENLY ACROSS CHUNKS rather than spent first-come. A single global cap
+    /// plus a `break` out of the chunk loop meant one hostile writer flooding one tag in chunk 0
+    /// consumed the whole budget and every later chunk's tags were never queried at all — on that
+    /// pass and every subsequent one, so those friends' hearts were never picked up. That is exactly
+    /// the starvation the small `fetchChunkSize` claims to bound, and the chunk size was irrelevant
+    /// to it (review finding, 2026-07-27). Per-chunk budgeting keeps the same total work while
+    /// guaranteeing every chunk gets queried. Never zero: a chunk with no budget could never make
+    /// progress at all.
+    public static func perChunkBudget(chunkCount: Int) -> Int {
+        guard chunkCount > 0 else { return maxRecordsPerFetch }
+        return max(1, maxRecordsPerFetch / chunkCount)
+    }
+
     public func upload(tag: String, payload: Data) async throws -> String {
         let record = CKRecord(recordType: Self.recordType)
         record[Self.tagField] = tag as CKRecordValue
@@ -64,23 +89,32 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
         var results: [HeartDropRecord] = []
         var truncated = false
 
-        for chunk in stride(from: 0, to: tags.count, by: Self.fetchChunkSize).map({
-            Array(tags[$0..<min($0 + Self.fetchChunkSize, tags.count)])
-        }) {
+        let chunks = Self.chunked(tags)
+        let perChunkBudget = Self.perChunkBudget(chunkCount: chunks.count)
+
+        for chunk in chunks {
             let query = CKQuery(
                 recordType: Self.recordType,
                 predicate: NSPredicate(format: "%K IN %@", Self.tagField, chunk)
             )
             var page = try await database.records(matching: query)
             var pagesRead = 1
+            var chunkCount = 0
+            var chunkFull = false
             while true {
                 for (recordID, result) in page.matchResults {
+                    // Checked PER RECORD, not once per page: a server-chosen page can carry far
+                    // more matches than the remaining headroom, and every record admitted here
+                    // costs the receiver a ChaChaPoly open plus a deflate inflate on the main
+                    // actor — the work this cap exists to bound.
+                    guard chunkCount < perChunkBudget else { chunkFull = true; break }
                     guard let record = try? result.get(),
                           let tag = record[Self.tagField] as? String,
                           let payload = record[Self.payloadField] as? Data else { continue }
                     results.append(HeartDropRecord(tag: tag, payload: payload, recordName: recordID.recordName))
+                    chunkCount += 1
                 }
-                guard results.count < Self.maxRecordsPerFetch else { truncated = true; break }
+                guard !chunkFull else { truncated = true; break }
                 guard let cursor = page.queryCursor, pagesRead < Self.maxPagesPerChunk else {
                     if page.queryCursor != nil { truncated = true }
                     break
@@ -88,7 +122,8 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
                 page = try await database.records(continuingMatchFrom: cursor)
                 pagesRead += 1
             }
-            if truncated { break }
+            // Deliberately NO `break` here: a truncated chunk stops ITSELF, never its successors.
+            // The remaining records stay on the server and the next sync picks them up.
         }
 
         if truncated {

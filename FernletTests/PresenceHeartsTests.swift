@@ -171,6 +171,42 @@ struct PresenceHeartsTests {
         #expect(PresenceManager.heartAffordance(heartsEnabled: true, presenceEnabled: true, reachable: true) == .reachable)
     }
 
+    /// Regression (review 2026-07-27): away delivery needs no presence radio, so the
+    /// enable-presence prompt must not pre-empt it. It used to — `.needsPresence` fired on
+    /// hearts-on + presence-off alone, and the friend row renders that branch INSTEAD of the send
+    /// affordance, so opting into away hearts while leaving Nearby Friends off left every friend
+    /// row on a dead-end nag with no Send button and copy ("hearts are sent in person") that the
+    /// feature had just made false.
+    @Test func awayDeliveryReplacesTheNeedsPresencePromptWithASendableNotNearby() {
+        // The regressing combination: hearts on, presence OFF, away delivery ON.
+        #expect(PresenceManager.heartAffordance(
+            heartsEnabled: true, presenceEnabled: false, reachable: false,
+            awayDeliveryEnabled: true) == .notNearby)
+        // A stale reachable flag is still meaningless without presence — never `.reachable`.
+        #expect(PresenceManager.heartAffordance(
+            heartsEnabled: true, presenceEnabled: false, reachable: true,
+            awayDeliveryEnabled: true) == .notNearby)
+
+        // Away delivery does NOT resurrect a hidden row: the hearts opt-out still outranks it.
+        #expect(PresenceManager.heartAffordance(
+            heartsEnabled: false, presenceEnabled: false, reachable: false,
+            awayDeliveryEnabled: true) == .heartsOff)
+
+        // With away delivery OFF the prompt is still the right answer (the pre-existing behavior,
+        // which the defaulted parameter also preserves for every untouched call site).
+        #expect(PresenceManager.heartAffordance(
+            heartsEnabled: true, presenceEnabled: false, reachable: false,
+            awayDeliveryEnabled: false) == .needsPresence)
+
+        // Presence on: away delivery changes nothing — the in-person split still decides.
+        #expect(PresenceManager.heartAffordance(
+            heartsEnabled: true, presenceEnabled: true, reachable: true,
+            awayDeliveryEnabled: true) == .reachable)
+        #expect(PresenceManager.heartAffordance(
+            heartsEnabled: true, presenceEnabled: true, reachable: false,
+            awayDeliveryEnabled: true) == .notNearby)
+    }
+
     // MARK: - Teardown keeps a still-advertising peer reachable AND sendable (Group 4)
 
     @Test func heartConnectionTeardownKeepsAdvertisingPeerSendable() throws {

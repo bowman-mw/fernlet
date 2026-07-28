@@ -367,13 +367,17 @@ struct FriendListView: View {
     /// below. No counts of sent or received hearts appear anywhere.
     @ViewBuilder
     private func heartRow(_ peer: ProximityTrustedPeerRecord) -> some View {
-        // Hearts require presence (Group 2). When hearts are on but the presence layer is off,
-        // every friend would otherwise read a dead "Not nearby" — surface an actionable
+        // In-person hearts require presence (Group 2). When hearts are on but the presence layer is
+        // off, every friend would otherwise read a dead "Not nearby" — surface an actionable
         // enable-presence state instead. Reachability is only meaningful once presence is on.
+        // Away delivery is the exception: it needs no radio, so with it on the presence prompt is a
+        // dead end (it hides the only Send button that would still work) — the friend is just
+        // `.notNearby`, and `sendHeartBlock` renders the dead-drop path.
         let affordance = PresenceManager.heartAffordance(
             heartsEnabled: store.settings.allowNearbyHearts,
             presenceEnabled: store.settings.allowNearbyPresence,
-            reachable: store.presenceManager.isReachable(fingerprint: peer.fingerprint))
+            reachable: store.presenceManager.isReachable(fingerprint: peer.fingerprint),
+            awayDeliveryEnabled: store.settings.heartsAwayDelivery)
 
         VStack(alignment: .leading, spacing: 10) {
             if affordance == .needsPresence {

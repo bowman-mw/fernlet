@@ -896,6 +896,11 @@ private struct NearbySlotRow: View {
     @State private var verifyQRURL: URL?
     @State private var showVerifyScanner = false
     @State private var verifyMissed = false
+    /// Set by the scanner callback, converted into `verifyMissed` only in the scan sheet's
+    /// `onDismiss`. Raising the alert from the callback flipped `isPresented` in the same update
+    /// that tore the sheet down, and SwiftUI drops an alert presented on a view whose sheet is
+    /// mid-dismiss — so a failed scan closed the scanner and said nothing at all.
+    @State private var pendingScanFailed = false
 
     @ViewBuilder
     private var trailingControl: some View {
@@ -942,9 +947,15 @@ private struct NearbySlotRow: View {
             ), onDismiss: onDismissVerifyQR) {
                 VerifyQRDisplaySheet(url: verifyQRURL, peerName: peerName)
             }
-            .sheet(isPresented: $showVerifyScanner) {
+            .sheet(isPresented: $showVerifyScanner, onDismiss: {
+                // Raise the alert only once the scanner has actually gone away.
+                if pendingScanFailed {
+                    pendingScanFailed = false
+                    verifyMissed = true
+                }
+            }) {
                 VerifyQRScanSheet { url in
-                    verifyMissed = !onScanVerified(url)
+                    pendingScanFailed = !onScanVerified(url)
                 }
             }
             .alert("That code didn't match", isPresented: $verifyMissed) {

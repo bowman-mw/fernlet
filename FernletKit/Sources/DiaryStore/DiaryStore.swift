@@ -558,6 +558,16 @@ public final class DiaryStore {
         )
     }
 
+    /// A logged meal always represents food that was actually eaten, so zero (or negative) is never
+    /// a meaningful amount. Non-positive counts fall back to ONE serving — the same default the log
+    /// methods already declare — rather than to an epsilon: `Macros` fields are `Int`, so a 0.01
+    /// floor would still round every macro to zero and leave the row "contributing nothing", which
+    /// is half the defect. Clamped rather than refused, so a bad count still yields a usable,
+    /// correctable row. Positive fractional counts pass through exactly.
+    static func normalizedServings(_ servings: Double) -> Double {
+        servings > 0 ? servings : 1
+    }
+
     /// Shared "one serving of this known food" meal construction for the product-shaped log paths.
     ///
     /// `servings` is `nil` for the saved-product / nutrient-nudge paths — those keep the original
@@ -573,7 +583,12 @@ public final class DiaryStore {
         let loggedMicros: Micronutrients
         let components: [MealComponentSnapshot]
         if let servings {
-            let count = max(servings, 0)
+            // Non-positive counts are normalized, not merely floored at zero: `max(servings, 0)`
+            // let a 0 through, which writes a meal row contributing nothing and showing
+            // "0 servings" in the correction sheet. The one current UI path is protected only
+            // because its save bar disables at <= 0, so the invariant belongs here, where the data
+            // is written (review finding, 2026-07-27).
+            let count = Self.normalizedServings(servings)
             loggedMacros = foodItem.macros.scaled(by: count)
             loggedMicros = foodItem.micronutrients.scaled(by: count)
             components = [
