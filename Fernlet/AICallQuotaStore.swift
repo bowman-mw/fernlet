@@ -9,7 +9,7 @@ import AIContext
 ///
 /// The counter never enters `FernletSnapshot`, the sealed stores, or CloudKit — it is plain
 /// `UserDefaults.standard`, so device A's usage can never throttle device B.
-final class UserDefaultsAICallQuotaStore: AICallQuotaStore {
+final class UserDefaultsAICallQuotaStore: AICallQuotaStore, @unchecked Sendable {
     private let defaults: UserDefaults
     /// ONE defaults key holding the (dayKey, count) PAIR. Writing them as two separate keys made the
     /// persist non-atomic: a kill between the two writes could pair a fresh dayKey with the previous
