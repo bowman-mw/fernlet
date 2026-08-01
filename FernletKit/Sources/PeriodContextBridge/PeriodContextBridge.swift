@@ -95,6 +95,10 @@ public nonisolated enum CyclePhaseResolver {
     private static let menstrualWindow = 5
     private static let lutealLength = 14
 
+    /// - Parameter date: Day to resolve, compared at the start-of-day granularity of `calendar`.
+    /// - Parameter entries: Observed cycle log entries used to detect bleeding days and period starts.
+    /// - Parameter prediction: Optional calendar-math prediction that supplies the cycle length context.
+    /// - Parameter calendar: Calendar used for day bucketing and date arithmetic.
     /// - Parameter periodStarts: the detected period starts for `entries`, if the caller already has them
     ///   memoized. When `nil` they are recomputed from `entries` — passing them in is a pure performance
     ///   optimization and never changes the result (they must equal `detectedPeriodStarts(from: entries)`).

@@ -82,6 +82,8 @@ public enum RecipeWebImportError: LocalizedError {
 public enum RecipeWebImporter {
     private static let maxFetchBytes = 3 * 1024 * 1024  // 3 MB
 
+    /// - Parameter url: Public HTTPS page to fetch and inspect for recipe content.
+    /// - Parameter catalog: Food catalog used to resolve imported ingredients against Fernlet foods.
     /// - Parameter aiEnabled: When false, the FoundationModels fallback is skipped so that
     ///   users who have disabled AI are not silently opted in via recipe import.
     /// - Parameter gate: routes the on-device model dispatch (`standard` tier). The gate caps by device
