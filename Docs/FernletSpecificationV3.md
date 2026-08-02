@@ -233,6 +233,8 @@ To define later:
 - Product purpose and user-facing copy.
 - Data fields, if any, beyond aggregate counts.
 - Whether any local non-HealthKit manual logging exists.
+- Retention, deletion, export, and visibility rules.
+- Interactions with cycle tracking, scoring, AI, sharing, and sensitive memory.
 
 ### 5.2 Age Assurance
 
@@ -276,8 +278,6 @@ Enforcement is at the seam, never a UI condition. Intimacy flows through the sam
 gates the sealed-store decrypt path, so a locked device never opens an intimacy row. Chat is enforced at
 **three** mesh seams — the `messages` capability is withheld from advertisement, sends refuse, and inbound
 messages drop — because withholding a capability only informs well-behaved peers.
-- Retention, deletion, export, and visibility rules.
-- Interactions with cycle tracking, scoring, AI, sharing, and sensitive memory.
 
 ## 6. Scoring and Wellness Formula
 
