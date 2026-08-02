@@ -1,58 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
+<dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_fernlet-coach._tcp</string>
+		<string>_fernlet-coach._udp</string>
+		<string>_fernlet-friend._tcp</string>
+		<string>_fernlet-friend._udp</string>
+		<string>_fernlet-recipe._tcp</string>
+		<string>_fernlet-recipe._udp</string>
+		<string>_fernlet-near._tcp</string>
+		<string>_fernlet-near._udp</string>
+	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fraunces-SemiBold.ttf</string>
+		<string>DMSerifDisplay-Regular.ttf</string>
+		<string>InstrumentSerif-Regular.ttf</string>
+		<string>InstrumentSerif-Italic.ttf</string>
+		<string>DMSans-Regular.ttf</string>
+		<string>DMSans-Medium.ttf</string>
+		<string>PlayfairDisplay-Italic.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	<key>UILaunchScreen</key>
 	<dict>
-		<key>ITSAppUsesNonExemptEncryption</key>
-		<false/>
-		<key>UIBackgroundModes</key>
-		<array>
-			<string>remote-notification</string>
-		</array>
-		<key>NSLocalNetworkUsageDescription</key>
-		<string>Fernlet uses your local network to connect with nearby trainers and friends for workout sharing.</string>
-		<key>NSBonjourServices</key>
-		<array>
-			<string>_fernlet-coach._tcp</string>
-			<string>_fernlet-coach._udp</string>
-			<string>_fernlet-friend._tcp</string>
-			<string>_fernlet-friend._udp</string>
-			<string>_fernlet-recipe._tcp</string>
-			<string>_fernlet-recipe._udp</string>
-			<string>_fernlet-near._tcp</string>
-			<string>_fernlet-near._udp</string>
-		</array>
-		<key>NSNearbyInteractionUsageDescription</key>
-		<string>Fernlet uses Ultra Wideband to precisely measure distance when connecting with a nearby trainer or friend.</string>
-		<key>NSSupportsLiveActivities</key>
-		<true/>
-		<key>NSCameraUsageDescription</key>
-		<string>Fernlet uses your camera to scan nutrition labels and to take photos during in-person sharing sessions.</string>
-		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Fernlet accesses your photo library to scan nutrition labels from saved photos.</string>
-		<key>NSPhotoLibraryAddUsageDescription</key>
-		<string>Fernlet saves the shared pictures you choose after a friend session.</string>
-		<key>NSFaceIDUsageDescription</key>
-		<string>Fernlet uses Face ID to unlock your private health data.</string>
-		<key>NSHealthShareUsageDescription</key>
-		<string>Fernlet reads selected Health data only when you enable it — including workouts, body metrics, sleep, recovery, and (optionally) cycle data — to give you a complete, on-device picture of your wellbeing.</string>
-		<key>NSHealthUpdateUsageDescription</key>
-		<string>Fernlet writes the workouts and health observations you explicitly log into Apple Health, so they appear in Apple Fitness and across your devices.</string>
-		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>Fernlet uses your approximate location only to check the weather for gentle recovery prompts, when you turn that on.</string>
-		<key>UILaunchScreen</key>
-		<dict>
-			<key>UIColorName</key>
-			<string>LaunchParchment</string>
-		</dict>
-		<key>UIAppFonts</key>
-		<array>
-			<string>Fraunces-SemiBold.ttf</string>
-			<string>DMSerifDisplay-Regular.ttf</string>
-			<string>InstrumentSerif-Regular.ttf</string>
-			<string>InstrumentSerif-Italic.ttf</string>
-			<string>DMSans-Regular.ttf</string>
-			<string>DMSans-Medium.ttf</string>
-			<string>PlayfairDisplay-Italic.ttf</string>
-		</array>
+		<key>UIColorName</key>
+		<string>LaunchParchment</string>
 	</dict>
+</dict>
 </plist>
