@@ -424,7 +424,13 @@ struct FernletTests {
     @MainActor
     @Test func intimacyAgeGateControlsHubAndQuickLogVisibility() {
         let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("intimacy-age-gate")))
-        store.settings.userProfile.age = 17
+        // The 16+ gate reads the device-local age record, not the profile stepper. Set explicitly in
+        // both directions so a record left behind by another test can never decide this one.
+        store.ageAssurance.applyDetermination(
+            lowerBound: AgeGate.chat.minimumAge,
+            upperBound: AgeGate.intimacy.minimumAge,
+            provenance: .guardianDeclared
+        )
 
         #expect(!store.isIntimateLoggingAllowed)
         #expect(!PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility).contains(.intimacy))
@@ -435,7 +441,11 @@ struct FernletTests {
         )
         #expect(!quickLogItems.contains(.intimacyTracking))
 
-        store.settings.userProfile.age = 18
+        store.ageAssurance.applyDetermination(
+            lowerBound: AgeGate.intimacy.minimumAge,
+            upperBound: nil,
+            provenance: .selfDeclared
+        )
 
         #expect(store.isIntimateLoggingAllowed)
         #expect(PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility).contains(.intimacy))

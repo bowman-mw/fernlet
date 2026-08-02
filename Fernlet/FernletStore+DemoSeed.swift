@@ -39,8 +39,14 @@ extension FernletStore {
     func seedDemoContent() {
         guard day.meals.isEmpty, day.workouts.isEmpty else { return }
 
-        // Ensure the (age-gated) Intimacy section is reachable for appearance review.
-        if settings.userProfile.age < 18 { settings.userProfile.age = 30 }
+        // Ensure the age-gated surfaces are reachable for appearance review. The profile age no longer
+        // gates anything — both gates read the device-local age record — so seed that instead, with a
+        // bracket above the highest gate and a provenance, since a bracket without one stays undetermined.
+        ageAssurance.applyDetermination(
+            lowerBound: AgeGate.adult.minimumAge,
+            upperBound: nil,
+            provenance: .selfDeclared
+        )
 
         // Ensure the Period section is reachable for appearance review. Mirrors the age
         // bump above: the Period surface gates on `isPeriodTrackingVisible`, which absent

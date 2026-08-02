@@ -1446,7 +1446,7 @@ public final class HealthKitAuthorizationViewModel {
     }
 
     public func showIntimateLoggingAgeWallMessage() {
-        statusMessage = "Intimate logging is available only when the manual body profile age is 18 or older."
+        statusMessage = "Intimate logging is available at 16 and older. Fernlet checks your age range with Apple — see Settings › Intimacy."
     }
 
     public func importBodyProfile(current profile: UserNutritionProfile) async -> UserNutritionProfile? {

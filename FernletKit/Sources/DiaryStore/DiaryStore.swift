@@ -259,8 +259,18 @@ public final class DiaryStore {
         repository.storageDescription()
     }
 
+    /// Fail-closed adult gate, injected because the determination behind it is a device-local Apple
+    /// Account signal that deliberately never rides the synced settings blob (see `AgeAssuranceRecord`).
+    /// Same contract as `IntimacyLogStore.isVisible`: the default REFUSES, so a store built before the
+    /// facade wires it is locked rather than open.
+    ///
+    /// This used to read `settings.userProfile.age >= 18`, which was self-attested and defaulted to 30 —
+    /// a minor unlocked intimacy tracking by leaving the onboarding stepper alone. That profile age still
+    /// exists and still feeds the nutrition targets; it just no longer gates anything.
+    @ObservationIgnored public var isAdultVerified: () -> Bool = { false }
+
     public var isIntimateLoggingAllowed: Bool {
-        settings.userProfile.age >= 18
+        isAdultVerified()
     }
 
     // MARK: - Settings toggles

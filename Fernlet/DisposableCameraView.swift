@@ -611,8 +611,14 @@ struct DisposableCameraView: View {
         ZStack {
             infoButton
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            chatButton
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            // The 13+ age gate. Reads the same value the transport enforces (`chatAllowedProvider`), so
+            // the affordance can't survive a gate the send/receive seams are already refusing. Settings
+            // carries the explanation and the way to unlock it — a camera overlay is the wrong place to
+            // tell someone they're too young.
+            if manager.isChatAllowed {
+                chatButton
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            }
         }
         .padding(20)
     }

@@ -65,6 +65,7 @@ struct PrivacyWipeCoverageTests {
         "guidedRunStateStore.clear",
         "cookingRunStateStore.clear",
         "clearSensitiveVisibilityResolution",
+        "ageAssurance.clear",
         "repository.purgeAllPersistedData",
         // Widget / AI runtime
         "widgetSnapshotMirror",

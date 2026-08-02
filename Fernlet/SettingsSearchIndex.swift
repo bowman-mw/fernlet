@@ -246,7 +246,7 @@ nonisolated enum SettingsSearchIndex {
         ),
         SettingsSearchEntry(
             title: "Intimate logging access",
-            keywords: ["intimate", "intimacy", "sexual", "private", "health"],
+            keywords: ["intimate", "intimacy", "sexual", "private", "health", "age", "16"],
             breadcrumb: "Health",
             route: .health
         ),

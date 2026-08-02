@@ -58,6 +58,7 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Guided-workout run state + Live Activity | App group + ActivityKit | `guidedRunStateStore.clear` |
 | Cooking run state + Live Activity | App group + ActivityKit | `cookingRunStateStore.clear` |
 | Sensitive-visibility resolution | Memory | `clearSensitiveVisibilityResolution` |
+| Age determination (intimacy 16+, mesh chat 13+) | UserDefaults | `ageAssurance.clear` |
 | Day rows + blob + legacy JSON (+ tier-two memories inside the blob) | Core Data/CloudKit/disk | `repository.purgeAllPersistedData` |
 | Widget snapshot files | App group | `widgetSnapshotMirror` |
 | Pending widget actions | App group | `pendingWidgetActionQueue.clear` |

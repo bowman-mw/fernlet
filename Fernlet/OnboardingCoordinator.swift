@@ -80,6 +80,10 @@ final class OnboardingCoordinatorModel {
     @ObservationIgnored private let store: FernletStore
     @ObservationIgnored private let onComplete: () -> Void
 
+    /// Exposed so the personal-details step can run the system age-range request. Onboarding is the one
+    /// place Fernlet asks unprompted; everywhere else the request is user-initiated from Settings.
+    var ageAssurance: AgeAssuranceStore { store.ageAssurance }
+
     init(store: FernletStore, onComplete: @escaping () -> Void) {
         self.store = store
         self.onComplete = onComplete
@@ -202,6 +206,7 @@ struct OnboardingCoordinator: View {
                 stepText: model.step.indexText,
                 profile: $model.profile,
                 displayName: $model.proximityDisplayName,
+                ageAssurance: model.ageAssurance,
                 continueAction: model.advance
             )
         case .dietaryPattern:
@@ -349,7 +354,11 @@ struct OnboardingPersonalDetailsScreen: View {
     var stepText: String
     @Binding var profile: UserNutritionProfile
     @Binding var displayName: String
+    var ageAssurance: AgeAssuranceStore
     var continueAction: () -> Void
+
+    /// Flipped by Continue to run the system age-range request; the modifier flips it back and advances.
+    @State private var isRequestingAgeRange = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -383,10 +392,24 @@ struct OnboardingPersonalDetailsScreen: View {
                     }
                     .profileFieldStyle()
                 }
+                // The age above feeds nutrition targets and nothing else. Two features have real age
+                // requirements — intimacy tracking (16+) and messaging friends nearby (13+) — and those
+                // read Apple's answer, not this stepper, so say so before the system sheet appears.
+                Text("Next, iPhone will ask whether you want to share your age range with Fernlet. It's used only to unlock messaging friends nearby (13+) and intimacy tracking (16+). Fernlet never sees your birthday, and the answer stays on this device.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .accessibilityIdentifier("onboarding.profile.ageRangeExplainer")
             }
-            SheetSaveBar(label: "Continue", disabled: profile.age < 13) { continueAction() }
+            SheetSaveBar(
+                label: "Continue",
+                disabled: profile.age < 13 || isRequestingAgeRange
+            ) { isRequestingAgeRange = true }
         }
         .accessibilityIdentifier("onboarding.personal")
+        // Ask on Continue rather than on appear, so the system sheet lands after the explainer has been
+        // on screen rather than ambushing the step. `onFinish` advances whatever the answer was — a
+        // declined or unavailable range is recorded as undetermined and never blocks onboarding.
+        .requestsAgeRange(when: $isRequestingAgeRange, into: ageAssurance, onFinish: continueAction)
     }
 
     private var heightText: String {

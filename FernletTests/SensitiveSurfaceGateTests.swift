@@ -26,6 +26,31 @@ struct SensitiveSurfaceGateTests {
             .appendingPathComponent("\(name)-\(UUID().uuidString).json")
     }
 
+    /// Puts the device-local age record above the 16+ intimacy gate.
+    ///
+    /// The profile age stepper no longer gates anything (it feeds nutrition targets only) — the gate
+    /// reads `AgeAssuranceStore`, seeded here from Apple's declared age range. Provenance is required:
+    /// a bracket without one deliberately stays `.undetermined` rather than unlocking.
+    ///
+    /// Every intimacy test sets this EXPLICITLY in both directions, so a record left in the shared
+    /// defaults by an earlier test can never decide a later one.
+    private func seedAgeMeetingIntimacyGate(_ store: FernletStore) {
+        store.ageAssurance.applyDetermination(
+            lowerBound: AgeGate.intimacy.minimumAge,
+            upperBound: nil,
+            provenance: .selfDeclared
+        )
+    }
+
+    /// Puts the device-local age record below the 16+ intimacy gate (a 13–16 bracket).
+    private func seedAgeBelowIntimacyGate(_ store: FernletStore) {
+        store.ageAssurance.applyDetermination(
+            lowerBound: AgeGate.chat.minimumAge,
+            upperBound: AgeGate.intimacy.minimumAge,
+            provenance: .guardianDeclared
+        )
+    }
+
     // MARK: - Visibility derivation
 
     @Test func periodVisibilityDerivesFromSexWhenUnset() {
@@ -70,16 +95,16 @@ struct SensitiveSurfaceGateTests {
 
     // MARK: - Age vs preference (intimacy)
 
-    /// Age is a floor, not a preference: an adult who hides and a minor are both invisible, but only
-    /// the adult can turn it back on.
+    /// Age is a floor, not a preference: someone 16+ who hides the feature and someone below the gate
+    /// are both invisible, but only the former can turn it back on.
     @Test func intimacyVisibilityRequiresBothAgeAndPreference() {
         let store = makeStore("gate-intimacy-age")
 
-        store.settings.userProfile.age = 17
+        seedAgeBelowIntimacyGate(store)
         store.settings.intimacyTrackingVisible = true
         #expect(!store.isIntimacyTrackingVisible)
 
-        store.settings.userProfile.age = 18
+        seedAgeMeetingIntimacyGate(store)
         #expect(store.isIntimacyTrackingVisible)
 
         store.settings.intimacyTrackingVisible = false
@@ -88,7 +113,7 @@ struct SensitiveSurfaceGateTests {
 
     @Test func intimacyDefaultsToVisibleForAdults() {
         let store = makeStore("gate-intimacy-default")
-        store.settings.userProfile.age = 30
+        seedAgeMeetingIntimacyGate(store)
 
         // Default ON preserves today's behavior, and means the flag only ever deviates from its
         // default in the benign direction (OFF) when it rides the synced blob.
@@ -100,7 +125,7 @@ struct SensitiveSurfaceGateTests {
 
     @Test func hiddenSurfacesAreSubtractedFromHealthCapabilities() {
         let store = makeStore("gate-capabilities")
-        store.settings.userProfile.age = 30
+        seedAgeMeetingIntimacyGate(store)
         store.settings.userProfile.sex = .female
         store.settings.periodTrackingVisible = true
         store.settings.intimacyTrackingVisible = true
@@ -123,7 +148,7 @@ struct SensitiveSurfaceGateTests {
     /// data before the user hid the feature keeps serving it.
     @Test func scrubbingClearsHiddenHealthContextDimensions() {
         let store = makeStore("gate-scrub-context")
-        store.settings.userProfile.age = 30
+        seedAgeMeetingIntimacyGate(store)
         store.day.healthContext = HealthDailyContext(
             cycle: HealthCycleContext(),
             intimate: HealthIntimateContext(eventCount: 2)
@@ -139,7 +164,7 @@ struct SensitiveSurfaceGateTests {
 
     @Test func scrubbingLeavesVisibleDimensionsAlone() {
         let store = makeStore("gate-scrub-keeps-visible")
-        store.settings.userProfile.age = 30
+        seedAgeMeetingIntimacyGate(store)
         store.settings.userProfile.sex = .female
         store.settings.periodTrackingVisible = true
         store.settings.intimacyTrackingVisible = true
@@ -160,7 +185,7 @@ struct SensitiveSurfaceGateTests {
     /// user's choice would be silently destroyed.
     @Test func hidingFiltersQuickLogForDisplayWithoutMutatingStoredItems() {
         let store = makeStore("gate-quicklog-display-only")
-        store.settings.userProfile.age = 30
+        seedAgeMeetingIntimacyGate(store)
         let chosen: [FernletShortcut] = [.meal, .water, .intimacyTracking, .periodTracking]
         store.setQuickLogItems(chosen)
 
@@ -210,11 +235,11 @@ struct SensitiveSurfaceGateTests {
 
     @Test func agingBelowTheFloorFlipsTheDerivedIntimacyGate() {
         let store = makeStore("gate-derived-flip-age")
-        store.settings.userProfile.age = 30
+        seedAgeMeetingIntimacyGate(store)
         store.settings.intimacyTrackingVisible = true
         #expect(store.sensitiveSurfaceVisibility.intimacy)
 
-        store.settings.userProfile.age = 17
+        seedAgeBelowIntimacyGate(store)
 
         #expect(!store.sensitiveSurfaceVisibility.intimacy)
     }
@@ -264,7 +289,7 @@ struct SensitiveSurfaceGateTests {
     /// ignoring the gate.
     @Test func hiddenSurfacesAreNotOfferedAsHealthRows() {
         let store = makeStore("gate-visible-capabilities")
-        store.settings.userProfile.age = 30
+        seedAgeMeetingIntimacyGate(store)
         store.settings.userProfile.sex = .female
         store.settings.periodTrackingVisible = true
         store.settings.intimacyTrackingVisible = true
@@ -311,7 +336,7 @@ struct SensitiveSurfaceGateTests {
             repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("gate-keydrop-src")),
             sensitiveVisibilityDefaults: defaults
         )
-        store1.settings.userProfile.age = 30
+        seedAgeMeetingIntimacyGate(store1)
         store1.setPeriodTrackingVisible(false)
         store1.setIntimacyTrackingVisible(false)
         #expect(!store1.isPeriodTrackingVisible)
@@ -326,7 +351,7 @@ struct SensitiveSurfaceGateTests {
             repository: LocalFernletRepository(fileURL: syncedURL),
             sensitiveVisibilityDefaults: defaults
         )
-        store2.settings.userProfile.age = 30
+        seedAgeMeetingIntimacyGate(store2)
 
         #expect(!store2.isPeriodTrackingVisible)
         #expect(!store2.isIntimacyTrackingVisible)

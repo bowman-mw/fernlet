@@ -26,6 +26,18 @@ struct SessionMessageTests {
     // Keeps the FernletStore alive past the manager's `unowned let store` (mirrors MeshClothingShopTests).
     let store = makeTestStore()
 
+    init() {
+        // Chat is gated at 13+ and fails closed, so these transport tests would otherwise all exercise
+        // the gate instead of the messaging path. Seed a 13–16 bracket: old enough to chat, and
+        // deliberately NOT old enough for intimacy, so nothing here quietly depends on an adult record.
+        // `AgeAssuranceTests` owns the gate's own coverage.
+        store.ageAssurance.applyDetermination(
+            lowerBound: AgeGate.chat.minimumAge,
+            upperBound: AgeGate.intimacy.minimumAge,
+            provenance: .guardianDeclared
+        )
+    }
+
     private let day = Date(timeIntervalSince1970: 1_780_000_000)
 
     private var messagesCap: [String] {
@@ -389,11 +401,21 @@ struct SessionMessageTests {
         #expect(manager.sessionMessages.messages.isEmpty, "Nothing is echoed for an empty message")
     }
 
-    @Test func localCapabilitiesAlwaysAdvertiseMessages() {
+    /// There is still no user-facing opt-out for messages — session membership is the consent gate —
+    /// but the 13+ age gate does withhold the capability, which is what this now pins.
+    @Test func localCapabilitiesAdvertiseMessagesOnlyAboveTheAgeGate() {
         let manager = store.meshNetworkManager
         #expect(manager.localCapabilities().contains(ProximityCapability.messages.rawValue))
         // No opt-out for v1: even with the shop opt-out off, messages stays advertised.
         store.setAllowNearbyClothingShares(false)
         #expect(manager.localCapabilities().contains(ProximityCapability.messages.rawValue))
+
+        // Below the gate, the capability is withheld so friends' devices skip us in the room
+        // broadcast — but every other capability is untouched.
+        store.ageAssurance.applyDetermination(
+            lowerBound: nil, upperBound: AgeGate.chat.minimumAge, provenance: .guardianDeclared
+        )
+        #expect(!manager.localCapabilities().contains(ProximityCapability.messages.rawValue))
+        #expect(manager.localCapabilities().contains(ProximityCapability.photos.rawValue))
     }
 }

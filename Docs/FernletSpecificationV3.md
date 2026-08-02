@@ -81,7 +81,9 @@ Platform requirements:
 - Apple Watch is optional but useful for sleep stage data and continuous heart rate.
 
 Explicitly not building:
-- No chat interface.
+- No general chat or messaging product. The one exception is the live-session transcript in Section 10:
+  it exists only while an in-person proximity session is active, vanishes at session end, is never stored
+  or synced, and is gated at 13+ (Section 5.2).
 - No year-in-review data story.
 - No predictive scoring.
 - No compare-to-others metrics.
@@ -221,7 +223,8 @@ Intimate tracking is a planned optional HealthKit-backed capability. This sectio
 
 Current guardrails:
 - Hidden by default and not requested during onboarding.
-- Available only when the manual body profile age is 18 or older.
+- Available only at **16 or older**, established by the system age check in Section 5.2 — not by the
+  manual body profile age, which feeds nutrition targets and gates nothing.
 - HealthKit sexual activity access is requested only after the age gate passes and the user explicitly enables the feature.
 - Local prototype storage stays minimal; event counts are acceptable, while event details are deferred pending a privacy review.
 - Revocation happens through iOS Health permissions; Fernlet guides the user to Settings rather than implying in-app revocation is possible.
@@ -230,6 +233,49 @@ To define later:
 - Product purpose and user-facing copy.
 - Data fields, if any, beyond aggregate counts.
 - Whether any local non-HealthKit manual logging exists.
+
+### 5.2 Age Assurance
+
+Two features carry age requirements: intimate tracking (16+, Section 5.1) and live-session mesh chat
+(13+, Section 10). Both read one determination obtained from Apple's `DeclaredAgeRange` framework, which
+returns an age *bracket* and never a birthday. Requires the `com.apple.developer.declared-age-range`
+entitlement (public capability, no Apple approval).
+
+One request asks for thresholds **13, 16, and 18** together — the framework accepts at most three, and
+Fernlet has exactly three — so the returned bracket answers every gate and no one is prompted twice. 18
+gates nothing today; it is requested so a future adult-only question needs no second prompt.
+
+Rules, in order of precedence:
+1. **Guardian communication limits win outright.** If the response reports
+   `activeParentalControls.communicationLimits`, every interpersonal-communication gate closes whatever
+   the age says. Checked before the age verdict so no bracket can get past it.
+2. **Fail closed.** A device that has never asked allows nothing.
+3. **A below-gate verdict is final** and cannot be overridden in-app.
+4. **Provenance is asymmetric.** A bracket with no provenance (`selfDeclared`, `guardianDeclared`, or
+   `confirmed`) can *close* a gate but never *open* one — weak evidence of being old enough is not
+   enough, while weak evidence of being underage is.
+
+The two gates are deliberately **not** symmetric:
+- **Intimacy (16+)** accepts a manual "I'm 16 or older" confirmation, taken behind a warning, when the
+  system returns nothing. Refusing outright would strand adults whose Apple Account carries no age range,
+  and the exposure is a private on-device log.
+- **Chat (13+)** accepts **no manual confirmation at any confirmed age.** 13 is the line the system check
+  exists to hold; a tap-to-confirm there would readmit exactly the under-13 user it is meant to stop.
+  Consequence: manually confirming 16 opens intimacy but not chat, even though 16 > 13.
+
+Prompted once during onboarding (Section 13). Settings offers a user-initiated re-check for every locked
+state — including a below-gate verdict, because a birthday is the ordinary way out of one, and because a
+lifted parental restriction is picked up the same way.
+
+The determination is **device-local and never synced**: it describes the Apple Account signed in on this
+device, so syncing it would carry one account's status onto a device signed in as someone else and put a
+minor's status on the wire. It is stored beside the sensitive-surface visibility resolution and is
+cleared by "delete everything" (see `Docs/PrivacyWipeCoverage.md`).
+
+Enforcement is at the seam, never a UI condition. Intimacy flows through the same derived visibility that
+gates the sealed-store decrypt path, so a locked device never opens an intimacy row. Chat is enforced at
+**three** mesh seams — the `messages` capability is withheld from advertisement, sends refuse, and inbound
+messages drop — because withholding a capability only informs well-behaved peers.
 - Retention, deletion, export, and visibility rules.
 - Interactions with cycle tracking, scoring, AI, sharing, and sensitive memory.
 
@@ -504,6 +550,21 @@ Group activities use direct host handshakes for small groups and cloud-assisted 
 
 ## 10. Friend System and State Sharing
 
+### Live-Session Messaging
+
+Peers in an active in-person session can exchange short text messages. Session-scoped by construction:
+the transcript is memory-only, never enters a snapshot, and is dropped at every session-end path — there
+is no offline queue and no history.
+
+**Gated at 13+ (Section 5.2), with no manual confirmation available at any age.** Enforced at three mesh
+seams, because any one alone is insufficient: the `messages` capability is withheld from advertisement so
+peers skip the device in the room broadcast; sends refuse; and inbound messages drop, since a peer on a
+modified build or holding capabilities cached from an earlier session can still transmit. A guardian's
+`communicationLimits` closes the feature independently of age.
+
+> **Spec gap:** the wire format, dedup/rate-limit, and sanitization rules for this feature are
+> implemented but not yet written up here. Only the age gate is specified above.
+
 ### Trainer and Nutritionist Sharing
 
 Fernlet should support a local-only professional sharing mode for a personal trainer, nutritionist, coach, or similar trusted helper. The first version should use the same proximity/Bluetooth transport as the handshake system, with no cloud requirement.
@@ -625,13 +686,19 @@ Onboarding: 6 screens max.
 1. Welcome and privacy promise.
 2. Goal selection.
 3. Starter customization.
-4. Optional personal details.
+4. Optional personal details, then the system age-range request (Section 5.2).
 5. Dietary pattern.
 6. HealthKit and notification permissions.
 
+The age-range request is the one place Fernlet prompts unasked. It runs on Continue from the personal-
+details screen, after on-screen copy explaining that the answer only unlocks messaging friends nearby
+(13+) and intimate tracking (16+), that no birthday is shared, and that it stays on the device. Declining
+is recorded as undetermined and never blocks onboarding.
+
 Tier 1 onboarding data:
 - Goal required.
-- Age bracket required.
+- Age bracket required. The profile age stepper feeds nutrition targets only and gates nothing; the
+  gating bracket comes from the system age check.
 - Biological sex optional.
 - Height optional.
 - Current weight optional and never tracked over time.
@@ -739,6 +806,9 @@ Tapping any day in the Journal calendar heatmap opens a modal sheet for that day
 On-device (always):
 - Raw journal text.
 - Sensitive memory.
+- Age determination (Section 5.2). Never synced: it describes the Apple Account signed in on this device,
+  so syncing it would carry one account's status onto a device signed in as someone else and put a minor's
+  status on the wire.
 - Period entries, predictions, trends.
 - Photos (stored in `PrivateMediaStore`; included in standard iCloud device backup through app container).
 - On-device AI inferences.
@@ -808,6 +878,11 @@ Usage descriptions required:
 - `NSHealthUpdateUsageDescription`.
 - `NSLocationWhenInUseUsageDescription`.
 - `NSLocalNetworkUsageDescription` + `NSBonjourServices` (the `_fernlet-*` service families).
+
+Entitlements required beyond HealthKit/CloudKit/App Groups:
+- `com.apple.developer.declared-age-range` — the Section 5.2 age check. A public capability requiring no
+  Apple approval. Simulator builds sign ad-hoc and never validate entitlements, so device or TestFlight
+  builds are the only real check that the App ID carries it.
 
 > **Reconciled 2026-07-11:** `NSBluetoothAlwaysUsageDescription` is intentionally **not** declared.
 > The proximity transport is MultipeerConnectivity over the **Local Network** permission (Bonjour) plus

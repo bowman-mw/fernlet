@@ -141,6 +141,9 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | File | Purpose |
 | --- | --- |
 | `Fernlet/FernletKit/Sources/FernletLockUI/FernletLockGate.swift` | View modifier that gates protected UI behind the Fernlet lock state. |
+| `Fernlet/Fernlet/AgeAssuranceStore.swift` | `AgeAssuranceStore` — owns the device-local age determination behind the intimacy (16+) and mesh-chat (13+) gates. Persists to the never-synced sidecar; fail-closed on a fresh or undecodable record. |
+| `Fernlet/Fernlet/AgeAssuranceRequest.swift` | The single seam to Apple's `DeclaredAgeRange` framework: one prompt for gates 13/16/18, plus the `.requestsAgeRange` view modifier. Every failure path lands on undetermined. |
+| `Fernlet/Fernlet/AgeGateNotice.swift` | `AgeGateNotice` — the locked-state row for an age-gated feature: states the true reason, and offers a re-check plus the manual confirmation only when the system never ruled. |
 | `Fernlet/FernletKit/Sources/FernletLockUI/FernletLockView.swift` | Lock setup, unlock UI, numeric pad, passcode entry, and related lock interaction views. |
 | `Fernlet/FernletKit/Sources/FernletLock/FernletLockService.swift` | Lock service protocols, lock state, credential types, crypto provider, keychain item handling, audit logging, and lock/unlock orchestration. |
 | `Fernlet/FernletKit/Sources/FernletFoundation/KeychainHelpers.swift` | Low-level Keychain read/write/delete helpers shared by lock and identity services. |
@@ -217,6 +220,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletKit/Sources/FernletDomainModel/WorkoutRestGuidance.swift` | Evidence-based default rest-between-sets table (`WorkoutRestGuidance`) keyed by movement `Demand` and training goal. |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/CompanionModels.swift` | Companion appearance, workshop, and texture value models (`WorkshopData`, `TextureEntry`). |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/SettingsModel.swift` | `FernletSettings` app-settings serialization aggregate (hydration, companion, equipped items, designer provenance). |
+| `Fernlet/FernletKit/Sources/FernletDomainModel/AgeAssurance.swift` | `AgeGate` (13/16/18), `AgeGateVerdict`, `AgeAssuranceProvenance`, and `AgeAssuranceRecord` — the pure age-gate rules: fail-closed, a below-gate verdict is unappealable, and provenance is asymmetric (it can close a gate but not open one). |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/NavigationEnums.swift` | Screen/widget/shortcut navigation enums (`FernletScreen`, `ConnectionInspectorMode`). |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/ScoringValueTypes.swift` | Pure scoring value types (`ScoringWeights`) carved out of the app-layer scoring logic. |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/FoodItemSearch.swift` | Pure relevance-search value logic over `FoodItem` plus a restaurant-chain brand lexicon (`FoodItemSearch`, `FoodBrandLexicon`). |
@@ -530,6 +534,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletTests/SealedBackupTests.swift` | Sealed-backup crypto round-trip and escrow-key provisioning tests. |
 | `Fernlet/FernletTests/SealedIntroductionTests.swift` | Sealed-introduction mesh handshake tests guarding against unsealed identity leakage. |
 | `Fernlet/FernletTests/SealedStoreConfigTests.swift` | Sealed-store/CloudKit-model isolation tests keeping sensitive entities out of the synced model. |
+| `Fernlet/FernletTests/AgeAssuranceTests.swift` | Age-gate tests: the pure record rules, the device-local store's persistence and fail-closed decode, and the wiring into the intimacy visibility gate, the mesh chat seams, and `resetAll`. |
 | `Fernlet/FernletTests/SensitiveSurfaceGateTests.swift` | Sensitive-surface (period/intimacy) hard hide-gate visibility tests. |
 | `Fernlet/FernletTests/SessionMessageTests.swift` | Live-session ephemeral message codec, dispatch-gate, and transcript-clearing tests. |
 | `Fernlet/FernletTests/SettingsDecodeCompatTests.swift` | Forward-compatibility tests for unknown enum tokens in synced `FernletSettings` fields. |

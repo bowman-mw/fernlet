@@ -240,10 +240,14 @@ struct SettingsSheet: View {
                             .accessibilityIdentifier("settings.intimacy.visible")
                     } else {
                         // Age is a floor, not a preference — say the true reason rather than showing a
-                        // toggle that would silently do nothing.
-                        Text("Available for adults only.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                        // toggle that would silently do nothing. The notice also carries the only way
+                        // back for someone who installed before this gate existed, or who has since
+                        // had a birthday.
+                        AgeGateNotice(
+                            gate: .intimacy,
+                            featureName: "Intimacy tracking",
+                            ageAssurance: store.ageAssurance
+                        )
                     }
                 } header: {
                     Text("Intimacy")
@@ -306,6 +310,17 @@ struct SettingsSheet: View {
                         Text("Hearts need Nearby Friends turned on to work — turn it on below.")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
+                    }
+                    // In-session messaging has no toggle — session membership is its consent gate — so
+                    // its 13+ age requirement is the one thing that can withhold it. Surfaced here
+                    // because the chat button simply doesn't appear in-session, which on its own would
+                    // read as a bug rather than a rule.
+                    if !store.ageAssurance.allows(.chat) {
+                        AgeGateNotice(
+                            gate: .chat,
+                            featureName: "Messaging friends nearby",
+                            ageAssurance: store.ageAssurance
+                        )
                     }
                     // Away delivery (bitchat adoptions Increment 3): the one proximity feature
                     // that touches the network, so it carries its own explicit opt-in — separate

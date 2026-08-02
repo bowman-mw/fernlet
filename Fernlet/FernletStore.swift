@@ -134,6 +134,10 @@ final class FernletStore {
             guard let self, self.settings.allowNearbyClothingShares else { return nil }
             return self.buildShopCatalog()
         }
+        // The 13+ mesh-chat gate. Withholds the `messages` capability, refuses sends, and drops inbound
+        // messages — see `MeshNetworkManager.chatAllowedProvider`. `?? false` keeps a deallocated facade
+        // fail-closed, matching the nil-means-no contract the provider already documents.
+        manager.chatAllowedProvider = { [weak self] in self?.ageAssurance.allows(.chat) ?? false }
         // Phase 3b: one-hop moderation relay — supply our own reports to sign + send; ingest peers' verified rows.
         manager.ownModerationReportsProvider = { [weak self] in self?.moderationLedger.rows ?? [] }
         manager.onModerationRowsReceived = { [weak self] rows in self?.ingestModerationRows(rows) }
@@ -366,6 +370,16 @@ final class FernletStore {
     /// values fail-closed instead. Injectable so tests isolate it from `.standard`, mirroring
     /// `pastDayJournalScrubDefaults`. See `reconcileSensitiveSurfaceVisibility`.
     @ObservationIgnored private let sensitiveVisibilityDefaults: UserDefaults
+
+    /// The age determination behind the intimacy (16+) and mesh-chat (13+) gates. Deliberately shares
+    /// `sensitiveVisibilityDefaults` rather than taking its own injection point: it is the same kind of
+    /// device-local, never-synced sidecar for the same set of sensitive surfaces, and tests that isolate
+    /// one want the other isolated with it.
+    ///
+    /// NOT `@ObservationIgnored` on the inside — `AgeAssuranceStore.record` is observable, so a view that
+    /// reads a gate during `body` re-renders when the verdict changes.
+    @ObservationIgnored let ageAssurance: AgeAssuranceStore
+
     private enum SensitiveVisibilityKeys {
         static let resolved = "sensitiveVisibilityResolved"
         static let period = "sensitiveVisibilityResolvedPeriodVisible"
@@ -374,6 +388,7 @@ final class FernletStore {
 
     init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, cookingRunDirectory: URL? = nil) {
         self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
+        self.ageAssurance = AgeAssuranceStore(defaults: sensitiveVisibilityDefaults)
         self.injectedAuditLogStore = aiAuditLogStore
         // Test seam: redirect the shared cooking-run app-group file to a per-test temp dir so a parallel
         // suite's file wipe can't race a cooking test's read (mirrors GuidedWorkoutRunStateStore(directory:)).
@@ -437,6 +452,10 @@ final class FernletStore {
         )
         // Mint the anonymous designer id now (not lazily from a view body) so the first Wardrobe/Studio
         // render is a pure read and never mutates @Observable state mid-update.
+        // The 16+ intimacy gate. A closure rather than a cached `Bool` so it re-reads the observable
+        // record on every call — that is what lets a view consulting `isIntimateLoggingAllowed` in its
+        // body re-render when the verdict changes. `?? false` keeps a deallocated facade fail-closed.
+        self.diary.isAdultVerified = { [weak self] in self?.ageAssurance.allows(.intimacy) ?? false }
         self.diary.ensureLocalDesignerID()
         // Apply the one-time period-visibility migration + the mixed-version fail-closed guard against the
         // just-loaded settings, BEFORE any UI reads `isPeriodTrackingVisible` or a save can persist.
@@ -466,6 +485,7 @@ final class FernletStore {
         foodCatalog: FoodCatalog = .bundled()
     ) {
         self.sensitiveVisibilityDefaults = .standard
+        self.ageAssurance = AgeAssuranceStore(defaults: .standard)
         self.savedRecipeService = savedRecipeService
         self.customItemService = customItemService
         self.coinLedgerService = coinLedgerService
@@ -492,6 +512,10 @@ final class FernletStore {
             stressModifier: { [weak self] key in self?.stressModifier(for: key) ?? 0 },
             sealedJournalIDs: { [weak self] in self?.journalSealingCoordinator.sealedJournalIDs ?? [] }
         )
+        // The 16+ intimacy gate. A closure rather than a cached `Bool` so it re-reads the observable
+        // record on every call — that is what lets a view consulting `isIntimateLoggingAllowed` in its
+        // body re-render when the verdict changes. `?? false` keeps a deallocated facade fail-closed.
+        self.diary.isAdultVerified = { [weak self] in self?.ageAssurance.allows(.intimacy) ?? false }
         self.diary.ensureLocalDesignerID()
         reconcileSensitiveSurfaceVisibility()
         self.connectionInspector.attachStore(self)
@@ -3934,6 +3958,10 @@ final class FernletStore {
         // Device-local sensitive-surface visibility resolution — reset to "unresolved" so a fresh start
         // re-derives from `sex` (resetDiary already restored the settings gate to its defaults).
         clearSensitiveVisibilityResolution()
+        // The age determination is device-local and re-derivable from the Apple Account, so a wipe drops
+        // it too rather than leaving a wiped device still holding a verdict about its user. Both gates
+        // return to fail-closed until the user verifies again.
+        ageAssurance.clear()
         return incompleteStores
     }
 
