@@ -35,17 +35,17 @@ struct FernletLockTests {
     @Test func pin4ConfigureAndUnlock() async throws {
         let service = freshService()
 
-        try await service.configure(credential: .pin4("1234"))
-        #expect(service.state == .unlocked)
+        try await service.configure(credential: .pin4("1234"), grantingScope: .privateHub)
+        #expect(service.state == .unlocked(scope: .privateHub))
         #expect(service.credentialKind == .pin4)
 
         // Relocking and re-unlocking should work with the same PIN
         service.lock(reason: .manual)
         if case .locked = service.state { } else { Issue.record("Expected locked state") }
 
-        let result = try await service.unlock(passcode: "1234")
+        let result = try await service.unlock(passcode: "1234", for: .privateHub)
         #expect(result.method == .passcode)
-        #expect(service.state == .unlocked)
+        #expect(service.state == .unlocked(scope: .privateHub))
 
         try? service.reset()
     }
@@ -54,12 +54,12 @@ struct FernletLockTests {
     @Test func pin6ConfigureAndUnlock() async throws {
         let service = freshService()
 
-        try await service.configure(credential: .pin6("654321"))
+        try await service.configure(credential: .pin6("654321"), grantingScope: .privateHub)
         service.lock(reason: .manual)
 
-        let result = try await service.unlock(passcode: "654321")
+        let result = try await service.unlock(passcode: "654321", for: .privateHub)
         #expect(result.method == .passcode)
-        #expect(service.state == .unlocked)
+        #expect(service.state == .unlocked(scope: .privateHub))
 
         try? service.reset()
     }
@@ -68,12 +68,12 @@ struct FernletLockTests {
     @Test func alphanumericConfigureAndUnlock() async throws {
         let service = freshService()
 
-        try await service.configure(credential: .alphanumeric("hunter2-secure"))
+        try await service.configure(credential: .alphanumeric("hunter2-secure"), grantingScope: .privateHub)
         service.lock(reason: .manual)
 
-        let result = try await service.unlock(passcode: "hunter2-secure")
+        let result = try await service.unlock(passcode: "hunter2-secure", for: .privateHub)
         #expect(result.method == .passcode)
-        #expect(service.state == .unlocked)
+        #expect(service.state == .unlocked(scope: .privateHub))
 
         try? service.reset()
     }
@@ -84,14 +84,14 @@ struct FernletLockTests {
     @Test func wrongPasscodeIncrementsAttemptCount() async throws {
         let service = freshService()
 
-        try await service.configure(credential: .pin6("111111"))
+        try await service.configure(credential: .pin6("111111"), grantingScope: .privateHub)
         service.lock(reason: .manual)
 
         #expect(service.currentAttemptCount == 0)
 
         for expected in 1...3 {
             do {
-                _ = try await service.unlock(passcode: "000000")
+                _ = try await service.unlock(passcode: "000000", for: .privateHub)
             } catch FernletLockError.invalidPasscode { }
             #expect(service.currentAttemptCount == expected)
         }
@@ -105,12 +105,12 @@ struct FernletLockTests {
     @Test func fourWrongAttemptsTriggersCooldownLevel1() async throws {
         let service = freshService()
 
-        try await service.configure(credential: .pin6("999999"))
+        try await service.configure(credential: .pin6("999999"), grantingScope: .privateHub)
         service.lock(reason: .manual)
 
         for _ in 0..<4 {
             do {
-                _ = try await service.unlock(passcode: "000000")
+                _ = try await service.unlock(passcode: "000000", for: .privateHub)
             } catch { }
         }
 
@@ -137,7 +137,7 @@ struct FernletLockTests {
         defer { harness.cleanup() }
         let service = harness.makeService()
 
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
 
         let expectedDurations: [TimeInterval] = [60, 900, 3600, 14400]
@@ -145,7 +145,7 @@ struct FernletLockTests {
         for expectedDuration in expectedDurations {
             // Burn 4 attempts to reach this level's cooldown
             for _ in 0..<4 {
-                do { _ = try await service.unlock(passcode: "wrong") } catch { }
+                do { _ = try await service.unlock(passcode: "wrong", for: .privateHub) } catch { }
             }
 
             if case .locked(let deadline) = service.state {
@@ -162,7 +162,7 @@ struct FernletLockTests {
         }
 
         for _ in 0..<(4 * 4) {
-            do { _ = try await service.unlock(passcode: "bad") } catch { }
+            do { _ = try await service.unlock(passcode: "bad", for: .privateHub) } catch { }
         }
         #expect(service.requiresReset)
 
@@ -175,15 +175,15 @@ struct FernletLockTests {
     @Test func successfulUnlockResetsAttemptCount() async throws {
         let service = freshService()
 
-        try await service.configure(credential: .pin4("5678"))
+        try await service.configure(credential: .pin4("5678"), grantingScope: .privateHub)
         service.lock(reason: .manual)
 
         for _ in 0..<3 {
-            do { _ = try await service.unlock(passcode: "0000") } catch { }
+            do { _ = try await service.unlock(passcode: "0000", for: .privateHub) } catch { }
         }
         #expect(service.currentAttemptCount == 3)
 
-        _ = try await service.unlock(passcode: "5678")
+        _ = try await service.unlock(passcode: "5678", for: .privateHub)
         #expect(service.currentAttemptCount == 0)
 
         try? service.reset()
@@ -195,11 +195,11 @@ struct FernletLockTests {
     @Test func attemptCountSurvivesServiceRestart() async throws {
         let serviceA = freshService()
 
-        try await serviceA.configure(credential: .pin6("777777"))
+        try await serviceA.configure(credential: .pin6("777777"), grantingScope: .privateHub)
         serviceA.lock(reason: .manual)
 
         for _ in 0..<2 {
-            do { _ = try await serviceA.unlock(passcode: "000000") } catch { }
+            do { _ = try await serviceA.unlock(passcode: "000000", for: .privateHub) } catch { }
         }
         #expect(serviceA.currentAttemptCount == 2)
 
@@ -215,12 +215,12 @@ struct FernletLockTests {
     @Test func resetDeletesAllState() async throws {
         let service = freshService()
 
-        try await service.configure(credential: .pin4("4321"))
-        #expect(service.state == .unlocked)
+        try await service.configure(credential: .pin4("4321"), grantingScope: .privateHub)
+        #expect(service.state == .unlocked(scope: .privateHub))
         service.lock(reason: .manual)
 
         for _ in 0..<4 {
-            do { _ = try await service.unlock(passcode: "0000") } catch { }
+            do { _ = try await service.unlock(passcode: "0000", for: .privateHub) } catch { }
         }
         #expect(KeychainItem.load(for: .cooldownMonotonicAnchor, service: service.keychainService) != nil)
         #expect(KeychainItem.load(for: .cooldownDurationSeconds, service: service.keychainService) != nil)
@@ -244,20 +244,20 @@ struct FernletLockTests {
     @Test func contentKeyAvailabilityWithLockCycle() async throws {
         let service = freshService()
 
-        try await service.configure(credential: .pin6("246810"))
-        let keyAfterConfigure = service.contentKey()
+        try await service.configure(credential: .pin6("246810"), grantingScope: .privateHub)
+        let keyAfterConfigure = service.contentKey(for: .privateHub)
         #expect(keyAfterConfigure != nil)
 
         service.lock(reason: .manual)
-        #expect(service.contentKey() == nil)
+        #expect(service.contentKey(for: .privateHub) == nil)
 
-        _ = try await service.unlock(passcode: "246810")
-        let keyAfterUnlock = service.contentKey()
+        _ = try await service.unlock(passcode: "246810", for: .privateHub)
+        let keyAfterUnlock = service.contentKey(for: .privateHub)
         #expect(keyAfterUnlock != nil)
 
         service.lock(reason: .manual)
-        _ = try await service.unlock(passcode: "246810")
-        let keyAfterSecondUnlock = service.contentKey()
+        _ = try await service.unlock(passcode: "246810", for: .privateHub)
+        let keyAfterSecondUnlock = service.contentKey(for: .privateHub)
         #expect(keyAfterSecondUnlock != nil)
 
         let d1 = keyAfterUnlock!.withUnsafeBytes { Data($0) }
@@ -273,15 +273,15 @@ struct FernletLockTests {
     @Test func changeCredentialPreservesContentKey() async throws {
         let service = freshService()
 
-        try await service.configure(credential: .pin4("1111"))
-        let originalKeyData = service.contentKey()!.withUnsafeBytes { Data($0) }
+        try await service.configure(credential: .pin4("1111"), grantingScope: .privateHub)
+        let originalKeyData = service.contentKey(for: .privateHub)!.withUnsafeBytes { Data($0) }
 
         try await service.changeCredential(current: "1111", new: .pin6("222222"))
 
         service.lock(reason: .manual)
-        _ = try await service.unlock(passcode: "222222")
+        _ = try await service.unlock(passcode: "222222", for: .privateHub)
 
-        let newKeyData = service.contentKey()!.withUnsafeBytes { Data($0) }
+        let newKeyData = service.contentKey(for: .privateHub)!.withUnsafeBytes { Data($0) }
         #expect(originalKeyData == newKeyData)
 
         try? service.reset()
@@ -294,16 +294,16 @@ struct FernletLockTests {
         let service = freshService()
 
         await #expect(throws: FernletLockError.self) {
-            try await service.configure(credential: .pin4("123"))    // too short
+            try await service.configure(credential: .pin4("123"), grantingScope: .privateHub)    // too short
         }
         await #expect(throws: FernletLockError.self) {
-            try await service.configure(credential: .pin6("12345"))  // too short
+            try await service.configure(credential: .pin6("12345"), grantingScope: .privateHub)  // too short
         }
         await #expect(throws: FernletLockError.self) {
-            try await service.configure(credential: .alphanumeric("short"))  // < 8 chars
+            try await service.configure(credential: .alphanumeric("short"), grantingScope: .privateHub)  // < 8 chars
         }
         await #expect(throws: FernletLockError.self) {
-            try await service.configure(credential: .pin4("12ab"))   // non-numeric
+            try await service.configure(credential: .pin4("12ab"), grantingScope: .privateHub)   // non-numeric
         }
     }
 
@@ -395,8 +395,8 @@ struct FernletLockTests {
     @Test func lockGateCallsLockOnDisappear() async throws {
         let service = freshService()
 
-        try await service.configure(credential: .pin6("135246"))
-        #expect(service.state == .unlocked)
+        try await service.configure(credential: .pin6("135246"), grantingScope: .privateHub)
+        #expect(service.state == .unlocked(scope: .privateHub))
 
         service.lock(reason: .viewDisappeared)
         if case .locked = service.state { } else {
@@ -421,8 +421,8 @@ struct FernletLockTests {
             try? service.reset()
         }
 
-        try await service.configure(credential: .pin6("135246"))
-        #expect(service.state == .unlocked)
+        try await service.configure(credential: .pin6("135246"), grantingScope: .privateHub)
+        #expect(service.state == .unlocked(scope: .privateHub))
 
         let hostingController = UIHostingController(
             rootView: HubMovementLockHarness(showChild: true)
@@ -436,7 +436,7 @@ struct FernletLockTests {
             .environment(service)
         try await Task.sleep(nanoseconds: 100_000_000)
 
-        #expect(service.state == .unlocked)
+        #expect(service.state == .unlocked(scope: .privateHub))
 
         window?.isHidden = true
         window?.rootViewController = nil
@@ -459,12 +459,12 @@ struct FernletLockTests {
         var window: UIWindow? = UIWindow(windowScene: windowScene)
         window?.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
 
-        try await service.configure(credential: .pin6("135246"))
-        #expect(service.state == .unlocked)
+        try await service.configure(credential: .pin6("135246"), grantingScope: .privateHub)
+        #expect(service.state == .unlocked(scope: .privateHub))
 
         window?.rootViewController = UIHostingController(
             rootView: Text("hi")
-                .fernletLockGate(active: false)
+                .fernletLockGate(scope: .privateHub, active: false)
                 .environment(service)
         )
         window?.makeKeyAndVisible()
@@ -473,7 +473,7 @@ struct FernletLockTests {
         window?.rootViewController = nil
         await Task.yield()
 
-        #expect(service.state == .unlocked)
+        #expect(service.state == .unlocked(scope: .privateHub))
 
         window?.isHidden = true
         window = nil
@@ -487,9 +487,9 @@ private struct HubMovementLockHarness: View {
         VStack {
             if showChild {
                 Text("inner")
-                    .fernletLockGate(active: false)
+                    .fernletLockGate(scope: .privateHub, active: false)
             }
         }
-        .fernletLockGate()
+        .fernletLockGate(scope: .privateHub)
     }
 }

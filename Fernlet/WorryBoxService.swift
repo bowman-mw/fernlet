@@ -64,12 +64,16 @@ final class WorryBoxService {
     /// Call whenever the lock state changes (and once at startup). On unlock, worries written
     /// under the device fallback key (while locked / before a lock existed) are re-sealed under
     /// the user content key — the same migration journals perform on activation.
+    /// The Worry Box lives in the Private tab, so it follows the `.privateHub` unlock scope and no
+    /// other. Matched explicitly rather than on a bare `.unlocked` so an unlock held by the
+    /// progress-photo strip or App-lock settings lands in the locked branch by construction — not
+    /// merely because the caller happened to hand us a nil key.
     func updateActivation(lockState: FernletLockState, contentKey: SymmetricKey?) {
         switch lockState {
         case .notConfigured:
             mode = .noLock
             userContentKey = nil
-        case .unlocked:
+        case .unlocked(.privateHub):
             if let contentKey {
                 mode = .unlocked
                 userContentKey = contentKey
@@ -78,7 +82,7 @@ final class WorryBoxService {
                 mode = .locked
                 userContentKey = nil
             }
-        case .locked:
+        case .unlocked, .locked:
             mode = .locked
             userContentKey = nil
         }

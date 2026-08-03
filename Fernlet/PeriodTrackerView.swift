@@ -215,7 +215,7 @@ struct PeriodTrackerView: View {
 
     private func loadIfUnlocked() async {
         periodStore.attachLockService(lockService)
-        guard case .unlocked = lockService.state, let contentKey = lockService.contentKey() else { return }
+        guard let contentKey = lockService.contentKey(for: .privateHub) else { return }
         if !authorization.hasRequested(.cycleTracking) {
             await authorization.request(.cycleTracking)
         }
@@ -224,8 +224,7 @@ struct PeriodTrackerView: View {
     }
 
     private func refreshContext() {
-        let unlocked: Bool
-        if case .unlocked = lockService.state { unlocked = true } else { unlocked = false }
+        let unlocked = lockService.isUnlocked(for: .privateHub)
         periodContext?.refresh(unlocked: unlocked, wellbeingByDay: store.periodWellbeingByDay)
     }
 

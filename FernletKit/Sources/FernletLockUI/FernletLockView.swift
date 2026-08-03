@@ -16,6 +16,10 @@ import FernletUI
 // MARK: - Setup view
 
 public struct FernletLockSetupView: View {
+    /// The surface whose unlock the freshly-created passcode grants. The user is authenticated at
+    /// the moment they confirm it, so that one screen opens — but only that one, so setting a lock
+    /// up from Settings doesn't also hand over the Private Hub.
+    let grantingScope: FernletLockScope
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
 
@@ -28,7 +32,9 @@ public struct FernletLockSetupView: View {
     @State private var errorMessage: String?
     @State private var showSuccess = false
 
-    public init() {}
+    public init(grantingScope: FernletLockScope) {
+        self.grantingScope = grantingScope
+    }
 
     public var body: some View {
         NavigationStack {
@@ -322,7 +328,7 @@ public struct FernletLockSetupView: View {
                 case .pin6: credential = .pin6(passcode)
                 case .alphanumeric: credential = .alphanumeric(passcode)
                 }
-                try await lockService.configure(credential: credential)
+                try await lockService.configure(credential: credential, grantingScope: grantingScope)
 
                 if biometricEnabled {
                     try? await lockService.setBiometricEnabled(true, passcode: passcode)
@@ -393,6 +399,9 @@ public struct FernletLockSetupView: View {
 
 public struct FernletLockView: View {
     @Environment(FernletLockService.self) private var lockService
+    /// The surface being unlocked. A successful entry here opens THIS screen only — any unlock
+    /// another locked screen was holding is revoked by the same call.
+    var scope: FernletLockScope
     var onUnlocked: () -> Void
     var onResetRequested: (() -> Void)?
 
@@ -403,7 +412,8 @@ public struct FernletLockView: View {
     @State private var cooldownRemaining: TimeInterval = 0
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    public init(onUnlocked: @escaping () -> Void, onResetRequested: (() -> Void)? = nil) {
+    public init(scope: FernletLockScope, onUnlocked: @escaping () -> Void, onResetRequested: (() -> Void)? = nil) {
+        self.scope = scope
         self.onUnlocked = onUnlocked
         self.onResetRequested = onResetRequested
     }
@@ -618,7 +628,7 @@ public struct FernletLockView: View {
         Task { @MainActor in
             defer { isUnlocking = false }
             do {
-                _ = try await lockService.unlock(passcode: passcode)
+                _ = try await lockService.unlock(passcode: passcode, for: scope)
                 passcode = ""
                 onUnlocked()
             } catch FernletLockError.cooldownActive {
@@ -642,7 +652,7 @@ public struct FernletLockView: View {
         Task { @MainActor in
             defer { isCheckingBiometric = false }
             do {
-                _ = try await lockService.unlockWithBiometrics()
+                _ = try await lockService.unlockWithBiometrics(for: scope)
                 onUnlocked()
             } catch FernletLockError.biometricNotAvailable {
                 // Quietly fall back to passcode entry.

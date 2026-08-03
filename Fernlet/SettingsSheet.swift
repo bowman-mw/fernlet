@@ -180,7 +180,7 @@ struct SettingsSheet: View {
         case .appLock:
             AppLockSettingsView()
                 .environment(lockService)
-                .fernletLockGate(active: lockService.state != .notConfigured)
+                .fernletLockGate(scope: .appLockSettings, active: lockService.state != .notConfigured)
                 .environment(lockService)
         }
     }
@@ -1847,7 +1847,7 @@ struct AppLockSettingsView: View {
         .background(Color.parchment)
         .navigationTitle("App lock")
         .sheet(isPresented: $showSetup) {
-            FernletLockSetupView()
+            FernletLockSetupView(grantingScope: .appLockSettings)
                 .environment(lockService)
         }
         .sheet(isPresented: $showChangePasscode) {
@@ -2199,7 +2199,9 @@ private struct FernletLockChangePasscodeView: View {
     private func advanceFromVerifyOld() {
         Task { @MainActor in
             do {
-                _ = try await lockService.unlock(passcode: currentPasscode)
+                // Presented from the (already `.appLockSettings`-unlocked) App lock page, so the
+                // re-verification stays in that scope rather than escalating to the Private Hub.
+                _ = try await lockService.unlock(passcode: currentPasscode, for: .appLockSettings)
                 errorMessage = nil
                 step = .enterNew
             } catch {

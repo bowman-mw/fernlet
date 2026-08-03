@@ -227,9 +227,9 @@ struct LogPeriodSheet: View {
             )
             let result: PeriodLogResult
             if let entry = editingEntry {
-                result = try await periodStore.editEvent(event, replacingEntry: entry, unlockedContentKey: lockService.contentKey())
+                result = try await periodStore.editEvent(event, replacingEntry: entry, unlockedContentKey: lockService.contentKey(for: .privateHub))
             } else {
-                result = try await periodStore.logEvent(event, unlockedContentKey: lockService.contentKey())
+                result = try await periodStore.logEvent(event, unlockedContentKey: lockService.contentKey(for: .privateHub))
             }
             switch result {
             case .saved:

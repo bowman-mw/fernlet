@@ -3,6 +3,7 @@ import FernletDomainModel
 import PrivateHealthStore
 import PeriodContextBridge
 import FernletUI
+import FernletLock
 import FernletLockUI
 
 enum PrivateHubSection: String, CaseIterable, Identifiable {
@@ -65,7 +66,9 @@ struct PrivateHubView: View {
         .background(Color.parchment)
         // UX appearance tests can bypass the gate overlay to review the Journal/Period/
         // Intimacy screens without configuring a passcode. Release builds: always gated.
-        .fernletLockGate(active: !UITestSupport.bypassPrivateLockGate)
+        // `.privateHub` is the scope that owns the sealed content key — unlocking the progress-photo
+        // strip or App-lock settings does NOT open this tab (and vice versa).
+        .fernletLockGate(scope: .privateHub, active: !UITestSupport.bypassPrivateLockGate)
         .onAppear { resetUnavailableSectionIfNeeded() }
         .onChange(of: store.sensitiveSurfaceVisibility) { _, _ in
             resetUnavailableSectionIfNeeded()

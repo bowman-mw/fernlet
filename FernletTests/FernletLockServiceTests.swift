@@ -19,11 +19,11 @@ struct FernletLockServiceTests {
         defer { harness.cleanup() }
         let service = harness.makeService()
 
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         try await service.setBiometricEnabled(true, passcode: "123456")
         service.lock(reason: .manual)
         do {
-            _ = try await service.unlock(passcode: "000000")
+            _ = try await service.unlock(passcode: "000000", for: .privateHub)
             Issue.record("Wrong passcode unexpectedly unlocked the service")
         } catch FernletLockError.invalidPasscode {
         }
@@ -75,7 +75,7 @@ struct FernletLockServiceTests {
         defer { harness.cleanup() }
         let service = harness.makeService()
 
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
 
         #expect(service.consumeAutoBiometricPromptOpportunity())
@@ -83,7 +83,7 @@ struct FernletLockServiceTests {
         service.lock(reason: .manual)
         #expect(!service.consumeAutoBiometricPromptOpportunity())
 
-        _ = try await service.unlock(passcode: "123456")
+        _ = try await service.unlock(passcode: "123456", for: .privateHub)
         service.lock(reason: .manual)
         #expect(service.consumeAutoBiometricPromptOpportunity())
     }
@@ -92,7 +92,7 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
 
         #expect(keychainAttributes(account: LockKeychainKey.biometricBypass.rawValue, service: harness.serviceID) == nil)
     }
@@ -101,7 +101,7 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         try await service.setBiometricEnabled(true, passcode: "123456")
 
         let attributes = try #require(keychainAttributes(account: LockKeychainKey.biometricBypass.rawValue, service: harness.serviceID))
@@ -112,7 +112,7 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         try await service.setBiometricEnabled(true, passcode: "123456")
         try await service.setBiometricEnabled(false, passcode: "123456")
 
@@ -124,18 +124,18 @@ struct FernletLockServiceTests {
         defer { harness.cleanup() }
         var biometricKey = Data()
         let service = harness.makeService { _, _ in biometricKey }
-        try await service.configure(credential: .pin6("123456"))
-        biometricKey = try #require(service.contentKey()).withUnsafeBytes { Data($0) }
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        biometricKey = try #require(service.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
         try await service.setBiometricEnabled(true, passcode: "123456")
         try await service.changeCredential(current: "123456", new: .alphanumeric("newpass123"))
 
         #expect(keychainAttributes(account: LockKeychainKey.biometricBypass.rawValue, service: harness.serviceID) != nil)
         service.lock(reason: .manual)
-        _ = try await service.unlock(passcode: "newpass123")
-        let passcodeKey = try #require(service.contentKey()).withUnsafeBytes { Data($0) }
+        _ = try await service.unlock(passcode: "newpass123", for: .privateHub)
+        let passcodeKey = try #require(service.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
         service.lock(reason: .manual)
-        _ = try await service.unlockWithBiometrics()
-        let bypassKey = try #require(service.contentKey()).withUnsafeBytes { Data($0) }
+        _ = try await service.unlockWithBiometrics(for: .privateHub)
+        let bypassKey = try #require(service.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
         #expect(passcodeKey == biometricKey)
         #expect(bypassKey == passcodeKey)
     }
@@ -144,20 +144,20 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let serviceA = harness.makeService()
-        try await serviceA.configure(credential: .pin6("123456"))
+        try await serviceA.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         serviceA.lock(reason: .manual)
 
         let serviceB = harness.makeService()
         #expect(serviceB.state == .locked(cooldownDeadline: nil))
-        _ = try await serviceB.unlock(passcode: "123456")
-        #expect(serviceB.state == .unlocked)
+        _ = try await serviceB.unlock(passcode: "123456", for: .privateHub)
+        #expect(serviceB.state == .unlocked(scope: .privateHub))
     }
 
     @Test func attemptCounterPersistsAcrossInstances() async throws {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let serviceA = harness.makeService()
-        try await serviceA.configure(credential: .pin6("123456"))
+        try await serviceA.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         serviceA.lock(reason: .manual)
         try await failPasscode(serviceA, times: 3)
 
@@ -171,13 +171,13 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let serviceA = harness.makeService()
-        try await serviceA.configure(credential: .pin6("123456"))
+        try await serviceA.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         serviceA.lock(reason: .manual)
         try await failPasscode(serviceA, times: 4)
 
         let serviceB = harness.makeService()
         await #expect(throws: FernletLockError.self) {
-            _ = try await serviceB.unlock(passcode: "123456")
+            _ = try await serviceB.unlock(passcode: "123456", for: .privateHub)
         }
         #expect(cooldownDeadline(from: serviceB.state) != nil)
     }
@@ -186,7 +186,7 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let serviceA = harness.makeService()
-        try await serviceA.configure(credential: .pin6("123456"))
+        try await serviceA.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         serviceA.lock(reason: .manual)
         try await failPasscode(serviceA, times: 4)
         harness.clock.advance(by: 61)
@@ -201,7 +201,7 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
 
         for expected in [60.0, 900.0, 3600.0, 14400.0] {
@@ -216,7 +216,7 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
 
         for duration in [60.0, 900.0, 3600.0, 14400.0] {
@@ -227,7 +227,7 @@ struct FernletLockServiceTests {
         try await failPasscode(service, times: 4)
         #expect(service.requiresReset)
         await #expect(throws: FernletLockError.self) {
-            _ = try await service.unlock(passcode: "123456")
+            _ = try await service.unlock(passcode: "123456", for: .privateHub)
         }
     }
 
@@ -235,11 +235,11 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
         try await failPasscode(service, times: 3)
 
-        _ = try await service.unlock(passcode: "123456")
+        _ = try await service.unlock(passcode: "123456", for: .privateHub)
         #expect(service.currentAttemptCount == 0)
         #expect(loadByte(.cooldownLevel, service: harness.serviceID) == nil)
         #expect(keychainData(account: LockKeychainKey.cooldownDeadline.rawValue, service: harness.serviceID) == nil)
@@ -255,7 +255,7 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
         try await failPasscode(service, times: 4)
         #expect(cooldownDeadline(from: service.state) != nil)
@@ -264,7 +264,7 @@ struct FernletLockServiceTests {
         harness.clock.advance(by: 90)
 
         do {
-            _ = try await service.unlock(passcode: "123456")
+            _ = try await service.unlock(passcode: "123456", for: .privateHub)
             Issue.record("Correct passcode should remain blocked while monotonic cooldown is active")
         } catch FernletLockError.cooldownActive {
         } catch {
@@ -278,15 +278,15 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
         try await failPasscode(service, times: 4)
 
         harness.clock.advance(by: 90)
         harness.uptime.advance(by: 90)
 
-        _ = try await service.unlock(passcode: "123456")
-        #expect(service.state == .unlocked)
+        _ = try await service.unlock(passcode: "123456", for: .privateHub)
+        #expect(service.state == .unlocked(scope: .privateHub))
         #expect(service.currentAttemptCount == 0)
         #expect(loadByte(.cooldownLevel, service: harness.serviceID) == nil)
         #expect(keychainData(account: LockKeychainKey.cooldownDeadline.rawValue, service: harness.serviceID) == nil)
@@ -302,7 +302,7 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
         try await failPasscode(service, times: 4)
 
@@ -310,8 +310,8 @@ struct FernletLockServiceTests {
         harness.uptime.simulateReboot(uptimeAfterReboot: 5)
         harness.clock.advance(by: 90)
 
-        _ = try await service.unlock(passcode: "123456")
-        #expect(service.state == .unlocked)
+        _ = try await service.unlock(passcode: "123456", for: .privateHub)
+        #expect(service.state == .unlocked(scope: .privateHub))
         #expect(audit.contains("lock.cooldownMonotonicResetByReboot"))
     }
 
@@ -319,7 +319,7 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
         try await failPasscode(service, times: 4)
 
@@ -341,7 +341,7 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
         try await failPasscode(service, times: 4)
 
@@ -350,8 +350,8 @@ struct FernletLockServiceTests {
         audit.removeAll()
         harness.clock.advance(by: 90)
 
-        _ = try await service.unlock(passcode: "123456")
-        #expect(service.state == .unlocked)
+        _ = try await service.unlock(passcode: "123456", for: .privateHub)
+        #expect(service.state == .unlocked(scope: .privateHub))
         #expect(!audit.contains("lock.cooldownClockRegression"))
     }
 
@@ -359,13 +359,13 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService { _, _ in throw FernletLockError.biometricFailed }
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         try await service.setBiometricEnabled(true, passcode: "123456")
         service.lock(reason: .manual)
 
         for _ in 0..<10 {
             await #expect(throws: FernletLockError.self) {
-                _ = try await service.unlockWithBiometrics()
+                _ = try await service.unlockWithBiometrics(for: .privateHub)
             }
         }
         #expect(service.currentAttemptCount == 0)
@@ -375,7 +375,7 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         try await service.setBiometricEnabled(true, passcode: "123456")
         try service.bufferPendingNarrative(samplePayload())
         try await failPasscode(service, times: 4)
@@ -400,12 +400,12 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         let firstSalt = try #require(keychainData(account: LockKeychainKey.salt.rawValue, service: harness.serviceID))
         let firstVerifier = try #require(keychainData(account: LockKeychainKey.verifier.rawValue, service: harness.serviceID))
 
         try service.reset()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         let secondSalt = try #require(keychainData(account: LockKeychainKey.salt.rawValue, service: harness.serviceID))
         let secondVerifier = try #require(keychainData(account: LockKeychainKey.verifier.rawValue, service: harness.serviceID))
         #expect(firstSalt != secondSalt)
@@ -416,59 +416,59 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin4("1234"))
+        try await service.configure(credential: .pin4("1234"), grantingScope: .privateHub)
         service.lock(reason: .manual)
-        _ = try await service.unlock(passcode: "1234")
+        _ = try await service.unlock(passcode: "1234", for: .privateHub)
         service.lock(reason: .manual)
-        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "12345") }
-        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "0000") }
+        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "12345", for: .privateHub) }
+        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "0000", for: .privateHub) }
     }
 
     @Test func pin4RejectsNonNumericAndWrongLength() async throws {
         let service = LockTestHarness().makeService()
-        await #expect(throws: FernletLockError.self) { try await service.configure(credential: .pin4("abcd")) }
-        await #expect(throws: FernletLockError.self) { try await service.configure(credential: .pin4("123")) }
+        await #expect(throws: FernletLockError.self) { try await service.configure(credential: .pin4("abcd"), grantingScope: .privateHub) }
+        await #expect(throws: FernletLockError.self) { try await service.configure(credential: .pin4("123"), grantingScope: .privateHub) }
     }
 
     @Test func pin6Setup() async throws {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
-        _ = try await service.unlock(passcode: "123456")
+        _ = try await service.unlock(passcode: "123456", for: .privateHub)
         service.lock(reason: .manual)
-        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "12345") }
-        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "000000") }
+        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "12345", for: .privateHub) }
+        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "000000", for: .privateHub) }
     }
 
     @Test func pin6RejectsNonNumericAndWrongLength() async throws {
         let service = LockTestHarness().makeService()
-        await #expect(throws: FernletLockError.self) { try await service.configure(credential: .pin6("abcdef")) }
-        await #expect(throws: FernletLockError.self) { try await service.configure(credential: .pin6("12345")) }
+        await #expect(throws: FernletLockError.self) { try await service.configure(credential: .pin6("abcdef"), grantingScope: .privateHub) }
+        await #expect(throws: FernletLockError.self) { try await service.configure(credential: .pin6("12345"), grantingScope: .privateHub) }
     }
 
     @Test func alphanumericSetupIsExactAndCaseSensitive() async throws {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .alphanumeric("hunter2hunter2"))
+        try await service.configure(credential: .alphanumeric("hunter2hunter2"), grantingScope: .privateHub)
         service.lock(reason: .manual)
-        _ = try await service.unlock(passcode: "hunter2hunter2")
+        _ = try await service.unlock(passcode: "hunter2hunter2", for: .privateHub)
         service.lock(reason: .manual)
-        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "hunter2hunter2 ") }
-        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "Hunter2hunter2") }
+        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "hunter2hunter2 ", for: .privateHub) }
+        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "Hunter2hunter2", for: .privateHub) }
     }
 
     @Test func alphanumericMinimumLength() async throws {
         let service = LockTestHarness().makeService()
-        await #expect(throws: FernletLockError.self) { try await service.configure(credential: .alphanumeric("short")) }
+        await #expect(throws: FernletLockError.self) { try await service.configure(credential: .alphanumeric("short"), grantingScope: .privateHub) }
     }
 
     @Test func alphanumericMaximumLength() async throws {
         let service = LockTestHarness().makeService()
         await #expect(throws: FernletLockError.self) {
-            try await service.configure(credential: .alphanumeric(String(repeating: "x", count: 65)))
+            try await service.configure(credential: .alphanumeric(String(repeating: "x", count: 65)), grantingScope: .privateHub)
         }
     }
 
@@ -476,11 +476,11 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin4("1234"))
+        try await service.configure(credential: .pin4("1234"), grantingScope: .privateHub)
         try await service.changeCredential(current: "1234", new: .alphanumeric("newpass123"))
         service.lock(reason: .manual)
-        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "1234") }
-        _ = try await service.unlock(passcode: "newpass123")
+        await #expect(throws: FernletLockError.self) { _ = try await service.unlock(passcode: "1234", for: .privateHub) }
+        _ = try await service.unlock(passcode: "newpass123", for: .privateHub)
         #expect(service.currentAttemptCount == 0)
     }
 
@@ -490,8 +490,8 @@ struct FernletLockServiceTests {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
-        let expectedContentKey = try #require(service.contentKey()).withUnsafeBytes { Data($0) }
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        let expectedContentKey = try #require(service.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
         service.lock(reason: .manual)
 
         // Simulate a pre-split install: overwrite the digest verifier with the RAW derived key (the old
@@ -502,9 +502,9 @@ struct FernletLockServiceTests {
         #expect(keychainData(account: LockKeychainKey.verifier.rawValue, service: harness.serviceID) == rawDerived)
 
         // Unlock still succeeds via the legacy compare, and yields the same content key.
-        let result = try await service.unlock(passcode: "123456")
+        let result = try await service.unlock(passcode: "123456", for: .privateHub)
         #expect(result.method == .passcode)
-        #expect(try #require(service.contentKey()).withUnsafeBytes { Data($0) } == expectedContentKey)
+        #expect(try #require(service.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) } == expectedContentKey)
 
         // The verifier is migrated in place to the digest form (no longer the raw wrapping key).
         let migrated = try #require(keychainData(account: LockKeychainKey.verifier.rawValue, service: harness.serviceID))
@@ -513,15 +513,15 @@ struct FernletLockServiceTests {
 
         // A subsequent unlock now matches via the current (digest) path.
         service.lock(reason: .manual)
-        _ = try await service.unlock(passcode: "123456")
-        #expect(service.contentKey() != nil)
+        _ = try await service.unlock(passcode: "123456", for: .privateHub)
+        #expect(service.contentKey(for: .privateHub) != nil)
     }
 
     @Test func wrongPasscodeRejectedAgainstLegacyVerifier() async throws {
         let harness = LockTestHarness()
         defer { harness.cleanup() }
         let service = harness.makeService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         service.lock(reason: .manual)
 
         let salt = try #require(keychainData(account: LockKeychainKey.salt.rawValue, service: harness.serviceID))
@@ -529,13 +529,13 @@ struct FernletLockServiceTests {
         KeychainItem.store(rawDerived, for: .verifier, service: harness.serviceID)
 
         do {
-            _ = try await service.unlock(passcode: "000000")
+            _ = try await service.unlock(passcode: "000000", for: .privateHub)
             Issue.record("Wrong passcode unexpectedly unlocked against a legacy verifier")
         } catch FernletLockError.invalidPasscode {
         }
         // The legacy verifier is untouched by a failed attempt.
         #expect(keychainData(account: LockKeychainKey.verifier.rawValue, service: harness.serviceID) == rawDerived)
-        #expect(service.contentKey() == nil)
+        #expect(service.contentKey(for: .privateHub) == nil)
     }
 }
 
@@ -666,7 +666,7 @@ private final class AuditCapture {
 private func failPasscode(_ service: FernletLockService, times: Int) async throws {
     for _ in 0..<times {
         do {
-            _ = try await service.unlock(passcode: "000000")
+            _ = try await service.unlock(passcode: "000000", for: .privateHub)
         } catch FernletLockError.invalidPasscode {
         } catch FernletLockError.cooldownActive {
         } catch FernletLockError.resetRequired {
