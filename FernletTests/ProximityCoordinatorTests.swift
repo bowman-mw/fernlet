@@ -84,13 +84,30 @@ struct ProximityCoordinatorTests {
         return peer
     }
 
+    /// Bounded spin for the coordinator's fire-and-forget `Task`s (the timeout timer, the
+    /// post-handshake transitions). Gives up only once the deadline has passed AND `minimumPolls`
+    /// observations have actually been made.
+    ///
+    /// Both halves are load-earned. A fixed sleep sized to the timer races the moment the timer
+    /// task is *scheduled*, which under full-suite load lands long after its nominal fire time.
+    /// But a wall-clock deadline alone does not fix that: every proximity suite is `@MainActor`,
+    /// and while this one is starved `ContinuousClock` keeps advancing, so a deadline can expire
+    /// having genuinely looked only a handful of times (that is how the sibling
+    /// `ProximityRecipeShareCapTests.connectTimeoutSurfacesBusyPeerFailure` still failed at
+    /// 41.8 s with a 10 s deadline). Counting observations makes the give-up decision
+    /// proportional to scheduling actually received. It still terminates: `polls` only climbs,
+    /// and every turn of the loop sleeps.
     private func waitUntil(
-        timeout: Duration = .seconds(1),
+        timeout: Duration = .seconds(2),
+        minimumPolls: Int = 200,
         condition: @escaping @MainActor () -> Bool
     ) async {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: timeout)
-        while !condition(), clock.now < deadline {
+        var polls = 0
+        while !condition() {
+            polls += 1
+            if polls >= minimumPolls, clock.now >= deadline { return }
             try? await Task.sleep(for: .milliseconds(10))
         }
     }
@@ -615,7 +632,10 @@ struct ProximityCoordinatorTests {
         let coordinator = makeCoordinator(identity: identity, timeoutSeconds: 0.01)
 
         await coordinator.begin(role: .browser, mode: .trainer)
-        try await Task.sleep(nanoseconds: 30_000_000)
+        // Waited on, not slept past: a fixed 30 ms sleep left only a 3x margin over the 10 ms
+        // timer, and under full-suite load the timer's Task had not been scheduled yet when the
+        // assertion ran.
+        await waitUntil(timeout: .seconds(5)) { coordinator.state == .ended(reason: .timeout) }
 
         #expect(coordinator.state == .ended(reason: .timeout))
     }

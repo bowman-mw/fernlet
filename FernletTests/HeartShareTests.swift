@@ -385,13 +385,23 @@ struct HeartShareTests {
 
     private enum TestFailure: Error { case notConnected(String) }
 
+    /// Gives up only once the deadline has passed AND `minimumPolls` observations have really been
+    /// made. A `ContinuousClock` deadline alone measures wall clock, which keeps advancing while
+    /// this `@MainActor` suite is starved in a loaded full-suite run — so it can expire having
+    /// genuinely looked only a handful of times. Counting observations ties the give-up decision
+    /// to scheduling received rather than to time elapsed, and still terminates: `polls` only
+    /// climbs, and every turn of the loop sleeps.
     private func waitUntil(
         timeout: Duration = .seconds(2),
+        minimumPolls: Int = 400,
         condition: @escaping @MainActor () -> Bool
     ) async {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: timeout)
-        while !condition(), clock.now < deadline {
+        var polls = 0
+        while !condition() {
+            polls += 1
+            if polls >= minimumPolls, clock.now >= deadline { return }
             try? await Task.sleep(for: .milliseconds(5))
         }
     }

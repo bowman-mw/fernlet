@@ -215,10 +215,25 @@ struct ProximityVerificationTests {
 
     /// The commit hops through a `Task`, so a positive assertion polls and a negative one has to
     /// give that task a chance to run before concluding nothing happened.
-    private func waitForCommit(_ coordinator: ProximityCoordinator, timeout: Duration = .seconds(1)) async {
+    ///
+    /// Gives up only once the deadline has passed AND `minimumPolls` observations have really been
+    /// made. "Give that task a chance to run" is exactly what a `ContinuousClock` deadline alone
+    /// fails to guarantee: it measures wall clock, which keeps advancing while this `@MainActor`
+    /// suite is starved in a loaded full-suite run, so it can expire having genuinely looked only
+    /// a handful of times — and the negative assertions then pass for the wrong reason. Counting
+    /// observations ties the decision to scheduling received rather than to time elapsed, and
+    /// still terminates: `polls` only climbs, and every turn of the loop sleeps.
+    private func waitForCommit(
+        _ coordinator: ProximityCoordinator,
+        timeout: Duration = .seconds(1),
+        minimumPolls: Int = 200
+    ) async {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: timeout)
-        while !isCommitted(coordinator), clock.now < deadline {
+        var polls = 0
+        while !isCommitted(coordinator) {
+            polls += 1
+            if polls >= minimumPolls, clock.now >= deadline { return }
             try? await Task.sleep(for: .milliseconds(10))
         }
     }

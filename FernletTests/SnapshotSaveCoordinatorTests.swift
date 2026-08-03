@@ -86,11 +86,23 @@ struct SnapshotSaveCoordinatorTests {
         // fire late. The loop returns as soon as the condition holds, so a longer ceiling never slows a
         // passing run — it only stops a saturated scheduler from tripping a false timeout.
         timeout: Duration = .seconds(10),
+        // …but headroom denominated in wall clock is the wrong currency, which this 10 s ceiling
+        // learned the hard way: it was not enough. This suite is `@MainActor`, and while a loaded
+        // full-suite run starves it `ContinuousClock` keeps advancing, so the deadline can expire
+        // having genuinely *looked* only a handful of times. Both of these tests failed exactly
+        // that way at 40.3 s, inside the same starvation stall that other suites rode out. So give
+        // up only once the deadline has passed AND this many observations have really been made —
+        // tying the decision to scheduling received rather than to time elapsed. It still
+        // terminates: `polls` only climbs, and every turn of the loop sleeps.
+        minimumPolls: Int = 300,
         condition: @escaping @MainActor () -> Bool
     ) async {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: timeout)
-        while !condition(), clock.now < deadline {
+        var polls = 0
+        while !condition() {
+            polls += 1
+            if polls >= minimumPolls, clock.now >= deadline { return }
             try? await clock.sleep(for: .milliseconds(10))
         }
     }

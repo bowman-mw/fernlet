@@ -184,13 +184,33 @@ struct HeartDropTests {
         return service
     }
 
-    /// Bounded spin for the fire-and-forget sync path (`syncNow`/`queueHeart`'s auto-kick).
-    private func waitUntil(_ condition: () -> Bool, iterations: Int = 20_000) async -> Bool {
-        for _ in 0..<iterations {
+    /// Bounded spin for the fire-and-forget sync path (`syncNow`/`queueHeart`'s auto-kick). Gives
+    /// up only once the deadline has passed AND `minimumPolls` observations have really been made.
+    ///
+    /// A bare `Task.yield()` count — what this was — measures neither time nor scheduling, and
+    /// starves the very work it waits on: yielding never suspends long enough for a timer to fire
+    /// or a disk write to land. That is the failure the sibling `HeartDropAppWiringTests` records
+    /// in its own helper: on the first store in a cold test process, where identity provisioning
+    /// and the sidecar writes actually hit the keychain and disk, 20k yields burned through before
+    /// the upload landed and the purge tests failed on their first execution but passed on rerun.
+    /// A wall-clock deadline alone is no better under the opposite pressure — it keeps advancing
+    /// while this `@MainActor` suite is starved in a loaded full-suite run — so the give-up rule
+    /// needs both halves. It still terminates: `polls` only climbs, and every turn of the loop
+    /// sleeps.
+    private func waitUntil(
+        _ condition: () -> Bool,
+        timeout: TimeInterval = 30,
+        minimumPolls: Int = 500
+    ) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        var polls = 0
+        while true {
             if condition() { return true }
+            polls += 1
+            if polls >= minimumPolls, Date() >= deadline { return false }
             await Task.yield()
+            try? await Task.sleep(nanoseconds: 1_000_000) // 1 ms
         }
-        return condition()
     }
 
     // MARK: - Day tags

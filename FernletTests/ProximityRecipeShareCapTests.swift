@@ -82,15 +82,59 @@ struct ProximityRecipeShareCapTests {
         )
     }
 
+    /// Gives up only when the deadline has passed AND `minimumPolls` observations have actually
+    /// been made. See `waitForValue` for why the second half is load-earned.
     private func waitUntil(
-        timeout: Duration = .seconds(2),
+        timeout: Duration = .seconds(5),
+        minimumPolls: Int = 400,
         condition: @escaping @MainActor () -> Bool
     ) async {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: timeout)
-        while !condition(), clock.now < deadline {
+        var polls = 0
+        while !condition() {
+            polls += 1
+            if polls >= minimumPolls, clock.now >= deadline { return }
             try? await Task.sleep(for: .milliseconds(5))
         }
+    }
+
+    /// Polls `value` until `predicate` holds and returns it AS OBSERVED at that moment, giving up
+    /// only once the deadline has passed AND `minimumPolls` observations have actually been made.
+    ///
+    /// Two separate load failures are being closed here, and each needs its own half.
+    ///
+    /// The LATCH: `sendState` is not a resting place — every terminal state arms
+    /// `scheduleStatusClear`, which resets it to `.idle` 2.5 s later. So waiting and then
+    /// re-reading the live property has a deadline it must thread between: long enough to survive
+    /// starvation, short enough not to race that reset. No value satisfies both. Returning the
+    /// observed value removes the upper bound.
+    ///
+    /// The POLL FLOOR: a `ContinuousClock` deadline measures wall clock, which keeps advancing
+    /// while this `@MainActor` suite is starved by every other `@MainActor` suite in a loaded
+    /// full-suite run. `connectTimeoutSurfacesBusyPeerFailure` failed exactly that way with a
+    /// 10 s deadline — 41.8 s of wall clock, `sendState` still `.connecting`, because the 0.05 s
+    /// timer task had not been *scheduled* yet and the poll had genuinely looked only a handful
+    /// of times before its clock ran out. Counting observations makes the give-up decision
+    /// proportional to scheduling actually received rather than to time elapsed. The pair still
+    /// terminates: `polls` only climbs, and every turn of the loop sleeps.
+    private func waitForValue<T>(
+        timeout: Duration = .seconds(10),
+        minimumPolls: Int = 400,
+        of value: @escaping @MainActor () -> T,
+        until predicate: @escaping @MainActor (T) -> Bool
+    ) async -> T {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        var latest = value()
+        var polls = 1
+        while !predicate(latest) {
+            polls += 1
+            if polls >= minimumPolls, clock.now >= deadline { return latest }
+            try? await Task.sleep(for: .milliseconds(5))
+            latest = value()
+        }
+        return latest
     }
 
     // MARK: - Inbound acceptance gate
@@ -299,10 +343,12 @@ struct ProximityRecipeShareCapTests {
         #expect(manager.sendState == .connecting(recipientName: "Blair"))
         #expect(manager.engagedRecipientID == recipient.id)
 
-        await waitUntil { if case .failed = manager.sendState { return true }; return false }
+        let observed = await waitForValue(of: { manager.sendState }) {
+            if case .failed = $0 { return true }; return false
+        }
 
-        guard case .failed(let message) = manager.sendState else {
-            Issue.record("Expected connect-timeout failure, got \(manager.sendState)")
+        guard case .failed(let message) = observed else {
+            Issue.record("Expected connect-timeout failure, got \(observed)")
             return
         }
         #expect(message.contains("busy"))

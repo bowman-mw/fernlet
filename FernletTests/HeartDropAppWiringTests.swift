@@ -97,20 +97,37 @@ struct HeartDropAppWiringTests {
     }
 
     /// Bounded spin for the fire-and-forget paths (`queueHeart`'s auto-sync, the purge `Task`).
-    /// Spins until `condition` holds or the deadline passes. Deadline-based on purpose: a fixed
-    /// iteration count of `Task.yield()` does not measure time, and on the FIRST store in a cold
-    /// test process — where identity provisioning and the sidecar writes actually hit the keychain
-    /// and disk — 20k yields burned through before the upload landed, so both purge tests failed on
-    /// their first execution and passed on the rerun. The short sleep also stops this from starving
-    /// the very MainActor work it is waiting for.
-    private func waitUntil(_ condition: () -> Bool, timeout: TimeInterval = 10) async -> Bool {
+    /// Spins until `condition` holds, or until BOTH the deadline has passed and `minimumPolls`
+    /// observations have actually been made.
+    ///
+    /// Both halves of that give-up rule are load-earned. A fixed iteration count of `Task.yield()`
+    /// does not measure time: on the FIRST store in a cold test process — where identity
+    /// provisioning and the sidecar writes actually hit the keychain and disk — 20k yields burned
+    /// through before the upload landed, so both purge tests failed on their first execution and
+    /// passed on the rerun. But a wall-clock deadline alone is no better under the opposite
+    /// pressure: this suite is `@MainActor`, and in a loaded full-suite run the whole process can
+    /// be starved of the MainActor for tens of seconds at a stretch. `Date()` keeps advancing
+    /// throughout, so a pure 10 s deadline expired having genuinely *looked* only a handful of
+    /// times — `aPurgeOwedFromAPreviousLaunchIsRediscoveredAndRetried` burned 38.1 s and failed
+    /// that way, against the ~0.02 s it takes unloaded. Requiring real observations makes the
+    /// give-up decision proportional to scheduling actually received rather than to time elapsed,
+    /// and the pair still terminates: `polls` only climbs, and each turn of the loop sleeps.
+    ///
+    /// The short sleep also stops this from starving the very MainActor work it is waiting for.
+    private func waitUntil(
+        _ condition: () -> Bool,
+        timeout: TimeInterval = 30,
+        minimumPolls: Int = 500
+    ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
+        var polls = 0
+        while true {
             if condition() { return true }
+            polls += 1
+            if polls >= minimumPolls, Date() >= deadline { return false }
             await Task.yield()
             try? await Task.sleep(nanoseconds: 1_000_000) // 1 ms
         }
-        return condition()
     }
 
     /// Enables away delivery, queues one heart and waits until it has actually REACHED the drop-off

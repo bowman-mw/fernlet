@@ -421,10 +421,18 @@ struct SensitiveSurfaceGateTests {
         remote.current = LocalFernletRepository(fileURL: blobURL)
         remote.simulateRemoteChange()
 
-        // The remote-reload path debounces (750ms); wait for apply() to land.
+        // The remote-reload path debounces (750ms); wait for apply() to land. Gives up only once
+        // the deadline has passed AND 200 observations have actually been made: this suite is
+        // `@MainActor`, and while a loaded full-suite run starves it `ContinuousClock` keeps
+        // advancing — a deadline-only loop expired here having genuinely looked only a handful of
+        // times, failing all three assertions below with the debounce simply not yet applied.
+        // Counting observations ties the give-up decision to scheduling received, not time elapsed.
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: .seconds(10))
-        while store.settings.periodTrackingVisible != true, clock.now < deadline {
+        var polls = 0
+        while store.settings.periodTrackingVisible != true {
+            polls += 1
+            if polls >= 200, clock.now >= deadline { break }
             try? await clock.sleep(for: .milliseconds(25))
         }
         #expect(store.settings.periodTrackingVisible == true,
