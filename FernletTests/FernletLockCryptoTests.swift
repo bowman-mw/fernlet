@@ -239,10 +239,10 @@ struct FernletLockCryptoTests {
     @MainActor
     @Test func contentKeyScrubsOnLock() async throws {
         let service = freshService()
-        try await service.configure(credential: .pin6("123456"))
-        #expect(service.contentKey() != nil)
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        #expect(service.contentKey(for: .privateHub) != nil)
         service.lock(reason: .manual)
-        #expect(service.contentKey() == nil, "Fernlet stores the content key as SymmetricKey and scrubs it by dropping the reference on lock")
+        #expect(service.contentKey(for: .privateHub) == nil, "Fernlet stores the content key as SymmetricKey and scrubs it by dropping the reference on lock")
         try? service.reset()
     }
 
@@ -250,16 +250,16 @@ struct FernletLockCryptoTests {
     @MainActor
     @Test func failedUnlockDoesNotLeavePlaintext() async throws {
         let service = freshService()
-        try await service.configure(credential: .pin6("123456"))
-        let originalContentKey = try #require(service.contentKey()).withUnsafeBytes { Data($0) }
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        let originalContentKey = try #require(service.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
         service.lock(reason: .manual)
 
         do {
-            _ = try await service.unlock(passcode: "999999")
+            _ = try await service.unlock(passcode: "999999", for: .privateHub)
             Issue.record("Wrong passcode unexpectedly unlocked the service")
         } catch FernletLockError.invalidPasscode { }
 
-        #expect(service.contentKey() == nil)
+        #expect(service.contentKey(for: .privateHub) == nil)
         #expect(loadKeychainData(account: "com.fernlet.lock.biometricBypass", service: service.keychainService) == nil)
         let wrappedContentKey = try #require(loadKeychainData(account: "com.fernlet.lock.wrappedContentKey", service: service.keychainService))
         #expect(wrappedContentKey != originalContentKey)
@@ -271,7 +271,7 @@ struct FernletLockCryptoTests {
     @MainActor
     @Test func configuredVerifierIsDigestNotWrappingKey() async throws {
         let service = freshService()
-        try await service.configure(credential: .pin6("123456"))
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         let salt = try #require(loadKeychainData(account: "com.fernlet.lock.salt", service: service.keychainService))
         let storedVerifier = try #require(loadKeychainData(account: "com.fernlet.lock.verifier", service: service.keychainService))
         let derivedKey = try await verifier(passcode: "123456", salt: salt)

@@ -131,7 +131,7 @@ struct LogIntimacySheet: View {
                 eventDate: eventDate,
                 note: String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(2000))
             )
-            try intimacyStore.insert(log, contentKey: lockService.contentKey())
+            try intimacyStore.insert(log, contentKey: lockService.contentKey(for: .privateHub))
             guard writesToHealthKit else {
                 dismiss()
                 return

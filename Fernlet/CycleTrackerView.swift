@@ -360,7 +360,7 @@ struct CycleTrackerView: View {
         // HealthKit AUTHORIZATION prompt below is view-level and outside that seam — never ask
         // for cycle-tracking permission while the user has the period surface hidden.
         guard store.isPeriodTrackingVisible else { return }
-        guard case .unlocked = lockService.state, let contentKey = lockService.contentKey() else { return }
+        guard let contentKey = lockService.contentKey(for: .privateHub) else { return }
         if !authorization.hasRequested(.cycleTracking) {
             await authorization.request(.cycleTracking)
         }
@@ -384,7 +384,7 @@ struct CycleTrackerView: View {
             scrubIntimacyState()
             return
         }
-        let contentKey = lockService.contentKey()
+        let contentKey = lockService.contentKey(for: .privateHub)
         let localLogs: [IntimacyLog] = (try? intimacyStore.logs(contentKey: contentKey)) ?? []
         intimacyLogs = localLogs
         let localEventsByDay = Dictionary(grouping: localLogs, by: \.dayKey).mapValues(\.count)
@@ -398,8 +398,7 @@ struct CycleTrackerView: View {
     }
 
     private func refreshContext() {
-        let unlocked: Bool
-        if case .unlocked = lockService.state { unlocked = true } else { unlocked = false }
+        let unlocked = lockService.isUnlocked(for: .privateHub)
         periodContext?.refresh(unlocked: unlocked, wellbeingByDay: store.periodWellbeingByDay)
     }
 

@@ -26,7 +26,7 @@ import FernletUI
 ///
 /// This is the enforcement point that ties `FernletLockService` (the keychain-backed lock
 /// service in the `FernletLock` module) to the screens that display sealed content: the app
-/// applies it via the public `fernletLockGate(active:shouldLockOnDisappear:)` extension on
+/// applies it via the public `fernletLockGate(scope:active:shouldLockOnDisappear:)` extension on
 /// `View`, on screens like the private hub, the lock-related settings screen, and the
 /// progress-photo timeline. Its responsibilities:
 ///
@@ -49,6 +49,9 @@ import FernletUI
 /// (the module's default isolation); all lock-state reads go through the environment-injected
 /// `FernletLockService`.
 struct FernletLockGateModifier: ViewModifier {
+    /// Which locked surface this gate is. An unlock covers exactly one scope, so a gate reveals only
+    /// while the unlock in force is ITS unlock — and revokes a foreign one as it appears.
+    let scope: FernletLockScope
     /// Whether the gate is enforced; when `false` the content passes through unmodified
     /// and no lifecycle handling (overlays or disappear re-locks) occurs.
     let active: Bool
@@ -98,7 +101,8 @@ struct FernletLockGateModifier: ViewModifier {
             }
         }
         .sheet(isPresented: $showSetup) {
-            FernletLockSetupView()
+            // Creating the passcode from THIS gate opens THIS surface and no other.
+            FernletLockSetupView(grantingScope: scope)
                 .environment(lockService)
         }
         .confirmationDialog(
@@ -128,7 +132,7 @@ struct FernletLockGateModifier: ViewModifier {
                     // Execute any deferred lock request if the gate hasn't re-appeared.
                     if pendingRelock && !gateIsActive {
                         pendingRelock = false
-                        if case .unlocked = lockService.state {
+                        if lockService.isUnlocked(for: scope) {
                             lockService.lock(reason: .viewDisappeared)
                         }
                     }
@@ -141,11 +145,12 @@ struct FernletLockGateModifier: ViewModifier {
 
     // MARK: Computed state
 
-    /// True while the lock service reports `.locked` (with or without a cooldown deadline),
-    /// which drives the unlock overlay.
+    /// Configured, but not unlocked FOR THIS SCOPE — an unlock held by another locked surface reads
+    /// as locked here, which is the whole point. Drives the unlock overlay (with or without a
+    /// cooldown deadline).
     private var isLocked: Bool {
-        if case .locked = lockService.state { return true }
-        return false
+        guard !isNotConfigured else { return false }
+        return !lockService.isUnlocked(for: scope)
     }
 
     /// True while no passcode has been configured, which drives the setup CTA overlay.
@@ -162,6 +167,10 @@ struct FernletLockGateModifier: ViewModifier {
         guard active else { return }
         gateIsActive = true
         pendingRelock = false
+        // Revoke — never inherit — an unlock taken out on a different locked surface. Doing this on
+        // APPEAR is what makes the guarantee hold: the other surface's disappear re-lock may have
+        // been suppressed (covering sheet, camera cover, scene transition) or never fired at all.
+        lockService.revokeUnlockOutside(scope)
         // If configured + locked -> the overlay will appear automatically via `isLocked`
         // Nothing else to do here; biometric auto-prompt is inside FernletLockView.onAppear
     }
@@ -175,7 +184,9 @@ struct FernletLockGateModifier: ViewModifier {
         guard active, gateIsActive else { return }
         gateIsActive = false
         guard !lockService.isPerformingBiometricUnlock else { return }
-        guard case .unlocked = lockService.state else { return }
+        // Only ever re-lock OUR OWN unlock. If another surface has already claimed one, locking here
+        // would yank it out from under whoever is on screen now.
+        guard lockService.isUnlocked(for: scope) else { return }
         guard shouldLockOnDisappear() else { return }
         if suppressRelock {
             // Defer the lock so it fires when the suppression window expires,
@@ -193,6 +204,7 @@ struct FernletLockGateModifier: ViewModifier {
     @ViewBuilder private var lockOverlay: some View {
         Color.parchment.ignoresSafeArea()
         FernletLockView(
+            scope: scope,
             onUnlocked: { },
             onResetRequested: { showReset = true }
         )
@@ -243,14 +255,20 @@ struct FernletLockGateModifier: ViewModifier {
 // MARK: - View extension
 
 public extension View {
-    /// Gates the view behind FernletLock by applying `FernletLockGateModifier`.
+    /// Gates the view behind FernletLock, for ONE `scope`, by applying `FernletLockGateModifier`.
+    ///
+    /// An unlock is granted to a single surface: this gate reveals only while the unlock in force is
+    /// its own, revokes a foreign one as it appears, and on disappear scrubs the content key so
+    /// every re-entry re-prompts. Two gates that share a `scope` (the progress-photo strip and its
+    /// pushed photo detail) share one unlock session; different scopes never do.
     ///
     /// When `active` is false the content passes through unchanged.
-    /// On disappear the content key is scrubbed; every re-entry re-prompts.
     /// `shouldLockOnDisappear` (default always-true) can veto the disappear re-lock when the gate is
     /// popping back to an also-gated, still-visible parent that owns the session's re-lock.
     ///
     /// - Parameters:
+    ///   - scope: The locked surface this gate is. No default — a new gated screen must name
+    ///     itself rather than silently inherit another surface's unlock.
     ///   - active: Whether the gate is enforced at all; pass `false` to render the content
     ///     ungated (e.g. while a UI-test bypass flag is set).
     ///   - shouldLockOnDisappear: Consulted at the moment the gated view disappears;
@@ -258,9 +276,10 @@ public extension View {
     ///     push onto — and pop back from — a child screen whose parent is also gated.
     /// - Returns: The content wrapped in the lock gate.
     func fernletLockGate(
+        scope: FernletLockScope,
         active: Bool = true,
         shouldLockOnDisappear: @escaping () -> Bool = { true }
     ) -> some View {
-        modifier(FernletLockGateModifier(active: active, shouldLockOnDisappear: shouldLockOnDisappear))
+        modifier(FernletLockGateModifier(scope: scope, active: active, shouldLockOnDisappear: shouldLockOnDisappear))
     }
 }

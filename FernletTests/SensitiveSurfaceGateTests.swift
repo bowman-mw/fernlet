@@ -132,7 +132,7 @@ struct SensitiveSurfaceGateTests {
 
         let all = Set(HealthCapability.allCases)
         // Baseline: nothing hidden, and the store must be unlocked or the lock gate confounds this.
-        #expect(store.allowedHealthCapabilities(from: all).contains(.cycleTracking) == (store.lockState == .unlocked))
+        #expect(store.allowedHealthCapabilities(from: all).contains(.cycleTracking) == (store.lockState == .unlocked(scope: .privateHub)))
 
         store.settings.periodTrackingVisible = false
         #expect(!store.allowedHealthCapabilities(from: all).contains(.cycleTracking))

@@ -24,9 +24,11 @@ struct ProgressPhotoSection: View {
     var onOpen: (ProgressPhotoRecord) -> Void
 
     // Body photos are as personal as journal/cycle/intimacy, so — when a Fernlet lock is configured —
-    // the timeline reveals behind the SAME global lock as the Private Hub (fail-closed at the reveal
-    // seam: no thumbnail decodes until unlocked). With no lock configured the section behaves exactly as
-    // before, keeping the capture affordance discoverable.
+    // the timeline reveals behind the Fernlet lock (fail-closed at the reveal seam: no thumbnail
+    // decodes until unlocked). It is the SAME passcode as the Private Hub but its OWN unlock session
+    // (`.progressPhotos`): unlocking here reveals only this strip and its photo detail, and the hub
+    // stays locked. With no lock configured the section behaves exactly as before, keeping the
+    // capture affordance discoverable.
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingUnlock = false
@@ -52,11 +54,11 @@ struct ProgressPhotoSection: View {
     }
 
     private var isUnlocked: Bool {
-        if case .unlocked = lockService.state { return true }
-        return false
+        lockService.isUnlocked(for: .progressPhotos)
     }
 
-    /// Whether the real photos may be shown. Gated behind the global lock when configured.
+    /// Whether the real photos may be shown. Gated behind THIS surface's own unlock when configured —
+    /// an unlock held by the Private Hub or App-lock settings reveals nothing here.
     private var isRevealed: Bool { !gateActive || isUnlocked }
 
     /// Hide the app-switcher snapshot of body photos while the app isn't frontmost.
@@ -74,6 +76,10 @@ struct ProgressPhotoSection: View {
             sectionIsVisible = true
             pendingRelock = false
             isOpeningDetail = false
+            // Arriving here revokes an unlock held by the Private Hub / App-lock settings rather than
+            // inheriting it — the appear-side half of the one-surface guarantee, which holds even when
+            // the surface we replaced never got to run its own disappear re-lock.
+            if gateActive { lockService.revokeUnlockOutside(.progressPhotos) }
         }
         .onDisappear {
             sectionIsVisible = false
@@ -95,7 +101,9 @@ struct ProgressPhotoSection: View {
                     // Execute a deferred genuine-departure lock if the section hasn't re-appeared.
                     if pendingRelock && !sectionIsVisible && !isCapturing {
                         pendingRelock = false
-                        if case .unlocked = lockService.state {
+                        // Only our own unlock — if another surface has since claimed one, locking
+                        // here would yank it out from under whoever is on screen now.
+                        if lockService.isUnlocked(for: .progressPhotos) {
                             lockService.lock(reason: .viewDisappeared)
                         }
                     }
@@ -223,7 +231,7 @@ struct ProgressPhotoSection: View {
     private func reLockOnDisappear() {
         guard gateActive, !isOpeningDetail, !isCapturing else { return }
         guard !lockService.isPerformingBiometricUnlock else { return }
-        guard case .unlocked = lockService.state else { return }
+        guard lockService.isUnlocked(for: .progressPhotos) else { return }
         if suppressRelock {
             pendingRelock = true
         } else {
@@ -268,18 +276,19 @@ struct ProgressPhotoSection: View {
 }
 
 /// A calm sheet that runs the app's real unlock flow (`FernletLockView`) so revealing the progress-photo
-/// timeline uses the SAME lock as the Private Hub — one authentication, one content key. The lock service
-/// is passed in explicitly (rather than read from the sheet's environment) since sheets don't reliably
-/// inherit it, then re-injected for `FernletLockView`. Dismisses the moment the global lock unlocks.
+/// timeline uses the SAME passcode as the Private Hub — but its own `.progressPhotos` unlock session, so
+/// authenticating here opens the strip and nothing else. The lock service is passed in explicitly (rather
+/// than read from the sheet's environment) since sheets don't reliably inherit it, then re-injected for
+/// `FernletLockView`. Dismisses the moment THIS scope unlocks.
 private struct ProgressPhotoUnlockSheet: View {
     let lockService: FernletLockService
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        FernletLockView(onUnlocked: { dismiss() }, onResetRequested: nil)
+        FernletLockView(scope: .progressPhotos, onUnlocked: { dismiss() }, onResetRequested: nil)
             .environment(lockService)
             .onChange(of: lockService.state) { _, newState in
-                if case .unlocked = newState { dismiss() }
+                if newState.isUnlocked(for: .progressPhotos) { dismiss() }
             }
     }
 }
@@ -368,11 +377,12 @@ struct ProgressPhotoDetailView: View {
         lockService.isLockConfigured && !UITestSupport.bypassPrivateLockGate
     }
 
-    /// Fail-closed at the reveal seam: don't even decode the sealed bytes until unlocked.
+    /// Fail-closed at the reveal seam: don't even decode the sealed bytes until unlocked — and only
+    /// for THIS surface's unlock (shared with the strip that pushed us, so one authentication covers
+    /// strip → detail → pop-back; never inherited from the Private Hub or App-lock settings).
     private var canReveal: Bool {
         guard gateActive else { return true }
-        if case .unlocked = lockService.state { return true }
-        return false
+        return lockService.isUnlocked(for: .progressPhotos)
     }
 
     private var redactForSnapshot: Bool { scenePhase != .active }
@@ -529,11 +539,13 @@ struct ProgressPhotoDetailView: View {
         // Routes through the shared destructive-confirmation so the delete warns AND leaves an audit trail,
         // like every other irreversible action (the bespoke confirmationDialog it replaced had no audit).
         .destructiveConfirmation($pendingDestructiveAction)
-        // Same full-screen lock as the Private Hub: when configured + locked, an unlock overlay covers
-        // the photo and re-locks on disappear. Inactive (no lock configured) → passes through unchanged.
-        // The disappear re-lock defers to `shouldLockOnDisappear` so popping back to the still-unlocked
-        // strip doesn't cost a fresh Face ID per photo (see the property doc above).
-        .fernletLockGate(active: gateActive, shouldLockOnDisappear: shouldLockOnDisappear)
+        // Same full-screen lock treatment as the Private Hub, on the strip's OWN `.progressPhotos`
+        // scope: when configured + not unlocked for that scope, an unlock overlay covers the photo,
+        // and it re-locks on disappear. Inactive (no lock configured) → passes through unchanged.
+        // Sharing the strip's scope is what lets `shouldLockOnDisappear` keep one unlock across
+        // strip → detail → pop-back instead of costing a fresh Face ID per photo (see the property
+        // doc above).
+        .fernletLockGate(scope: .progressPhotos, active: gateActive, shouldLockOnDisappear: shouldLockOnDisappear)
     }
 
     /// Persists the caption, then refreshes the parent timeline in the SAME step (save → refresh), so the

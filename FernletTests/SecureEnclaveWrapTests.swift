@@ -49,8 +49,8 @@ struct SecureEnclaveWrapTests {
             SecureEnclaveContentKeyWrap.deleteKey(service: service)
         }
 
-        try await lockService.configure(credential: .pin6("135791"))
-        let contentKeyData = try #require(lockService.contentKey()).withUnsafeBytes { Data($0) }
+        try await lockService.configure(credential: .pin6("135791"), grantingScope: .privateHub)
+        let contentKeyData = try #require(lockService.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
 
         if SecureEnclaveContentKeyWrap.isAvailable {
             let blob = try #require(KeychainItem.load(for: .seWrappedContentKey, service: service),
@@ -60,8 +60,8 @@ struct SecureEnclaveWrapTests {
             // Corrupt the wrap; the unlock must still succeed (scrypt stays authoritative)…
             KeychainItem.store(Data(repeating: 0xFF, count: 64), for: .seWrappedContentKey, service: service)
             lockService.lock(reason: .manual)
-            _ = try await lockService.unlock(passcode: "135791")
-            #expect(try #require(lockService.contentKey()).withUnsafeBytes { Data($0) } == contentKeyData)
+            _ = try await lockService.unlock(passcode: "135791", for: .privateHub)
+            #expect(try #require(lockService.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) } == contentKeyData)
 
             // …and repair the blob back to a working wrap of the same content key.
             let repaired = try #require(KeychainItem.load(for: .seWrappedContentKey, service: service))
@@ -71,8 +71,8 @@ struct SecureEnclaveWrapTests {
             #expect(KeychainItem.load(for: .seWrappedContentKey, service: service) == nil,
                     "without an enclave no blob may exist — behavior must be byte-for-byte legacy")
             lockService.lock(reason: .manual)
-            _ = try await lockService.unlock(passcode: "135791")
-            #expect(try #require(lockService.contentKey()).withUnsafeBytes { Data($0) } == contentKeyData)
+            _ = try await lockService.unlock(passcode: "135791", for: .privateHub)
+            #expect(try #require(lockService.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) } == contentKeyData)
         }
     }
 
@@ -83,7 +83,7 @@ struct SecureEnclaveWrapTests {
         guard SecureEnclaveContentKeyWrap.isAvailable else { return }
         let service = "com.fernlet.lock.test.se.reset.\(UUID().uuidString)"
         let lockService = FernletLockService(keychainService: service)
-        try await lockService.configure(credential: .pin6("246802"))
+        try await lockService.configure(credential: .pin6("246802"), grantingScope: .privateHub)
         #expect(SecureEnclaveContentKeyWrap.loadKey(service: service) != nil)
         try lockService.reset()
         #expect(SecureEnclaveContentKeyWrap.loadKey(service: service) == nil)

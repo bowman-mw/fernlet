@@ -124,23 +124,23 @@ struct PeriodPredictionUITests {
     /// restarts the load by construction. This pins that identity.
     @Test func loadTaskIdentityChangesWhenADerivedVisibilityGateFlips() {
         let mounted = CycleTrackerView.LoadTrigger(
-            lockState: .unlocked,
+            lockState: .unlocked(scope: .privateHub),
             visibility: SensitiveSurfaceVisibility(intimacy: true, period: false)
         )
 
         // Same lock state + same visibility: no spurious restart.
         #expect(mounted == CycleTrackerView.LoadTrigger(
-            lockState: .unlocked,
+            lockState: .unlocked(scope: .privateHub),
             visibility: SensitiveSurfaceVisibility(intimacy: true, period: false)
         ))
         // Un-hiding the period half restarts the load (the finding's exact scenario).
         #expect(mounted != CycleTrackerView.LoadTrigger(
-            lockState: .unlocked,
+            lockState: .unlocked(scope: .privateHub),
             visibility: SensitiveSurfaceVisibility(intimacy: true, period: true)
         ))
         // Symmetric for the intimacy half.
         #expect(mounted != CycleTrackerView.LoadTrigger(
-            lockState: .unlocked,
+            lockState: .unlocked(scope: .privateHub),
             visibility: SensitiveSurfaceVisibility(intimacy: false, period: false)
         ))
         // Lock transitions keep their pre-existing trigger role.
