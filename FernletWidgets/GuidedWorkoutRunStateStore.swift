@@ -15,6 +15,19 @@
 
 import Foundation
 
+/// Coordinated app-group reader/writer for the single in-progress ``GuidedWorkoutRunState`` JSON
+/// file.
+///
+/// The persistence seam between the two guided-workout drivers: `FernletStore` (in-app transitions
+/// and the foreground reconcile, which also logs a Lock-Screen-only finish) and
+/// ``GuidedWorkoutIntentRunner`` (the Lock Screen buttons). Every access runs inside an
+/// `NSFileCoordinator` block; dates are ISO-8601 with sorted keys; writes are atomic with
+/// `.completeFileProtectionUntilFirstUserAuthentication`. Reads are nil-tolerant — a missing,
+/// corrupt, or still-protected file reads as "no active guided run" — and every failure mode is
+/// silent by design (`try?` throughout): losing one write never crashes an intent. `write(_:)`
+/// re-stamps `updatedAt` so the app's reconcile can age-out an abandoned run. Self-contained
+/// (literal app-group id, own codecs) so this one file compiles identically in both targets;
+/// ``CookingRunStateStore`` is its byte-for-byte sibling.
 struct GuidedWorkoutRunStateStore {
     /// Documented duplicate of `fernletAppGroupIdentifier` — see file header.
     private static let appGroupIdentifier = "group.MBO.Fernlet"
@@ -32,6 +45,7 @@ struct GuidedWorkoutRunStateStore {
         self.fileURL = dir.appendingPathComponent("GuidedWorkoutRunState.json")
     }
 
+    /// Sorted-keys + ISO-8601 encoder — the file-format half of the cross-process contract.
     private func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -39,6 +53,7 @@ struct GuidedWorkoutRunStateStore {
         return encoder
     }
 
+    /// ISO-8601 decoder matching ``makeEncoder()``.
     private func makeDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601

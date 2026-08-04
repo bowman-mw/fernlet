@@ -22,6 +22,24 @@ import FernletDomainModel
 import FernletFoundation
 import FernletPersistence
 
+/// Per-row Core Data + iCloud store for day history: one `DayRecord` per calendar day.
+///
+/// The `DayRecordRepositoring` conformer that ``CoreDataFernletRepository`` writes through.
+/// Splitting each `FernletDay` into its own row (a JSON `payloadData` blob via
+/// ``RowPayloadCoders``, keyed by `dateKey`) keeps every record far under CloudKit's ~1 MB
+/// limit — the reason the old 370-day blob cap could be removed — and lets CloudKit merge
+/// different-day edits from different devices per record. Upsert-only: `upsert` touches only
+/// the days it is handed and never deletes rows it wasn't, so a stale in-memory set can't wipe
+/// days synced in from another device.
+///
+/// Unlike the ledger stores, reads MUST collapse duplicates: CloudKit mirrors by record
+/// identity, not `dateKey`, so two devices first-writing the same day before import settles can
+/// produce two rows for one key. `loadAll`/`load` return the most-recently-updated row per key,
+/// and self-heal deletion of the losers is deliberately conservative — only rows STRICTLY older
+/// than the top `updatedAt` are ever deleted, never ties (two devices' migration-backfilled rows
+/// share one stamp, and an on-tie delete would let each device wipe the other's row, losing
+/// both). MainActor-isolated by the module default, working on ``PersistenceController``'s view
+/// context.
 public struct DayRecordRepository: DayRecordRepositoring {
     private let controller: PersistenceController
 
@@ -33,6 +51,7 @@ public struct DayRecordRepository: DayRecordRepositoring {
         self.controller = controller
     }
 
+    /// Loads the whole (uncapped) day history, duplicate-collapsed to one day per `dateKey`.
     public func loadAll() -> [String: FernletDay] {
         StartupTiming.timed("DayRecordRepository.loadAll") {
             let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
@@ -40,6 +59,7 @@ public struct DayRecordRepository: DayRecordRepositoring {
         }
     }
 
+    /// Loads only the listed days (duplicate-collapsed); keys with no row are simply absent.
     public func load(dateKeys: [String]) -> [String: FernletDay] {
         guard !dateKeys.isEmpty else { return [:] }
         let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
@@ -47,6 +67,8 @@ public struct DayRecordRepository: DayRecordRepositoring {
         return dedupedDays(fetching: request)
     }
 
+    /// Loads the newest `limit` distinct days for the derived-table window, over-fetching a small
+    /// buffer so duplicate rows can't shrink the window below `limit` days.
     public func loadRecent(limit: Int) -> [FernletDay] {
         guard limit > 0 else { return [] }
         let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
@@ -58,6 +80,10 @@ public struct DayRecordRepository: DayRecordRepositoring {
         return byKey.keys.sorted(by: >).prefix(limit).compactMap { byKey[$0] }
     }
 
+    /// Inserts or updates the given sanitized days by `dateKey`, never deleting rows it wasn't
+    /// handed; existing duplicate rows for a key are all updated (they collapse on the next read).
+    ///
+    /// - Returns: `false` when the Core Data save fails (the context is rolled back).
     @discardableResult public func upsert(_ days: [DayRecordUpsert]) -> Bool {
         guard !days.isEmpty else { return true }
         let context = controller.container.viewContext
@@ -98,6 +124,8 @@ public struct DayRecordRepository: DayRecordRepositoring {
         }
     }
 
+    /// Deletes the rows for the listed days (a no-op, returning `true`, when none exist) — used
+    /// when a day's last logged entry is removed so an emptied day doesn't linger.
     @discardableResult public func delete(dateKeys: [String]) -> Bool {
         guard !dateKeys.isEmpty else { return true }
         let context = controller.container.viewContext
@@ -118,6 +146,7 @@ public struct DayRecordRepository: DayRecordRepositoring {
         }
     }
 
+    /// Removes every day row — the delete-all/reset path.
     @discardableResult public func deleteAll() -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
@@ -156,6 +185,10 @@ public struct DayRecordRepository: DayRecordRepositoring {
             return [:]
         }
         // Group every decodable row by `dateKey` (a stable per-row tiebreak accompanies each).
+        /// One decodable fetched row: its managed object, decoded day, `updatedAt` stamp, and tiebreak.
+        ///
+        /// Local to the dedup pass; the tiebreak (the object-ID URI) makes the in-dict winner
+        /// deterministic across reads when several rows tie at the top `updatedAt`.
         struct Row { let record: NSManagedObject; let day: FernletDay; let updatedAt: Date; let tiebreak: String }
         var rowsByKey: [String: [Row]] = [:]
         let decoder = RowPayloadCoders.makeDecoder()

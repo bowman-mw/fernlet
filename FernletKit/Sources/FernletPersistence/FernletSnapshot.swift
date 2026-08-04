@@ -14,23 +14,53 @@
 import Foundation
 import FernletDomainModel
 
+/// The persisted aggregate: the one Codable value the repositories serialize to and from storage and
+/// that the app's store applies back into diary state on load.
+///
+/// A snapshot bundles today's `FernletDay` with everything else the diary needs to rehydrate —
+/// settings, recent meals, previous journals, memories, goals, workshop state, the food/recipe
+/// catalogs, daily score history, the AI-analysis retry queue, and the proximity/trainer bookkeeping
+/// lists. Both conformers of ``FernletRepository`` read and write it, and `FernletStore.apply` (app
+/// side) consumes it on load.
+///
+/// The Codable shape is a compatibility contract: keys and decode-if-present defaults are intentionally
+/// byte-identical to the original app-target encoding so persisted JSON round-trips unchanged, and
+/// every field added after the initial shape decodes via `decodeIfPresent` with an empty-array default
+/// so blobs written by older builds keep loading. A raw snapshot never reaches storage directly — the
+/// repository write path requires a ``SanitizedSnapshot`` minted through the storage privacy strip.
 public struct FernletSnapshot: Codable {
+    /// The date key of the day this snapshot considers "today".
     public var todayKey: String
+    /// Today's day record — the live day the app mutates.
     public var day: FernletDay
+    /// The user's settings aggregate.
     public var settings: FernletSettings
+    /// Recently logged meals (the quick re-log working set).
     public var recentMeals: [Meal]
+    /// Journal entries from previous days (sealed entries are blanked by the storage strip).
     public var previousJournals: [JournalEntry]
+    /// Saved memory notes.
     public var memories: [MemoryNote]
+    /// The user's fitness goals.
     public var goals: [FitnessGoal]
+    /// Companion workshop state (texture observations, handoff notes, Claude notes).
     public var workshop: WorkshopData
+    /// The user's food item catalog. Added after the initial shape; decodes to empty when absent.
     public var foodItems: [FoodItem] = []
+    /// Recipe definitions carried in the blob. Added after the initial shape; decodes to empty when absent.
     public var recipes: [RecipeDefinition] = []
+    /// Per-day health score history (cycle-derived `periodPhase` is stripped before storage).
     public var dailyScores: [DailyHealthScore] = []
+    /// Pending AI meal-analysis retry records.
     public var retryQueue: [AIAnalysisRetryRecord] = []
+    /// Proximity connection session logs.
     public var connectionSessionLogs: [ConnectionSessionLog] = []
+    /// Trusted proximity peer records.
     public var trustedProximityPeers: [ProximityTrustedPeerRecord] = []
+    /// Trainer-export audit events.
     public var trainerAuditEvents: [TrainerAuditEvent] = []
 
+    /// Creates a snapshot from its components; the later-added lists default to empty.
     public init(
         todayKey: String,
         day: FernletDay,
@@ -65,6 +95,8 @@ public struct FernletSnapshot: Codable {
         self.trainerAuditEvents = trainerAuditEvents
     }
 
+    /// Decodes with `decodeIfPresent` + empty defaults for every field added after the initial shape,
+    /// so persisted blobs written by older builds keep loading unchanged.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         todayKey = try container.decode(String.self, forKey: .todayKey)
@@ -109,7 +141,9 @@ private extension FernletDay {
 /// to mint one is `sanitizing(_:sealedJournalIDs:)` (or `FernletSnapshot.forStorage`), both of which
 /// apply the strip — the data-side analogue of the compiler import-wall.
 public struct SanitizedSnapshot {
+    /// The wrapped, already-stripped snapshot — safe to hand to the repository write path.
     public let snapshot: FernletSnapshot
+    /// Private by design: only the sanitizing mints (and the test-only unchecked wrapper) may wrap.
     private init(_ snapshot: FernletSnapshot) { self.snapshot = snapshot }
 
     /// Applies the storage strip and wraps the result: blanks sealed-journal text (today + previous
@@ -142,7 +176,9 @@ public struct SanitizedSnapshot {
 /// so a raw past-day write cannot leak sealed-journal text or sensitive health fields into the synced
 /// blob. The only way to mint one is `sanitizing(_:sealedJournalIDs:)`.
 public struct SanitizedDay {
+    /// The wrapped, already-stripped day — safe to write to a synced row.
     public let day: FernletDay
+    /// Private by design: only the sanitizing mints (and the internal wrappers below) may wrap.
     private init(_ day: FernletDay) { self.day = day }
 
     /// Blanks sealed-journal text and nils sensitive health fields (cycle/intimate) on a single day.

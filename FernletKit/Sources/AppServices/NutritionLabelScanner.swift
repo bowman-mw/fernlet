@@ -7,6 +7,14 @@ import Vision
 import UIKit
 import FernletDomainModel
 
+/// Everything one OCR pass managed to read off a nutrition-facts label: serving info, the three
+/// macros, and the full micronutrient panel.
+///
+/// Every field is optional — `nil` means "not recognized", never zero — and the per-serving units
+/// follow the label conventions the parser normalizes to (macros in grams, most minerals/vitamins in
+/// mg, vitamin D/A/B12/folate in mcg, omega-3 in grams). Produced by ``NutritionLabelScanner``;
+/// consumed by the app's `FoodCaptureRouter`, `NutritionLabelCameraSheet`, `FoodView`, and
+/// `FoodProductWebImporter`, which fold it into the domain model via ``micronutrients()``.
 public struct NutritionLabelResult: Equatable, Hashable {
     public var servingSize: String?
     public var servingsPerContainer: Int?
@@ -170,7 +178,11 @@ public struct NutritionLabelResult: Equatable, Hashable {
     }
 }
 
-// Returned when the label has two side-by-side columns (e.g. "dry mix" vs "as prepared").
+/// Returned when the label has two side-by-side columns (e.g. "dry mix" vs "as prepared").
+///
+/// Carries both parsed columns plus best-effort header strings recovered from the label text, so
+/// the app's `NutritionLabelCameraSheet` can let the user pick which column to log. Only produced
+/// by ``NutritionLabelScanner/scanAll(image:)`` when the text contains an "as prepared" marker.
 public struct DualColumnScanResult {
     public var col1Header: String
     public var col2Header: String
@@ -190,6 +202,11 @@ public struct DualColumnScanResult {
     }
 }
 
+/// User-facing failures from the label-scan pipeline: no readable text, or an image that could not
+/// be converted for Vision.
+///
+/// Both cases carry gentle, actionable `errorDescription` strings that the camera sheet shows
+/// verbatim, so wording here is UI copy — not just a debug message.
 public enum NutritionLabelScanError: LocalizedError {
     case noTextFound
     case imageConversionFailed
@@ -204,14 +221,40 @@ public enum NutritionLabelScanError: LocalizedError {
     }
 }
 
+/// On-device OCR pipeline that turns a photo of a nutrition-facts label into a structured
+/// ``NutritionLabelResult``.
+///
+/// The pipeline is: CoreImage preprocessing (document-rectangle perspective correction, contrast
+/// boost, grayscale, noise reduction) → `VNRecognizeTextRequest` with a custom-words vocabulary of
+/// label phrases → the pure line parser ``parse(lines:matchIndex:)``. The parser is deliberately
+/// forgiving of OCR damage: fuzzy label matching (normalization, "rn"→"m" confusion, bounded
+/// Levenshtein distance), split label/value line recovery, %-Daily-Value back-solving against the
+/// shared `FDADailyValues` table (21 CFR 101.9, the same table `MicronutrientGapAnalyzer` reads),
+/// locale-aware comma handling, and cross-field sanity clamps (saturated fat ≤ fat, sugar/fiber ≤
+/// carbs, added sugar ≤ sugar).
+///
+/// A namespace in practice — every member is static and the class is never instantiated. Vision
+/// work runs in a detached, user-initiated task (`recognizeText(in:workDidStart:)`); parsing is
+/// pure and synchronous, which is what makes `NutritionLabelScannerTests` possible without a
+/// camera. Callers: the app's `NutritionLabelCameraSheet`, `FoodCaptureRouter`, `FoodView`, and
+/// `FoodProductWebImporter`, all via ``scanAll(image:)``. Failure mode: throws
+/// ``NutritionLabelScanError`` when no text is readable; individual unrecognized fields simply
+/// stay `nil`.
 public final class NutritionLabelScanner {
+    /// Single-column convenience: OCR the image and parse the first (left) column.
+    ///
+    /// - Important: currently has no callers — every production path uses ``scanAll(image:)``.
     static func scan(image: UIImage) async throws -> NutritionLabelResult {
         let lines = try await recognizeText(in: image)
         guard lines.isEmpty == false else { throw NutritionLabelScanError.noTextFound }
         return parse(lines: lines)
     }
 
-    // Returns the primary result plus dual-column info when the label has two columns.
+    /// OCRs the image and returns the primary (left-column) result plus dual-column info when the
+    /// label has two columns ("as prepared" marker detected).
+    ///
+    /// - Returns: `primary` is the left column when a dual-column layout is detected, otherwise the
+    ///   whole-label parse; `dualColumn` is `nil` for ordinary single-column labels.
     public static func scanAll(image: UIImage) async throws -> (primary: NutritionLabelResult, dualColumn: DualColumnScanResult?) {
         let lines = try await recognizeText(in: image)
         guard lines.isEmpty == false else { throw NutritionLabelScanError.noTextFound }
@@ -219,6 +262,14 @@ public final class NutritionLabelScanner {
         return (dual?.col1 ?? parse(lines: lines), dual)
     }
 
+    /// Runs preprocessing + Vision text recognition off the calling thread and returns the
+    /// recognized lines, top candidate per observation.
+    ///
+    /// - Parameters:
+    ///   - image: The label photo; throws ``NutritionLabelScanError/imageConversionFailed`` when it
+    ///     has no backing `CGImage`.
+    ///   - workDidStart: Optional hook invoked on the detached task just before the heavy work —
+    ///     used by UI callers to flip a "scanning…" indicator only once work truly begins.
     nonisolated public static func recognizeText(
         in image: UIImage,
         workDidStart: (@Sendable () -> Void)? = nil
@@ -342,8 +393,13 @@ public final class NutritionLabelScanner {
         )
     }
 
-    // matchIndex: 0 = first (left) column, 1 = second (right) column.
-    // Defaults to 0 so all existing callers are unaffected.
+    /// Pure parser from recognized text lines to a ``NutritionLabelResult`` — the unit-testable
+    /// heart of the scanner (no Vision, no UIKit state).
+    ///
+    /// - Parameters:
+    ///   - lines: OCR output lines, one per text observation.
+    ///   - matchIndex: Which numeric token on a line to read — 0 = first (left) column,
+    ///     1 = second (right) column. Defaults to 0 so all existing callers are unaffected.
     public static func parse(lines: [String], matchIndex: Int = 0) -> NutritionLabelResult {
         var result = NutritionLabelResult()
         let normalized = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

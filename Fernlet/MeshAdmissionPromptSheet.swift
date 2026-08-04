@@ -3,6 +3,13 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
+/// The in-session "someone wants to join" prompt shown to existing members of a closed mesh.
+///
+/// Pure presentation, zero manager reference: it renders the first pending
+/// `MeshAdmissionRequestPayload` (name + requester fingerprint for eyeball verification) with an
+/// "N more waiting" pill, and forwards Allow/Decline through the closures.
+/// ``DisposableCameraView`` presents it whenever `MeshNetworkManager.pendingAdmissionRequests` is
+/// non-empty and wires swipe-to-dismiss to decline everything still pending (fail-closed).
 struct MeshAdmissionPromptSheet: View {
     let requests: [MeshAdmissionRequestPayload]
     let meshName: String

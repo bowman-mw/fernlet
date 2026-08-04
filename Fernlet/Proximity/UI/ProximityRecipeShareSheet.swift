@@ -4,6 +4,12 @@ import FernletDomainModel
 import FernletLock
 import FernletUI
 
+/// One recipe the user chose to share, packaged for the share sheet.
+///
+/// Built at the tap site in `FoodView` (from a local recipe or a saved web recipe) and presented
+/// via `.sheet(item:)`: `payload` is the signed wire body ``ProximityRecipeShareSheet`` sends
+/// over the proximity radio, and `shareText` is the plain-text fallback for the system
+/// "Share outside Fernlet" link.
 struct ProximityRecipeShareDraft: Identifiable, Equatable {
     let id = UUID()
     var title: String
@@ -11,6 +17,17 @@ struct ProximityRecipeShareDraft: Identifiable, Equatable {
     var payload: ProximityRecipeSharePayload
 }
 
+/// The "share this recipe with a nearby Fernlet" sheet: discovers recipients over the recipe
+/// radio and sends the drafted payload to the tapped one.
+///
+/// Runs `ProximityRecipeShareManager` for its whole presentation (`start()` on appear, `stop()`
+/// on disappear) and renders its observable state: the recipient list (with the hard 2-device cap
+/// — every other row disables while one is engaged), a searching pulse that gives way to a
+/// "no nearby Fernlets" hint after ~6 s, the connect/send/sent status line, and a collapsible
+/// diagnostics card. An "Include notes" toggle strips the payload's share notes before sending.
+/// On disappear it also restarts passive listening behind the same opt-in + active-scene + lock
+/// gates ContentView enforces — the go-dark-after-share fix, since `stop()` would otherwise leave
+/// the device undiscoverable for inbound recipes until the next scene/tab/lock event.
 struct ProximityRecipeShareSheet: View {
     var draft: ProximityRecipeShareDraft
     var manager: ProximityRecipeShareManager

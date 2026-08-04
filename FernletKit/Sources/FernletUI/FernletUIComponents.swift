@@ -86,6 +86,11 @@ public extension View {
     }
 }
 
+/// The standard screen title block: a display-serif title with an italic slate subtitle.
+///
+/// Used at the top of the major tab screens and hub pages so page headers share one type
+/// treatment. `subtitleFirst` places the subtitle above the title (the "eyebrow" layout); the
+/// optional `identifier` gives UX appearance tests a stable anchor for the whole header.
 public struct ScreenHeader: View {
     var title: String
     var subtitle: String
@@ -126,6 +131,11 @@ public struct ScreenHeader: View {
     }
 }
 
+/// A rounded cream pill button for a screen header's trailing action — icon, text, or both.
+///
+/// Sits alongside ``ScreenHeader`` on tab screens for actions like opening settings or starting an
+/// entry flow. At least one of `title` / `systemImage` must be provided (asserted in the
+/// initializer); the 58pt minimum height keeps it comfortably tappable.
 public struct HeaderActionButton: View {
     var title: String?
     var systemImage: String?
@@ -164,6 +174,12 @@ public struct HeaderActionButton: View {
     }
 }
 
+/// A small tilted polaroid-style tile: a photo (or flat color swatch) over a handwritten-style
+/// caption on a cream frame.
+///
+/// Used by the friend photo wall and meal-photo surfaces to render snapshots as scattered keepsake
+/// prints. When `imageData` decodes to a `UIImage` it fills the frame; otherwise the `color`
+/// placeholder shows. `rotation` is in degrees, giving each tile its hand-placed tilt.
 public struct PolaroidTile: View {
     var color: Color
     var caption: String
@@ -275,9 +291,12 @@ public extension View {
     }
 }
 
-/// A slim top bar carrying a single leading "Cancel" button, for entry sheets that block interactive
-/// (swipe) dismiss while dirty and therefore need an explicit escape hatch. The `action` decides
-/// whether to dismiss directly or raise a discard confirmation.
+/// A slim top bar carrying a single leading "Cancel" button, for entry sheets that block
+/// interactive (swipe) dismiss while dirty and therefore need an explicit escape hatch.
+///
+/// The `action` decides whether to dismiss directly or raise a discard confirmation (typically via
+/// the `discardConfirmation(isPresented:onDiscard:)` modifier). Exposes the stable `sheet.cancel`
+/// accessibility identifier for UI tests.
 public struct SheetCancelBar: View {
     let action: () -> Void
 
@@ -302,6 +321,12 @@ public struct SheetCancelBar: View {
 
 // MARK: - Sheet Layout Components
 
+/// A left-to-right wrapping layout that flows subviews onto a new row when the current row runs
+/// out of width.
+///
+/// A SwiftUI `Layout` conformance used by the chip/tag pickers in entry sheets (feelings, textures,
+/// activity and option chips — usually styled with ``ChipButtonStyle``) where a fixed grid would
+/// waste space. Each row is as tall as its tallest subview; `spacing` separates both items and rows.
 public struct FlowLayout: Layout {
     var spacing: CGFloat
 
@@ -309,6 +334,7 @@ public struct FlowLayout: Layout {
         self.spacing = spacing
     }
 
+    /// Simulates the row-wrapping pass to report the total size needed at the proposed width.
     public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
         var x: CGFloat = 0
@@ -327,6 +353,8 @@ public struct FlowLayout: Layout {
         return CGSize(width: width, height: y + rowHeight)
     }
 
+    /// Places each subview at its ideal size, wrapping to a new row when the next item would
+    /// overflow `bounds`.
     public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var x = bounds.minX
         var y = bounds.minY
@@ -345,6 +373,11 @@ public struct FlowLayout: Layout {
     }
 }
 
+/// A labeled form row for entry sheets: an uppercase small-label caption above arbitrary content.
+///
+/// The standard building block of the food/workout/journal entry sheets — it pairs a
+/// design-system `labelSmall` caption with any input control so field labeling stays uniform
+/// across every sheet.
 public struct SheetField<Content: View>: View {
     var label: String
     var content: Content
@@ -365,6 +398,11 @@ public struct SheetField<Content: View>: View {
     }
 }
 
+/// A pill "chip" button style that inverts to a filled bark background when selected.
+///
+/// Applied to the tag/option chips inside entry sheets (often laid out with ``FlowLayout``). Pass
+/// `selected:` so the style can render the chosen state; unselected chips stay cream with a faint
+/// bark outline.
 public struct ChipButtonStyle: ButtonStyle {
     var selected: Bool
 
@@ -390,6 +428,11 @@ public struct ChipButtonStyle: ButtonStyle {
     }
 }
 
+/// A multi-line text editor on a cream card with a perfectly aligned placeholder.
+///
+/// Used for free-text fields in entry sheets (journal notes, worry box, recipe notes). The
+/// external padding deliberately compensates for `TextEditor`'s intrinsic UITextView insets so the
+/// cursor lands exactly where the placeholder text sits (see the inline note on `body`).
 public struct SheetTextEditor: View {
     @Binding var text: String
     var placeholder: String
@@ -428,6 +471,12 @@ public struct SheetTextEditor: View {
     }
 }
 
+/// A horizontal section switcher: a row of pill buttons where the selected section is highlighted
+/// on a cream capsule.
+///
+/// Generic over any `Hashable` section type; hub-style screens use it to flip between sub-pages
+/// (with a spring animation on selection change) without the visual weight of a system segmented
+/// control.
 public struct HubSectionPicker<Section: Hashable>: View {
     var sections: [Section]
     @Binding var selection: Section
@@ -476,8 +525,24 @@ public extension View {
     }
 }
 
+/// Drives the app's compacting tab bar from a page's scroll position, with hysteresis so the bar
+/// never oscillates.
+///
+/// Installed on each scrollable tab page via `fernletTabBarCompaction(_:resetToken:)`; the tab
+/// container (the app's `ContentView`) owns the shared `isCompact` state and a per-tab
+/// `resetToken`. The modifier observes scroll geometry and flips `isCompact` per the
+/// ``shouldCompact(isCompact:distanceScrolledPastTop:)`` dead band: compaction begins only after
+/// 48pt of real downward travel and releases only once settled back under 8pt.
+///
+/// - Important: Measuring `contentOffset.y - contentInsets.top` — not `containerSize` — is
+///   load-bearing: the compacting bar animates the bottom safe-area inset, so any inset-dependent
+///   metric would feed the animation back into its own trigger (and re-fire neighbor pages).
+///   Incrementing `resetToken` scrolls the page back to the top and expands the bar; the page also
+///   expands the bar on disappear so the next page starts expanded.
 public struct FernletTabBarCompactionModifier: ViewModifier {
+    /// Whether the tab bar is currently compacted; owned by the tab container and shared across pages.
     @Binding var isCompact: Bool
+    /// Incremented by the tab container to scroll this page to the top and re-expand the bar.
     @Binding var resetToken: Int
     @State private var scrollPosition = ScrollPosition(edge: .top)
 
@@ -525,6 +590,10 @@ public struct FernletTabBarCompactionModifier: ViewModifier {
     }
 }
 
+/// The trailing moss "Save" pill pinned at the bottom of entry sheets.
+///
+/// Rendered on a parchment strip so it reads as a fixed footer beneath the sheet's scrolling
+/// content; `disabled` fades the fill and blocks the action while the form is incomplete.
 public struct SheetSaveBar: View {
     var label: String
     var disabled: Bool
@@ -556,9 +625,12 @@ public struct SheetSaveBar: View {
 // MARK: - Searching pulse
 
 /// A soft, tinted pulsing icon for "searching for nearby peers" states — a calmer, on-brand
-/// stand-in for the system `ProgressView`. Two expanding rings behind a filled disc with an icon.
-/// Ported from the shop's private `SearchingPulse`; parameterized (tint / size / icon) so the
-/// friend-shop, connect, and recipe-share surfaces can share one component.
+/// stand-in for the system `ProgressView`.
+///
+/// Two expanding rings behind a filled disc with an icon. Ported from the shop's private
+/// `SearchingPulse`; parameterized (tint / size / icon) so the friend-shop, connect, and
+/// recipe-share surfaces can share one component. Hidden from accessibility — it is purely
+/// decorative.
 public struct SearchingPulse: View {
     var tint: Color
     /// Outer frame edge; the ring and inner disc scale from it (defaults reproduce the shop's 80pt look).
@@ -602,9 +674,12 @@ public struct SearchingPulse: View {
 
 // MARK: - Pressed-metal keepsake medallion
 
-/// A circular "pressed metal" keepsake: a radial-gradient face, an inset highlight/shadow ring for
-/// the struck-coin look, and a thin inner ring. Purely decorative — reads as a memento, not a token.
-/// Shared by the Milestones keepsake shelf and the Home milestones doorway card.
+/// A circular "pressed metal" keepsake medallion with a radial-gradient face and struck-coin
+/// highlight/shadow rings.
+///
+/// Purely decorative — reads as a memento, not a currency token (that is ``CoinGlyph``). Shared by
+/// the Milestones keepsake shelf and the Home milestones doorway card; every ring, blur, and icon
+/// size scales from `diameter` so the same component works at shelf and card sizes.
 public struct PressedMedallion: View {
     let icon: String
     let tint: Color
@@ -678,8 +753,12 @@ private extension Color {
     )
 }
 
-/// The small pressed-gold coin used in the coins-summary cards. Radial gold gradient with a soft
-/// inner highlight; the "coin" mark is a gentle leaf. Muted variant for the not-yet state.
+/// The small pressed-gold coin glyph used wherever the coin currency appears.
+///
+/// A radial gold gradient with a soft inner highlight; the "coin" mark is a gentle leaf. The
+/// `muted` variant renders the not-yet-earned state. Border and shadow scale with `diameter` so
+/// the tiny 11–14pt shop coins don't carry a proportionally heavy outline (see the inline note).
+/// Used by the coins-summary cards, the shop, and ``CoinBalancePill``.
 public struct CoinGlyph: View {
     var diameter: CGFloat
     var muted: Bool
@@ -720,9 +799,12 @@ public struct CoinGlyph: View {
     }
 }
 
-/// Coin wallet — a compact parchment pill carrying the live spendable balance, echoing the shop's coin
-/// chips so every coin surface reads in one currency. Shared by the friend shop's toolbar and the
-/// Wardrobe header (the always-reachable balance surface now that the shop is a post-session window).
+/// Coin wallet — a compact cream pill carrying the live spendable coin balance.
+///
+/// Echoes the shop's coin chips (via a small ``CoinGlyph``) so every coin surface reads in one
+/// currency, and animates balance changes with a numeric content transition. Shared by the friend
+/// shop's toolbar and the Wardrobe header (the always-reachable balance surface now that the shop
+/// is a post-session window).
 public struct CoinBalancePill: View {
     var balance: Int
 

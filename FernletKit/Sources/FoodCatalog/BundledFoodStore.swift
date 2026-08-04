@@ -15,6 +15,8 @@ public nonisolated func sqliteBindText(_ stmt: OpaquePointer?, _ index: Int32, _
     }
 }
 
+/// Reads a TEXT column as a Swift `String`, or nil for SQL NULL. The companion read helper to
+/// ``sqliteBindText(_:_:_:)``, likewise shared by the generator and the read path.
 public nonisolated func sqliteColumnText(_ stmt: OpaquePointer?, _ index: Int32) -> String? {
     guard let cString = sqlite3_column_text(stmt, index) else { return nil }
     return String(cString: cString)
@@ -22,9 +24,13 @@ public nonisolated func sqliteColumnText(_ stmt: OpaquePointer?, _ index: Int32)
 
 // MARK: - Schema
 
-/// Single source of truth for the `FoodCatalog.sqlite` shape, shared by the generator
-/// (`FoodCatalogDatabaseBuilder`) and the read path (`SQLiteBundledFoodSource`). The generator's
-/// INSERT column list and the reader's SELECT column list must both agree with these names.
+/// Single source of truth for the `FoodCatalog.sqlite` shape — table/index/FTS DDL, the SELECT
+/// column lists, the schema version, and the candidate fetch cap.
+///
+/// Shared by the generator (`FoodCatalogDatabaseBuilder`, app target — build/test time only) and the
+/// read path (``SQLiteBundledFoodSource``). The generator's INSERT column list and the reader's
+/// SELECT column list must both agree with these names; ``selectColumns``, the reader's `hydrate`,
+/// and the generator's insert routine change in lockstep.
 public nonisolated enum FoodCatalogSchema {
     /// v2 adds the nullable `gtin_upc` barcode column (+ index). The SHIPPED FoodCatalog.sqlite is
     /// still v1 content (the compact source JSON carries no UPC data yet), so the read path
@@ -96,9 +102,13 @@ public nonisolated enum FoodCatalogSchema {
 
 // MARK: - Source abstraction
 
-/// The read-only bundled food set (the ~13k USDA/curated foods). Backed by SQLite in production and
-/// by an in-memory array in tests. Returns candidate rows for a query plus point lookups; ranking is
-/// left to `FoodItemSearch` via `FoodCatalog`.
+/// The read-only bundled food set (the ~13k USDA/curated foods) behind ``FoodCatalog``.
+///
+/// Backed by ``SQLiteBundledFoodSource`` in production (both the base catalog and the attachable
+/// branded/ODR catalog) and by ``InMemoryBundledFoodSource`` in tests. Conformers return candidate
+/// rows for a query plus point lookups; ranking is left to `FoodItemSearch` via ``FoodCatalog``.
+/// Conformers must be `Sendable` and safe to query from any actor — ``FoodCatalog`` calls them off
+/// the main actor on the AI meal-resolution path.
 public nonisolated protocol BundledFoodSource: Sendable {
     /// All rows whose name/category/tags satisfy the search gate for `query` (every query token must
     /// match an indexed token by equality or prefix). May return more than the caller needs — the
@@ -115,8 +125,18 @@ public nonisolated protocol BundledFoodSource: Sendable {
 
 // MARK: - SQLite-backed source
 
-/// Opens the bundled `FoodCatalog.sqlite` read-only and answers candidate/point queries. All access
-/// is serialized on a private queue so the single connection is safe to share across actors.
+/// Opens the bundled `FoodCatalog.sqlite` read-only and answers candidate/point queries.
+///
+/// The production ``BundledFoodSource``. One instance serves the base catalog (the `Bundle.module`
+/// resource); a second, tuned via `skipPriorityOrder`/`candidateCap`, serves the attachable branded
+/// On-Demand-Resource catalog. Candidate retrieval runs an FTS5 prefix-AND match that mirrors
+/// `FoodItemSearch`'s hard gate, de-biased by a data-type priority `ORDER BY` so the fetch cap never
+/// silently drops the top-priority rows; hydration decodes the JSON-blob columns
+/// (micronutrients/tags/portions) back into `FoodItem`s. The v2 `gtin_upc` barcode column is
+/// feature-detected once at open, so the same read path serves both the shipped v1 file and a
+/// future v2 regeneration. All access is serialized on a private queue so the single connection is
+/// safe to share across actors (`@unchecked Sendable`); open failures return nil from init, and any
+/// query failure degrades to an empty result rather than throwing.
 public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unchecked Sendable {
     private let db: OpaquePointer?
     private let queue = DispatchQueue(label: "com.fernlet.foodcatalog.sqlite")
@@ -149,6 +169,13 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         self.init(url: url, skipPriorityOrder: skipPriorityOrder, candidateCap: candidateCap)
     }
 
+    /// Opens the database file at `url` read-only; returns nil when it cannot be opened.
+    ///
+    /// - Parameters:
+    ///   - skipPriorityOrder: Pass true for a single-`data_type` file (the branded/ODR catalog) to
+    ///     skip the wasted priority sort in `candidates(forQuery:)`.
+    ///   - candidateCap: Row cap for `candidates(forQuery:)`; defaults to the base catalog's tuned
+    ///     `FoodCatalogSchema.candidateFetchLimit`.
     public init?(
         url: URL,
         skipPriorityOrder: Bool = false,
@@ -173,6 +200,9 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
 
     deinit { sqlite3_close(db) }
 
+    /// All rows whose indexed name/category/tags pass the FTS5 prefix-AND gate for `query`, hydrated
+    /// up to the candidate cap in data-type-priority order (see the in-body comments for the
+    /// de-bias rationale).
     public func candidates(forQuery query: String) -> [FoodItem] {
         let tokens = FoodItemSearch.searchTokens(in: query)
         guard !tokens.isEmpty else { return [] }
@@ -211,11 +241,14 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, match) }
     }
 
+    /// Point lookup by the food's stable UUID (stored as its string form in the indexed `id` column).
     public func item(id: UUID) -> FoodItem? {
         let sql = "SELECT \(selectColumns) FROM food WHERE id = ? LIMIT 1;"
         return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, id.uuidString) }.first
     }
 
+    /// Batch point lookup — a single `IN` query; rows come back in SQLite's own order, not the
+    /// caller's `ids` order.
     public func items(ids: [UUID]) -> [FoodItem] {
         guard !ids.isEmpty else { return [] }
         let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ", ")
@@ -227,11 +260,14 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         }
     }
 
+    /// The alphabetically first row whose `normalized_name` equals `normalizedName` (deterministic
+    /// tie-break), or nil.
     public func exactMatch(normalizedName: String) -> FoodItem? {
         let sql = "SELECT \(selectColumns) FROM food WHERE normalized_name = ? ORDER BY name LIMIT 1;"
         return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, normalizedName) }.first
     }
 
+    /// Point lookup by normalized GTIN; always nil on a v1 file, which has no `gtin_upc` column.
     public func item(barcode: String) -> FoodItem? {
         // v1 files (the shipped database) have no gtin_upc column — never reference it there.
         guard hasBarcodeColumn else { return nil }
@@ -241,6 +277,8 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
 
     // MARK: Query execution
 
+    /// Prepares, binds, steps, and hydrates `sql` on the serial queue. Any SQLite failure
+    /// (prepare error, missing db) yields an empty array — the read path never throws.
     private func fetchRows(_ sql: String, bind: (OpaquePointer?) -> Void) -> [FoodItem] {
         queue.sync {
             guard let db else { return [] }
@@ -256,6 +294,7 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         }
     }
 
+    /// The `food` table's total row count, read once at open to seed `count`.
     private static func scalarCount(_ db: OpaquePointer?) -> Int {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM food;", -1, &stmt, nil) == SQLITE_OK else { return 0 }
@@ -314,9 +353,13 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
 
 // MARK: - In-memory source (tests)
 
-/// A trivial bundled source backed by an in-memory array — used by tests so they don't need the
-/// generated database. `candidates(forQuery:)` returns everything; `FoodCatalog`'s scorer applies the
-/// real gate and ranking, so results match the SQLite path for the same item set.
+/// A trivial bundled source backed by an in-memory array — the test double for
+/// ``SQLiteBundledFoodSource``.
+///
+/// Used by tests (and as ``FoodCatalog/bundled(bundle:)``'s empty fallback when the SQLite resource
+/// is missing) so they don't need the generated database. `candidates(forQuery:)` returns
+/// everything; ``FoodCatalog``'s scorer applies the real gate and ranking, so results match the
+/// SQLite path for the same item set.
 public nonisolated struct InMemoryBundledFoodSource: BundledFoodSource, @unchecked Sendable {
     public let items: [FoodItem]
 

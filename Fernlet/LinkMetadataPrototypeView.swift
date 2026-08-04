@@ -12,6 +12,11 @@ import UIKit
 
 // `nonisolated` keeps the UIActivityItemSource conformance legal if the target ever adopts
 // default MainActor isolation; if your build setting rejects the keyword, just delete it.
+/// One row of the D11 test matrix: a URL to share, an optional custom title/image to supply as
+/// `LPLinkMetadata`, and the question that row answers.
+///
+/// Rendered as a list row by ``LinkMetadataPrototypeView`` and fed to ``LinkMetadataItemSource``
+/// when its Share button is tapped.
 nonisolated struct LinkMetadataTestCase: Identifiable, Sendable {
     let id: String          // matrix row, e.g. "B"
     let name: String
@@ -21,6 +26,10 @@ nonisolated struct LinkMetadataTestCase: Identifiable, Sendable {
     let attachImage: Bool
 }
 
+/// The fixed A–G test matrix for the D11 prototype, from a no-metadata baseline through custom
+/// titles, images, rich OG pages, a ~2 KB fragment payload, a 404, and an unresolvable domain.
+///
+/// Pure data — the results table these cases feed lives in Docs/D11-LinkMetadata-Prototype.md.
 nonisolated enum LinkMetadataTestMatrix {
     /// ~2 KB of deterministic base64url noise standing in for a sealed inline plan payload.
     static let fragmentPayload: String = {
@@ -75,6 +84,10 @@ nonisolated enum LinkMetadataTestMatrix {
     ]
 }
 
+/// The `UIActivityItemSource` that shares a test case's URL while supplying sender-side
+/// `LPLinkMetadata` (custom title, optional generated card image) — the mechanism under test.
+///
+/// A `nil` custom title makes it a plain URL share, giving the matrix its baseline row.
 nonisolated final class LinkMetadataItemSource: NSObject, UIActivityItemSource {
     let testCase: LinkMetadataTestCase
 
@@ -120,6 +133,9 @@ nonisolated final class LinkMetadataItemSource: NSObject, UIActivityItemSource {
     }
 }
 
+/// A minimal `UIActivityViewController` wrapper presenting one ``LinkMetadataItemSource``.
+///
+/// Prototype-local on purpose — the shipping app's share paths use `ShareLink`, not this.
 private struct ActivityShareSheet: UIViewControllerRepresentable {
     let itemSource: LinkMetadataItemSource
 
@@ -130,6 +146,11 @@ private struct ActivityShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
+/// The DEBUG-only D11 prototype screen: lists the ``LinkMetadataTestMatrix`` cases with Share /
+/// Copy-URL buttons so each can be sent through Messages by hand.
+///
+/// Not wired into any shipping screen — present it with a temporary NavigationLink from a DEBUG
+/// build, and delete the whole file once D11 is decided.
 struct LinkMetadataPrototypeView: View {
     @State private var activeCase: LinkMetadataTestCase?
 

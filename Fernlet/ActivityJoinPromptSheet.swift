@@ -3,10 +3,12 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
-/// The host's "someone wants to join" confirmation for Group Activities (Phase 6). A clone of
-/// `MeshAdmissionPromptSheet`: pure presentation, zero manager reference. It shows the first pending
-/// join request (with the joiner's transport-VERIFIED fingerprint) + an "N more waiting" pill, and calls
-/// the two closures. Swipe-to-dismiss declines all (fail-closed) — wired at the presentation site.
+/// The host's "someone wants to join" confirmation for Group Activities (Phase 6).
+///
+/// A clone of ``MeshAdmissionPromptSheet``: pure presentation, zero manager reference. It shows
+/// the first pending join request (with the joiner's transport-VERIFIED fingerprint) + an "N more
+/// waiting" pill, and calls the two closures. Swipe-to-dismiss declines all (fail-closed) — wired
+/// at the presentation site in ``ActivitiesView``.
 struct ActivityJoinPromptSheet: View {
     let requests: [ProximityActivityManager.PendingActivityJoin]
     let activityTitle: String

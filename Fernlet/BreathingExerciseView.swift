@@ -14,6 +14,9 @@ import FernletUI
 #endif
 
 /// One phase of a breath cycle (e.g. "Breathe in" for 4 seconds toward the expanded circle).
+///
+/// The building block of a ``BreathingPreset``; ``BreathingExerciseView``'s session loop shows
+/// `label`, animates the circle toward `targetScale` over `seconds`, then sleeps out the phase.
 struct BreathPhase: Equatable {
     let label: String
     let seconds: Double
@@ -21,6 +24,12 @@ struct BreathPhase: Equatable {
     let targetScale: CGFloat
 }
 
+/// A named breathing pattern: an ordered list of ``BreathPhase``s plus display copy for the
+/// pattern picker.
+///
+/// Two curated presets exist — ``box`` (4-4-4-4) and ``relax`` (4-7-8) — surfaced on
+/// ``BreathingExerciseView``'s setup screen via ``all``; the session loop repeats the preset's
+/// phases until the chosen length elapses.
 struct BreathingPreset: Identifiable, Equatable {
     let id: String
     let name: String
@@ -55,6 +64,15 @@ struct BreathingPreset: Identifiable, Equatable {
     static let all: [BreathingPreset] = [.box, .relax]
 }
 
+/// The slow-breathing exercise: a softly swelling circle guided through a chosen
+/// ``BreathingPreset`` for 1–3 minutes, with optional soft haptics on phase changes.
+///
+/// Pushed from ``FirstAidView``. Runs a setup → running → finished state machine driven by one
+/// wall-clock session task; the cycle in progress when the timer crosses the line finishes gently
+/// rather than cutting off mid-breath. Only a session that runs to its full chosen length calls
+/// `onSessionComplete` (the caller's Health/milestone hook) — ending early or backgrounding the
+/// app abandons quietly, so an inflated `.mindfulSession` interval is never written for an
+/// exercise that didn't actually happen.
 struct BreathingExerciseView: View {
     /// Called once when a session runs to its full chosen length (not when abandoned early).
     var onSessionComplete: (_ start: Date, _ end: Date) -> Void

@@ -10,15 +10,39 @@ import FernletDomainModel
 
 // MARK: - Tier Two Memory Engine
 
+/// Deterministic inference engine that derives Tier-2 behavioral memories — goal-behavior gaps,
+/// consistency profile, journal-avoidance patterns, and workout-mood correlation — from the
+/// rolling day window.
+///
+/// Runs inside `LocalFernletDatabase.rebuildDerivedTables(todayKey:recentDays:)` on every save,
+/// so inferences track the data with no AI involvement (Tier-2 memories are behavioral
+/// observations *about* the user, distinct from the user-visible Tier-1 `MemoryNote`s). The
+/// engine is change-driven: for each category a fresh candidate is compared against the newest
+/// active record and appended only when the behavioral `state` actually changed, deactivating
+/// the predecessor — so records form a small per-category history instead of churning every
+/// save. Every candidate must pass the `DiagnosticLanguage` post-classifier (spec §8) before
+/// storage; any diagnostic-sounding text is silently rejected. ``updateInferences(existing:from:goals:)``
+/// always ends with ``prune(_:)`` (5 per category / 20 total). Results persist as
+/// `TierTwoMemoryRecord`s in the ``LocalFernletDatabase`` blob and reach the AI layer only
+/// through snapshot loading. Internal to `LocalPersistence`; a stateless namespace enum,
+/// nonisolated.
 enum TierTwoMemoryEngine {
 
-    // Each category stores at most 5 records; total is capped at 20.
-    // With 4 categories × 5 = 20, the per-category cap IS the global cap.
+    /// Each category stores at most 5 records; total is capped at 20.
+    /// With 4 categories × 5 = 20, the per-category cap IS the global cap.
     private static let maxPerCategory = 5
+    /// The global record ceiling enforced by ``prune(_:)`` after the per-category trim.
     private static let maxTotal = 20
 
-    // Compares the new 14-day window against existing records.
-    // Only appends when the behavioral state for a category has actually changed.
+    /// Compares the new 14-day window against existing records and appends a record per category
+    /// only when that category's behavioral state has actually changed.
+    ///
+    /// - Parameters:
+    ///   - existing: The persisted Tier-2 records being updated (never mutated in place).
+    ///   - days: `(dateKey, day)` pairs, oldest-first; only the trailing 14 are considered, and
+    ///     fewer than 3 days short-circuits to a prune of the existing records.
+    ///   - goals: The user's fitness goals; the first drives the goal-behavior-gap category.
+    /// - Returns: The pruned, updated record list to persist back into the blob.
     static func updateInferences(
         existing: [TierTwoMemoryRecord],
         from days: [(String, FernletDay)],
@@ -59,8 +83,8 @@ enum TierTwoMemoryEngine {
         return prune(updated)
     }
 
-    // Keeps the most recent maxPerCategory records per category.
-    // If still over maxTotal, drops oldest inactive records first.
+    /// Keeps the most recent ``maxPerCategory`` records per category.
+    /// If still over ``maxTotal``, drops oldest inactive records first.
     private static func prune(_ records: [TierTwoMemoryRecord]) -> [TierTwoMemoryRecord] {
         let categories = Array(Set(records.map { $0.category })).sorted()
         var result: [TierTwoMemoryRecord] = []
@@ -78,6 +102,9 @@ enum TierTwoMemoryEngine {
 
     // MARK: Goal-Behavior Gap
 
+    /// Infers whether logged behavior (workout/meal/journal/sleep rates) matches the primary
+    /// stated goal, producing an aligned/partial/misaligned-style state per goal type. Returns
+    /// nil when the user has no goals.
     private static func goalBehaviorGap(
         window: [(String, FernletDay)],
         goals: [FitnessGoal]
@@ -171,6 +198,8 @@ enum TierTwoMemoryEngine {
 
     // MARK: Consistency Profile
 
+    /// Classifies overall engagement — consistent / intermittent / sporadic / minimal — from the
+    /// fraction of window days with any logged data at all.
     private static func consistencyProfile(window: [(String, FernletDay)]) -> TierTwoMemoryRecord? {
         let n = window.count
         let activeDays = window.filter { _, day in
@@ -208,6 +237,9 @@ enum TierTwoMemoryEngine {
 
     // MARK: Journal Avoidance Pattern
 
+    /// Detects excuse/avoidance language in journal text via a fixed keyword list, emitting a
+    /// record only past a threshold (≥30% of entries or ≥3 matches); returns nil below it or
+    /// with fewer than 2 entries.
     private static func journalAvoidancePattern(window: [(String, FernletDay)]) -> TierTwoMemoryRecord? {
         let avoidanceKeywords = [
             "couldn't", "too tired", "forgot", "maybe tomorrow", "didn't have time",
@@ -250,6 +282,8 @@ enum TierTwoMemoryEngine {
 
     // MARK: Workout-Mood Correlation
 
+    /// Compares average journal mood on workout days vs rest days (each needs ≥2 journaled days,
+    /// else nil), classifying the delta as mood_boost / mood_drain / neutral.
     private static func workoutMoodCorrelation(window: [(String, FernletDay)]) -> TierTwoMemoryRecord? {
         let workoutWithMood = window.filter { !$0.1.workouts.isEmpty && !$0.1.journals.isEmpty }
         let restWithMood = window.filter { $0.1.workouts.isEmpty && !$0.1.journals.isEmpty }
@@ -294,6 +328,8 @@ enum TierTwoMemoryEngine {
         )
     }
 
+    /// Maps a journal `FeelingTag` onto the fixed 0.2–1.0 mood scale (duplicated in
+    /// ``DerivedSignalFactory`` — keep the two tables in sync).
     private static func moodScore(_ tag: FeelingTag) -> Double {
         switch tag {
         case .bright: return 1

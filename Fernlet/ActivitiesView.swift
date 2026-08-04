@@ -404,14 +404,26 @@ struct ActivitiesView: View {
 
     // MARK: - Local model
 
+    /// The member a "Remove member?" confirmation is about — captured when the minus button is
+    /// tapped so the alert survives a roster refresh mid-confirmation.
+    ///
+    /// Cleared on both Remove and Cancel; `name` is pre-sanitized for the alert copy.
     private struct RemovalTarget: Equatable { let activityID: UUID; let fingerprint: String; let name: String }
 
+    /// The host form's activity-type chips (Walk, Coffee, …).
+    ///
+    /// The raw value is the visible chip label; `token` is the lowercase wire token pinned into
+    /// the activity descriptor (and re-sanitized for display on the receiving side).
     private enum ActivityTypeOption: String, CaseIterable, Identifiable {
         case walk = "Walk", coffee = "Coffee", meal = "Meal", study = "Study", workout = "Workout", hangout = "Hangout", other = "Other"
         var id: String { rawValue }
         var token: String { rawValue.lowercased() }
     }
 
+    /// The host form's duration chips, mapped to the activity's absolute expiry.
+    ///
+    /// `seconds` is added to "now" at start time to produce the descriptor's `expiresAt`; expiry
+    /// itself is then enforced by the manager (`gcExpired`) and rendered by ``ExpiryLabel``.
     private enum ActivityDurationOption: String, CaseIterable, Identifiable {
         case twoHours = "2 hours", oneDay = "1 day", threeDays = "3 days", sevenDays = "7 days"
         var id: String { rawValue }
@@ -425,6 +437,10 @@ struct ActivitiesView: View {
         }
     }
 
+    /// The shared cream card treatment behind every activity entry (offered, hosted, joined).
+    ///
+    /// A modifier rather than a wrapper view so each section can keep its own content layout while
+    /// the card chrome stays identical.
     private struct CardBackground: ViewModifier {
         func body(content: Content) -> some View {
             content
@@ -436,6 +452,10 @@ struct ActivitiesView: View {
 }
 
 /// A live "Expires in …" / "Expired" label that ticks each minute.
+///
+/// A minute-period `TimelineView` is the only clock — no timers to invalidate — and the copy
+/// flips to a terracotta "Expired" the moment the descriptor's `expiresAt` passes. Used on every
+/// activity card in ``ActivitiesView``.
 private struct ExpiryLabel: View {
     let expiresAt: Date
 

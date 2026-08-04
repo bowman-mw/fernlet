@@ -6,6 +6,15 @@ import simd
 // DomainModel names (ProximityRole / ProximityMode / ProximityRangingMode), not the app-side
 // ProximityCoordinator.* typealiases. Codable identity is unchanged.
 
+/// The persisted audit record of one proximity session: peer, ranging, transport, events,
+/// envelopes, and errors.
+///
+/// This is the record the Connection Inspector renders and `FernletSnapshot.connectionSessionLogs`
+/// stores in the synced blob — NOT a wire type; the wire enums stay strict. Its own enum fields
+/// (``ProximityRole``, ``ProximityMode``, ``ProximityRangingMode``, event kinds, envelope
+/// direction) decode tolerantly with parked-token side channels (``EnumDecodeCompat``) so a session
+/// logged by a newer build can't brick an older paired device into read-only recovery. Pure
+/// Sendable value type; all logging logic lives app-side in the proximity subsystem.
 public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     public var startedAt: Date
@@ -91,6 +100,10 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         endState = try c.decode(String.self, forKey: .endState)
     }
 
+    /// Identity snapshot of the remote peer as observed during the session.
+    ///
+    /// Advertised and confirmed fingerprints are kept separate so the log records what the peer
+    /// *claimed* versus what the identity handshake actually verified.
     public struct PeerInfo: Codable, Equatable, Sendable {
         public let displayName: String
         public let advertisedFingerprint: String?
@@ -116,6 +129,10 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         }
     }
 
+    /// UWB/RSSI ranging record for the session: mode, distance samples, and min/max distance.
+    ///
+    /// `mode` decodes tolerantly (parked token) — a ranging mode minted by a newer build freezes to
+    /// `.none` rather than dropping the whole log.
     public struct RangingInfo: Codable, Equatable, Sendable {
         public var mode: ProximityRangingMode
         public var unknownModeToken: String? = nil
@@ -152,6 +169,10 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         }
     }
 
+    /// One timestamped distance (and optional direction vector) measurement.
+    ///
+    /// Direction components are stored as three separate floats so the record stays plain
+    /// `Codable` without a simd conformance.
     public struct DistanceSample: Codable, Equatable, Identifiable, Sendable {
         public var id: UUID = UUID()
         public let timestamp: Date
@@ -169,6 +190,10 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         }
     }
 
+    /// MultipeerConnectivity transport counters: session state, byte counts, radio flags, and RTT
+    /// samples.
+    ///
+    /// Everything here is locally observed diagnostics — nothing is trusted wire data.
     public struct TransportInfo: Codable, Equatable, Sendable {
         public var mcSessionState: String
         public var connectedAt: Date?
@@ -205,6 +230,11 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         }
     }
 
+    /// One timestamped lifecycle event in the session (discovery, invite, identity, envelope,
+    /// error).
+    ///
+    /// `kind` decodes tolerantly: a kind minted by a newer build freezes to `.stateTransition` with
+    /// its token parked, while `message` still describes what happened.
     public struct Event: Codable, Equatable, Identifiable, Sendable {
         public var id: UUID = UUID()
         public let timestamp: Date
@@ -233,6 +263,10 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
             message = try c.decode(String.self, forKey: .message)
         }
 
+        /// The taxonomy of loggable session events, from discovery through teardown.
+        ///
+        /// Extended by newer builds; older devices park unknown kinds via `Event`'s tolerant
+        /// decode rather than dropping the row.
         public enum Kind: String, Codable, CaseIterable, Sendable {
             case stateTransition
             case peerDiscovered
@@ -259,6 +293,10 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         }
     }
 
+    /// Audit row for one signed/sealed envelope sent or received during the session.
+    ///
+    /// Records size, verification outcome, and whether it was encrypted — never the payload
+    /// itself.
     public struct EnvelopeRecord: Codable, Equatable, Identifiable, Sendable {
         public var id: UUID = UUID()
         public let envelopeID: UUID
@@ -312,12 +350,18 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
             summary = try c.decode(String.self, forKey: .summary)
         }
 
+        /// Whether the envelope was sent by this device or received from the peer.
+        ///
+        /// Unknown values from newer builds freeze to `.received` with the token parked.
         public enum Direction: String, Codable, Sendable {
             case sent
             case received
         }
     }
 
+    /// One recorded transport/protocol error with its domain and recoverability.
+    ///
+    /// Purely diagnostic; appended by the proximity coordinator as errors occur.
     public struct ErrorRecord: Codable, Equatable, Identifiable, Sendable {
         public var id: UUID = UUID()
         public let timestamp: Date
@@ -340,6 +384,9 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         }
     }
 
+    /// Derived roll-up of a session: duration, envelope/byte/error totals, and end state.
+    ///
+    /// Computed on demand from the log via the `summary` property — never persisted separately.
     public struct Summary: Equatable, Sendable {
         public let durationSeconds: TimeInterval?
         public let totalEnvelopes: Int

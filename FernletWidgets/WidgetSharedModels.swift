@@ -20,10 +20,14 @@
 
 import Foundation
 
+/// The shared app-group id — documented duplicate of the app/share-extension constants (see the file
+/// header). Every cross-process file in this target lives under this container.
 let fernletAppGroupIdentifier = "group.MBO.Fernlet"
 
-/// Raw-value mirror of the app's `CompanionState`. Raw values are the persisted contract
-/// ("Thriving"/"Okay"/"Tired"/"Resting"/"Sick" — note the capitalization).
+/// Raw-value mirror of the app's `CompanionState`.
+///
+/// Raw values are the persisted contract ("Thriving"/"Okay"/"Tired"/"Resting"/"Sick" — note the
+/// capitalization); an unknown raw value decodes to nil and renders as the neutral companion.
 enum WidgetCompanionState: String {
     case thriving = "Thriving"
     case okay = "Okay"
@@ -33,8 +37,16 @@ enum WidgetCompanionState: String {
 }
 
 /// The benign outbound snapshot the app mirrors into the app-group container.
-/// PRIVACY: wellness score + water + macro grams ONLY — never journal, cycle, stress, or intimacy data.
+///
+/// PRIVACY: wellness score + water + macro grams ONLY — never journal, cycle, stress, or intimacy
+/// data. Written by the app's `WidgetSnapshotMirror` on every snapshot save and read back by
+/// ``WidgetSnapshotStore`` on each timeline build; `dateKey` is what ``WidgetDayGate`` checks so a
+/// stale snapshot never leaks yesterday's state into a new day.
 struct WidgetSnapshot: Codable, Equatable {
+    /// Today's macro totals in grams.
+    ///
+    /// Carried in the snapshot for future surfaces; no current widget family renders it (the
+    /// rollover path zeroes it purely for coherence).
     struct MacroSummary: Codable, Equatable {
         var protein: Double
         var carbs: Double
@@ -63,8 +75,11 @@ struct WidgetSnapshot: Codable, Equatable {
     )
 }
 
-/// One inbound action row the widget appends for the app to drain (mirrors SharedRecipeImportQueue's
-/// file-based handoff; the app applies it idempotently by row id against the row's OWN dateKey).
+/// One inbound action row the widget appends for the app to drain.
+///
+/// Mirrors SharedRecipeImportQueue's file-based handoff; the app applies it idempotently by row id
+/// against the row's OWN `dateKey` (day-rollover safety). `action` is a string discriminator —
+/// ``waterPlusOne`` is the only value today.
 struct PendingWidgetAction: Codable, Identifiable, Equatable {
     static let waterPlusOne = "waterPlusOne"
 
@@ -75,6 +90,10 @@ struct PendingWidgetAction: Codable, Identifiable, Equatable {
 }
 
 /// Canonical "yyyy-MM-dd" day key — duplicate of FernletFoundation.FernletDate.dayKey.
+///
+/// Pinned to en_US_POSIX + Gregorian so both processes always agree on what "today" is; the key is
+/// the join field for every app-group contract in this target (snapshot day gate, pending-action
+/// rows, run-state day anchors).
 enum WidgetDayKey {
     private static let formatter: DateFormatter = {
         let f = DateFormatter()
@@ -89,18 +108,28 @@ enum WidgetDayKey {
     }
 }
 
-/// Pure day-gate shared by the companion entry's water + mood accessors. A mirrored snapshot only
-/// "counts" for a given timeline entry when its `dateKey` names the same local day as the entry's
-/// date; a stale (previous-day) snapshot therefore reads as a fresh, empty day — zero water and the
-/// neutral companion — until the app republishes. Kept as a free static function (no WidgetKit /
-/// TimelineEntry types) so the gate is checkable in isolation and reused verbatim by every family.
+/// Pure day-gate shared by the companion entry's water + mood accessors.
+///
+/// A mirrored snapshot only "counts" for a given timeline entry when its `dateKey` names the same
+/// local day as the entry's date; a stale (previous-day) snapshot therefore reads as a fresh, empty
+/// day — zero water and the neutral companion — until the app republishes. Kept as a free static
+/// function (no WidgetKit / TimelineEntry types) so the gate is checkable in isolation and reused
+/// verbatim by every family.
 enum WidgetDayGate {
     static func snapshotReflectsDay(_ dateKey: String, at entryDate: Date) -> Bool {
         dateKey == WidgetDayKey.current(entryDate)
     }
 }
 
+/// Widget-side file plumbing for the app-group bridge: the shared container directory plus the JSON
+/// codecs every bridge file uses.
+///
+/// Mirror of the app target's `WidgetBridgeFiles` (Fernlet/WidgetBridge.swift) — the encoder
+/// settings (pretty-printed, sorted keys, ISO-8601 dates) are part of the cross-process file
+/// contract, so keep both sides literally identical. When the app-group container is unavailable
+/// (e.g. tests) it degrades to the temporary directory rather than crashing.
 enum WidgetBridgeFiles {
+    /// The `FernletWidgets/` directory inside the shared `group.MBO.Fernlet` container.
     static func containerDirectory(fileManager: FileManager = .default) -> URL {
         let base = fileManager.containerURL(forSecurityApplicationGroupIdentifier: fernletAppGroupIdentifier)
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
@@ -123,6 +152,13 @@ enum WidgetBridgeFiles {
 
 /// Widget-side reader (+ optimistic writer) for the mirrored snapshot. Reads are nil-tolerant: a
 /// missing/corrupt/still-protected file simply yields the "open Fernlet" placeholder state.
+///
+/// The read half of the outbound bridge: the app's `WidgetSnapshotMirror` publishes
+/// `WidgetSnapshot.json` into the app-group container, and ``FernletCompanionProvider`` reads it
+/// here on every timeline build. The only widget-side WRITE is the optimistic +1-water bump — the
+/// app remains the source of truth and overwrites the file on its next save. All access is
+/// `NSFileCoordinator`-guarded and failure-silent (`try?`), so a lost write costs at most one stale
+/// render.
 struct WidgetSnapshotStore {
     private let fileManager: FileManager
     private let fileURL: URL
@@ -133,6 +169,7 @@ struct WidgetSnapshotStore {
             .appendingPathComponent("WidgetSnapshot.json")
     }
 
+    /// The mirrored snapshot, or nil when there is none (missing/corrupt/protected file).
     func read() -> WidgetSnapshot? {
         var result: WidgetSnapshot?
         var coordinatorError: NSError?
@@ -181,6 +218,11 @@ struct WidgetSnapshotStore {
 
 /// Widget-side appender for the pending-action queue (mirrors SharedRecipeImportQueueWriter's
 /// coordinated read-modify-write; idempotent by row id).
+///
+/// The write half of the inbound bridge: ``WaterPlusOneIntent`` appends here, and the app drains the
+/// same `PendingWidgetActions.json` via `FernletStore.processPendingWidgetActions()`. The
+/// read-modify-write runs as one `NSFileCoordinator` transaction, and a duplicate row id is dropped
+/// rather than appended twice.
 struct PendingWidgetActionWriter {
     private let fileManager: FileManager
     private let fileURL: URL
@@ -191,6 +233,7 @@ struct PendingWidgetActionWriter {
             .appendingPathComponent("PendingWidgetActions.json")
     }
 
+    /// Append one action row unless a row with the same id already exists (idempotent under retries).
     func append(_ action: PendingWidgetAction) {
         var coordinatorError: NSError?
         let coordinator = NSFileCoordinator()

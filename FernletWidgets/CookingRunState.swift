@@ -28,11 +28,19 @@ import Foundation
 /// can render the next set with no domain plan, this carries the full ordered `steps` list so a
 /// cold-launched "Next" intent can render the next step with no RecipeDefinition. `stepCount` and
 /// `currentStepText` are therefore derived accessors over that list, not independently stored scalars.
+///
+/// Persisted as ISO-8601 JSON by ``CookingRunStateStore``; its two writers (the app while
+/// foregrounded, the App Intents otherwise) never run concurrently. All transitions are pure
+/// `mutating` functions — no clock or file access — and the timer invariant (`timerStartedAt` and
+/// `timerEndsAt` set and cleared together, always ordered) is what keeps the widget's
+/// `Text(timerInterval:)` from ever seeing an inverting range.
 struct CookingRunState: Codable, Hashable {
 
     /// One cooking step, flattened to byte-portable primitives (mirror of the domain `RecipeStep`,
-    /// which the app target maps to/from). A positive `durationSeconds` drives the passive per-step
-    /// timer; `nil` means the step just shows the Next button.
+    /// which the app target maps to/from).
+    ///
+    /// A positive `durationSeconds` drives the passive per-step timer; `nil` means the step just
+    /// shows the Next button.
     struct Step: Codable, Hashable {
         var text: String
         var durationSeconds: Int?
@@ -184,9 +192,10 @@ struct CookingRunState: Codable, Hashable {
         )
     }
 
-    /// Named stale-date budgets (mirror GuidedWorkoutRunState.Staleness): generous enough that a real
-    /// long step never trips them — they exist only to retire an orphaned activity into a "paused"
-    /// register instead of a frozen live card.
+    /// Named stale-date budgets (mirror GuidedWorkoutRunState.Staleness).
+    ///
+    /// Generous enough that a real long step never trips them — they exist only to retire an
+    /// orphaned activity into a "paused" register instead of a frozen live card.
     enum Staleness {
         static let timerGrace: TimeInterval = 15 * 60
         static let stepCap: TimeInterval = 90 * 60

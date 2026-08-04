@@ -12,6 +12,11 @@ import SwiftUI
 import FernletDomainModel
 import PrivateHealthStore
 
+/// The five top-level tabs (Home / Food / Move / Friends / Private) in display order.
+///
+/// `ContentView` keys the paged `TabView`, the custom floating tab bar, and the per-tab
+/// listener/health-refresh gating on this; the raw value doubles as a stable identifier for
+/// per-tab reset tokens. `next`/`previous` support ordered paging helpers.
 enum FernletTab: String, CaseIterable, Hashable, Identifiable {
     case home
     case food
@@ -58,6 +63,13 @@ enum FernletTab: String, CaseIterable, Hashable, Identifiable {
     }
 }
 
+/// Every modal sheet the app can present, routed through `ContentView`'s single
+/// `activeSheet` slot (one sheet at a time; chained handoffs dismiss-then-represent).
+///
+/// Cases with payloads carry the edit target (recipe, period entry) or a deep-link hint
+/// (`firstAid`'s optional tool). The string `id` is also the contract for the
+/// `FERNLET_UI_TEST_OPEN_SHEET` launch hook (see `UITestSupport`) and the notification/App
+/// Intent deep-link tokens, so renaming an id is a cross-file change.
 enum FernletSheet: Identifiable {
     case meal
     case recipe
@@ -81,6 +93,9 @@ enum FernletSheet: Identifiable {
     case editRecipe(RecipeDefinition)
     case editSavedRecipe(RecipeDefinition)
 
+    /// Stable string identity per case (edit cases append the payload id so distinct edits
+    /// re-present). Also the public id space for UI-test and deep-link routing — keep in sync
+    /// with `FernletSheet(uiTestID:)`.
     var id: String {
         switch self {
         case .meal: "meal"

@@ -33,6 +33,10 @@ public nonisolated struct FriendInteractionDayCounts: Codable, Equatable, Sendab
     }
 }
 
+/// Deterministic trailing-30-day closeness scoring over per-day interaction counts.
+///
+/// Pure integer/rational math — no calendar, clock, or I/O — so the ProximityKit ledger and the app
+/// compute bit-for-bit identical closeness from the same ``FriendInteractionDayCounts`` rows.
 public nonisolated enum ClosenessMath {
     public static let windowDays = 30
 
@@ -49,6 +53,10 @@ public nonisolated enum ClosenessMath {
 
 /// The persisted close-slot assignment (device-local — closeness is a private, per-device view and
 /// never leaves the device).
+///
+/// Holds the four close-slot fingerprints, when each entered (for the dwell immunity), and the last
+/// day ``CloseSlotAssignment/evaluate(eligible:firstAcceptedAt:state:now:todayKey:)`` ran, so the
+/// once-per-day re-evaluation is idempotent within a day.
 public nonisolated struct CloseSlotState: Codable, Equatable, Sendable {
     public var closeFingerprints: [String] = []
     public var enteredAt: [String: Date] = [:]
@@ -56,6 +64,12 @@ public nonisolated struct CloseSlotState: Codable, Equatable, Sendable {
     public init() {}
 }
 
+/// The close-friend slot machine: tier limits plus the hysteretic 4-slot assignment pass.
+///
+/// Holds the friend-tier constants (4 close / 8 core / 12 max) and `evaluate`, the deterministic
+/// once-per-day re-assignment: vacancies fill freely from friends with real closeness, and otherwise
+/// at most ONE margin-gated challenge swap per run against an incumbent past its dwell — so slots
+/// stay stable day to day instead of churning on small score changes.
 public nonisolated enum CloseSlotAssignment {
     public static let closeSlots = 4
     public static let coreSlots = 8

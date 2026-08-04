@@ -17,6 +17,17 @@ import FernletDomainModel
 import FernletFoundation
 import FernletPersistence
 
+/// Append-only per-row Core Data + iCloud store for `MilestoneLedgerEntry` rows — with no delete path.
+///
+/// The `MilestoneLedgerRepositoring` conformer under Core Data storage: a direct clone of
+/// ``CoinLedgerRepository`` (JSON `payloadData` via ``RowPayloadCoders``, keyed by the entry's
+/// deterministic `idString`) minus deletion entirely — milestone rows are lifetime memories of
+/// care that survive a full data reset by design, a guarantee the contract makes structural.
+/// One device upserts by id so re-mints are no-ops; duplicate-id rows across devices are not
+/// collapsed here (CloudKit mirrors by record identity) — `MilestoneEconomy` union-merges them
+/// on aggregation. Rows whose payload an older build can't decode (an unknown newer
+/// `MilestoneEventKind`) are dropped per row on read. MainActor-isolated by the module default,
+/// working on ``PersistenceController``'s view context.
 public struct MilestoneLedgerRepository: MilestoneLedgerRepositoring {
     private let controller: PersistenceController
 
@@ -28,10 +39,12 @@ public struct MilestoneLedgerRepository: MilestoneLedgerRepositoring {
         self.controller = controller
     }
 
+    /// Loads every milestone entry, oldest first; undecodable rows are dropped per row.
     public func load() -> [MilestoneLedgerEntry] {
         StartupTiming.timed("MilestoneLedgerRepository.load") { loadRecords() }
     }
 
+    /// Async-signature variant of `load()` (the fetch itself still runs on the main actor).
     public func loadAsync() async -> [MilestoneLedgerEntry] {
         StartupTiming.timed("MilestoneLedgerRepository.loadAsync") { loadRecords() }
     }
@@ -47,6 +60,10 @@ public struct MilestoneLedgerRepository: MilestoneLedgerRepositoring {
         return records.compactMap(Self.entry(from:))
     }
 
+    /// Upserts the given entries by `idString`; rows not in `entries` are never touched, and
+    /// there is no delete counterpart at all.
+    ///
+    /// - Returns: `false` when the Core Data save fails (the context is rolled back).
     @discardableResult public func append(_ entries: [MilestoneLedgerEntry]) -> Bool {
         guard !entries.isEmpty else { return true }
         let context = controller.container.viewContext

@@ -11,6 +11,23 @@ import FernletDomainModel
 import FernletUI
 #endif
 
+/// The `@main` scene entry point: process-wide service bootstrap plus the launch state machine.
+///
+/// Owns the app-lifetime singletons a cold launch needs before any view exists — the
+/// `FernletLockService` (keychain-backed app lock), the `StoragePreferencesStore`, and the
+/// ``FernletStoreLoader`` that loads ``FernletStore`` off the first frame. `init()` runs the
+/// must-happen-before-launch wiring: installing ``CoreDataHealthKitCacheCleaner`` into the
+/// HealthKit gateway's static seam, setting ``FernletNotificationDelegate`` on the notification
+/// center (so a cold-launch tap is delivered), and baking the UIKit nav-bar appearance.
+///
+/// The body swaps between `LaunchScreen` (preparing), onboarding or ``ContentView`` (ready), and
+/// ``LaunchFailureView`` (failed). Scene-phase changes relock the app and flush the pending
+/// snapshot save on background, and reconcile guided-workout/cooking runs made from the Live
+/// Activity on re-activation. Storage-preference changes reload `PersistenceController` (queueing
+/// a follow-up reload when one is already in flight) and re-apply the sealed store's backup
+/// exclusion; a delayed post-startup task activates CloudKit sync so launch never waits on it.
+/// DEBUG launch arguments (`-resetOnboarding`, `-completeOnboarding`,
+/// `FERNLET_UI_TEST_OPEN_PRIVACY_DATA`) support the UI-test harness.
 @main
 struct FernletApp: App {
     @State private var lockService = FernletLockService()
@@ -152,6 +169,8 @@ struct FernletApp: App {
         }
     }
 
+    /// The scene's main slot: the UI-test privacy-data shortcut when requested, otherwise the
+    /// loader-phase switch (launch screen / ready content / failure view).
     @ViewBuilder
     private var content: some View {
         if shouldOpenPrivacyDataForUITest {
@@ -173,6 +192,8 @@ struct FernletApp: App {
         }
     }
 
+    /// DEBUG-only: `FERNLET_UI_TEST_OPEN_PRIVACY_DATA=1` renders the Privacy Data settings screen
+    /// directly (no store load), so its UI tests never wait on the full launch pipeline.
     private var shouldOpenPrivacyDataForUITest: Bool {
         #if DEBUG
         ProcessInfo.processInfo.environment["FERNLET_UI_TEST_OPEN_PRIVACY_DATA"] == "1"
@@ -189,6 +210,9 @@ struct FernletApp: App {
         }
     }
 
+    /// The post-load surface: onboarding until it completes, then ``ContentView``. Also watches
+    /// storage-preference changes (reloading persistence / stopping workout observation) and kicks
+    /// the delayed startup CloudKit-sync activation.
     @ViewBuilder
     private func readyContent(store: FernletStore) -> some View {
         Group {
@@ -225,6 +249,9 @@ struct FernletApp: App {
         }
     }
 
+    /// Defers CloudKit-sync activation ~5 s past first render so launch never blocks on iCloud.
+    /// One-shot per process (`didScheduleStartupCloudSync`) and re-checks the preference after the
+    /// sleep so a user who turned sync off in the window is honored.
     @MainActor
     private func activateCloudSyncAfterStartupIfNeeded() async {
         guard !didScheduleStartupCloudSync else { return }
@@ -238,6 +265,10 @@ struct FernletApp: App {
         await reloadPersistenceForPreferenceChange(current)
     }
 
+    /// Reloads the Core Data stack for a storage-preference change (iCloud sync on/off, backup
+    /// exclusion). If a reload is already in flight the request is parked in
+    /// `pendingPreferenceReload` and replayed afterwards; a failed reload is audit-logged rather
+    /// than crashing the scene.
     @MainActor
     private func reloadPersistenceForPreferenceChange(_ preferences: StoragePreferences) async {
         // The sealed store is local-only and never reloads, so re-apply its backup exclusion here so a
@@ -278,6 +309,11 @@ private extension UIView {
 }
 #endif
 
+/// Full-screen fallback for a failed store load: names the error and offers a retry.
+///
+/// Rendered only from ``FernletApp``'s `.failed` loader phase; the button re-runs
+/// ``FernletStoreLoader/retry()`` so a transient persistence failure never strands the user on a
+/// blank screen.
 private struct LaunchFailureView: View {
     let error: Error
     let retry: () -> Void

@@ -2,6 +2,12 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
+/// The live Connection Inspector sheet: the in-flight session's diagnostic log, or a "No active
+/// session" placeholder when nothing is being recorded.
+///
+/// A debug-tools surface — ContentView presents it off `store.showConnectionInspector` (set from
+/// the session-info sheet when `showProximityDebugTools` is on) and it simply wraps
+/// ``ConnectionInspectorLogDetailView`` around ``ConnectionInspector``'s observable `liveLog`.
 struct ConnectionInspectorView: View {
     var inspector: ConnectionInspector
     @Environment(\.dismiss) private var dismiss
@@ -37,6 +43,13 @@ struct ConnectionInspectorView: View {
     }
 }
 
+/// Read-only rendering of one `ConnectionSessionLog`: identity, distance (with sparkline),
+/// transport counters, events, envelopes, and errors.
+///
+/// Shared by the live inspector (``ConnectionInspectorView``, where the log updates under it)
+/// and the history browser (``ConnectionInspectorHistoryView``, where the log is a finished
+/// snapshot). Event and envelope lists render only the newest 50/30 entries; when no ranging
+/// samples exist it explains why per ranging mode (RSSI on MultipeerConnectivity has no meters).
 struct ConnectionInspectorLogDetailView: View {
     let log: ConnectionSessionLog
 
@@ -231,6 +244,10 @@ struct ConnectionInspectorLogDetailView: View {
     }
 }
 
+/// A minimal line chart of recent UWB distance samples for the distance panel.
+///
+/// Normalizes against the larger of the window's max and 0.3 m so tiny at-arm's-length wiggles
+/// still fill the height; drawn as a single stroked `Path`, no axes or labels.
 private struct DistanceSparkline: View {
     let samples: [ConnectionSessionLog.DistanceSample]
 

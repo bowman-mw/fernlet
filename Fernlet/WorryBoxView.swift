@@ -16,10 +16,18 @@ import FernletUI
 
 /// Write a worry, then "let it go": the words tuck down into the box, a lid closes over
 /// them with a soft seal glow, and the worry is sealed away.
+///
+/// The First Aid entry point (pushed from ``FirstAidView``), capped at 300 characters. The seal is
+/// real before the theater starts — ``WorryBoxService/addWorry(_:)`` writes the sealed row first,
+/// then the ~2.2s ``TuckIntoBoxView`` animation plays and settles onto the confirmation. A failed
+/// write keeps the text in the editor with a gentle retry message.
 struct WorryEntryView: View {
     var worryBox: WorryBoxService
 
     /// The compose → release → confirmation flow.
+    ///
+    /// `releasing` exists only for the tuck animation; the worry is already sealed by the time it
+    /// begins.
     private enum Phase { case writing, releasing, tucked }
 
     @State private var text = ""
@@ -192,8 +200,10 @@ struct WorryEntryView: View {
 // MARK: - Tuck-into-the-box release animation
 
 /// The "let it go" motif: the words lift and shrink down into an open box, the lid swings
-/// closed over them, and a soft amber seal-glow pulses. Purely decorative — the worry is
-/// sealed in the store before this appears.
+/// closed over them, and a soft amber seal-glow pulses.
+///
+/// Purely decorative — the worry is sealed in the store before this appears. Shown by
+/// ``WorryEntryView`` during its `releasing` phase and hidden from accessibility.
 private struct TuckIntoBoxView: View {
     var worryText: String
 
@@ -293,6 +303,8 @@ private struct TuckIntoBoxView: View {
 
 /// The settled, latched box shown on the "Tucked away." confirmation — a soft amber halo
 /// pulses gently around it.
+///
+/// Static decoration for ``WorryEntryView``'s `tucked` phase; hidden from accessibility.
 private struct SealedBoxView: View {
     @State private var pulse = false
 
@@ -339,8 +351,13 @@ private struct SealedBoxView: View {
 
 // MARK: - Hub section (Personal tab)
 
-/// The kept worries, re-readable and releasable. Sits inside PrivateHubView, so the
-/// standard lock gate covers it exactly like the other private sections.
+/// The kept worries, re-readable and releasable, plus an inline composer.
+///
+/// The Private-hub section for the Worry Box: sits inside ``PrivateHubView``, so the standard
+/// lock gate covers it exactly like the other private sections. Reads
+/// ``WorryBoxService/worries`` (empty while locked), reloads on appear, and per-worry "Release"
+/// plays the ember-lift animation before ``WorryBoxService/release(_:)`` performs the real
+/// deletion.
 struct WorryBoxView: View {
     var worryBox: WorryBoxService
     @State private var composeText = ""

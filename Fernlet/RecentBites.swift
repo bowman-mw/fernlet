@@ -56,6 +56,11 @@ enum MealPhotoPresence: Equatable {
     }
 }
 
+/// Namespace for the pure windowing logic behind Home's "Recent bites" polaroid strip.
+///
+/// `HomeView` feeds it today's live day row plus its cached prior days and renders the resulting
+/// ``RecentBite``s as ``MealPhotoPolaroid`` tiles; keeping the selection here (UI-free, no sealed
+/// photo reads) is what makes the 7-day window unit-testable.
 enum RecentBites {
     /// The recent photographed meals for the strip: every meal that carries a photo across the given
     /// `days`, newest first, capped at `limit`. Pure over already-loaded day rows (it reads no photo

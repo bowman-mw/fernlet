@@ -7,6 +7,11 @@
 
 import Foundation
 
+/// Shared bounds plus the wire-boundary sanitizer for the in-person clothing shop.
+///
+/// Pure and wall-safe so both the ProximityKit exchange manager and the app-layer codec can clamp an
+/// untrusted, peer-received ``CustomizationItem`` into a safe shape — texture fitted to its slot
+/// grid, name sanitized, price clamped — before it is rendered, stored, or bought.
 public nonisolated enum ClothingShopLimits {
     /// Most items a single shop may broadcast at once (decision §2.1).
     public static let maxListedItems = 6

@@ -6,12 +6,28 @@ import Foundation
 import FernletDomainModel
 import PrivateStoreCore
 
+/// One cycle-day narrative: the note, symptom flags, and custom symptom scales attached to a logged
+/// period event.
+///
+/// The plaintext half of a `MenstrualNarrative` row in the sealed private store. HealthKit holds
+/// the clinical samples (flow, temperature, and so on); this type carries what Fernlet adds on top.
+/// At rest, ``note``, ``symptomFlags``, and ``customSymptomScales`` exist only as ChaChaPoly
+/// ciphertext columns decrypted by ``MenstrualNarrativeRepository``, while `id`,
+/// ``hkExternalUUID``, ``dateKey``, and the timestamps stay plaintext for querying. `Codable` so
+/// the app-side sealed-backup export can serialize decrypted records into its re-encrypted chunks.
 public nonisolated struct MenstrualNarrative: Identifiable, Codable, Equatable {
     public var id: UUID
+    /// `HKMetadataKeyExternalUUID` of the HealthKit samples this narrative annotates — the join key
+    /// ``PeriodTrackerStore`` matches on. Still minted (uniquely) for narrative-only events that
+    /// have no backing sample.
     public var hkExternalUUID: String
+    /// Canonical `yyyy-MM-dd` day key — the indexed plaintext column date-range fetches filter on.
     public var dateKey: String
+    /// The user's free-text note, sealed at rest; `nil` when nothing was written.
     public var note: String?
+    /// Built-in symptoms flagged for the day, sealed at rest.
     public var symptomFlags: [PeriodSymptom]
+    /// User-defined symptom name to intensity value, sealed at rest.
     public var customSymptomScales: [String: Int]
     public var createdAt: Date
     public var updatedAt: Date
@@ -37,6 +53,26 @@ public nonisolated struct MenstrualNarrative: Identifiable, Codable, Equatable {
     }
 }
 
+/// Sealed at-rest CRUD for cycle-day narratives, plus the device-local "ever stored" divergence
+/// latch the sealed-backup restore depends on.
+///
+/// The persistence layer beneath ``PeriodTrackerStore``: notes, symptom flags, and custom symptom
+/// scales are sealed with `ColumnCrypto` (label `"menstrual-narrative"`) into
+/// `PrivatePersistenceController`'s local-only store, joined to HealthKit samples by the plaintext
+/// `hkExternalUUID` column. The app-side `SealedBackupCoordinator` is the other caller: it exports
+/// via the paged ``narratives(offset:limit:contentKey:)`` / ``narrativeCount()`` pair, restores via
+/// ``insertAtomically(_:contentKey:)``, and consults ``hasEverStoredNarrative`` so a restore can
+/// never resurrect narratives the user deliberately deleted.
+///
+/// Key discipline mirrors ``IntimacyLogRepository``: the content key is passed per call and never
+/// retained; writes fail closed (`FernletLockError.locked`), reads degrade to `[]`/`nil` without a
+/// key, rows whose ciphertext fails to authenticate are skipped, and deletes work without the key
+/// so wipes survive lock and hide. Every mutation best-effort prunes Core Data persistent history
+/// so superseded ciphertext does not linger in the transaction log — and every mutation (deletes
+/// included) sets the one-way divergence latch.
+///
+/// A `nonisolated` final class: all Core Data access is serialized through the view context's
+/// `performAndWait`, so it is callable from any executor.
 public nonisolated final class MenstrualNarrativeRepository {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "menstrual-narrative")
@@ -85,16 +121,28 @@ public nonisolated final class MenstrualNarrativeRepository {
         defaults.set(true, forKey: Self.everStoredDefaultsKey)
     }
 
+    /// Creates a repository on a sealed-store stack.
+    ///
+    /// - Parameters:
+    ///   - controller: The private persistence stack to use; `nil` selects the shared
+    ///     `PrivatePersistenceController`.
+    ///   - defaults: Suite holding the divergence latch; tests inject an isolated suite.
     public init(controller: PrivatePersistenceController? = nil, defaults: UserDefaults = .standard) {
         self.context = (controller ?? .shared).container.viewContext
         self.defaults = defaults
     }
 
+    /// Creates a repository on an explicit managed-object context — the seam tests use to run
+    /// against an in-memory store.
     public init(context: NSManagedObjectContext, defaults: UserDefaults = .standard) {
         self.context = context
         self.defaults = defaults
     }
 
+    /// Seals and stores one narrative, prunes persistent history (best-effort), and sets the
+    /// divergence latch — only after a successful save.
+    ///
+    /// - Important: Fails closed — throws `FernletLockError.locked` when `contentKey` is `nil`.
     public func insert(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
@@ -137,6 +185,9 @@ public nonisolated final class MenstrualNarrativeRepository {
         }
     }
 
+    /// Re-seals an existing narrative in place (matched by `id`, preserving the stored `createdAt`),
+    /// prunes the superseded ciphertext from persistent history, and sets the divergence latch. A
+    /// missing row is a silent no-op; a `nil` key throws `FernletLockError.locked`.
     public func update(_ narrative: MenstrualNarrative, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
@@ -153,6 +204,8 @@ public nonisolated final class MenstrualNarrativeRepository {
         }
     }
 
+    /// Deletes one narrative by `id` without decrypting it, prunes persistent history, and — when a
+    /// row was actually removed — sets the divergence latch (see the inline rationale).
     public func delete(id: UUID) throws {
         try context.performAndWait {
             let request = request(id: id)
@@ -223,6 +276,12 @@ public nonisolated final class MenstrualNarrativeRepository {
         }
     }
 
+    /// Decrypted narratives whose `dateKey` falls inside `dateRange`, ascending by day.
+    ///
+    /// Enumerates the range into explicit day keys for an indexed `IN` predicate, so keep ranges
+    /// bounded (the store's 240-day load window is the intended caller) — unbounded walks belong to
+    /// the paged ``narratives(offset:limit:contentKey:)``. Returns `[]` without a key; rows that
+    /// fail to decrypt are skipped.
     public func narratives(in dateRange: DateInterval, contentKey: SymmetricKey?) throws -> [MenstrualNarrative] {
         guard let contentKey else { return [] }
         let keys = Self.dateKeys(in: dateRange)
@@ -241,6 +300,8 @@ public nonisolated final class MenstrualNarrativeRepository {
         }
     }
 
+    /// The decrypted narrative joined to one HealthKit external UUID, or `nil` when absent or the
+    /// store is locked (`contentKey == nil`). First match wins if duplicates ever exist.
     public func narrative(forHKUUID hkExternalUUID: String, contentKey: SymmetricKey?) throws -> MenstrualNarrative? {
         guard let contentKey else { return nil }
         return try context.performAndWait {
@@ -252,6 +313,9 @@ public nonisolated final class MenstrualNarrativeRepository {
         }
     }
 
+    /// Writes one narrative into a managed object, sealing the three sensitive columns.
+    /// `createdAt` is caller-supplied so updates preserve the original creation date while
+    /// `updatedAt` is always stamped now.
     private func apply(_ narrative: MenstrualNarrative, to object: NSManagedObject, contentKey: SymmetricKey, createdAt: Date) throws {
         object.setValue(narrative.id, forKey: "id")
         object.setValue(narrative.hkExternalUUID, forKey: "hkExternalUUID")
@@ -263,6 +327,9 @@ public nonisolated final class MenstrualNarrativeRepository {
         object.setValue(Date(), forKey: "updatedAt")
     }
 
+    /// Rehydrates one managed object into a ``MenstrualNarrative``, decrypting the sealed columns.
+    /// Returns `nil` when the required plaintext fields are missing; throws when decryption fails;
+    /// unknown symptom raw values are dropped rather than failing the row.
     private func decrypt(_ object: NSManagedObject, contentKey: SymmetricKey) throws -> MenstrualNarrative? {
         guard let id = object.value(forKey: "id") as? UUID,
               let hkExternalUUID = object.value(forKey: "hkExternalUUID") as? String,
@@ -281,6 +348,7 @@ public nonisolated final class MenstrualNarrativeRepository {
         )
     }
 
+    /// Fetch request for a single row by `id`.
     private func request(id: UUID) -> NSFetchRequest<NSManagedObject> {
         let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
         request.fetchLimit = 1
@@ -288,6 +356,7 @@ public nonisolated final class MenstrualNarrativeRepository {
         return request
     }
 
+    /// Enumerates the interval into canonical day keys via `FernletDate`.
     private static func dateKeys(in interval: DateInterval) -> [String] {
         FernletDate.dayKeys(in: interval)
     }

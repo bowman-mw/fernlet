@@ -9,6 +9,12 @@ import os
 
 // MARK: - Camera preview (UIViewRepresentable)
 
+/// `UIViewRepresentable` wrapper showing the live `AVCaptureSession` preview layer.
+///
+/// Owns horizon-level rotation via `AVCaptureDevice.RotationCoordinator` and detaches the
+/// session reference in `dismantleUIView`. ``DisposableCameraView`` keeps exactly one instance
+/// structurally stable across rotation so the running capture session is never torn down and
+/// reattached (the old freeze / black flash).
 struct CameraPreviewView: UIViewRepresentable {
     let session: AVCaptureSession
 
@@ -28,6 +34,10 @@ struct CameraPreviewView: UIViewRepresentable {
         uiView.tearDown()
     }
 
+    /// The backing `UIView` whose layer is an `AVCaptureVideoPreviewLayer`.
+    ///
+    /// Holds the rotation coordinator + KVO observation that keep the preview's rotation angle
+    /// in sync with the device; `tearDown()` drops both and detaches the session.
     final class PreviewView: UIView {
         private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
         private var rotationObservation: NSKeyValueObservation?
@@ -61,10 +71,22 @@ struct CameraPreviewView: UIViewRepresentable {
 
 // MARK: - Camera capture controller
 
-/// Manages AVCaptureSession lifecycle and the arm/wind gate state machine.
-/// The arm/wind/disarm logic is independent of AVFoundation and fully testable.
+/// Manages the disposable camera's `AVCaptureSession` lifecycle and the arm/wind gate state machine.
+///
+/// Owned as `@State` by ``DisposableCameraView``. The AVFoundation side (authorization, session
+/// configuration, rotation, capture) runs on a private serial `sessionQueue` and publishes its
+/// observable state back to the main thread; the arm/wind/disarm state machine (`isArmed`,
+/// `windProgress`) is independent of AVFoundation and fully testable. Capture is single-flight:
+/// the pending continuation lives in an `OSAllocatedUnfairLock` slot that is reserved before
+/// capture and consumed exactly once on the AVFoundation delegate queue, so the two isolation
+/// domains never race (the previous `nonisolated(unsafe) var` was a real data race). Failures
+/// surface as ``CaptureError`` or the delegate's decode errors.
 @Observable
 final class CameraCaptureController: NSObject {
+    /// Failures ``capturePhoto()`` can throw before AVFoundation is even asked.
+    ///
+    /// `captureInProgress` wins over `cameraUnavailable` when both apply: the single-flight slot
+    /// is reserved first, preserving the original error precedence.
     enum CaptureError: LocalizedError, Equatable {
         case cameraUnavailable
         case captureInProgress
@@ -92,6 +114,7 @@ final class CameraCaptureController: NSObject {
         cameraAuthorizationStatus == .denied || cameraAuthorizationStatus == .restricted
     }
 
+    /// The live capture session ``CameraPreviewView`` attaches to; configured lazily on `sessionQueue`.
     @ObservationIgnored let session = AVCaptureSession()
     @ObservationIgnored private let photoOutput = AVCapturePhotoOutput()
     @ObservationIgnored private var captureRotationCoordinator: AVCaptureDevice.RotationCoordinator?
@@ -158,6 +181,9 @@ final class CameraCaptureController: NSObject {
         connection.videoRotationAngle = angle
     }
 
+    /// Starts (or resumes) the capture session, requesting camera authorization first if it has
+    /// never been asked. All AVFoundation work hops to the private `sessionQueue`; the resulting
+    /// authorization/configured flags are published back to the main thread.
     func startSession() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
@@ -197,6 +223,8 @@ final class CameraCaptureController: NSObject {
         session.startRunning()
     }
 
+    /// Stops the running capture session on the session queue and clears the run intent, so a
+    /// stale async start can't restart it after the view has gone away.
     func stopSession() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
@@ -231,10 +259,13 @@ final class CameraCaptureController: NSObject {
         advanceWind(progress: windProgress + progressDelta)
     }
 
+    /// Snaps an unfinished wind back to zero when the drag ends; a no-op once armed.
     func resetWind() {
         if !isArmed { windProgress = 0 }
     }
 
+    /// Returns to the unarmed state after a shot so the viewfinder retracts and the next photo
+    /// requires a fresh wind.
     func disarm() {
         isArmed = false
         windProgress = 0
@@ -242,6 +273,13 @@ final class CameraCaptureController: NSObject {
 
     // MARK: Capture
 
+    /// Captures one photo and returns its encoded file data.
+    ///
+    /// Single-flight: the continuation is reserved in the locked slot before AVFoundation is
+    /// asked, so a second call while one is pending throws ``CaptureError/captureInProgress``
+    /// (which deliberately outranks ``CaptureError/cameraUnavailable``). The reservation is
+    /// consumed exactly once by the capture delegate.
+    /// - Returns: The photo's `fileDataRepresentation()` bytes.
     func capturePhoto() async throws -> Data {
         try await withCheckedThrowingContinuation { [weak self] cont in
             guard let self else {
@@ -303,6 +341,11 @@ extension CameraCaptureController: AVCapturePhotoCaptureDelegate {
 /// derived from `topInset` at runtime, so an unknown future device degrades gracefully to the notch/
 /// flat case rather than mispositioning. Coordinates are measured from the true top of the screen.
 struct IslandViewfinderMetrics: Equatable {
+    /// The hardware bucket the top-inset heuristic sorted this screen into.
+    ///
+    /// Selected once in `init` via ``IslandViewfinderMetrics/classify(topInset:)``; every closed-anchor
+    /// size, radius, and center below switches on it so island phones merge the housing with the
+    /// island pill while notch/flat devices get the detached floating card.
     enum DeviceClass: Equatable { case island, notch, flat }
 
     let topInset: CGFloat
@@ -370,6 +413,11 @@ struct IslandViewfinderMetrics: Equatable {
 
     var centerX: CGFloat { screenWidth / 2 }
 
+    /// One interpolated housing (or glass) rectangle: its size, corner radius, and vertical center.
+    ///
+    /// Produced by ``IslandViewfinderMetrics/frame(openness:)`` and
+    /// ``IslandViewfinderMetrics/glassFrame(openness:)``; the view converts it into an absolute
+    /// `CGRect` in the full-screen overlay's coordinate space.
     struct Frame: Equatable {
         var size: CGSize
         var cornerRadius: CGFloat
@@ -448,11 +496,13 @@ struct IslandViewfinderMetrics: Equatable {
 
 // MARK: - Orientation resolution
 
-/// Pure, testable hysteresis for the camera's layout orientation. A rotation animation drives the
-/// view's frame through a near-square shape; a raw `width > height` test would flip the layout twice
-/// per rotation, thrashing it. The [0.95, 1.05] aspect-ratio dead-band holds the current orientation
-/// until the frame is clearly one way or the other. Kept as a free value type (not on the `View`,
-/// which the Swift 6 SDK isolates to the main actor) so it stays nonisolated and unit-testable.
+/// Pure, testable hysteresis for the camera's layout orientation.
+///
+/// A rotation animation drives the view's frame through a near-square shape; a raw
+/// `width > height` test would flip the layout twice per rotation, thrashing it. The [0.95, 1.05]
+/// aspect-ratio dead-band holds the current orientation until the frame is clearly one way or the
+/// other. Kept as a free value type (not on the `View`, which the Swift 6 SDK isolates to the main
+/// actor) so it stays nonisolated and unit-testable.
 enum DisposableCameraOrientation {
     static func resolveLandscape(current: Bool, size: CGSize) -> Bool {
         let ratio = size.width / max(size.height, 1)
@@ -462,6 +512,20 @@ enum DisposableCameraOrientation {
 
 // MARK: - Disposable camera view
 
+/// The in-session "disposable camera": the full-screen hardware-styled capture surface shown by
+/// ``FriendsView`` while a friends mesh session is live.
+///
+/// Owns a ``CameraCaptureController`` as `@State` and renders the wind-to-arm thumbwheel, the
+/// island-morphing viewfinder (geometry from ``IslandViewfinderMetrics``), the shutter with a
+/// shared per-session film counter (`MeshNetworkManager.filmRemaining`), and the session-info
+/// sheet (rename, open/closed access, roster with removal seconding / blocking, in-session
+/// hearts). It also hosts the session-scoped chat entry (13+ gated via `manager.isChatAllowed`),
+/// the admission-prompt sheet for join requests, and the develop flow: "Develop" stops the
+/// capture session and either leaves immediately (no photos — the keep-as-friend prompt is then
+/// FriendsView's job via the pending review batch) or presents `FriendPhotoReviewSheet` with
+/// friend candidates computed at presentation time against the live trust vault. Orientation
+/// flips through ``DisposableCameraOrientation``'s hysteresis so mid-rotation near-square frames
+/// never thrash the layout.
 struct DisposableCameraView: View {
     var store: FernletStore
 

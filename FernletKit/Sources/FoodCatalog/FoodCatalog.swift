@@ -1,15 +1,27 @@
 import Foundation
 import FernletDomainModel
 
-/// The app's food lookup surface. Replaces the old in-memory `allFoodItems` array: the ~13k bundled
-/// USDA/curated foods live in a read-only SQLite store (`BundledFoodSource`) and are queried on
-/// demand, while the small mutable set of user-added items is held as a snapshot. Search runs the
-/// existing `FoodItemSearch` scorer over (SQLite candidates + user items), preserving all of the
-/// preparation / form / data-type ranking; point lookups resolve ingredient IDs straight from SQLite.
+/// The app's food lookup surface — search, point lookups, and resolver candidate pools over the
+/// bundled USDA/curated foods plus the user's own items.
 ///
-/// Thread-safe: the SQLite source serializes its own access and the user-items snapshot is guarded by
-/// a lock, so the catalog can be queried from any actor (the AI meal-resolution path runs off the
-/// main actor).
+/// Replaces the old in-memory `allFoodItems` array: the ~13k bundled USDA/curated foods live in a
+/// read-only SQLite store (``BundledFoodSource``) and are queried on demand, while the small mutable
+/// set of user-added items is held as a snapshot kept in sync from `FernletStore.foodItems` via
+/// ``setUserItems(_:)``. Search runs the existing `FoodItemSearch` scorer over (SQLite candidates +
+/// user items), preserving all of the preparation / form / data-type ranking; point lookups resolve
+/// ingredient IDs straight from SQLite. A second ``BundledFoodSource`` — the ~364k-product branded
+/// catalog delivered as a purgeable On-Demand Resource — can be attached and detached at runtime
+/// (``attachBrandedSource(_:)`` / ``detachBrandedSource()``); every read unions base + branded +
+/// user items with source priority user > base > branded.
+///
+/// Consumers span the module graph: `DiaryStore`, the app's `FernletStore` and meal-resolution /
+/// barcode / grocery flows, and the walled `AIProviders` module all query it — this module sits
+/// below the S3 wall and holds no sealed data, so that edge is wall-legal.
+///
+/// Thread-safe: the SQLite source serializes its own access, and the user-items snapshot and
+/// branded-source slot are guarded by one lock, so the catalog can be queried from any actor (the
+/// AI meal-resolution path runs off the main actor) — hence the nonisolated `@unchecked Sendable`
+/// class.
 public nonisolated final class FoodCatalog: @unchecked Sendable {
     private let source: BundledFoodSource
     private let lock = NSLock()
@@ -19,6 +31,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// snapshots it into a local `let` so a concurrent `detachBrandedSource()` mid-query is safe.
     private var _brandedSource: BundledFoodSource?
 
+    /// Creates a catalog over `source` with an empty user-items snapshot and no branded source.
     public init(source: BundledFoodSource) {
         self.source = source
     }
@@ -69,14 +82,20 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
 
     // MARK: - Search
 
+    /// The top `limit` foods for a free-text query, ranked by the `FoodItemSearch` scorer over
+    /// bundled + branded candidates plus the user items.
     public func results(for query: String, limit: Int = 6) -> [FoodItem] {
         FoodItemSearch.results(for: query, in: index(for: query), limit: limit)
     }
 
+    /// Like ``results(for:limit:)`` but pairs each item with its match score, for callers that gate
+    /// on match quality (e.g. the meal-resolution review floor).
     public func scoredResults(for query: String, limit: Int = 6) -> [(item: FoodItem, score: Int)] {
         FoodItemSearch.scoredResults(for: query, in: index(for: query), limit: limit)
     }
 
+    /// The single food whose normalized name equals `normalizedName`, or nil. Priority: the user's
+    /// manual entries, then the base catalog, then the branded catalog, then remaining user items.
     public func exactNameMatch(forNormalized normalizedName: String) -> FoodItem? {
         let users = userItems
         let branded = brandedSource
@@ -116,6 +135,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
 
     // MARK: - Resolution
 
+    /// Point lookup by food-item id: user items first, then the base catalog, then the branded catalog.
     public func item(id: UUID) -> FoodItem? {
         let branded = brandedSource
         return userItems.first(where: { $0.id == id }) ?? source.item(id: id) ?? branded?.item(id: id)
@@ -134,6 +154,8 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         return source.item(barcode: normalized) ?? branded?.item(barcode: normalized)
     }
 
+    /// Batch point lookup — each id resolves from the first source that has it (user > base >
+    /// branded). Results are grouped by source, not returned in the caller's `ids` order.
     public func items(ids: [UUID]) -> [FoodItem] {
         guard !ids.isEmpty else { return [] }
         let branded = brandedSource

@@ -11,9 +11,32 @@ import FernletDomainModel
 import FernletScoring
 import FernletPersistence
 
+/// The single Codable aggregate both persistence backends serialize — every diary slice (day
+/// history, settings, aggregate lists, derived log tables, Tier-2 memories) in one blob.
+///
+/// ``LocalFernletRepository`` writes it as a pretty-printed JSON file (the local/no-iCloud path,
+/// where ``days`` holds the full, uncapped history), while `CoreDataFernletRepository` (in
+/// `CloudKitSync`) embeds the identical encoding in a Core Data + CloudKit record — there,
+/// ``days`` is only a bounded recent cache and per-row `DayRecord` rows are the uncapped source
+/// of truth. Because this type IS the synced payload, it must only ever contain
+/// privacy-stripped content: writes arrive through the `SanitizedSnapshot` seam, so sealed
+/// narratives (journal bodies destined for the encrypted store, cycle data) never enter the blob.
+///
+/// The hand-written `init(from:)` decodes every key with `decodeIfPresent` plus a default, so a
+/// blob written by an older build (missing newer keys) always decodes; a hard decode failure is
+/// reserved for genuine corruption and trips the owning repository's read-only recovery mode.
+/// The `apply(_:maxStoredDays:)` / `rebuildDerivedTables(todayKey:recentDays:)` extension methods
+/// are the shared write path both repositories funnel through. Declared `@unchecked Sendable`:
+/// a plain mutable value type the repositories hand across actor boundaries by copy.
 public struct LocalFernletDatabase: Codable, @unchecked Sendable {
+    /// Blob format version; currently always 1. Backward compatibility is handled by the
+    /// tolerant decoder rather than version branching.
     public var schemaVersion = 1
+    /// Timestamp of the last mutation, refreshed by `apply(_:maxStoredDays:)` and the Tier-2
+    /// replace path. ISO-8601 round-trips drop fractional seconds.
     public var updatedAt = Date()
+    /// Per-day diary history keyed by day key (yyyy-MM-dd). Full and uncapped on the local
+    /// path; a bounded recent cache on the Core Data path (see `apply(_:maxStoredDays:)`).
     public var days: [String: FernletDay] = [:]
     /// Per-store guard for the blob→per-row `DayRecord` migration (Core Data path). Lives in the store
     /// (not the keychain) so it shares the store's lifecycle: a data reset re-arms it, and any later
@@ -24,27 +47,49 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
     /// read once the Core Data path clears the blob's `days` cache (Stage B). Empty until populated; the
     /// local/no-iCloud path leaves it empty (it has no cloud detection).
     public var dayContentSummary = DayContentSummary()
+    /// User settings, already privacy-stripped by the sanitizing snapshot factories.
     public var settings = FernletSettings()
+    /// Recently logged meals surfaced for quick re-logging.
     public var recentMeals: [Meal] = []
+    /// The journal-entry carryover list the snapshot maintains across days.
     public var previousJournals: [JournalEntry] = []
+    /// Tier-1 (user-visible, user-editable) memory notes.
     public var memories: [MemoryNote] = []
+    /// The user's fitness goals; the first is treated as primary by `TierTwoMemoryEngine`.
     public var goals: [FitnessGoal] = []
+    /// Companion workshop state (customization/clothing data).
     public var workshop = WorkshopData()
+    /// Derived table: one ``DailyLogRecord`` per day in the recent window. Recomputable —
+    /// rebuilt from ``days`` on every save by `rebuildDerivedTables(todayKey:recentDays:)`.
     public var dailyLogs: [DailyLogRecord] = []
+    /// Derived table: per-meal ``MealLogRecord`` rows for the recent window. Recomputable.
     public var mealLogs: [MealLogRecord] = []
+    /// Derived table: per-workout ``WorkoutLogRecord`` rows for the recent window. Recomputable.
     public var workoutLogs: [WorkoutLogRecord] = []
+    /// Derived table: per-entry ``JournalLogRecord`` rows for the recent window. Recomputable.
     public var journalLogs: [JournalLogRecord] = []
+    /// Pending AI meal-analysis retries, persisted so they survive relaunch.
     public var retryQueue: [AIAnalysisRetryRecord] = []
+    /// Tier-2 behavioral memories inferred by `TierTwoMemoryEngine` on each derived-table
+    /// rebuild; also replaceable wholesale via sealed-backup restore.
     public var tierTwoMemories: [TierTwoMemoryRecord] = []
+    /// The user's custom food library.
     public var foodItems: [FoodItem] = []
+    /// Saved recipe definitions (including mesh-shared recipes).
     public var recipes: [RecipeDefinition] = []
+    /// The per-day wellbeing score history.
     public var dailyScores: [DailyHealthScore] = []
+    /// Proximity-session audit log entries.
     public var connectionSessionLogs: [ConnectionSessionLog] = []
+    /// Trusted proximity-mesh peer records (the persisted half of the trust vault's roster).
     public var trustedProximityPeers: [ProximityTrustedPeerRecord] = []
+    /// Trainer-export audit trail events.
     public var trainerAuditEvents: [TrainerAuditEvent] = []
 
     public init() {}
 
+    /// Tolerant decoder: every key falls back to its default via `decodeIfPresent`, so blobs
+    /// written by older builds always decode and only genuine corruption fails the read.
     public nonisolated init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
@@ -73,7 +118,41 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
     }
 }
 
+/// The local, iCloud-free `FernletRepository` conformer: persists the whole
+/// ``LocalFernletDatabase`` as a single pretty-printed JSON file under Application Support.
+///
+/// One of the two real conformers to the `FernletRepository` contract (the other is
+/// `CoreDataFernletRepository` in `CloudKitSync`). The app's `FernletStore` selects it when
+/// `StoragePreferences` chooses local-only storage, and `CoreDataFernletRepository` also holds
+/// one as its legacy repository so ``loadDatabaseForMigration(todayKey:)`` can hydrate the Core
+/// Data store from a pre-existing local file.
+///
+/// Behavior:
+/// - **Whole-file read-modify-write.** Every save decodes the file, applies the sanitized
+///   snapshot/day, rebuilds the derived log tables + Tier-2 memories, and atomically rewrites
+///   the file with `.completeFileProtection`. On this path the blob's `days` is the full,
+///   uncapped history (no `maxStoredDays` bound is passed).
+/// - **Fail-closed corruption handling.** An unreadable or undecodable file flips the instance
+///   into read-only recovery mode (``State``'s `persistenceBlockedByDecodeFailure`): reads
+///   return a fresh/migrated database, but every save is refused so a later write cannot
+///   clobber data that might still be recoverable off disk. A subsequent successful decode or
+///   ``purgeAllPersistedData()`` lifts the block.
+/// - **Legacy migration.** When no file exists, ``LegacyKeys`` UserDefaults data (the
+///   pre-database persistence) seeds the first database, and the first successful save clears
+///   those keys.
+///
+/// Concurrency: nonisolated with a fully synchronous API. The struct is a value-type facade over
+/// a shared reference-type ``State`` box, so copies observe the same recovery/cleanup flags; the
+/// box is unsynchronized and the type is not `Sendable`, so call sites are expected to confine
+/// an instance to a single actor (in practice the MainActor store/save coordinator).
 public struct LocalFernletRepository: FernletRepository {
+    /// Shared mutable session flags for the value-type repository.
+    ///
+    /// A reference-type box so every copy of the enclosing struct observes the same
+    /// `persistenceBlockedByDecodeFailure` (read-only recovery mode after a corrupt read) and
+    /// `pendingLegacyCleanup` (legacy UserDefaults keys awaiting removal after the first
+    /// successful save). Unsynchronized — safety relies on single-actor confinement of the
+    /// repository, not on locking.
     private final class State {
         var persistenceBlockedByDecodeFailure = false
         var pendingLegacyCleanup = false
@@ -84,6 +163,11 @@ public struct LocalFernletRepository: FernletRepository {
     private let decoder: JSONDecoder
     private let state = State()
 
+    /// Creates a repository backed by the given file, defaulting to
+    /// `Application Support/Fernlet/FernletDatabase.json` (see ``defaultFileURL()``).
+    ///
+    /// - Parameter fileURL: Override used by tests and by callers that stage a database in a
+    ///   custom location; `nil` selects the production path.
     public init(fileURL: URL? = nil) {
         let resolvedURL = fileURL ?? Self.defaultFileURL()
         assert(!resolvedURL.path.isEmpty, "repository path must not be empty")
@@ -92,6 +176,9 @@ public struct LocalFernletRepository: FernletRepository {
         self.decoder = Self.makeDecoder()
     }
 
+    /// Loads the full aggregate for `todayKey`, substituting a fresh empty day when no day row
+    /// exists for that key yet. Never fails: corruption degrades to a migrated/fresh database
+    /// (and arms read-only recovery mode) rather than throwing.
     public func loadSnapshot(todayKey: String) -> FernletSnapshot {
         assert(!todayKey.isEmpty, "today key required")
         let database = loadDatabase(todayKey: todayKey)
@@ -115,6 +202,13 @@ public struct LocalFernletRepository: FernletRepository {
         )
     }
 
+    /// Persists a privacy-stripped snapshot: read-modify-write of the whole file, including a
+    /// derived-table + Tier-2 rebuild.
+    ///
+    /// - Parameter sanitized: A `SanitizedSnapshot` — mintable only through the storage privacy
+    ///   strip, which is what keeps un-stripped content out of the blob by type.
+    /// - Returns: `false` when the save is refused (read-only recovery mode) or any encode/write
+    ///   step fails; the on-disk file is left untouched in that case.
     @discardableResult public func saveSnapshot(_ sanitized: SanitizedSnapshot) -> Bool {
         let snapshot = sanitized.snapshot
         assert(!snapshot.todayKey.isEmpty, "snapshot key required")
@@ -124,6 +218,14 @@ public struct LocalFernletRepository: FernletRepository {
         return saveDatabase(database)
     }
 
+    /// Persists a single (typically past) day without touching the aggregate slices, then
+    /// rebuilds the derived tables so they reflect the edit.
+    ///
+    /// - Parameters:
+    ///   - sanitized: The privacy-stripped day; its `date` must equal `dateKey` (asserted).
+    ///   - dateKey: The day being written.
+    ///   - todayKey: The current day key, used for the rebuild context.
+    /// - Returns: `false` under read-only recovery mode or on any write failure.
     @discardableResult public func updateDay(_ sanitized: SanitizedDay, for dateKey: String, todayKey: String) -> Bool {
         let day = sanitized.day
         assert(!dateKey.isEmpty, "date key required")
@@ -135,23 +237,33 @@ public struct LocalFernletRepository: FernletRepository {
         return saveDatabase(database)
     }
 
+    /// The concrete on-disk location of the JSON database, surfaced for diagnostics and
+    /// migration tooling.
     public func databaseFileURL() -> URL {
         assert(fileURL.pathExtension == "json", "database must be json")
         return fileURL
     }
 
+    /// Human-readable backing-store description (the database file name) for diagnostics.
     public func storageDescription() -> String {
         fileURL.lastPathComponent
     }
 
+    /// Every persisted day keyed by date key — on this path the file itself is the uncapped,
+    /// authoritative history the store rehydrates on launch.
     public func loadAllDays() -> [String: FernletDay] {
         loadDatabase(todayKey: FernletDate.dayKey(for: .now)).days
     }
 
+    /// The persisted Tier-2 behavioral memories that seed the inference base.
     public func loadTierTwoMemories() -> [TierTwoMemoryRecord] {
         loadDatabase(todayKey: FernletDate.dayKey(for: .now)).tierTwoMemories
     }
 
+    /// Overwrites the persisted Tier-2 memories wholesale (sealed-backup restore on a fresh
+    /// install), bumping `updatedAt`.
+    ///
+    /// - Returns: Whether the write succeeded (`false` under read-only recovery mode).
     @discardableResult public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
         var database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))
         database.tierTwoMemories = records
@@ -159,10 +271,14 @@ public struct LocalFernletRepository: FernletRepository {
         return saveDatabase(database)
     }
 
+    /// Exposes the raw decoded database so `CoreDataFernletRepository` can hydrate the Core Data
+    /// store from a pre-existing local file (one-time blob migration).
     public func loadDatabaseForMigration(todayKey: String) -> LocalFernletDatabase {
         loadDatabase(todayKey: todayKey)
     }
 
+    /// Reads and decodes the database file; an absent file yields the legacy-UserDefaults
+    /// migration, and an unreadable one arms read-only recovery mode.
     private func loadDatabase(todayKey: String) -> LocalFernletDatabase {
         assert(!todayKey.isEmpty, "today key required")
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
@@ -176,6 +292,8 @@ public struct LocalFernletRepository: FernletRepository {
         return decodeDatabase(data, todayKey: todayKey)
     }
 
+    /// Decodes the blob; success clears any prior recovery block, while failure arms it and
+    /// falls back to the legacy migration so reads still return something usable.
     private func decodeDatabase(_ data: Data, todayKey: String) -> LocalFernletDatabase {
         assert(!data.isEmpty, "database data required")
         assert(!todayKey.isEmpty, "today key required")
@@ -188,6 +306,8 @@ public struct LocalFernletRepository: FernletRepository {
         return migratedDatabase(todayKey: todayKey)
     }
 
+    /// Arms read-only recovery mode: subsequent saves are refused until a successful decode or a
+    /// purge lifts the block.
     private func markPersistenceBlockedByDecodeFailure() {
         state.persistenceBlockedByDecodeFailure = true
     }
@@ -209,6 +329,9 @@ public struct LocalFernletRepository: FernletRepository {
         }
     }
 
+    /// The single write path: refuses under read-only recovery mode, then encodes and atomically
+    /// writes the file, and — on the first success after a legacy migration — clears the old
+    /// UserDefaults keys.
     private func saveDatabase(_ database: LocalFernletDatabase) -> Bool {
         assert(database.schemaVersion >= 1, "schema version invalid")
         guard !state.persistenceBlockedByDecodeFailure else {
@@ -228,6 +351,8 @@ public struct LocalFernletRepository: FernletRepository {
         return true
     }
 
+    /// Creates the database's parent directory (with intermediates) if needed; a failure aborts
+    /// the save rather than letting the write throw.
     private func ensureDirectoryExists() -> Bool {
         let directory = fileURL.deletingLastPathComponent()
         assert(!directory.path.isEmpty, "directory path required")
@@ -240,6 +365,8 @@ public struct LocalFernletRepository: FernletRepository {
         }
     }
 
+    /// Writes the encoded blob atomically with `.completeFileProtection` (encrypted at rest,
+    /// inaccessible while the device is locked).
     private func write(_ data: Data) -> Bool {
         assert(!data.isEmpty, "write data required")
         do {
@@ -251,6 +378,9 @@ public struct LocalFernletRepository: FernletRepository {
         }
     }
 
+    /// Builds a first database from the pre-database ``LegacyKeys`` UserDefaults data (or fresh
+    /// defaults on a clean install) and flags the legacy keys for cleanup after the next
+    /// successful save.
     private func migratedDatabase(todayKey: String) -> LocalFernletDatabase {
         assert(!todayKey.isEmpty, "today key required")
         var database = LocalFernletDatabase()
@@ -266,6 +396,8 @@ public struct LocalFernletRepository: FernletRepository {
         return database
     }
 
+    /// Removes the pre-database UserDefaults keys (including the per-day `fernlet-day-*`
+    /// entries) once their content has been safely persisted to the database file.
     private static func clearLegacyUserDefaultsIfPresent() {
         let knownKeys = [
             LegacyKeys.settings,
@@ -282,6 +414,8 @@ public struct LocalFernletRepository: FernletRepository {
             .forEach { UserDefaults.standard.removeObject(forKey: $0) }
     }
 
+    /// Decodes one legacy UserDefaults value, returning `nil` (not throwing) when the key is
+    /// absent or the stored data no longer decodes.
     private static func loadLegacy<T: Decodable>(_ type: T.Type, key: String) -> T? {
         assert(!key.isEmpty, "legacy key required")
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
@@ -289,6 +423,8 @@ public struct LocalFernletRepository: FernletRepository {
         return try? JSONDecoder().decode(type, from: data)
     }
 
+    /// The production database location: `Application Support/Fernlet/FernletDatabase.json`
+    /// (falling back to the temporary directory only if Application Support is unavailable).
     public static func defaultFileURL() -> URL {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         assert(directory != nil, "application support unavailable")
@@ -297,6 +433,8 @@ public struct LocalFernletRepository: FernletRepository {
             .appendingPathComponent("FernletDatabase.json")
     }
 
+    /// The blob encoder: pretty-printed, sorted keys (stable diffs), ISO-8601 dates. Must stay
+    /// in lockstep with ``makeDecoder()`` and the CloudKitSync copy of the same configuration.
     private static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -305,6 +443,8 @@ public struct LocalFernletRepository: FernletRepository {
         return encoder
     }
 
+    /// The blob decoder, paired with ``makeEncoder()``. ISO-8601 date decoding drops fractional
+    /// seconds, so timestamps round-trip at second precision.
     private static func makeDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -312,6 +452,11 @@ public struct LocalFernletRepository: FernletRepository {
         return decoder
     }
 
+    /// The pre-database UserDefaults keys the original app persisted under.
+    ///
+    /// Retained solely so ``migratedDatabase(todayKey:)`` can hydrate a first database from an
+    /// old install's data and ``clearLegacyUserDefaultsIfPresent()`` can remove the keys once
+    /// that data is safely in the file. New code must never write these keys.
     private enum LegacyKeys {
         static let settings = "fernlet-settings"
         static let recentMeals = "fernlet-recent-meals"
@@ -328,10 +473,11 @@ public struct LocalFernletRepository: FernletRepository {
 }
 
 extension LocalFernletDatabase {
-    /// Applies today's day + the aggregate slices. `maxStoredDays` bounds the blob's own `days` window:
-    /// the Core Data path passes a small bound (its `days` is just a recent cache — the per-row `DayRecord`
-    /// store is the uncapped source of truth), while the local/no-iCloud path passes nil so its single
-    /// file holds the full, now-uncapped history.
+    /// Applies today's day + the aggregate slices, refreshing `updatedAt`. `maxStoredDays` bounds the
+    /// blob's own `days` window: the Core Data path passes a small bound (its `days` is just a recent
+    /// cache — the per-row `DayRecord` store is the uncapped source of truth), while the local/no-iCloud
+    /// path passes nil so its single file holds the full, now-uncapped history. When trimming, the
+    /// lexicographically oldest date keys are dropped first.
     public mutating func apply(_ snapshot: FernletSnapshot, maxStoredDays: Int? = nil) {
         assert(!snapshot.todayKey.isEmpty, "snapshot key required")
         assert(snapshot.day.date == snapshot.todayKey, "snapshot day mismatch")
@@ -358,7 +504,9 @@ extension LocalFernletDatabase {
 
     /// Rebuilds the derived log tables + Tier-2 memories. `recentDays` (oldest-first) lets a per-row store
     /// inject a bounded window of days instead of paying a whole-history scan of `self.days`; when omitted
-    /// it falls back to the blob's own `days` (the local/no-iCloud path).
+    /// it falls back to the blob's own `days` (the local/no-iCloud path). This is the shared write-path
+    /// step both repositories run on every save, which is what makes the derived tables safely
+    /// disposable — any frozen or stale row is overwritten on the next save.
     public mutating func rebuildDerivedTables(todayKey: String, recentDays: [(String, FernletDay)]? = nil) {
         assert(!todayKey.isEmpty, "today key required")
         let orderedDays = recentDays ?? Self.sortedDayPairs(days)
@@ -369,6 +517,7 @@ extension LocalFernletDatabase {
         tierTwoMemories = TierTwoMemoryEngine.updateInferences(existing: tierTwoMemories, from: orderedDays, goals: goals)
     }
 
+    /// Orders the day dictionary oldest-first by date key (day keys sort lexicographically).
     private static func sortedDayPairs(_ days: [String: FernletDay]) -> [(String, FernletDay)] {
         // No upper-bound assertion: day storage is uncapped now (per-row rows for iCloud, a single
         // uncapped file for local-only). The log builders below still bound their output by
@@ -376,12 +525,15 @@ extension LocalFernletDatabase {
         days.sorted { first, second in first.key < second.key }
     }
 
+    /// One ``DailyLogRecord`` per day, bounded to the trailing ``FernletLimits/derivedLogWindowDays``.
     private static func makeDailyLogs(from days: [(String, FernletDay)]) -> [DailyLogRecord] {
         return days.suffix(FernletLimits.derivedLogWindowDays).map { key, day in
             DailyLogRecord(dateKey: key, day: day)
         }
     }
 
+    /// Per-meal rows for the window, clamped per day (``FernletLimits/maxMealsPerDay``) and
+    /// overall (``FernletLimits/maxMealLogs``).
     private static func makeMealLogs(from days: [(String, FernletDay)]) -> [MealLogRecord] {
         let nested = days.suffix(FernletLimits.derivedLogWindowDays).map { key, day in
             day.meals.prefix(FernletLimits.maxMealsPerDay).map { meal in
@@ -391,6 +543,8 @@ extension LocalFernletDatabase {
         return Array(nested.joined().prefix(FernletLimits.maxMealLogs))
     }
 
+    /// Per-workout rows for the window, clamped per day (``FernletLimits/maxWorkoutsPerDay``)
+    /// and overall (``FernletLimits/maxWorkoutLogs``).
     private static func makeWorkoutLogs(from days: [(String, FernletDay)]) -> [WorkoutLogRecord] {
         let nested = days.suffix(FernletLimits.derivedLogWindowDays).map { key, day in
             day.workouts.prefix(FernletLimits.maxWorkoutsPerDay).map { workout in
@@ -400,6 +554,8 @@ extension LocalFernletDatabase {
         return Array(nested.joined().prefix(FernletLimits.maxWorkoutLogs))
     }
 
+    /// Per-entry journal rows for the window, clamped per day (``FernletLimits/maxJournalsPerDay``)
+    /// and overall (``FernletLimits/maxJournalLogs``).
     private static func makeJournalLogs(from days: [(String, FernletDay)]) -> [JournalLogRecord] {
         let nested = days.suffix(FernletLimits.derivedLogWindowDays).map { key, day in
             day.journals.prefix(FernletLimits.maxJournalsPerDay).map { journal in
@@ -411,23 +567,45 @@ extension LocalFernletDatabase {
 
 }
 
+/// The persistence-layer size caps: derived-table windows, per-day entry clamps, and log-table
+/// ceilings shared by both repositories and the derived-signal/Tier-2 engines.
+///
+/// These bound only the *recomputable* structures — never day storage itself, which is uncapped
+/// (per-row for the iCloud path, a single file for local-only). The log ceilings are sized as
+/// window × per-day clamp (370 × 20 meals = 7,400; 370 × 12 = 4,440), so the two sides are
+/// consistent by construction: changing one means revisiting the other. Consumers include the
+/// derived-table builders here, ``DerivedSignalFactory``, `TierTwoMemoryEngine`,
+/// `CoreDataFernletRepository`, and the app-side `CoreDataHealthKitCacheCleaner`.
 public enum FernletLimits {
     /// How much day history the derived log tables (daily/meal/workout/journal) retain. Decoupled from
     /// day *storage* (which is per-row and uncapped) — it bounds only the recomputable log tables and the
     /// "year-ago" lookbacks, so derived rebuilds read a fixed recent window instead of the whole history.
     public static let derivedLogWindowDays = 370
+    /// Per-day clamp on meals considered by the log builders, macro totals, and signal heuristics.
     public static let maxMealsPerDay = 20
+    /// Per-day clamp on workouts considered by the log builders and training-load heuristics.
     public static let maxWorkoutsPerDay = 12
+    /// Per-day clamp on journal entries considered by the log builders and mood heuristics.
     public static let maxJournalsPerDay = 12
+    /// Overall ceiling on ``MealLogRecord`` rows (window × per-day clamp).
     public static let maxMealLogs = 7_400
+    /// Overall ceiling on ``WorkoutLogRecord`` rows (window × per-day clamp).
     public static let maxWorkoutLogs = 4_440
+    /// Overall ceiling on ``JournalLogRecord`` rows (window × per-day clamp).
     public static let maxJournalLogs = 4_440
+    /// Maximum journal text length; ``JournalLogRecord``'s builder asserts it in debug.
     public static let maxJournalCharacters = 800
+    /// Clamp on emotion keys carried per journal log row.
     public static let maxEmotionKeys = 8
+    /// The maximum day window ``DerivedSignalFactory`` accepts (and `TierTwoMemoryEngine` uses).
     public static let signalWindowDays = 14
 }
 
 extension MacroTotals {
+    /// Sums protein/carbs/fat across a day's meals, clamped to ``FernletLimits/maxMealsPerDay``.
+    ///
+    /// - Important: Asserts (debug-only) that the input is already within the per-day cap; the
+    ///   clamp is the release-mode safety net.
     public init(meals: [Meal]) {
         assert(meals.count <= FernletLimits.maxMealsPerDay, "too many meals")
         let limited = meals.prefix(FernletLimits.maxMealsPerDay)

@@ -11,16 +11,33 @@ import FoundationModels
 import FernletDomainModel
 #endif
 
+/// The "here's the page I found" step of a web product lookup: the resolved product-page URL and its
+/// best-known title, shown to the user before any nutrition is extracted.
+///
+/// Produced by ``FoodProductWebSearch/preview(for:)`` / `FoodProductWebImporter.preview(from:)` and
+/// displayed in `FoodProductReviewSheet` so the source is always disclosed alongside the values.
 struct ProductPagePreview: Equatable {
     var sourceURL: URL
     var title: String
 
+    /// The host to display as the source name, falling back to the whole URL when there is none.
     var sourceName: String {
         sourceURL.host() ?? sourceURL.absoluteString
     }
 }
 
+/// Web search for a packaged/branded product's page, plus the "is this query worth searching?"
+/// gate.
+///
+/// Runs only behind the web-nutrition-lookup opt-in (the query egresses to DuckDuckGo's HTML
+/// endpoint). Result links are unwrapped from DuckDuckGo redirects, restricted to https, and ranked
+/// so retailer/chain sites beat secondary nutrition aggregators. `MealSheet`'s Save path consults
+/// ``shouldSearch(for:foodItems:)`` to decide whether a typed description is a specific branded
+/// product (and not already imported) before offering the web route.
 enum FoodProductWebSearch {
+    /// Whether `description` names a specific retail/branded product worth a web lookup: it must
+    /// carry a retailer/brand signal, have at least two meaningful tokens, and not already match a
+    /// previously web-imported (`aiResolved`) food item.
     static func shouldSearch(for description: String, foodItems: [FoodItem]) -> Bool {
         let normalized = FoodItemSearch.normalized(description)
         let retailerTerms = [
@@ -41,6 +58,9 @@ enum FoodProductWebSearch {
         }
     }
 
+    /// Searches the web for "`query` nutrition facts" and returns the highest-priority result as a
+    /// ``ProductPagePreview``.
+    /// - Throws: ``FoodProductWebImportError/productNotFound`` when no usable result parses.
     static func preview(for query: String) async throws -> ProductPagePreview {
         var components = URLComponents(string: "https://html.duckduckgo.com/html/")
         components?.queryItems = [URLQueryItem(name: "q", value: "\(query) nutrition facts")]
@@ -54,12 +74,16 @@ enum FoodProductWebSearch {
         return result
     }
 
+    /// The parsed search results reordered by source priority — retailer/chain hosts first,
+    /// secondary nutrition aggregators demoted.
     static func preferredSearchResults(from html: String) -> [ProductPagePreview] {
         searchResults(from: html).sorted { first, second in
             sourcePriority(for: first.sourceURL) > sourcePriority(for: second.sourceURL)
         }
     }
 
+    /// Extracts deduplicated (URL, title) result links from the search page's HTML, unwrapping
+    /// DuckDuckGo `uddg` redirects and keeping only https, non-DuckDuckGo destinations.
     static func searchResults(from html: String) -> [ProductPagePreview] {
         let pattern = #"(?is)<a\b([^>]*)>(.*?)</a>"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
@@ -150,6 +174,14 @@ enum FoodProductWebSearch {
     }
 }
 
+/// A packaged food's per-serving nutrition as extracted from its web page, ready for user
+/// confirmation.
+///
+/// The unit of exchange across the web-import flow: built by ``FoodProductWebImporter``, reviewed in
+/// `FoodProductReviewSheet`, and persisted as an `aiResolved` catalog `FoodItem` via
+/// `FernletStore.saveWebImportedFoodProduct` only after the user confirms. `lookupQuery` carries the
+/// text the user originally typed so repeat lookups hit the cache. The second initializer rebuilds
+/// one from an already-saved `FoodItem` for the cached-product fast path.
 struct ImportedFoodProduct: Equatable {
     var sourceURL: URL
     var name: String
@@ -192,6 +224,10 @@ struct ImportedFoodProduct: Equatable {
     }
 }
 
+/// Every way a web product lookup/import can fail, with a user-facing sentence for each.
+///
+/// Thrown across ``FoodProductWebSearch`` and ``FoodProductWebImporter``; the import screen shows
+/// `errorDescription` as its calm inline notice rather than a hard error.
 enum FoodProductWebImportError: LocalizedError {
     case invalidURL
     case fetchFailed
@@ -218,7 +254,19 @@ enum FoodProductWebImportError: LocalizedError {
     }
 }
 
+/// Extracts one packaged food's nutrition from a product web page, trying progressively less
+/// structured sources: schema.org JSON-LD → visible nutrition-facts text → OCR over candidate label
+/// images → a last-resort on-device Foundation Models extraction over the cleaned body text.
+///
+/// The workhorse behind the "Import product" flow (and the barcode TODO's future opt-in). Runs only
+/// behind the web-nutrition-lookup opt-in; fetches are https-only, size-capped (3 MB HTML, 12 MB
+/// images), and 15-second-bounded. Only the model tier touches AI — it routes through `FernletAIGate`,
+/// is audited in `AIAuditLog`, and its output must pass per-field bounds plus a macro-calorie
+/// consistency check before it is believed. Every tier funnels into ``ImportedFoodProduct``, which is
+/// never persisted until the user confirms in the review sheet.
 enum FoodProductWebImporter {
+    /// Normalizes free text into an https product-page URL (prefixing `https://` when the scheme is
+    /// missing), or `nil` when it can't be a valid web URL.
     static func normalizedWebURL(from text: String) -> URL? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -231,6 +279,9 @@ enum FoodProductWebImporter {
         return url
     }
 
+    /// Fetches `url` and builds its preview (JSON-LD product name → og:title → `<title>` → host).
+    /// A fetch failure falls back to a web search built from the URL's path slug, so a dead or
+    /// bot-walled product link can still resolve to a working page.
     static func preview(from url: URL) async throws -> ProductPagePreview {
         let html: String
         do {
@@ -246,6 +297,8 @@ enum FoodProductWebImporter {
         return ProductPagePreview(sourceURL: url, title: htmlDecoded(title))
     }
 
+    /// A human-ish search query recovered from a URL's path slug (numbers and boilerplate path
+    /// segments dropped, hyphens spaced), for when the page itself couldn't be fetched.
     static func fallbackSearchText(from url: URL) -> String {
         let ignoredPathComponents: Set<String> = ["p", "product", "products", "-"]
         let slug = url.pathComponents
@@ -255,6 +308,11 @@ enum FoodProductWebImporter {
         return slug.isEmpty ? (url.host() ?? url.absoluteString) : slug
     }
 
+    /// Runs the full extraction ladder over the previewed page: a direct image URL is OCR'd as a
+    /// label; otherwise structured JSON-LD, visible nutrition text, candidate label images, and
+    /// finally the gated on-device model are tried in order.
+    /// - Returns: The first tier's complete ``ImportedFoodProduct``.
+    /// - Throws: A ``FoodProductWebImportError`` when every tier comes up empty.
     static func importProduct(from preview: ProductPagePreview, gate: FernletAIGate) async throws -> ImportedFoodProduct {
         #if canImport(UIKit)
         if isDirectImageURL(preview.sourceURL),
@@ -295,6 +353,8 @@ enum FoodProductWebImporter {
         return try await extractWithFoundationModel(from: cleanedText, fallbackName: preview.title, sourceURL: preview.sourceURL, gate: gate)
     }
 
+    /// The structured tier: a product built from the page's schema.org JSON-LD `Product` +
+    /// `nutrition` data, or `nil` when the page carries none (or the macros are incomplete).
     static func structuredProduct(from html: String, sourceURL: URL) -> ImportedFoodProduct? {
         guard let dictionary = productDictionary(in: html) else { return nil }
         return importedProduct(from: dictionary, sourceURL: sourceURL)
@@ -337,6 +397,10 @@ enum FoodProductWebImporter {
                 }) == true
     }
 
+    /// Fetches a page as HTML with a Safari-like User-Agent: https-only, 15 s timeout, 2xx +
+    /// text/html content-type required, and the body capped at 3 MB (streamed so an oversized page
+    /// aborts early).
+    /// - Throws: ``FoodProductWebImportError/fetchFailed`` / `emptyHTML` / `invalidURL`.
     static func fetchHTML(from url: URL) async throws -> String {
         guard url.scheme == "https" else {
             throw FoodProductWebImportError.invalidURL
@@ -486,6 +550,8 @@ enum FoodProductWebImporter {
         return (value as? [String: Any]).flatMap { stringValue($0["name"]) }
     }
 
+    /// The visible-text tier: flattens the page body to lines, normalizes shorthand ("fat 5g" →
+    /// "Total Fat 5g"), and runs the shared `NutritionLabelScanner` line parser over them.
     static func productFromVisibleNutritionText(in html: String, fallbackName: String, sourceURL: URL) -> ImportedFoodProduct? {
         var lines: [String] = []
         for line in visibleTextLines(from: html) {
@@ -551,6 +617,9 @@ enum FoodProductWebImporter {
         )
     }
 
+    /// Whether an OCR'd label scan is complete enough to trust from an arbitrary web image: serving
+    /// size, calories, and all three macros must all be present. Guards the image tier against
+    /// accepting a partial read off a lifestyle photo.
     static func isCompleteNutritionLabelScan(_ result: NutritionLabelResult) -> Bool {
         guard let servingSize = result.servingSize?.trimmingCharacters(in: .whitespacesAndNewlines),
               servingSize.isEmpty == false,
@@ -687,6 +756,11 @@ enum FoodProductWebImporter {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// A possible nutrition-label image scraped from the page: its URL plus the surrounding
+    /// attribute/JSON context used to score it.
+    ///
+    /// Candidates from `<img>`/`<source>` tags, social metadata, JSON-LD, and raw embedded URLs are
+    /// scored by label-ish context terms, then the top few are fetched and OCR'd.
     private struct ImageCandidate {
         var url: URL
         var context: String
@@ -916,6 +990,8 @@ enum FoodProductWebImporter {
         allCaptures(in: text, pattern: pattern).first
     }
 
+    /// Decodes the handful of HTML entities that matter for titles, hrefs, and JSON-LD blobs
+    /// (`&amp;` deliberately last so double-encoded text unwraps one layer per pass).
     static func htmlDecoded(_ text: String) -> String {
         let entities: [(String, String)] = [
             ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""),
@@ -928,6 +1004,12 @@ enum FoodProductWebImporter {
 }
 
 #if canImport(FoundationModels)
+/// The `@Generable` schema for the last-resort on-device model extraction: every field is a raw
+/// string in the page's own wording (empty when absent), so the model never invents numbers.
+///
+/// `importedProduct(sourceURL:fallbackName:)` parses the strings back into an
+/// ``ImportedFoodProduct``; the caller then applies bounds and macro-calorie consistency checks
+/// before trusting the result.
 @available(iOS 26.0, macOS 26.0, visionOS 26.0, *)
 @Generable
 private struct ExtractedFoodProduct {

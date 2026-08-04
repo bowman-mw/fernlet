@@ -17,6 +17,18 @@ import FernletDomainModel
 import FernletFoundation
 import FernletPersistence
 
+/// Append-only per-row Core Data + iCloud store for `CoinLedgerEntry` rows.
+///
+/// The `CoinLedgerRepositoring` conformer used under Core Data storage. Each entry is one
+/// `CoinLedgerRecord` row — a JSON `payloadData` blob (encoded via ``RowPayloadCoders``) keyed
+/// by the entry's stable deterministic `idString` — so each device's earn/spend rows sync
+/// independently instead of last-writer-wins on the snapshot blob. `append` upserts only the
+/// rows it is handed and never deletes others, so a stale in-memory set on one device cannot
+/// wipe rows synced in from another. Duplicate-id rows minted by two devices are NOT collapsed
+/// here (CloudKit mirrors by record identity, not `idString`); the union-merge dedup lives in
+/// `CoinEconomy` aggregation. Failed saves assert in Debug builds, roll the context back, and
+/// return `false`. MainActor-isolated by the module default, working on
+/// ``PersistenceController``'s view context.
 public struct CoinLedgerRepository: CoinLedgerRepositoring {
     private let controller: PersistenceController
 
@@ -28,10 +40,12 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
         self.controller = controller
     }
 
+    /// Loads every ledger entry, oldest first; undecodable rows are dropped per row.
     public func load() -> [CoinLedgerEntry] {
         StartupTiming.timed("CoinLedgerRepository.load") { loadRecords() }
     }
 
+    /// Async-signature variant of `load()` (the fetch itself still runs on the main actor).
     public func loadAsync() async -> [CoinLedgerEntry] {
         StartupTiming.timed("CoinLedgerRepository.loadAsync") { loadRecords() }
     }
@@ -47,6 +61,9 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
         return records.compactMap(Self.entry(from:))
     }
 
+    /// Upserts the given entries by `idString`, never deleting rows it wasn't handed.
+    ///
+    /// - Returns: `false` when the Core Data save fails (the context is rolled back).
     @discardableResult public func append(_ entries: [CoinLedgerEntry]) -> Bool {
         guard !entries.isEmpty else { return true }
         let context = controller.container.viewContext
@@ -86,6 +103,7 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
         }
     }
 
+    /// Removes every ledger row — the delete-all/reset path only (normal operation never deletes).
     @discardableResult public func deleteAll() -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "CoinLedgerRecord")

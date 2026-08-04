@@ -18,6 +18,18 @@ import FernletDomainModel
 import FernletFoundation
 import FernletPersistence
 
+/// Upsert-only per-row Core Data + iCloud store for user-designed `CustomizationItem`s.
+///
+/// The `CustomItemRepositoring` conformer under Core Data storage: each item is one
+/// `CustomItemRecord` row (a JSON `payloadData` blob via ``RowPayloadCoders``, keyed by the
+/// item's UUID) so a growing closet never bloats the snapshot blob and items sync row by row.
+/// `upsert` touches only the rows it is handed and `delete` removes only the listed ids — the
+/// discipline that stops a stale in-memory set on one device from clobbering rows synced in from
+/// another (the cross-device wipe the in-person clothing shop's buy would otherwise trigger).
+/// Duplicate-id rows from two devices buying the same friend's item are NOT collapsed here
+/// (CloudKit mirrors by record identity); `CustomItemService` dedups on load. Failed saves
+/// assert in Debug builds, roll the context back, and return `false`. MainActor-isolated by the
+/// module default, working on ``PersistenceController``'s view context.
 public struct CustomItemRepository: CustomItemRepositoring {
     private let controller: PersistenceController
 
@@ -29,10 +41,12 @@ public struct CustomItemRepository: CustomItemRepositoring {
         self.controller = controller
     }
 
+    /// Loads every custom item, oldest first; undecodable rows are dropped per row.
     public func load() -> [CustomizationItem] {
         StartupTiming.timed("CustomItemRepository.load") { loadRecords() }
     }
 
+    /// Async-signature variant of `load()` (the fetch itself still runs on the main actor).
     public func loadAsync() async -> [CustomizationItem] {
         StartupTiming.timed("CustomItemRepository.loadAsync") { loadRecords() }
     }
@@ -48,6 +62,9 @@ public struct CustomItemRepository: CustomItemRepositoring {
         return records.compactMap(Self.item(from:))
     }
 
+    /// Inserts or updates the given items by UUID, never deleting rows it wasn't handed.
+    ///
+    /// - Returns: `false` when the Core Data save fails (the context is rolled back).
     @discardableResult public func upsert(_ items: [CustomizationItem]) -> Bool {
         guard !items.isEmpty else { return true }
         let context = controller.container.viewContext
@@ -87,6 +104,7 @@ public struct CustomItemRepository: CustomItemRepositoring {
         }
     }
 
+    /// Deletes only the rows with the listed ids (a no-op for ids with no row).
     @discardableResult public func delete(ids: [UUID]) -> Bool {
         guard !ids.isEmpty else { return true }
         let context = controller.container.viewContext
@@ -107,6 +125,7 @@ public struct CustomItemRepository: CustomItemRepositoring {
         }
     }
 
+    /// Removes every custom-item row — the delete-all/reset path.
     @discardableResult public func deleteAll() -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "CustomItemRecord")

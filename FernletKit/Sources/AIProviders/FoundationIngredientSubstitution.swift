@@ -21,6 +21,12 @@ import FoundationModels
 /// device capability, applies the sleepy/resting budget, and charges exactly one call. A `nil` gate
 /// result (off / resting / incapable) returns `nil` so the caller takes its deterministic path (the
 /// manual catalog-search sheet).
+///
+/// Every model call is recorded in `AIAuditLog` (payload kind + included field names, never
+/// content); session errors are audited and rethrown. MainActor by the module's default isolation,
+/// with the pure binding helpers (``bindNames(picks:resolve:limit:)``, ``bind(picks:candidates:limit:)``,
+/// ``deterministicSuggestions(candidates:)``) explicitly `nonisolated` so tests exercise the
+/// world-knowledge → catalog handoff without `FoundationModels`.
 public enum FoundationIngredientSubstitutionModel {
 
     /// Runs the substitution model for one ingredient. `resolve` maps a model-proposed food name to local
@@ -149,11 +155,19 @@ public enum FoundationIngredientSubstitutionModel {
 }
 
 #if canImport(FoundationModels)
+/// The `@Generable` response schema for F4 ingredient substitution: an ordered list of substitute
+/// picks, best first.
+///
+/// Guided generation guarantees only shape; ``bound(resolve:)`` funnels the raw names through
+/// ``FoundationIngredientSubstitutionModel``'s `bindNames`, so the drop / dedupe / order / cap
+/// invariants apply before anything reaches the UI.
 @available(iOS 26.0, *)
 @Generable
 private struct FoundationSubstitutionSuggestions {
     var suggestions: [FoundationSubstitutionPick]
 
+    /// Rebinds the model's proposed names to real catalog foods via
+    /// `FoundationIngredientSubstitutionModel.bindNames`; names resolving to nothing are dropped.
     func bound(resolve: (String) -> [FoodSelectionCandidate]) -> [IngredientSubstitutionSuggestion] {
         FoundationIngredientSubstitutionModel.bindNames(
             picks: suggestions.map { (name: $0.foodName, reason: $0.reason) },
@@ -162,6 +176,11 @@ private struct FoundationSubstitutionSuggestions {
     }
 }
 
+/// One model-proposed substitute: a plain grocery-store food name plus a short friendly reason.
+///
+/// The name is world knowledge only — it is re-resolved against the local catalog by
+/// ``FoundationIngredientSubstitutionModel``, which supplies the actual `FoodItem` and macros; the
+/// reason is display copy, capped before it reaches the UI and never persisted.
 @available(iOS 26.0, *)
 @Generable
 private struct FoundationSubstitutionPick {

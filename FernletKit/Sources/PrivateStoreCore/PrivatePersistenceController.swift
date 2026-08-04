@@ -5,16 +5,55 @@ import FernletFoundation
 
 /// A dedicated non-CloudKit persistent store for sealed (ChaChaPoly-encrypted) entities.
 /// Sensitive narrative records live here and are never mirrored to iCloud.
+///
+/// This is the shared Core Data substrate on the protected side of the S3 privacy wall: the
+/// sealed repositories in `PrivateHealthStore` (`MenstrualNarrativeRepository`,
+/// `IntimacyLogRepository`) and `PrivateMemoryStore` (`JournalNarrativeRepository`,
+/// `WorryNarrativeRepository`) all read and write through its ``container``, and
+/// `FernletLockService` calls ``purgeEncryptedEntities()`` during its destructive reset. The
+/// walled `AIProviders` and `CloudKitSync` modules have no dependency edge to this module, so no
+/// sealed entity is even nameable there.
+///
+/// Store posture:
+/// - Never synced: `cloudKitContainerOptions` is intentionally never set, so the `FernletPrivate`
+///   store cannot be mirrored to iCloud.
+/// - `FileProtection.complete` on the store file; iOS-backup exclusion follows the user's
+///   `localBackupExcludedFromiOSBackup` preference (via the shared `BackupExclusion` helper) so
+///   one toggle consistently covers both the synced and sealed stores.
+/// - Persistent-history tracking is on; sealed writers pair their saves with
+///   ``PrivatePersistentHistoryPruner`` so edited rows do not leave prior ciphertext recoverable
+///   from the history tables.
+/// - The model is built programmatically (``makeManagedObjectModel()``): plain `NSManagedObject`
+///   entities whose text content lives only in `*Ciphertext` binary columns; ids, day keys, and
+///   timestamps are plaintext by accepted risk (NEW-4). The column sealing itself happens in the
+///   layer-3 repositories under the lock's content key — this module never touches that key.
+///
+/// Concurrency: this module is nonisolated; ``shared`` is `nonisolated(unsafe)` because
+/// `NSPersistentContainer` is not `Sendable` (matching its prior app-target behavior). Failure
+/// mode: a store that fails to load logs the error and sets ``didFailToLoad`` instead of
+/// crashing.
 public final class PrivatePersistenceController {
+    /// The process-wide controller for the on-disk sealed store; `nonisolated(unsafe)` because
+    /// the container is not `Sendable`.
     nonisolated(unsafe) public static let shared = PrivatePersistenceController()
 
+    /// An in-memory (`/dev/null`-backed) controller for SwiftUI previews and tests.
     @MainActor
     public static let preview = PrivatePersistenceController(inMemory: true)
 
+    /// The local-only container hosting the four sealed entities (`MenstrualNarrative`,
+    /// `JournalNarrative`, `IntimacyLog`, `WorryNarrative`).
     public let container: NSPersistentContainer
+    /// `true` when the persistent store failed to load; the error is logged and the controller
+    /// left running (against an empty container) rather than crashing.
     public private(set) var didFailToLoad = false
     private let inMemory: Bool
 
+    /// Creates the stack and loads the `FernletPrivate` store with complete file protection,
+    /// history tracking, lightweight migration, and — for on-disk stores — the user's
+    /// backup-exclusion preference applied.
+    ///
+    /// - Parameter inMemory: When `true`, backs the store with `/dev/null` for previews and tests.
     public init(inMemory: Bool = false) {
         self.inMemory = inMemory
         container = NSPersistentContainer(
@@ -77,6 +116,10 @@ public final class PrivatePersistenceController {
         BackupExclusion.apply(storeURL: storeURL, excluded: excluded, includeSupportDir: true)
     }
 
+    /// Deletes every row of all four sealed entities, saves, and prunes the persistent history.
+    ///
+    /// The destructive half of the lock reset and delete-all-data flows. The ciphertext rows are
+    /// unrecoverable afterward — their content key is owned (and scrubbed) by `FernletLockService`.
     public func purgeEncryptedEntities() throws {
         let context = container.viewContext
         try context.performAndWait {
@@ -93,12 +136,15 @@ public final class PrivatePersistenceController {
 
     // MARK: - Model
 
+    /// Builds the programmatic managed-object model containing the four sealed entities.
     static func makeManagedObjectModel() -> NSManagedObjectModel {
         let model = NSManagedObjectModel()
         model.entities = [makeMenstrualNarrativeEntity(), makeJournalNarrativeEntity(), makeIntimacyLogEntity(), makeWorryNarrativeEntity()]
         return model
     }
 
+    /// The sealed period-narrative entity: plaintext id / HealthKit UUID / day key plus
+    /// ciphertext note, symptom-flag, and symptom-scale columns, indexed by `dateKey`.
     static func makeMenstrualNarrativeEntity() -> NSEntityDescription {
         let entity = NSEntityDescription()
         entity.name = "MenstrualNarrative"
@@ -121,6 +167,8 @@ public final class PrivatePersistenceController {
         return entity
     }
 
+    /// The sealed journal entity: plaintext id / day key / tag / dates plus ciphertext text and
+    /// emotions columns, indexed by `dayKey`.
     static func makeJournalNarrativeEntity() -> NSEntityDescription {
         let entity = NSEntityDescription()
         entity.name = "JournalNarrative"
@@ -146,6 +194,8 @@ public final class PrivatePersistenceController {
         return entity
     }
 
+    /// The sealed intimacy-log entity: plaintext id / day key / event date / HealthKit UUID plus
+    /// a ciphertext note column, indexed by `dayKey`.
     static func makeIntimacyLogEntity() -> NSEntityDescription {
         let entity = NSEntityDescription()
         entity.name = "IntimacyLog"
@@ -168,6 +218,8 @@ public final class PrivatePersistenceController {
         return entity
     }
 
+    /// The sealed, device-only Worry Box entity: plaintext id / createdAt plus a single
+    /// ciphertext text column.
     static func makeWorryNarrativeEntity() -> NSEntityDescription {
         let entity = NSEntityDescription()
         entity.name = "WorryNarrative"
@@ -184,6 +236,8 @@ public final class PrivatePersistenceController {
         return entity
     }
 
+    /// Builds one optional attribute description, optionally flagged for external binary storage
+    /// (used by the ciphertext columns).
     private static func makeAttribute(
         _ name: String,
         type: NSAttributeType,
@@ -200,6 +254,14 @@ public final class PrivatePersistenceController {
     }
 }
 
+/// Helpers that clear the sealed store's persistent-history transactions after sealed writes.
+///
+/// History tracking is enabled on the `FernletPrivate` store, so every save leaves a copy of the
+/// changed rows — including prior ciphertext — in the history shadow tables. The sealed
+/// repositories in `PrivateHealthStore` and `PrivateMemoryStore` call ``saveAndPrune(_:)`` (or
+/// ``prune(context:before:)`` after their own do/catch saves) so edits and deletes do not linger
+/// as recoverable transactions, and ``PrivatePersistenceController/purgeEncryptedEntities()``
+/// prunes after a full wipe. A caseless enum used purely as a namespace.
 public enum PrivatePersistentHistoryPruner {
     /// Deletes ALL persistent-history transactions store-wide (across the journal/menstrual/intimacy
     /// entities), not just the caller's. It only clears the history shadow tables — it does NOT

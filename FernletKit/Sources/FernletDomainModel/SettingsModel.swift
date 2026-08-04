@@ -3,6 +3,19 @@
 
 import Foundation
 
+/// The whole synced app-settings aggregate: targets, sensitive-surface gates, closet state,
+/// proximity consents, and workout configuration.
+///
+/// A top-level field of the synced snapshot blob, which makes its serialization the module's most
+/// defended surface: scalar enums decode freeze-and-park (``EnumDecodeCompat``), enum arrays split
+/// into known cases plus parked token side channels, and every top-level key this build does NOT
+/// know is parked verbatim in `parkedUnknownKeys` and re-emitted on encode — so an older device can
+/// never strip a newer build's settings. The sensitive-visibility keys
+/// (`periodTrackingVisible`/`intimacyTrackingVisible` + the `didMigratePeriodVisibility` marker)
+/// deliberately run their one-time pin OUTSIDE `init(from:)`, in
+/// `reconcilingSensitiveVisibility(deviceLocal:)`, gated on a device-local
+/// ``SensitiveVisibilityResolution`` a pre-gate peer can never rewrite. The custom `encode(to:)`
+/// mirrors the synthesized shape exactly, plus the parked keys at top level.
 public nonisolated struct FernletSettings: Codable {
     public var bottleOz: Int = 24
     public var hydrationTarget: Int = 4
@@ -81,8 +94,9 @@ public nonisolated struct FernletSettings: Codable {
     /// Whether intimate-activity logging is visible. Default ON so this preserves today's behavior
     /// exactly, and so the flag only deviates from its default in the benign direction (turned OFF) —
     /// a default-OFF flag reading `true` would positively signal "this user tracks intimacy" to
-    /// anyone reading the synced blob. Still subordinate to the 18+ age check
-    /// (`isIntimateLoggingAllowed`), which is a separate concern: age says "may not", this says
+    /// anyone reading the synced blob. Still subordinate to the age check
+    /// (`isIntimateLoggingAllowed`, backed by `AgeGate.intimacy` — 16+), which is a separate
+    /// concern: age says "may not", this says
     /// "does not want to". Hiding is a hard gate on the same terms as `periodTrackingVisible`.
     public var intimacyTrackingVisible: Bool = true
     public var hidePredictions: Bool = false
@@ -369,6 +383,10 @@ public nonisolated struct FernletSettings: Codable {
         parkedUnknownKeys = parked
     }
 
+    /// The synced wire-format keys for every stored ``FernletSettings`` property.
+    ///
+    /// `CaseIterable` so the tolerant decoder can compute the known-key set and park every unknown
+    /// key into `parkedUnknownKeys` instead of dropping it; renaming a case is a wire-format break.
     private enum CodingKeys: String, CodingKey, CaseIterable {
         // Every STORED property that participates in the synced wire format. `parkedUnknownKeys` is
         // deliberately absent: it is written back at the top level by key (`encode(to:)`), never under a
@@ -589,6 +607,10 @@ public extension FernletSettings {
     }
 }
 
+/// The companion-voiced AI availability state shown in Settings (ready/sleepy/resting/off).
+///
+/// Synced on ``FernletSettings`` with a parked-token side channel; `.off` disables the AI
+/// features entirely.
 public nonisolated enum AIStatus: String, Codable, Sendable, CaseIterable, Identifiable {
     case ready
     case sleepy

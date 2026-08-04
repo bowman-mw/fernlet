@@ -17,6 +17,17 @@ import Foundation
 import UserNotifications
 import AppServices
 
+/// The app's `UNUserNotificationCenterDelegate`: foreground presentation for the gentle local
+/// notifications, plus tap-to-sheet deep-linking.
+///
+/// `willPresent` opts the daily check-in into banner+sound while the app is foregrounded
+/// (otherwise the system swallows it); `didReceive` maps a tap on the check-in to the journal
+/// sheet by storing `pendingSheetID` and posting `pendingSheetRequestNotification`, which
+/// `ContentView.consumePendingNotificationSheet()` consumes (cold launches read the flag from the
+/// startup task instead). Installed in `FernletApp.init` before launch finishes — the delegate
+/// must exist for a cold-launch tap to be delivered — and `shared` holds the strong reference the
+/// center's weak delegate slot needs. Delegate callbacks are `nonisolated`; the state write hops
+/// to the main actor.
 final class FernletNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = FernletNotificationDelegate()
 

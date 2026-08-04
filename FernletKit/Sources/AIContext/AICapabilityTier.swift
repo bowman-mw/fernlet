@@ -1,9 +1,13 @@
 import Foundation
 import FernletDomainModel
 
-/// The minimum capability an AI task declares. The router picks the *cheapest available* destination
-/// meeting the tier, never higher than the device capability or the user's configured ceiling.
-/// See Docs/AI-Provider-Ladder-2026-07-23.md §3.1.
+/// The minimum capability an AI task declares.
+///
+/// The router (``FernletModelRouter``) picks the *cheapest available* destination meeting the tier,
+/// never higher than the device capability or the user's configured ceiling.
+/// See Docs/AI-Provider-Ladder-2026-07-23.md §3.1. Every call site passes a tier into
+/// ``FernletAIGate/dispatch(tier:userInvoked:)``; the tier's ``escalationLadder`` is the ordered rung
+/// list the router walks.
 ///
 /// Placement: this and the router/quota contract types live in `AIContext` (not `FernletDomainModel`)
 /// because they are AI control-plane concepts that sit alongside the audit log and the typed
@@ -22,7 +26,7 @@ public enum AICapabilityTier: String, Codable, Sendable, CaseIterable {
     /// Whether a task at this tier may ever route to a destination that leaves the device.
     ///
     /// `light` is `false`: it is the sensitive-adjacent tier (journal, memory) and is pinned
-    /// on-device as a HARD rule, not a default. `FernletModelRouter` enforces this at resolution
+    /// on-device as a HARD rule, not a default. ``FernletModelRouter`` enforces this at resolution
     /// time with an assertion — a `light` task can never yield a `leavesDevice` destination — so the
     /// pin survives future edits to the ladder rather than living only in a comment.
     public var allowsOffDeviceEscalation: Bool {

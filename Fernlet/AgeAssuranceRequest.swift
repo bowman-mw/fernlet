@@ -85,6 +85,12 @@ extension View {
     }
 }
 
+/// The modifier behind `requestsAgeRange(when:into:onFinish:)`: watches the trigger binding and
+/// runs the system age-range request when it flips true.
+///
+/// Exists because `\.requestAgeRange` is a SwiftUI environment action and can only be read from
+/// inside a view; `.task(id:)` keys the request off the binding, so re-asking is just re-flipping
+/// the trigger.
 private struct AgeRangeRequestModifier: ViewModifier {
     let store: AgeAssuranceStore
     @Binding var isRequesting: Bool

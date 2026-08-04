@@ -10,6 +10,16 @@
 
 import Foundation
 
+/// Namespace for toggling iOS-backup exclusion across a Core Data store file and its sidecars.
+///
+/// Shared by both persistence controllers — the sealed store's `PrivatePersistenceController`
+/// (PrivateStoreCore) and the synced store's `PersistenceController` (CloudKitSync) — so the two
+/// backup-exclusion loops stay identical instead of drifting apart. It operates purely on `URL`s
+/// with no CoreData import, which is what lets it live at Layer 0 where modules on both sides of
+/// the S3 wall can reach it. The app re-applies the user's
+/// ``StoragePreferences/localBackupExcludedFromiOSBackup`` choice through this helper on launch;
+/// the re-apply is idempotent, so sidecars that did not exist on an earlier pass self-heal on the
+/// next one. `nonisolated`: pure file-attribute writes, callable from any executor.
 public nonisolated enum BackupExclusion {
     /// Sets `isExcludedFromBackupKey` to `excluded` on a Core Data store file, its `-wal`/`-shm`
     /// sidecars, and — when `includeSupportDir` is true — the sibling `.<StoreName>_SUPPORT`

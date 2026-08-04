@@ -8,7 +8,17 @@ import FernletScoring
 import FoundationModels
 #endif
 
+/// Namespace answering "can this device run the on-device Foundation model right now?".
+///
+/// App-side call sites (the launch prewarm in `LaunchPreparationService`, the workout-adjust
+/// affordance in `MoveView`) consult ``isFoundationModelAvailable`` to show or hide AI affordances
+/// before any payload is built. This is a raw capability probe only — actual dispatch decisions
+/// (user intent, daily budget, one-call charge) go through `FernletAIGate`, which reads the same
+/// signal via ``SystemLanguageModelCapabilityProvider``.
 public enum FoodSelectionAvailability {
+    /// `true` when the default `SystemLanguageModel` reports `.available` (iOS 26+ with
+    /// FoundationModels importable); `false` on incapable hardware, with Apple Intelligence
+    /// disabled, or on SDKs without the framework.
     public static var isFoundationModelAvailable: Bool {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
@@ -21,6 +31,23 @@ public enum FoodSelectionAvailability {
     }
 }
 
+/// On-device AI stage for meal food selection: turns a free-text meal description ("grilled cheese
+/// and tomato soup") into a structured `FoodSelectionPlan` bound to numbered catalog candidates.
+///
+/// The app's meal-resolution pipeline calls ``resolve(_:gate:)`` with a de-identified
+/// `FoodSelectionPayload` (description + numbered `FoodSelectionCandidate` list built app-side).
+/// The model contributes judgment only — how to split the meal and which candidate numbers fit —
+/// and can never introduce a food: the `@Generable` response carries candidate NUMBERS, which
+/// ``FoundationMealSelection`` re-binds to real catalog foods, dropping unknown numbers,
+/// normalizing units, clamping quantities, and capping items/ingredients before anything persists.
+///
+/// Every model dispatch routes through `FernletAIGate` (standard tier, user-invoked) — capability
+/// cap, sleepy/resting daily budget, exactly one call charged — and every outcome is recorded in
+/// `AIAuditLog` with the payload kind and included field names, never the content. A `nil` result
+/// (gate fallback, empty candidates, or an unusable response) tells the caller to run its
+/// deterministic cascade; ``deterministicPlan(description:candidates:fallbackType:)`` is the
+/// AI-free tier of the same contract. MainActor by the module's default isolation; the helpers are
+/// pure functions. Errors thrown by the model session are audited and rethrown.
 public enum FoundationFoodSelectionModel {
     /// Meal food-selection (`standard` tier, user-invoked). Routes through `gate` right before the
     /// model dispatch: the gate caps by device capability, applies the sleepy/resting budget, and
@@ -78,6 +105,9 @@ public enum FoundationFoodSelectionModel {
         return nil
     }
 
+    /// The AI-free tier of meal selection: splits the description with `MealItemSplitter`, binds each
+    /// split item to its single best catalog candidate, and assembles a plan — or `nil` when nothing
+    /// binds, ending the cascade.
     public static func deterministicPlan(description: String, candidates: [FoodSelectionCandidate], fallbackType: MealType?) -> FoodSelectionPlan? {
         let items = MealItemSplitter.items(from: description).compactMap { itemName -> FoodSelectionMealItem? in
             let ingredients = deterministicIngredients(for: itemName, candidates: candidates)
@@ -92,6 +122,9 @@ public enum FoundationFoodSelectionModel {
         )
     }
 
+    /// Resolves one split item to at most ONE catalog food (the bind-floor-clearing best), with a
+    /// default unit and quantity — the deterministic counterpart of the model's per-item ingredient
+    /// picks.
     private static func deterministicIngredients(for itemName: String, candidates: [FoodSelectionCandidate]) -> [FoodSelectionIngredient] {
         let foodItems = candidates.map(\.foodItem)
         // Pull a wider set (not just 4) so the candidate builder's prepared-dish demotion has a raw
@@ -149,6 +182,8 @@ public enum FoundationFoodSelectionModel {
         return itemCandidates.filter { (bestScore[$0.foodItem.id] ?? Int.min) >= FoodItemSearch.minimumBindScore }
     }
 
+    /// Picks the unit for a deterministic bind: sandwich bread/cheese counts as `.each`, an explicit
+    /// spelled-out unit wins, and otherwise the food's preferred recipe unit applies.
     private static func defaultUnit(for foodItem: FoodItem, itemName: String) -> RecipeUnit {
         let normalizedItem = FoodItemSearch.normalized(itemName)
         let normalizedFood = FoodItemSearch.normalized(foodItem.name)
@@ -165,6 +200,9 @@ public enum FoundationFoodSelectionModel {
         return foodItem.preferredRecipeUnit
     }
 
+    /// Derives the quantity for a deterministic bind, treating a bare count with a weight/volume unit
+    /// ("2 eggs" whose unit resolves to grams) as a count of SERVINGS — see the inline note on the
+    /// ~99% calorie-undercount this prevents.
     private static func defaultQuantity(for foodItem: FoodItem, itemName: String, unit: RecipeUnit) -> Double {
         let normalizedItem = FoodItemSearch.normalized(itemName)
         let normalizedFood = FoodItemSearch.normalized(foodItem.name)
@@ -188,6 +226,7 @@ public enum FoundationFoodSelectionModel {
         return count * foodItem.defaultRecipeQuantity(for: unit)
     }
 
+    /// The first bare number in the item text ("2 eggs" → 2), or `nil` when the person gave no count.
     private static func explicitCount(in itemName: String) -> Double? {
         FoodItemSearch.normalized(itemName)
             .split(separator: " ")
@@ -216,6 +255,12 @@ public enum FoundationFoodSelectionModel {
 }
 
 #if canImport(FoundationModels)
+/// The `@Generable` response schema the Foundation model fills in for a meal selection: a meal name,
+/// a meal-type string, and the selected items built from candidate numbers.
+///
+/// Guided generation guarantees shape, never validity — ``plan(fallbackDescription:fallbackType:candidates:)``
+/// is the validation pass that stands between the raw response and a `FoodSelectionPlan`, so nothing
+/// the model emitted reaches the caller unchecked.
 @available(iOS 26.0, *)
 @Generable
 private struct FoundationMealSelection {
@@ -223,6 +268,10 @@ private struct FoundationMealSelection {
     var mealType: String
     var items: [FoundationMealItem]
 
+    /// Binds the raw response to real catalog foods: unknown candidate numbers are dropped, units
+    /// normalized (falling back to the food's preferred unit), quantities clamped (1500 for
+    /// weight/volume units, 20 for counts), ingredients capped at 5 per item and items at 6, blank
+    /// names defaulted. Returns `nil` when no item survives — the fell-back signal.
     func plan(fallbackDescription: String, fallbackType: MealType?, candidates: [FoodSelectionCandidate]) -> FoodSelectionPlan? {
         let validItems = items.compactMap { item -> FoodSelectionMealItem? in
             let validIngredients = item.ingredients.compactMap { ingredient -> FoodSelectionIngredient? in
@@ -283,6 +332,11 @@ private struct FoundationMealSelection {
     }
 }
 
+/// One meal item in the model's ``FoundationMealSelection`` response — a display name plus its
+/// candidate-number ingredient picks.
+///
+/// Purely a guided-generation shape; binding to real catalog foods (and every clamp/cap) happens in
+/// `FoundationMealSelection.plan`.
 @available(iOS 26.0, *)
 @Generable
 private struct FoundationMealItem {
@@ -290,6 +344,11 @@ private struct FoundationMealItem {
     var ingredients: [FoundationMealIngredient]
 }
 
+/// One ingredient pick in the model's response: a number from the prompt's numbered candidate list
+/// plus the model's quantity and unit strings.
+///
+/// The number is re-bound to a real `FoodSelectionCandidate` during validation; a pick whose number
+/// matches no candidate is silently dropped, so the model cannot invent a food.
 @available(iOS 26.0, *)
 @Generable
 private struct FoundationMealIngredient {

@@ -1,7 +1,10 @@
 import AppIntents
 
-/// Surfaces Fernlet's App Intents to Spotlight and Siri (#6). Auto-discovered by the system; each
-/// `AppShortcut` carries a few natural phrases (all must include `\(.applicationName)`).
+/// Surfaces Fernlet's App Intents to Spotlight and Siri (#6).
+///
+/// Auto-discovered by the system; each `AppShortcut` carries a few natural phrases (all must
+/// include `\(.applicationName)`). Covers the water/meal/journal intents plus the two cooking-mode
+/// `LiveActivityIntent`s, so a cook can advance or repeat a recipe step hands-free.
 struct FernletShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(

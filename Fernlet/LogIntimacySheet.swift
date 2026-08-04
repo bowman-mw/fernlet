@@ -6,6 +6,15 @@ import PrivateHealthStore
 import HealthKitGateway
 import FernletUI
 
+/// The intimacy log sheet: an event date, an encrypted private note, and — when Apple Health sync
+/// is enabled for intimate logging — an optional protection-used status.
+///
+/// The note is sealed on-device through `IntimacyLogStore` and never leaves the app; only the
+/// event date and protection status go to HealthKit, and only when both the master toggle and the
+/// intimate-logging capability are on in `StoragePreferencesStore`. Saving while the derived
+/// intimacy-tracking gate has flipped to hidden throws `IntimacyTrackingHiddenError`, which the
+/// sheet surfaces as a gentle explanation instead of a raw error string. A HealthKit write failure
+/// after a successful seal is reported but never blocks the local save.
 struct LogIntimacySheet: View {
     /// The gated funnel for the sealed-note write. Reaches the same fail-closed decrypt/seam gate the
     /// calendar reads through, so a save while intimacy is hidden throws instead of sealing a new row.

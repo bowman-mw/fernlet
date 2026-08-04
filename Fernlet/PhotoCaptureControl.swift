@@ -100,9 +100,11 @@ struct PhotoCaptureControl<Label: View>: View {
     }
 }
 
-/// Reads a photo's capture date from its own bytes. A non-generic namespace so it can hold the shared
-/// `DateFormatter` as a static stored property (generic types can't). Kept out of `PhotoCaptureControl`
-/// for that reason alone.
+/// Reads a photo's capture date from its own bytes.
+///
+/// A non-generic namespace so it can hold the shared `DateFormatter` as a static stored property
+/// (generic types can't). Kept out of ``PhotoCaptureControl`` for that reason alone; the control's
+/// library path is its only caller.
 private enum PhotoMetadata {
     /// Best-effort capture date recovered from the picked bytes' own EXIF/TIFF metadata — no photo-library
     /// permission needed, because the metadata travels with the exported `Data` (unlike `PHAsset.creationDate`,

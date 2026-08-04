@@ -30,8 +30,10 @@
 import SwiftUI
 import AppServices
 
-/// Time-of-day phase for the ambience tint. A pure hour → phase mapping so tests can
-/// pin the boundaries.
+/// Time-of-day phase for the ambience tint.
+///
+/// A pure hour → phase mapping (dawn 5–8, day 8–17, dusk 17–21, night otherwise) so tests can
+/// pin the boundaries; ``CompanionAmbienceLayer`` keys its whole palette off it.
 enum CompanionDayPhase: Equatable, CaseIterable {
     case dawn
     case day
@@ -52,9 +54,15 @@ enum CompanionDayPhase: Equatable, CaseIterable {
     }
 }
 
-/// The single environment view behind the companion. Purely decorative: it never
-/// intercepts touches and is hidden from the accessibility tree, so the tap-to-pet
-/// gesture and the UX-appearance probes are unaffected.
+/// The single environment view behind the companion on Home: a full-bleed time-of-day sky wash
+/// with celestial glow and optional weather accents.
+///
+/// Purely decorative: it never intercepts touches and is hidden from the accessibility tree, so
+/// the tap-to-pet gesture and the UX-appearance probes are unaffected. Layers a directional
+/// ``CompanionDayPhase`` tint, an always-on Canvas celestial pass (sun / crescent moon + stars),
+/// and — only when a `WeatherAmbient` snapshot is supplied — slow drifting cloud/rain/snow
+/// accents, all masked by an elliptical edge feather so the sky dissolves into the parchment.
+/// Uses local hour only; no location or network of its own.
 struct CompanionAmbienceLayer: View {
     var phase: CompanionDayPhase
     /// `nil` ⇒ time-of-day tint only (weather off, unauthorized, or unavailable).
@@ -449,9 +457,12 @@ struct CompanionAmbienceLayer: View {
 // MARK: - Local ambience palette
 
 /// Colors traced directly from the badge-6a matrix, kept local to this file so the shared
-/// theme palette is never touched. Each is a plain `Color` (no light/dark variant): this
-/// layer is a fixed sky wash that reads the same in either app appearance, and the low
-/// opacities keep it from fighting the parchment in light mode or the dark theme.
+/// theme palette is never touched.
+///
+/// Each is a plain `Color` (no light/dark variant): this layer is a fixed sky wash that reads
+/// the same in either app appearance, and the low opacities keep it from fighting the parchment
+/// in light mode or the dark theme. The per-phase helpers (`cloud`/`rain`/`snow`) tune the
+/// weather accents warmer at dawn/dusk, cleaner by day, and cooler at night.
 private enum AmbiencePalette {
     // Time-of-day tint bases — rgba stops from the "Clear" matrix row.
     static let dawnTint = Color(red: 244 / 255, green: 176 / 255, blue: 146 / 255)   // rgba(244,176,146)

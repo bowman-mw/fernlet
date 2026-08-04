@@ -2,6 +2,11 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
+/// The first onboarding screen: the companion at its happiest plus Fernlet's three privacy pillars
+/// (private by default, no shame loops, share only what you choose).
+///
+/// Purely informational — the only interaction is Continue, which advances the
+/// ``OnboardingCoordinatorModel``. Sets the tone before any question is asked.
 struct OnboardingWelcomeView: View {
     var stepText: String
     var continueAction: () -> Void

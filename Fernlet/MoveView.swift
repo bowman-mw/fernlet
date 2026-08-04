@@ -6,6 +6,15 @@ import AIProviders
 import PrivateMediaStore
 import FernletUI
 
+/// The Move tab root: workout calendar, today's planned and logged workouts, the guided-workout
+/// entry cards, and the progress-photo timeline.
+///
+/// Owned state is deliberately thin — `allDays` is a snapshot cache of `store.loadDays()` refreshed
+/// through the single `refreshAllDays()` seam (which also recomputes the cached coach-tag gate), and
+/// the guided cards derive from ``FernletStore``'s committed plan and persisted run state rather than
+/// local `@State`. Day rollover and Live Activity progress are reconciled on scene activation
+/// because a foreground can cross local midnight without re-firing `onAppear`. Navigation pushes a
+/// day-key `String` for ``MoveDayDetailView`` and a `ProgressPhotoRecord` for the photo detail.
 struct MoveView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -271,8 +280,14 @@ struct MoveView: View {
 }
 
 /// The guidable filter, in one place so the Move-root card and the Suggest sheet agree (reused, not
-/// reimplemented). A session is worth *guiding* through only when it carries real, set-based catalog
-/// work; pure cardio/mobility/rest carry descriptor lines with `sets == 0`.
+/// reimplemented).
+///
+/// A session is worth *guiding* through only when it carries real, set-based catalog work; pure
+/// cardio/mobility/rest carry descriptor lines with `sets == 0`. ``MoveView``,
+/// ``WorkoutSuggestionSheet``, and ``GuidedWorkoutCardState`` all route their already-logged checks
+/// through these predicates, which is the invariant that keeps a session finished from one entry
+/// point excluded everywhere — including after a relaunch, when session ids are fresh but the tagged
+/// name in the day record survives.
 enum GuidedWorkoutAvailability {
     /// A session with real, set-based catalog exercises (the guided runner needs sets to time rests).
     nonisolated static func isGuidable(_ session: WorkoutProgram.SessionSuggestion) -> Bool {
@@ -309,7 +324,11 @@ enum GuidedWorkoutAvailability {
 }
 
 /// The Move-root "Start today's workout" card's state, derived purely from today's plan and the set
-/// of sessions already logged. Extracted so the availability rules are unit-testable without SwiftUI.
+/// of sessions already logged.
+///
+/// Extracted so the availability rules are unit-testable without SwiftUI;
+/// ``StartTodaysWorkoutCard`` renders whichever case
+/// ``resolve(plan:completed:loggedGuidedWorkoutNames:)`` returns.
 enum GuidedWorkoutCardState: Equatable {
     /// A session is ready to guide (carries its id so the tap opens exactly this session).
     case ready(sessionID: UUID)
@@ -321,6 +340,8 @@ enum GuidedWorkoutCardState: Equatable {
     /// No guidable session today (a rest, or cardio/mobility-only day). Carries a gentle reason.
     case noneToGuide(reason: String)
 
+    /// Derives the card state for today's plan, routing every already-logged check through
+    /// ``GuidedWorkoutAvailability`` so the result stays truthful after a relaunch.
     static func resolve(
         plan: WorkoutProgram.DayPlan,
         completed: Set<UUID>,
@@ -349,9 +370,11 @@ enum GuidedWorkoutCardState: Equatable {
     }
 }
 
-/// Shown while a guided run is in progress — the resume entry point. Driven purely by the persisted
-/// run state (not the in-memory committed plan), so a workout interrupted by an app kill can still be
-/// picked back up in-app, not only from the Live Activity.
+/// Shown while a guided run is in progress — the resume entry point.
+///
+/// Driven purely by the persisted run state (not the in-memory committed plan), so a workout
+/// interrupted by an app kill can still be picked back up in-app, not only from the Live Activity.
+/// ``MoveView`` gives it precedence over ``StartTodaysWorkoutCard``.
 struct ResumeWorkoutCard: View {
     var title: String
     var isResting: Bool
@@ -397,10 +420,12 @@ struct ResumeWorkoutCard: View {
 }
 
 /// The Move-root card that makes starting a guided workout discoverable — the guided runner used to
-/// be reachable only from inside the Suggest sheet. Gentle, no-pressure copy; the primary action is a
-/// single "Start today's workout" button (the a11y id lives on the button, not a wrapping container,
-/// so it isn't overridden). On rest / cardio-only days it shows a gentle reason instead of a button;
-/// once today's sessions are all logged it shows a done state, never a restart.
+/// be reachable only from inside the Suggest sheet.
+///
+/// Gentle, no-pressure copy; the primary action is a single "Start today's workout" button (the a11y
+/// id lives on the button, not a wrapping container, so it isn't overridden). On rest / cardio-only
+/// days it shows a gentle reason instead of a button; once today's sessions are all logged it shows
+/// a done state, never a restart. Renders whatever ``GuidedWorkoutCardState`` its parent resolved.
 struct StartTodaysWorkoutCard: View {
     var state: GuidedWorkoutCardState
     var onStart: () -> Void
@@ -474,6 +499,15 @@ struct StartTodaysWorkoutCard: View {
     }
 }
 
+/// The manual "Log workout" sheet: strength (exercise rows built from the catalog) or activity
+/// (type + duration/distance/energy/effort) logging into a day record.
+///
+/// Presented from the Move header's Log button and from ``MoveDayDetailView`` (which passes a past
+/// `dateKey`; past-day logs are stamped at noon of that day, today's at now). Save folds a
+/// typed-but-unadded exercise draft into the rows first so it isn't silently dropped, and
+/// ``WorkoutSheetRules`` keeps the save-gating and muscle-group aggregation unit-testable. Intensity
+/// is inferred from RPE (strength) or effort (activity); the category preview reflects
+/// `inferredCategory` live as the user types.
 struct WorkoutSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -738,6 +772,12 @@ struct WorkoutSheet: View {
     }
 }
 
+/// The Log sheet's pure save-gating and aggregation rules, extracted from ``WorkoutSheet`` so they
+/// are unit-testable without SwiftUI.
+///
+/// `saveDisabled` mirrors the sheet's auto-commit behavior — a lone valid strength draft counts as
+/// an exercise because the Save closure folds it in — and an activity log needs a chosen type plus a
+/// positive duration or distance.
 enum WorkoutSheetRules {
     static func saveDisabled(
         mode: WorkoutMode,
@@ -771,6 +811,11 @@ enum WorkoutSheetRules {
     }
 }
 
+/// A trimmed one-exercise logging sheet: pick a catalog exercise, fill its inputs and an RPE, save.
+///
+/// The fast path (presented from ContentView's quick-log flow) for logging a single movement without
+/// opening the full ``WorkoutSheet``; the saved `Workout` is built by
+/// ``QuickExerciseWorkoutFactory`` and always lands on today.
 struct QuickExerciseSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -854,6 +899,10 @@ struct QuickExerciseSheet: View {
     }
 }
 
+/// Builds the single-exercise `Workout` a ``QuickExerciseSheet`` save logs.
+///
+/// Static and pure so the quick-log mapping (entry summary → name / inferred category / muscle
+/// groups) is unit-testable without standing up the sheet.
 enum QuickExerciseWorkoutFactory {
     static func workout(from entry: WorkoutExerciseEntry, rpe: Double?, intensity: WorkoutIntensity) -> Workout {
         Workout(
@@ -870,6 +919,16 @@ enum QuickExerciseWorkoutFactory {
     }
 }
 
+/// The Suggest flow: configure intensity/context and generate today's guided plan, then review it —
+/// start it guided, edit it, adjust it with AI, approve it, rework it, or bulk-log it as done.
+///
+/// The committed plan and completed-session set live on ``FernletStore`` (not private `@State`),
+/// which is what keeps this sheet and the Move-root "Today's workout" card in agreement: a session
+/// finished from either entry point is excluded in both. Every already-logged check routes through
+/// ``GuidedWorkoutAvailability`` so a relaunch (fresh session ids, empty completed set) reconciles
+/// against the tagged workout names in the day record. The AI adjustment pins the base plan's
+/// session ids so a stale result can't land on a plan the user reworked mid-flight, and the rework /
+/// edit affordances only appear while nothing of the plan is logged yet.
 struct WorkoutSuggestionSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -1322,12 +1381,15 @@ struct WorkoutSuggestionSheet: View {
     }
 }
 
-/// A logged (completed) workout row. Beyond displaying the workout it carries the recoverability
-/// affordances a tester asked for: a one-tap Complete is easy to trigger by accident, so every logged
-/// row can be edited or removed. Remove confirms first (gentle copy, and it mentions putting a planned
-/// row back when the completion came from one). A workout that lives in Apple Health (`healthKitUUID`
-/// set — an import, or a Fernlet log already synced) can't be cleanly edited/removed here without
-/// orphaning or resurrecting the Health sample, so it shows a gentle "manage in Health" note instead.
+/// A logged (completed) workout row with edit and remove recoverability affordances.
+///
+/// Beyond displaying the workout it carries the recoverability a tester asked for: a one-tap
+/// Complete is easy to trigger by accident, so every logged row can be edited or removed. Remove
+/// confirms first (gentle copy, and it mentions putting a planned row back when the completion came
+/// from one). A workout that lives in Apple Health (`healthKitUUID` set — an import, or a Fernlet
+/// log already synced) can't be cleanly edited/removed here without orphaning or resurrecting the
+/// Health sample, so a genuine import shows a gentle "manage in Health" note instead, while a
+/// Fernlet-authored row stays editable and removal deletes its Health copy too.
 struct WorkoutRow: View {
     var store: FernletStore
     var workout: Workout
@@ -1466,11 +1528,14 @@ struct WorkoutRow: View {
 }
 
 /// A small editor for an already-logged workout — the reversible half of the recoverability feature.
+///
 /// It edits only the fields that make sense to correct after the fact (name, intensity, duration,
 /// notes) and reuses the manual Log sheet's field idiom (`SheetField`, `SheetTextEditor`, chips,
 /// `SheetSaveBar`). Everything else — provenance (planned/guided/Health), exercises, targets,
 /// timestamps — is carried straight through by editing a copy of the original and letting the store
-/// re-assert provenance on save.
+/// re-assert provenance on save. A guided-logged row's name is pinned (it's the guided card's
+/// reconciliation key), and a store refusal (a genuine Health import) keeps the sheet open with an
+/// explanation instead of pretending the edit saved.
 struct EditWorkoutSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -1593,6 +1658,10 @@ struct EditWorkoutSheet: View {
     }
 }
 
+/// One checked-off exercise line inside a logged ``WorkoutRow``.
+///
+/// Pure display — a checkmark glyph beside the free-text exercise summary the workout was logged
+/// with.
 struct WorkoutExerciseRow: View {
     var exercise: String
 
@@ -1612,6 +1681,11 @@ struct WorkoutExerciseRow: View {
     }
 }
 
+/// The read-only "Category · Auto" strip in the Log sheet showing the inferred workout category.
+///
+/// The category is derived live from the typed name and exercises (see
+/// `WorkoutSheet.inferredCategory`), so this preview is how the user sees what the log will be
+/// classified as before saving.
 struct WorkoutCategoryPreview: View {
     var category: WorkoutType
 
@@ -1642,10 +1716,11 @@ struct WorkoutCategoryPreview: View {
     }
 }
 
-/// The three look-alike cream boxes above the calendar — a navigational goal, a passive readiness
-/// band, and a navigational location — collapse into one thin two-segment context strip
-/// (Goal · Space). Readiness, already surfaced on Home and inside Suggest, no longer claims a band
-/// or caption here.
+/// The thin two-segment context strip (Goal · Space) above the workout calendar.
+///
+/// The three look-alike cream boxes it replaced — a navigational goal, a passive readiness band, and
+/// a navigational location — collapse into these two tappable segments. Readiness, already surfaced
+/// on Home and inside Suggest, no longer claims a band or caption here.
 struct MoveContextStrip: View {
     var store: FernletStore
     var onEditGoal: () -> Void
@@ -1698,7 +1773,10 @@ struct MoveContextStrip: View {
 }
 
 /// One tappable half of the context strip: a small uppercase label over a value line, with a
-/// leading icon. Each segment truncates independently; the icon never clips.
+/// leading icon.
+///
+/// Each segment truncates independently; the icon never clips. A nil value renders the italic empty
+/// prompt so a first-run segment reads as an invitation, not a set value.
 private struct MoveContextSegment: View {
     var icon: String
     var label: String
@@ -1742,6 +1820,11 @@ private struct MoveContextSegment: View {
     }
 }
 
+/// One editable exercise row in the workout sheets: a catalog exercise plus its free-text inputs
+/// (sets/reps/weight for strength, speed/incline for treadmill, details for either).
+///
+/// `summary` renders the row into the single free-text line that `Workout`/`PlannedWorkout` store in
+/// their `exercises` field — the shared display and persistence format for exercise lines.
 struct WorkoutExerciseEntry: Identifiable, Equatable {
     var id = UUID()
     var exercise: ExerciseTarget
@@ -1782,6 +1865,12 @@ struct WorkoutExerciseEntry: Identifiable, Equatable {
     }
 }
 
+/// The shared exercise-entry form: catalog search picker plus the input fields for the selected
+/// exercise's kind (sets/reps/weight, or speed/incline), with an optional Add button.
+///
+/// Reused by ``WorkoutSheet``, ``WorkoutPlanSheet``, and ``QuickExerciseSheet``; all field state is
+/// bound to the presenting sheet, which owns the draft and decides what an Add (or an implicit
+/// save-time fold) does with it.
 struct WorkoutExerciseBuilder: View {
     @Binding var selectedExercise: ExerciseTarget?
     @Binding var sets: String
@@ -1874,6 +1963,11 @@ struct WorkoutExerciseBuilder: View {
     }
 }
 
+/// Search-as-you-type picker over the exercise catalog, collapsing to the chosen exercise once one
+/// is selected.
+///
+/// Bumping `resetToken` clears the query from outside — how the sheets reset the picker after an
+/// add. Also reused by ``GuidedWorkoutEditorSheet`` to append catalog exercises to a session.
 struct ExerciseSearchPicker: View {
     @Binding var selectedExercise: ExerciseTarget?
     @Binding var resetToken: Int
@@ -1922,6 +2016,10 @@ struct ExerciseSearchPicker: View {
     }
 }
 
+/// One row in the exercise search results — name, category dot, muscles, and a plus/clear glyph.
+///
+/// The same row renders both the selected exercise (tap to clear) and an unselected result (tap to
+/// pick), keyed off `isSelected`.
 struct ExerciseSearchResultRow: View {
     var exercise: ExerciseTarget
     var isSelected: Bool
@@ -1955,6 +2053,10 @@ struct ExerciseSearchResultRow: View {
     }
 }
 
+/// A read-only added-exercise row in the Log sheet, with a remove button.
+///
+/// Shows the entry's name, its summary minus the name, and its muscles; corrections happen by
+/// removing the row and re-adding it through the builder.
 struct LoggedExerciseRow: View {
     var entry: WorkoutExerciseEntry
     var onRemove: () -> Void
@@ -1986,6 +2088,10 @@ struct LoggedExerciseRow: View {
     }
 }
 
+/// An in-place editable exercise row in the plan sheet — fields vary by the exercise's input kind.
+///
+/// Unlike ``LoggedExerciseRow`` its fields stay live; every keystroke calls `onChange` so
+/// ``WorkoutPlanSheet`` can re-fold the rows into its plan-steps text.
 struct EditablePlannedExerciseRow: View {
     @Binding var entry: WorkoutExerciseEntry
     var onRemove: () -> Void
@@ -2051,6 +2157,13 @@ struct EditablePlannedExerciseRow: View {
     }
 }
 
+/// The week-strip workout calendar on the Move root: seven tappable day cells with logged/planned
+/// category dots, week paging chevrons, and a split legend.
+///
+/// Renders a ``WorkoutWeekModel`` built from the parent's `allDays` snapshot. The legend shows the
+/// default splits plus any split actually planned in the last month, so uncommon splits only claim
+/// legend space while they're in use. Day taps hand the day key back for navigation to
+/// ``MoveDayDetailView``.
 struct WorkoutCalendarCard: View {
     @Binding var displayedWeek: Date
     var allDays: [String: FernletDay]
@@ -2138,6 +2251,10 @@ struct WorkoutCalendarCard: View {
     }
 }
 
+/// One tappable day cell in the calendar week strip.
+///
+/// Pure rendering of a ``WorkoutWeekCell`` — fill, today ring, logged (solid) and planned (faded)
+/// category dots, and the log/plan/rest summary line.
 struct WorkoutCalendarCell: View {
     var cell: WorkoutWeekCell
     var onTap: () -> Void
@@ -2193,6 +2310,11 @@ struct WorkoutCalendarCell: View {
     }
 }
 
+/// The display model for one day cell of the workout calendar week strip.
+///
+/// Precomputed by ``WorkoutWeekModel`` from that day's record: deduplicated logged categories,
+/// planned splits/categories, counts, and the today/future flags that drive the cell's fill and text
+/// colors.
 struct WorkoutWeekCell: Identifiable {
     let id = UUID()
     var day: Int
@@ -2231,6 +2353,11 @@ struct WorkoutWeekCell: Identifiable {
     }
 }
 
+/// Builds the calendar card's week: a "Jun 1 - Jun 7"-style title plus seven ``WorkoutWeekCell``s
+/// for the week containing `date`.
+///
+/// Pure and synchronous over the `allDays` snapshot so the card's body stays cheap; category and
+/// split lists are deduplicated in first-seen order.
 struct WorkoutWeekModel {
     let weekTitle: String
     let cells: [WorkoutWeekCell]
@@ -2282,6 +2409,12 @@ struct WorkoutWeekModel {
     }
 }
 
+/// The per-day drill-in from the calendar: that day's plan and logged workouts, with Plan and Log
+/// entry points in the toolbar.
+///
+/// Past-day reads (`store.loadDay` for a non-today key) aren't observed, so mutations bump a local
+/// `reloadToken` to force a re-read — the same nudge every row callback uses. Future days hide the
+/// log section and the complete action (you can plan ahead but not log ahead).
 struct MoveDayDetailView: View {
     var store: FernletStore
     var dateKey: String
@@ -2430,6 +2563,11 @@ struct MoveDayDetailView: View {
     }
 }
 
+/// A planned (not yet done) workout row: complete tap target, name/split/duration, a preview of the
+/// plan's first steps, and edit/remove actions.
+///
+/// Shared by the Move root and ``MoveDayDetailView``; `showsCompleteAction` is false on future days,
+/// and the coach/user source tag only renders when coach-sourced plans exist at all.
 struct PlannedWorkoutRow: View {
     var plannedWorkout: PlannedWorkout
     var showsPlanSourceTag: Bool
@@ -2520,6 +2658,14 @@ struct PlannedWorkoutRow: View {
     }
 }
 
+/// The plan-ahead sheet: create or edit a `PlannedWorkout` for a given day — split, kind, exercise
+/// rows or an activity, duration/targets, and notes.
+///
+/// Seeds from the plan being edited, else copies forward the most recent split, and offers a
+/// one-tap "Copy previous week" for the matching weekday. Free-text plan steps and structured rows
+/// stay in sync: row edits re-fold into the text, and `exerciseEntries(from:)` best-effort parses
+/// text lines back into rows on open. Dirty tracking compares a field signature captured at init, so
+/// an untouched sheet (blank or pre-seeded) can be swiped away without a discard prompt.
 struct WorkoutPlanSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -2916,6 +3062,9 @@ struct WorkoutPlanSheet: View {
     }
 }
 
+/// A compact read-only summary row for a saved `FitnessGoal` (goal, timeframe/metric, milestones).
+///
+/// Rendered in the goals sheet's list (SharedSheets); editing happens there, not on the row.
 struct GoalRow: View {
     var goal: FitnessGoal
 

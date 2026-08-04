@@ -9,6 +9,12 @@
 
 import SwiftUI
 
+/// The standard cream content card: 16pt padding, 18pt continuous corners, and a soft bark-tinted
+/// shadow.
+///
+/// The workhorse container of the redesigned screens — used across more than a dozen files in the
+/// app plus the package-resident lock and proximity views, which is why its single-layer shadow is
+/// deliberately kept (see the inline note) rather than swapped for `fernletCardShadow()`.
 public struct FernletCard<Content: View>: View {
     private let content: Content
 
@@ -27,6 +33,10 @@ public struct FernletCard<Content: View>: View {
     }
 }
 
+/// An uppercase, letter-spaced slate caption that titles a section of content.
+///
+/// Pairs with ``FernletCard`` groups on the Home and hub screens so section headings share one
+/// small-label treatment; it is the screen-level sibling of ``SheetField``'s in-sheet caption.
 public struct SectionLabel: View {
     private let text: String
 
@@ -42,6 +52,10 @@ public struct SectionLabel: View {
     }
 }
 
+/// A centered italic placeholder line shown when a list or section has no content yet.
+///
+/// Used wherever a card would otherwise render empty (no meals logged, no friends nearby, …) so
+/// empty sections still read as intentional rather than broken.
 public struct EmptyState: View {
     var text: String
 

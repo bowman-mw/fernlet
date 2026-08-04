@@ -13,6 +13,14 @@ import FernletUI
 import ImageIO
 #endif
 
+/// The Food tab's root screen: today's meals grouped by meal type, macro totals against targets, a
+/// cooking-resume card, pending AI retries, and the five most recent recipes.
+///
+/// Hosted by the app's tab switcher and backed entirely by ``FernletStore`` state. It routes every
+/// food flow: the meal-log sheet (via the shared `FernletSheet` binding), the recipe editor sheets,
+/// the recipe book, proximity recipe sharing, meal correction, and resuming an in-progress cooking
+/// run that survives in the app group. On appear and on re-activation it reconciles the cooking run
+/// from the app group so a step advance made from the Live Activity or Siri is picked up.
 struct FoodView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -340,14 +348,21 @@ struct FoodView: View {
     }
 }
 
-/// One meal-type group in the "Today" card. Identifiable by its `MealType` so `ForEach` can key on
-/// it without an index (each type appears at most once in `mealsByType`).
+/// One meal-type group in the "Today" card.
+///
+/// Identifiable by its `MealType` so `ForEach` can key on it without an index (each type appears at
+/// most once in `mealsByType`).
 private struct MealTypeGroup: Identifiable {
     let type: MealType
     let meals: [Meal]
     var id: MealType { type }
 }
 
+/// A row in the Food root's "Recipes" preview — either a manual/local recipe or a saved/web recipe,
+/// so the two stores can interleave in one recency-sorted list.
+///
+/// The `id` prefixes the recipe id with its store so a recipe present in both stores can't collide;
+/// `addedAt` drives the newest-first sort feeding the five-row cap.
 private enum RecentRecipePreview: Identifiable {
     case local(RecipeDefinition)
     case saved(RecipeDefinition)
@@ -372,18 +387,20 @@ private enum RecentRecipePreview: Identifiable {
 }
 
 /// The target for the Food-root cooking resume cover: the recipe to re-open plus whether it's a
-/// saved/web recipe (routes the completion log to `logSavedRecipe` vs `logRecipe`). Identifiable by
-/// the recipe id so `fullScreenCover(item:)` keys on it.
+/// saved/web recipe (routes the completion log to `logSavedRecipe` vs `logRecipe`).
+///
+/// Identifiable by the recipe id so `fullScreenCover(item:)` keys on it.
 private struct CookingResumeTarget: Identifiable {
     let recipe: RecipeDefinition
     let isSaved: Bool
     var id: UUID { recipe.id }
 }
 
-/// The Food-root "Cooking in progress" card — the cooking analogue of `ResumeWorkoutCard`. Appears
-/// whenever a cooking run survives in the app group (including after an app kill), offering Resume
-/// (re-open the walker at the saved step) and Discard (drop the run + any orphan Live Activity). The
-/// a11y ids live on the buttons, not a wrapping container, so they aren't overridden.
+/// The Food-root "Cooking in progress" card — the cooking analogue of `ResumeWorkoutCard`.
+///
+/// Appears whenever a cooking run survives in the app group (including after an app kill), offering
+/// Resume (re-open the walker at the saved step) and Discard (drop the run + any orphan Live
+/// Activity). The a11y ids live on the buttons, not a wrapping container, so they aren't overridden.
 private struct CookingResumeCard: View {
     let recipeName: String
     let stepNumber: Int
@@ -444,6 +461,10 @@ private struct CookingResumeCard: View {
     }
 }
 
+/// A small labeled stat tile (title over value) for macro and calorie figures.
+///
+/// Shared by the recipe detail's per-serving card and the web-product review sheet so nutrition
+/// numbers render identically wherever they appear.
 struct NutritionPill: View {
     var title: String
     var value: String
@@ -463,6 +484,12 @@ struct NutritionPill: View {
     }
 }
 
+/// The "Import recipe" sheet: paste a Fernlet recipe share (text payload) or pull a recipe URL from
+/// the pasteboard.
+///
+/// Text imports decode through `FernletStore.importRecipe(from:)` (the ``RecipeShareCodec`` payload);
+/// the Paste-URL button runs `RecipeWebImporter` and lands the result in the saved-recipe store.
+/// Reached from ``RecipeCreationOptionsView``.
 struct RecipeImportSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -555,6 +582,11 @@ struct RecipeImportSheet: View {
     }
 }
 
+/// A list row for a saved/web-imported recipe: name, source host, notes, a preview of its free-text
+/// ingredient lines, and per-serving macros when the import carried them.
+///
+/// Interleaves with ``RecipeRow`` in the Food root's recipe preview and in the recipe book, so its
+/// title typography deliberately matches that row's.
 struct SavedRecipeRow: View {
     var recipe: RecipeDefinition
 
@@ -611,6 +643,12 @@ struct SavedRecipeRow: View {
     }
 }
 
+/// The edit sheet for a saved/web-imported recipe — notes editing plus delete.
+///
+/// Web imports carry free-text ingredient lines and no structured ingredients, so unlike
+/// ``RecipeSheet`` there is nothing structural to edit: ingredients and macros render read-only, the
+/// source link opens in an in-app Safari sheet, and Done persists via
+/// `FernletStore.updateSavedRecipe`.
 struct SavedRecipeNotesSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -731,6 +769,11 @@ struct SavedRecipeNotesSheet: View {
     }
 }
 
+/// Navigation destinations inside ``MealSheet``'s log-meal `NavigationStack`.
+///
+/// Covers the barcode scanner, the embedded recipe editor, web product import/search, and the
+/// auto-router landings for a captured photo. `Hashable` so the cases can drive
+/// `navigationDestination(for:)` path values.
 enum MealFlowDestination: Hashable {
     case scanBarcode
     case reviewScan(NutritionLabelResult)
@@ -744,6 +787,14 @@ enum MealFlowDestination: Hashable {
     case captureLabel(NutritionLabelResult)
 }
 
+/// The manual recipe editor: name, notes, catalog-bound ingredients, per-serving totals, servings,
+/// and the F5 ordered cooking-step list.
+///
+/// Creates a new recipe (Save / Log & save) or edits an existing one, persisting through
+/// `FernletStore.addRecipe`/`updateRecipe`. It can embed in a parent `NavigationStack`
+/// (`isEmbeddedInNavigationStack`) or wrap its own, and can open straight into the nutrition-label
+/// scanner (`startsWithScanner`). A barcode scan appends a resolved catalog item as an ingredient
+/// through the same binding path as a search pick.
 struct RecipeSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -1180,6 +1231,11 @@ struct RecipeSheet: View {
     }
 }
 
+/// The collapsed one-line summary of a recipe ingredient (name plus a quantity/macros line), shown
+/// while a different ingredient's editor is expanded.
+///
+/// Tapping the row re-expands it into ``RecipeIngredientEditor``; the trailing x removes it. The
+/// calorie figure in the summary renders only behind the explicit calorie opt-in.
 struct CollapsedIngredientRow: View {
     var ingredient: ManualRecipeIngredientInput
     var catalog: FoodCatalog
@@ -1231,6 +1287,15 @@ struct CollapsedIngredientRow: View {
     }
 }
 
+/// The expanded editor for one recipe ingredient: a debounced catalog typeahead, quantity/unit
+/// controls, and either locked catalog macros or manual macro entry.
+///
+/// Typeahead results come from `FoodCatalog.results(for:)` — real SQLite + index + score work over a
+/// catalog growing toward ~482k rows — so the query runs debounced and off the main actor. Selecting a
+/// suggestion binds the ingredient to the catalog item (locking its macros); editing the name away
+/// unbinds it, and the editor deliberately never auto-binds on an exact name match so branded products
+/// can't hijack common words like "chicken". "Save custom ingredient" persists manual macros as a user
+/// `FoodItem` via the injected closure.
 struct RecipeIngredientEditor: View {
     @Binding var ingredient: ManualRecipeIngredientInput
     var catalog: FoodCatalog
@@ -1407,6 +1472,10 @@ struct RecipeIngredientEditor: View {
     }
 }
 
+/// The locked-macros panel shown when an ingredient is bound to a catalog food item.
+///
+/// Displays the resolved macros and the item's reference serving, with a "Manual" escape hatch that
+/// unbinds the ingredient and seeds the editable fields from the item's macros.
 struct LockedMacroSummary: View {
     var foodItem: FoodItem
     var macros: Macros
@@ -1438,8 +1507,13 @@ struct LockedMacroSummary: View {
 
 #if canImport(UIKit)
 /// A resolved scanned or label-parsed food awaiting the quick serving-count confirmation before it
-/// is logged. `kind` selects the truthful log path (barcode vs. nutrition-label provenance).
+/// is logged.
+///
+/// `kind` selects the truthful log path (barcode vs. nutrition-label provenance), and the fresh `id`
+/// gives `sheet(item:)` a new identity per scan.
 private struct PendingScannedFood: Identifiable {
+    /// How the food was captured — routes the eventual log to `logBarcodeScannedFoodItem` vs.
+    /// `logLabelScannedFoodItem` so the meal's provenance stays truthful.
     enum Kind { case barcode, label }
     let id = UUID()
     let item: FoodItem
@@ -1447,6 +1521,16 @@ private struct PendingScannedFood: Identifiable {
 }
 #endif
 
+/// The "Log meal" sheet — the app's quick-log front door, presented from any tab via `FernletSheet`.
+///
+/// Owns the free-text description field and the unified Capture flow: a camera shot runs
+/// ``FoodCaptureRouter`` (barcode → label → meal) behind an analyzing veil, an ambiguous reading
+/// opens ``CaptureChooserSheet``, and a library pick attaches as the meal photo via the byte path —
+/// the sealed-ready JPEG is held so a 48 MP pick never decodes into a full-resolution bitmap. Save
+/// resolves the text through `FernletStore.resolveMeals`; a low-confidence resolution pauses at
+/// ``MealReviewSheet`` instead of committing, and barcode/label results confirm a serving count in
+/// ``BarcodeServingStepView`` before logging. `didLogMeal` disarms Save after a photo-save failure so
+/// the meal can never log twice, and interactive dismissal is disabled while a resolve is in flight.
 struct MealSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -1850,6 +1934,11 @@ struct MealSheet: View {
         }
     }
 
+    /// The payload for the pre-log review sheet: the low-confidence resolution plus any captured
+    /// photo awaiting attach.
+    ///
+    /// Identifiable with a fresh `id` per presentation so `sheet(item:)` re-presents even for an
+    /// identical resolution.
     struct MealReviewContext: Identifiable {
         let id = UUID()
         let resolution: MealResolution
@@ -1932,6 +2021,10 @@ struct MealSheet: View {
 
     // MARK: - Unified Capture auto-routing (Food Capture mockup §2b–2e)
 
+    /// The context handed to ``CaptureChooserSheet`` when auto-detection was ambiguous.
+    ///
+    /// Carries the captured image plus the router's best-effort label parse and detected barcode, so
+    /// the chooser branches reuse those readings instead of re-scanning the same photo.
     struct CaptureChooserContext: Identifiable {
         let id = UUID()
         let image: UIImage
@@ -2050,10 +2143,10 @@ struct MealSheet: View {
     }
 
     #if canImport(UIKit)
-    /// The single prominent capture affordance — "one button points at food." It opens the camera
-    /// (the delightful default). Barcode/scan/import remain as quiet helpers beneath it.
-    /// The styled label for the prominent capture affordance — "one button points at food." The tap
-    /// behavior (camera, or library fallback) lives in the shared `PhotoCaptureControl` that wraps this.
+    /// The styled label for the single prominent capture affordance — "one button points at food."
+    /// It opens the camera (the delightful default); barcode/scan/import remain quiet helpers beneath
+    /// it. The tap behavior (camera, or library fallback) lives in the shared `PhotoCaptureControl`
+    /// that wraps this.
     private var mealCapturePrimaryLabel: some View {
         HStack(spacing: 10) {
             Image(systemName: "camera.fill")
@@ -2111,6 +2204,14 @@ struct MealSheet: View {
     #endif
 }
 
+/// The "Import product" screen: search the web (or paste a product-page URL) for a packaged food,
+/// preview the source, and save the extracted nutrition as a catalog item.
+///
+/// Runs only behind the web-nutrition-lookup opt-in; every lookup is recorded in `AIAuditLog` at
+/// dispatch (the query egresses at request time) and settled with its real outcome at completion.
+/// Resolution goes through ``FoodProductWebSearch``/``FoodProductWebImporter``, is confirmed in
+/// ``FoodProductReviewSheet``, and `onLogAsTyped` offers an escape back to the normal typed-meal
+/// resolve when the web can't help.
 struct FoodProductPageImportView: View {
     var store: FernletStore
     var onSaved: (ImportedFoodProduct) -> Void
@@ -2238,12 +2339,10 @@ struct FoodProductPageImportView: View {
             : "Turn on Web nutrition lookup in Settings before searching the web for nutrition."
     }
 
-    /// Records the web-nutrition lookup at COMPLETION with its real outcome (Ladder §7.2) — a persisted
-    /// "what left my device" entry must not pre-stamp `.succeeded` on a lookup that later failed. The
-    /// on-device model isn't involved (this is the web path), so `modelIdentifier` is intentionally nil.
     /// Records the web-nutrition lookup at DISPATCH with a provisional `.fellBack` outcome and returns the
-    /// entry id, so the caller can settle the real outcome at completion. The description egresses at
-    /// request time, so the entry must exist before the network call — not only if it succeeds.
+    /// entry id, so the caller can settle the real outcome at completion (Ladder §7.2). The description
+    /// egresses at request time, so the entry must exist before the network call — not only if it succeeds.
+    /// The on-device model isn't involved (this is the web path), so `modelIdentifier` is intentionally nil.
     private func recordWebNutritionLookupDispatch(_ mealDescription: String) async -> UUID {
         let payload = WebNutritionLookupPayload(mealDescription: mealDescription)
         return await AIAuditLog.shared.record(
@@ -2327,6 +2426,12 @@ struct FoodProductPageImportView: View {
     }
 }
 
+/// The confirmation sheet for a web-imported product: source details, serving size, and macro pills,
+/// with Open page / Search again / Confirm & save actions.
+///
+/// Nothing is persisted until the user confirms — the owning view saves via
+/// `FernletStore.saveWebImportedFoodProduct` only from `onConfirm`. The Calories pill renders only
+/// behind the explicit calorie opt-in.
 struct FoodProductReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     var preview: ProductPagePreview
@@ -2451,6 +2556,13 @@ struct FoodProductReviewSheet: View {
     }
 }
 
+/// One logged meal in the day list: name, note or component breakdown, macros, confidence tag,
+/// optional photo thumb, and delete / "Looks off?" correction actions.
+///
+/// The photo closures are injected so the row reads the sealed `MealPhotoStore` lazily and can
+/// distinguish a photo on another device from one that's here but unreadable (see
+/// ``MealPhotoPresence``). The meal-type capsule is suppressed when the row already sits under a
+/// meal-type section header.
 struct MealRow: View {
     var meal: Meal
     var showCalories: Bool
@@ -2549,6 +2661,12 @@ struct MealRow: View {
     }
 }
 
+/// An editable copy of one `MealComponentSnapshot`, used by the correction and pre-log review
+/// editors.
+///
+/// Only `quantity` is mutable; `snapshot` rebuilds the component with its macros and micronutrients
+/// scaled proportionally from the captured base quantity, so re-quantifying never invents nutrition
+/// data. `nonisolated` so review state can be constructed off the main actor.
 nonisolated struct MealComponentCorrectionInput: Identifiable {
     let id: UUID
     let foodItemId: UUID?
@@ -2584,6 +2702,11 @@ nonisolated struct MealComponentCorrectionInput: Identifiable {
     }
 }
 
+/// The "Adjust meal" sheet behind every meal row's "Looks off?" action.
+///
+/// Edits the meal's name, type, and either its raw macros (when it has no components) or its matched
+/// component quantities, then persists through `FernletStore.updateMealCorrection` with totals
+/// recomputed from the corrected snapshots.
 struct MealCorrectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -2664,6 +2787,10 @@ struct MealCorrectionSheet: View {
 
 // MARK: - Shared meal editor rows (used by correction + pre-log review)
 
+/// The three protein/carb/fat input rows used when a meal has no component breakdown.
+///
+/// Shared by ``MealCorrectionSheet`` and ``MealReviewSheet`` so post-log correction and pre-log
+/// review edit macros identically.
 struct MealMacroEditorRows: View {
     @Binding var protein: Int
     @Binding var carbs: Int
@@ -2680,6 +2807,11 @@ struct MealMacroEditorRows: View {
     }
 }
 
+/// The per-component quantity editor (typeable amount plus stepper, with live scaled macros) for a
+/// meal that has matched catalog components.
+///
+/// Shared by ``MealCorrectionSheet`` and ``MealReviewSheet``; the footer totals recompute through
+/// `MealBuilder.totals` so they always match what would be logged.
 struct MealComponentEditorRows: View {
     @Binding var components: [MealComponentCorrectionInput]
 
@@ -2736,6 +2868,11 @@ struct MealComponentEditorRows: View {
 
 // MARK: - Pre-log review (low-confidence / fabricated resolutions)
 
+/// Mutable review-sheet state for one resolved meal: an editable name, type, and macros or component
+/// quantities layered over the immutable base meal.
+///
+/// `applied` produces the meal the user actually logs — edits folded in, totals and micronutrients
+/// recomputed from the edited components, `isAIFallback` cleared, and confidence stamped "Reviewed".
 private nonisolated struct EditableReviewMeal: Identifiable {
     let id: UUID
     var name: String
@@ -2793,6 +2930,15 @@ private nonisolated struct EditableReviewMeal: Identifiable {
     }
 }
 
+/// The pre-log review sheet for low-confidence or fabricated resolutions — nothing reaches the diary
+/// until the user confirms here.
+///
+/// Each resolved meal is editable in place (name, type, macros or component quantities), and when the
+/// decomposition tier suggested a recipe the sheet offers it with an editable name and yield. On "Log
+/// meal" the reviewed meals plus the optionally confirmed recipe are handed back through `onConfirm`,
+/// so the caller commits both through the same `commitResolution` path — the recipe is minted only on
+/// this confirm, never at resolve time. `isLogging` one-shots the button so a fast double-tap can't
+/// log the meal twice.
 struct MealReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -2985,6 +3131,11 @@ struct MealReviewSheet: View {
 }
 
 #if canImport(UIKit)
+/// The 54pt sealed-photo thumbnail on a meal row.
+///
+/// Loads the photo bytes lazily off the injected closures and renders one of three honest fallbacks
+/// via ``MealPhotoPresence``: the decoded image, an "on your other device" glyph (no sealed file
+/// here), or a "couldn't be opened" glyph (file present but unreadable).
 private struct MealPhotoThumb: View {
     var loadData: () -> Data?
     /// Existence-only probe (no decrypt): tells a photo that never synced here (no file) from one that's
@@ -3049,6 +3200,11 @@ private struct MealPhotoThumb: View {
 }
 #endif
 
+/// A manual recipe's row in the recipe lists: name, servings, ingredient count, notes preview, and
+/// per-serving macros.
+///
+/// Rendered at `.headerMedium` — a deliberate step down from `MealRow`'s title, since recipes are a
+/// shortcut list beneath the meal log rather than the log itself.
 struct RecipeRow: View {
     var recipe: RecipeDefinition
     var totals: MacroTotals
@@ -3102,9 +3258,12 @@ struct RecipeRow: View {
 
 #if canImport(UIKit)
 /// Read-only detail view for a saved recipe (#1): the user's OWN photo, per-serving + total macros, the
-/// ingredient list, and notes — plus log / edit / share. Reached by tapping a recipe in the book (which
-/// used to jump straight into the editor). Recipe photos are the user's own pick — never an external
-/// fetch — sealed and keyed by the recipe id.
+/// ingredient list, and notes — plus log / edit / share.
+///
+/// Reached by tapping a recipe in the book (which used to jump straight into the editor). Recipe photos
+/// are the user's own pick — never an external fetch — sealed and keyed by the recipe id. Also hosts the
+/// ephemeral F4 "cook for N" view-only scaling, the per-ingredient Swap flow
+/// (``IngredientSubstitutionSheet``), and the F5 ``CookingModeView`` full-screen cover.
 struct RecipeDetailView: View {
     var store: FernletStore
     let recipe: RecipeDefinition
@@ -3607,6 +3766,11 @@ struct RecipeDetailView: View {
 }
 #endif
 
+/// One macro entry row: a tappable value that flips into a focused numeric text field, plus a
+/// stepper.
+///
+/// Commits on focus loss (clamped to `range`); nudging the stepper while editing commits its value
+/// and closes the field. Used across the ingredient, correction, and review editors.
 struct MacroInputRow: View {
     let label: String
     let unit: String
@@ -3666,6 +3830,10 @@ struct MacroInputRow: View {
     }
 }
 
+/// The "Create recipe" chooser: Import (URL or shared Fernlet text) or Manual entry.
+///
+/// Pushed from the recipe book's Create button. Nutrition-label scanning is deliberately absent here —
+/// it belongs to the barcode-not-found handoff, not to recipe creation.
 struct RecipeCreationOptionsView: View {
     var store: FernletStore
 
@@ -3710,6 +3878,9 @@ struct RecipeCreationOptionsView: View {
     }
 }
 
+/// One tappable option card (icon, title, subtitle, chevron) in ``RecipeCreationOptionsView``.
+///
+/// Purely presentational — the wrapping `NavigationLink` provides the behavior.
 struct RecipeCreationOptionRow: View {
     var title: String
     var subtitle: String
@@ -3744,6 +3915,10 @@ struct RecipeCreationOptionRow: View {
     }
 }
 
+/// The 44pt share-icon button on a recipe row.
+///
+/// Fires the injected action, which builds a `ProximityRecipeShareDraft` for the proximity
+/// recipe-share sheet.
 private struct RecipeShareButton: View {
     var action: () -> Void
 
@@ -3760,6 +3935,10 @@ private struct RecipeShareButton: View {
     }
 }
 
+/// The fork-and-knife menu on a recipe row that logs the recipe as a chosen meal type.
+///
+/// Shared by the Food-root preview and the recipe book so one-tap logging behaves identically in
+/// both.
 private struct RecipeMealTypeMenu: View {
     var onSelect: (MealType) -> Void
 
@@ -3782,6 +3961,10 @@ private struct RecipeMealTypeMenu: View {
     }
 }
 
+/// A row for a saved web-imported product in the recipe book's "Imported products" section.
+///
+/// Shows name, brand/source host, serving description, and macros; logging happens via the adjacent
+/// ``RecipeMealTypeMenu``.
 private struct WebImportedFoodRow: View {
     var foodItem: FoodItem
 
@@ -3822,6 +4005,12 @@ private struct WebImportedFoodRow: View {
     }
 }
 
+/// The full recipe book: searchable A–Z lists of manual recipes, saved/web recipes, and imported
+/// products, plus entry points for recipe creation and the F3 grocery planner.
+///
+/// Rows push the read-only ``RecipeDetailView``; edit requests are handed back to ``FoodView`` via
+/// the two editing bindings (the book dismisses and the owning view presents the right editor sheet).
+/// Sharing goes through the proximity recipe-share sheet.
 struct RecipeBookSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -4047,6 +4236,11 @@ struct RecipeBookSheet: View {
 import SafariServices
 import FernletDomainModel
 
+/// A `UIViewControllerRepresentable` wrapper around `SFSafariViewController` for in-app source
+/// links.
+///
+/// Belt-and-braces: any non-http(s) URL falls back to an empty controller instead of crashing, but
+/// presentation sites should still gate on `URL.isSafariPresentable` so that branch is never reached.
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
 

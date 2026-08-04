@@ -6,14 +6,24 @@ import FernletFoundation
 import FernletDomainModel
 import HealthKitGateway
 
-// The concrete HealthKit cache cleaner. Lives in the app target (NOT the HealthKitGateway
-// module) because it reaches CloudKitSync's `PersistenceController` and LocalPersistence's
-// `LocalFernletDatabase` — modules the platform gateway must never depend on. It is installed
-// into `HealthKitService.defaultCacheClearer` at app launch (see FernletApp.init) and surfaced
-// to the gateway only through the `HealthKitCacheClearing` seam.
+/// The concrete HealthKit cache cleaner behind the HealthKit opt-out.
+///
+/// Lives in the app target (NOT the HealthKitGateway module) because it reaches CloudKitSync's
+/// `PersistenceController` and LocalPersistence's `LocalFernletDatabase` — modules the platform
+/// gateway must never depend on. It is installed into `HealthKitService.defaultCacheClearer` at
+/// app launch (see `FernletApp.init`) and surfaced to the gateway only through the
+/// `HealthKitCacheClearing` seam.
+///
+/// `clearHealthKitCachedValues()` strips cached health context from every per-row `DayRecord`
+/// (preserving user-authored sleep) and rebuilds the aggregate blob's derived tables from the
+/// stripped rows so no HealthKit-derived value keeps syncing to iCloud after opt-out. It is
+/// FAIL-CLOSED: any undecodable row/blob throws ``CacheClearError`` so the opt-out reports
+/// failure and can be retried instead of silently "succeeding" with clinical data left behind.
 struct CoreDataHealthKitCacheCleaner: HealthKitCacheClearing {
     /// A row or the aggregate blob could not be decoded, so the scrub cannot prove the HealthKit cache is
-    /// gone. Thrown to keep the opt-out FAIL-CLOSED: `HealthKitService.disableIntegration` catches it, logs
+    /// gone.
+    ///
+    /// Thrown to keep the opt-out FAIL-CLOSED: `HealthKitService.disableIntegration` catches it, logs
     /// `healthkit.disable.failed`, leaves `healthKitMasterEnabled` ON, and lets the user retry — rather than
     /// silently "succeeding" while clinical data (sleep/steps/HRV, cycle/intimate-derived values) stays in the
     /// CloudKit-synced record. Undecodable here means a corrupt payload or a forward-schema payload written by

@@ -9,7 +9,30 @@ import Foundation
 import FernletDomainModel
 import FernletScoring
 
+/// The deterministic engine that computes the rolling derived-signal window — mood, energy,
+/// eating pattern, training progression, intensity readiness, and micronutrient gaps — from
+/// stored day pairs.
+///
+/// A stateless namespace enum: every signal is a pure heuristic over logged behavior (journal
+/// tags, sleep, meals, workouts) plus optional HealthKit HR/HRV recovery context, so results are
+/// reproducible with no AI involvement. `DerivedSignalsRebuilder` (in `StoreCore`) is the sole
+/// production caller; it feeds a bounded oldest-first window of at most
+/// ``FernletLimits/signalWindowDays`` days. Each run yields exactly seven ``DerivedSignalRecord``
+/// values whose `value` strings are short lowercase phrases ("needs gentleness",
+/// "ready for hard", "2 possible gaps") surfaced directly by the AI-context layer and companion
+/// UI — so changing a phrase here changes user-visible text. The records are recomputed on
+/// demand and held in store state, never persisted in the ``LocalFernletDatabase`` blob.
+/// Nonisolated and Sendable-safe by virtue of having no state.
 public enum DerivedSignalFactory {
+    /// Computes the full set of seven signal records from an oldest-first day window.
+    ///
+    /// - Parameters:
+    ///   - days: `(dateKey, day)` pairs, oldest-first, at most ``FernletLimits/signalWindowDays``
+    ///     entries (asserted in debug).
+    ///   - todayKey: The current day key; required non-empty, used only for the debug assertion.
+    /// - Returns: The seven records (mood, energy, eating, progression, readiness, and the 7- and
+    ///   14-day micronutrient windows), or an empty array when the window has no days at all.
+    ///   Sparse data never fails — signals degrade to an "insufficient data" value instead.
     public static func makeSignals(from days: [(String, FernletDay)], todayKey: String) -> [DerivedSignalRecord] {
         assert(!todayKey.isEmpty, "today key required")
         assert(days.count <= FernletLimits.signalWindowDays, "too many signal days")
@@ -25,6 +48,8 @@ public enum DerivedSignalFactory {
         ]
     }
 
+    /// Builds the `moodTrend` signal from daily journal-tag averages; a recent low day forces
+    /// "needs gentleness" before any trend comparison.
     private static func moodTrend(from days: [(String, FernletDay)], start: String, end: String) -> DerivedSignalRecord {
         assert(!start.isEmpty, "start required")
         assert(!end.isEmpty, "end required")
@@ -40,6 +65,8 @@ public enum DerivedSignalFactory {
         return DerivedSignalRecord(signalName: "moodTrend", value: value, windowStart: start, windowEnd: end, sourceFields: ["journals.tag"])
     }
 
+    /// Builds the `energyTrend` signal from the blended sleep/mood/training-load daily energy
+    /// score; a low 3-day recent average reports "low" before any trend comparison.
     private static func energyTrend(from days: [(String, FernletDay)], start: String, end: String) -> DerivedSignalRecord {
         assert(days.count <= FernletLimits.signalWindowDays, "too many days")
         assert(!end.isEmpty, "end required")
@@ -56,6 +83,8 @@ public enum DerivedSignalFactory {
         return DerivedSignalRecord(signalName: "energyTrend", value: value, windowStart: start, windowEnd: end, sourceFields: ["sleep.hours", "sleep.quality", "journals.tag", "workouts.intensity"])
     }
 
+    /// Builds the `eatingPattern` signal — light / protein-forward / inconsistent / consistent —
+    /// from meal counts, recent skipped days, and per-day protein totals.
     private static func eatingPattern(from days: [(String, FernletDay)], start: String, end: String) -> DerivedSignalRecord {
         assert(days.count <= FernletLimits.signalWindowDays, "too many days")
         assert(!start.isEmpty, "start required")
@@ -81,6 +110,8 @@ public enum DerivedSignalFactory {
         return DerivedSignalRecord(signalName: "eatingPattern", value: value, windowStart: start, windowEnd: end, sourceFields: ["meals.count", "meals.macros", "meals.calorieSnapshot"])
     }
 
+    /// Builds the `intensityReadiness` signal — the light/moderate/hard training recommendation —
+    /// from the last 3 days' load, energy, fueling, and (when wearable data exists) HR/HRV recovery.
     private static func intensityReadiness(from days: [(String, FernletDay)], start: String, end: String) -> DerivedSignalRecord {
         assert(days.count <= FernletLimits.signalWindowDays, "too many days")
         assert(!end.isEmpty, "end required")
@@ -118,6 +149,8 @@ public enum DerivedSignalFactory {
         return DerivedSignalRecord(signalName: "intensityReadiness", value: value, windowStart: start, windowEnd: end, sourceFields: ["workouts.intensity", "workouts.duration", "workouts.rpe", "sleep", "journals.tag", "meals.count", "body.restingHeartRate", "body.heartRateVariability"])
     }
 
+    /// Builds the `progressionTrend` signal — building / deloading / steady — by comparing total
+    /// training load between the older and newer halves of the window.
     private static func progressionTrend(from days: [(String, FernletDay)], start: String, end: String) -> DerivedSignalRecord {
         assert(days.count <= FernletLimits.signalWindowDays, "too many days")
         let midpoint = days.count / 2
@@ -139,6 +172,9 @@ public enum DerivedSignalFactory {
         return DerivedSignalRecord(signalName: "progressionTrend", value: value, windowStart: start, windowEnd: end, sourceFields: ["workouts.duration", "workouts.intensity", "workouts.rpe"])
     }
 
+    /// Builds a `micronutrientGaps{7,14}Day` signal by delegating gap analysis to
+    /// `MicronutrientGapAnalyzer` (in `FernletScoring`); the structured gaps ride along in
+    /// ``DerivedSignalRecord/nutrientGaps``.
     private static func micronutrientTrend(from days: [(String, FernletDay)], start: String, end: String, windowDays: Int) -> DerivedSignalRecord {
         assert(windowDays == 7 || windowDays == 14, "unsupported nutrient window")
         let gaps = MicronutrientGapAnalyzer.gaps(from: days, windowDays: windowDays)
@@ -162,6 +198,8 @@ public enum DerivedSignalFactory {
         )
     }
 
+    /// One averaged 0–1 mood score per day that has journal entries (days without journals are
+    /// omitted, not zeroed).
     private static func dailyMoodScores(from days: [(String, FernletDay)]) -> [Double] {
         days.compactMap { _, day in
             let scores = day.journals.prefix(FernletLimits.maxJournalsPerDay).map { moodScore($0.tag) }
@@ -170,6 +208,8 @@ public enum DerivedSignalFactory {
         }
     }
 
+    /// One blended 0–1 energy score per day from whichever components exist: sleep score, mood
+    /// average, and an inverse training-load penalty. Days with none of the three are omitted.
     private static func dailyEnergyScores(from days: [(String, FernletDay)]) -> [Double] {
         days.compactMap { _, day in
             var components: [Double] = []
@@ -189,6 +229,8 @@ public enum DerivedSignalFactory {
         }
     }
 
+    /// Shared half-window trend comparison: older half vs newer half, with a ±0.12 dead band
+    /// mapped to the caller-supplied rising/falling/steady phrases.
     private static func trendValue(scores: [Double], rising: String, falling: String, steady: String) -> String {
         let midpoint = scores.count / 2
         let older = Array(scores.prefix(midpoint))
@@ -200,6 +242,8 @@ public enum DerivedSignalFactory {
         return steady
     }
 
+    /// Maps a journal `FeelingTag` onto the fixed 0.2–1.0 mood scale (duplicated in
+    /// `TierTwoMemoryEngine.moodScore` — keep the two tables in sync).
     private static func moodScore(_ tag: FeelingTag) -> Double {
         switch tag {
         case .bright: 1
@@ -211,6 +255,8 @@ public enum DerivedSignalFactory {
         }
     }
 
+    /// 0–1 sleep-energy score: 60% hours (normalized against 8h) + 40% subjective quality,
+    /// falling back to quality alone when no duration is known.
     private static func sleepEnergyScore(_ sleep: SleepLog, healthSleepHours: Double? = nil) -> Double {
         let qualityScore: Double
         switch sleep.quality {
@@ -225,6 +271,8 @@ public enum DerivedSignalFactory {
         return hourScore * 0.6 + qualityScore * 0.4
     }
 
+    /// Sums a day's training load in intensity- and RPE-weighted minutes (capped at
+    /// ``FernletLimits/maxWorkoutsPerDay`` workouts; a missing duration counts as 30 minutes).
     private static func dailyTrainingLoad(_ day: FernletDay) -> Int {
         day.workouts.prefix(FernletLimits.maxWorkoutsPerDay).reduce(0) { total, workout in
             let minutes = max(workout.duration ?? 30, 0)
@@ -239,6 +287,7 @@ public enum DerivedSignalFactory {
         }
     }
 
+    /// Arithmetic mean, with an empty input defined as 0 rather than a trap.
     private static func average(_ values: [Double]) -> Double {
         guard values.isEmpty == false else { return 0 }
         return values.reduce(0, +) / Double(values.count)

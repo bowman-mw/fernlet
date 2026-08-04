@@ -16,14 +16,32 @@
 import ActivityKit
 import Foundation
 
+/// The ActivityKit contract for the guided-workout Live Activity: the fixed attributes (workout
+/// title) plus the per-set ``ContentState`` snapshot.
+///
+/// Compiled into BOTH targets: the app's `WorkoutLiveActivityController` requests and updates the
+/// activity with these values, and the widget's ``WorkoutLiveActivity`` renders them. A plain
+/// Codable/Hashable value type with no app or domain-model imports (S3 wall) —
+/// ``CookingActivityAttributes`` mirrors this shape for cooking mode. The rest timer ticks natively
+/// via `Text(timerInterval:)`, so the content state only changes on discrete set/exercise
+/// transitions — never per-second, never via push.
 struct WorkoutActivityAttributes: ActivityAttributes {
     /// The workout's title (e.g. "Push day"). Fixed for the life of the activity.
     var workoutTitle: String
 
+    /// The dynamic per-set snapshot the widget renders: exercise name, set/exercise cursors, the
+    /// two-case phase, and the optional fixed rest window.
+    ///
+    /// Produced only by `GuidedWorkoutRunState.contentState` (the app-group run state's Live Activity
+    /// mapping), so both drivers — the in-app guided sheet and the Lock Screen intents — publish
+    /// byte-identical snapshots.
     struct ContentState: Codable, Hashable {
-        /// `working` = doing a set (show set / reps). `resting` = between sets (show the countdown).
-        /// Deliberately NOT the runner's four-case `Phase` — the Live Activity surface only ever
-        /// renders while a workout is in progress, so `.ready`/`.done` never reach it.
+        /// The two-case rendering phase: `working` = doing a set (show set / reps), `resting` =
+        /// between sets (show the countdown).
+        ///
+        /// Deliberately narrower than the run state's three-case ``GuidedWorkoutRunState/Phase`` —
+        /// the Live Activity surface only ever renders while a workout is in progress, so `.done`
+        /// never reaches it (the activity is ended the instant a run finishes).
         enum Phase: String, Codable, Hashable {
             case working
             case resting

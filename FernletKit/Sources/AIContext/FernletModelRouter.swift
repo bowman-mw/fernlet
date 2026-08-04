@@ -2,6 +2,11 @@ import Foundation
 import FernletDomainModel
 
 /// Why a task landed on the deterministic (non-AI) path instead of a model destination.
+///
+/// Carried inside ``AIRouteResolution/deterministicFallback(_:)`` so callers (notably deferred /
+/// queued tasks) can distinguish a transient budget fallback (`.resting` / `.sleepy`, clears at
+/// midnight) from a persistent one (`.deviceIncapable`, `.allRungsExhausted`) when deciding whether
+/// to spend a bounded retry.
 public enum AIDeterministicReason: String, Sendable, Equatable {
     /// User turned AI off.
     case aiOff
@@ -21,16 +26,30 @@ public enum AIDeterministicReason: String, Sendable, Equatable {
 
 /// The outcome of a routing decision: either a concrete destination to call, or the deterministic
 /// fallback with the reason it was chosen.
+///
+/// Returned by ``FernletModelRouter/resolve(tier:effectiveStatus:userInvoked:)`` and
+/// ``FernletModelRouter/stepDown(from:tier:reason:)``, and surfaced to call sites through
+/// ``FernletAIGate/resolveRoute(tier:userInvoked:)``. A fallback means the caller MUST take its
+/// existing deterministic path — there is no "no result" state.
 public enum AIRouteResolution: Sendable, Equatable {
+    /// Dispatch the call to this rung.
     case destination(AIDestination)
+    /// Do not call a model; take the deterministic path for the given reason.
     case deterministicFallback(AIDeterministicReason)
 }
 
 /// Why a resolved destination failed, driving the step-down decision.
+///
+/// Passed by a call site into ``FernletModelRouter/stepDown(from:tier:reason:)`` after a dispatched
+/// rung failed; every case steps down the ladder except `contentRefusal`, which terminates.
 public enum AIRouteFailureReason: String, Sendable, Equatable {
+    /// The rung reported itself unavailable at call time.
     case unavailable
+    /// The call threw a generic error.
     case error
+    /// The call timed out.
     case timeout
+    /// The model responded but the structured result failed validation.
     case schemaValidation
     /// A provider safety refusal. NOT a step-down trigger — it terminates to the deterministic
     /// fallback (re-sending the same health-adjacent data to a different company would leak it
@@ -39,16 +58,25 @@ public enum AIRouteFailureReason: String, Sendable, Equatable {
 }
 
 /// Resolves an AI task to a destination per the Ladder §3.2 resolution order, capped by device
-/// capability. Escalation is downward only; the router never promotes a task to a destination the
-/// user did not enable, and never sends a `light` payload off the device.
+/// capability.
+///
+/// The routing brain inside ``FernletAIGate``: it walks the tier's ``AICapabilityTier/escalationLadder``
+/// (budget/intent gate first, then cheapest reachable rung) and hands back an ``AIRouteResolution``.
+/// Escalation is downward only; the router never promotes a task to a destination the user did not
+/// enable, and never sends a `light` payload off the device — `finalize` fails closed on that pin
+/// even in release builds.
 ///
 /// Pure and settings-driven: it takes the *effective* `AIStatus` (already overlaid with the local
-/// quota by the caller via `AIStatusOverlay`), so the router itself never reaches the quota store —
+/// quota by the caller via ``AIStatusOverlay``), so the router itself never reaches the quota store —
 /// which keeps the device-local counter unreachable from the walled `AIProviders` module except
-/// through the injected `AICallQuotaStore` seam.
+/// through the injected ``AICallQuotaStore`` seam. A `Sendable` value with no mutable state; safe to
+/// rebuild or share freely.
 public struct FernletModelRouter: Sendable {
+    /// The seam that reports which rungs this device can reach; read fresh on every resolution.
     private let capabilityProvider: AIDeviceCapabilityProviding
 
+    /// Creates a router capped by the given capability seam (the live check in production, a
+    /// ``StaticAIDeviceCapabilityProvider`` in tests).
     public init(capabilityProvider: AIDeviceCapabilityProviding) {
         self.capabilityProvider = capabilityProvider
     }

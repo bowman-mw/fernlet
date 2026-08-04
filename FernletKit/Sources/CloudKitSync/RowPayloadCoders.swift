@@ -14,6 +14,14 @@
 
 import Foundation
 
+/// Single source of truth for the JSON coder configuration shared by every per-row store.
+///
+/// Day rows, coin/milestone-ledger rows, custom-item rows, saved-recipe payloads, the aggregate
+/// blob, and the legacy recipe JSON file all encode through this one config — deterministic
+/// `.sortedKeys` ordering plus ISO-8601 dates — after per-store private coders drifted (two
+/// stores once wrote bare numeric dates). ISO-8601 truncates dates to whole seconds, which
+/// callers that compare dates across representations must account for (see
+/// ``SavedRecipeRepository``'s divergence flooring).
 nonisolated enum RowPayloadCoders {
     /// The canonical row-payload encoder: sorted keys + ISO-8601 dates. Pass `prettyPrinted: true`
     /// only for on-disk files that intentionally want human-readable output (the legacy recipe JSON).

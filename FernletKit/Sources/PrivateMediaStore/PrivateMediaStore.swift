@@ -6,18 +6,30 @@ import FernletDomainModel
 
 /// On-device, at-rest-encrypted store for friend/mesh media (the photowall cache).
 ///
+/// This is the peer-photo half of the module: `MeshNetworkManager` (in `ProximityKit`) owns one
+/// instance as its photowall cache, persisting the photos friends share over the proximity mesh.
 /// Self-contained: it depends only on Foundation/CryptoKit/ImageIO and an injected
-/// `PrivateMediaKeyProviding`. It shares files with nothing else and is the intended clean
-/// module target for the future S3 package split (spec §3 — `PrivateMediaStore` must not be
-/// importable by AI providers).
+/// ``PrivateMediaKeyProviding``. It shares files with nothing else and is a sealed S3 store
+/// (spec §3 — `PrivateMediaStore` must not be importable by AI providers; the SPM dependency
+/// graph enforces that wall).
 ///
 /// Image and thumbnail bytes are encrypted with AES-256-GCM before they touch disk (spec §11:
 /// "Photos are stored in `PrivateMediaStore` with encryption"); only metadata lives in the
 /// (unencrypted) JSON index. Files retain `.completeFileProtection` as defense-in-depth.
+/// Because the photos arrive from PEERS, every write path is guarded against decompression
+/// bombs: a byte-size cap plus an ImageIO pixel-dimension/area check that never decodes the
+/// full bitmap (``isWithinSafePixelBounds(_:)``). Fail-closed throughout — when no key is
+/// available, plaintext bytes are dropped rather than written; bytes that neither GCM-open nor
+/// parse as a safe image read back as missing, never as garbage handed to the UI.
 ///
 /// On-disk names (`MeshPhotoCache.json`, `MeshPhotos/`, `MeshPhotoThumbnails/`) are kept from the
 /// former `MeshPhotoCacheStore` so existing caches load without migration; legacy plaintext files
 /// are recognised on read and re-encrypted in place on first access.
+///
+/// Concurrency: a plain nonisolated value type with no internal locking. All state is on disk;
+/// in practice every instance is confined to `MeshNetworkManager`'s main actor. The default
+/// ``KeychainPrivateMediaKeyProvider`` caches its key without synchronization, so instances
+/// sharing a provider must share an isolation domain.
 public struct PrivateMediaStore {
     private let indexURL: URL
     private let imageDirectoryURL: URL
@@ -37,9 +49,18 @@ public struct PrivateMediaStore {
     private static let maxImagePixelCount = 24_000_000  // ~24 MP
     // Spec §11: cap the on-device photo cache at 1000 (FIFO by recency), with a soft warning near 900.
     // Newest photos are kept; oldest are evicted.
+    /// Hard cap on cached photos (spec §11). ``save(_:)`` keeps the newest and evicts the rest.
     public static let maxCachedPhotos = 1000
+    /// Soft threshold at which the UI warns the user the photo cache is nearly full.
     public static let cacheWarningThreshold = 900
 
+    /// Creates a store rooted at `indexURL`'s directory.
+    ///
+    /// - Parameters:
+    ///   - indexURL: Location of the metadata index JSON; the `MeshPhotos/` and
+    ///     `MeshPhotoThumbnails/` directories are created as its siblings.
+    ///   - keyProvider: Source of the AES-256-GCM at-rest key; defaults to the shared
+    ///     keychain-backed provider, with tests injecting an in-memory one.
     public init(indexURL: URL, keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider()) {
         self.indexURL = indexURL
         let baseURL = indexURL.deletingLastPathComponent()
@@ -58,6 +79,12 @@ public struct PrivateMediaStore {
         keyProvider.invalidateCachedKey()
     }
 
+    /// Loads the cached photo metadata, newest first, with image bytes stripped.
+    ///
+    /// Also re-runs ``save(_:)`` on the decoded entries as a normalization pass (cap enforcement +
+    /// orphan-file sweep). Bytes are fetched lazily per photo via ``imageData(for:)`` /
+    /// ``thumbnailData(for:)``. An unreadable or absent index reads as empty.
+    /// - Returns: The index entries (metadata only; `imageData` is nil on every payload).
     public func load() -> [FriendPhotoPayload] {
         guard let data = try? Data(contentsOf: indexURL), !data.isEmpty,
               let photos = try? decoder.decode([FriendPhotoPayload].self, from: data) else { return [] }
@@ -65,6 +92,16 @@ public struct PrivateMediaStore {
         return photos.map { $0.withoutImageData() }
     }
 
+    /// Persists the photo set: seals each payload's in-memory bytes to disk, writes the
+    /// byte-less metadata index, and sweeps files no longer referenced.
+    ///
+    /// The set is capped at ``maxCachedPhotos`` (newest by `addedAt` win). Per photo, bytes are
+    /// written only after passing the size cap and ``isWithinSafePixelBounds(_:)``, and only
+    /// sealed — with no key available the bytes are skipped (the metadata entry is still indexed
+    /// and the photo rehydrates from the mesh on demand). Payloads without in-memory bytes keep
+    /// whatever file already exists for their id.
+    /// - Important: This is a full-index rewrite; pass the COMPLETE set, not a delta —
+    ///   any photo omitted here has its on-disk files deleted as orphans.
     public func save(_ photos: [FriendPhotoPayload]) {
         let capped = Array(photos.sorted { $0.addedAt > $1.addedAt }.prefix(Self.maxCachedPhotos))
         createDirectories()
@@ -93,6 +130,12 @@ public struct PrivateMediaStore {
         removeOrphanedFiles(keeping: Set(capped.map(\.id)))
     }
 
+    /// Returns the full-resolution plaintext bytes for a photo, preferring in-memory bytes,
+    /// then decrypting the on-disk file.
+    ///
+    /// A legacy pre-encryption plaintext file is returned and re-sealed in place on this first
+    /// access. Returns nil when no file exists or the bytes can't be opened (missing key,
+    /// corruption) — never ciphertext or garbage.
     public func imageData(for photo: FriendPhotoPayload) -> Data? {
         if let inMemory = photo.imageData { return inMemory }
         guard let stored = try? Data(contentsOf: imageURL(for: photo.id)) else { return nil }
@@ -108,6 +151,11 @@ public struct PrivateMediaStore {
         }
     }
 
+    /// Returns plaintext thumbnail bytes for a photo, decrypting the cached thumbnail or
+    /// regenerating (and sealing) one from the full image when the cache is missing or corrupt.
+    ///
+    /// Like ``imageData(for:)``, a legacy plaintext thumbnail is re-sealed in place on first
+    /// access. Returns nil only when neither a thumbnail nor the full image can be opened.
     public func thumbnailData(for photo: FriendPhotoPayload) -> Data? {
         if let stored = try? Data(contentsOf: thumbnailURL(for: photo.id)) {
             switch openSealed(stored) {
@@ -126,6 +174,10 @@ public struct PrivateMediaStore {
         return thumbnailData
     }
 
+    /// Rebuilds a byte-less index payload into one carrying its decrypted image bytes
+    /// (e.g. to re-share a cached photo over the mesh).
+    ///
+    /// - Returns: The payload with `imageData` populated, or nil when the bytes can't be loaded.
     public func hydrated(_ photo: FriendPhotoPayload) -> FriendPhotoPayload? {
         guard let data = imageData(for: photo) else { return nil }
         return FriendPhotoPayload(
@@ -141,6 +193,11 @@ public struct PrivateMediaStore {
 
     // MARK: - At-rest encryption
 
+    /// Three-way outcome of opening an on-disk media file via `openSealed(_:)`.
+    ///
+    /// Read paths branch on this to keep the seal seam fail-closed: only `.opened` and
+    /// `.legacyPlaintext` ever hand bytes to a caller, and `.legacyPlaintext` additionally
+    /// triggers an in-place re-seal so the plaintext generation shrinks over time.
     private enum OpenResult {
         case opened(Data)           // decrypted from ciphertext
         case legacyPlaintext(Data)  // a pre-encryption plaintext file (re-encrypted in place on access)

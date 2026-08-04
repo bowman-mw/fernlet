@@ -9,6 +9,14 @@
 
 import Foundation
 
+/// Pure classifier for the "your devices will diverge without iCloud" warning.
+///
+/// With sync off there is no merge path between a user's own devices, so day history and the
+/// per-row stores drift apart silently. `classify` turns three already-available signals —
+/// account presence, the sync preference, and ``CloudKitDataService``'s existing-data
+/// detection — into one of three warning cases, or `nil` when sync is on and no warning is
+/// warranted. Deliberately free of FileManager and view state so the three-way decision is
+/// trivially unit-testable; the settings banner and disable-sync sheet render `message` as-is.
 public nonisolated enum MultiDeviceSyncWarning: Equatable, Sendable {
     /// An iCloud account is present and another device signed into it already wrote Fernlet data, but
     /// sync is off — the strongest, most specific warning (changes here won't merge with that device).

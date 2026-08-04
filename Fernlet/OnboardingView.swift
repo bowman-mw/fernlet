@@ -2,6 +2,12 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
+/// Reusable editor for the body profile (age, weight, height, sex, activity level) and nutrition
+/// preferences (eating pattern, guidance style).
+///
+/// Despite the file name, this is not an onboarding screen: ``SettingsSheet``'s "Goal & nutrition"
+/// tab is its caller, feeding it a Health-synced profile binding so weight/height edits also write
+/// back to Apple Health. Both bindings are the caller's; the editor persists nothing itself.
 struct ProfileEditor: View {
     @Binding var profile: UserNutritionProfile
     @Binding var preferences: UserNutritionPreferences
@@ -70,6 +76,8 @@ struct ProfileEditor: View {
 }
 
 extension View {
+    /// The cream-card treatment shared by profile-style field groups (padding, rounded cream
+    /// background, hairline bark stroke) — also used by the onboarding personal-details step.
     func profileFieldStyle() -> some View {
         self
             .padding(14)

@@ -3,6 +3,15 @@
 
 import Foundation
 
+/// One completed workout row: what was done, how hard, and where the record came from.
+///
+/// Lives inside ``FernletDay``, so every enum field decodes tolerantly with parked tokens
+/// (``EnumDecodeCompat``). Provenance is three-way and load-bearing for edit/delete rules:
+/// `healthKitUUID` + `healthKitAuthored` distinguish a read-only Apple Health *import*
+/// (``isHealthImported``) from a Fernlet-*authored* Health sample Fernlet owns
+/// (``isHealthAuthored``), and `loggedFromGuidedSession` marks guided-flow rows so name-based
+/// reconciliation only ever matches its own logs. Both markers are encoded only when set, so
+/// untagged rows stay byte-identical.
 public nonisolated struct Workout: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var name: String
@@ -209,6 +218,10 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         try container.encode(loggedAt, forKey: .loggedAt)
     }
 
+    /// Persisted JSON keys for a logged ``Workout``'s wire format.
+    ///
+    /// Renaming a case is a data-format break; the optional tag keys (`healthKitAuthored`,
+    /// `loggedFromGuidedSession`) are encoded only when set so untagged rows stay byte-identical.
     private enum CodingKeys: String, CodingKey {
         case id, name, type, mode, activityType, exercises, rpe, notes, duration
         case distanceMiles, activeEnergyKcal, effort, muscleGroups, healthKitUUID, healthKitAuthored, plannedWorkoutID
@@ -219,6 +232,10 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
     }
 }
 
+/// A workout planned for a day but not yet done.
+///
+/// Same tolerant enum-decode contract as ``Workout``; `completedWorkout` mints the completion row,
+/// linking back to the plan via `plannedWorkoutID`.
 public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var name: String
@@ -336,6 +353,10 @@ public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
     }
 
+    /// Persisted JSON keys for a ``PlannedWorkout`` template's wire format.
+    ///
+    /// Renaming a case is a data-format break; the `unknown*Token` keys carry the freeze/park
+    /// round-trip values for enum cases a newer build wrote that this build doesn't know.
     private enum CodingKeys: String, CodingKey {
         case id, name, split, source, mode, activityType, exercises, muscleGroups, notes, duration
         case targetDistanceMiles, targetEnergyKcal, targetEffort, createdAt
@@ -344,6 +365,9 @@ public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
     }
 }
 
+/// Who authored a planned workout: the user or a coach.
+///
+/// Drives the completion note text; decodes tolerantly on ``PlannedWorkout``.
 public nonisolated enum WorkoutPlanSource: String, Codable, CaseIterable, Identifiable {
     case user
     case coach
@@ -365,6 +389,10 @@ public nonisolated enum WorkoutPlanSource: String, Codable, CaseIterable, Identi
     }
 }
 
+/// The split label a planned workout belongs to (upper, push, legs, cardio, …).
+///
+/// Maps down to the coarser ``WorkoutType`` for scoring/history via `workoutType`; decodes
+/// tolerantly on ``PlannedWorkout``.
 public nonisolated enum WorkoutSplit: String, Codable, CaseIterable, Identifiable {
     case workout
     case upper
@@ -403,6 +431,11 @@ public nonisolated enum WorkoutSplit: String, Codable, CaseIterable, Identifiabl
     }
 }
 
+/// The coarse workout category used in history and scoring.
+///
+/// NOTE: `allCases` is deliberately overridden to only the four current categories — the legacy
+/// cases (`armsBack`, `mixed`, `run`, `hike`) stay decodable for old rows but are excluded from
+/// pickers and any `allCases` iteration.
 public nonisolated enum WorkoutType: String, Codable, CaseIterable, Identifiable, Sendable {
     case upper = "Upper"
     case lower = "Lower"
@@ -418,6 +451,10 @@ public nonisolated enum WorkoutType: String, Codable, CaseIterable, Identifiable
     public var id: String { rawValue }
 }
 
+/// Whether a workout is strength training or a named activity/class.
+///
+/// Switches the logging UI's vocabulary (`pickerTitle`, `searchPlaceholder`) and which fields
+/// (exercise lines vs ``WorkoutActivityType``) are expected; decodes tolerantly where persisted.
 public nonisolated enum WorkoutMode: String, Codable, CaseIterable, Identifiable {
     case strengthTraining
     case activity
@@ -453,6 +490,10 @@ public nonisolated enum WorkoutMode: String, Codable, CaseIterable, Identifiable
     }
 }
 
+/// The coarse body region a muscle belongs to (upper/lower/core/full).
+///
+/// Derived from ``MuscleGroup``'s `region`; used to infer a workout's category from its muscle mix
+/// and to match program slots by region.
 public nonisolated enum BodyRegion: String, Codable, CaseIterable {
     case upper
     case lower
@@ -460,6 +501,11 @@ public nonisolated enum BodyRegion: String, Codable, CaseIterable {
     case full
 }
 
+/// The granular muscle taxonomy exercises target and injuries avoid.
+///
+/// Persisted in day rows AND in the safety-relevant ``WorkoutProfile`` avoided-muscles set, so
+/// both decode tolerantly with parked tokens (dropping an avoided muscle would silently un-avoid
+/// it). `fromLegacyString` maps the old coarse strings from early catalogs.
 public nonisolated enum MuscleGroup: String, Codable, CaseIterable, Identifiable {
     case chest
     case upperBack
@@ -545,6 +591,10 @@ extension MuscleGroup {
     }
 }
 
+/// The biomechanical pattern of an exercise (push, pull, hinge, squat, …).
+///
+/// The unit of both slot matching in the program engine and movement-level contraindications in
+/// ``WorkoutProfile``; also keys rest demand in ``WorkoutRestGuidance``.
 public nonisolated enum MovementPattern: String, Codable, CaseIterable {
     case push
     case pull
@@ -557,6 +607,10 @@ public nonisolated enum MovementPattern: String, Codable, CaseIterable {
     case locomotion
 }
 
+/// The coarse equipment capability the planning engine reasons about.
+///
+/// User-facing granular gear (``GymEquipment``) maps down onto these; the safety filter checks
+/// that a ``WorkoutLocation`` has an exercise's capability before it can be prescribed.
 public nonisolated enum Equipment: String, Codable, CaseIterable, Identifiable {
     case barbell
     case dumbbell
@@ -587,6 +641,12 @@ public nonisolated enum Equipment: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// The named activity/class taxonomy (running, yoga, pickleball, …) mirroring HealthKit's workout
+/// types.
+///
+/// Carries the per-activity UI defaults (symbol, expected distance/pace, default duration) and
+/// folds to a coarse ``WorkoutType`` via `fernletCategory`. Decodes tolerantly where persisted on
+/// workout rows.
 public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
     case running, walking, hiking, cycling, indoorCycling
     case yoga, pilates, barre, dance, socialDance
@@ -719,17 +779,29 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
     }
 }
 
+/// The day's training energy (light/moderate/hard).
+///
+/// Adjusts prescribed set counts by ±1 in ``WorkoutGoalStyle``'s `adjustedSets`; decodes
+/// tolerantly on ``Workout``.
 public nonisolated enum WorkoutIntensity: String, Codable, CaseIterable, Identifiable {
     case light, moderate, hard
     public var id: String { rawValue }
 }
 
+/// What logging inputs an exercise expects (strength sets, treadmill fields, or none).
+///
+/// A catalog attribute on ``ExerciseTarget``; defaults to `.strength` for legacy rows.
 public nonisolated enum ExerciseInputKind: String, Codable {
     case strength
     case treadmill
     case none
 }
 
+/// One catalog exercise: primary/secondary muscles, equipment, movement pattern, and input kind.
+///
+/// The unit the program engine scores against slots and ``WorkoutSafetyFilter`` vets. Decode is
+/// legacy-tolerant: rows written with the old `muscles` string array map through
+/// `MuscleGroup.fromLegacyString` into `primaryMuscles`.
 public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable {
     public var id: String { name }
     public var name: String
@@ -805,12 +877,22 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable {
         try container.encode(inputKind, forKey: .inputKind)
     }
 
+    /// Persisted JSON keys for an ``ExerciseTarget`` catalog row (`id` is derived from `name`, so
+    /// it is never encoded).
+    ///
+    /// `legacyMuscles` maps the old `muscles` string-array key so pre-split rows still decode.
     private enum CodingKeys: String, CodingKey {
         case name, primaryMuscles, secondaryMuscles, equipment, movementPattern, inputKind
         case legacyMuscles = "muscles"
     }
 }
 
+/// The bundled exercise catalog plus name-based category/target inference.
+///
+/// Loads `WorkoutExercises.json` from `Bundle.main` once (silently empty if the hosting bundle
+/// lacks it — the resource lives in the APP target, not `Bundle.module`). `inferredCategory`
+/// scores free text against catalog names for legacy rows without muscle data; `search` powers the
+/// exercise picker.
 public nonisolated enum WorkoutExerciseCatalog {
     // Immutable, computed-once catalog. `nonisolated(unsafe)` avoids cascading Sendable
     // through ExerciseTarget; the array is built once and never mutated.

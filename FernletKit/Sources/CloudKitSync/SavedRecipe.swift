@@ -9,9 +9,11 @@ import FernletPersistence
 // below load/save `RecipeDefinition`s while keeping the existing on-disk formats stable so that
 // recipes saved by older builds migrate without loss.
 
-/// Mirror of the legacy `SavedRecipe` JSON schema, used only to decode (and re-encode) the
-/// pre-merge `SavedRecipes.json` file so older saved recipes survive the model merge. Maps
-/// losslessly to/from `RecipeDefinition` via `webImport`.
+/// Mirror of the legacy `SavedRecipe` JSON schema for the pre-merge `SavedRecipes.json` file.
+///
+/// Used only by ``LegacySavedRecipeJSONRepository`` to decode (and re-encode) that file so older
+/// builds' saved recipes survive the model merge; maps losslessly to/from `RecipeDefinition`
+/// via its `webImport` payload, with defensive defaults for every optional field.
 nonisolated private struct LegacySavedRecipeDTO: Codable {
     var id: UUID?
     var sourceURLString: String?
@@ -86,9 +88,13 @@ nonisolated struct SavedRecipePayload: Codable {
     }
 }
 
-/// Single source of truth for translating the legacy saved-recipe columns/fields (free-text
-/// ingredients + precomputed nutrition + source URL) into a `RecipeDefinition` with a `webImport`
-/// payload. Shared by the Core Data and legacy-JSON repositories so both migrate identically.
+/// Single source of truth for translating the legacy saved-recipe columns/fields into a
+/// `RecipeDefinition` with a `webImport` payload.
+///
+/// The legacy shape is free-text ingredient lines plus precomputed nutrition and a source URL.
+/// Shared by ``SavedRecipeRepository`` (Core Data columns) and
+/// ``LegacySavedRecipeJSONRepository`` (the JSON file) so both migrate identically, and reused
+/// by the staleness guard's legacy projection.
 nonisolated enum SavedRecipeMapping {
     static func recipe(
         id: UUID,
@@ -126,6 +132,23 @@ nonisolated enum SavedRecipeMapping {
     }
 }
 
+/// Core Data + iCloud store for saved recipes, with a dual legacy/structured on-disk format.
+///
+/// The `SavedRecipeRepositoring` conformer under Core Data storage. Each recipe is one
+/// `SavedRecipeRecord` row carrying BOTH representations: the legacy typed columns (free-text
+/// ingredient lines plus precomputed macros — all an un-updated paired device can read or
+/// write) and the additive `payloadData` blob (``SavedRecipePayload``, the full structured
+/// `RecipeDefinition`). Writes always populate both ("write-both"); reads prefer the blob but
+/// fall back to the legacy columns whenever those have diverged from the blob's own legacy
+/// projection — divergence means a legacy-only writer edited the row after the blob was
+/// encoded, so the legacy columns are the fresher user intent (the STEP 0 staleness guard).
+/// Divergence comparison floors dates to whole seconds to match ``RowPayloadCoders``' ISO-8601
+/// precision, or every runtime-created recipe would false-positive as diverged.
+///
+/// Also owns the one-time migration from ``LegacySavedRecipeJSONRepository``'s JSON file
+/// (guarded by a UserDefaults flag). Same upsert-only row discipline as the sibling stores:
+/// never deletes rows it wasn't handed. `@MainActor`, working on ``PersistenceController``'s
+/// view context; failed saves assert in Debug, roll back, and return `false`.
 @MainActor
 public struct SavedRecipeRepository {
     private let controller: PersistenceController
@@ -144,6 +167,8 @@ public struct SavedRecipeRepository {
 
     private static let migrationCompletedKey = "com.fernlet.savedRecipeMigrationCompleted"
 
+    /// Loads all saved recipes, newest first, running the one-time legacy-JSON migration when
+    /// the Core Data store is empty and migration hasn't been marked complete.
     public func load() -> [RecipeDefinition] {
         StartupTiming.timed("SavedRecipeRepository.load") {
             let recipes = loadCoreDataRecipes()
@@ -159,6 +184,7 @@ public struct SavedRecipeRepository {
         }
     }
 
+    /// Async-signature variant of `load()` with its own signposted legacy read.
     public func loadAsync() async -> [RecipeDefinition] {
         StartupTiming.timed("SavedRecipeRepository.loadAsync") {
             let recipes = loadCoreDataRecipes()
@@ -188,6 +214,10 @@ public struct SavedRecipeRepository {
         return records.compactMap(Self.recipe(from:))
     }
 
+    /// Inserts or updates the given recipes by UUID (writing both representations), never
+    /// deleting rows it wasn't handed.
+    ///
+    /// - Returns: `false` when the Core Data save fails (the context is rolled back).
     @discardableResult public func upsert(_ recipes: [RecipeDefinition]) -> Bool {
         guard !recipes.isEmpty else { return true }
         let context = controller.container.viewContext
@@ -220,6 +250,7 @@ public struct SavedRecipeRepository {
         }
     }
 
+    /// Deletes only the rows with the listed ids.
     @discardableResult public func delete(ids: [UUID]) -> Bool {
         guard !ids.isEmpty else { return true }
         let context = controller.container.viewContext
@@ -240,6 +271,7 @@ public struct SavedRecipeRepository {
         }
     }
 
+    /// Removes every saved-recipe row — the delete-all/reset path.
     @discardableResult public func deleteAll() -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
@@ -424,6 +456,12 @@ public struct SavedRecipeRepository {
 
 extension SavedRecipeRepository: SavedRecipeRepositoring {}
 
+/// Reader/writer for the legacy pretty-printed `SavedRecipes.json` file in Application Support.
+///
+/// Retained as the one-time migration source for ``SavedRecipeRepository`` so recipes saved by
+/// pre-Core-Data builds survive without loss: `load` tolerates a missing or undecodable file by
+/// returning `[]`, and `save` writes atomically with complete file protection, encoding through
+/// the shared ``RowPayloadCoders`` config with the pretty-printed opt-in.
 nonisolated public struct LegacySavedRecipeJSONRepository {
     private let fileURL: URL
     private let encoder: JSONEncoder

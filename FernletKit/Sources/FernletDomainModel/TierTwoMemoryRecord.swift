@@ -7,6 +7,12 @@
 
 import Foundation
 
+/// A distilled "tier two" behavioral memory the memory pipeline extracted from recent data.
+///
+/// Referenced by the `FernletRepository` protocol and the app-layer MemoryAgent; a change in
+/// `state` (the key behavioral verdict) triggers a NEW record rather than mutating this one, and
+/// `active` retires superseded records. The custom decode keeps records written before newer fields
+/// existed loading cleanly.
 public nonisolated struct TierTwoMemoryRecord: Identifiable, Codable, Equatable, Sendable {
     public var id = UUID()
     public var category: String

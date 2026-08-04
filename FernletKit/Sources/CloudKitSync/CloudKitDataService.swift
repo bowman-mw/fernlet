@@ -4,6 +4,13 @@ import FernletFoundation
 import Foundation
 import FernletDomainModel
 
+/// Per-store counts of Fernlet data already present in the user's iCloud private database.
+///
+/// Produced by ``CloudKitDataService``'s `detectExistingData()` on the rare detection paths
+/// (onboarding, the disable-sync flow) and consumed via `hasData` by ``MultiDeviceSyncWarning``
+/// to decide whether "another device already wrote cloud data" should be surfaced. Aggregate-blob
+/// counts come from the blob's bounded `dayContentSummary`; the per-row stores (custom items,
+/// coin ledger, day rows) are counted directly because the blob cannot see them.
 public struct ExistingDataSummary: Equatable {
     public var mealLogCount: Int
     public var journalEntryCount: Int
@@ -42,12 +49,14 @@ public struct ExistingDataSummary: Equatable {
         self.dayRecordCount = dayRecordCount
     }
 
+    /// True when any counted store holds at least one record — the signal the multi-device warning keys on.
     public var hasData: Bool {
         mealLogCount > 0 || journalEntryCount > 0 || workoutCount > 0 ||
         hygieneLogCount > 0 || hydrationLogCount > 0 || sleepRecordCount > 0 ||
         customItemCount > 0 || coinLedgerCount > 0 || dayRecordCount > 0
     }
 
+    /// Accumulates another summary's counts into this one (used to fold multiple aggregate records together).
     public mutating func merge(_ other: ExistingDataSummary) {
         mealLogCount += other.mealLogCount
         journalEntryCount += other.journalEntryCount
@@ -60,6 +69,7 @@ public struct ExistingDataSummary: Equatable {
         dayRecordCount += other.dayRecordCount
     }
 
+    /// A summary with every count at zero — the accumulator seed for detection.
     public static let empty = ExistingDataSummary(
         mealLogCount: 0,
         journalEntryCount: 0,
@@ -70,6 +80,12 @@ public struct ExistingDataSummary: Equatable {
     )
 }
 
+/// Proof of user intent required before ``CloudKitDataService`` will delete all cloud data.
+///
+/// The user must either have typed "DELETE" (case-insensitive, whitespace-trimmed) or completed
+/// a biometric check within the last 60 seconds of the service's injected clock; anything else
+/// makes `deleteAllCloudKitData(confirmation:)` throw
+/// ``CloudKitDataServiceError/confirmationRequired``.
 public struct DeletionConfirmation {
     public var userTypedConfirmation: String
     public var biometricVerifiedAt: Date?
@@ -80,6 +96,11 @@ public struct DeletionConfirmation {
     }
 }
 
+/// Outcome of a full CloudKit deletion sweep.
+///
+/// Returned to the privacy/data settings UI so it can report how many records were removed and
+/// warn — when iCloud sync is enabled — that the deletion will propagate to the user's other
+/// signed-in devices.
 public struct DeletionResult: Equatable {
     public var deletedRecordCount: Int
     public var mayAffectOtherDevices: Bool
@@ -90,6 +111,11 @@ public struct DeletionResult: Equatable {
     }
 }
 
+/// Failures surfaced by ``CloudKitDataService`` operations, each with a user-facing description.
+///
+/// `notSignedIn` and `confirmationRequired` are precondition failures the UI can resolve;
+/// `cloudKitOperationFailed` wraps any underlying CloudKit error's message so callers present
+/// one consistent alert instead of raw `CKError`s.
 public enum CloudKitDataServiceError: Error, LocalizedError, Equatable {
     case notSignedIn
     case confirmationRequired
@@ -107,22 +133,70 @@ public enum CloudKitDataServiceError: Error, LocalizedError, Equatable {
     }
 }
 
+/// Seam for querying the iCloud account status.
+///
+/// ``SystemCloudKitAccountProvider`` is the production conformer (backed by `CKContainer`);
+/// tests inject fakes so the sign-in gate in ``CloudKitDataService`` can be exercised without
+/// an iCloud account.
 public protocol CloudKitAccountStatusProviding {
+    /// The current `CKAccountStatus`; only `.available` lets service operations proceed.
     func accountStatus() async throws -> CKAccountStatus
 }
 
+/// Seam over the CloudKit private-database operations ``CloudKitDataService`` needs.
+///
+/// ``SystemCloudKitRecordDatabase`` is the production conformer (cursor-following queries,
+/// batched deletes against a real `CKDatabase`); tests substitute in-memory fakes so detection,
+/// deletion, and sealed-backup logic run without a network or an iCloud account. Methods throw
+/// the underlying `CKError` unmapped — the service layers its own error mapping on top.
 public protocol CloudKitRecordDatabase {
+    /// All record zone IDs present in the database.
     func recordZoneIDs() async throws -> [CKRecordZone.ID]
+    /// The IDs of every record of `recordType` in `zoneID` (following pagination to exhaustion).
     func recordIDs(matching recordType: String, in zoneID: CKRecordZone.ID) async throws -> [CKRecord.ID]
+    /// Fetches the given records, silently omitting IDs that fail individually.
     func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord]
+    /// Saves the given records with an all-keys save policy.
     func saveRecords(_ records: [CKRecord]) async throws
+    /// Deletes the given records (batched to respect CloudKit's per-operation limits).
     func deleteRecords(with recordIDs: [CKRecord.ID]) async throws
 }
 
+/// Direct-CloudKit service for the operations `NSPersistentCloudKitContainer` can't do: detecting
+/// existing cloud data, wiping every Fernlet record from iCloud, and storing sealed backups.
+///
+/// Three responsibilities, all against the user's private CloudKit database:
+/// - **Detection** — `detectExistingData()` counts records of every synced type (the aggregate
+///   blob's `dayContentSummary` plus direct counts of the per-row stores) so onboarding and the
+///   disable-sync flow can warn when this iCloud account already holds Fernlet data
+///   (see ``MultiDeviceSyncWarning``).
+/// - **Deletion** — `deleteAllCloudKitData(confirmation:)` is a confirmed, audited sweep over
+///   every known record type, including the sealed narrative mirrors, which are named only as
+///   string literals so no sealed type is ever imported into this walled module (the S3 wall).
+/// - **Sealed backups** — `saveSealedBackup(_:)` and friends read/write the opaque, chunked
+///   ``SealedBackupRecord`` ciphertext envelopes; sealing and opening stay app-side with the
+///   identity service.
+///
+/// Collaborators are injected behind ``CloudKitAccountStatusProviding`` and
+/// ``CloudKitRecordDatabase`` so every path is testable without CloudKit; the convenience
+/// initializer wires the real `CKContainer`-backed conformers. MainActor-isolated by the module
+/// default (the `containerIdentifier`/`appZoneID` statics are nonisolated). Every operation logs
+/// attempt/completed/failed events to `FernletAuditLog`, and non-service errors are mapped into
+/// ``CloudKitDataServiceError/cloudKitOperationFailed(_:)``.
 public final class CloudKitDataService {
+    /// The app's CloudKit container identifier — the same container ``PersistenceController``
+    /// mirrors into and ``HeartDropCloudTransport`` defaults to.
     nonisolated public static let containerIdentifier = "iCloud.MBO.Fernlet"
+    /// The default record zone, always scanned alongside every other zone the database reports
+    /// (the NSPersistentCloudKitContainer mirror writes into its own zone).
     nonisolated public static let appZoneID = CKRecordZone.default().zoneID
+    /// Both spellings of the aggregate blob's record type: the `CD_`-prefixed
+    /// NSPersistentCloudKitContainer mirror and the legacy bare name.
     private static let aggregateDatabaseRecordTypes = ["CD_FernletDatabaseRecord", "FernletDatabaseRecord"]
+    /// Every record type the full deletion sweep covers — mirrored (`CD_`) and bare spellings,
+    /// legacy direct-CloudKit log types, sealed backups, and the sealed narrative mirror named
+    /// only as a string literal (S3 wall). Milestone-ledger records are deliberately absent:
+    /// milestone rows survive a full data reset by design (see `MilestoneLedgerRepositoring`).
     private static let allRecordTypes = [
         "CD_FernletDatabaseRecord",
         "FernletDatabaseRecord",
@@ -152,6 +226,13 @@ public final class CloudKitDataService {
     private let now: () -> Date
     private let decoder: JSONDecoder
 
+    /// Production initializer: wires the real `CKContainer`-backed account provider and database.
+    ///
+    /// - Parameters:
+    ///   - container: the CloudKit container to operate on (defaults to the app container).
+    ///   - isCloudKitSyncEnabled: live sync-preference read used to decide whether a deletion
+    ///     may affect other devices; defaults to the nonisolated `StoragePreferencesStore` static.
+    ///   - now: clock seam for the biometric-confirmation window (injectable for tests).
     @MainActor
     public init(
         container: CKContainer = CKContainer(identifier: CloudKitDataService.containerIdentifier),
@@ -169,6 +250,7 @@ public final class CloudKitDataService {
         self.decoder = Self.makeDecoder()
     }
 
+    /// Seam initializer for tests: injects the account provider, database, and a fixed zone.
     public init(
         accountProvider: CloudKitAccountStatusProviding,
         database: CloudKitRecordDatabase,
@@ -184,6 +266,15 @@ public final class CloudKitDataService {
         self.decoder = Self.makeDecoder()
     }
 
+    /// Counts the Fernlet data already in this iCloud account across every zone.
+    ///
+    /// Reads the aggregate blob's precomputed `dayContentSummary` (falling back to the blob's
+    /// legacy `days`/derived tables for un-migrated blobs), then directly counts the per-row
+    /// stores the blob can't see. Runs only on the rare onboarding/settings detection paths.
+    ///
+    /// - Returns: the summary when any data exists, or `nil` when the account is clean.
+    /// - Throws: ``CloudKitDataServiceError/notSignedIn`` without an available account, or
+    ///   ``CloudKitDataServiceError/cloudKitOperationFailed(_:)`` wrapping any CloudKit error.
     public func detectExistingData() async throws -> ExistingDataSummary? {
         FernletAuditLog.log("cloudkit.detect.attempt")
         do {
@@ -249,6 +340,16 @@ public final class CloudKitDataService {
         }
     }
 
+    /// Deletes every Fernlet record from the private database, across all zones and record types.
+    ///
+    /// Requires a valid ``DeletionConfirmation`` (typed "DELETE" or a fresh biometric check) and
+    /// an available iCloud account. Record IDs are de-duplicated across the `CD_`/bare type
+    /// spellings before deletion so a shared record is only counted once.
+    ///
+    /// - Returns: the count of deleted records and whether other devices may be affected
+    ///   (i.e. sync is currently enabled).
+    /// - Important: this deletes cloud copies only; local stores are wiped separately by
+    ///   ``CoreDataFernletRepository/purgeAllPersistedData()`` and its siblings.
     public func deleteAllCloudKitData(confirmation: DeletionConfirmation) async throws -> DeletionResult {
         FernletAuditLog.log("cloudkit.delete.attempt")
         do {
@@ -287,6 +388,9 @@ public final class CloudKitDataService {
         }
     }
 
+    /// Uploads one sealed-backup chunk, writing its ciphertext as a `CKAsset` under the
+    /// deterministic record name for its payload type and chunk index. Overwrites any prior
+    /// record of the same name (all-keys save).
     public func saveSealedBackup(_ record: SealedBackupRecord) async throws {
         try await ensureSignedIn()
         let fileURL = FileManager.default.temporaryDirectory
@@ -396,6 +500,8 @@ public final class CloudKitDataService {
         }
     }
 
+    /// Gate on every operation: throws ``CloudKitDataServiceError/notSignedIn`` unless the
+    /// account status is `.available`.
     private func ensureSignedIn() async throws {
         let status = try await accountProvider.accountStatus()
         guard status == .available else { throw CloudKitDataServiceError.notSignedIn }
@@ -443,6 +549,8 @@ public final class CloudKitDataService {
         )
     }
 
+    /// Enforces the deletion-confirmation rule: typed "DELETE", or a biometric verification no
+    /// older than 60 seconds (and not in the future) by the injected clock.
     private func validate(_ confirmation: DeletionConfirmation) throws {
         let typed = confirmation.userTypedConfirmation.trimmingCharacters(in: .whitespacesAndNewlines)
         if typed.uppercased() == "DELETE" { return }
@@ -563,6 +671,9 @@ private extension CloudKitDataServiceError {
     }
 }
 
+/// Production ``CloudKitAccountStatusProviding``: bridges `CKContainer.accountStatus` into async/await.
+///
+/// Private to this file; tests never see it — they inject their own conformer instead.
 private final class SystemCloudKitAccountProvider: CloudKitAccountStatusProviding {
     private let container: CKContainer
 
@@ -583,6 +694,11 @@ private final class SystemCloudKitAccountProvider: CloudKitAccountStatusProvidin
     }
 }
 
+/// Production ``CloudKitRecordDatabase`` backed by a real `CKDatabase`.
+///
+/// Wraps the callback-based CloudKit operations in checked continuations: queries follow
+/// pagination cursors recursively until exhausted, saves use an all-keys policy, and deletes run
+/// in batches of 400 to stay under CloudKit's per-operation record limit.
 private final class SystemCloudKitRecordDatabase: CloudKitRecordDatabase {
     private let database: CKDatabase
 

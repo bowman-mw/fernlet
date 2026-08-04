@@ -3,6 +3,15 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
+/// The receiving side of a proximity recipe share: review what arrived, then import or decline.
+///
+/// Presented by ContentView when `ProximityRecipeShareManager` holds a
+/// `PendingProximityRecipeShare`. Shows the recipe's kind (local Fernlet recipe vs. saved web
+/// recipe), servings/ingredient counts, macros, notes, and the ingredient list, plus a duplicate
+/// warning when a same-named (or same-source) recipe already exists — import then becomes
+/// "Import anyway". Import goes through `FernletStore.importProximityRecipeShare` (which
+/// sanitizes and records provenance by sender fingerprint); both outcomes consume the pending
+/// share via `dismissRecipeShare`, and an import failure keeps the sheet up with an inline notice.
 struct ProximityRecipeShareReviewSheet: View {
     var share: PendingProximityRecipeShare
     var store: FernletStore

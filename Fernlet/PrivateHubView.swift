@@ -5,6 +5,11 @@ import PeriodContextBridge
 import FernletUI
 import FernletLockUI
 
+/// The pages of the Private hub, in display order: Journal, Period, Intimacy, Worry Box.
+///
+/// Raw values double as the section-picker labels. Period and Intimacy are conditional on the
+/// store's derived `SensitiveSurfaceVisibility`; ``visibleSections(visibility:)`` is the single
+/// filter both the UI and tests use to decide which pages exist.
 enum PrivateHubSection: String, CaseIterable, Identifiable {
     case journal = "Journal"
     case period = "Period"
@@ -27,6 +32,16 @@ enum PrivateHubSection: String, CaseIterable, Identifiable {
     }
 }
 
+/// The Personal tab's paged container for every sensitive surface: ``JournalView``,
+/// ``PeriodTrackerView``, the intimacy screen, and ``WorryBoxView``, all behind one lock gate.
+///
+/// The whole hub sits behind `fernletLockGate` (bypassable only via the DEBUG UI-test hook), so
+/// each child screen inherits the app-lock requirement instead of gating itself. Section
+/// visibility follows ``PrivateHubSection/visibleSections(visibility:)``; the ``clampedSection(_:)``
+/// binding guarantees the paged `TabView` can never select a hidden page mid-transaction (a
+/// visibility flip from Settings, a HealthKit body-profile import, or an Age/Gender edit), while
+/// ``resetUnavailableSectionIfNeeded()`` converges the ancestor-owned `$section` onto a real page
+/// afterward.
 struct PrivateHubView: View {
     var store: FernletStore
     var periodStore: PeriodTrackerStore

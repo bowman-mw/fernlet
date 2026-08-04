@@ -22,9 +22,14 @@ import FernletDomainModel
 /// `SanitizedSnapshot`/`SanitizedDay`, and (2) tests. It MUST NOT be used to serialize a raw,
 /// app-sourced day into a synced row — go through `SanitizedDay.sanitizing(...)` first.
 public nonisolated struct DayRecordUpsert {
+    /// The day payload to persist — in production, one that has already passed the privacy strip.
     public var day: FernletDay
+    /// The per-day last-writer-wins stamp; duplicate rows collapse to the most recent.
     public var updatedAt: Date
 
+    /// Raw mint: wraps `day` without any strip. Reserved for the two sanctioned callers named in the
+    /// type discussion (days already sourced from a minted `Sanitized*` wrapper, and tests) — never
+    /// for a raw, app-sourced day.
     public init(day: FernletDay, updatedAt: Date) {
         self.day = day
         self.updatedAt = updatedAt
@@ -37,9 +42,20 @@ public nonisolated struct DayRecordUpsert {
         self.updatedAt = updatedAt
     }
 
+    /// The row key — the day's own `date`.
     public var dateKey: String { day.date }
 }
 
+/// The persistence contract for the per-day row store that replaced the capped in-blob day history.
+///
+/// Each day is its own CloudKit-synced row keyed by `dateKey`, so days union-merge across devices
+/// instead of the whole history riding one last-writer-wins CloudKit record — and splitting days into
+/// rows is what let the 370-day blob-size cap be removed (one day is far under CloudKit's per-record
+/// limit). ``upsert(_:)`` touches only the days it is handed and never deletes rows it didn't receive,
+/// so one device can't clobber another device's synced days. Writes go through ``DayRecordUpsert``,
+/// which carries the same sanitize-barrier obligation as the blob path (see its discussion). The Core
+/// Data + iCloud conformer is `DayRecordRepository` (in `CloudKitSync`); `CoreDataFernletRepository`
+/// and the store's history/derived-table rebuild paths load through it. `@MainActor`.
 @MainActor
 public protocol DayRecordRepositoring {
     /// Every stored day, keyed by `dateKey`, duplicate rows collapsed by most-recent `updatedAt`.

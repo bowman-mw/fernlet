@@ -8,8 +8,18 @@ import FoundationModels
 
 // MARK: - Candidate exercises offered to the adjuster
 
+/// One numbered exercise the adjuster model may pick, pairing a stable prompt number with its
+/// catalog `ExerciseTarget`.
+///
+/// Built by ``WorkoutAdjustmentCandidateBuilder`` and rendered into the prompt via ``promptLine``;
+/// the model answers with `candidateNumber` values that are bound back through ``id``, so it can
+/// never introduce an exercise outside this pool. Explicitly `nonisolated` — a pure value type in a
+/// MainActor-default module.
 public nonisolated struct WorkoutAdjustmentCandidate: Identifiable, Equatable {
+    /// Stable 1-based number used in the prompt and matched against the model's `candidateNumber`
+    /// replies.
     public var id: Int
+    /// The catalog exercise this number stands for.
     public var exercise: ExerciseTarget
 
     public init(id: Int, exercise: ExerciseTarget) {
@@ -17,6 +27,8 @@ public nonisolated struct WorkoutAdjustmentCandidate: Identifiable, Equatable {
         self.exercise = exercise
     }
 
+    /// The single prompt line describing this candidate: number, name, equipment, movement pattern,
+    /// and up to two primary muscles.
     public var promptLine: String {
         let muscles = exercise.primaryMuscles.map(\.displayName).sorted().prefix(2).joined(separator: "/")
         return "\(id). \(exercise.name) — \(exercise.equipment.displayName), \(exercise.movementPattern.rawValue)\(muscles.isEmpty ? "" : ", \(muscles)")"
@@ -26,7 +38,24 @@ public nonisolated struct WorkoutAdjustmentCandidate: Identifiable, Equatable {
 /// Builds the equipment- and injury-filtered candidate pool the adjuster may pick from, ranked so
 /// the current session's exercises and request-relevant options come first, then capped for the
 /// model's context budget.
+///
+/// The safety property lives here, in code: only exercises `WorkoutSafetyFilter` deems feasible for
+/// the user's location and profile ever reach the prompt, so the model cannot select around an
+/// injury or missing equipment. The app's workout-adjust flow builds this pool, hands it to
+/// ``FoundationWorkoutAdjustmentModel``, and binds the reply back by candidate number.
 public enum WorkoutAdjustmentCandidateBuilder {
+    /// Ranks the feasible catalog for one adjustment request.
+    ///
+    /// Scoring favors exercises already in the session (+50), overlapping primary muscles (+8 each),
+    /// and name tokens shared with the request (+30); ties break alphabetically for determinism.
+    /// - Parameters:
+    ///   - currentNames: Exercise names in the session being adjusted.
+    ///   - request: The user's natural-language request, tokenized for relevance scoring.
+    ///   - location: Where the session happens; drives equipment feasibility.
+    ///   - profile: The equipment and injury constraints `WorkoutSafetyFilter` applies.
+    ///   - limit: Maximum candidates emitted (the model's context budget).
+    ///   - catalog: The exercise universe to draw from.
+    /// - Returns: Candidates numbered from 1 in rank order; empty when nothing is feasible.
     public static func candidates(
         currentNames: [String],
         request: String,
@@ -74,10 +103,25 @@ public enum WorkoutAdjustmentCandidateBuilder {
 
 // MARK: - Adjuster model
 
+/// On-device AI stage for natural-language workout adjustment — "swap the squat", "I only have 30
+/// minutes", "no barbell today" — rebuilding a session from a numbered candidate pool.
+///
+/// The app's workout-adjust flow calls ``adjust(_:candidates:currentLines:gate:)`` with a
+/// de-identified `WorkoutAdjustmentPayload`, the ``WorkoutAdjustmentCandidateBuilder`` pool, and the
+/// rendered current-session lines. The model returns candidate numbers with sets/reps; code binds
+/// each number back to its real exercise, dedupes by name, clamps sets to 1–6, defaults blank reps,
+/// derives the `SlotRole` from the movement pattern, and caps the session at 6 exercises — the
+/// model never introduces an exercise, and the injury/equipment filter already ran in code before
+/// the prompt was built.
+///
+/// Dispatch routes through `FernletAIGate` (standard tier, user-invoked) and every call is recorded
+/// in `AIAuditLog`; session errors are audited and rethrown. A `nil` result leaves the original
+/// session intact. MainActor by the module's default isolation.
 public enum FoundationWorkoutAdjustmentModel {
     /// Adjusts a session's exercises to honour a natural-language request, constrained to the
     /// candidate list (equipment- and injury-filtered). Returns nil when the model is unavailable
     /// or produces nothing usable, leaving the original session intact.
+    ///
     /// Workout adjustment (`standard` tier, user-invoked). Routes through `gate` at the model-dispatch
     /// point: capability cap + sleepy/resting budget + one-call charge. `nil` (resting / incapable /
     /// off) leaves the original session intact, exactly as the old availability guard did.
@@ -141,12 +185,21 @@ public enum FoundationWorkoutAdjustmentModel {
 }
 
 #if canImport(FoundationModels)
+/// The `@Generable` response schema for an adjusted session: the model's ordered exercise picks.
+///
+/// Guided generation guarantees shape, never validity — ``resolved(candidates:)`` is the binding
+/// and sanity pass that stands between the raw response and the `PrescribedExercise` list the
+/// caller applies.
 @available(iOS 26.0, *)
 @Generable
 private struct FoundationWorkoutPlan {
     @Guide(description: "The adjusted session: 3 to 6 exercises chosen from the candidate list")
     var exercises: [FoundationWorkoutItem]
 
+    /// Binds the picks to real exercises: unknown candidate numbers and duplicate names are dropped,
+    /// sets clamped to 1–6, blank reps defaulted to "8-12", roles derived from movement pattern
+    /// (isolation → accessory), and the result capped at 6. Returns `nil` when nothing survives —
+    /// the fell-back signal that leaves the original session intact.
     func resolved(candidates: [WorkoutAdjustmentCandidate]) -> [PrescribedExercise]? {
         var seenNames = Set<String>()
         let resolved = exercises.compactMap { item -> PrescribedExercise? in
@@ -165,6 +218,11 @@ private struct FoundationWorkoutPlan {
     }
 }
 
+/// One exercise pick in the model's adjusted session: a candidate number plus the model's sets and
+/// reps.
+///
+/// The number is re-bound to a real ``WorkoutAdjustmentCandidate`` by `FoundationWorkoutPlan.resolved`;
+/// a pick whose number matches no candidate is dropped, so the model cannot invent an exercise.
 @available(iOS 26.0, *)
 @Generable
 private struct FoundationWorkoutItem {

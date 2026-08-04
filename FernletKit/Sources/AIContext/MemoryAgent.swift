@@ -1,12 +1,22 @@
 import Foundation
 import FernletDomainModel
 
-/// Routes Tier-2 memory access for AI prompts.
+/// Routes Tier-2 memory access for AI prompts — the memory gatekeeper.
 ///
 /// Applies three layers before any `TierTwoMemoryRecord` text reaches a prompt:
-/// 1. Destination allowlist — only `companion-thought` payloads receive behavioral context.
-/// 2. Recency filter — records older than `recencyDays` are excluded.
+/// 1. Destination allowlist — only `companion-thought` payloads receive behavioral context
+///    (everything else gets an empty string; fail-closed).
+/// 2. Recency filter — records older than `recencyDays` are excluded (inactive and low-confidence
+///    records are dropped alongside).
 /// 3. Diagnostic-language post-classifier — records containing clinical or diagnostic terms are dropped.
+///
+/// The app builds ``CompanionThoughtPayload/filteredMemorySummary`` exclusively through
+/// ``filteredContext(from:destinedFor:recencyDays:maxChars:)``, and the storage side reuses
+/// `containsDiagnosticLanguage(_:)` to screen every proposed memory before it is
+/// persisted (spec §8). Deliberately placed in `AIContext`, NOT `PrivateMemoryStore`: it is pure,
+/// AI-facing control plane that every provider calls, and homing it in a sealed module would have
+/// been an `AIProviders` → `Private*` wall violation. A caseless enum of static pure functions — no
+/// state, no isolation concerns.
 public enum MemoryAgent {
 
     // MARK: - Destination allowlist

@@ -65,6 +65,10 @@ final class PetInteractionGovernor {
 
     // MARK: - Device-local persistence keys (never synced)
 
+    /// The `UserDefaults` keys the governor persists its window/settle state under.
+    ///
+    /// Device-local only (never in `FernletSettings`, never synced); note `settledUntil` keeps
+    /// its historical "cooldownUntil" raw key so existing installs don't lose an in-flight settle.
     private enum Key {
         static let petCount = "fernlet.companionPets.count"
         static let windowStart = "fernlet.companionPets.windowStart"

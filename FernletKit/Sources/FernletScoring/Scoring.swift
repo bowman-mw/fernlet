@@ -2,6 +2,13 @@ import Foundation
 import FernletFoundation
 import FernletDomainModel
 
+/// The companion's gentle first-person copy for AI-degraded moments.
+///
+/// Each case names a situation where the on-device AI could not (or should not) run — a failed meal
+/// analysis, a spent daily budget, AI switched off — and `message(for:)` returns the matching
+/// reassuring line, so every fallback surface speaks with one voice. Consumed by
+/// `AIRetryQueueService` (StoreCore) when it saves a local meal estimate, by the food log's
+/// retry banner, and by the AI section of Settings.
 public enum FernletVoice: CaseIterable, Sendable {
     case mealAnalysisFailed
     case workoutSuggestionUnavailable
@@ -13,6 +20,7 @@ public enum FernletVoice: CaseIterable, Sendable {
     /// the counter resets at midnight. Surfaced on quota fallback per Ladder §3.2 step 6.
     case aiResting
 
+    /// The user-facing line for a fallback situation, in the companion's gentle voice.
     public static func message(for voice: FernletVoice) -> String {
         switch voice {
         case .mealAnalysisFailed:
@@ -37,8 +45,8 @@ extension ScoringWeights {
     /// not penalised as sharply. Much milder than `adjustedForSickness` (which zeroes workout entirely).
     /// `.none` is the identity, preserving byte-for-byte the period-unaware weight vector. Total stays 1.
     ///
-    /// Lives here (app layer) rather than on the carved-down `ScoringWeights` value type because it
-    /// depends on `PeriodSignalStrength`, which sits above the domain layer (period-module egress).
+    /// Lives here (the scoring module) rather than on the carved-down `ScoringWeights` value type because
+    /// it depends on ``PeriodSignalStrength``, which sits above the domain layer (period-module egress).
     public func adjustedForPeriod(_ leniency: PeriodSignalStrength) -> ScoringWeights {
         guard leniency == .suggested else { return self }
         var adjusted = self
@@ -50,7 +58,18 @@ extension ScoringWeights {
     }
 }
 
+/// Maps the user's selected goal to the canonical scoring-weight vector.
+///
+/// Each `GoalType` gets a hand-tuned `ScoringWeights` mix — `.mentalHealth` weighs journaling
+/// highest, `.recovery` weighs sleep highest, `.strength`/`.sportsPrep` lean into meals and
+/// workouts — and every vector sums to 1 (debug-asserted). `DiaryStore` and the app's
+/// `FernletStore` fetch the vector here on every daily-score computation, before the sickness and
+/// period adjustments are layered on.
 public enum GoalWeights {
+    /// The hand-tuned weight vector for a goal.
+    ///
+    /// - Important: The components must sum to 1; this is checked only with `assert`
+    ///   (debug builds), so new vectors must keep the invariant by construction.
     public static func forGoal(_ goal: GoalType) -> ScoringWeights {
         let weights: ScoringWeights
         switch goal {
@@ -76,9 +95,18 @@ public enum GoalWeights {
 
 /// The overall score plus the per-component sub-scores and the exact (sickness-adjusted)
 /// weight vector that produced it. Persisted into `DailyHealthScore` for later inspection.
+///
+/// Produced by ``FernletScoring/FernletScoring``'s `computeBreakdown` and consumed wherever a score
+/// needs to be explained rather than merely displayed: `DiaryStore` persists it into each day's
+/// `DailyHealthScore`, and the trainer export renders the component columns. Because
+/// ``appliedWeights`` records the post-adjustment vector actually applied, a historical score can
+/// be audited without re-deriving the day's adjustments.
 public struct ScoreBreakdown: Equatable {
+    /// The final 0–1 daily score (weighted component sum plus the capped stress nudge).
     public var overall: Double
+    /// Per-component 0–1 sub-scores, keyed `journal`/`meal`/`workout`/`sleep`/`hydration`/`hygiene`.
     public var components: [String: Double]
+    /// The exact weight vector applied — after the sickness and period adjustments.
     public var appliedWeights: ScoringWeights
 
     public init(overall: Double, components: [String: Double], appliedWeights: ScoringWeights) {
@@ -88,7 +116,25 @@ public struct ScoreBreakdown: Equatable {
     }
 }
 
+/// The deterministic scoring engine: pure functions from a day's logged signals to the 0–1
+/// wellbeing score (and companion state) at the heart of Fernlet.
+///
+/// A namespace enum that deliberately shares the module's name. `computeBreakdown` is the single
+/// entry point the stores use: it blends six 0–1 component scores — journal feeling, meals,
+/// movement, sleep, hydration, personal care — under a goal-derived `ScoringWeights` vector, then
+/// layers the gentle modifiers on top: sickness reweighting, the ``PeriodScoringAdjustment``
+/// leniencies, the capped micronutrient nudge, and the capped ``StressEngine`` nudge. `DiaryStore`
+/// (and the app's `FernletStore` facade) call it for every day's `DailyHealthScore`;
+/// `DerivedSignalFactory` (LocalPersistence) reuses `recoveryReadinessScore` for the derived
+/// signals, and `CuratedNutrientSources` (FoodCatalog) reuses `dedupedNutrientGaps`.
+///
+/// Invariants callers rely on: every score is clamped to 0…1; every optional refinement
+/// (HealthKit sleep/activity data, nutrient gaps, period adjustment, stress modifier) defaults to
+/// an identity, so a call supplying only the original inputs reproduces the original scores
+/// byte-for-byte; and the additive nudges are capped so no modifier can dominate the weighted sum.
+/// All members are stateless nonisolated statics, callable from any isolation context.
 public enum FernletScoring {
+    /// Maps a journal feeling tag to its 0–1 journal-component score (nil reads as a quiet 0.55).
     public static func tagScore(_ tag: FeelingTag?) -> Double {
         switch tag {
         case .bright: 1
@@ -204,15 +250,21 @@ public enum FernletScoring {
         return components.reduce(0, +) / Double(components.count)
     }
 
+    /// Personal-care score from the checked built-in hygiene items (convenience over the count-based overload).
     public static func hygieneScore(_ checked: Set<HygieneItem>) -> Double {
         hygieneScore(completedCount: checked.count, taskCount: HygieneItem.allCases.count)
     }
 
+    /// Fraction of the day's personal-care tasks completed, clamped to 0–1 (0 when there are no tasks).
     public static func hygieneScore(completedCount: Int, taskCount: Int) -> Double {
         guard taskCount > 0 else { return 0 }
         return min(Double(completedCount) / Double(taskCount), 1)
     }
 
+    /// Convenience over `computeBreakdown` that returns only the overall 0–1 score.
+    ///
+    /// Same parameters and identity-preserving defaults; callers that need the per-component
+    /// sub-scores or the applied weight vector use `computeBreakdown` directly.
     public static func compute(
         journalTag: FeelingTag?,
         mealCount: Int,
@@ -364,10 +416,14 @@ public enum FernletScoring {
         return candidate.windowDays > existing.windowDays
     }
 
+    /// Fraction of the supplied meals carrying usable micronutrient data (forwards to
+    /// `MicronutrientGapAnalyzer`); the micronutrient modifier only applies at ≥ 0.5 coverage.
     public static func micronutrientDataCoverageRatio(for meals: [Meal]) -> Double {
         MicronutrientGapAnalyzer.micronutrientDataCoverageRatio(for: meals)
     }
 
+    /// The small, capped meal-score nudge from windowed nutrient gaps: persistent reliable gaps
+    /// subtract up to −0.05; well-covered nutrients add up to +0.03 (never both).
     public static func micronutrientModifier(from nutrientGaps: [NutrientGap]) -> Double {
         let reliableSignals = nutrientGaps.filter { $0.dataCoverageRatio >= 0.5 }
         guard reliableSignals.isEmpty == false else { return 0 }
@@ -379,6 +435,7 @@ public enum FernletScoring {
         return min(Double(covered.count) * 0.01, 0.03)
     }
 
+    /// Bands a 0–1 score into the companion's presentation state; `isSick` overrides everything to `.sick`.
     public static func state(for score: Double, isSick: Bool = false) -> CompanionState {
         if isSick { return .sick }
         if score >= 0.75 { return .thriving }
@@ -388,7 +445,17 @@ public enum FernletScoring {
     }
 }
 
+/// Deterministic keyword-heuristic meal estimator — the always-available local fallback for
+/// meal logging.
+///
+/// The bottom rung of the meal-analysis ladder: when the AI providers and the food-catalog match
+/// decline or fail, `parse` still turns a free-text description into a saved `Meal` with rough
+/// keyword-derived macros, marked "Estimated" so the review flow can revisit it later.
+/// `MealResolutionService`, `DiaryStore`, `SavedRecipeService`, and AIProviders'
+/// `FoundationFoodSelection` also borrow `classifyMealType` / `mealName` piecemeal to fill the
+/// gaps the smarter paths leave blank. Pure statics — no I/O, no state.
 public enum MealParser {
+    /// Builds a locally estimated `Meal` from a free-text description — never fails, never leaves the device.
     public static func parse(_ description: String, fallbackType: MealType? = nil) -> Meal {
         let type = fallbackType ?? classifyMealType(description)
         let macros = estimateMacros(description, type: type)
@@ -403,6 +470,7 @@ public enum MealParser {
         )
     }
 
+    /// Infers the meal slot from description keywords, falling back to the (injectable) hour of day.
     public static func classifyMealType(_ description: String, hour: Int = Calendar.current.component(.hour, from: .now)) -> MealType {
         let lower = description.lowercased()
         if lower.contains("breakfast") || lower.contains("oatmeal") || lower.contains("pancake") || lower.contains("waffle") { return .breakfast }
@@ -417,6 +485,7 @@ public enum MealParser {
         return .dinner
     }
 
+    /// Derives a short display name from the first few words of the description ("Meal" when empty).
     public static func mealName(from description: String) -> String {
         let words = description
             .replacingOccurrences(of: "from", with: " ")
@@ -427,6 +496,7 @@ public enum MealParser {
         return name.isEmpty ? "Meal" : name.capitalized
     }
 
+    /// Rough keyword-bumped macro estimate, clamped to plausible single-meal ceilings.
     private static func estimateMacros(_ description: String, type: MealType) -> Macros {
         let lower = description.lowercased()
         var protein = 18
@@ -462,7 +532,15 @@ public enum MealParser {
     }
 }
 
+/// Deterministic local fallbacks for workout planning: a same-day session suggestion and
+/// three gentle starter fitness goals.
+///
+/// `defaultGoals` seeds onboarding (`OnboardingCoordinator`) and the goals sheet with starter
+/// `FitnessGoal`s shaped around the user's stated interests and constraints. `suggestion` builds an
+/// energy-matched `Workout` without AI; it currently has no production call sites — only
+/// `defaultGoals` is wired into the app. Pure statics, no state.
 public enum WorkoutPlanner {
+    /// An energy-matched local `Workout` (25/40/55 min) aligned to the user's first fitness goal.
     public static func suggestion(energy: WorkoutIntensity, goal: String, context: String, goals: [FitnessGoal]) -> Workout {
         let alignedGoal = goals.first?.goal ?? goal
         let duration = energy == .light ? 25 : energy == .moderate ? 40 : 55
@@ -479,6 +557,8 @@ public enum WorkoutPlanner {
         return Workout(name: "Suggested \(energy.rawValue.capitalized)", type: .mixed, exercises: exercises, rpe: nil, notes: note, duration: duration, intensity: energy)
     }
 
+    /// Three gentle starter `FitnessGoal`s (1-week / 4-week / 3-month) shaped around the stated
+    /// interests and constraints.
     public static func defaultGoals(level: String, interests: String, constraints: String) -> [FitnessGoal] {
         let focus = interests.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "general strength" : interests
         let limits = constraints.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -491,7 +571,16 @@ public enum WorkoutPlanner {
     }
 }
 
+/// Static goal- and intensity-keyed library of hand-written local workout suggestions.
+///
+/// A read-only lookup of gentle `WorkoutSuggestion` templates per `GoalType`, intended as AI-free
+/// fallback content. Goals without templates (currently `.sportsPrep`) silently fall back to the
+/// `.wellness` set, and an intensity with no match falls back to every template for the goal.
+/// As of the current tree it is exercised only by the unit tests — no production surface
+/// consumes it.
 public struct WorkoutSuggestionLibrary {
+    /// Templates matching the goal and intensity; falls back to all of the goal's templates, and
+    /// to the `.wellness` set for goals without any.
     public static func suggestions(for goal: GoalType, intensity: WorkoutIntensity) -> [WorkoutSuggestion] {
         let base = templates[goal] ?? templates[.wellness] ?? []
         let matching = base.filter { $0.intensity == intensity }.map(\.suggestion)

@@ -15,6 +15,9 @@ import AppIntents
 
 /// "Done set" — completes the current set (starting the rest countdown, advancing the exercise, or
 /// finishing the workout, exactly like the in-app button).
+///
+/// Rendered by the Lock Screen card and Dynamic Island while working; the system runs `perform()` in
+/// the app's process via ``GuidedWorkoutIntentRunner``.
 struct GuidedWorkoutMarkSetDoneIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Done set"
     static let description = IntentDescription("Marks the current set done and starts your rest timer.")
@@ -28,6 +31,9 @@ struct GuidedWorkoutMarkSetDoneIntent: LiveActivityIntent {
 }
 
 /// "Skip rest" — ends the rest early and resumes the next set.
+///
+/// Rendered by the Lock Screen card and Dynamic Island while resting; the system runs `perform()` in
+/// the app's process via ``GuidedWorkoutIntentRunner``.
 struct GuidedWorkoutSkipRestIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Skip rest"
     static let description = IntentDescription("Ends the current rest early and moves to your next set.")
@@ -39,10 +45,14 @@ struct GuidedWorkoutSkipRestIntent: LiveActivityIntent {
     }
 }
 
-/// Shared transition applier for the two intents. Reads → mutates → writes the app-group run state,
-/// then reflects it onto the activity. Guarded on the expected phase so a double-tap or a tap that
-/// races the app's own transition is a harmless no-op.
+/// Shared transition applier for the two guided-workout intents.
+///
+/// Reads → mutates → writes the app-group run state via ``GuidedWorkoutRunStateStore``, then
+/// reflects the result onto the activity through ``GuidedWorkoutActivityBridge``. Guarded on the
+/// expected phase so a double-tap or a tap that races the app's own transition is a harmless no-op.
 enum GuidedWorkoutIntentRunner {
+    /// Complete the current set (rest / next exercise / finish, per the pure transition) and reflect
+    /// the result onto the activity. Guarded on `.working` — any other phase is a no-op.
     static func markSetDone() async {
         let store = GuidedWorkoutRunStateStore()
         guard var state = store.read(), state.phase == .working else { return }
@@ -50,6 +60,8 @@ enum GuidedWorkoutIntentRunner {
         await apply(state, store: store)
     }
 
+    /// End the rest early and resume the next set, then reflect the result onto the activity.
+    /// Guarded on `.resting` — any other phase is a no-op.
     static func skipRest() async {
         let store = GuidedWorkoutRunStateStore()
         guard var state = store.read(), state.phase == .resting else { return }

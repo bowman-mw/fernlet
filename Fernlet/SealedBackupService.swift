@@ -4,7 +4,28 @@ import Foundation
 import FernletDomainModel
 import CloudKitSync
 
+/// AES-GCM seal/open for `SealedBackupRecord`s — the pure crypto half of the sealed iCloud backup.
+///
+/// ``seal(_:payloadType:identityService:chunkIndex:chunkCount:updatedAt:)`` encrypts a payload
+/// chunk under the identity's backup-escrow-derived key and binds the payload type, signing
+/// identity, and chunk position into the GCM additional-authenticated-data, so a chunk cannot be
+/// replayed in another slot or across differently-sized backup generations.
+/// ``open(_:identityService:)`` attempts decryption against every escrow key candidate the device
+/// holds and consults the record's identity tag only to classify failures (someone else's record
+/// versus a tampered/corrupt one of ours). Records are bound to the backup-escrow public key
+/// (which syncs via iCloud Keychain) rather than the per-device proximity key, so a backup sealed
+/// on one device is recognized and restorable on another. Stateless namespace; the methods are
+/// `@MainActor` because `IdentityService` is. ``SealedBackupService`` is the only production
+/// caller.
 enum SealedBackupCrypto {
+    /// Seals one payload chunk into a `SealedBackupRecord` under the escrow-derived backup key.
+    ///
+    /// - Parameters:
+    ///   - plaintext: The chunk's serialized payload.
+    ///   - chunkIndex: This record's position in its chunk set (bound into the GCM AAD).
+    ///   - chunkCount: The set's total size (also bound, so mixed-generation sets fail closed).
+    /// - Returns: The sealed record, tagged with the escrow public key so another of the user's
+    ///   devices recognizes it as theirs.
     @MainActor
     static func seal(
         _ plaintext: Data,
@@ -45,6 +66,12 @@ enum SealedBackupCrypto {
         )
     }
 
+    /// Opens a sealed record, trying every backup-escrow key this device holds.
+    ///
+    /// - Returns: The decrypted plaintext when any candidate key authenticates the record.
+    /// - Throws: `SealedBackupError.keyAgreementIdentityMismatch` when the record is not tagged
+    ///   with any of our escrow identities (someone else's, or unrelated), or
+    ///   `SealedBackupError.malformedRecord` for a tampered/corrupt record of ours.
     @MainActor
     static func open(_ record: SealedBackupRecord, identityService: IdentityService) throws -> Data {
         // The AES-GCM authentication under our escrow-derived key is the REAL ownership boundary: only a
@@ -94,11 +121,22 @@ enum SealedBackupCrypto {
     }
 }
 
+/// Seals payloads and moves them to/from the private CloudKit database — the transport half of
+/// the sealed iCloud backup.
+///
+/// Composes ``SealedBackupCrypto`` with `CloudKitDataService`: ``reconcile(_:payloadType:enabled:)``
+/// handles single-record payloads (enable = seal + upload, disable = delete),
+/// ``reconcileChunked(payloadType:chunkCount:chunk:)`` pages large payloads through bounded chunks
+/// with the head record written last as the commit marker, and ``restoreChunks(payloadType:)``
+/// fetches and opens a complete set all-or-nothing. ``SealedBackupCoordinator`` owns the policy
+/// (visibility gates, no-clobber checks, escrow reconciliation) and is the only production caller;
+/// this class stays mechanism-only. Main-actor isolated, matching its `IdentityService` dependency.
 @MainActor
 final class SealedBackupService {
     private let cloudDataService: CloudKitDataService
     private let identityService: IdentityService
 
+    /// Creates the service over its CloudKit transport and the sealing identity.
     init(cloudDataService: CloudKitDataService, identityService: IdentityService) {
         self.cloudDataService = cloudDataService
         self.identityService = identityService
@@ -138,6 +176,7 @@ final class SealedBackupService {
         try await cloudDataService.deleteSealedBackupChunks(payloadType: payloadType, withIndexAtLeast: count)
     }
 
+    /// Seals one chunk and uploads it (shared by both `reconcileChunked` write phases).
     private func saveChunk(_ plaintext: Data, payloadType: SealedBackupPayloadType, chunkIndex: Int, chunkCount: Int) async throws {
         let record = try SealedBackupCrypto.seal(
             plaintext,
@@ -161,6 +200,7 @@ final class SealedBackupService {
 }
 
 private extension AES.GCM.Nonce {
+    /// The nonce's raw bytes, for storage in a `SealedBackupRecord`.
     var data: Data {
         withUnsafeBytes { Data($0) }
     }

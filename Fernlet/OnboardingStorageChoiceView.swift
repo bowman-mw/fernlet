@@ -4,6 +4,15 @@ import FernletFoundation
 import FernletDomainModel
 import FernletUI
 
+/// Onboarding step where the user chooses where their logs live: iCloud sync or this device only.
+///
+/// First probes the account through the injected ``ExistingCloudDataDetecting`` — the choices stay
+/// hidden behind a spinner until detection finishes, so a returning user always sees "Restore from
+/// iCloud" and the local-only warning rather than the fresh-install copy. Unlike the other steps,
+/// a tap here writes `StoragePreferences` immediately (via the environment's
+/// `StoragePreferencesStore`): `iCloudSyncEnabled`, and `cloudCopyKept` when local-only is chosen
+/// while the account already holds data — the marker that keeps a stranded cloud copy reachable by
+/// the delete-everything funnel. Continue stays disabled until a card is picked.
 struct OnboardingStorageChoiceView: View {
     var stepText: String
     let detector: any ExistingCloudDataDetecting
@@ -151,6 +160,11 @@ struct OnboardingStorageChoiceView: View {
     }
 }
 
+/// The two storage homes offered during onboarding: the user's own iCloud private database, or
+/// this device alone.
+///
+/// Selection state for ``OnboardingStorageChoiceView`` only — the durable record is the
+/// `StoragePreferences` write the card tap performs.
 enum OnboardingStorageChoice {
     case icloud
     case localOnly

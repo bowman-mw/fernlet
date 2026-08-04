@@ -2,7 +2,18 @@ import ProximityKit
 import Foundation
 import FernletDomainModel
 
+/// Encodes and decodes recipes for sharing — the human-readable share text with its embedded
+/// machine-readable JSON payload, and the proximity-mesh wire payload.
+///
+/// The single place that knows the `fernlet.recipe` v1 format. Ingredients are resolved against the
+/// passed `foodItems` and carried as (name, quantity, unit, scaled macros) — recipient devices don't
+/// share the sender's catalog ids, so the payload is self-contained. Steps ride an optional key
+/// (version stays 1; old peers ignore it). `FernletStore.importRecipe(from:)` decodes pasted share
+/// text through ``decodePayload(from:)``, and the proximity recipe-share flow sends
+/// ``proximityPayload(for:foodItems:)`` over the mesh.
 struct RecipeShareCodec {
+    /// The full text a user shares: readable name/servings/ingredients/notes followed by a
+    /// "Fernlet recipe data:" line carrying the single-line JSON payload the importer parses back.
     static func shareText(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> String {
         let payload = payload(for: recipe, foodItems: foodItems)
         var lines: [String] = [
@@ -23,6 +34,9 @@ struct RecipeShareCodec {
         return lines.joined(separator: "\n")
     }
 
+    /// The self-contained `SharedRecipePayload` for a structured recipe: each ingredient resolved
+    /// against `foodItems` and flattened to name + quantity + scaled macros (ingredients whose food
+    /// item can't be resolved are dropped), with ordered steps riding along.
     static func payload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> SharedRecipePayload {
         SharedRecipePayload(
             name: recipe.name,
@@ -79,6 +93,10 @@ struct RecipeShareCodec {
         )
     }
 
+    /// Decodes a pasted share back into a payload: accepts either the bare JSON or the full share
+    /// text (the first `{`-line after the "Fernlet recipe data:" marker), then validates the
+    /// `fernlet.recipe` v1 format.
+    /// - Throws: `RecipeImportError.missingPayload` / `.invalidPayload` / `.unsupportedFormat`.
     static func decodePayload(from text: String) throws -> SharedRecipePayload {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let jsonText: String

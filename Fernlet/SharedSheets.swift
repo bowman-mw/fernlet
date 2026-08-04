@@ -3,6 +3,12 @@ import FernletDomainModel
 import FernletScoring
 import FernletUI
 
+/// Quick-log sheet for hydration: today's bottle count with add/remove buttons and a bottle-row
+/// visual against the target.
+///
+/// Presented from the main view's quick-log flow. Every tap mutates ``FernletStore`` immediately
+/// (`addBottle`/`removeBottle`) — the Done bar only dismisses, so there is no unsaved draft to lose.
+/// Bottle size and daily target come from settings and are edited in ``SettingsSheet``, not here.
 struct WaterSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -56,6 +62,11 @@ struct WaterSheet: View {
     }
 }
 
+/// Quick-log sheet for sleep: a quality picker plus optional hours and note fields.
+///
+/// Presented from the main view's quick-log flow. Pre-fills from today's existing sleep entry on
+/// appear (so reopening edits rather than resets) and commits everything in one
+/// `FernletStore.setSleep` call on Save — dismissing without saving discards the draft.
 struct SleepSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -135,6 +146,13 @@ struct SleepSheet: View {
     }
 }
 
+/// Two-phase sheet for re-planning fitness goals: describe level/interests/constraints, then review
+/// and accept the crafted set.
+///
+/// Presented from the main view's quick-log flow. "Craft" runs `WorkoutPlanner.defaultGoals`
+/// on-device (the copy says so explicitly — health details never leave the phone); only "Accept"
+/// commits, replacing the store's goals wholesale via `FernletStore.replaceGoals`. Dismissing at
+/// either phase changes nothing.
 struct GoalsSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -202,6 +220,12 @@ struct GoalsSheet: View {
     }
 }
 
+/// Quick-log sheet for personal care: the user's tasks grouped by time of day, each a tap-to-toggle
+/// completion row.
+///
+/// Presented from the main view's quick-log flow. Toggles commit to ``FernletStore`` immediately
+/// (`togglePersonalCareTask`), so Done only dismisses. The task list itself is authored in
+/// ``SettingsSheet``'s personal-care section; this sheet only checks things off.
 struct HygieneSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore

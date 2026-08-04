@@ -9,6 +9,10 @@ import AIContext
 ///
 /// The counter never enters `FernletSnapshot`, the sealed stores, or CloudKit — it is plain
 /// `UserDefaults.standard`, so device A's usage can never throttle device B.
+///
+/// Concurrency: `@unchecked Sendable`, made safe by serializing every read-modify-write behind an
+/// `NSLock` (the protocol is `Sendable`, so callers may arrive off the main actor). Drives the
+/// derived `.sleepy`/`.resting` overlay on `FernletStore.effectiveAIStatus`.
 final class UserDefaultsAICallQuotaStore: AICallQuotaStore, @unchecked Sendable {
     private let defaults: UserDefaults
     /// ONE defaults key holding the (dayKey, count) PAIR. Writing them as two separate keys made the

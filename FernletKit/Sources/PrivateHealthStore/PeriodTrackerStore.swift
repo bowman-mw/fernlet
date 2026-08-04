@@ -6,6 +6,14 @@ import HealthKit
 import FernletDomainModel
 import PrivateStoreCore
 
+/// Everything the user entered in the log-period sheet for one cycle event, before it is split
+/// between HealthKit and the sealed store.
+///
+/// The write-side counterpart of ``CycleDayEntry``: ``PeriodTrackerStore/logEvent(_:unlockedContentKey:)``
+/// sends the clinical fields (flow, temperature, mucus, ovulation test, bleeding and cycle-start
+/// flags) to HealthKit through ``PeriodHealthKitServicing`` and routes the narrative fields
+/// (``note``, ``symptoms``, ``customSymptomScales``) into the sealed ``MenstrualNarrative`` — or,
+/// while locked, into the pending buffer. A plain value type the log and edit sheets bind to.
 public nonisolated struct UserLoggedCycleEvent: Equatable {
     public var date: Date = Date()
     public var flowLevel: PeriodFlowLevel?
@@ -45,14 +53,23 @@ public nonisolated struct UserLoggedCycleEvent: Equatable {
         self.customSymptomScales = customSymptomScales
     }
 
+    /// Whether any sealed-store content exists: a nonempty trimmed note, any symptom, or any custom
+    /// scale. `false` means logging this event writes HealthKit only.
     public var hasNarrative: Bool {
         !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !symptoms.isEmpty || !customSymptomScales.isEmpty
     }
 }
 
+/// What happened to a logged cycle event's narrative half.
+///
+/// Returned by ``PeriodTrackerStore/logEvent(_:unlockedContentKey:)`` (and the edit path) so the
+/// sheet can tell the user when their note was deferred or lost rather than sealed immediately.
 public nonisolated enum PeriodLogResult: Equatable {
+    /// The HealthKit samples saved and the narrative, if any, was sealed immediately.
     case saved
+    /// The app was locked: the narrative sits sealed in the pending buffer until the next unlock.
     case savedWithBufferedNarrative
+    /// No lock is configured, so there was no safe place to keep the narrative — it was dropped.
     case savedWithDroppedNarrative
 }
 
@@ -63,10 +80,18 @@ public nonisolated struct PeriodTrackingHiddenError: Error, Equatable {
     public init() {}
 }
 
+/// Observed menstrual-flow level, round-trippable to HealthKit's `HKCategoryValueVaginalBleeding`.
+///
+/// The user-facing flow vocabulary of the log sheet and calendar. Distinct from
+/// ``PredictedFlowLevel`` (forecast-only, includes spotting): this one maps onto the HealthKit
+/// category values via ``hkValue`` on write, and ``CycleDayEntry/flowLevel`` recovers it from
+/// samples on read.
 public nonisolated enum PeriodFlowLevel: String, CaseIterable, Identifiable, Codable {
     case none, light, medium, heavy, unspecified
     public var id: String { rawValue }
+    /// Display label for pickers and the calendar detail.
     public var title: String { rawValue == "none" ? "None" : rawValue.capitalized }
+    /// The matching `HKCategoryValueVaginalBleeding` raw value for writing the HealthKit sample.
     public var hkValue: Int {
         switch self {
         case .none: HKCategoryValueVaginalBleeding.none.rawValue
@@ -78,16 +103,28 @@ public nonisolated enum PeriodFlowLevel: String, CaseIterable, Identifiable, Cod
     }
 }
 
+/// Unit the user entered basal body temperature in.
+///
+/// Sheet-level input state carried on ``UserLoggedCycleEvent`` so the HealthKit gateway knows how
+/// to interpret the entered value; reads come back normalized through
+/// ``CycleDayEntry/basalBodyTemperatureFahrenheit``.
 public nonisolated enum PeriodTemperatureUnit: String, CaseIterable, Identifiable, Codable {
     case fahrenheit, celsius
     public var id: String { rawValue }
+    /// Single-letter unit suffix for the input field.
     public var symbol: String { self == .fahrenheit ? "F" : "C" }
 }
 
+/// Observed cervical-mucus quality, mapped onto HealthKit's `HKCategoryValueCervicalMucusQuality`.
+///
+/// Fertility-signal input on ``UserLoggedCycleEvent``: ``hkValue`` carries it into the HealthKit
+/// sample on write and ``CycleDayEntry/cervicalMucusQuality`` recovers it from samples on read.
 public nonisolated enum CervicalMucusQuality: String, CaseIterable, Identifiable, Codable {
     case dry, sticky, creamy, watery, eggWhite
     public var id: String { rawValue }
+    /// Display label for pickers and the calendar detail.
     public var title: String { self == .eggWhite ? "Egg White" : rawValue.capitalized }
+    /// The matching `HKCategoryValueCervicalMucusQuality` raw value for the HealthKit sample.
     public var hkValue: Int {
         switch self {
         case .dry: HKCategoryValueCervicalMucusQuality.dry.rawValue
@@ -99,10 +136,16 @@ public nonisolated enum CervicalMucusQuality: String, CaseIterable, Identifiable
     }
 }
 
+/// Ovulation-test outcome, mapped onto HealthKit's `HKCategoryValueOvulationTestResult`.
+///
+/// Input on ``UserLoggedCycleEvent``; `positive` deliberately maps to `luteinizingHormoneSurge` on
+/// write, and ``CycleDayEntry/ovulationTestResult`` recovers the value from samples on read.
 public nonisolated enum OvulationTestResult: String, CaseIterable, Identifiable, Codable {
     case negative, positive, indeterminate
     public var id: String { rawValue }
+    /// Display label for pickers and the calendar detail.
     public var title: String { rawValue.capitalized }
+    /// The matching `HKCategoryValueOvulationTestResult` raw value for the HealthKit sample.
     public var hkValue: Int {
         switch self {
         case .negative: HKCategoryValueOvulationTestResult.negative.rawValue
@@ -112,6 +155,12 @@ public nonisolated enum OvulationTestResult: String, CaseIterable, Identifiable,
     }
 }
 
+/// The fixed vocabulary of built-in period symptoms a narrative can flag.
+///
+/// Stored SEALED: symptom flags live in ``MenstrualNarrative/symptomFlags`` as an encrypted column,
+/// never in HealthKit. `Comparable` by declaration order so the symptom set on
+/// ``UserLoggedCycleEvent`` serializes in a stable, display-matching order. User-defined symptoms
+/// travel separately in ``MenstrualNarrative/customSymptomScales``.
 public nonisolated enum PeriodSymptom: String, CaseIterable, Identifiable, Codable, Comparable {
     case cramps, headache, breastTenderness, moodSwings, fatigue, bloating, acne, backPain, foodCravings
     public var id: String { rawValue }
@@ -133,18 +182,40 @@ public nonisolated enum PeriodSymptom: String, CaseIterable, Identifiable, Codab
     }
 }
 
+/// The menstrual-cycle phase resolved for a day.
+///
+/// A RAW sealed-side type on purpose: it lives here rather than in `FernletDomainModel` because the
+/// walled `AIProviders` module imports the domain model, and exposing the phase there would defeat
+/// the `PeriodContextBridge` abstraction — the bridge converts phases into the abstract period
+/// signals scoring consumes, and only those cross the S3 wall. Inside the protected side it appears
+/// on ``CycleDayEntry/phase`` and ``PeriodTrackerStore/currentPhase``; `unknown` is the fail-quiet
+/// default whenever neither observation nor prediction can place the user.
 public nonisolated enum CyclePhase: String, CaseIterable, Identifiable {
     case menstrual, follicular, ovulatory, luteal, unknown
     public var id: String { rawValue }
+    /// Display label for the phase chip.
     public var title: String { rawValue.capitalized }
 }
 
+/// One calendar day of cycle data: the day's HealthKit samples joined with its sealed narrative and
+/// a resolved phase.
+///
+/// The read-side unit ``PeriodTrackerStore`` publishes — one entry per day of the 240-day load
+/// window, present whether or not anything was observed that day. The computed accessors decode the
+/// raw `HKSample`s on demand so views and the prediction engine never touch HealthKit values
+/// directly. Identified by its day key, so a collection holds at most one entry per day.
 public nonisolated struct CycleDayEntry: Identifiable, Equatable {
     public var id: String { dateKey }
     public var date: Date
+    /// Canonical `yyyy-MM-dd` day key; doubles as the identity.
     public var dateKey: String
+    /// Raw HealthKit samples starting on this day — all sources, not just Fernlet's own.
     public var samples: [HKSample]
+    /// The sealed narrative joined to this day (by sample external UUID, else by day key), or `nil`
+    /// when none exists or the store was loaded without a content key.
     public var narrative: MenstrualNarrative?
+    /// Phase resolved at load time: `menstrual` when a flow sample exists, else `unknown` — richer
+    /// calendar-math resolution happens downstream in `PeriodContextBridge`.
     public var phase: CyclePhase
 
     public init(
@@ -161,10 +232,13 @@ public nonisolated struct CycleDayEntry: Identifiable, Equatable {
         self.phase = phase
     }
 
+    /// Whether anything at all was logged on this day (a sample or a narrative).
     public var hasObservedEvent: Bool { !samples.isEmpty || narrative != nil }
+    /// The day's samples filtered to the menstrual-flow category.
     public var menstrualFlowSamples: [HKCategorySample] {
         samples.compactMap { $0 as? HKCategorySample }.filter { $0.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue }
     }
+    /// Observed flow decoded from the day's first menstrual-flow sample, or `nil` with no sample.
     public var flowLevel: PeriodFlowLevel? {
         guard let sample = menstrualFlowSamples.first else { return nil }
         switch HKCategoryValueVaginalBleeding(rawValue: sample.value) {
@@ -175,6 +249,7 @@ public nonisolated struct CycleDayEntry: Identifiable, Equatable {
         default: return .unspecified
         }
     }
+    /// Display string for the observed flow ("No flow" when no sample exists).
     public var flowLabel: String {
         guard let value = menstrualFlowSamples.first?.value else { return "No flow" }
         switch HKCategoryValueVaginalBleeding(rawValue: value) {
@@ -185,50 +260,100 @@ public nonisolated struct CycleDayEntry: Identifiable, Equatable {
         default: return "Unspecified"
         }
     }
+    /// Whether the first flow sample carries the `HKMetadataKeyMenstrualCycleStart` flag.
     public var isCycleStart: Bool {
         menstrualFlowSamples.first?.metadata?[HKMetadataKeyMenstrualCycleStart] as? Bool ?? false
     }
+    /// Whether any sample records intermenstrual (between-period) bleeding.
     public var hasIntermenstrualBleeding: Bool {
         samples.contains { ($0 as? HKCategorySample)?.categoryType.identifier == HKCategoryTypeIdentifier.intermenstrualBleeding.rawValue }
     }
+    /// Mucus quality decoded from the day's first cervical-mucus sample, if any.
     public var cervicalMucusQuality: CervicalMucusQuality? {
         guard let sample = samples.compactMap({ $0 as? HKCategorySample }).first(where: { $0.categoryType.identifier == HKCategoryTypeIdentifier.cervicalMucusQuality.rawValue }) else { return nil }
         return CervicalMucusQuality.allCases.first { $0.hkValue == sample.value }
     }
+    /// Test outcome decoded from the day's first ovulation-test sample, if any.
     public var ovulationTestResult: OvulationTestResult? {
         guard let sample = samples.compactMap({ $0 as? HKCategorySample }).first(where: { $0.categoryType.identifier == HKCategoryTypeIdentifier.ovulationTestResult.rawValue }) else { return nil }
         return OvulationTestResult.allCases.first { $0.hkValue == sample.value }
     }
+    /// The day's first basal-body-temperature reading converted to Fahrenheit, if any.
     public var basalBodyTemperatureFahrenheit: Double? {
         guard let sample = samples.compactMap({ $0 as? HKQuantitySample }).first(where: { $0.quantityType.identifier == HKQuantityTypeIdentifier.basalBodyTemperature.rawValue }) else { return nil }
         return sample.quantity.doubleValue(for: .degreeFahrenheit())
     }
 }
 
-/// Narrow HealthKit seam consumed by `PeriodTrackerStore`. The concrete `HealthKitService`
-/// conformance lives app-side (it uses HealthKitService internals); this module only needs the
-/// three cycle operations and never refines the fat `HealthKitServicing` protocol.
+/// Narrow HealthKit seam consumed by ``PeriodTrackerStore``. The concrete `HealthKitService`
+/// conformance lives in the `HealthKitGateway` module (it uses HealthKitService internals — a
+/// wall-legal edge, since the wall only constrains `AIProviders`/`CloudKitSync`); this module only
+/// needs the three cycle operations and never refines the fat `HealthKitServicing` protocol.
+/// Tests substitute a mock so the store is exercisable without a Health store.
 public protocol PeriodHealthKitServicing: AnyObject {
+    /// Writes the event's clinical fields as HealthKit samples stamped with `externalUUID` — the
+    /// key ``MenstrualNarrative/hkExternalUUID`` later joins on.
+    /// - Returns: The samples that were saved.
     func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample]
+    /// All cycle-relevant samples (from any source app) starting in `dateRange`.
     func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample]
+    /// Deletes the given samples; callers pre-filter to Fernlet-owned samples, since HealthKit
+    /// refuses deletes of other apps' data.
     func delete(_ samples: [HKSample]) async throws
 }
 
-/// Narrow lock seam consumed by `PeriodTrackerStore` for buffering narratives while the app is
-/// locked. The fat app-side `FernletLockServicing` refines this so the store stays decoupled from
-/// the lock service's full surface.
+/// Narrow lock seam consumed by ``PeriodTrackerStore`` for buffering narratives while the app is
+/// locked. `FernletLockServicing` (in the `FernletLock` module) refines this, so `FernletLockService`
+/// is the production conformer — the seam is owned HERE so `PrivateHealthStore` never names the lock
+/// module (a one-directional edge; the lock module depends on this one, not the reverse).
 public protocol PeriodLockContext: AnyObject {
+    /// Whether an app lock exists at all. Without one there is no buffer key and no later unlock to
+    /// drain at, so a locked-state narrative is dropped rather than buffered.
     var isLockConfigured: Bool { get }
+    /// Seals `payload` into the device-key pending buffer to await the next unlock.
     func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws
+    /// Unseals and returns every buffered payload WITHOUT clearing the buffer —
+    /// ``purgePendingNarratives()`` is the explicit clear, called only once re-sealing succeeded.
     func drainPendingNarratives() throws -> [PendingNarrativePayload]
+    /// Destroys the buffered payloads.
     func purgePendingNarratives() throws
 }
 
+/// The observable store for the period tracker: joins HealthKit cycle samples with sealed
+/// narratives, enforces the cycle-visibility gate, and publishes entries, current phase, and
+/// prediction.
+///
+/// This is the S3 funnel for cycle data — every cycle read and write in the app goes through it.
+/// Splits each event across two stores: clinical samples (flow, temperature, mucus, ovulation
+/// tests) live in HealthKit behind the ``PeriodHealthKitServicing`` seam (conformed to by
+/// `HealthKitService` in `HealthKitGateway`), while notes/symptoms are sealed into
+/// ``MenstrualNarrativeRepository``. While locked, narratives detour through the pending buffer via
+/// the ``PeriodLockContext`` seam (`FernletLockService`) and are re-sealed on the next unlock by
+/// ``drainPendingBuffer(contentKey:)``. ``CyclePredictionEngine`` supplies ``prediction``; the
+/// period calendar, Home surface, and `PeriodContextBridge` (the sanctioned scoring egress) are the
+/// consumers.
+///
+/// The load-bearing invariant is ``isVisible``, the fail-closed hard gate at the data seam rather
+/// than in any view: while hidden the store is INERT — ``loadEntries(unlockedContentKey:)`` scrubs
+/// and returns before the HealthKit read (gate G1), writes and the buffer drain refuse (gate G2) —
+/// yet ``deleteEntry(_:)`` stays ungated so hiding never blocks deletion. Orthogonally, the content
+/// key gates the *narrative* and *prediction* half: a keyless load still lists samples but carries
+/// no decrypted notes and no prediction.
+///
+/// `@MainActor` `@Observable`: SwiftUI observes ``entries``/``currentPhase``/``prediction``
+/// directly; repository and buffer calls are synchronous on the main actor, HealthKit calls are
+/// awaited. Load failures scrub to the empty state rather than surfacing stale cycle data.
 @MainActor
 @Observable
 public final class PeriodTrackerStore {
+    /// One ``CycleDayEntry`` per day of the 240-day load window, oldest first — `[]` while hidden,
+    /// after a scrub, or on load failure.
     public var entries: [CycleDayEntry] = []
+    /// Today's phase from direct observation only (`menstrual` when actual flow was logged today,
+    /// else `unknown`); richer calendar-math phases live in `PeriodContextBridge`.
     public var currentPhase: CyclePhase = .unknown
+    /// The latest ``CyclePredictionEngine`` fit — non-`nil` only when the last load ran with a
+    /// content key and enough usable history existed.
     public var prediction: CyclePrediction?
 
     @ObservationIgnored private let healthService: PeriodHealthKitServicing
@@ -255,6 +380,13 @@ public final class PeriodTrackerStore {
     /// key of its own to check.
     @ObservationIgnored private var lastLoadHadContentKey = false
 
+    /// Creates the store over its two persistence seams.
+    ///
+    /// - Parameters:
+    ///   - healthService: The HealthKit seam (production: `HealthKitService`; tests: a mock).
+    ///   - narrativeRepository: Sealed narrative store; `nil` builds one on the shared private stack.
+    ///   - lockService: The lock seam, or `nil` to wire later via ``attachLockService(_:)``.
+    ///   - calendar: Calendar for all day math.
     public init(
         healthService: PeriodHealthKitServicing,
         narrativeRepository: MenstrualNarrativeRepository? = nil,
@@ -267,10 +399,18 @@ public final class PeriodTrackerStore {
         self.calendar = calendar
     }
 
+    /// Wires the lock seam after construction — the lock service and this store are built in
+    /// either order at startup, so the app attaches it from its launch task and the period surfaces.
     public func attachLockService(_ lockService: any PeriodLockContext) {
         self.lockService = lockService
     }
 
+    /// Rebuilds ``entries`` (plus phase and prediction) for the trailing 240 days.
+    ///
+    /// Gate G1: while hidden this scrubs any resident plaintext and returns BEFORE the HealthKit
+    /// read (see the inline note — the samples are the larger exposure). With a `nil` key the
+    /// entries still carry samples but no narratives and no prediction. Any load error scrubs to
+    /// the empty state rather than leaving stale cycle data visible.
     public func loadEntries(unlockedContentKey: SymmetricKey?) async {
         // G1 — the hard gate. Returns BEFORE `loadPeriodEvents`, because that HealthKit read is the
         // larger exposure here: flow, cycle dates, and BBT are ordinary unencrypted Health samples,
@@ -310,6 +450,14 @@ public final class PeriodTrackerStore {
         lastLoadHadContentKey = false
     }
 
+    /// Saves one user-logged cycle event: clinical fields to HealthKit, narrative to the sealed store.
+    ///
+    /// Gate G2 (write half): throws ``PeriodTrackingHiddenError`` while hidden. The narrative lands
+    /// in the sealed store when the content key is available, in the lock service's pending buffer
+    /// while locked, and is dropped when no lock is configured — the result says which happened so
+    /// the sheet can tell the user. The note is trimmed and capped at 1000 characters before sealing.
+    ///
+    /// - Returns: What happened to the narrative half; see ``PeriodLogResult``.
     public func logEvent(_ event: UserLoggedCycleEvent, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
         // G2 (write half). Refuse before touching HealthKit: logging while hidden would both write
         // cycle data the user asked Fernlet to leave alone and, via the buffer path below, decrypt
@@ -347,6 +495,10 @@ public final class PeriodTrackerStore {
         return .savedWithBufferedNarrative
     }
 
+    /// Replaces an existing entry: deletes its Fernlet-owned samples and sealed narrative, then
+    /// re-logs `event` through ``logEvent(_:unlockedContentKey:)``. Gated up front so a hide racing
+    /// an edit cannot delete without re-creating (see the inline note). Samples written by other
+    /// apps are left untouched.
     public func editEvent(_ event: UserLoggedCycleEvent, replacingEntry entry: CycleDayEntry, unlockedContentKey: SymmetricKey?) async throws -> PeriodLogResult {
         // Gate BEFORE the deletes below. This is delete-then-recreate: it drops the old HealthKit
         // samples and the sealed narrative, then re-adds via `logEvent`. If the gate only fired inside
@@ -364,6 +516,10 @@ public final class PeriodTrackerStore {
         return try await logEvent(event, unlockedContentKey: unlockedContentKey)
     }
 
+    /// Deletes one day's Fernlet-owned samples and sealed narrative, then recomputes local state.
+    /// Deliberately not visibility-gated — hiding must never block deletion — and the prediction
+    /// recompute is key-gated (see the inline note) so a delete can never resurrect a prediction
+    /// the load was not entitled to.
     public func deleteEntry(_ entry: CycleDayEntry) async throws {
         let bundleID = Bundle.main.bundleIdentifier ?? ""
         let ownedSamples = entry.samples.filter { $0.sourceRevision.source.bundleIdentifier == bundleID }
@@ -386,6 +542,12 @@ public final class PeriodTrackerStore {
         currentPhase = currentPhaseFromObservations()
     }
 
+    /// Re-seals every pending-buffer narrative into the sealed store after an unlock.
+    ///
+    /// Gate G2 (drain half): a silent no-op while hidden — the buffer unseals under a device key
+    /// the content-key gate never sees, so this path must refuse explicitly, and the buffer stays
+    /// intact for a later un-hide. The buffer is purged only after every insert succeeds, so a
+    /// partial failure leaves it drainable on the next unlock.
     public func drainPendingBuffer(contentKey: SymmetricKey) async throws {
         // G2 (drain half). `PendingNarrativeBuffer.loadEntries` unseals with a device key that has
         // nothing to do with the content key, so this path is invisible to key-withholding and must
@@ -410,6 +572,9 @@ public final class PeriodTrackerStore {
         try lockService.purgePendingNarratives()
     }
 
+    /// The phase derivable from today's direct observation alone: `menstrual` when an actual
+    /// (non-none) flow sample exists today, `unknown` otherwise. Needs no prediction and no content
+    /// key, so it is safe on every path.
     public func currentPhaseFromObservations() -> CyclePhase {
         let todayKey = FernletDate.dayKey(for: Date())
         guard let entry = entries.first(where: { $0.dateKey == todayKey }) else { return .unknown }
@@ -420,6 +585,9 @@ public final class PeriodTrackerStore {
         return hasActualFlow ? .menstrual : .unknown
     }
 
+    /// Assembles one ``CycleDayEntry`` per day key in `range`, attaching each day's samples and its
+    /// narrative — matched by sample external UUID first, then by day key (see the inline note on
+    /// note-only events with no backing sample).
     private func buildEntries(samples: [HKSample], narratives: [String: MenstrualNarrative], range: DateInterval) -> [CycleDayEntry] {
         let grouped = Dictionary(grouping: samples) { FernletDate.dayKey(for: $0.startDate) }
         // Note/symptom-only events have no backing HealthKit sample, so they can't be matched

@@ -13,6 +13,11 @@ import FernletDomainModel
 
 // MARK: - Photowall seed
 
+/// One prepared tile for the Home photowall strip: caption, polaroid rotation, a themed color
+/// index, and (optionally) a friend-photo id to render.
+///
+/// Built once per launch by ``LaunchPreparationService`` and stored on `FernletStore.photowallSeeds`;
+/// `HomeView` maps these into `PhotowallTile`s.
 struct PhotowallSeed: Identifiable {
     let id = UUID()
     let caption: String
@@ -21,6 +26,11 @@ struct PhotowallSeed: Identifiable {
     let photoID: UUID?
 }
 
+/// The inputs a ``PhotowallPhotoRanking`` may weigh when ordering candidate friend photos:
+/// selection time, current derived signals, recent activity names, and the user's favorites.
+///
+/// Assembled by ``LaunchPreparationService`` from live store state; rankings are free to ignore
+/// any of it (the random ranking does).
 struct PhotowallSelectionContext {
     let selectedAt: Date
     let derivedSignals: [DerivedSignalRecord]
@@ -43,6 +53,11 @@ struct PhotowallSelectionContext {
     }
 }
 
+/// Strategy seam for ordering friend-photo candidates for the Home photowall.
+///
+/// Conformers: ``RandomPhotowallPhotoRanking`` (uniform shuffle, the test-friendly baseline) and
+/// ``FavoriteWeightedPhotowallPhotoRanking`` (the production default, hearted photos weighted up).
+/// ``PhotowallPhotoSelector`` consumes the ranking and layers the freshness/history rules on top.
 protocol PhotowallPhotoRanking {
     func rankedCandidates(
         from photos: [FriendPhotoPayload],
@@ -50,6 +65,10 @@ protocol PhotowallPhotoRanking {
     ) -> [FriendPhotoPayload]
 }
 
+/// The simplest ``PhotowallPhotoRanking``: a uniform shuffle that ignores the context.
+///
+/// Kept as an injectable baseline for tests and as the behavior favorites-weighting degrades to
+/// when no photo is hearted.
 struct RandomPhotowallPhotoRanking: PhotowallPhotoRanking {
     func rankedCandidates(
         from photos: [FriendPhotoPayload],
@@ -62,7 +81,9 @@ struct RandomPhotowallPhotoRanking: PhotowallPhotoRanking {
 
 /// Pure, seedable weighted-shuffle used to order home-photowall candidates so hearted (favorited) friend
 /// photos surface more often than the rest — without ever starving the non-favorites (they keep 1× weight
-/// and stay reachable in every position). Extracted from the ranking so the favorites-weighting is
+/// and stay reachable in every position).
+///
+/// Extracted from ``FavoriteWeightedPhotowallPhotoRanking`` so the favorites-weighting is
 /// deterministically unit-testable under a seeded generator.
 enum WeightedPhotowallOrdering {
     /// Reorders `ids` by weighted random sampling WITHOUT replacement: at each step an id in `favoriteIDs`
@@ -99,9 +120,11 @@ enum WeightedPhotowallOrdering {
 }
 
 /// The home photowall's default ranking: a weighted shuffle that surfaces hearted (favorited) friend
-/// photos more often than the rest without starving them. Favorites carry `favoriteWeight`× the draw
-/// weight of a non-favorite; with no favorites this reduces to a plain uniform shuffle. The sampling
-/// itself lives in the pure, seedable `WeightedPhotowallOrdering` helper.
+/// photos more often than the rest without starving them.
+///
+/// Favorites carry `favoriteWeight`× the draw weight of a non-favorite; with no favorites this
+/// reduces to a plain uniform shuffle. The sampling itself lives in the pure, seedable
+/// ``WeightedPhotowallOrdering`` helper.
 struct FavoriteWeightedPhotowallPhotoRanking: PhotowallPhotoRanking {
     /// How much likelier a favorited photo is to be drawn at each step than a non-favorite. ~3× per the
     /// tester decision: favorites appear meaningfully more, others still show up.
@@ -123,6 +146,12 @@ struct FavoriteWeightedPhotowallPhotoRanking: PhotowallPhotoRanking {
     }
 }
 
+/// Picks which friend-photo ids fill the Home photowall this launch: dedupes candidates, ranks
+/// them via the injected ``PhotowallPhotoRanking``, prefers photos NOT shown last time, and
+/// persists the new selection to `UserDefaults` as next launch's "previous" set.
+///
+/// The history key keeps the wall rotating across launches instead of resurfacing the same
+/// photos; defaults/history-key/ranking are all injectable for tests.
 struct PhotowallPhotoSelector {
     private let defaults: UserDefaults
     private let historyKey: String
@@ -165,19 +194,37 @@ struct PhotowallPhotoSelector {
 
 // MARK: - Launch preparation service
 
+/// The second-stage launch pipeline: everything ``ContentView`` runs between "store loaded" and
+/// "main interface visible", behind the companion launch screen.
+///
+/// `prepare(store:)` reconciles guided-workout and cooking runs from the app-group container
+/// (Lock Screen / Siri actions made while the app was gone), sweeps stranded plaintext data-export
+/// files, builds the photowall seeds (via ``PhotowallPhotoSelector``), backfills missing day
+/// summaries (capped per run, once per calendar day, ambient-tier AI with an intentionally empty
+/// fallback), generates the companion thought (Foundation Models with a deterministic
+/// signal-based fallback), and backfills workouts from Health — then flips `isDone` after a
+/// minimum display time. All AI calls route through `FernletAIGate` and are recorded to
+/// `AIAuditLog`. @MainActor + @Observable: `isDone`/`statusMessage` drive the launch UI.
 @MainActor
 @Observable
 final class LaunchPreparationService {
+    /// Set once `prepare(store:)` finishes; `ContentView` cross-fades to the main interface on it.
     private(set) var isDone = false
+    /// The rotating status line the launch screen shows while preparation runs.
     private(set) var statusMessage = initialStatusMessage
     private let photowallPhotoSelector: PhotowallPhotoSelector
 
+    /// The first status line, shared with `FernletStoreLoader` so both launch phases open on the
+    /// same message.
     static let initialStatusMessage = "Checking in with your body..."
 
     init(photowallPhotoSelector: PhotowallPhotoSelector? = nil) {
         self.photowallPhotoSelector = photowallPhotoSelector ?? PhotowallPhotoSelector()
     }
 
+    /// Runs the whole preparation pass once (re-entry is a no-op via `isDone`); called from
+    /// `ContentView`'s launch task. Holds the launch screen for a ~1.4 s minimum so the status
+    /// text settles instead of flashing.
     func prepare(store: FernletStore) async {
         guard !isDone else { return }
 

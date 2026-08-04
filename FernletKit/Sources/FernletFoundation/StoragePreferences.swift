@@ -1,12 +1,38 @@
 import Foundation
 import Observation
 
+/// The user's storage and privacy choices: iCloud sync, backup exclusion, HealthKit capability
+/// toggles, and the sealed-backup flags.
+///
+/// This value is the single record of where the user's data is allowed to live. It is persisted
+/// as JSON in the keychain (never in the synced blob) by ``StoragePreferencesStore``, and
+/// consulted by repository selection (Core Data + iCloud vs. local JSON), the HealthKit gateway,
+/// the sealed-backup coordinator, and the "delete everything" flow — the derived flags
+/// ``hasAnyCloudCopy`` / ``hasICloudDayCopy`` / ``hasSealedBackup`` decide what the destructive
+/// dialogs may truthfully claim to remove.
+///
+/// - Important: Decoding is deliberately tolerant — the custom ``init(from:)`` falls back to each
+///   field's default when its key is absent. A synthesized decode would throw on the first key an
+///   app update adds, and `StoragePreferencesStore.loadPreferences` maps a throw to fresh
+///   defaults, silently resetting every stored choice (and making "delete everything" skip a
+///   sealed backup it should erase). New fields must always decode `IfPresent` with a default.
 public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
+    /// Whether the day blob syncs to the user's private CloudKit zone (the Core Data + iCloud
+    /// repository is selected when true).
     public var iCloudSyncEnabled: Bool
+    /// Whether the local store files are excluded from iOS device backups. Defaults to false so
+    /// the sealed store — which has no cloud recovery — stays recoverable via encrypted backups.
     public var localBackupExcludedFromiOSBackup: Bool
+    /// The master HealthKit switch; when false, every capability is off regardless of the
+    /// per-capability map.
     public var healthKitMasterEnabled: Bool
+    /// Per-capability HealthKit toggles, keyed by `HealthCapability` raw values (defined in
+    /// HealthKitGateway, above this layer — hence the string keys).
     public var healthKitCapabilityEnabled: [String: Bool]
+    /// Whether the sealed (encrypted) backup of sensitive notes (journal/worry narratives) is
+    /// uploaded to iCloud.
     public var sealedBackupSensitiveNotesEnabled: Bool
+    /// Whether the sealed (encrypted) backup of period/intimacy data is uploaded to iCloud.
     public var sealedBackupPeriodEnabled: Bool
     /// Set when the sealed PERIOD backup still needs re-uploading under a newly-adopted escrow key —
     /// the escrow adopt (or a re-seal) ran while period tracking was hidden, so the cloud chunk is
@@ -21,8 +47,11 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     /// omits the iCloud sentence and the wipe reports COMPLETE while the server copy survives. Cleared
     /// once that copy is actually deleted (the delete-cloud-data flow, or "delete everything").
     public var cloudCopyKept: Bool
+    /// Timestamp of the last mutation, stamped by ``StoragePreferencesStore/update(_:)``.
     public var lastModifiedAt: Date
 
+    /// Creates preferences; every parameter defaults to its first-launch value (sync off,
+    /// HealthKit off, no sealed backups, local data included in device backups).
     public init(
         iCloudSyncEnabled: Bool = false,
         // Default NOT excluded: local data — especially the sealed store, which has NO cloud recovery —
@@ -48,12 +77,14 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         self.lastModifiedAt = lastModifiedAt
     }
 
-    // Tolerant decode: every field falls back to its default when absent. Synthesized `Codable` would
-    // THROW on a missing non-optional key, and `StoragePreferencesStore.loadPreferences` maps a throw to
-    // fresh defaults — so adding `cloudCopyKept` (or any field) would silently RESET an existing user's
-    // stored iCloud / HealthKit / sealed-backup choices on upgrade, since their keychain blob predates the
-    // key. A reset `sealedBackup*` flag would even make "delete everything" skip a backup it should erase.
-    // Decoding each key `IfPresent` keeps old blobs readable and new keys additive.
+    /// Tolerant decode: every field falls back to its default when absent.
+    ///
+    /// Synthesized `Codable` would
+    /// THROW on a missing non-optional key, and `StoragePreferencesStore.loadPreferences` maps a throw to
+    /// fresh defaults — so adding `cloudCopyKept` (or any field) would silently RESET an existing user's
+    /// stored iCloud / HealthKit / sealed-backup choices on upgrade, since their keychain blob predates the
+    /// key. A reset `sealedBackup*` flag would even make "delete everything" skip a backup it should erase.
+    /// Decoding each key `IfPresent` keeps old blobs readable and new keys additive.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         iCloudSyncEnabled = try container.decodeIfPresent(Bool.self, forKey: .iCloudSyncEnabled) ?? false
@@ -91,14 +122,14 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupSensitiveNotesEnabled || sealedBackupPeriodEnabled
     }
 
-    // Default per-capability map: every HealthKit capability disabled.
-    //
-    // NOTE: the capability *raw values* below must mirror `HealthCapability`'s
-    // cases (defined in the app's HealthKitService, which sits ABOVE this
-    // Layer-0 module and therefore cannot be referenced here). This keeps the
-    // default byte-identical to the previous
-    // `Dictionary(HealthCapability.allCases.map { ($0.rawValue, false) })`.
-    // If a `HealthCapability` case is added/removed, update this list to match.
+    /// Default per-capability map: every HealthKit capability disabled.
+    ///
+    /// - Important: The capability *raw values* below must mirror `HealthCapability`'s
+    ///   cases (defined in HealthKitGateway's HealthKitService, which sits ABOVE this
+    ///   Layer-0 module and therefore cannot be referenced here). This keeps the
+    ///   default byte-identical to the previous
+    ///   `Dictionary(HealthCapability.allCases.map { ($0.rawValue, false) })`.
+    ///   If a `HealthCapability` case is added/removed, update this list to match.
     public static var defaultHealthKitCapabilityEnabled: [String: Bool] {
         [
             "bodyProfile": false,
@@ -112,9 +143,27 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     }
 }
 
+/// The observable owner of the persisted ``StoragePreferences``, backed by the keychain.
+///
+/// The app's single writer for storage choices: settings and onboarding surfaces mutate through
+/// ``update(_:)``, which stamps `lastModifiedAt` and persists the JSON-encoded value to the
+/// keychain slot named by ``keychainService``. Storing in the keychain — device-protected and
+/// outside the synced blob — keeps the record of the user's privacy choices from traveling
+/// through the very channels it governs.
+///
+/// `@MainActor` `@Observable`: SwiftUI settings views observe ``preferences`` directly.
+/// Long-lived non-main consumers (`CloudKitDataService`'s sync-enabled closure,
+/// `HealthKitService`) must not trust a stale in-memory copy; they re-read the live value via the
+/// `nonisolated` ``currentPreferences(service:)``, a pure keychain read + JSON decode. Any load
+/// failure (missing or undecodable blob) yields fresh defaults — see the tolerant-decode note on
+/// ``StoragePreferences/init(from:)`` for why that fallback makes additive fields mandatory.
+/// ``resetToDefaults()`` deletes the keychain row outright rather than writing defaults, so
+/// "delete everything" leaves no `lastModifiedAt` trace of use.
 @MainActor
 @Observable
 public final class StoragePreferencesStore {
+    /// The current preferences value; mutate only through ``update(_:)`` so persistence and the
+    /// `lastModifiedAt` stamp stay in step.
     public private(set) var preferences: StoragePreferences
 
     /// The keychain service slot this store reads/writes. Exposed so long-lived
@@ -129,6 +178,8 @@ public final class StoragePreferencesStore {
     @ObservationIgnored
     private let decoder = JSONDecoder()
 
+    /// Creates a store reading its initial value from `keychainService`; `now` is injectable so
+    /// tests can pin the `lastModifiedAt` stamp.
     public init(
         keychainService: String = KeychainItem.storagePreferencesService,
         now: @escaping () -> Date = Date.init
@@ -138,6 +189,8 @@ public final class StoragePreferencesStore {
         preferences = Self.loadPreferences(service: keychainService)
     }
 
+    /// Applies `mutation` to a copy of the current preferences, stamps `lastModifiedAt`, then
+    /// publishes and persists the result to the keychain in one step.
     public func update(_ mutation: (inout StoragePreferences) -> Void) {
         var updated = preferences
         mutation(&updated)
@@ -161,8 +214,11 @@ public final class StoragePreferencesStore {
         KeychainItem.store(data, for: .storagePreferences, service: keychainService)
     }
 
-    // nonisolated: pure keychain read + JSON decode with no actor-isolated state, so it is safe
-    // to call from any executor (e.g. the non-MainActor CloudKitDataService sync-enabled closure).
+    /// Reads the live persisted preferences straight from the keychain, bypassing any in-memory
+    /// copy; returns fresh defaults when nothing is stored (or the blob fails to decode).
+    ///
+    /// `nonisolated`: pure keychain read + JSON decode with no actor-isolated state, so it is safe
+    /// to call from any executor (e.g. the non-MainActor CloudKitDataService sync-enabled closure).
     nonisolated public static func currentPreferences(service: String = KeychainItem.storagePreferencesService) -> StoragePreferences {
         loadPreferences(service: service)
     }

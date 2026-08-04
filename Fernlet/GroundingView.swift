@@ -10,7 +10,19 @@
 import SwiftUI
 import FernletUI
 
+/// The 5-4-3-2-1 grounding exercise: a stepped, tap-to-advance walk through the five senses,
+/// ending on a soft affirmation.
+///
+/// Pushed from ``FirstAidView``. No timers and no pressure — tapping anywhere is the only pace,
+/// and each sense fills the screen with its own calm color wash from the static `steps` table.
+/// Entirely self-contained view state (step index + completion flag); nothing is recorded or
+/// persisted.
 struct GroundingView: View {
+    /// One sense's step in the 5-4-3-2-1 sequence: its count, icon, prompt/hint copy, and the
+    /// per-sense color trio (wash tint, deep ink, mid-tone).
+    ///
+    /// The five instances live in the static `steps` table; the view renders whichever one
+    /// `stepIndex` points at.
     private struct GroundingStep {
         let count: Int
         let icon: String

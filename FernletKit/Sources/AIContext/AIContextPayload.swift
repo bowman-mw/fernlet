@@ -3,22 +3,37 @@ import FernletDomainModel
 
 // MARK: - Payload protocol
 
-/// Marker protocol for all AI context payloads.
-/// Each conforming type defines the exact fields that may enter an AI prompt.
-/// Anything not expressed in a payload type cannot reach the model.
+/// Marker protocol for all AI context payloads — the de-identification contract.
+///
+/// Each conforming type defines the exact fields that may enter an AI prompt; anything not expressed
+/// in a payload type cannot reach the model. This is the S3 wall's sanctioned-egress mechanism in
+/// type form: the walled `AIProviders` module (and the app-target AI call sites) consume ONLY these
+/// typed payloads, never raw sealed data, and the app builds each payload from already-allowed
+/// values. The two requirements feed the audit trail — ``AIAuditLog`` records `payloadKind` and
+/// `includedFieldNames` (names, never values) for every call. All conformers are `Sendable` value
+/// types, safe to carry across the actor hop into a model session.
 public protocol AIContextPayload: Sendable {
+    /// Stable kind token for this payload family (e.g. `"companion-thought"`), recorded in the audit
+    /// log and matched against `MemoryAgent.allowedPayloadKinds`.
     var payloadKind: String { get }
+    /// The NAMES of the fields this payload carries — what the audit log stores; never the values.
     var includedFieldNames: [String] { get }
 }
 
 // MARK: - Food selection payload
 
 /// Fields allowed for food-selection inference.
+///
+/// Built by the app's `MealResolutionService` and consumed by `AIProviders`' food-selection provider:
+/// the model picks the best catalog candidates for a described meal.
 /// Forbidden: journal text, period data, health metrics, TierTwo memories, narratives.
 public struct FoodSelectionPayload: AIContextPayload {
     public let payloadKind = "food-selection"
+    /// The user's free-text meal description — the only user prose this payload carries.
     public let mealDescription: String
+    /// The catalog candidates the model may choose among; it never invents foods outside this list.
     public let candidates: [FoodSelectionCandidate]
+    /// Meal slot to assume when the description does not imply one.
     public let fallbackMealType: MealType?
 
     public var includedFieldNames: [String] { ["mealDescription", "candidates", "fallbackMealType"] }
@@ -33,7 +48,10 @@ public struct FoodSelectionPayload: AIContextPayload {
 // MARK: - Meal decomposition payload
 
 /// Fields allowed for AI dish decomposition (M1).
-/// Sends strictly less than FoodSelectionPayload — no candidate list required.
+///
+/// Built by the app's `MealResolutionService` when a described dish must be split into component
+/// foods before candidate matching. Sends strictly less than ``FoodSelectionPayload`` — no candidate
+/// list required.
 public struct MealDecompositionPayload: AIContextPayload {
     public let payloadKind = "meal-decomposition"
     public let mealDescription: String
@@ -50,7 +68,10 @@ public struct MealDecompositionPayload: AIContextPayload {
 // MARK: - Web nutrition payload
 
 /// Fields allowed for web nutrition lookup.
-/// The meal description is sent to a search provider, so this path is opt-in and audited.
+///
+/// The one payload whose destination LEAVES the device today: the meal description is sent to a
+/// search provider, so this path is opt-in, settings-gated, and audited at DISPATCH time (see
+/// ``AIAuditLog``'s dispatch-then-update contract). Built by the app's food view flow.
 public struct WebNutritionLookupPayload: AIContextPayload {
     public let payloadKind = "web-nutrition"
     public let mealDescription: String
@@ -65,7 +86,9 @@ public struct WebNutritionLookupPayload: AIContextPayload {
 // MARK: - Day summary payload
 
 /// Fields allowed for day-summary generation.
-/// Forbidden: journal text, period data, TierTwo memories, symptom flags, narratives.
+///
+/// Built by the app's `LaunchPreparationService` for the ambient day-summary task — names and labels
+/// only. Forbidden: journal text, period data, TierTwo memories, symptom flags, narratives.
 public struct DaySummaryPayload: AIContextPayload {
     public let payloadKind = "day-summary"
     public let mealNames: [String]
@@ -97,8 +120,13 @@ public struct DaySummaryPayload: AIContextPayload {
 // MARK: - Companion thought payload
 
 /// A single derived-signal item — name and trend value only; no raw health samples.
+///
+/// The line-item form derived wellbeing signals take inside ``CompanionThoughtPayload``, keeping the
+/// prompt at the abstraction level of "sleep: trending up" rather than clinical numbers.
 public struct AISignalSummary: Equatable, Sendable {
+    /// The signal's display name (e.g. "sleep").
     public let signalName: String
+    /// The already-abstracted trend/value string; never a raw HealthKit sample.
     public let value: String
 
     public init(signalName: String, value: String) {
@@ -108,9 +136,12 @@ public struct AISignalSummary: Equatable, Sendable {
 }
 
 /// Fields allowed for companion-thought generation.
+///
+/// Built by the app's `LaunchPreparationService` for the ambient thought-bubble task — the only
+/// payload kind allowed any TierTwo behavioral context, and only after ``MemoryAgent`` filtering.
 /// Forbidden: journal text, period data, raw narratives, raw TierTwo records.
-/// `filteredMemorySummary` MUST be the output of `MemoryAgent.filteredContext` — never a raw
-/// `tierTwoContextSummary` call.
+/// `filteredMemorySummary` MUST be the output of ``MemoryAgent/filteredContext(from:destinedFor:recencyDays:maxChars:)``
+/// — never a raw `tierTwoContextSummary` call.
 public struct CompanionThoughtPayload: AIContextPayload {
     public let payloadKind = "companion-thought"
     public let signalSummaries: [AISignalSummary]
@@ -133,6 +164,9 @@ public struct CompanionThoughtPayload: AIContextPayload {
 // MARK: - Workout adjustment payload
 
 /// Fields allowed for on-device workout-session adjustment.
+///
+/// Built by the app's `WorkoutPlanningService` and consumed by `AIProviders`' workout-adjustment
+/// provider when the user asks to tweak a session in free text.
 /// Forbidden: journal text, period data, health metrics, narratives. Only the session's exercise
 /// names, the user's free-text request, and how many catalog candidates were offered are sent.
 public struct WorkoutAdjustmentPayload: AIContextPayload {
@@ -168,7 +202,7 @@ public struct WorkoutAdjustmentPayload: AIContextPayload {
 /// quantity, or a macro. Sending only two dish/ingredient names also keeps the payload genuinely
 /// names-only.
 ///
-/// This payload is deliberately NOT in `MemoryAgent.allowedPayloadKinds`: a substitution prompt must
+/// This payload is deliberately NOT in ``MemoryAgent/allowedPayloadKinds``: a substitution prompt must
 /// receive zero TierTwo behavioral context — it needs only names — so `MemoryAgent.filteredContext`
 /// returns an empty string for `"ingredient-substitution"` by default (fail-closed).
 public struct IngredientSubstitutionPayload: AIContextPayload {
@@ -187,7 +221,10 @@ public struct IngredientSubstitutionPayload: AIContextPayload {
 // MARK: - Web page extraction payloads
 
 /// Fields allowed for on-device nutrition extraction from a product webpage.
-/// Only the source host and approximate text length are recorded; page content is never logged.
+///
+/// Built by the app's `FoodProductWebImporter` when the on-device model reads an already-fetched
+/// product page. Only the source host and approximate text length are recorded; page content is
+/// never logged.
 public struct WebPageNutritionExtractionPayload: AIContextPayload {
     public let payloadKind = "web-nutrition-extraction"
     public let sourceHost: String
@@ -202,7 +239,10 @@ public struct WebPageNutritionExtractionPayload: AIContextPayload {
 }
 
 /// Fields allowed for on-device recipe extraction from a webpage.
-/// Only the source host and approximate text length are recorded; page content is never logged.
+///
+/// Built by `AIProviders`' `RecipeWebImporter` when the on-device model parses an already-fetched
+/// recipe page. Only the source host and approximate text length are recorded; page content is
+/// never logged.
 public struct RecipeExtractionPayload: AIContextPayload {
     public let payloadKind = "recipe-extraction"
     public let sourceHost: String

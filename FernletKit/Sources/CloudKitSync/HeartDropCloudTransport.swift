@@ -6,6 +6,12 @@ import FernletFoundation
 /// CloudKit PUBLIC-database ferry for heart drops (bitchat adoptions Increment 3,
 /// Docs/Plan-Bitchat-Adoptions-2026-07-25.md) — the app's first public-DB use.
 ///
+/// The production conformer of the `HeartDropTransporting` seam (declared in
+/// `FernletDomainModel`), driven by `HeartDropService` in `ProximityKit`: upload one sealed drop
+/// per tag, fetch drops for a friend's tag window with per-chunk anti-starvation budgeting, and
+/// delete own records after pickup. `@unchecked Sendable` over two immutable, documented
+/// thread-safe CloudKit references only.
+///
 /// Wall note (S3): this type sees only pseudonymous rotating day tags and sealed blobs; every
 /// byte of crypto lives on the ProximityKit side of the `HeartDropTransporting` seam declared in
 /// FernletDomainModel. Known accepted residual (documented in the plan): public-DB records carry
@@ -18,8 +24,11 @@ import FernletFoundation
 /// gated solely by the caller's `heartsAwayDelivery` consent.
 public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Sendable {
 
+    /// CloudKit record type for one dropped heart in the public database.
     public static let recordType = "HeartDrop"
+    /// Queryable field holding the pseudonymous rotating day tag.
     static let tagField = "tag"
+    /// Bytes field holding the sealed (ChaChaPoly + deflate) drop payload.
     static let payloadField = "payload"
     /// CloudKit `IN` predicates degrade past ~portions of this; fetches chunk the tag list. Kept
     /// deliberately small: one query page is shared by every tag in a chunk, so a friend flooding
@@ -45,6 +54,7 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
         self.database = container.publicCloudDatabase
     }
 
+    /// Whether an iCloud account is available (errors read as unavailable — the caller skips sync).
     public func accountAvailable() async -> Bool {
         (try? await container.accountStatus()) == .available
     }
@@ -73,6 +83,8 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
         return max(1, maxRecordsPerFetch / chunkCount)
     }
 
+    /// Saves one sealed drop under `tag` and returns the server-assigned record name (kept so
+    /// the sender can delete its own record after the outbox lifetime).
     public func upload(tag: String, payload: Data) async throws -> String {
         let record = CKRecord(recordType: Self.recordType)
         record[Self.tagField] = tag as CKRecordValue
@@ -135,6 +147,8 @@ public final class HeartDropCloudTransport: HeartDropTransporting, @unchecked Se
         return results
     }
 
+    /// Deletes the caller's own drop records by name (public-DB records are deletable only by
+    /// their creator) — the post-pickup/expiry cleanup path.
     public func deleteOwnRecords(recordNames: [String]) async throws {
         guard !recordNames.isEmpty else { return }
         let ids = recordNames.map { CKRecord.ID(recordName: $0) }

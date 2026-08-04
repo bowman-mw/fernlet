@@ -2,14 +2,30 @@ import Foundation
 import HealthKit
 import FernletDomainModel
 
+/// The output of a ``CyclePredictionEngine`` fit: the projected next period plus the statistics behind it.
+///
+/// Produced only when ``PeriodTrackerStore`` loads with a content key while cycle tracking is visible,
+/// and published through ``PeriodTrackerStore/prediction``. Consumed read-only by the period-tracker
+/// calendar, the Home outlook card, and — via its cycle-source seam — the `PeriodContextBridge` phase
+/// resolver; the engine recomputes the whole value from scratch on every load.
 public nonisolated struct CyclePrediction: Equatable {
+    /// Most likely start date of the next period (day resolution).
     public let nextStart: Date
+    /// Window the next start plausibly falls in: ``nextStart`` plus/minus a robust-spread half-width of 1–10 days.
     public let likelyStartRange: ClosedRange<Date>
+    /// Projected length in days of the cycle now in progress (weighted-median/EWMA blend, rounded).
     public let predictedCycleLength: Int
+    /// Recency-weighted median of the recent usable cycle lengths, in days.
     public let averageCycleLength: Int
+    /// Median absolute deviation of recent cycle lengths from that median, in whole days.
     public let variationDays: Int
+    /// Overall confidence in ``nextStart``, clamped to 0.15...0.95 — grows with sample count and
+    /// regularity, decays with suspected missed logs and staleness past the expected start.
     public let confidence: Double
+    /// Number of detected period *starts* the fit observed (period count, not completed-cycle count —
+    /// `PeriodContextBridge` subtracts one to count completed cycles).
     public let cyclesObserved: Int
+    /// Day-by-day flow forecast for the predicted period; see ``PredictedFlowDay``.
     public let predictedFlow: [PredictedFlowDay]
 
     public init(
@@ -34,14 +50,27 @@ public nonisolated struct CyclePrediction: Equatable {
 }
 
 /// Fernlet-only prediction/UI levels. `spotting` is intentionally not mapped back to a HealthKit menstrual-flow value.
+///
+/// Used only on the forecast surface (``PredictedFlowDay`` and the calendar's projected-flow marks);
+/// observed flow keeps using ``PeriodFlowLevel``, which round-trips to HealthKit. Raw values order
+/// by intensity so the engine can fit levels as 0–4 scores.
 public nonisolated enum PredictedFlowLevel: Int, CaseIterable, Codable {
     case none = 0, spotting = 1, light = 2, medium = 3, heavy = 4
 }
 
+/// One day of the predicted-flow forecast attached to a ``CyclePrediction``.
+///
+/// Emitted by ``CyclePredictionEngine`` in `dayIndex` order starting at the predicted period start;
+/// the period calendar uses it to draw projected flow intensity on future days.
 public nonisolated struct PredictedFlowDay: Equatable {
+    /// The forecast calendar day.
     public let date: Date
+    /// Zero-based offset from the predicted period start.
     public let dayIndex: Int
+    /// Predicted flow intensity for this day.
     public let level: PredictedFlowLevel
+    /// Per-day confidence: the overall prediction confidence discounted by this day's bleed
+    /// probability and by how concentrated past observations are on ``level``.
     public let confidence: Double
 
     public init(date: Date, dayIndex: Int, level: PredictedFlowLevel, confidence: Double) {
@@ -52,7 +81,31 @@ public nonisolated struct PredictedFlowDay: Equatable {
     }
 }
 
+/// Pure, stateless cycle-prediction engine: fits recent period starts and flow patterns to project
+/// the next period, its likely window, and a day-by-day flow profile.
+///
+/// A caseless namespace of static functions — no state, no side effects, `nonisolated` so it may run
+/// from any executor. ``PeriodTrackerStore`` is its only production caller: it invokes
+/// ``predict(from:today:calendar:)`` after a key-carrying load (never while hidden or locked, so
+/// prediction work is itself downstream of the visibility and lock gates), and `PeriodContextBridge`'s
+/// phase resolver reuses ``detectedPeriodStarts(from:calendar:)`` to anchor calendar-math phases.
+///
+/// The fit is deliberately robust rather than clever: observed flow days are grouped into periods
+/// (gaps of up to 2 days bridge one period), start-to-start intervals outside 15–90 days are
+/// discarded, intervals near 2× or 3× the running median are classified as suspected missed logs
+/// (excluded from the fit but charged against confidence), and the projected length blends a
+/// recency-weighted median with an EWMA. Everything degrades quietly: fewer than 3 detected periods
+/// (or 2 usable intervals) yields `nil` and the UI shows no forecast, and a thin flow history falls
+/// back to a canonical 5-day profile capped at 0.4 confidence.
 public nonisolated enum CyclePredictionEngine {
+    /// Fits the observed cycle history and projects the next period.
+    ///
+    /// - Parameters:
+    ///   - entries: Day-resolution cycle entries to fit; only their observed flow levels matter.
+    ///   - today: Anchor for the staleness penalty — how far past the expected start today already is.
+    ///   - calendar: Calendar used for all day math.
+    /// - Returns: The prediction, or `nil` when fewer than 3 periods (or 2 usable intervals) are
+    ///   detected — callers show no forecast rather than a wild one.
     public static func predict(
         from entries: [CycleDayEntry],
         today: Date,
@@ -127,6 +180,8 @@ public nonisolated enum CyclePredictionEngine {
         detectPeriods(from: entries, calendar: calendar).map(\.start)
     }
 
+    /// Groups observed flow days into discrete periods, bridging gaps of up to 2 days, recording each
+    /// day's flow score by its offset from the period start.
     private static func detectPeriods(from entries: [CycleDayEntry], calendar: Calendar) -> [DetectedPeriod] {
         let observedDays = entries.compactMap { entry -> ObservedFlowDay? in
             guard let score = predictionScore(for: entry.flowLevel), score > 0 else { return nil }
@@ -166,6 +221,9 @@ public nonisolated enum CyclePredictionEngine {
         return periods
     }
 
+    /// Builds the day-by-day flow forecast from the last 6 detected periods, falling back to the
+    /// canonical profile when history is too thin; stops after two consecutive low-probability tail
+    /// days once past day 2.
     private static func predictFlowProfile(
         from periods: [DetectedPeriod],
         nextStart: Date,
@@ -222,6 +280,8 @@ public nonisolated enum CyclePredictionEngine {
         return result
     }
 
+    /// The canonical medium–heavy–medium–light–spotting 5-day profile used when flow history is too
+    /// thin to fit, with per-day confidence capped at 0.4.
     private static func fallbackFlowProfile(nextStart: Date, overallConfidence: Double, calendar: Calendar) -> [PredictedFlowDay] {
         let levels: [PredictedFlowLevel] = [.medium, .heavy, .medium, .light, .spotting]
         return levels.enumerated().compactMap { index, level in
@@ -230,6 +290,8 @@ public nonisolated enum CyclePredictionEngine {
         }
     }
 
+    /// Tags each start-to-start interval as usable for the fit, out of range (outside 15–90 days), or
+    /// a suspected missed log (within 15% of 2× or 3× the running median of usable intervals).
     private static func classify(intervals: [Int]) -> [ClassifiedInterval] {
         var result: [ClassifiedInterval] = []
         var usable: [Double] = []
@@ -259,6 +321,8 @@ public nonisolated enum CyclePredictionEngine {
         return result
     }
 
+    /// Maps an observed flow level to the 0–4 intensity score the fit runs on (`unspecified` counts
+    /// as medium; `none` or absent as 0, which the detection pass then drops).
     private static func predictionScore(for flowLevel: PeriodFlowLevel?) -> Int? {
         switch flowLevel {
         case .some(.heavy): 4
@@ -270,11 +334,18 @@ public nonisolated enum CyclePredictionEngine {
     }
 }
 
+/// A single day with nonzero observed flow, reduced to its start-of-day date and 0–4 intensity score.
+///
+/// Intermediate value of ``CyclePredictionEngine``'s period-detection pass; never leaves this file.
 private nonisolated struct ObservedFlowDay {
     let date: Date
     let score: Int
 }
 
+/// One detected period: its start and end days plus each day's flow score keyed by offset from the start.
+///
+/// Built by ``CyclePredictionEngine``'s grouping pass and consumed by both the interval fit (via
+/// `start`) and the flow-profile fit (via `scoresByDayIndex` and `length`).
 private nonisolated struct DetectedPeriod {
     let start: Date
     let end: Date
@@ -289,12 +360,18 @@ private nonisolated struct DetectedPeriod {
     }
 }
 
+/// A start-to-start cycle interval tagged with how the fit should treat it.
+///
+/// `useForFit` excludes out-of-range and suspected-missed-log intervals from the length fit;
+/// `suspectedMissedLog` intervals additionally count against prediction confidence.
 private nonisolated struct ClassifiedInterval {
     let days: Int
     let useForFit: Bool
     let suspectedMissedLog: Bool
 }
 
+/// Weighted median (the first value whose cumulative weight crosses half the total); zero and
+/// negative weights are ignored.
 private nonisolated func weightedMedian(_ values: [Double], weights: [Double]) -> Double {
     guard !values.isEmpty, values.count == weights.count else { return 0 }
     let pairs = zip(values, weights).sorted { $0.0 < $1.0 }
@@ -310,6 +387,7 @@ private nonisolated func weightedMedian(_ values: [Double], weights: [Double]) -
     return pairs[pairs.count - 1].0
 }
 
+/// Weighted mode; ties break toward the value nearest `tieBreaker`.
 private nonisolated func weightedMode(_ values: [Int], weights: [Double], tieBreaker: Int) -> Int? {
     guard values.count == weights.count, !values.isEmpty else { return nil }
     var totals: [Int: Double] = [:]
@@ -325,6 +403,7 @@ private nonisolated func weightedMode(_ values: [Int], weights: [Double], tieBre
     }.first?.key
 }
 
+/// Exponentially weighted moving average seeded with the first value.
 private nonisolated func ewma(_ values: [Double], alpha: Double) -> Double {
     guard var current = values.first else { return 0 }
     for value in values.dropFirst() {
@@ -333,6 +412,7 @@ private nonisolated func ewma(_ values: [Double], alpha: Double) -> Double {
     return current
 }
 
+/// Exponential-decay recency weights, oldest first (the newest element weighs 1.0), with the given half-life.
 private nonisolated func recencyWeights(count: Int, halfLife: Double) -> [Double] {
     guard count > 0 else { return [] }
     return (0..<count).map { index in
@@ -341,6 +421,8 @@ private nonisolated func recencyWeights(count: Int, halfLife: Double) -> [Double
     }
 }
 
+/// Fraction of total observation weight that landed exactly on the chosen score — how unanimous
+/// history is about a forecast day's level.
 private nonisolated func categoryConcentration(chosenScore: Int, observations: [(score: Int, weight: Double)]) -> Double {
     let totalWeight = observations.reduce(0.0) { $0 + max(0.0, $1.weight) }
     guard totalWeight > 0 else { return 0 }
@@ -350,6 +432,7 @@ private nonisolated func categoryConcentration(chosenScore: Int, observations: [
     return chosenWeight / totalWeight
 }
 
+/// Clamps `value` into `lower...upper`.
 private nonisolated func clamp<T: Comparable>(_ value: T, min lower: T, max upper: T) -> T {
     Swift.min(Swift.max(value, lower), upper)
 }

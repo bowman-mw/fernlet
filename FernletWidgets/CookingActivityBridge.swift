@@ -17,6 +17,17 @@
 import ActivityKit
 import Foundation
 
+/// The single seam that reflects a ``CookingRunState`` onto the live cooking activity — updating it
+/// while a cook is in progress and ending it on finish.
+///
+/// Shared by both drivers that run in the APP process: the in-app cooking walker (Next/Back/timer via
+/// `FernletStore`) and the App Intents (``CookingIntentRunner``, behind the Lock Screen "Next" button
+/// and Siri). Funneling both through one namespace keeps their activity updates byte-for-byte
+/// consistent. It enumerates ONLY `Activity<CookingActivityAttributes>`, so it can never touch a live
+/// workout activity (a different `ActivityAttributes` type). Requesting a NEW activity is deliberately
+/// out of scope — only the app (`CookingLiveActivityController`) ever starts a cook; this bridge only
+/// updates or ends what is already on screen. Stateless enum of async statics; safe to call from any
+/// task.
 enum CookingActivityBridge {
 
     /// Reflect the run state onto the live activity: update while the cook is in progress, end

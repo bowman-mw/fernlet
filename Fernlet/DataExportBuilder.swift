@@ -21,6 +21,17 @@ import FoodCatalog
 
 // MARK: - Export DTO (curated, human-readable projections)
 
+/// The root of the "Export my data" JSON file: a curated, human-readable projection of the user's
+/// own non-sealed data.
+///
+/// Built by `FernletStore.buildDataExport()` from live decrypted in-memory state and encoded by
+/// `writeDataExportFile()` (pretty-printed, sorted keys, ISO-8601 dates) for the Privacy & Data
+/// screen's share sheet. The shape is deliberately an *allowlist*: every field here was consciously
+/// chosen, so new store data stays out of the export until someone adds a projection — that is the
+/// mechanism that keeps period/cycle data, intimate-activity data, sensitive (Tier-2) memories,
+/// Worry Box notes, photo bytes, and identity keys excluded by construction. Field names are plain
+/// English and empty sections are omitted, because the audience is the person the data belongs to,
+/// not a machine.
 struct FernletDataExport: Codable {
     var about: About
     var you: Profile
@@ -31,6 +42,11 @@ struct FernletDataExport: Codable {
     var wardrobe: Wardrobe
     var friends: [FriendExport]
 
+    /// The export's self-describing preamble: app name, export date, and explicit includes/excludes
+    /// lists.
+    ///
+    /// Written first so a person opening the file learns what is (and deliberately isn't) inside
+    /// before scrolling into their history.
     struct About: Codable {
         var app = "Fernlet"
         var exportedOn: String
@@ -40,6 +56,10 @@ struct FernletDataExport: Codable {
         var excludes: [String]
     }
 
+    /// The handful of non-sensitive profile settings worth exporting: goal, hydration targets, and
+    /// the calories-visibility choice.
+    ///
+    /// Body measurements (age, weight, height, sex) are deliberately not projected here.
     struct Profile: Codable {
         var goal: String
         var dailyWaterTargetBottles: Int
@@ -47,6 +67,11 @@ struct FernletDataExport: Codable {
         var showsCalories: Bool
     }
 
+    /// One logged day, newest-first in the export: wellbeing score plus every log category the day
+    /// actually holds.
+    ///
+    /// Projected from `FernletDay` by `projectDay`; each optional section is nil (and therefore
+    /// omitted from the JSON) when empty, so a day reads as only what happened.
     struct DayExport: Codable {
         var day: String
         var wellbeing: Wellbeing?
@@ -63,15 +88,25 @@ struct FernletDataExport: Codable {
         /// the `recipes` array (§4.3). Dangling ids (recipe since deleted) are dropped.
         var plannedMeals: [String]?
 
+        /// The day's wellbeing result: score (rounded to two places), companion state, and summary.
+        ///
+        /// Present only when a `DailyHealthScore` exists for the day.
         struct Wellbeing: Codable {
             var score: Double
             var state: String
             var summary: String?
         }
+        /// The day's hydration: bottles drunk against the target in effect at export time.
+        ///
+        /// Omitted when no bottles were logged that day.
         struct Water: Codable {
             var bottles: Int
             var targetBottles: Int
         }
+        /// Non-sensitive Apple Health context for the day: activity and body metrics only.
+        ///
+        /// Cycle, intimate, and mindfulness contexts are never projected here (see `projectHealth`);
+        /// an all-nil projection omits the section entirely.
         struct Health: Codable {
             var steps: Int?
             var activeEnergyKcal: Double?
@@ -82,6 +117,9 @@ struct FernletDataExport: Codable {
         }
     }
 
+    /// One logged meal: name, meal type, calories, macros, optional note, and the log time.
+    ///
+    /// Projected from the day's meals; meal photos are excluded from the export by design.
     struct MealExport: Codable {
         var name: String
         var type: String
@@ -93,6 +131,10 @@ struct FernletDataExport: Codable {
         var loggedAt: Date
     }
 
+    /// One logged workout: name, type, exercise lines, duration, perceived effort, and notes.
+    ///
+    /// Optional fields are omitted rather than exported empty, matching the export's
+    /// readable-by-a-person convention.
     struct WorkoutExport: Codable {
         var name: String
         var type: String
@@ -103,12 +145,19 @@ struct FernletDataExport: Codable {
         var completedAt: Date
     }
 
+    /// The day's sleep entry: optional hours, the quality label, and an optional note.
+    ///
+    /// Present only when sleep was logged that day.
     struct SleepExport: Codable {
         var hours: Double?
         var quality: String
         var note: String?
     }
 
+    /// One journal entry: the feeling tag, the entry text, tagged emotions, and its date.
+    ///
+    /// Journal text is readable here because the export is built from live decrypted state behind
+    /// the Privacy & Data screen's fresh biometric check; sensitive (Tier-2) memory stays excluded.
     struct JournalExport: Codable {
         var feeling: String
         var text: String?
@@ -116,12 +165,20 @@ struct FernletDataExport: Codable {
         var date: Date
     }
 
+    /// One core memory Fernlet keeps: its category, the note text, and the source date.
+    ///
+    /// Only Tier-1 (user-visible, editable) memories are projected; Tier-2 inferred memory is on the
+    /// exclusion list.
     struct MemoryExport: Codable {
         var category: String
         var note: String
         var remembered: Date
     }
 
+    /// One fitness goal: type, the goal statement, and its optional timeframe, metric, milestones,
+    /// and weekly structure.
+    ///
+    /// Projected from the store's `FitnessGoal`s with empty strings collapsed to nil.
     struct GoalExport: Codable {
         var type: String
         var goal: String
@@ -131,6 +188,10 @@ struct FernletDataExport: Codable {
         var weeklyStructure: String?
     }
 
+    /// One saved recipe rendered readably: name, servings, ingredient lines, notes, and steps.
+    ///
+    /// Ingredients come through `recipeIngredientLines`, which resolves a manual recipe's food ids
+    /// to "Name (2 cup)" lines; recipe photos are excluded from the export by design.
     struct RecipeExport: Codable {
         var name: String
         var servings: Int
@@ -143,10 +204,17 @@ struct FernletDataExport: Codable {
         var createdAt: Date
     }
 
+    /// The companion's economy: the coin balance and every custom clothing item.
+    ///
+    /// Built-in catalog items aren't listed — only custom items the user made or received.
     struct Wardrobe: Codable {
         var coins: Int
         var customItems: [WardrobeItem]
 
+        /// One custom clothing item: name, slot, whether the user designed it, and when it was
+        /// created.
+        ///
+        /// `madeByYou` distinguishes the user's own designs from items received from friends.
         struct WardrobeItem: Codable {
             var name: String
             var slot: String
@@ -155,6 +223,11 @@ struct FernletDataExport: Codable {
         }
     }
 
+    /// One proximity friend: display name, key fingerprint, status, and the friendship dates.
+    ///
+    /// `status` collapses the trust-vault record to "friend" / "removed" / "blocked" (see
+    /// `friendStatus`); the fingerprint is the public identifier — private keys are on the export's
+    /// exclusion list.
     struct FriendExport: Codable {
         var displayName: String
         var fingerprint: String

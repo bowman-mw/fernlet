@@ -22,6 +22,15 @@
 
 import Foundation
 
+/// The freeze-on-unknown + parked-token decode helpers behind every tolerant enum field in the
+/// synced payloads.
+///
+/// Centralizes the contract in this file's header: an unknown raw value decodes to the field's
+/// default, the true token parks in a side-channel key and is re-encoded (so a save here can't
+/// strip a newer build's value), a build that knows a parked token re-adopts it on decode, and an
+/// explicit local edit clears the park via the field's `didSet`. `splitRawTokens` is the
+/// array/set variant; `resolveScalar`/`resolveOptionalScalar` the scalar ones. The
+/// `KeyedDecodingContainer` extension below is the call-site surface every domain model uses.
 public nonisolated enum EnumDecodeCompat {
     /// Defensive bounds for parked unknown tokens: real ones are enum raw values from a future
     /// build (a handful, tens of characters), so anything past these is treated as corrupt and

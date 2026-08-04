@@ -87,6 +87,10 @@ enum SealedBackupRestoreOutcome: Equatable {
 /// store/core path.
 @MainActor
 final class SealedBackupCoordinator {
+    /// Local preconditions a sealed-backup operation can fail on, before or without touching CloudKit.
+    ///
+    /// Thrown by the period seal/restore paths and mapped onto a retryable
+    /// ``SealedBackupRestoreOutcome`` by `classifyRestoreFailure`.
     enum SealedBackupWiringError: Error, Equatable {
         /// Period-data sealing/restore attempted while the content key is locked.
         case locked

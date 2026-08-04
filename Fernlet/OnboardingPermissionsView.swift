@@ -4,10 +4,20 @@ import HealthKitGateway
 import AppServices
 import FernletUI
 
+/// The final onboarding screen: explains that permissions (Health, camera, location) are asked at
+/// first use, and offers the one permission with no natural in-app trigger — notifications — inline.
+///
+/// The notifications row requests authorization through `NotificationService` and schedules the
+/// daily check-in on grant; every other row is informational only. "Start Fernlet" runs
+/// `finishAction`, which is the coordinator model's `complete()`.
 struct OnboardingPermissionsView: View {
     var stepText: String
     var finishAction: () -> Void
 
+    /// Tri-state for the notifications row: `undecided` shows the "Turn on" button, `on`/`off`
+    /// reflect the answer the user gave (here or previously in iOS Settings).
+    ///
+    /// Refreshed on appear so a permission already granted elsewhere renders as On immediately.
     private enum OptIn { case undecided, on, off }
     @State private var notifications: OptIn = .undecided
     @State private var requestingNotifications = false

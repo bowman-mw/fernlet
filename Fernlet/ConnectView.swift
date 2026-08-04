@@ -7,6 +7,18 @@ import FernletUI
 
 // MARK: - FriendsView
 
+/// The Friends tab root: the shared photo album when idle, the in-session disposable camera when live.
+///
+/// Swaps to ``DisposableCameraView`` once `MeshNetworkManager.isInSession` flips and the
+/// ``ConnectionSuccessOverlay`` completes; otherwise it renders the album layout — the
+/// post-session shop-window card, the nearby-peer banner (with the QR verify ceremony on manual
+/// commits), and the searchable photo wall. It also owns the session-end review flow:
+/// `presentDisconnectReviewIfNeeded()` presents either the full photo review or the compact
+/// keep-as-friends prompt off observable model state (`pendingFriendReview` + post-teardown
+/// `sessionPhotos`), so a review promoted while no instance existed still presents on the next
+/// appearance. Kept friends are minted one-sided via ``FernletStore``'s `keepProximityFriends`,
+/// and the presented batch is consumed with `completeFriendReview` — never by clearing the live
+/// roster, which would clobber the next session's entries.
 struct FriendsView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -531,6 +543,11 @@ struct FriendsView: View {
 
 // MARK: - Full-screen photo feed
 
+/// The full-screen, vertically scrolling feed of photo-wall posts, opened from the album grid.
+///
+/// Scrolls to `initialPostID` on appear and renders each post as a
+/// ``FriendPhotoCarouselPostView``. Dismisses itself when the last photo is deleted so the
+/// viewer never sits on a blank screen.
 private struct FriendPhotoFeedView: View {
     let posts: [FriendPhotoWallPost]
     let initialPostID: UUID?
@@ -582,6 +599,14 @@ private struct FriendPhotoFeedView: View {
     }
 }
 
+/// One post in the full-screen feed: a paged carousel of a session's photos with save, favorite,
+/// and delete actions.
+///
+/// Tracks its own selected page and auto-fading chrome (page counter + dots), and re-anchors the
+/// selection when a deletion removes the current page — the post id is stable for aggregated
+/// sessions, so the view is reused without re-init. Saving rehydrates the metadata-only payload
+/// from the encrypted disk cache (`MeshNetworkManager.hydratedPhotos`) before handing bytes to
+/// `FriendPhotoLibrarySaver`, and never reports a false success when decryption fails.
 private struct FriendPhotoCarouselPostView: View {
     let post: FriendPhotoWallPost
     let manager: MeshNetworkManager
@@ -811,6 +836,10 @@ private struct FriendPhotoCarouselPostView: View {
     }
 }
 
+/// Loads a photo's bytes lazily through a closure and shows a placeholder glyph until decoded.
+///
+/// `shouldLoad` lets the carousel defer decoding to the current page ± 1 so a long post never
+/// decodes every image at once; the load task re-fires when the flag flips to true.
 private struct LazyFriendPhotoImage: View {
     let loadData: () -> Data?
     let contentMode: ContentMode
@@ -837,6 +866,10 @@ private struct LazyFriendPhotoImage: View {
     }
 }
 
+/// The little moss-leaf circle standing in for a friend's avatar in the feed header.
+///
+/// Purely decorative — friend photos carry no profile pictures, so every post gets the same
+/// placeholder mark.
 private struct FriendProfilePlaceholder: View {
     var body: some View {
         Circle()
@@ -853,6 +886,15 @@ private struct FriendProfilePlaceholder: View {
 
 // MARK: - Nearby slot row
 
+/// One row of the "nearby friends" banner: a discovered peer slot with its handshake state and
+/// commit affordances.
+///
+/// Renders `PeerSlot.coordinator.state` as icon + label, shows the live UWB distance while
+/// `awaitingProximityCommit`, and in `awaitingManualCommit` offers the plain Connect button plus
+/// the QR verification ceremony (show my code / scan theirs), whose closures reach
+/// `MeshNetworkManager` through the parent ``FriendsView``. The failed-scan alert is raised from
+/// the scan sheet's `onDismiss` — presenting it from the scanner callback landed in the same
+/// update that tore the sheet down, and SwiftUI silently dropped it.
 private struct NearbySlotRow: View {
     let slot: PeerSlot
     let showDebugOverride: Bool
@@ -1015,6 +1057,10 @@ private struct NearbySlotRow: View {
 
 // MARK: - Connection success overlay
 
+/// The full-screen "Connected" celebration shown the moment a session commits.
+///
+/// Runs a fixed spring-and-fade choreography (card rise, expanding rings, auto-exit) and calls
+/// `onComplete` when finished so ``FriendsView`` can flip into the in-session camera.
 struct ConnectionSuccessOverlay: View {
     let peerName: String
     let onComplete: () -> Void

@@ -7,6 +7,12 @@
 
 import Foundation
 
+/// Best-effort keyword screen for clinical/diagnostic language in text bound for AI prompts or
+/// stored memories (spec §8).
+///
+/// Lives in the domain layer so value types (``MemoryNote``'s journal capture) can screen proposed
+/// memories without depending on the app-layer `MemoryAgent`, which forwards its public API here.
+/// See `contains(_:)` for why this is defense-in-depth, never a hard privacy boundary.
 public nonisolated enum DiagnosticLanguage {
 
     /// Lowercase substrings that indicate clinical or diagnostic language.

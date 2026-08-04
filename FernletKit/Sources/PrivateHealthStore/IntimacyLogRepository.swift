@@ -6,11 +6,23 @@ import Foundation
 import FernletDomainModel
 import PrivateStoreCore
 
+/// One intimacy record: an event date plus a free-text note that is encrypted at rest.
+///
+/// The plaintext half of an `IntimacyLog` row in the sealed (local-only, never-synced) private
+/// store: `id`, `dayKey`, `eventDate`, and the timestamps are stored in the clear for querying,
+/// while ``note`` exists only as ChaChaPoly ciphertext and is decrypted by ``IntimacyLogRepository``
+/// on read. The clinical fact of the activity itself lives in HealthKit as a sexual-activity sample
+/// (linked via ``healthKitExternalUUID``); this type carries only Fernlet's note about it.
 public nonisolated struct IntimacyLog: Identifiable, Equatable {
     public var id: UUID
+    /// Canonical `yyyy-MM-dd` day key derived from ``eventDate`` (see `FernletDate`).
     public var dayKey: String
+    /// When the event happened, as the user logged it.
     public var eventDate: Date
+    /// The user's free-text note — the sealed column; empty when nothing was written.
     public var note: String
+    /// `HKMetadataKeyExternalUUID` of the matching HealthKit sexual-activity sample once the
+    /// save-to-HealthKit step succeeded; `nil` until then.
     public var healthKitExternalUUID: String?
     public var createdAt: Date
     public var updatedAt: Date
@@ -51,18 +63,49 @@ public nonisolated struct IntimacyLog: Identifiable, Equatable {
     }
 }
 
+/// Sealed at-rest CRUD for intimacy logs: seals notes into the private Core Data store with
+/// `ColumnCrypto` and decrypts them back on read.
+///
+/// The persistence layer beneath ``IntimacyLogStore`` (the `@MainActor` funnel that adds the
+/// visibility gate); nothing else should touch the `IntimacyLog` entity. Rows live in
+/// `PrivatePersistenceController`'s local-only store — never CloudKit, and unreachable from the
+/// walled `AIProviders`/`CloudKitSync` modules by construction. The note column is sealed via a
+/// `ColumnCrypto` labeled `"intimacy-log"` (an HKDF domain separation that keeps intimacy
+/// ciphertext unopenable under the other sealed columns' derived keys), while `id`, `dayKey`,
+/// `eventDate`, and the timestamps stay plaintext for querying.
+///
+/// Key discipline: the content key is passed per call and never retained here. Writes fail closed
+/// (``insert(_:contentKey:)`` throws `FernletLockError.locked` without a key), reads degrade
+/// (``logs(contentKey:)`` returns `[]`, and a row whose ciphertext fails to authenticate is
+/// skipped rather than failing the whole fetch), and deletes never need the key — they drop rows
+/// without decrypting, which is what keeps the full wipe available while locked or hidden. Every
+/// mutation prunes Core Data persistent history afterward (best-effort) so superseded ciphertext
+/// does not linger in the transaction log.
+///
+/// A `nonisolated` final class: all Core Data access is serialized through the view context's
+/// `performAndWait`, so it is callable from any executor.
 public nonisolated final class IntimacyLogRepository {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "intimacy-log")
 
+    /// Creates a repository on a sealed-store stack.
+    ///
+    /// - Parameter controller: The private persistence stack to use; `nil` selects the shared
+    ///   `PrivatePersistenceController`.
     public init(controller: PrivatePersistenceController? = nil) {
         self.context = (controller ?? .shared).container.viewContext
     }
 
+    /// Creates a repository on an explicit managed-object context — the seam tests use to run
+    /// against an in-memory store.
     public init(context: NSManagedObjectContext) {
         self.context = context
     }
 
+    /// Seals and stores a new log, then prunes persistent history (best-effort).
+    ///
+    /// - Important: Fails closed — throws `FernletLockError.locked` when `contentKey` is `nil`
+    ///   (the private area is locked), so no plaintext row can ever be written.
     public func insert(_ log: IntimacyLog, contentKey: SymmetricKey?) throws {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
@@ -79,6 +122,10 @@ public nonisolated final class IntimacyLogRepository {
         }
     }
 
+    /// Every stored log, newest first, decrypted with `contentKey`.
+    ///
+    /// - Returns: `[]` when `contentKey` is `nil` (locked). Rows whose ciphertext fails to
+    ///   authenticate (wrong key, tampering) are silently skipped rather than failing the fetch.
     public func logs(contentKey: SymmetricKey?) throws -> [IntimacyLog] {
         guard let contentKey else { return [] }
         return try context.performAndWait {
@@ -94,6 +141,8 @@ public nonisolated final class IntimacyLogRepository {
         }
     }
 
+    /// Deletes one log by `id` without decrypting it, then prunes persistent history. A missing row
+    /// is a silent no-op.
     public func delete(id: UUID) throws {
         try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
@@ -118,6 +167,8 @@ public nonisolated final class IntimacyLogRepository {
         }
     }
 
+    /// Records the HealthKit external UUID on an already-saved row — plaintext metadata only; the
+    /// sealed note is neither decrypted nor re-sealed. A missing row is a silent no-op.
     public func markSavedToHealthKit(id: UUID, externalUUID: UUID) throws {
         try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
@@ -131,6 +182,8 @@ public nonisolated final class IntimacyLogRepository {
         }
     }
 
+    /// Rehydrates one managed object into an ``IntimacyLog``, decrypting the note column; returns
+    /// `nil` when the required plaintext fields are missing, and throws when decryption fails.
     private func decryptLog(_ object: NSManagedObject, contentKey: SymmetricKey) throws -> IntimacyLog? {
         guard let id = object.value(forKey: "id") as? UUID,
               let dayKey = object.value(forKey: "dayKey") as? String,

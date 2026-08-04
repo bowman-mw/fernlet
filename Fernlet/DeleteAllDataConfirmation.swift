@@ -158,11 +158,13 @@ enum DeleteAllDataConfirmation {
     }
 }
 
-/// A full-screen busy overlay shown while the "delete everything" wipe runs. The wipe is multi-second
-/// (CloudKit + HealthKit deletes) and the destructive alert dismisses the moment the user confirms, so
-/// without this the screen stays fully interactive: a second tap could interleave a second wipe, or the
-/// user could log new data into a store mid-deletion. The dimmed layer swallows taps; the caller also
-/// disables the delete button and blocks dismissal while it is up.
+/// A full-screen busy overlay shown while the "delete everything" wipe runs.
+///
+/// The wipe is multi-second (CloudKit + HealthKit deletes) and the destructive alert dismisses the
+/// moment the user confirms, so without this the screen stays fully interactive: a second tap could
+/// interleave a second wipe, or the user could log new data into a store mid-deletion. The dimmed
+/// layer swallows taps; the caller (``SettingsSheet`` or ``PrivacyDataSettingsView``) also disables
+/// the delete button and blocks dismissal while it is up.
 struct DeletingEverythingOverlay: View {
     var body: some View {
         ZStack {

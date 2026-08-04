@@ -11,6 +11,12 @@
 
 import Foundation
 
+/// A static, curated library of warm journaling prompts with a deterministic daily rotation.
+///
+/// Deliberately NOT AI: journal text is walled from every model (S3), and the prompt of the day
+/// must be identical on every launch and every device, so ``prompt(for:)`` is a pure function of
+/// the dateKey seeded by a stable FNV-1a hash. ``JournalSheet``'s dismissible inspiration chip is
+/// the only consumer — prompts are inspiration only, never required, never blocking.
 enum JournalPromptLibrary {
     /// ~40 gentle prompts across gratitude, naming emotions, body check-ins, tiny wins, small
     /// pleasures, and self-kindness. Warm and non-clinical by design — no "symptoms", no scores,

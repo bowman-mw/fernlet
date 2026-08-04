@@ -4,6 +4,11 @@
 import Foundation
 import FernletFoundation
 
+/// The developer-notes "workshop" content shown behind the `showDeveloperNotes` setting.
+///
+/// Three ``TextureEntry`` lists (texture observations, handoff notes, Claude notes) persisted in the
+/// synced snapshot; the decode path re-seeds the default starter entries when a list is absent so
+/// legacy blobs keep their seeded content.
 public nonisolated struct WorkshopData: Codable, Equatable {
     public var textureEntries: [TextureEntry] = []
     public var handoffEntries: [TextureEntry] = [
@@ -33,6 +38,11 @@ public nonisolated struct WorkshopData: Codable, Equatable {
     }
 }
 
+/// One dated observation entry in ``WorkshopData``.
+///
+/// `tags` decodes tolerantly — unknown tokens park in `unknownTagTokens` and are re-encoded
+/// (``EnumDecodeCompat``) — so a tag minted by a newer build can't brick the synced blob's
+/// `workshop` field on an older device.
 public nonisolated struct TextureEntry: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var title: String = FernletDate.shortDate(for: .now) + " observation"
@@ -61,11 +71,24 @@ public nonisolated struct TextureEntry: Identifiable, Codable, Equatable {
     }
 }
 
+/// The valence tag on a ``TextureEntry`` (tension, delight, friction).
+///
+/// Raw-string `Codable`; tokens from newer builds are parked by ``TextureEntry``'s tolerant set
+/// decode rather than thrown on.
 public nonisolated enum TextureTag: String, Codable, CaseIterable, Identifiable {
     case tension, delight, friction
     public var id: String { rawValue }
 }
 
+/// The companion's full cosmetic configuration: body style, palette, accessory, clothing, side item,
+/// and their colors.
+///
+/// Lives in ``FernletSettings`` (the synced blob) and also crosses the friend wire inside
+/// ``FriendStatePayload``, so every enum field decodes tolerantly with a parked-token side channel
+/// (``EnumDecodeCompat``): a cosmetic case minted by a newer build freezes to the default here, is
+/// preserved through re-saves, and is re-adopted after upgrade; an explicit local edit clears the
+/// park via `didSet`. The `*CustomColorHex` strings are the only free-text surface and are clamped
+/// at the wire boundary by ``FriendStatePayload``'s `sanitizedAppearance`.
 public nonisolated struct CompanionAppearance: Codable, Equatable {
     // Every enum field decodes tolerantly (freeze-on-unknown + parked-token side channel): these
     // are the closet/customization enums, exactly the surface a newer build extends with new
@@ -196,6 +219,10 @@ public nonisolated struct CompanionAppearance: Codable, Equatable {
     }
 }
 
+/// The companion's body silhouette (circle, soft blob, pear, puddle).
+///
+/// One of the closet enums ``CompanionAppearance`` decodes tolerantly, so a style added by a newer
+/// build never bricks an older paired device.
 public nonisolated enum CompanionBodyStyle: String, Codable, CaseIterable, Identifiable, Sendable {
     case circle
     case softBlob
@@ -214,6 +241,10 @@ public nonisolated enum CompanionBodyStyle: String, Codable, CaseIterable, Ident
     }
 }
 
+/// The companion's overall color palette; `.state` means "colored by today's mood".
+///
+/// Seeds the default ``CompanionAssetColor`` per slot (see its `init(palette:)`); decoded tolerantly
+/// by ``CompanionAppearance``.
 public nonisolated enum CompanionPalette: String, Codable, CaseIterable, Identifiable {
     case state
     case fern
@@ -234,6 +265,11 @@ public nonisolated enum CompanionPalette: String, Codable, CaseIterable, Identif
     }
 }
 
+/// A per-slot asset color; `.state` defers to the mood-derived palette at render time.
+///
+/// Used independently for body, accessory, clothing, and side item so each can be tinted
+/// separately; decoded tolerantly by ``CompanionAppearance``. Actual color values live in the UI
+/// layer (`ModelColors` in FernletUI) — this module holds only the token.
 public nonisolated enum CompanionAssetColor: String, Codable, CaseIterable, Identifiable {
     case state
     case moss
@@ -272,6 +308,10 @@ public nonisolated enum CompanionAssetColor: String, Codable, CaseIterable, Iden
     }
 }
 
+/// The built-in head accessory (sprout, flower, glasses).
+///
+/// Distinct from user-designed ``CustomizationItem``s — these are the fixed starter cosmetics.
+/// Decoded tolerantly by ``CompanionAppearance``.
 public nonisolated enum CompanionAccessory: String, Codable, CaseIterable, Identifiable {
     case none
     case sprout
@@ -290,6 +330,10 @@ public nonisolated enum CompanionAccessory: String, Codable, CaseIterable, Ident
     }
 }
 
+/// The built-in clothing option (scarf, sleep cap).
+///
+/// Fixed starter cosmetics alongside ``CompanionAccessory``; decoded tolerantly by
+/// ``CompanionAppearance``.
 public nonisolated enum CompanionClothing: String, Codable, CaseIterable, Identifiable {
     case none
     case scarf
@@ -306,6 +350,10 @@ public nonisolated enum CompanionClothing: String, Codable, CaseIterable, Identi
     }
 }
 
+/// The small item rendered beside the companion (mug, book, weight, bottle).
+///
+/// Fixed starter cosmetics with SF Symbol renderings; decoded tolerantly by
+/// ``CompanionAppearance``.
 public nonisolated enum CompanionSideItem: String, Codable, CaseIterable, Identifiable {
     case none
     case mug
@@ -336,6 +384,11 @@ public nonisolated enum CompanionSideItem: String, Codable, CaseIterable, Identi
     }
 }
 
+/// The five-way daily wellbeing state the companion renders (thriving … sick).
+///
+/// Derived from the daily score by the scoring layer and persisted on ``DailyHealthScore``. It
+/// never crosses the friend wire directly — the `fuzzy` fold collapses it to the 3-way
+/// ``FriendFuzzyState`` first, so friends see vibes, never the granular state.
 public nonisolated enum CompanionState: String, Codable, Sendable {
     case thriving = "Thriving"
     case okay = "Okay"

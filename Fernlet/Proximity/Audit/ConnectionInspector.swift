@@ -4,10 +4,33 @@ import Observation
 import SwiftUI
 import FernletDomainModel
 
+/// The proximity subsystem's diagnostic recorder: builds one `ConnectionSessionLog` per
+/// coordinator session and keeps a capped, persisted history for the debug inspector UI.
+///
+/// The app-side conformer of ProximityKit's `ProximityInspectorRecording` seam — a
+/// `ProximityCoordinator` holds it weakly and streams state transitions, envelope records,
+/// ranging samples, transport updates, and errors into it. ``ConnectionInspectorView`` renders
+/// the in-flight `liveLog`; ``ConnectionInspectorHistoryView`` (Settings debug tools) lists,
+/// deletes, and JSON-exports `historicalLogs`.
+///
+/// Responsibilities and invariants:
+/// - Recording is gated on `FernletSettings.connectionInspectorMode != .disabled`, checked at
+///   both `beginSession` and `endSession`, so disabling mid-session also drops that session.
+/// - The live log is self-bounding: events/envelopes/errors are trimmed to the last 250/250/100
+///   after every append, and ranging samples are subsampled (1 in 3) and capped at 600, so a
+///   long session can't grow without limit.
+/// - History is capped at the 50 newest sessions and purged past 60 days (`purgeOld`); every
+///   mutation persists through `FernletStore.replaceConnectionSessionLogs`, whose snapshot the
+///   initializer / `attachStore` reload on launch.
+/// - `@MainActor` + `@Observable`: all recording happens on the main actor (the coordinator is
+///   main-actor too) and the log properties drive SwiftUI directly. The store reference is weak
+///   to avoid a retain cycle (the store owns the inspector); the clock is injectable for tests.
 @MainActor
 @Observable
 final class ConnectionInspector: ProximityInspectorRecording {
+    /// The log of the session currently being recorded; nil outside a session (or when disabled).
     private(set) var liveLog: ConnectionSessionLog?
+    /// Finished session logs, newest first — capped at 50 and purged past 60 days.
     private(set) var historicalLogs: [ConnectionSessionLog] = []
 
     @ObservationIgnored weak var store: FernletStore?
@@ -21,12 +44,16 @@ final class ConnectionInspector: ProximityInspectorRecording {
         self.historicalLogs = store?.connectionSessionLogs ?? []
     }
 
+    /// Late-binds the store (the inspector is created before the store finishes loading),
+    /// re-seeding history from the persisted snapshot and purging aged-out sessions.
     func attachStore(_ store: FernletStore) {
         self.store = store
         historicalLogs = store.connectionSessionLogs
         purgeOld()
     }
 
+    /// Opens a fresh live log for a starting coordinator session; a no-op while the inspector
+    /// mode is `.disabled`.
     func beginSession(role: ProximityCoordinator.Role, mode: ProximityCoordinator.Mode, localFingerprint: String) {
         guard store?.settings.connectionInspectorMode != .disabled else { return }
         sampleSubsamplingCounter = 0
@@ -40,6 +67,7 @@ final class ConnectionInspector: ProximityInspectorRecording {
         recordEvent(.stateTransition, message: "session started")
     }
 
+    /// Appends one timestamped event to the live log (trimming to the rolling caps after).
     func recordEvent(_ kind: ConnectionSessionLog.Event.Kind, message: String) {
         guard var log = liveLog else { return }
         log.events.append(ConnectionSessionLog.Event(timestamp: now(), kind: kind, message: message))
@@ -47,6 +75,8 @@ final class ConnectionInspector: ProximityInspectorRecording {
         trimLiveLog()
     }
 
+    /// Records a UWB distance sample: subsampled 1-in-3, capped at 600, and folded into the
+    /// running min/max so the detail view can show the session's range.
     func recordRangingSample(_ sample: ConnectionSessionLog.DistanceSample) {
         guard var log = liveLog else { return }
         sampleSubsamplingCounter += 1
@@ -68,6 +98,7 @@ final class ConnectionInspector: ProximityInspectorRecording {
         recordEvent(.rangingUpdated, message: String(format: "distance %.2fm", meters))
     }
 
+    /// Logs a sent/received signed envelope, accumulating the transport byte counters.
     func recordEnvelope(_ record: ConnectionSessionLog.EnvelopeRecord) {
         guard var log = liveLog else { return }
         log.envelopes.append(record)
@@ -108,6 +139,8 @@ final class ConnectionInspector: ProximityInspectorRecording {
         liveLog = log
     }
 
+    /// Seals the live log with its end state and promotes it into history (newest-first, capped
+    /// at 50, persisted) — unless the inspector mode was disabled, in which case it is dropped.
     func endSession(endState: String) {
         guard var log = liveLog else { return }
         log.endedAt = now()
@@ -130,6 +163,8 @@ final class ConnectionInspector: ProximityInspectorRecording {
         persistHistoricalLogs()
     }
 
+    /// Pretty-printed, stably-key-ordered JSON of the whole history, for the share-sheet export.
+    /// - Returns: The encoded `[ConnectionSessionLog]` bytes.
     func exportAsJSON() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -140,6 +175,7 @@ final class ConnectionInspector: ProximityInspectorRecording {
         JSONDecoder()
     }
 
+    /// Drops history older than 60 days; persists only when something was actually removed.
     func purgeOld() {
         let cutoff = now().addingTimeInterval(-60 * 24 * 60 * 60)
         let filtered = historicalLogs.filter { $0.startedAt >= cutoff }
@@ -148,6 +184,8 @@ final class ConnectionInspector: ProximityInspectorRecording {
         persistHistoricalLogs()
     }
 
+    /// Ingests a free-text coordinator status line: classifies it into an event kind by keyword,
+    /// and mines the "connected" / "tap confirmed" messages for their transport/ranging timestamps.
     func recordCoordinatorEvent(_ message: String) {
         guard liveLog != nil else { return }
         let kind = kind(for: message)

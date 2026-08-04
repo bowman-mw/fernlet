@@ -47,13 +47,35 @@ grep-wall.
   `is missing a dependency on`, reverts, and re-confirms the clean tree passes. Run it after any change
   to the wall (the `Package.swift` dependency DAG, the enforcement flag, or the walled modules).
 
+## Framework documentation (start here)
+
+Every framework has an Apple-style DocC landing page, and **every struct/class/protocol/enum/actor
+in the codebase has a `///` doc comment** (load-bearing types document members, invariants, and
+concurrency too). **Before changing a module, read its landing page first** — it explains the
+module's purpose, key types, invariants, and its position relative to the S3 wall:
+
+- `FernletKit/Sources/<Module>/Documentation.docc/<Module>.md` — one per SPM module (23 modules:
+  the domain/persistence/crypto core, the sealed `Private*` stores, the walled `AIProviders` +
+  `CloudKitSync`, `ProximityKit`, UI kits, and services).
+- [Fernlet/Documentation.docc/Fernlet.md](Fernlet/Documentation.docc/Fernlet.md) — the app target
+  (composition root): FernletStore, the tab surfaces, and how the six feature areas hang together.
+- [FernletWidgets/Documentation.docc/FernletWidgets.md](FernletWidgets/Documentation.docc/FernletWidgets.md),
+  [FernletShareExtension/Documentation.docc/FernletShareExtension.md](FernletShareExtension/Documentation.docc/FernletShareExtension.md)
+  — the extension targets.
+
+Browse rendered docs in Xcode via Product → Build Documentation. **Maintenance rule:** new or
+changed types must keep their doc comments accurate — run `Scripts/doc-coverage-scan.py` (zero
+undocumented type declarations is the enforced baseline) and update the module's landing page when
+its public surface or invariants change.
+
 ## Index & reference files
 
-Consult these before adding code so existing behavior is reused, not duplicated:
+The DocC pages above are the orientation layer; these indexes are the fine-grained lookup layer.
+Consult them before adding code so existing behavior is reused, not duplicated:
 
 | File | What it covers |
 | --- | --- |
-| [Docs/FileIndex.md](Docs/FileIndex.md) | Map of every main source file to its responsibility, grouped by feature area. Start here for orientation. |
+| [Docs/FileIndex.md](Docs/FileIndex.md) | Map of every main source file to its responsibility, grouped by feature area. |
 | [Docs/StoreRepositoryFunctionIndex.md](Docs/StoreRepositoryFunctionIndex.md) | Store / repository / persistence / derived-signals function index + duplication hotspots. Read before any data-mutation, save/load, or storage-preference work. |
 | [Docs/ProximityFunctionIndex.md](Docs/ProximityFunctionIndex.md) | Proximity & mesh subsystem function index (identity, transport, trust, recipe-share, friend-photo) + duplication hotspots. |
 | [Docs/FernletSpecificationV3.md](Docs/FernletSpecificationV3.md) | Canonical product & architecture spec (privacy-first, module-enforced boundaries). The source of truth for intended behavior. |
