@@ -14,6 +14,13 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
+/// The one-tap mood check-in row: a horizontal strip of `FeelingTag` chips shared by Home and
+/// the Journal screen.
+///
+/// A tap records a tag-only journal entry via `FernletStore.logQuickMood` — no text required —
+/// and re-tapping updates today's check-in in place. The highlighted chip mirrors today's LAST
+/// entry's tag, which is exactly what scoring, the calendar tint, and the ambient thought read,
+/// so the row always shows the mood the rest of the app is acting on.
 struct QuickMoodRow: View {
     var store: FernletStore
     /// Optional header (Home shows one inside the quick-log card; the Journal screen provides its

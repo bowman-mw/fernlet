@@ -12,6 +12,11 @@ import Foundation
 import Observation
 import FernletDomainModel
 
+/// User-presentable failure for when the primary Core Data store cannot be opened.
+///
+/// Thrown by the app-side startup flow when ``PersistenceController`` reports `didFailToLoad`;
+/// the copy stresses that data was not deleted and points at the usual recoveries (device just
+/// restarted and still locked, or storage full).
 public enum PersistenceStoreLoadError: LocalizedError, Equatable {
     case primaryStoreUnavailable
 
@@ -23,8 +28,42 @@ public enum PersistenceStoreLoadError: LocalizedError, Equatable {
     }
 }
 
+/// Owner of the app's synced Core Data stack: an `NSPersistentCloudKitContainer` built from a
+/// programmatic, cloud-safe-only model.
+///
+/// Every CloudKitSync repository reads and writes through this controller's `container`. The
+/// managed object model is assembled in code (no `.xcdatamodeld`) and contains ONLY
+/// non-sensitive entities — the aggregate blob, saved recipes, custom items, coin and milestone
+/// ledgers, and day rows; the sealed entities (`MenstrualNarrative`, `JournalNarrative`) live in
+/// the protected-side `PrivatePersistenceController` and are never modeled here (S3).
+///
+/// Behavior and invariants:
+/// - **CloudKit is opt-in twice**: mirroring options are configured only when the stored
+///   preference enables sync AND an iCloud account is present; ``shared`` additionally forces
+///   sync OFF at cold launch, and the app calls `reload(with:)` once the real preferences are
+///   known.
+/// - **Reload swaps containers wholesale**: `reload(with:)` saves and resets the old view
+///   context, stands up and loads a new container, then detaches the old stores; subscribers
+///   learn of the swap via a synthesized remote-change notification.
+/// - **No-account resilience**: a CloudKit "no account" load error (code 134400) never fails the
+///   store — CloudKit options are dropped and the load is retried local-only, since the SQLite
+///   store itself is healthy.
+/// - **Protection and backup**: stores use `FileProtectionType.complete`, persistent history and
+///   remote-change notifications are always on, and iOS-backup exclusion follows the user's
+///   preference (including the CloudKit `_SUPPORT` sidecar directory).
+/// - **DEBUG schema deploy**: the `INITIALIZE_CLOUDKIT_SCHEMA` launch argument (see
+///   ``CloudKitSchemaDeploy``) pushes the model to the CloudKit development schema against a
+///   throwaway scratch store on a background queue — compiled out of Release entirely.
+///
+/// `@Observable` and explicitly `nonisolated`; ``shared`` is a `nonisolated(unsafe)`
+/// process-wide singleton and `reload(with:)` is `@MainActor`. Remote CloudKit pushes surface
+/// through `remoteChangePublisher`, which ``CoreDataFernletRepository`` uses to invalidate its
+/// caches.
 @Observable
 nonisolated public final class PersistenceController {
+    /// Process-wide controller. Boots with the keychain-persisted preferences but FORCES iCloud
+    /// sync off — the app decides when to enable mirroring via `reload(with:)` once
+    /// onboarding/consent state is known.
     nonisolated(unsafe) public static let shared: PersistenceController = {
         let data = KeychainItem.load(for: .storagePreferences, service: KeychainItem.storagePreferencesService)
         var startupPreferences = data.flatMap { try? JSONDecoder().decode(StoragePreferences.self, from: $0) } ?? StoragePreferences()
@@ -32,18 +71,27 @@ nonisolated public final class PersistenceController {
         return PersistenceController(preferences: startupPreferences)
     }()
 
+    /// In-memory controller for SwiftUI previews and tests (plain `NSPersistentContainer`, no
+    /// CloudKit, `/dev/null`-backed store).
     @MainActor
     public static let preview: PersistenceController = {
         let result = PersistenceController(inMemory: true, preferences: StoragePreferences(iCloudSyncEnabled: false))
         return result
     }()
 
+    /// True while `reload(with:)` is swapping containers (observable, so UI can reflect it).
     public private(set) var isReloading = false
 
+    /// The live persistent container. Replaced wholesale by `reload(with:)` — never cache the
+    /// old value across a reload.
     @ObservationIgnored public private(set) var container: NSPersistentContainer
+    /// Latched true when the initial store load failed for a reason other than the recoverable
+    /// no-account case; cleared by a successful `reload(with:)`.
     public private(set) var didFailToLoad = false
-    /// Fires when iCloud pushes a remote change to the local store.
+    /// Fires when iCloud pushes a remote change to the local store, and once after each
+    /// successful `reload(with:)` so subscribers re-read from the new container.
     @ObservationIgnored public let remoteChangePublisher: AnyPublisher<Notification, Never>
+    /// Test hook: overrides the store URL used by the next `reload(with:)`.
     @ObservationIgnored public var reloadStoreURLOverrideForTesting: URL?
 
     private let inMemory: Bool
@@ -54,6 +102,14 @@ nonisolated public final class PersistenceController {
     @ObservationIgnored private let remoteChangeSubject = PassthroughSubject<Notification, Never>()
     @ObservationIgnored private var remoteChangeCancellable: AnyCancellable?
 
+    /// Builds and synchronously loads the stack.
+    ///
+    /// - Parameters:
+    ///   - inMemory: use a plain in-memory container (previews/tests; avoids the
+    ///     `NSPersistentCloudKitContainer` main-actor load-completion deadlock).
+    ///   - preferences: decides CloudKit mirroring and backup exclusion at load time.
+    ///   - storeURL: optional explicit store location (tests).
+    ///   - iCloudAvailable: overrides the real ubiquity-token check (tests).
     public init(
         inMemory: Bool = false,
         preferences: StoragePreferences = StoragePreferences(),
@@ -81,6 +137,12 @@ nonisolated public final class PersistenceController {
         #endif
     }
 
+    /// Rebuilds the whole stack under new preferences (the sync-toggle path): saves and resets
+    /// the old view context, loads a fresh container, swaps it in, detaches the old stores, and
+    /// notifies subscribers via a synthesized remote-change event.
+    ///
+    /// - Throws: the store-load error when the new container cannot load (the old container has
+    ///   already been locked; `didFailToLoad` is not set by a failed reload).
     @MainActor
     public func reload(with preferences: StoragePreferences) async throws {
         FernletAuditLog.log("persistence.reload.started", context: [
@@ -133,10 +195,12 @@ nonisolated public final class PersistenceController {
         }
     }
 
+    /// The live container's first (only) store description.
     public var activeStoreDescription: NSPersistentStoreDescription? {
         container.persistentStoreDescriptions.first
     }
 
+    /// On-disk URL of the active store, if any.
     public var activeStoreURL: URL? {
         activeStoreDescription?.url
     }
@@ -440,6 +504,8 @@ nonisolated public final class PersistenceController {
         }
     }
 
+    /// Builds the programmatic model holding only the cloud-safe entities; sealed entities are
+    /// modeled solely by the protected-side `PrivatePersistenceController`.
     private static func makeManagedObjectModel() -> NSManagedObjectModel {
         let model = NSManagedObjectModel()
         // Only cloud-safe, non-sensitive entities belong here.

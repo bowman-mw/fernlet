@@ -9,14 +9,29 @@ import HealthKitGateway
 import FernletUI
 import FernletLockUI
 
+/// The slice of CloudKit the Privacy & Data screen needs: count what's in the account, and delete it.
+///
+/// Conformers: `CloudKitDataService` (the real queries, via the retroactive conformance below) and
+/// ``MockPrivacyCloudDataService`` (canned answers for UI tests). ``PrivacyDataSettingsView`` uses
+/// detection to populate the "Cloud records" card and the multi-device warning, and the delete for
+/// the type-DELETE-to-confirm iCloud wipe. Main-actor-bound like the view that owns it.
 @MainActor
 protocol PrivacyCloudDataManaging {
+    /// - Returns: Counts of the account's existing Fernlet records, or nil when none were found.
     func detectExistingData() async throws -> ExistingDataSummary?
+    /// Deletes every Fernlet record from the account's private database.
+    /// - Parameter confirmation: Carries the user's typed "DELETE"; the service refuses without it.
     func deleteAllCloudKitData(confirmation: DeletionConfirmation) async throws -> DeletionResult
 }
 
 extension CloudKitDataService: PrivacyCloudDataManaging {}
 
+/// Abstraction over swapping the persistence stack when storage preferences change.
+///
+/// Conformers: `PersistenceController` (the real Core Data reload) and
+/// ``MockPrivacyPersistenceReloader`` (a no-op with an optional UI-test delay).
+/// ``PrivacyDataSettingsView`` calls it whenever the iCloud sync toggle flips so the store starts
+/// reading/writing the newly-selected home before the preference is persisted.
 @MainActor
 protocol PrivacyPersistenceReloading {
     func reload(with preferences: StoragePreferences) async throws
@@ -24,6 +39,13 @@ protocol PrivacyPersistenceReloading {
 
 extension PersistenceController: PrivacyPersistenceReloading {}
 
+/// The Health-integration switches the Privacy & Data screen drives: master enable/disable and a
+/// jump to the system Health privacy settings.
+///
+/// Conformers: `HealthKitService` (the real integration — disabling purges the locally cached
+/// HealthKit-derived values, fail-closed) and ``MockPrivacyHealthKitService`` (flips the preference
+/// only, for UI tests). Selected per call by `makeHealthKitService()` based on the UI-test
+/// environment.
 @MainActor
 protocol PrivacyHealthKitServicing {
     func disableIntegration() async throws
@@ -34,12 +56,42 @@ protocol PrivacyHealthKitServicing {
 extension HealthKitService: PrivacyHealthKitServicing {}
 
 /// One sealed-backup payload whose most recent restore attempt needs the user's attention (WS-4).
+///
+/// Built on the fly by ``PrivacyDataSettingsView``'s encrypted-backup status banner from
+/// `FernletStore.sealedBackupRestoreStatus`; identified by payload type so `ForEach` renders one
+/// line per payload.
 private struct SealedBackupAttention: Identifiable {
     let payload: SealedBackupPayloadType
     let outcome: SealedBackupRestoreOutcome
     var id: SealedBackupPayloadType { payload }
 }
 
+/// The Privacy & Data screen: iCloud sync and deletion, sealed encrypted backups, Health
+/// integration, iOS-backup inclusion, data export, trainer sharing, and the "delete everything"
+/// funnel.
+///
+/// Pushed from ``SettingsSheet`` via `SettingsRoute.privacyData`. Access is layered: with no app
+/// lock configured the screen shows a setup interstitial (plus — deliberately — the delete card,
+/// since erasing your own data must not require first handing Fernlet a passcode); with a lock, a
+/// fresh `LocalAuthentication` device-owner check is required on every entry before the controls
+/// appear. The lock gate protects *browsing* the privacy posture; the confirm dialogs protect the
+/// destructive actions themselves.
+///
+/// Key collaborators: ``PrivacyCloudDataManaging`` and ``PrivacyPersistenceReloading`` (injected, or
+/// chosen by ``PrivacyDataServiceFactory``), ``PrivacyHealthKitServicing`` (chosen per call),
+/// `StoragePreferencesStore` and `FernletLockService` from the environment, and an optional
+/// ``FernletStore`` — export, trainer share, sealed-backup status, and the delete-everything button
+/// render only when a store is present (the injected-nil case is previews and unit tests).
+///
+/// Invariants (WS-3/4/5 and the nothing-silent rule):
+/// - Every destructive or recovery-path-removing toggle routes through ``DestructiveConfirmation``;
+///   enabling a sealed backup shows an informed-consent disclosure before any upload.
+/// - Turning sync off records `cloudCopyKept` *before* the cloud delete can throw, so a stranded
+///   iCloud copy stays reachable by the delete-everything funnel.
+/// - Restore problems and escrow-key conflicts surface in a visible banner with a retry, never a
+///   silent swallow; an incomplete wipe raises a failure alert naming the surviving store.
+/// - The plaintext JSON export is purged once the share sheet finishes, and a wipe also drops the
+///   view's reference to the exported URL.
 struct PrivacyDataSettingsView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
@@ -365,13 +417,19 @@ struct PrivacyDataSettingsView: View {
     }
 
     /// Identifiable wrapper so the share sheet can present the freshly-written export file.
+    ///
+    /// Driven through `.sheet(item:)` — assigning a new payload presents ``ActivityShareView`` with
+    /// the file URL, and dismissal nils it out.
     fileprivate struct DataExportPayload: Identifiable {
         let id = UUID()
         let url: URL
     }
 
-    /// Wraps the system share sheet so the export file can be saved/shared. `onFinish` fires once the
-    /// activity completes or is cancelled — the seam where the plaintext export is cleaned up.
+    /// Wraps the system share sheet so the export file can be saved/shared.
+    ///
+    /// `onFinish` fires once the activity completes or is cancelled — the seam where the plaintext
+    /// export is cleaned up (`purgeDataExports`), safely after the chosen activity has finished
+    /// reading the file.
     private struct ActivityShareView: UIViewControllerRepresentable {
         let items: [Any]
         var onFinish: () -> Void = {}
@@ -1223,8 +1281,14 @@ struct PrivacyDataSettingsView: View {
     }
 }
 
+/// Chooses the cloud-data and persistence-reload implementations for this launch.
+///
+/// ``PrivacyDataSettingsView``'s initializer falls back to it when no service is injected: the
+/// `FERNLET_UI_TEST_PRIVACY_SERVICES` launch environment selects the mocks (with env-supplied
+/// counts); every normal launch gets `CloudKitDataService` and `PersistenceController.shared`.
 @MainActor
 private enum PrivacyDataServiceFactory {
+    /// - Returns: A ``MockPrivacyCloudDataService`` under the UI-test environment, else the live service.
     static func makeCloudDataService() -> any PrivacyCloudDataManaging {
         let environment = ProcessInfo.processInfo.environment
         if environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1" {
@@ -1240,6 +1304,7 @@ private enum PrivacyDataServiceFactory {
         return CloudKitDataService()
     }
 
+    /// - Returns: A ``MockPrivacyPersistenceReloader`` under the UI-test environment, else the shared controller.
     static func makePersistenceReloader() -> any PrivacyPersistenceReloading {
         if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1" {
             return MockPrivacyPersistenceReloader()
@@ -1248,6 +1313,12 @@ private enum PrivacyDataServiceFactory {
     }
 }
 
+/// Test double for ``PrivacyCloudDataManaging`` that returns a canned summary and simulates the
+/// type-DELETE-to-confirm contract without touching CloudKit.
+///
+/// Built by ``PrivacyDataServiceFactory`` when the UI-test launch environment asks for mock privacy
+/// services; the delete still throws unless the confirmation text is exactly "DELETE", so the
+/// confirm gate stays exercised in tests.
 @MainActor
 private struct MockPrivacyCloudDataService: PrivacyCloudDataManaging {
     var summary: ExistingDataSummary
@@ -1264,6 +1335,10 @@ private struct MockPrivacyCloudDataService: PrivacyCloudDataManaging {
     }
 }
 
+/// Test double for ``PrivacyPersistenceReloading`` that does nothing (optionally slowly).
+///
+/// Used under the UI-test privacy-services environment; `FERNLET_UI_TEST_SLOW_RELOAD` adds a delay
+/// so tests can assert the "Updating storage settings…" spinner appears.
 @MainActor
 private struct MockPrivacyPersistenceReloader: PrivacyPersistenceReloading {
     func reload(with preferences: StoragePreferences) async throws {
@@ -1273,6 +1348,11 @@ private struct MockPrivacyPersistenceReloader: PrivacyPersistenceReloading {
     }
 }
 
+/// Test double for ``PrivacyHealthKitServicing`` that flips the stored preferences without touching
+/// HealthKit.
+///
+/// Used under the UI-test privacy-services environment so the master toggle's on/off flows (and the
+/// capability reset on disable) can be exercised on simulators without Health authorization.
 @MainActor
 private struct MockPrivacyHealthKitService: PrivacyHealthKitServicing {
     let preferencesStore: StoragePreferencesStore

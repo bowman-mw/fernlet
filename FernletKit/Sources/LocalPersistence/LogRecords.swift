@@ -8,6 +8,14 @@
 import Foundation
 import FernletDomainModel
 
+/// One derived-table row summarizing a whole day: sleep, a workout-completed flag, and macro +
+/// micronutrient totals.
+///
+/// Built by `LocalFernletDatabase.rebuildDerivedTables(todayKey:recentDays:)` — one row per day
+/// in the recent window — and persisted in the ``LocalFernletDatabase`` blob for the AI-context
+/// and trend surfaces to read without re-deriving from raw days. Rows are disposable: every save
+/// rebuilds them from the source `FernletDay`s, which is why the tolerant `init(from:)` may
+/// freeze an unknown `sleepQuality` token to nil instead of failing the whole blob decode.
 public struct DailyLogRecord: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var dateKey: String
@@ -21,6 +29,8 @@ public struct DailyLogRecord: Identifiable, Codable, Equatable {
     public var location: String?
     public var notes: String?
 
+    /// Builds the row from a stored day. Note `weight`, `location`, and `notes` are left nil —
+    /// they exist only as decodable legacy fields.
     public init(dateKey: String, day: FernletDay) {
         assert(!dateKey.isEmpty, "date key required")
         let totals = MacroTotals(meals: day.meals)
@@ -55,6 +65,14 @@ public struct DailyLogRecord: Identifiable, Codable, Equatable {
     }
 }
 
+/// One derived-table row per logged meal, carrying the meal's macros plus the day's running
+/// totals for context.
+///
+/// Built by `LocalFernletDatabase.rebuildDerivedTables(todayKey:recentDays:)` (clamped by
+/// ``FernletLimits/maxMealsPerDay`` and ``FernletLimits/maxMealLogs``) and persisted in the
+/// ``LocalFernletDatabase`` blob. Disposable and rebuilt on every save; its decoder freezes an
+/// unknown `mealType` token to `.snack` while keeping the key itself required, so a genuinely
+/// truncated blob still surfaces as a decode failure.
 public struct MealLogRecord: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var dateKey: String
@@ -105,6 +123,12 @@ public struct MealLogRecord: Identifiable, Codable, Equatable {
     }
 }
 
+/// One derived-table row per logged workout: type, exercise text, RPE, and notes.
+///
+/// Built by `LocalFernletDatabase.rebuildDerivedTables(todayKey:recentDays:)` (clamped by
+/// ``FernletLimits/maxWorkoutsPerDay`` and ``FernletLimits/maxWorkoutLogs``) and persisted in the
+/// ``LocalFernletDatabase`` blob. Disposable and rebuilt on every save; its decoder freezes an
+/// unknown `type` token to `.fullBody` while keeping the key required (missing key = corruption).
 public struct WorkoutLogRecord: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var dateKey: String
@@ -137,6 +161,14 @@ public struct WorkoutLogRecord: Identifiable, Codable, Equatable {
     }
 }
 
+/// One derived-table row per journal entry: feeling tag, entry text, and emotion keys.
+///
+/// Built by `LocalFernletDatabase.rebuildDerivedTables(todayKey:recentDays:)` (clamped by
+/// ``FernletLimits/maxJournalsPerDay``, ``FernletLimits/maxJournalLogs``, and
+/// ``FernletLimits/maxEmotionKeys``) and persisted in the ``LocalFernletDatabase`` blob. The
+/// `text` comes from days that passed the sanitizing snapshot seam, so sealed-journal bodies
+/// arrive already blanked and never reach this table. Disposable and rebuilt on every save; its
+/// decoder freezes an unknown `tag` token to `.neutral`, key still required.
 public struct JournalLogRecord: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var dateKey: String
@@ -166,14 +198,31 @@ public struct JournalLogRecord: Identifiable, Codable, Equatable {
     }
 }
 
+/// One computed behavioral signal (for example `moodTrend` → "improving") with its window bounds
+/// and data provenance.
+///
+/// Produced in sets of seven by ``DerivedSignalFactory`` and held in store state — unlike the
+/// log-record tables, these are NOT persisted in the ``LocalFernletDatabase`` blob; they are
+/// recomputed on demand by `DerivedSignalsService`/`DerivedSignalsRebuilder` (in `StoreCore`).
+/// `sourceFields` names the day fields that fed the computation (provenance the UI can surface),
+/// and `nutrientGaps` carries the structured gap list for the micronutrient signals. The
+/// tolerant decoder defaults `id`, `computedAt`, and `nutrientGaps` so older encodings decode.
 public struct DerivedSignalRecord: Identifiable, Codable, Equatable {
     public var id = UUID()
+    /// Stable signal identifier (`moodTrend`, `energyTrend`, `eatingPattern`, `progressionTrend`,
+    /// `intensityReadiness`, `micronutrientGaps7Day`, `micronutrientGaps14Day`).
     public var signalName: String
+    /// Short lowercase phrase surfaced directly in UI and AI context ("needs gentleness",
+    /// "ready for hard", "2 possible gaps").
     public var value: String
     public var computedAt = Date()
+    /// First day key of the window the signal was computed over.
     public var windowStart: String
+    /// Last day key of the window the signal was computed over.
     public var windowEnd: String
+    /// The day fields that fed the computation — provenance the transparency UI can show.
     public var sourceFields: [String]
+    /// Structured micronutrient gap details; empty for the non-nutrient signals.
     public var nutrientGaps: [NutrientGap]
 
     public init(

@@ -2,9 +2,14 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
-/// Captures the durable workout context the suggestion engine reads: chosen split, where the user
-/// trains and the equipment there (via the location flow), weekly frequency, experience,
-/// sport/interests, and areas to work around.
+/// The "Equipment & limits" setup sheet — captures the durable workout context the suggestion
+/// engine reads.
+///
+/// Covers the chosen split (auto or an explicit pick from the recommendations), where the user
+/// trains and the equipment there (via ``WorkoutLocationSetupView``), weekly frequency, experience,
+/// sport/interests, and areas to work around. Injury-area chips expand to the muscle-group and
+/// movement-pattern sets the planner avoids. Saving a split change while training has been
+/// consistent asks a gentle confirm first — consistency beats novelty — but never hard-blocks.
 struct WorkoutSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -20,6 +25,11 @@ struct WorkoutSetupSheet: View {
     private let currentActiveSplitID: String
     private let currentSplitName: String
 
+    /// One selectable "work around this" chip: a display name plus the muscle groups and movement
+    /// patterns the planner should avoid while it's on.
+    ///
+    /// Identified by its name; the selected chips are folded into the profile's
+    /// `avoidedMuscles`/`avoidedMovements` on save.
     private struct InjuryArea: Identifiable {
         var id: String { name }
         var name: String

@@ -11,6 +11,14 @@ import FernletScoring
 
 // MARK: - M1: AI dish decomposition model
 
+/// The primary (M1) AI tier of the quick-log cascade: on-device Foundation Models break a free-text
+/// dish into 2–6 ingredient components from world knowledge, then ``MealDecompositionResolver`` binds
+/// each component to the food catalog so every macro comes from catalog data, never the model.
+///
+/// Called first by ``MealResolutionService/resolveMeals(from:type:date:)`` when AI is on; a `nil`
+/// return (model unavailable, gate resting, or an implausible result) falls through to the
+/// candidate-selection and deterministic tiers. Every dispatch routes through `FernletAIGate` and is
+/// recorded in `AIAuditLog` with its real outcome.
 enum FoundationDishDecompositionModel {
     /// Decomposes `payload.mealDescription` into primary components using on-device Foundation Models,
     /// resolves each component against the food catalog `index`, and returns a fully scaled `Meal`
@@ -79,6 +87,11 @@ enum FoundationDishDecompositionModel {
 // MARK: - @Generable schema
 
 #if canImport(FoundationModels)
+/// The `@Generable` schema the on-device model fills in when decomposing a dish description.
+///
+/// Pure model output — names, gram estimates, and confidence words only. It is never trusted for
+/// nutrition data: ``MealDecompositionResolver`` re-grounds every component against the food catalog
+/// before anything reaches a `Meal`.
 @available(iOS 26.0, *)
 @Generable
 struct FoundationDishDecomposition {
@@ -91,6 +104,11 @@ struct FoundationDishDecomposition {
     var overallConfidence: String
 }
 
+/// One model-emitted ingredient in a ``FoundationDishDecomposition``: a simple ingredient name, its
+/// preparation, an edible-gram estimate, and how confident the model is it belongs in the dish.
+///
+/// The grams are bounded and clamped by the resolver (template gram bounds, then 1–1500 g) before
+/// they are believed.
 @available(iOS 26.0, *)
 @Generable
 struct FoundationDishComponent {
@@ -109,8 +127,22 @@ struct FoundationDishComponent {
 
 // MARK: - Resolver
 
+/// Grounds a model-emitted ``FoundationDishDecomposition`` in the food catalog and turns it into a
+/// fully snapshotted `Meal` (plus an optional suggested recipe) — or rejects it.
+///
+/// The trust boundary between model output and the diary: components bind to catalog items only
+/// above `FoodItemSearch.minimumBindScore`, grams are bounded by ``DishTemplateLexicon`` template
+/// ranges and clamped to 1–1500 g, duplicate bindings collapse to one row, and the whole result must
+/// pass a caloric-density check (0.3–9 kcal/g) and the ``MealPlausibility`` total caps before a meal
+/// is built via ``MealBuilder``. Confidence combines the model's self-report with bind strength and
+/// any dropped/weak components.
 enum MealDecompositionResolver {
     #if canImport(FoundationModels)
+    /// Resolves `decomposition` against `catalog` into a ``ResolvedMeal`` — the meal, a combined
+    /// confidence, and (for genuine multi-ingredient dishes) a review-offered recipe built from the
+    /// same deduped, catalog-bound pairs.
+    /// - Returns: `nil` when no component binds acceptably or the total fails a plausibility check,
+    ///   letting the cascade fall through to a saner tier.
     @available(iOS 26.0, *)
     static func resolve(
         from decomposition: FoundationDishDecomposition,
@@ -248,6 +280,8 @@ enum MealDecompositionResolver {
         return level
     }
 
+    /// Clamps a model gram estimate into the dish-template bounds whose key matches the component's
+    /// query (by containment or token overlap); returns the estimate unchanged when no bound applies.
     private static func boundedComponentGrams(
         _ grams: Double,
         query: String,

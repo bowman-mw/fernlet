@@ -7,6 +7,15 @@
 
 import Foundation
 
+/// The trust vault's persisted record of one accepted peer: identity keys, mode, and lifecycle
+/// timestamps.
+///
+/// Security-relevant synced state: identity material (keys/fingerprint) decodes STRICTLY — absence
+/// is corruption, never forward compat — while `mode` decodes tolerantly so a relationship mode
+/// minted by a newer build can't destroy the whole vault on an older device (see the field note on
+/// why the `.trainer` freeze default is privilege-neutral today). `blockedAt`/`reportedAt`
+/// deliberately sync: they record the user's OWN moderation actions, which must apply on every one
+/// of the user's devices.
 public nonisolated struct ProximityTrustedPeerRecord: Codable, Equatable, Identifiable, Sendable {
     public var id: UUID
     public var displayName: String
@@ -101,7 +110,17 @@ public nonisolated struct ProximityTrustedPeerRecord: Codable, Equatable, Identi
     }
 }
 
+/// One persisted trainer-pairing audit row (`FernletSnapshot.trainerAuditEvents`).
+///
+/// `kind` and `payloadType` decode tolerantly with parked tokens — ``PayloadType`` grows with every
+/// in-person share feature, and an audit row stamped by a newer build must not brick the older
+/// paired device. The audit-log LOGIC stays app-side in TrainerAuditLog.swift; this is the pure
+/// DTO the persistence layer holds.
 public nonisolated struct TrainerAuditEvent: Codable, Equatable, Identifiable, Sendable {
+    /// The taxonomy of auditable trainer-pairing events, from pairing start to revocation.
+    ///
+    /// Unknown kinds from newer builds freeze to `.stateTransition` on decode with the token
+    /// parked; `message` still describes the event.
     public enum Kind: String, Codable, CaseIterable, Sendable {
         case pairingStarted
         case stateTransition

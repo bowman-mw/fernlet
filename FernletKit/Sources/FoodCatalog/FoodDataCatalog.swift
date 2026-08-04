@@ -2,6 +2,16 @@ import Foundation
 import FernletFoundation
 import FernletDomainModel
 
+/// One decoded row of USDA source JSON — either the compact bundled schema or a raw FDC envelope.
+///
+/// The generation-time decoding workhorse behind ``FoodDataCatalog``: its custom `init(from:)`
+/// detects the schema by the presence of the compact `name` key. The compact branch reads the
+/// pre-flattened fields directly; the raw-FDC branch flattens `foodNutrients` by nutrient id,
+/// derives portions, and — for branded labels — rescales the per-100g nutrient values onto the
+/// label's per-serving basis so macros and micronutrients share one basis. ``foodItem()`` then
+/// produces the final `FoodItem`, minting a deterministic UUID from the FDC id
+/// (`00000000-0000-5000-8000-<12-digit fdcId>`) so catalog regenerations keep stable ids.
+/// Generation and test time only: the shipped app reads `FoodCatalog.sqlite`, never this decoder.
 struct USDAFoodItemRecord: Decodable {
     var id: UUID?
     var fdcId: Int?
@@ -41,6 +51,11 @@ struct USDAFoodItemRecord: Decodable {
     var zinc: Double?
     var omega3: Double?
 
+    /// JSON keys for both shapes ``USDAFoodItemRecord`` decodes: the curated catalog's compact keys
+    /// and the raw USDA FDC export's keys (`description`, `foodNutrients`, `labelNutrients`, …).
+    ///
+    /// Renaming a compact case breaks the shipped catalog resource; the FDC-side cases must track
+    /// the upstream USDA export format.
     private enum CodingKeys: String, CodingKey {
         case id, fdcId, name, brandSource, servingSize, servingUnit, protein, carbs, fat
         case category, tags, portions, fiber, sugar, saturatedFat, cholesterol
@@ -52,6 +67,8 @@ struct USDAFoodItemRecord: Decodable {
         case gtinUpc
     }
 
+    /// Decodes one record, branching on the compact `name` key: the compact bundled schema when it
+    /// is present, the raw FDC envelope (with branded-label per-serving rescaling) otherwise.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id)
@@ -163,6 +180,8 @@ struct USDAFoodItemRecord: Decodable {
         omega3 = scaled(nutrientValues[1272] ?? nutrientValues[1278] ?? nutrientValues[1270])
     }
 
+    /// The finished catalog `FoodItem`: stable USDA UUID (when derivable from the FDC id), rounded
+    /// integer macros, resolved micronutrients, classified data type, and normalized barcode.
     nonisolated func foodItem() -> FoodItem {
         FoodItem(
             id: id ?? stableUSDAID ?? UUID(),
@@ -186,6 +205,9 @@ struct USDAFoodItemRecord: Decodable {
         )
     }
 
+    /// Maps the record's FDC `dataType`/category/brand onto `FoodDataType` (foundation > survey >
+    /// branded, with `srLegacy` as the unbranded fallback), using `FoodBrandLexicon` to split
+    /// restaurant chains from packaged brands.
     nonisolated private var classifiedDataType: FoodDataType {
         let dataTypeLower = dataType?.lowercased()
         if dataTypeLower?.contains("foundation") == true { return .foundation }
@@ -199,6 +221,8 @@ struct USDAFoodItemRecord: Decodable {
         return FoodBrandLexicon.isRestaurantChain(brand) ? .restaurant : .branded
     }
 
+    /// The flattened micronutrient set, already on the record's serving basis (rescaled for
+    /// branded labels during decoding).
     nonisolated private var resolvedMicronutrients: Micronutrients {
         Micronutrients(
             fiber: fiber,
@@ -227,6 +251,8 @@ struct USDAFoodItemRecord: Decodable {
         )
     }
 
+    /// Merges the FDC household portions with a label-serving portion (skipped when an equivalent
+    /// portion already exists) and always appends a per-100 g anchor.
     private static func portions(
         from fdcPortions: [FDCFoodPortion],
         labelServingSize: Double?,
@@ -251,6 +277,8 @@ struct USDAFoodItemRecord: Decodable {
         return portions
     }
 
+    /// Gram weight for convertible units only (g/ml treated 1:1, oz, lb); nil for anything else,
+    /// which drops the label portion rather than guessing.
     private static func gramWeight(quantity: Double, unit: String?) -> Double? {
         switch RecipeUnit.normalized(unit ?? RecipeUnit.gram.rawValue) {
         case .gram, .milliliter:
@@ -264,11 +292,14 @@ struct USDAFoodItemRecord: Decodable {
         }
     }
 
+    /// "USDA FDC <id>" — the brand-source fallback that preserves data provenance for unbranded rows.
     nonisolated private var fdcDescription: String? {
         guard let fdcId else { return nil }
         return "USDA FDC \(fdcId)"
     }
 
+    /// Deterministic UUID minted from the FDC id (`00000000-0000-5000-8000-<12-digit fdcId>`), so a
+    /// regenerated catalog keeps the same ids and saved recipes/curated pins stay resolvable.
     nonisolated private var stableUSDAID: UUID? {
         guard let fdcId, fdcId >= 0, fdcId <= 999_999_999_999 else { return nil }
         let suffix = String(format: "%012d", fdcId)
@@ -276,6 +307,10 @@ struct USDAFoodItemRecord: Decodable {
     }
 }
 
+/// One entry of a raw FDC `foodNutrients` array — a nutrient id plus its amount.
+///
+/// Tolerates both raw-FDC shapes (a nested `nutrient` object or a flat `nutrientId` field) so one
+/// record type serves every FDC data-type export; `USDAFoodItemRecord` groups these by id.
 private struct FDCFoodNutrient: Decodable {
     let amount: Double?
     private let nutrient: FDCNutrient?
@@ -285,29 +320,49 @@ private struct FDCFoodNutrient: Decodable {
         nutrient?.id ?? nutrientIdValue ?? -1
     }
 
+    /// JSON keys for a raw FDC nutrient entry; `nutrientIdValue` maps the flat `nutrientId` field
+    /// so both FDC shapes decode through one record.
     private enum CodingKeys: String, CodingKey {
         case amount, nutrient, nutrientIdValue = "nutrientId"
     }
 }
 
+/// The nested `nutrient` object of a raw FDC nutrient entry — only the id is read.
+///
+/// Exists solely so `FDCFoodNutrient` can resolve a nutrient id from the nested shape.
 private struct FDCNutrient: Decodable {
     let id: Int?
 }
 
+/// The raw FDC `foodCategory` object — only its human-readable description is read.
+///
+/// Feeds the `FoodItem.category` fallback chain in `USDAFoodItemRecord`.
 private struct FDCFoodCategory: Decodable {
     let description: String?
 }
 
+/// The raw FDC `labelNutrients` object for branded foods — the per-serving macro values as printed
+/// on the product label.
+///
+/// Its presence (together with a brand) is what flips `USDAFoodItemRecord` into the per-serving
+/// branded-label decoding branch.
 private struct FDCLabelNutrients: Decodable {
     let protein: FDCLabelNutrientValue?
     let carbohydrates: FDCLabelNutrientValue?
     let fat: FDCLabelNutrientValue?
 }
 
+/// One `labelNutrients` figure — FDC nests each label value in a `{ "value": … }` object.
+///
+/// Exists only to unwrap that nesting for `FDCLabelNutrients`.
 private struct FDCLabelNutrientValue: Decodable {
     let value: Double?
 }
 
+/// One raw FDC `foodPortions` entry — household-measure metadata plus its gram weight.
+///
+/// `foodPortion` converts it to the app's `FoodPortion`, dropping entries without a positive gram
+/// weight or any usable unit text.
 private struct FDCFoodPortion: Decodable {
     let amount: Double?
     let gramWeight: Double?
@@ -315,6 +370,7 @@ private struct FDCFoodPortion: Decodable {
     let portionDescription: String?
     let measureUnit: FDCMeasureUnit?
 
+    /// The app-model portion, or nil when the entry lacks a positive gram weight or unit text.
     var foodPortion: FoodPortion? {
         guard let gramWeight, gramWeight > 0 else { return nil }
         let unit = measureUnit?.abbreviation ?? measureUnit?.name ?? portionDescription ?? modifier
@@ -328,11 +384,23 @@ private struct FDCFoodPortion: Decodable {
     }
 }
 
+/// The raw FDC `measureUnit` object — a unit's name and abbreviation.
+///
+/// Supplies the preferred unit text when `FDCFoodPortion` builds a `FoodPortion`.
 private struct FDCMeasureUnit: Decodable {
     let name: String?
     let abbreviation: String?
 }
 
+/// Generation-time entry point that turns the repo's USDA source JSON into the `FoodItem` set the
+/// SQLite catalog is built from.
+///
+/// The app never touches the source JSON at runtime — `FoodCatalogDatabaseBuilder` (app target,
+/// invoked via the gated `FoodCatalogGenerationTests`) calls ``sourceJSONFoodItems(directory:)`` to
+/// produce the rows it writes into `FoodCatalog.sqlite`, and the decoder unit tests exercise
+/// ``foodItems(from:)`` directly. Decoding is delegated to ``USDAFoodItemRecord`` (compact bundled
+/// schema or raw FDC envelope), and a small canonical-alias pass adds a friendlier name for the
+/// staple chicken-breast entry.
 public enum FoodDataCatalog {
     /// Source JSON file names (repo-only, under `FoodDataSource/`). These are no longer bundled
     /// into the app — they are the build-time input to `FoodCatalogDatabaseBuilder`, which emits the
@@ -362,6 +430,9 @@ public enum FoodDataCatalog {
         return addingCanonicalAliases(to: items)
     }
 
+    /// Appends the "Chicken breast, roasted" alias (a copy of the braised USDA entry under a fixed
+    /// alias UUID with extra tags) when the source set has the original but not the alias; the guard
+    /// makes repeated application idempotent.
     nonisolated private static func addingCanonicalAliases(to items: [FoodItem]) -> [FoodItem] {
         guard !items.contains(where: { $0.name == "Chicken breast, roasted" }),
               let chickenBreast = items.first(where: {

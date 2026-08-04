@@ -5,6 +5,16 @@ import PrivateHealthStore
 import HealthKitGateway
 import FernletUI
 
+/// The log/edit sheet for a cycle day: flow level, cycle-start and intermenstrual-bleeding flags,
+/// symptoms with intensity steppers, cervical mucus and ovulation-test observations, basal body
+/// temperature, and a private note.
+///
+/// Serves both flows — a fresh log (optionally pre-dated via `targetDate`) and an edit of an
+/// existing `CycleDayEntry` — and saves through `PeriodTrackerStore.logEvent`/`editEvent` as a
+/// `UserLoggedCycleEvent`. The clinical fields become HealthKit samples; the note and symptoms
+/// become a sealed narrative, so the sheet warns up front when no app lock is configured and maps
+/// the store's `PeriodLogResult` (saved / narrative buffered until unlock / narrative dropped) to
+/// an honest status message before dismissing.
 struct LogPeriodSheet: View {
     var periodStore: PeriodTrackerStore
     private let editingEntry: CycleDayEntry?

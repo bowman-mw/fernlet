@@ -18,8 +18,11 @@ import Foundation
 // "a little tense", which the gentle copy tolerates by design.
 
 /// One day of stress-relevant signals, assembled by the caller (most-recent day LAST).
+///
 /// All physiology fields are optional — a day with no wearable data simply contributes
-/// nothing to baselines or deviations.
+/// nothing to baselines or deviations. In the app, the HealthKit gateway supplies the raw
+/// metrics and the app-side stress service assembles the window it feeds to
+/// ``StressEngine/assess(samples:)``.
 public struct StressDaySample: Codable, Equatable, Sendable {
     /// `yyyy-MM-dd` day key.
     public var dateKey: String
@@ -57,9 +60,11 @@ public struct StressDaySample: Codable, Equatable, Sendable {
     }
 }
 
-/// Gentle wellness states — never clinical. Raw values are stable identifiers for the
-/// device-local sidecar; they are NEVER persisted into any synced store or into
-/// `CompanionState` (companion "frazzled" is a presentation-only flag).
+/// The engine's gentle wellness vocabulary — never clinical.
+///
+/// Raw values are stable identifiers for the device-local sidecar; they are NEVER persisted into
+/// any synced store or into `CompanionState` (companion "frazzled" is a presentation-only flag).
+/// ``StressEngine/scoringModifier(for:)`` maps each state to its small capped score nudge.
 public enum StressState: String, Codable, Equatable, Sendable {
     case calm
     case okay
@@ -68,6 +73,9 @@ public enum StressState: String, Codable, Equatable, Sendable {
 }
 
 /// Why a tense reading might not be "stress" — surfaced so the copy can soften itself.
+///
+/// Attached by ``StressEngine/assess(samples:)`` only when the state is `.tense` or worse; a
+/// confounded reading is capped at `.tense`, and illness wins over training when both apply.
 public enum StressAnnotation: String, Codable, Equatable, Sendable {
     /// Trained today or yesterday: probably "that good kind of tired", not strain.
     case workedOut
@@ -76,6 +84,9 @@ public enum StressAnnotation: String, Codable, Equatable, Sendable {
 }
 
 /// How settled the personal baseline is. Driven purely by the count of valid HRV days.
+///
+/// Used by the explainer copy to set expectations while the baseline is forming; classification
+/// thresholds stay widened (``StressEngine/wideningFactor``) until the baseline is `.established`.
 public enum StressConfidence: String, Codable, Equatable, Sendable {
     case building      // 7..<14 valid days
     case settling      // 14..<30 valid days
@@ -83,11 +94,20 @@ public enum StressConfidence: String, Codable, Equatable, Sendable {
 }
 
 /// The engine's output for "today" (the last sample).
+///
+/// A pure `Sendable` value bundling the classified ``StressState``, the smoothed deviation that
+/// produced it, how settled the baseline is, and an optional softening ``StressAnnotation``. The
+/// app-side stress service holds the current assessment (persisting it to the device-local
+/// sidecar), and `FernletStore` feeds ``state`` through ``StressEngine/scoringModifier(for:)``
+/// into the daily score.
 public struct StressAssessment: Codable, Equatable, Sendable {
+    /// The classified gentle wellness state (after the sustained rule and confounder capping).
     public var state: StressState
     /// EWMA-smoothed combined deviation (z) as of the last day. Negative = more load.
     public var smoothedZ: Double
+    /// How settled the personal baseline behind this reading is.
     public var confidence: StressConfidence
+    /// Optional confounder context (training or possible illness) softening the reading.
     public var annotation: StressAnnotation?
 
     public init(state: StressState, smoothedZ: Double, confidence: StressConfidence, annotation: StressAnnotation? = nil) {
@@ -98,16 +118,39 @@ public struct StressAssessment: Codable, Equatable, Sendable {
     }
 }
 
-/// Abstract seam for anything that can produce a stress assessment (Phase-4 cross-vendor
-/// providers plug in here). The local HRV/RHR engine's app-side service is the first
-/// conformer. Requirements are async so actor-isolated services can conform;
-/// `providerID` should be a nonisolated constant.
+/// Abstract seam for anything that can produce a stress assessment — the plug-in point for
+/// future (Phase-4) cross-vendor providers.
+///
+/// Requirements are async so actor-isolated services can conform; `providerID` should be a
+/// nonisolated constant. As of the current tree nothing conforms yet: the app-side stress service
+/// drives ``StressEngine`` directly, and this protocol is the seam it will be inverted onto when
+/// a second provider arrives.
 public protocol StressProvider {
+    /// Stable identifier for the provider (should be a nonisolated constant).
     var providerID: String { get }
+    /// The provider's assessment for today, or nil when it cannot produce one.
     func currentAssessment() async -> StressAssessment?
+    /// How settled the provider's personal baseline is, or nil before one exists.
     func baselineConfidence() async -> StressConfidence?
 }
 
+/// Pure, deterministic personal-baseline stress estimator over daily HRV / resting-HR samples.
+///
+/// Compares each day's autonomic signals against the user's OWN recent normal (never a population
+/// norm), smooths the daily deviation with a heavy EWMA, and classifies the result into the
+/// gentle ``StressState`` vocabulary. `assess(samples:)` is the entry point; the other statics
+/// are its exposed building blocks so the tests and the explainer copy share one source of truth
+/// (the tunables). The app-side stress service assembles the ``StressDaySample`` window from
+/// HealthKit metrics and runs the engine; `FernletStore` folds the result into scoring via
+/// `scoringModifier(for:)`.
+///
+/// Invariants: no I/O, no clocks, no HealthKit — stateless nonisolated statics over
+/// caller-supplied values. A cold start below `minimumValidDays` valid HRV days yields nil (never
+/// a guess); daily deviations are clamped to ±`dailyZClamp`; `.needsCare` requires a sustained
+/// deviation and is capped back to `.tense` by any confounder; and the scoring modifier is
+/// re-clamped inside `computeBreakdown`, so no caller can exceed `scoringModifierRange`. By
+/// design it takes NO cycle/period inputs (see the header note): the sealed store's only scoring
+/// egress stays ``PeriodScoringAdjustment``.
 public enum StressEngine {
     // MARK: Tunables (single source of truth for the tests + explainer copy)
 
@@ -141,6 +184,9 @@ public enum StressEngine {
     // MARK: Baseline statistics
 
     /// Personal baseline for one metric over the supplied window.
+    ///
+    /// Built by `baseline(from:)`; deviations are always measured against `longMean` /
+    /// `standardDeviation`, with `shortMean` kept as an informational "current normal".
     public struct MetricBaseline: Equatable, Sendable {
         /// Mean of the valid values among the last 7 days — the short "current normal"
         /// (informational; deviations are measured against the long window).

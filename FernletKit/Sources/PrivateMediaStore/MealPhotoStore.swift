@@ -17,6 +17,13 @@ import FernletDomainModel
 ///
 /// Photos written by the pre-sealing build are recognised as legacy plaintext on read and re-sealed in
 /// place on first access, so no migration pass is needed and existing meal photos keep working.
+///
+/// The app's `FernletStore` (main actor) owns the instances: one for meal photos (legacy upgrade ON),
+/// one for recipe photos (legacy upgrade OFF, keyed by recipe id via ``save(_:forID:)``), and
+/// ``ProgressPhotoStore`` composes a third internally for body-photo bytes. Ownership of a photo id
+/// lives with the caller (`Meal.photoID`, the recipe id, or the progress index) — this store is a flat
+/// id-to-sealed-file map with no index of its own. Plain nonisolated struct; thread safety comes from
+/// the owner's isolation, and the shared ``PrivateMediaKeyProviding`` must stay in that same domain.
 public struct MealPhotoStore {
     private let directory: URL
     private let keyProvider: PrivateMediaKeyProviding
@@ -36,6 +43,14 @@ public struct MealPhotoStore {
     /// `PrivateMediaStore`. The user's own camera photos are far below this.
     private static let maxSourcePixelDimension = 20_000
 
+    /// Creates a store over `directory` (created if needed), sealing under `keyProvider`'s key.
+    ///
+    /// - Parameters:
+    ///   - directory: Where the sealed `<uuid>.jpg` files live; each logical store gets its own.
+    ///   - keyProvider: Source of the shared at-rest key; defaults to the keychain-backed provider.
+    ///   - allowsLegacyPlaintextUpgrade: Pass true ONLY for a store that really has a pre-sealing
+    ///     plaintext generation on disk (the original meal-photo store); pass false for stores that
+    ///     were born sealed (recipe/body photos) so unsealed bytes are refused, not laundered.
     public init(
         directory: URL,
         keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(),
@@ -82,6 +97,11 @@ public struct MealPhotoStore {
         }
     }
 
+    /// Returns the decrypted photo bytes for `id`, or nil when there is no file, no key, or the
+    /// bytes won't open (never ciphertext/garbage).
+    ///
+    /// When `allowsLegacyPlaintextUpgrade` is true, a pre-sealing plaintext JPEG at this id is
+    /// returned and re-sealed in place on this first access; otherwise unsealed bytes are refused.
     public func imageData(for id: UUID) -> Data? {
         guard let stored = try? Data(contentsOf: url(for: id)) else { return nil }
         // Sealed bytes (the normal case).
@@ -111,6 +131,7 @@ public struct MealPhotoStore {
         FileManager.default.fileExists(atPath: url(for: id).path)
     }
 
+    /// Removes the sealed file for `id` (best-effort; a missing file is a no-op).
     public func delete(id: UUID) {
         try? FileManager.default.removeItem(at: url(for: id))
     }

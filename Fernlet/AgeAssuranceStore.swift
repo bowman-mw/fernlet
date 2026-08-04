@@ -26,6 +26,9 @@ final class AgeAssuranceStore {
 
     @ObservationIgnored private let defaults: UserDefaults
 
+    /// The `UserDefaults` keys for the device-local sidecar record.
+    ///
+    /// Namespaced here so the persistence key can never drift between the load, save, and clear paths.
     private enum Keys {
         static let record = "ageAssuranceRecord"
     }

@@ -95,6 +95,10 @@ public nonisolated enum GroceryAggregation {
         }
     }
 
+    /// The finished shopping list: merged structured lines plus per-recipe free-text sections.
+    ///
+    /// Rendered to share-sheet text by `plainText`; never persisted — the day's `plannedRecipeIDs`
+    /// plan is the only stored grocery state, and the list is a one-shot share artifact.
     public struct GroceryList: Equatable, Sendable {
         public var consolidated: [Line]
         public var recipeSections: [RecipeSection]
@@ -123,6 +127,9 @@ public nonisolated enum GroceryAggregation {
     private static func consolidate(_ items: [StructuredItem]) -> [Line] {
         // Food group = normalized-name key when a name exists (catches same-food/different-id), else the
         // raw foodItemId (an unresolvable item can only merge with an identical id).
+        /// One in-progress merge bucket: the display name plus the running quantity for one unit.
+        ///
+        /// Local to `consolidate` — keyed by food group + unit so compatible lines sum instead of repeat.
         struct Bucket { var name: String; var quantity: Double; var unit: String }
         var order: [String] = []
         var buckets: [String: Bucket] = [:]

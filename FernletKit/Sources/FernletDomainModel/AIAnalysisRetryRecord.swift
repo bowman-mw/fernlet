@@ -6,6 +6,12 @@
 
 import Foundation
 
+/// One queued retry of a failed AI meal analysis, persisted in the snapshot's retry queue.
+///
+/// The element type of `FernletSnapshot.retryQueue`: when an on-device analysis can't complete
+/// (model unavailable, timeout), the app-side `AIRetryQueueService` appends one of these and replays
+/// it on a later launch/foreground, bumping `attemptCount`/`lastAttemptAt` per try. Pure Foundation
+/// value type so the persistence layer can hold it without an upward edge to any service.
 public nonisolated struct AIAnalysisRetryRecord: Identifiable, Codable, Equatable, Sendable {
     public var id = UUID()
     public var payloadType: String

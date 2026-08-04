@@ -2,6 +2,12 @@ import Foundation
 import FernletDomainModel
 import AIProviders
 
+/// One queued recipe-URL import: the shared URL plus its retry bookkeeping (attempt count, last
+/// error, budget-deferral day).
+///
+/// Written to the App-Group JSON file by the `FernletShareExtension` (which only ever sets `id`,
+/// `urlString`, and `queuedAt`) and mutated by the app-side drain through ``SharedRecipeImportQueue``.
+/// All optional fields must stay optional so extension-written records keep decoding.
 public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
     public var id: UUID
     public var urlString: String
@@ -39,6 +45,24 @@ public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
     }
 }
 
+/// The App-Group file queue that carries recipe URLs from the share extension into the app.
+///
+/// Persistence is a single JSON array of ``SharedRecipeImportRecord`` at
+/// `SharedRecipeImports/PendingRecipeURLs.json` inside the `group.MBO.Fernlet` container (falling
+/// back to Application Support, then tmp, when the group container is unavailable — e.g. unit
+/// tests). Every read and write goes through `NSFileCoordinator`, because two processes touch the
+/// file: `ShareViewController` appends via its own writer while the app may be draining. Writes are
+/// atomic with `completeFileProtectionUntilFirstUserAuthentication` (ISO-8601 dates, sorted keys).
+///
+/// The app-side consumer is `FernletStore.processSharedRecipeImportQueue()`, run on launch and on
+/// each foreground from `ContentView`; it imports each URL, then calls ``remove(_:)`` on success,
+/// ``markAttempt(_:errorDescription:)`` on failure (records self-destruct after 5 attempts), or
+/// ``markBudgetDeferred(_:dayKey:)`` when the daily AI budget is exhausted. ``clear()`` is the
+/// "delete everything" hook and deliberately bypasses the corrupt-file-preserving `modifyRecords`
+/// path so a wipe always empties the file. The struct itself is stateless (a file URL + JSON
+/// coders), so instances are cheap and interchangeable; edits are last-writer-wins per coordinated
+/// write, and a corrupt file silently aborts mutations (but not ``clear()``) to avoid destroying
+/// records it cannot parse.
 public struct SharedRecipeImportQueue {
     static let appGroupIdentifier = "group.MBO.Fernlet"
 
@@ -54,6 +78,8 @@ public struct SharedRecipeImportQueue {
         self.decoder = Self.makeDecoder()
     }
 
+    /// The current queue contents under a coordinated read. Missing, unreadable, or corrupt files
+    /// all read as an empty queue — the drain never throws.
     public func records() -> [SharedRecipeImportRecord] {
         var result: [SharedRecipeImportRecord] = []
         var coordinatorError: NSError?
@@ -67,6 +93,7 @@ public struct SharedRecipeImportQueue {
         return result
     }
 
+    /// Removes a record by id — the success path after an import lands in the store.
     public func remove(_ record: SharedRecipeImportRecord) {
         modifyRecords { $0.removeAll { $0.id == record.id } }
     }
@@ -86,6 +113,8 @@ public struct SharedRecipeImportQueue {
     @discardableResult
     public func clear() -> Bool { save([]) }
 
+    /// Records a failed import attempt (timestamp + error text). A record that reaches 5 attempts
+    /// is removed outright, so a permanently broken page cannot retry forever.
     public func markAttempt(_ record: SharedRecipeImportRecord, errorDescription: String?) {
         modifyRecords { records in
             guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
@@ -127,6 +156,8 @@ public struct SharedRecipeImportQueue {
         }
     }
 
+    /// Replaces the whole file with `records` under a coordinated write, ignoring current contents.
+    /// Internal: production code mutates via `modifyRecords`; this backs ``clear()`` and tests.
     @discardableResult
     func save(_ records: [SharedRecipeImportRecord]) -> Bool {
         var success = false

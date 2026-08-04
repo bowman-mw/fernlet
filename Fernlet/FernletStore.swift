@@ -22,6 +22,39 @@ import HealthKitGateway
 import AppServices
 import AIContext
 
+/// The central observable app state: the facade every screen reads and mutates, and the app
+/// target's one legitimate integration point above the SPM "S3 wall".
+///
+/// Composition: the portable diary slice lives in `DiaryStore` (`diary`), with settable
+/// forwarders here so call sites keep working; this facade owns everything app-only — the
+/// per-row ledger services (saved recipes, custom items, coins, milestones), the proximity
+/// subsystem (`meshNetworkManager`, `presenceManager`, `recipeShareManager`, trust vault, heart
+/// ledger/`heartDropService`, moderation), the coordinators extracted from it
+/// (`SnapshotSaveCoordinator`, `JournalSealingCoordinator`, `SealedBackupCoordinator`,
+/// ``HealthSyncCoordinator``, workout planning / meal resolution), the sealed photo stores, the
+/// AI gate/quota/audit plumbing, and the widget bridge.
+///
+/// Persistence: mutations schedule a debounced snapshot save through `SnapshotSaveCoordinator`
+/// against the active `FernletRepository` (Core Data + CloudKit, or local JSON); remote-change
+/// notifications reload state, and the after-save hook republishes the benign widget snapshot.
+/// Sensitive data never enters the snapshot: journal/cycle/intimacy text lives in the sealed
+/// narrative stores, and device-local sidecars (AI quota + audit log, hearts, closeness,
+/// moderation, age assurance, sensitive-visibility resolution) deliberately never sync.
+///
+/// Invariants worth knowing before editing:
+/// - Sensitive-surface gating is DERIVED (`isPeriodTrackingVisible` /
+///   `isIntimacyTrackingVisible`) and fail-closed; hiding must also scrub resident plaintext
+///   (`periodScrubHook`, `scrubHiddenHealthContext`), and the device-local resolution sidecar
+///   protects the choice from mixed-version peers.
+/// - "Delete everything" (`deleteAllData`) is a single ordered funnel: writers stopped first,
+///   sealed rows dropped WITHOUT decrypting, every leg reported through ``DeleteAllOutcome`` —
+///   an unwired hook counts as failure, never success.
+/// - AI call sites route through `aiGate` (rebuilt per read); the concrete provider type is
+///   named only in ``FernletAIComposition`` so this file stays off the S3 grep-wall's AI list.
+///
+/// Concurrency: `@MainActor` + `@Observable`; collaborators call back via weak hooks onto the
+/// main actor. Failure mode by design is best-effort-but-reported: saves, HealthKit calls, and
+/// cloud legs may fail individually and surface through outcomes/audit logs rather than crashing.
 @MainActor
 @Observable
 final class FernletStore {
@@ -32,10 +65,15 @@ final class FernletStore {
     @ObservationIgnored let diary: DiaryStore
 
     // MARK: - Diary forwarders (state moved to DiaryStore; settable forwarders write through)
+    /// Today's record (meals, workouts, journals, sleep, hygiene, health context) — the diary's
+    /// canonical "current day", re-keyed on rollover by `refreshCurrentDayIfNeeded`.
     var day: FernletDay {
         get { diary.day }
         set { diary.day = newValue }
     }
+    /// The synced user settings blob (goals, visibility toggles, proximity opt-ins, companion
+    /// appearance, home-widget order). Writes flow into the snapshot; prefer the dedicated
+    /// setters when a side effect (scrub, radio stop) must accompany the change.
     var settings: FernletSettings {
         get { diary.settings }
         set { diary.settings = newValue }
@@ -380,12 +418,23 @@ final class FernletStore {
     /// reads a gate during `body` re-renders when the verdict changes.
     @ObservationIgnored let ageAssurance: AgeAssuranceStore
 
+    /// UserDefaults keys for the device-local sensitive-visibility resolution sidecar (see
+    /// `sensitiveVisibilityDefaults`).
+    ///
+    /// Kept together so the load/store/clear trio can't drift.
     private enum SensitiveVisibilityKeys {
         static let resolved = "sensitiveVisibilityResolved"
         static let period = "sensitiveVisibilityResolvedPeriodVisible"
         static let intimacy = "sensitiveVisibilityResolvedIntimacyVisible"
     }
 
+    /// The synchronous designated initializer (tests, previews, and the pre-async load path):
+    /// loads the snapshot and every per-row service on the calling thread, builds the diary,
+    /// rewires its closures onto the facade, reconciles sensitive-surface visibility BEFORE any
+    /// UI read, reconciles the coin/milestone ledgers, and subscribes to remote-change reloads.
+    /// Every repository/service/defaults parameter is an injection seam; nil means production
+    /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
+    /// frame.
     init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, cookingRunDirectory: URL? = nil) {
         self.sensitiveVisibilityDefaults = sensitiveVisibilityDefaults
         self.ageAssurance = AgeAssuranceStore(defaults: sensitiveVisibilityDefaults)
@@ -473,6 +522,10 @@ final class FernletStore {
         configureAIAuditLog()
     }
 
+    /// The async-load twin of the designated initializer: takes the snapshot and the
+    /// already-loaded services from `FernletStore.load` and only does the cheap wiring here, so
+    /// launch never repeats the store reads on the main thread. Keep the wiring in lockstep with
+    /// the synchronous initializer.
     private init(
         snapshot: FernletSnapshot,
         todayKey: String,
@@ -537,6 +590,8 @@ final class FernletStore {
     }
 
 
+    /// Today's 0–1 wellness score, recomputed on every read from the live day record, goal
+    /// weights, derived nutrient gaps, and the (pre-gated) period/stress adjustments.
     var score: Double {
         let body = day.healthContext?.body
         let activity = day.healthContext?.activity
@@ -564,6 +619,8 @@ final class FernletStore {
         )
     }
 
+    /// The companion's mood band derived from `score` (sickness overrides), driving every
+    /// companion render and the widget snapshot.
     var companionState: CompanionState {
         FernletScoring.state(for: score, isSick: isSick(on: todayKey))
     }
@@ -1060,6 +1117,12 @@ final class FernletStore {
         diary.setKnownDesignerName(id: id, name: name)
     }
 
+    /// The outcome of ``buyClothingItem(_:fromDesignerID:sellerName:sellerFingerprint:)``, which
+    /// `FriendShopView` maps to user-facing messaging.
+    ///
+    /// `.bought` covers both a fresh purchase and the free re-grant of an already-paid item
+    /// ("buy once, own forever, never charged twice"); the distinct refusals let the shop grid
+    /// explain exactly why a buy didn't land.
     enum ClothingPurchaseResult: Equatable {
         case bought
         case alreadyOwned
@@ -1129,6 +1192,11 @@ final class FernletStore {
 
     // MARK: - Shop listing management (Wardrobe)
 
+    /// The outcome of ``listCustomItemForSale(id:price:)``, consumed by `WardrobeView` and the
+    /// Creation Studio's listing confirmation to pick the right alert.
+    ///
+    /// The refusal cases are deliberately distinct so the UI never shows a misleading reason —
+    /// a flagged name, a full shop, an unlistable item, and a banned store each get their own copy.
     enum ShopListingResult: Equatable {
         case listed
         case nameFlagged
@@ -3573,11 +3641,13 @@ final class FernletStore {
         }
     }
 
-    /// What a wipe actually managed to remove. Every layer of the delete is best-effort by design — a
-    /// Core Data save can fail, a HealthKit type may be unauthorized, a coordinated file write can lose
-    /// to another process — and the confirm dialog promises permanence. So a failure has to reach the
-    /// user instead of being swallowed; "delete everything" quietly half-working is the failure mode
-    /// this whole change exists to end.
+    /// What a wipe actually managed to remove.
+    ///
+    /// Every layer of the delete is best-effort by design — a Core Data save can fail, a HealthKit
+    /// type may be unauthorized, a coordinated file write can lose to another process — and the
+    /// confirm dialog promises permanence. So a failure has to reach the user instead of being
+    /// swallowed; "delete everything" quietly half-working is the failure mode this whole change
+    /// exists to end.
     struct DeleteAllOutcome: Equatable {
         /// Human-readable names of the stores that did not confirm deletion, for the failure alert.
         var incompleteStores: [String] = []

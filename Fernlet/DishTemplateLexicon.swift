@@ -5,17 +5,32 @@ import FoodCatalog
 
 // MARK: - JSON types
 
+/// One ingredient line of a dish template as decoded from `DishTemplates.json`: a catalog search
+/// term, the edible grams contributed per natural unit of the dish, and an optional preparation.
+///
+/// `search` (prefixed by `preparation` when present) becomes the ``DishTemplateLexicon`` catalog
+/// query; `gramsPerUnit × count` gives the resolved quantity.
 struct DishTemplateComponent: Decodable {
     let search: String
     let gramsPerUnit: Double
     let preparation: String?
 }
 
+/// A per-alias component substitution inside a dish template (e.g. "salmon nigiri" swapping the
+/// generic fish for salmon).
+///
+/// When the alias matches, its `componentOverrides` are appended to the template's base components
+/// during assembly.
 struct DishTemplateAliasOverride: Decodable {
     let alias: String
     let componentOverrides: [DishTemplateComponent]
 }
 
+/// One dish entry decoded from `DishTemplates.json`: canonical name, lookup aliases, natural unit
+/// ("piece", "roll"…), a default count, and its ingredient components.
+///
+/// The backing data for the M2 deterministic tier — ``DishTemplateLexicon`` indexes every name and
+/// alias, and `MealBuilder.defaultRecipeServings` reads `defaultCount` as the auto-mint yield hint.
 struct DishTemplate: Decodable {
     let name: String
     let aliases: [String]
@@ -26,11 +41,19 @@ struct DishTemplate: Decodable {
     let components: [DishTemplateComponent]
 }
 
+/// A lexicon index hit: the matched template plus any alias-specific component overrides that the
+/// matched key carried.
+///
+/// Produced by ``DishTemplateLexicon``'s lookup and consumed by its assembly and gram-bound paths.
 struct DishTemplateMatch {
     let template: DishTemplate
     let componentOverrides: [DishTemplateComponent]
 }
 
+/// The top-level shape of `DishTemplates.json` — a schema version plus the dish list.
+///
+/// Decoded once by ``DishTemplateLexicon``'s lazy catalog load; a decode failure degrades to an
+/// empty lexicon rather than failing.
 private struct DishTemplateFile: Decodable {
     let version: Int
     let dishes: [DishTemplate]
@@ -39,6 +62,13 @@ private struct DishTemplateFile: Decodable {
 // MARK: - Lexicon
 
 /// Loads DishTemplates.json once and provides deterministic dish lookup for the M2 fallback path.
+///
+/// The first deterministic tier of the quick-log cascade (``MealResolutionService``): when AI is off
+/// or the AI tiers fall through, it matches composite dishes ("6 pieces salmon nigiri") by exact or
+/// longest-substring name/alias, extracts a leading count, and assembles catalog-grounded meals via
+/// ``MealBuilder``. It also supplies per-component gram bounds that ``MealDecompositionResolver``
+/// uses to sanity-clamp the AI tier's estimates, and default yields for auto-minted recipes. A
+/// missing or undecodable JSON degrades to an empty lexicon (every lookup misses).
 public enum DishTemplateLexicon {
     /// Single lazy load — both templates and the name index built together.
     private static let catalog: (templates: [DishTemplate], index: [String: DishTemplateMatch]) = {
@@ -96,12 +126,17 @@ public enum DishTemplateLexicon {
         return (nil, 1)
     }
 
+    /// Whether the item name matches a template flagged as a composite dish (one made of several
+    /// distinct components, like nigiri or a burrito).
     static func isComposite(_ itemName: String) -> Bool {
         matchWithCount(itemName).0?.isComposite == true
     }
 
     // MARK: Component bounds
 
+    /// Plausible gram ranges (0.5×–1.75× of the template amount) for each component of every dish the
+    /// description names, keyed by normalized search term. Used by `MealDecompositionResolver` to
+    /// clamp the AI tier's per-component gram estimates toward template reality.
     public static func componentGramBounds(description: String) -> [String: ClosedRange<Double>] {
         var bounds: [String: ClosedRange<Double>] = [:]
         for itemName in MealItemSplitter.items(from: description) {

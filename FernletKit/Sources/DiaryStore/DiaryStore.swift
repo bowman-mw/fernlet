@@ -12,32 +12,92 @@ import StoreCore
 /// journal-field/settings/personal-care/load). Holds NO app-only collaborators — those live in
 /// the app-side `FernletStore` facade, which owns a `DiaryStore` and forwards to it.
 ///
-/// Two injected closures decouple it from the facade so it depends on no app/sealed module:
+/// Injected closures decouple it from the facade so it depends on no app/sealed module:
 /// - `scheduleSnapshotSave` replaces every former `snapshotSaveCoordinator.schedule()` call.
 /// - `periodAdjustment` replaces the former `periodAdjustment(for:)` body that read the
 ///   facade-only `PeriodContextBridge`; the facade supplies a closure that applies the opt-in
 ///   gate. Default `{ _ in .none }` makes scoring byte-identical to period-unaware.
+/// - `stressModifier` and `sealedJournalIDs` follow the same pattern (see their hook
+///   properties), and ``isAdultVerified`` is the fail-closed intimacy gate the facade sets
+///   separately.
+///
+/// Construction is two-phase because the facade can only build its real closures after this
+/// store exists: `init` takes placeholders, then
+/// ``rewireHooks(scheduleSnapshotSave:periodAdjustment:stressModifier:sealedJournalIDs:)``
+/// swaps in the live ones (an assert makes a forgotten rewire trip loudly in debug).
+///
+/// Collaborators: reads and writes day rows, tier-two memories, and the full day history
+/// through the injected `FernletRepository` (Core Data + iCloud or local JSON, per the user's
+/// storage preference); keeps the injected `FoodCatalog`'s user-item index in sync with
+/// ``foodItems``; builds saved-recipe meals via `SavedRecipeService`; and resolves
+/// recipe-editor ingredients through `CustomIngredientUpsert`.
+///
+/// Invariants:
+/// - Every mutation ends in a `scheduleSnapshotSave()` (directly or via the
+///   `batchSnapshotPersistence` wrapper); actual persistence stays with the facade's debounced
+///   coordinator, so this store never writes the snapshot itself.
+/// - "Today" lives in memory (``day``, keyed by ``todayKey``); every other date round-trips
+///   through the repository via ``mutateDay(date:_:)``, and every past-day write is stripped
+///   through `SanitizedDay` so sealed journal text and hidden cycle/intimate health context
+///   can never reach the (potentially iCloud-synced) blob.
+/// - ``foodItems`` never contains USDA catalog rows (filtered at init and on snapshot apply);
+///   the bundled catalog is served read-only by `FoodCatalog`.
+/// - ``isAdultVerified`` defaults to refusal, so a store built before the facade wires it
+///   keeps intimate logging locked rather than open.
+///
+/// Concurrency: `@MainActor` + `@Observable` (the whole `DiaryStore` target compiles with
+/// `defaultIsolation(MainActor.self)`). Observation tracking lives on this class — the facade
+/// marks its own forwarding property `@ObservationIgnored` so views observe changes here.
+///
+/// Failure modes: empty date keys, mutating before `rewireHooks()`, and a failed past-day save
+/// all trip `assert`s; in release those guards compile out, so a mis-wired store degrades to
+/// dropped saves rather than crashing.
 @MainActor
 @Observable
 public final class DiaryStore {
+    /// The mutable in-memory record for "today" (the day keyed by ``todayKey``). Every other
+    /// date round-trips through the repository via ``mutateDay(date:_:)``.
     public var day: FernletDay
+    /// The synced settings aggregate (goal, visibility gates, workout profile, dismissals, …).
+    /// Mutate through the setter methods so every change schedules a snapshot save.
     public var settings: FernletSettings
+    /// Rolling newest-first window of recently logged meals (capped at 50 by
+    /// ``appendMeal(_:date:)``) that powers quick re-logging.
     public var recentMeals: [Meal]
+    /// Journal entries carried over from earlier days. The facade owns sealing/unsealing of
+    /// their text; this store only holds the rows.
     public var previousJournals: [JournalEntry]
+    /// Long-lived companion memory notes, edited via ``updateMemory(_:category:text:)`` and
+    /// ``deleteMemory(_:)``.
     public var memories: [MemoryNote]
+    /// The user's fitness goals (capped at 12 by ``replaceGoals(_:)``).
     public var goals: [FitnessGoal]
+    /// Workshop content (texture entries) behind the companion-personalization surface.
     public var workshop: WorkshopData
+    /// User-created/imported food items — never USDA catalog rows, which are filtered out at
+    /// init and on snapshot apply (the catalog serves them read-only). The `didSet` mirrors the
+    /// list into ``foodCatalog`` so search sees user items immediately.
     public var foodItems: [FoodItem] {
         didSet { foodCatalog.setUserItems(foodItems) }
     }
+    /// The subset of ``foodItems`` that arrived through the web-nutrition import path
+    /// (tagged `web-import`).
     public var webImportedFoodItems: [FoodItem] {
         foodItems.filter { $0.tags.contains("web-import") }
     }
+    /// Whether the web nutrition lookup may run: requires the explicit settings opt-in AND
+    /// AI not being switched off.
     public var allowsWebNutritionLookup: Bool {
         settings.webNutritionLookupEnabled && settings.aiStatus != .off
     }
+    /// The user's recipe book, newest-first; mutated only through the add/update/insert/delete
+    /// recipe methods.
     public var recipes: [RecipeDefinition]
+    /// The persisted per-day score history; ``dailyHealthScore(for:day:)`` prefers a stored
+    /// row over recomputing.
     public var dailyScores: [DailyHealthScore]
+    /// The companion's current transient thought-bubble text. In-memory only — set without a
+    /// save and cleared on relaunch.
     public var companionThought: String?
 
     /// The store's notion of "today". Pinned at construction, but ADVANCEABLE via `advanceCurrentDay`
@@ -46,9 +106,17 @@ public final class DiaryStore {
     /// only happens through the guarded rollover seam); still `@ObservationIgnored` because the rollover
     /// reassigns `day` (which IS observed) in the same breath, so dependent views re-render off that.
     @ObservationIgnored public private(set) var todayKey: String
+    /// The persistence backend (Core Data + iCloud or local JSON, per the user's storage
+    /// preference). Past-day rows, tier-two memories, and the full day history live here.
     @ObservationIgnored public let repository: FernletRepository
+    /// The bundled USDA + user-item food search service, kept in sync with ``foodItems``
+    /// via that property's `didSet`.
     @ObservationIgnored public let foodCatalog: FoodCatalog
+    /// Facade-supplied debounced snapshot-save closure (the former
+    /// `snapshotSaveCoordinator.schedule()`). An init placeholder until `rewireHooks` runs.
     @ObservationIgnored private var scheduleSnapshotSaveHook: () -> Void
+    /// Facade-supplied, pre-gated period scoring adjustment for a day key (the facade applies
+    /// the period-aware-scoring opt-in). Returns `.none` until `rewireHooks` runs.
     @ObservationIgnored private var periodAdjustmentHook: (String) -> PeriodScoringAdjustment
     /// Facade-supplied, pre-gated stress scoring modifier for a day (the stress twin of
     /// `periodAdjustmentHook`). The facade applies the `stressAwarenessEnabled` opt-in and the
@@ -96,6 +164,24 @@ public final class DiaryStore {
         self.hooksRewired = true
     }
 
+    /// Builds the diary slice from a loaded snapshot.
+    ///
+    /// USDA-sourced rows are filtered out of `snapshot.foodItems` (the bundled catalog serves
+    /// them read-only) and the surviving user items are pushed into `foodCatalog` for search.
+    /// When the facade can only build its real closures after this store exists, pass
+    /// placeholders and call
+    /// ``rewireHooks(scheduleSnapshotSave:periodAdjustment:stressModifier:sealedJournalIDs:)``
+    /// immediately afterward.
+    ///
+    /// - Parameters:
+    ///   - snapshot: The loaded aggregate whose diary fields seed the store.
+    ///   - todayKey: The local day key to treat as "today" (advanced later only via
+    ///     ``advanceCurrentDay(to:)``).
+    ///   - repository: The persistence backend for past-day rows and tier-two memories.
+    ///   - foodCatalog: The food search service kept in sync with ``foodItems``.
+    ///   - scheduleSnapshotSave: Debounced-save hook (normally the facade's snapshot coordinator).
+    ///   - periodAdjustment: Pre-gated period scoring modifier for a day key; the `.none`
+    ///     default keeps scoring byte-identical to period-unaware.
     public init(
         snapshot: FernletSnapshot,
         todayKey: String,
@@ -132,6 +218,7 @@ public final class DiaryStore {
     // derived signals — lives here. The facade's `score`/`companionState` read `diary` props +
     // facade `derivedSignals`, preserving identical behavior.
 
+    /// Today's protein/carbs/fat, summed over ``day``'s meals.
     public var macroTotals: MacroTotals {
         day.meals.reduce(into: MacroTotals()) { partial, meal in
             partial.protein += meal.macros.protein
@@ -140,16 +227,22 @@ public final class DiaryStore {
         }
     }
 
+    /// Today's micronutrients, summed over ``day``'s meal snapshots.
     public var micronutrientTotals: Micronutrients {
         day.meals.reduce(into: Micronutrients()) { partial, meal in
             partial.add(meal.micronutrientSnapshot)
         }
     }
 
+    /// The daily nutrition targets derived from the current profile/settings via
+    /// `NutritionTargetCalculator`.
     public var nutritionTargets: NutritionTargets {
         NutritionTargetCalculator.targets(for: settings)
     }
 
+    /// Computes the full per-component score breakdown for a day — the pure seam over
+    /// `FernletScoring.computeBreakdown`, fed with the day's logs, the settings-derived goal
+    /// weights, and the pre-gated period/stress modifiers from the facade hooks.
     public func scoreBreakdown(for targetDay: FernletDay) -> ScoreBreakdown {
         let body = targetDay.healthContext?.body
         let activity = targetDay.healthContext?.activity
@@ -176,10 +269,15 @@ public final class DiaryStore {
         )
     }
 
+    /// The overall wellbeing score for a day (the `overall` component of
+    /// ``scoreBreakdown(for:)``).
     public func score(for targetDay: FernletDay) -> Double {
         scoreBreakdown(for: targetDay).overall
     }
 
+    /// The `DailyHealthScore` for `dateKey`: the stored row from ``dailyScores`` when one is
+    /// cached, else a freshly computed one (score, companion state, weights, period-phase
+    /// label, health context) that is NOT stored — callers decide whether it enters the history.
     public func dailyHealthScore(for dateKey: String, day targetDay: FernletDay) -> DailyHealthScore {
         assert(!dateKey.isEmpty, "date key required")
         if let stored = dailyScores.first(where: { $0.dateKey == dateKey }) {
@@ -204,10 +302,12 @@ public final class DiaryStore {
 
     // MARK: - Personal care
 
+    /// The personal-care task list from settings, normalized via `PersonalCareTask.normalized`.
     public var personalCareTasks: [PersonalCareTask] {
         PersonalCareTask.normalized(settings.personalCareTasks)
     }
 
+    /// Completed/total personal-care task counts for `targetDay` (today when nil).
     public func personalCareProgress(for targetDay: FernletDay? = nil) -> (completed: Int, total: Int) {
         let activeDay = targetDay ?? day
         let tasks = personalCareTasks
@@ -215,6 +315,8 @@ public final class DiaryStore {
         return (completed, tasks.count)
     }
 
+    /// Whether `task` is done in `targetDay` (today when nil): checked off by id, or — for
+    /// default tasks — present in the day's legacy `hygiene` set.
     public func isPersonalCareTaskCompleted(_ task: PersonalCareTask, in targetDay: FernletDay? = nil) -> Bool {
         let activeDay = targetDay ?? day
         if activeDay.completedPersonalCareTaskIDs.contains(task.id) { return true }
@@ -226,6 +328,8 @@ public final class DiaryStore {
 
     // MARK: - Day summary / companion thought
 
+    /// Caches a generated day summary (trimmed, capped at 300 characters) on the day's score
+    /// row, minting the row first if the day has no stored score yet. Empty text is ignored.
     public func storeDaySummary(_ text: String, for dateKey: String) {
         assert(!dateKey.isEmpty, "date key required")
         let trimmed = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300))
@@ -242,6 +346,8 @@ public final class DiaryStore {
         }
     }
 
+    /// Clears the cached day summary for `dateKey` so it regenerates after the day's content
+    /// changes (called by every meal/workout append and removal).
     public func invalidateDaySummary(for dateKey: String) {
         assert(!dateKey.isEmpty, "date key required")
         guard let index = dailyScores.firstIndex(where: { $0.dateKey == dateKey }) else { return }
@@ -249,12 +355,14 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    /// Sets the transient companion thought (trimmed; empty text ignored). Never persisted.
     public func storeCompanionThought(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         companionThought = trimmed
     }
 
+    /// Human-readable description of where diary data is stored, from the active repository.
     public var storageLocation: String {
         repository.storageDescription()
     }
@@ -269,6 +377,8 @@ public final class DiaryStore {
     /// exists and still feeds the nutrition targets; it just no longer gates anything.
     @ObservationIgnored public var isAdultVerified: () -> Bool = { false }
 
+    /// Whether intimate-activity logging is available — a direct read of the fail-closed
+    /// ``isAdultVerified`` gate.
     public var isIntimateLoggingAllowed: Bool {
         isAdultVerified()
     }
@@ -283,16 +393,19 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    /// Persists the "hide cycle predictions" display toggle.
     public func setHidePredictions(_ hidePredictions: Bool) {
         settings.hidePredictions = hidePredictions
         scheduleSnapshotSave()
     }
 
+    /// Persists the "hide fertile window" display toggle.
     public func setHideFertileWindow(_ hideFertileWindow: Bool) {
         settings.hideFertileWindow = hideFertileWindow
         scheduleSnapshotSave()
     }
 
+    /// Persists the opt-in that lets period context adjust daily scoring.
     public func setPeriodAwareScoringEnabled(_ enabled: Bool) {
         settings.periodAwareScoringEnabled = enabled
         scheduleSnapshotSave()
@@ -312,6 +425,8 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    /// Sets the hard intimacy-visibility gate. Like ``setPeriodTrackingVisible(_:)``, an
+    /// explicit user choice must outrank derivation, so it stamps the migration marker.
     public func setIntimacyTrackingVisible(_ visible: Bool) {
         settings.intimacyTrackingVisible = visible
         // Same contract as `setPeriodTrackingVisible`: an explicit choice stamps the marker.
@@ -339,22 +454,26 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    /// Persists the opt-in that lets stress context adjust daily scoring.
     public func setStressAwarenessEnabled(_ enabled: Bool) {
         settings.stressAwarenessEnabled = enabled
         scheduleSnapshotSave()
     }
 
+    /// Records that the one-time period-context primer was shown (saves only on the first call).
     public func markPeriodContextPrimerSeen() {
         guard !settings.periodContextPrimerSeen else { return }
         settings.periodContextPrimerSeen = true
         scheduleSnapshotSave()
     }
 
+    /// Persists the companion's chosen appearance.
     public func setCompanionAppearance(_ appearance: CompanionAppearance) {
         settings.companionAppearance = appearance
         scheduleSnapshotSave()
     }
 
+    /// Persists the companion's name.
     public func setCompanionName(_ name: String) {
         settings.companionName = name
         scheduleSnapshotSave()
@@ -460,21 +579,25 @@ public final class DiaryStore {
         Set(loadDays().compactMap { $0.value.hasLoggedContent ? $0.key : nil })
     }
 
+    /// Persists the (trimmed) display name advertised to nearby peers on the proximity mesh.
     public func setProximityDisplayName(_ name: String) {
         settings.proximityDisplayName = name.trimmingCharacters(in: .whitespaces)
         scheduleSnapshotSave()
     }
 
+    /// Persists the developer toggle that reveals the proximity debug tools.
     public func setShowProximityDebugTools(_ value: Bool) {
         settings.showProximityDebugTools = value
         scheduleSnapshotSave()
     }
 
+    /// Persists the home-screen widget arrangement, normalized via `HomeWidget.normalized`.
     public func setHomeWidgets(_ widgets: [HomeWidget]) {
         settings.homeWidgets = HomeWidget.normalized(widgets)
         scheduleSnapshotSave()
     }
 
+    /// Persists the quick-log shortcut list, normalized via `FernletShortcut.normalizedQuickLog`.
     public func setQuickLogItems(_ items: [FernletShortcut]) {
         settings.quickLogItems = FernletShortcut.normalizedQuickLog(items)
         scheduleSnapshotSave()
@@ -495,6 +618,7 @@ public final class DiaryStore {
         }
     }
 
+    /// Duplicates a past meal onto today (fresh identity via `copyForToday`) and returns the copy.
     @discardableResult public func copyMeal(_ meal: Meal) -> Meal {
         let copiedMeal = meal.copyForToday()
         batchSnapshotPersistence {
@@ -511,6 +635,8 @@ public final class DiaryStore {
     // per the AIProviders Package.swift note). `appendMeal` is the diary's pure write seam the
     // facade calls after building the MealBuilder-derived meal.
 
+    /// Links a stored meal photo to today's meal with `mealID` (no-op if the meal is gone).
+    /// Only the photo id rides the synced blob — the bytes stay in the sealed media store.
     public func attachMealPhoto(mealID: UUID, photoID: UUID) {
         batchSnapshotPersistence {
             if let index = day.meals.firstIndex(where: { $0.id == mealID }) {
@@ -519,6 +645,8 @@ public final class DiaryStore {
         }
     }
 
+    /// Logs a saved recipe as a meal (built by `SavedRecipeService.makeMeal`) on `date`
+    /// (today when nil) and returns it.
     @discardableResult public func logSavedRecipe(_ recipe: RecipeDefinition, mealType: MealType? = nil, date: String? = nil) -> Meal {
         let targetDate = date ?? todayKey
         assert(!targetDate.isEmpty, "saved recipe meal date required")
@@ -527,6 +655,8 @@ public final class DiaryStore {
         return meal
     }
 
+    /// Logs a previously web-imported product as a one-serving meal with truthful
+    /// web-import provenance.
     @discardableResult public func logWebImportedFoodProduct(_ foodItem: FoodItem, mealType: MealType? = nil, date: String? = nil) -> Meal {
         logFoodItemMeal(
             foodItem, mealType: mealType, date: date,
@@ -684,6 +814,8 @@ public final class DiaryStore {
         return replaced
     }
 
+    /// Upserts a planned workout on `date` (replace-by-id), keeping the day's plan ordered by
+    /// creation time.
     public func planWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
         assert(!date.isEmpty, "planned workout date required")
         mutateDay(date: date) { day in
@@ -693,6 +825,8 @@ public final class DiaryStore {
         }
     }
 
+    /// The split to pre-select when planning on `date`: the same day's latest planned split if
+    /// one exists, else the most recent earlier day's.
     public func copiedForwardWorkoutSplit(before date: String) -> WorkoutSplit? {
         assert(!date.isEmpty, "planned workout date required")
         let days = loadDays()
@@ -706,6 +840,8 @@ public final class DiaryStore {
             .first
     }
 
+    /// The first planned workout exactly seven days before `date`, if any — the copy-forward
+    /// source for weekly repeats.
     public func previousWeekPlannedWorkout(for date: String) -> PlannedWorkout? {
         assert(!date.isEmpty, "planned workout date required")
         guard let targetDate = FernletDate.date(fromDayKey: date),
@@ -716,6 +852,7 @@ public final class DiaryStore {
         return loadDay(for: previousWeekKey).plannedWorkouts.first
     }
 
+    /// Removes a planned workout from `date`'s plan (no-op if absent).
     public func deletePlannedWorkout(_ plannedWorkout: PlannedWorkout, date: String) {
         assert(!date.isEmpty, "planned workout date required")
         mutateDay(date: date) { day in
@@ -751,10 +888,12 @@ public final class DiaryStore {
         }
     }
 
+    /// Persists the whole workout profile aggregate.
     public func setWorkoutProfile(_ profile: WorkoutProfile) {
         batchSnapshotPersistence { settings.workoutProfile = profile }
     }
 
+    /// Adds or replaces a workout location by id, optionally making it the active one.
     public func upsertWorkoutLocation(_ location: WorkoutLocation, makeActive: Bool = false) {
         batchSnapshotPersistence {
             if let index = settings.workoutLocations.firstIndex(where: { $0.id == location.id }) {
@@ -766,6 +905,8 @@ public final class DiaryStore {
         }
     }
 
+    /// Deletes a workout location. The list never goes empty (falls back to `.fullGym`) and
+    /// the active id is repointed if it was the one deleted.
     public func deleteWorkoutLocation(_ id: UUID) {
         batchSnapshotPersistence {
             settings.workoutLocations.removeAll { $0.id == id }
@@ -776,10 +917,13 @@ public final class DiaryStore {
         }
     }
 
+    /// Persists which workout location is currently active.
     public func setActiveWorkoutLocation(_ id: UUID) {
         batchSnapshotPersistence { settings.activeWorkoutLocationID = id }
     }
 
+    /// Replaces the whole location list (empty input falls back to `.fullGym`), keeping
+    /// `activeID` only if it survives the replacement.
     public func setWorkoutLocations(_ locations: [WorkoutLocation], activeID: UUID?) {
         batchSnapshotPersistence {
             let normalized = locations.isEmpty ? [WorkoutLocation.fullGym] : locations
@@ -792,10 +936,13 @@ public final class DiaryStore {
         }
     }
 
+    /// Persists the selected workout split id (nil clears the selection).
     public func setSelectedSplit(_ id: String?) {
         batchSnapshotPersistence { settings.workoutProfile.selectedSplitID = id }
     }
 
+    /// Bumps the per-exercise progression counter once per distinct non-empty name — the
+    /// input to progression suggestions. ``decrementCompletedExercises(_:)`` is the exact reverse.
     public func recordCompletedExercises(_ names: [String]) {
         let deduped = Array(Set(names)).filter { $0.isEmpty == false }
         guard deduped.isEmpty == false else { return }
@@ -823,6 +970,7 @@ public final class DiaryStore {
 
     // MARK: - Sleep / hydration / hygiene / care
 
+    /// Records today's sleep log (delegates to the explicit-date overload).
     public func setSleep(hours: Double?, quality: SleepQuality, note: String) {
         // Delegate to the explicit-date overload (the single owner of SleepLog construction/trim).
         // mutateDay(date: todayKey) takes the today-key branch — `day.sleep = …; scheduleSnapshotSave()`
@@ -831,25 +979,31 @@ public final class DiaryStore {
         setSleep(hours: hours, quality: quality, note: note, date: todayKey)
     }
 
+    /// Increments today's water bottle count (capped at 30).
     public func addBottle() {
         day.bottleCount = min(day.bottleCount + 1, 30)
         scheduleSnapshotSave()
     }
 
+    /// Decrements today's water bottle count (floored at 0).
     public func removeBottle() {
         day.bottleCount = max(day.bottleCount - 1, 0)
         scheduleSnapshotSave()
     }
 
+    /// Toggles the personal-care task backing a legacy hygiene item (no-op when no task maps to it).
     public func toggleHygiene(_ item: HygieneItem) {
         guard let task = personalCareTasks.first(where: { $0.defaultHygieneItem == item }) else { return }
         togglePersonalCareTask(task)
     }
 
+    /// Flips a personal-care task's completion state for today.
     public func togglePersonalCareTask(_ task: PersonalCareTask) {
         setPersonalCareTask(task, completed: !isPersonalCareTaskCompleted(task))
     }
 
+    /// Sets a task's completion for today, mirroring default tasks into the legacy `hygiene`
+    /// set in both directions.
     public func setPersonalCareTask(_ task: PersonalCareTask, completed: Bool) {
         batchSnapshotPersistence {
             if completed {
@@ -862,6 +1016,8 @@ public final class DiaryStore {
         }
     }
 
+    /// Appends a custom personal-care task (trimmed; empty labels ignored) and re-normalizes
+    /// the list.
     public func addPersonalCareTask(label: String, group: String) {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -872,6 +1028,8 @@ public final class DiaryStore {
         }
     }
 
+    /// Deletes a personal-care task and scrubs its completion (and mirrored hygiene item)
+    /// from today.
     public func removePersonalCareTask(_ task: PersonalCareTask) {
         batchSnapshotPersistence {
             settings.personalCareTasks = PersonalCareTask.normalized(personalCareTasks.filter { $0.id != task.id })
@@ -880,6 +1038,8 @@ public final class DiaryStore {
         }
     }
 
+    /// Records the sleep log for an explicit date — the single owner of `SleepLog`
+    /// construction and note trimming.
     public func setSleep(hours: Double?, quality: SleepQuality, note: String, date: String) {
         assert(!date.isEmpty, "sleep date required")
         mutateDay(date: date) {
@@ -887,17 +1047,22 @@ public final class DiaryStore {
         }
     }
 
+    /// Sets an explicit date's bottle count, clamped to 0…30 (the calendar back-edit path).
     public func setBottleCount(_ count: Int, date: String) {
         assert(!date.isEmpty, "water date required")
         let clamped = min(max(count, 0), 30)
         mutateDay(date: date) { $0.bottleCount = clamped }
     }
 
+    /// Back-edit path that replaces a date's hygiene set by mapping items to task ids
+    /// (see ``setPersonalCareTaskIDs(_:date:)``).
     public func setHygiene(_ hygiene: Set<HygieneItem>, date: String) {
         let ids = Set(hygiene.map(\.rawValue))
         setPersonalCareTaskIDs(ids, date: date)
     }
 
+    /// Replaces a date's completed-task ids wholesale, deriving the legacy `hygiene` set from
+    /// whichever ids are default items.
     public func setPersonalCareTaskIDs(_ ids: Set<String>, date: String) {
         assert(!date.isEmpty, "personal care date required")
         let defaultItems = Set(ids.compactMap(HygieneItem.init(rawValue:)))
@@ -907,6 +1072,7 @@ public final class DiaryStore {
         }
     }
 
+    /// Replaces the goal list (capped at 12) and persists.
     public func replaceGoals(_ newGoals: [FitnessGoal]) {
         goals = Array(newGoals.prefix(12))
         scheduleSnapshotSave()
@@ -914,10 +1080,12 @@ public final class DiaryStore {
 
     // MARK: - Sickness / dismissals
 
+    /// Whether the user marked `dateKey` as a sick day (softens scoring and the companion state).
     public func isSick(on dateKey: String) -> Bool {
         settings.sickDays[dateKey] ?? false
     }
 
+    /// Marks or unmarks a sick day; unmarking removes the key so the synced map stays sparse.
     public func setSick(_ value: Bool, on dateKey: String) {
         if value {
             settings.sickDays[dateKey] = true
@@ -927,20 +1095,25 @@ public final class DiaryStore {
         scheduleSnapshotSave()
     }
 
+    /// Whether today's intent prompt has been dismissed.
     public var isTodayIntentDismissed: Bool {
         settings.intentDismissedDays[todayKey] ?? false
     }
 
+    /// Dismisses today's intent prompt for the rest of the day.
     public func dismissTodayIntent() {
         settings.intentDismissedDays[todayKey] = true
         scheduleSnapshotSave()
     }
 
+    /// Whether the micronutrient nudge bubble for `key` may show (true when never dismissed
+    /// or once its suppression window has lapsed).
     public func isNutrientBubbleActive(for key: String) -> Bool {
         guard let until = settings.nutrientBubbleDismissedUntil[key] else { return true }
         return Date() >= until
     }
 
+    /// Suppresses the nudge bubble for `key` for 14 days.
     public func dismissNutrientBubble(_ key: String) {
         settings.nutrientBubbleDismissedUntil[key] = Date().addingTimeInterval(14 * 86_400)
         scheduleSnapshotSave()
@@ -973,6 +1146,9 @@ public final class DiaryStore {
 
     // MARK: - Onboarding
 
+    /// Commits the onboarding results in one batch (profile, preferences, goal, calorie
+    /// display) and marks onboarding done — also stamping the period-visibility migration
+    /// marker, since onboarding just made a real visibility determination.
     public func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {
         batchSnapshotPersistence {
             settings.userProfile = profile
@@ -990,6 +1166,10 @@ public final class DiaryStore {
 
     // MARK: - Recipes & ingredients (pure)
 
+    /// Creates a manual recipe from editor inputs: resolves or mints custom-ingredient
+    /// `FoodItem`s via `CustomIngredientUpsert`, sanitizes the steps, and inserts the recipe
+    /// at the top of the book.
+    /// - Returns: The newly created recipe.
     @discardableResult public func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) -> RecipeDefinition {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         assert(!trimmedName.isEmpty, "recipe name required")
@@ -1017,9 +1197,14 @@ public final class DiaryStore {
         }
     }
 
-    // `steps` is REQUIRED (no default): it is written unconditionally at line ~978, so a defaulted-nil
-    // would silently erase a recipe's stored steps for any caller that forgot to pass them. Callers must
-    // always pass the editor's current step list (nil/[] only when the user genuinely cleared them).
+    /// Rewrites an existing recipe in place from editor inputs, with the same ingredient
+    /// resolution and step sanitizing as ``addRecipe(name:servings:notes:ingredients:steps:)``.
+    /// A no-op when the recipe id is no longer in the book.
+    ///
+    /// - Important: `steps` is REQUIRED (no default): it is written unconditionally below, so a
+    ///   defaulted-nil would silently erase a recipe's stored steps for any caller that forgot
+    ///   to pass them. Callers must always pass the editor's current step list (nil/[] only
+    ///   when the user genuinely cleared them).
     public func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]?) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         assert(!trimmedName.isEmpty, "recipe name required")
@@ -1057,6 +1242,8 @@ public final class DiaryStore {
         }
     }
 
+    /// Resolves (or mints) a custom-ingredient `FoodItem` from an editor row without attaching
+    /// it to any recipe. Returns nil for a blank name.
     @discardableResult public func saveCustomIngredient(_ ingredient: ManualRecipeIngredientInput) -> FoodItem? {
         guard !ingredient.trimmedName.isEmpty else { return nil }
         return batchSnapshotPersistence {
@@ -1068,6 +1255,8 @@ public final class DiaryStore {
         }
     }
 
+    /// A previously web-imported product matching `query` (by stored query tag or normalized
+    /// name), so a repeat lookup needs no new import.
     public func cachedWebImportedFoodProduct(for query: String) -> FoodItem? {
         let normalizedQuery = FoodItemSearch.normalized(query)
         guard !normalizedQuery.isEmpty else { return nil }
@@ -1078,6 +1267,7 @@ public final class DiaryStore {
         }
     }
 
+    /// Removes a recipe from the book by id and persists.
     public func deleteRecipe(_ recipe: RecipeDefinition) {
         recipes.removeAll { $0.id == recipe.id }
         scheduleSnapshotSave()
@@ -1088,18 +1278,22 @@ public final class DiaryStore {
 
     // MARK: - Workshop & memories (pure)
 
+    /// Prepends a workshop texture entry (free-text observation plus tags).
     public func addTexture(_ body: String, tags: Set<TextureTag>) {
         batchSnapshotPersistence {
             workshop.textureEntries.insert(TextureEntry(body: body, tags: tags), at: 0)
         }
     }
 
+    /// Deletes a companion memory note by id.
     public func deleteMemory(_ memory: MemoryNote) {
         batchSnapshotPersistence {
             memories.removeAll { $0.id == memory.id }
         }
     }
 
+    /// Edits a memory note's category and text (trimmed, text capped at 240 characters; empty
+    /// text is ignored, an empty category falls back to "note").
     public func updateMemory(_ memory: MemoryNote, category: String, text: String) {
         guard let index = memories.firstIndex(where: { $0.id == memory.id }) else { return }
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1113,26 +1307,35 @@ public final class DiaryStore {
 
     // MARK: - Tier-two memories (repository-backed)
 
+    /// The repository-backed tier-two (long-horizon) memory records — read live from the
+    /// repository, never cached on the store.
     public var tierTwoMemories: [TierTwoMemoryRecord] {
         repository.loadTierTwoMemories()
     }
 
+    /// Replaces the tier-two memory records wholesale in the repository.
     public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) {
         repository.replaceTierTwoMemories(records)
     }
 
+    /// Every persisted day keyed by date, straight from the repository WITHOUT overlaying the
+    /// in-memory today. Prefer ``loadDays()`` unless the raw persisted view is the point.
     public func loadAllDaysFromRepository() -> [String: FernletDay] {
         repository.loadAllDays()
     }
 
     // MARK: - Past-date access (repository-backed)
 
+    /// Every day keyed by date, with the in-memory ``day`` overlaid on ``todayKey`` — the
+    /// consistent full-history read.
     public func loadDays() -> [String: FernletDay] {
         var days = repository.loadAllDays()
         days[todayKey] = day
         return days
     }
 
+    /// The day for `dateKey`: the live in-memory ``day`` when it is today, else the
+    /// repository's persisted row.
     public func loadDay(for dateKey: String) -> FernletDay {
         if dateKey == todayKey { return day }
         return repository.loadDay(for: dateKey, todayKey: todayKey)
@@ -1164,12 +1367,16 @@ public final class DiaryStore {
 
     // MARK: - WorkoutSync (pure)
 
+    /// Whether any day in history contains a workout with this Fernlet id — the dedup guard
+    /// for HealthKit reconciliation.
     public func workoutExists(id: UUID) -> Bool {
         loadDays().values.contains { day in
             day.workouts.contains { $0.id == id }
         }
     }
 
+    /// Whether any day in history contains a workout stamped with this Apple Health UUID, so
+    /// an already-linked sample is never imported twice.
     public func workoutExists(healthKitUUID: UUID) -> Bool {
         loadDays().values.contains { day in
             day.workouts.contains { $0.healthKitUUID == healthKitUUID }
@@ -1224,8 +1431,11 @@ public final class DiaryStore {
 
     // MARK: - Day mutation workhorse
 
-    /// Mutates the day for the given date key. Today mutates the in-memory day;
-    /// past dates round-trip through the repository.
+    /// Mutates the day for the given date key — the single write seam every per-day content
+    /// mutation funnels through. Today mutates the in-memory ``day`` and schedules a snapshot
+    /// save; past dates round-trip through the repository (with the sealed-field strip — see
+    /// `mutatePastDay`).
+    /// - Returns: Whether the write succeeded (always true for today).
     @discardableResult
     public func mutateDay(date: String, _ change: (inout FernletDay) -> Void) -> Bool {
         assert(!date.isEmpty, "date key required")
@@ -1237,6 +1447,9 @@ public final class DiaryStore {
         return mutatePastDay(date, change)
     }
 
+    /// Loads, mutates, and re-saves a past day's repository row. Every past-day write passes
+    /// through `SanitizedDay` first, so sealed journal text and hidden cycle/intimate context
+    /// can never leak into the (potentially iCloud-synced) blob — see the inline note.
     @discardableResult
     private func mutatePastDay(_ dateKey: String, _ mutate: (inout FernletDay) -> Void) -> Bool {
         assert(!dateKey.isEmpty, "date key required")
@@ -1260,6 +1473,8 @@ public final class DiaryStore {
 
     // MARK: - Snapshot / reset helpers
 
+    /// Runs `updates`, then schedules a single snapshot save — the standard wrapper for
+    /// multi-field mutations so intent stays "one logical change, one save".
     @discardableResult
     func batchSnapshotPersistence<T>(_ updates: () throws -> T) rethrows -> T {
         let result = try updates()
@@ -1311,9 +1526,16 @@ public final class DiaryStore {
 
     // MARK: - Launch no-ops
 
+    /// Deliberate no-op kept for the existing launch/UI call sites (forwarded by the facade).
+    /// The deferred seeding this once gated is gone — see ``loadBundledFoodItemsForLaunch()``.
     public func markLaunchScreenDismissed() {}
 
+    /// Deliberate no-op: the bundled food catalog is now a read-only SQLite store opened
+    /// lazily by `FoodCatalog`, so there is no heavyweight seed to await at launch. Kept so
+    /// the launch flow's call sites keep a stable seam.
     public func loadBundledFoodItemsForLaunch() async {}
 
+    /// Deliberate no-op — same story as ``loadBundledFoodItemsForLaunch()``: bundled foods
+    /// are never seeded into ``foodItems`` anymore.
     public func ensureBundledFoodItemsSeeded() {}
 }

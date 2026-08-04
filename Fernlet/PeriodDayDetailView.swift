@@ -4,6 +4,14 @@ import FernletDomainModel
 import PrivateHealthStore
 import FernletUI
 
+/// Read-only detail screen for one cycle day: the raw HealthKit samples (flow, cervical mucus,
+/// ovulation test, intermenstrual bleeding, basal body temperature) and the sealed narrative
+/// (note plus symptom chips with optional intensity ratings).
+///
+/// Pushed from ``PeriodTrackerView``'s calendar; the Edit and Delete buttons are plain callbacks
+/// so the parent owns the actual mutation (Edit re-opens ``LogPeriodSheet`` for the day, Delete
+/// routes through `PeriodTrackerStore.deleteEntry`). Displays whatever the `CycleDayEntry` already
+/// holds — narrative text is only present when the store loaded it with an unlocked content key.
 struct PeriodDayDetailView: View {
     var entry: CycleDayEntry
     var onEdit: () -> Void = { }

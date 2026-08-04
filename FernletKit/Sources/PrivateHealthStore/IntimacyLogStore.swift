@@ -25,11 +25,16 @@ public nonisolated struct IntimacyTrackingHiddenError: Error, Equatable {
 /// real derived closure in its launch task, next to `periodStore.isVisible`, before any load runs.
 @MainActor
 public final class IntimacyLogStore {
+    /// The sealed persistence layer this funnel gates; the only object allowed to touch it.
     private let repository: IntimacyLogRepository
 
     /// Fail-closed hard gate. See `PeriodTrackerStore.isVisible` — same contract, same reasoning.
     public var isVisible: () -> Bool = { false }
 
+    /// Creates the funnel over a sealed repository.
+    ///
+    /// - Parameter repository: The sealed CRUD layer; defaults to one on the shared private store.
+    ///   Tests inject a repository backed by an in-memory context.
     public init(repository: IntimacyLogRepository = IntimacyLogRepository()) {
         self.repository = repository
     }

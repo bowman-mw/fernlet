@@ -15,6 +15,24 @@ import FernletUI
 
 // MARK: - Setup view
 
+/// Five-step first-time passcode configuration flow for the Fernlet app lock.
+///
+/// Walks the user through: lock-kind selection (4-digit PIN, 6-digit PIN, or 8–64 character
+/// password), passcode entry, confirmation, an optional biometric-unlock toggle, and a
+/// no-recovery disclosure sheet that must be acknowledged before anything is written. Only
+/// after the disclosure is accepted does ``finalizeSetup()`` call
+/// `FernletLockService.configure(credential:)` — which derives the Scrypt verifier and wraps
+/// the content key in the keychain — and, if requested, `setBiometricEnabled(_:passcode:)`.
+///
+/// Presented as a sheet from the app's settings and privacy screens, the onboarding lock
+/// step, and ``FernletLockGateModifier``'s not-configured call-to-action overlay. Reads the
+/// environment-injected `FernletLockService` (from the `FernletLock` module) and dismisses
+/// itself after a brief success toast. If `configure` throws, the flow returns to the entry
+/// step with both passcode fields cleared and the error shown inline. Runs on the main actor
+/// (the module's default isolation).
+///
+/// - Important: The disclosure is not ceremonial — a forgotten passcode makes the sealed
+///   journal, cycle, and intimacy notes permanently unreadable; there is no recovery path.
 public struct FernletLockSetupView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
@@ -222,6 +240,8 @@ public struct FernletLockSetupView: View {
         }
     }
 
+    /// Advances to the biometric step when the confirmation matches the original entry;
+    /// otherwise shows the mismatch error and clears the confirmation field for retry.
     private func validateAndAdvanceFromConfirm() {
         if passcode == confirmation {
             errorMessage = nil
@@ -313,6 +333,11 @@ public struct FernletLockSetupView: View {
         .tint(Color.moss)
     }
 
+    /// Commits the configuration after the disclosure is acknowledged: builds the
+    /// `FernletLockCredential` for the chosen kind, calls the lock service's
+    /// `configure(credential:)`, optionally enables biometrics, then shows the success
+    /// toast and dismisses. On a `configure` error the flow rewinds to the entry step
+    /// with both fields cleared.
     private func finalizeSetup() {
         Task { @MainActor in
             do {
@@ -384,6 +409,10 @@ public struct FernletLockSetupView: View {
         }
     }
 
+    /// The four in-flow screens of the setup wizard, in order.
+    ///
+    /// Drives ``FernletLockSetupView``'s step routing; the fifth stage (the no-recovery
+    /// disclosure) is a sheet layered over the biometric step rather than a case here.
     private enum SetupStep {
         case kindPicker, entry, confirm, biometric
     }
@@ -391,9 +420,38 @@ public struct FernletLockSetupView: View {
 
 // MARK: - Unlock view
 
+/// The unlock screen shown while the Fernlet app lock is engaged.
+///
+/// Renders the credential prompt matching the configured kind — a PIN-dot row plus
+/// ``FernletNumericPad`` for PINs, or a secure password field — and hands the entry to
+/// `FernletLockService.unlock(passcode:)`, which verifies it and unwraps the content key.
+/// It mirrors the service's full failure-state machine:
+///
+/// - An attempt counter warns how many tries remain before the service's 4-attempt lockout.
+/// - While a cooldown deadline is active, input is replaced by a countdown card refreshed by
+///   a 1-second timer; when the deadline passes, the service state is refreshed so input
+///   returns.
+/// - When the service reports `requiresReset` (cooldown ladder exhausted), input is replaced
+///   by a card explaining that only a destructive reset — invoked through `onResetRequested`,
+///   since the confirmation dialog lives in the presenting context — can continue.
+///
+/// If biometric unlock is enabled, `onAppear` asks the service's
+/// `consumeAutoBiometricPromptOpportunity()` before auto-triggering Face ID / Touch ID, so
+/// the prompt fires once per lock session rather than on every recreation; a manual
+/// biometric button remains available. Biometric failures fall back to passcode entry.
+///
+/// Used as ``FernletLockGateModifier``'s overlay and directly by the app's progress-photo
+/// timeline. Runs on the main actor (the module's default isolation); the lock service is
+/// environment-injected.
 public struct FernletLockView: View {
     @Environment(FernletLockService.self) private var lockService
+    /// Called after any successful unlock (passcode or biometric); the gate overlay passes
+    /// an empty closure because it disappears reactively, while sheet presenters use it
+    /// to dismiss.
     var onUnlocked: () -> Void
+    /// Invoked when the user taps "Reset app lock" on the reset-required card; the
+    /// presenting context owns the destructive confirmation. When nil, no reset button
+    /// is offered.
     var onResetRequested: (() -> Void)?
 
     @State private var passcode = ""
@@ -401,8 +459,16 @@ public struct FernletLockView: View {
     @State private var isCheckingBiometric = false
     @State private var isUnlocking = false
     @State private var cooldownRemaining: TimeInterval = 0
+    /// One-second tick that keeps the cooldown countdown text current while a deadline
+    /// is active.
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
+    /// Creates the unlock screen.
+    ///
+    /// - Parameters:
+    ///   - onUnlocked: Called after a successful passcode or biometric unlock.
+    ///   - onResetRequested: Optional handler for the reset-required card's destructive
+    ///     reset button; omit it to hide the button.
     public init(onUnlocked: @escaping () -> Void, onResetRequested: (() -> Void)? = nil) {
         self.onUnlocked = onUnlocked
         self.onResetRequested = onResetRequested
@@ -611,6 +677,10 @@ public struct FernletLockView: View {
 
     // MARK: Actions
 
+    /// Submits the entered passcode to `FernletLockService.unlock(passcode:)`, clearing the
+    /// field on every outcome. A `cooldownActive` error silently switches to the countdown
+    /// card; other errors surface inline. Re-entrant calls are ignored while a check is
+    /// in flight.
     private func attemptUnlock() {
         guard !isUnlocking else { return }
         errorMessage = nil
@@ -635,6 +705,9 @@ public struct FernletLockView: View {
         }
     }
 
+    /// Runs `FernletLockService.unlockWithBiometrics()`. Unavailable biometrics fall back
+    /// silently to passcode entry; recognition failures and reset-required states surface
+    /// as inline messages. Re-entrant calls are ignored while a check is in flight.
     private func triggerBiometric() {
         guard !isCheckingBiometric else { return }
         errorMessage = nil
@@ -656,6 +729,9 @@ public struct FernletLockView: View {
         }
     }
 
+    /// Recomputes the remaining cooldown from the service's locked-state deadline; once the
+    /// deadline passes it calls `lock(reason: .manual)` purely to make the service re-read
+    /// (and clear) the expired deadline so input is re-enabled.
     private func refreshCooldown() {
         if case .locked(let deadline) = lockService.state, let d = deadline {
             cooldownRemaining = max(0, d.timeIntervalSinceNow)
@@ -670,6 +746,8 @@ public struct FernletLockView: View {
 
     // MARK: Helpers
 
+    /// True while a future cooldown deadline is in force, replacing the input section with
+    /// the countdown card and hiding the biometric button.
     private var isInputDisabled: Bool {
         if case .locked(let deadline) = lockService.state, let d = deadline, d > .now {
             return true
@@ -699,6 +777,8 @@ public struct FernletLockView: View {
 
 // MARK: - PIN dots row
 
+/// Row of `total` circles with the first `current.count` filled — the masked progress
+/// indicator shown above ``FernletNumericPad`` in both the setup and unlock flows.
 private func pinDotsRow(current: String, total: Int) -> some View {
     HStack(spacing: 16) {
         ForEach(0..<total, id: \.self) { index in
@@ -712,8 +792,17 @@ private func pinDotsRow(current: String, total: Int) -> some View {
 
 // MARK: - Numeric pad
 
+/// Custom 3×4 numeric keypad (digits 0–9 plus backspace) used for PIN entry.
+///
+/// A binding-driven input surface: taps append digits to `value` up to `maxLength` and the
+/// backspace key removes the last one; callers react to the binding (both lock flows
+/// auto-advance when the PIN reaches its full length). Used by ``FernletLockSetupView`` and
+/// ``FernletLockView`` here, and by the app's passcode-change flows in `SettingsSheet`, in
+/// place of the system keyboard so PIN entry stays visually consistent with the lock screens.
 public struct FernletNumericPad: View {
+    /// The PIN accumulated so far; owned by the caller, mutated one digit at a time.
     @Binding var value: String
+    /// Maximum digit count (4 or 6 in practice); key presses beyond it are ignored.
     var maxLength: Int
 
     private let rows: [[String]] = [
@@ -778,6 +867,8 @@ public struct FernletNumericPad: View {
 
 // MARK: - Biometric helpers (shared by Setup + Unlock)
 
+/// User-facing name for a biometry type ("Face ID", "Touch ID", "Optic ID", or the generic
+/// "Biometrics"), shared by the setup and unlock screens and the app's lock settings.
 public func biometricName(_ type: LABiometryType) -> String {
     switch type {
     case .faceID: "Face ID"
@@ -787,6 +878,9 @@ public func biometricName(_ type: LABiometryType) -> String {
     }
 }
 
+/// SF Symbol name matching a biometry type, paired with ``biometricName(_:)`` wherever a
+/// biometric label is rendered. Types without a dedicated symbol (including Optic ID) fall
+/// back to "person.badge.key".
 public func biometricSystemImage(_ type: LABiometryType) -> String {
     switch type {
     case .faceID: "faceid"

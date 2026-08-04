@@ -4,14 +4,22 @@ import FernletPersistence
 import FernletDomainModel
 
 /// Owns the milestone (cumulative achievements) ledger in memory and persists it to its own
-/// per-row store — a direct mirror of `CoinLedgerService`'s debounced append-only shape, minus any
+/// per-row store — a direct mirror of ``CoinLedgerService``'s debounced append-only shape, minus any
 /// reset: milestone rows are lifetime memories of care and deliberately survive
 /// `FernletStore.resetAll` (the repository protocol has no delete; see
 /// `MilestoneLedgerRepositoring`). Lifetime counts are distinct-row counts over the union-merged
 /// rows (`MilestoneEconomy`), so they are monotonic and sync-safe across devices.
+///
+/// Collaborators: the injected `MilestoneLedgerRepositoring` store (concretely CloudKitSync's
+/// `MilestoneLedgerRepository`, behind the FernletPersistence protocol) and `FernletStore`, which
+/// records events from both the live logging hooks and the day-history reconcile — deterministic
+/// event ids make those overlapping inputs safe. Same durability invariant as the coin ledger:
+/// pending rows are the sole un-persisted copy, cleared only after a confirmed append, with
+/// ``reloadFromStore()`` re-merging them after a failed flush. `@MainActor` and `@Observable`.
 @MainActor
 @Observable
 public final class MilestoneLedgerService {
+    /// The in-memory ledger, union-merged (deduplicated by id) on every load.
     public private(set) var entries: [MilestoneLedgerEntry] = []
 
     @ObservationIgnored private let repository: any MilestoneLedgerRepositoring
@@ -20,6 +28,7 @@ public final class MilestoneLedgerService {
     @ObservationIgnored private var pendingAppends: [MilestoneLedgerEntry] = []
     @ObservationIgnored private var saveScheduled = false
 
+    /// Creates the service over its per-row store; `initialEntries` seeds the ledger before the first load.
     public init(repository: any MilestoneLedgerRepositoring, initialEntries: [MilestoneLedgerEntry] = []) {
         self.repository = repository
         self.entries = initialEntries
@@ -34,10 +43,12 @@ public final class MilestoneLedgerService {
 
     // MARK: - Loading
 
+    /// Replaces the in-memory ledger with the store's rows, union-merged by id.
     public func loadSync() {
         entries = MilestoneEconomy.deduplicatedByID(repository.load())
     }
 
+    /// Async variant of ``loadSync()`` for the off-main initial load.
     public func loadAsync() async {
         entries = MilestoneEconomy.deduplicatedByID(await repository.loadAsync())
     }
@@ -85,6 +96,7 @@ public final class MilestoneLedgerService {
 
     // MARK: - Internals
 
+    /// Coalesces mutations into one debounced main-actor flush per burst.
     private func scheduleSave() {
         guard !saveScheduled else { return }
         saveScheduled = true

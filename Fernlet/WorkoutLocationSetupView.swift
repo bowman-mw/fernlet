@@ -3,12 +3,22 @@ import FernletDomainModel
 import FernletUI
 
 /// Location creator + equipment selection, per the design: pick where you train (saved locations or
-/// a preset template), then check off the equipment that's there in a categorized grid. Equipment is
-/// stored granularly and mapped to coarse capabilities the planning engine reasons about.
+/// a preset template), then check off the equipment that's there in a categorized grid.
+///
+/// Equipment is stored granularly and mapped to coarse capabilities the planning engine reasons
+/// about. Edits accumulate in local `@State` and commit through `commitEdits()` at every exit from
+/// the equipment step (save bar, back chevron, and the swipe-dismiss `onDisappear` backstop, guarded
+/// so a brand-new not-yet-saved location isn't committed by a cancel-swipe). Deletes persist
+/// immediately at their confirm, because a swipe-dismiss after a delete must not silently resurrect
+/// the location.
 struct WorkoutLocationSetupView: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
 
+    /// Which of the sheet's two steps is showing: the location grid or the equipment checklist.
+    ///
+    /// Advancing to `.equipment` always sets `editingIndex` first, so the checklist always has a
+    /// concrete location to edit.
     private enum Step { case location, equipment }
 
     @State private var step: Step = .location

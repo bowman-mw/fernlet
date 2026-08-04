@@ -3,6 +3,10 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
+/// The segment filter for the trusted-peer list: everyone, active friends, or blocked peers.
+///
+/// Backing model for the `HubSectionPicker` at the top of ``FriendListView``; the raw value doubles
+/// as the visible segment title.
 private enum FriendListFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case friends = "Friends"
@@ -10,6 +14,17 @@ private enum FriendListFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// The "Friends & Blocks" management screen: every trusted proximity peer, searchable and
+/// filterable, with block/unblock, remove, report, and heart-sending per peer.
+///
+/// Pushed from the Friends tab header. Rows expand in place into a detail card (fingerprint,
+/// accepted/seen dates, mode, status timestamps) whose actions mirror the swipe actions; all
+/// mutations go through ``FernletStore`` (`blockProximityPeer`, `revokeTrustedProximityPeer`,
+/// `reportProximityPeer`, …). The screen also owns the user's mesh display name — committed only
+/// on Return / focus loss / disappear, never per keystroke, because the name rides the discovery
+/// broadcast and a half-typed value must never persist — and the "Send good vibes" heart flow:
+/// live presence sends via `PresenceManager`, plus the consent-gated away-hearts dead-drop path
+/// (`HeartDropService.queueHeart`) with nothing-silent status copy from ``AwayHeartsCopy``.
 struct FriendListView: View {
     var store: FernletStore
     @Binding var isTabBarCompact: Bool
@@ -661,11 +676,16 @@ struct FriendListView: View {
     }
 }
 
-/// The "Send good vibes" affordance label in its presentation states (good-vibes 10c): a filled
-/// terracotta button when ready, a spinner while the multi-second send pipeline runs, a soft
-/// filled "cooldown" state within the 5-minute window, and a muted state when the friend isn't
-/// nearby. Presentation only — the enabling/disabling and the send action stay with the caller.
+/// The "Send good vibes" affordance label in its presentation states (good-vibes 10c).
+///
+/// A filled terracotta button when ready, a spinner while the multi-second send pipeline runs, a
+/// soft filled "cooldown" state within the 5-minute window, and a muted state when the friend
+/// isn't nearby. Presentation only — the enabling/disabling and the send action stay with the
+/// caller (``FriendListView``'s heart row; ``DisposableCameraView`` reuses just the
+/// ``SendGoodVibesLabel/state(onCooldown:reachable:sending:)`` mapping for its compact form).
 struct SendGoodVibesLabel: View {
+    /// The four presentation states; derive one with `state(onCooldown:reachable:sending:)` so
+    /// every surface ranks sending > cooldown > reachability identically.
     enum SendState { case ready, sending, cooldown, notNearby }
 
     var state: SendState

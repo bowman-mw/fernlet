@@ -7,15 +7,34 @@ import FernletDomainModel
 import FoundationModels
 #endif
 
+/// The structured result of a recipe web import: name, ingredient lines, per-serving macros, and
+/// optional ordered cooking steps, tied to the page they came from.
+///
+/// Produced by ``RecipeWebImporter`` from either JSON-LD structured data (macros from the site's
+/// own nutrition label when present, else USDA estimation against the local catalog) or the
+/// on-device model fallback (always USDA-estimated, `servings == 1`). The `AppServices` module
+/// bridges it into a `RecipeDefinition` via `RecipeDefinition(importedRecipe:)` — the wall-legal
+/// downward edge that carries imports into the diary. Explicitly `nonisolated`: a plain value type
+/// in a MainActor-default module.
 public nonisolated struct ImportedRecipe: Equatable {
+    /// The page the recipe was imported from, retained for attribution.
     public var sourceURL: URL
+    /// The recipe title as the source gave it.
     public var name: String
+    /// Raw ingredient lines exactly as the source listed them (unparsed display strings).
     public var ingredients: [String]
+    /// A short 1–2 sentence cooking-method blurb (site instructions condensed, or model-written).
     public var summary: String
+    /// The serving count the macros are divided by; 1 when the source gave none.
     public var servings: Int
+    /// Per-serving grams of protein.
     public var protein: Int
+    /// Per-serving grams of carbohydrate.
     public var carbs: Int
+    /// Per-serving grams of fat.
     public var fat: Int
+    /// Per-serving micronutrient detail from the site's own nutrition label; empty when macros were
+    /// estimated from ingredients.
     public var micronutrients: Micronutrients
     /// Ordered cooking steps parsed from JSON-LD `recipeInstructions` (F5). `nil` when the source had no
     /// structured instructions. `summary` stays the short blurb; steps are a separate, ordered list.
@@ -46,12 +65,27 @@ public nonisolated struct ImportedRecipe: Equatable {
     }
 }
 
+/// Failure modes of the recipe web-import pipeline, each carrying user-facing copy.
+///
+/// The one distinction callers branch on is transient vs. persistent: ``aiBudgetExhausted`` clears
+/// at midnight (retry tomorrow, without consuming a bounded retry attempt), while every other case
+/// is terminal for this attempt. The share-extension queue drain relies on that split.
 public enum RecipeWebImportError: LocalizedError {
+    /// The URL failed the SSRF guard: not HTTPS, no host, or a loopback / private / link-local
+    /// address literal.
     case invalidURL
+    /// The network fetch failed, returned a non-2xx status (including a refused redirect), or was
+    /// not HTML.
     case fetchFailed
+    /// The response body decoded to empty or whitespace-only text.
     case emptyHTML
+    /// The page had no JSON-LD recipe and AI extraction was disabled, or the cleaned body text was
+    /// empty.
     case noRecipeFound
+    /// The device cannot run on-device extraction — a PERSISTENT incapability, unlike
+    /// ``aiBudgetExhausted``.
     case modelUnavailable
+    /// The model's extraction lacked a name or any ingredients.
     case incompleteRecipe
     /// The device is capable of on-device extraction, but today's AI budget is spent
     /// (`.resting` / `.sleepy` ambient) — a TRANSIENT state that clears at midnight. Distinct from
@@ -79,9 +113,35 @@ public enum RecipeWebImportError: LocalizedError {
     }
 }
 
+/// Fetches a public recipe page and turns it into an ``ImportedRecipe`` — structured JSON-LD first,
+/// on-device AI extraction as the fallback.
+///
+/// The pipeline (``importRecipe(from:catalog:aiEnabled:userInvoked:gate:)``):
+/// 1. SSRF guard — ``isSafePublicHTTPSURL(_:)`` rejects non-HTTPS URLs and loopback / private /
+///    link-local address literals, and the ``RedirectValidator`` delegate re-applies the same check
+///    on every redirect hop.
+/// 2. Bounded fetch — HTML content types only, capped at 3 MB.
+/// 3. JSON-LD path — a schema.org `Recipe` object yields name, ingredients, servings, ordered steps
+///    (``orderedSteps(from:)``), and macros from the site's own nutrition label, else USDA
+///    estimation against the local `FoodCatalog`. No model call, no gate charge.
+/// 4. AI fallback — only when no JSON-LD recipe was found AND `aiEnabled` is true: body text is
+///    cleaned and truncated to 12k characters, dispatch routes through `FernletAIGate` (via
+///    `resolveRoute`, so a transient budget fallback surfaces as
+///    ``RecipeWebImportError/aiBudgetExhausted`` while persistent incapability surfaces as
+///    ``RecipeWebImportError/modelUnavailable``), and every model call is recorded in `AIAuditLog`.
+///
+/// Only the page host and the cleaned-text character count reach the audit payload
+/// (`RecipeExtractionPayload`) — never page content. Callers: the paste-a-URL import flow
+/// (user-invoked) and the share-extension queue drain (`userInvoked: false`, which defers on budget
+/// exhaustion rather than burning a retry attempt). MainActor by the module's default isolation;
+/// the parsing and SSRF helpers are `nonisolated` pure functions, and the module persists nothing.
 public enum RecipeWebImporter {
+    /// Fetch cap: HTML accumulation stops at 3 MB so a hostile or bloated page cannot exhaust memory.
     private static let maxFetchBytes = 3 * 1024 * 1024  // 3 MB
 
+    /// Imports one recipe page end to end: SSRF-guarded fetch, JSON-LD extraction, then the gated
+    /// on-device model fallback.
+    ///
     /// - Parameter url: Public HTTPS page to fetch and inspect for recipe content.
     /// - Parameter catalog: Food catalog used to resolve imported ingredients against Fernlet foods.
     /// - Parameter aiEnabled: When false, the FoundationModels fallback is skipped so that
@@ -111,6 +171,8 @@ public enum RecipeWebImporter {
         return try await extractWithFoundationModel(from: cleanedText, sourceURL: url, catalog: catalog, userInvoked: userInvoked, gate: gate)
     }
 
+    /// Streams the page with a 15 s timeout, redirect re-validation, an HTML-only MIME check, and the
+    /// 3 MB cap; UTF-8 with an ISO-Latin-1 fallback.
     private static func fetchHTML(from url: URL) async throws -> String {
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
@@ -182,6 +244,12 @@ public enum RecipeWebImporter {
     }
 
     /// Per-task delegate that re-validates each redirect target and cancels unsafe ones.
+    ///
+    /// Closes the redirect half of the SSRF guard: a public HTTPS page can 30x toward an internal or
+    /// link-local address, so every hop re-runs ``RecipeWebImporter/isSafePublicHTTPSURL(_:)`` and an
+    /// unsafe hop is refused — the 3xx then becomes the final response and fails the caller's
+    /// status-code guard. Stateless, which is why the `@unchecked Sendable` is sound even though
+    /// URLSession invokes it off the main actor.
     private final class RedirectValidator: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
         func urlSession(
             _ session: URLSession,
@@ -198,6 +266,8 @@ public enum RecipeWebImporter {
         }
     }
 
+    /// Scans every `application/ld+json` script block for a schema.org `Recipe` object and converts
+    /// the first usable one; `nil` sends the caller to the AI fallback.
     private static func jsonLDRecipe(from html: String, sourceURL: URL, catalog: FoodCatalog) throws -> ImportedRecipe? {
         for rawJSON in jsonLDScriptContents(from: html) {
             guard let jsonData = htmlDecoded(rawJSON).data(using: .utf8) else { continue }
@@ -210,6 +280,8 @@ public enum RecipeWebImporter {
         return nil
     }
 
+    /// Reduces the page to model-ready plain text: body only, nav/footer/script/style stripped, tags
+    /// flattened, entities decoded, whitespace collapsed, capped at 12k characters.
     private static func cleanedBodyText(from html: String) throws -> String {
         let bodyHTML = firstCapture(in: html, pattern: #"(?is)<body\b[^>]*>(.*?)</body>"#) ?? html
         let withoutNoise = removingElements(
@@ -231,6 +303,9 @@ public enum RecipeWebImporter {
         return String(normalized.prefix(12_000))
     }
 
+    /// The gated model dispatch: resolves the route (distinguishing transient budget fallbacks from
+    /// persistent incapability), runs guided extraction into ``ExtractedRecipe``, and records the
+    /// outcome in `AIAuditLog` before returning or rethrowing.
     private static func extractWithFoundationModel(from text: String, sourceURL: URL, catalog: FoodCatalog, userInvoked: Bool, gate: FernletAIGate) async throws -> ImportedRecipe {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, visionOS 26.0, *) {
@@ -452,6 +527,9 @@ public enum RecipeWebImporter {
 
     // MARK: - USDA ingredient macro estimation
 
+    /// USDA fallback when the site publishes no nutrition label: parses each ingredient line, matches
+    /// its cleaned name against the catalog's top result, sums scaled macros, and divides by servings.
+    /// Unparseable or unmatched lines contribute nothing, so this UNDERestimates rather than invents.
     nonisolated static func estimateMacrosFromIngredients(_ ingredients: [String], servings: Int, catalog: FoodCatalog) -> (Int, Int, Int) {
         var totalProtein = 0.0, totalCarbs = 0.0, totalFat = 0.0
 
@@ -736,8 +814,13 @@ public enum RecipeWebImporter {
 }
 
 #if canImport(FoundationModels)
+/// Availability probe for the on-device model, mirroring ``FoodSelectionAvailability``.
+///
+/// Currently unreferenced: the `FernletAIGate` routing inside `extractWithFoundationModel`
+/// superseded the direct availability check this wrapped, leaving it as dead code in this file.
 @available(iOS 26.0, macOS 26.0, visionOS 26.0, *)
 private enum RecipeExtractionAvailability {
+    /// `true` when the default `SystemLanguageModel` reports `.available`.
     static var isFoundationModelAvailable: Bool {
         if case .available = SystemLanguageModel.default.availability {
             return true
@@ -746,6 +829,11 @@ private enum RecipeExtractionAvailability {
     }
 }
 
+/// The `@Generable` response schema for AI recipe extraction: a name, raw ingredient lines, and a
+/// short method summary — no numbers, per the prompt's instructions.
+///
+/// ``importedRecipe(sourceURL:catalog:)`` validates and converts the raw response; the model never
+/// supplies macros, so nutrition is always USDA-estimated in code at one serving.
 @available(iOS 26.0, macOS 26.0, visionOS 26.0, *)
 @Generable
 struct ExtractedRecipe {
@@ -753,6 +841,9 @@ struct ExtractedRecipe {
     var ingredients: [String]
     var summary: String
 
+    /// Trims and validates the response — a blank name or zero ingredients throws
+    /// ``RecipeWebImportError/incompleteRecipe`` — then builds the ``ImportedRecipe`` with
+    /// USDA-estimated macros at `servings: 1`.
     func importedRecipe(sourceURL: URL, catalog: FoodCatalog) throws -> ImportedRecipe {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedIngredients = ingredients

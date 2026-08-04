@@ -12,6 +12,11 @@ import FoodCatalog
 /// (`FoodDataCatalog.sourceJSONFoodItems`), so the SQLite contents stay faithful to the legacy
 /// in-memory path — including branded-label scaling, USDA portions, and the canonical chicken alias.
 enum FoodCatalogDatabaseBuilder {
+    /// A failed SQLite step during generation, tagged by phase (open / exec / prepare / step) with
+    /// the underlying `sqlite3_errmsg` text.
+    ///
+    /// Thrown out of `build(items:to:)` to fail the generation test loudly — there is no runtime
+    /// recovery path because the builder never runs in the shipping app.
     enum BuildError: Error, CustomStringConvertible {
         case open(String)
         case exec(String)

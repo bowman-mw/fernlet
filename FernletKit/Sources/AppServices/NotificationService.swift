@@ -4,6 +4,20 @@ import FernletDomainModel
 
 /// Thin wrapper around `UNUserNotificationCenter` for the optional gentle daily check-in reminder.
 /// Local notifications only — no remote push — and entirely opt-in.
+///
+/// A stateless, caseless namespace of async statics covering the app's entire notification surface:
+/// authorization (`requestAuthorization()` / `isAuthorized()`), the repeating daily check-in
+/// (`scheduleDailyCheckIn(hour:minute:)` / `cancelDailyCheckIn()` / `scheduledDailyCheckIn()`), and
+/// the best-effort mesh session-message ping (`postSessionMessage(from:)`). Callers are the app's
+/// onboarding permissions screen, `SettingsSheet`, `FernletNotificationDelegate` (which matches
+/// ``dailyCheckInID`` to deep-link a tapped check-in), and the mesh chat surface in
+/// `DisposableCameraView`.
+///
+/// Key invariant: the pending `UNNotificationRequest` under ``dailyCheckInID`` IS the persisted
+/// check-in preference — there is deliberately no shadow flag anywhere else, so Settings always
+/// reads the schedule back from the notification center. `postSessionMessage(from:)` never prompts
+/// for permission and re-sanitizes the sender name defensively before it enters notification
+/// content. Everything is fire-and-forget; scheduling errors are swallowed by design.
 public enum NotificationService {
     /// Public so the app's notification delegate can recognize a tapped daily check-in and
     /// deep-link it (via the pending-open flag consumed by `ContentView`).

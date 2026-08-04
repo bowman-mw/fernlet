@@ -13,13 +13,27 @@
 
 import Foundation
 
+/// Which sealed dataset a backup record carries: sensitive notes or period data.
+///
+/// The raw value keys the deterministic CloudKit record name (`sealed-backup.<type>`), so each
+/// payload type has exactly one backup — a head record plus optional chunks — per account.
 public enum SealedBackupPayloadType: String, Codable, CaseIterable {
     case sensitiveNotes
     case periodData
 }
 
+/// Opaque encrypted envelope for one chunk of a sealed backup, as stored in CloudKit.
+///
+/// Carries only ciphertext plus crypto metadata (public keys, nonce, tag, chunk position) —
+/// never plaintext or any sealed-store type — which is why this transport DTO can live in the
+/// walled sync module. ``CloudKitDataService`` serializes it to/from the `SealedBackupRecord`
+/// CloudKit record type (ciphertext travels as a `CKAsset`); the sealing/opening crypto and the
+/// reconcile/restore service stay app-side with the identity service. Payloads too large for
+/// one record are split into a chunk set whose head (`chunkIndex == 0`) carries the
+/// authoritative `chunkCount`; records written before chunking existed decode as chunk 0 of 1.
 public struct SealedBackupRecord: Equatable {
     public var payloadType: SealedBackupPayloadType
+    /// The owner's signing public key, carried as provenance for the app-side restore checks.
     public var signingPublicKey: Data
     /// The owner's backup-ESCROW public key (X25519), used purely as a device-stable identity tag so a
     /// restore can confirm "this backup is mine" before attempting decryption. It is NOT the proximity
@@ -59,6 +73,12 @@ public struct SealedBackupRecord: Equatable {
     }
 }
 
+/// Failures raised while decoding or reassembling a sealed backup.
+///
+/// `malformedRecord` covers both an undecodable CloudKit record and an incomplete or
+/// inconsistent chunk set (restore is all-or-nothing, so a corrupt history is never
+/// reassembled); `keyAgreementIdentityMismatch` is thrown by the app-side restore service when
+/// a fetched backup's escrow identity does not match the current user's keys.
 public enum SealedBackupError: Error, Equatable {
     case keyAgreementIdentityMismatch
     case malformedRecord

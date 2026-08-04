@@ -6,12 +6,23 @@ import FernletFoundation
 import FernletScoring
 import FernletUI
 
+/// Abstraction over the "does this iCloud account already hold Fernlet data?" probe.
+///
+/// Conformers: `CloudKitDataService` (the real CloudKit query, via the retroactive conformance
+/// below) and ``MockExistingCloudDataDetector`` (fixed answers for UI tests and previews).
+/// ``OnboardingStorageChoiceView`` runs it before revealing the storage choices so a returning
+/// user sees "Restore from iCloud" and the local-only warning instead of the fresh-install copy.
 protocol ExistingCloudDataDetecting {
+    /// - Returns: Counts of the account's existing Fernlet records, or nil when none were found.
     func detectExistingData() async throws -> ExistingDataSummary?
 }
 
 extension CloudKitDataService: ExistingCloudDataDetecting {}
 
+/// Test double for ``ExistingCloudDataDetecting`` that returns a canned summary without touching CloudKit.
+///
+/// Built by ``OnboardingCloudDataDetectorFactory`` when the UI-test launch environment asks for a
+/// deterministic storage step — either "no existing data" or a summary assembled from env counts.
 struct MockExistingCloudDataDetector: ExistingCloudDataDetecting {
     var summary: ExistingDataSummary?
 
@@ -20,13 +31,24 @@ struct MockExistingCloudDataDetector: ExistingCloudDataDetecting {
     }
 }
 
+/// Namespace for the `UserDefaults` keys onboarding writes and the rest of the app reads.
+///
+/// `FernletApp` keys the onboarding-vs-main-UI decision off `hasCompletedOnboardingKey`;
+/// `lockSetupDeferredKey` records that the lock step was skipped so lockable features can prompt
+/// for setup at first use instead of assuming a lock exists.
 enum OnboardingDefaults {
     static let hasCompletedOnboardingKey = "hasCompletedOnboarding"
     static let lockSetupDeferredKey = "lockSetupDeferred"
 }
 
+/// Chooses the ``ExistingCloudDataDetecting`` implementation for this launch.
+///
+/// `FernletApp` calls ``makeDetector()`` when presenting onboarding: UI-test launch environment
+/// variables select a ``MockExistingCloudDataDetector`` (detection disabled, or a summary built
+/// from env-supplied counts); every normal launch gets the real `CloudKitDataService`.
 @MainActor
 struct OnboardingCloudDataDetectorFactory {
+    /// - Returns: A mock detector when the UI-test environment requests one, else the live CloudKit service.
     static func makeDetector() -> any ExistingCloudDataDetecting {
         let environment = ProcessInfo.processInfo.environment
         if environment["FERNLET_UI_TEST_DISABLE_CLOUD_DETECTION"] == "1" {
@@ -48,9 +70,24 @@ struct OnboardingCloudDataDetectorFactory {
     }
 }
 
+/// View model for the whole first-run onboarding flow: the current ``Step`` plus every draft choice
+/// the user makes along the way.
+///
+/// Owned as `@State` by ``OnboardingCoordinator``. All choices (goal, body profile, dietary
+/// preferences, starter name/color, proximity display name, training level/interests/constraints)
+/// accumulate here as plain properties and are committed to ``FernletStore`` in one shot by
+/// ``complete()`` — nothing persists per-step, so abandoning onboarding mid-flow writes nothing.
+/// The two exceptions are the lock step, which records its skip/choice in `UserDefaults`
+/// (``OnboardingDefaults``) immediately, and the storage step, which writes preferences from its
+/// own view. `@MainActor` + `@Observable`: SwiftUI reads it on the main actor and re-renders on
+/// mutation; the store and completion callback are `@ObservationIgnored` since they never change.
 @MainActor
 @Observable
 final class OnboardingCoordinatorModel {
+    /// The ordered onboarding pages.
+    ///
+    /// `rawValue` order is the flow order — ``advance()`` walks `rawValue + 1` and completes the
+    /// flow after the final case — so reordering cases reorders the screens.
     enum Step: Int, CaseIterable {
         case welcome
         case lockSetup
@@ -61,9 +98,11 @@ final class OnboardingCoordinatorModel {
         case dietaryPattern
         case permissions
 
+        /// The "3 of 8" progress caption shown at the top of every onboarding screen.
         var indexText: String { "\(rawValue + 1) of \(Self.allCases.count)" }
     }
 
+    /// The page currently on screen. Only ``advance()`` moves it — the flow is strictly forward.
     private(set) var step: Step = .welcome
     var goal: GoalType
     var profile: UserNutritionProfile
@@ -92,6 +131,7 @@ final class OnboardingCoordinatorModel {
         self.nutritionPreferences = store.settings.nutritionPreferences
     }
 
+    /// Moves to the next ``Step``, or runs ``complete()`` when the last step finishes.
     func advance() {
         guard let next = Step(rawValue: step.rawValue + 1) else {
             complete()
@@ -100,18 +140,28 @@ final class OnboardingCoordinatorModel {
         step = next
     }
 
+    /// Records that lock setup was skipped (biometrics-only or "skip for now"), audits it, and advances.
     func deferLockSetup() {
         UserDefaults.standard.set(true, forKey: OnboardingDefaults.lockSetupDeferredKey)
         FernletAuditLog.log("onboarding.lock.skipped")
         advance()
     }
 
+    /// Records that a lock was actually configured (clearing any earlier deferral), audits the
+    /// method, and advances.
+    /// - Parameter method: Audit-log label for how the lock was set up (e.g. "passcode").
     func markLockSetupChosen(via method: String) {
         UserDefaults.standard.set(false, forKey: OnboardingDefaults.lockSetupDeferredKey)
         FernletAuditLog.log("onboarding.lock.chosen", context: ["method": method])
         advance()
     }
 
+    /// Commits every accumulated choice to the store, marks onboarding done, and hands control back
+    /// to `FernletApp` via `onComplete`.
+    ///
+    /// - Important: This is the single persistence point for the flow — profile, preferences, goal,
+    ///   default workout goals/profile, proximity display name, companion name, and the starter
+    ///   body color all land here, so a flow abandoned before this call leaves the store untouched.
     func complete() {
         store.completeOnboarding(profile: profile, preferences: nutritionPreferences, goal: goal)
         store.replaceGoals(WorkoutPlanner.defaultGoals(
@@ -146,6 +196,12 @@ final class OnboardingCoordinatorModel {
     }
 }
 
+/// Root view of first-run onboarding: renders whichever screen matches the model's current step.
+///
+/// Presented by `FernletApp` when `OnboardingDefaults.hasCompletedOnboardingKey` is unset. Owns the
+/// ``OnboardingCoordinatorModel`` as `@State` and threads its bindings and callbacks into each step
+/// view; the injected ``ExistingCloudDataDetecting`` goes to the storage step. Step changes animate
+/// with a shared spring so every transition feels the same.
 struct OnboardingCoordinator: View {
     @State private var model: OnboardingCoordinatorModel
     private let detector: any ExistingCloudDataDetecting
@@ -221,6 +277,11 @@ struct OnboardingCoordinator: View {
     }
 }
 
+/// Shared chrome for every onboarding screen: the "N of M" caption, a `ScreenHeader`, and the
+/// step's own content in a scrolling column capped at 620pt.
+///
+/// Every step view wraps its body in this so spacing, padding, and the step caption's
+/// accessibility identifier stay identical across the flow; the save/continue bar sits outside it.
 struct OnboardingScreenContainer<Content: View>: View {
     var stepText: String
     var title: String
@@ -246,6 +307,11 @@ struct OnboardingScreenContainer<Content: View>: View {
     }
 }
 
+/// Onboarding step for picking a goal preset and sketching how training should fit the user's life.
+///
+/// Reuses ``GoalPresetCards`` from Settings so the goal choice shows the same paired nutrition and
+/// training summaries in both places. All four bindings point into the coordinator model's draft
+/// state; nothing is saved until the flow's `complete()`.
 struct OnboardingGoalScreen: View {
     var stepText: String
     @Binding var goal: GoalType
@@ -293,6 +359,11 @@ struct OnboardingGoalScreen: View {
     }
 }
 
+/// Onboarding step for naming the companion and choosing its starter body color, with a live preview.
+///
+/// The color is a typed `CompanionAssetColor` end to end — picker, preview, and the eventual write
+/// in the model's `complete()` all read the same binding, which is what keeps the previewed color
+/// and the persisted one from drifting (see the property comments below for the history).
 struct OnboardingStarterScreen: View {
     var stepText: String
     @Binding var starterName: String
@@ -350,6 +421,12 @@ struct OnboardingStarterScreen: View {
     }
 }
 
+/// Onboarding step for the body profile (age, weight, height, sex, activity), the proximity
+/// display name, and the one unprompted age-range request Fernlet ever makes.
+///
+/// The stepper age feeds nutrition targets only; the age-gated features (intimacy 16+, mesh chat
+/// 13+) read Apple's DeclaredAgeRange answer instead, requested through ``AgeAssuranceStore`` when
+/// Continue is tapped. A declined or unavailable answer never blocks onboarding.
 struct OnboardingPersonalDetailsScreen: View {
     var stepText: String
     @Binding var profile: UserNutritionProfile
@@ -418,6 +495,11 @@ struct OnboardingPersonalDetailsScreen: View {
     }
 }
 
+/// Onboarding step for choosing an eating pattern (balanced, higher-protein, plant-forward,
+/// lower-carb) via a column of ``OnboardingChoiceRow``s.
+///
+/// Writes only `preferences.dietaryPattern` on the coordinator model's draft; the subtitle copy is
+/// deliberately gentle — the pattern tunes suggestions without imposing rules.
 struct OnboardingDietaryPatternScreen: View {
     var stepText: String
     @Binding var preferences: UserNutritionPreferences
@@ -459,6 +541,11 @@ struct OnboardingDietaryPatternScreen: View {
     }
 }
 
+/// A tappable single-select card row — icon, title, subtitle — with the house selected/unselected
+/// styling (moss tint and stroke when chosen).
+///
+/// Used by ``OnboardingDietaryPatternScreen`` for its pattern choices; purely presentational, with
+/// selection state and the tap action owned by the caller.
 struct OnboardingChoiceRow: View {
     var title: String
     var subtitle: String

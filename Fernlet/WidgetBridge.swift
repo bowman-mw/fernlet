@@ -22,7 +22,16 @@ import Foundation
 import WidgetKit
 
 /// The benign outbound snapshot mirrored to the app-group container for the widget.
+///
+/// Carries only the wellness score, companion state, water count, and macro grams — never
+/// journal/cycle/intimacy data (sealed by design). Must stay byte-identical to the widget-side
+/// twin in `FernletWidgets/WidgetSharedModels.swift` (deliberate duplication; the widget cannot
+/// link the FernletKit umbrella).
 struct WidgetSnapshot: Codable, Equatable {
+    /// The day's protein/carbs/fat gram totals, in the widget's own minimal shape.
+    ///
+    /// Nested so the snapshot stays one self-contained JSON document; like the parent type it must
+    /// stay byte-identical to the widget-side twin.
     struct MacroSummary: Codable, Equatable {
         var protein: Double
         var carbs: Double
@@ -38,7 +47,11 @@ struct WidgetSnapshot: Codable, Equatable {
     var computedAt: Date
 }
 
-/// One inbound action row appended by the widget's App Intent.
+/// One inbound action row appended by the widget's App Intent (or the Siri water intent).
+///
+/// `dateKey` pins the action to the day it was tapped so a drain after midnight applies it to the
+/// correct row; `id` is the idempotency key the queue dedupes on. Byte-format twin of the
+/// widget-side writer.
 struct PendingWidgetAction: Codable, Identifiable, Equatable {
     static let waterPlusOne = "waterPlusOne"
 
@@ -49,6 +62,10 @@ struct PendingWidgetAction: Codable, Identifiable, Equatable {
 }
 
 /// Shared file locations + codecs for both bridge files.
+///
+/// One authoritative definition of the app-group container path and the iso8601/sorted-keys JSON
+/// coding both sides of the bridge must agree on; used by ``WidgetSnapshotFileStore`` and
+/// ``PendingWidgetActionQueue``.
 enum WidgetBridgeFiles {
     /// Documented duplicate of SharedRecipeImportQueue.appGroupIdentifier (and the share-extension
     /// writer's copy) — keep all literals identical.
@@ -75,7 +92,15 @@ enum WidgetBridgeFiles {
     }
 }
 
-/// Coordinated read/write of the mirrored snapshot file. Directory is injectable for tests.
+/// Coordinated read/write of the mirrored snapshot file (`WidgetSnapshot.json`). Directory is
+/// injectable for tests.
+///
+/// Every access goes through `NSFileCoordinator` because the app and the widget extension are
+/// separate processes sharing the file. Writes use
+/// `.completeFileProtectionUntilFirstUserAuthentication` so the Lock Screen widget can read after
+/// first unlock, and are best-effort — a failed write only means a stale widget, never data loss.
+/// `delete()` backs "delete everything" (leaving the file behind would keep the user's score
+/// glowing on the Lock Screen after a wipe).
 struct WidgetSnapshotFileStore {
     private let fileManager: FileManager
     private let fileURL: URL
@@ -86,6 +111,7 @@ struct WidgetSnapshotFileStore {
             .appendingPathComponent("WidgetSnapshot.json")
     }
 
+    /// Coordinated decode of the current snapshot; nil when missing or undecodable.
     func read() -> WidgetSnapshot? {
         var result: WidgetSnapshot?
         var coordinatorError: NSError?
@@ -99,6 +125,8 @@ struct WidgetSnapshotFileStore {
         return result
     }
 
+    /// Coordinated atomic replace of the snapshot file.
+    /// - Returns: whether the write (and the coordination) succeeded.
     @discardableResult
     func write(_ snapshot: WidgetSnapshot) -> Bool {
         var success = false
@@ -181,8 +209,14 @@ struct WidgetSnapshotFileStore {
     }
 }
 
-/// Coordinated reader/claimer of the widget's pending-action queue. `append` exists for tests and
+/// Coordinated reader/claimer of the widget's pending-action queue
+/// (`PendingWidgetActions.json`). `append` exists for tests and the Siri water intent and
 /// documents the byte format the widget-side writer produces.
+///
+/// The load-bearing operation is `claimAll()`: an atomic take-and-clear so a row is applied at
+/// most once across overlapping drains (a crash between claim and apply loses at most one bottle
+/// tap — preferred over double-logging). `clear()` backs "delete everything" so a pre-wipe tap
+/// can't rebuild a day record on the next foreground. Directory is injectable for tests.
 struct PendingWidgetActionQueue {
     private let fileManager: FileManager
     private let fileURL: URL
@@ -193,6 +227,7 @@ struct PendingWidgetActionQueue {
             .appendingPathComponent("PendingWidgetActions.json")
     }
 
+    /// Non-destructive coordinated read of every queued row (use `claimAll()` to drain).
     func records() -> [PendingWidgetAction] {
         var result: [PendingWidgetAction] = []
         var coordinatorError: NSError?
@@ -289,6 +324,11 @@ struct PendingWidgetActionQueue {
 
 /// Publishes the mirrored snapshot + pokes WidgetKit. Wired onto `FernletStore` from ContentView at
 /// store-ready (nil in unit tests unless a test injects one, keeping the suite hermetic).
+///
+/// The store calls `publish` from the snapshot-save after-hook (and at activation), so the widget
+/// tracks every persisted change; `clear()` is the delete-all leg — it reloads the timelines even
+/// when the file delete failed, because a placeholder widget beats one still showing deleted data.
+/// @MainActor: driven exclusively from the store's main-actor save path.
 @MainActor
 final class WidgetSnapshotMirror {
     static let widgetKind = "FernletCompanion"
@@ -301,6 +341,8 @@ final class WidgetSnapshotMirror {
         self.reloadTimelines = reloadTimelines ?? { WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind) }
     }
 
+    /// Writes the snapshot and reloads the widget timelines; a failed write skips the reload
+    /// (the widget keeps its last good snapshot).
     func publish(_ snapshot: WidgetSnapshot) {
         guard fileStore.write(snapshot) else { return }
         reloadTimelines()

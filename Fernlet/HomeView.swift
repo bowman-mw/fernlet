@@ -15,6 +15,19 @@ import FernletDomainModel
 import FernletUI
 #endif
 
+/// The Home tab: the companion hero and the user-configurable dashboard feed.
+///
+/// Renders the header, the photowall strip (friend polaroids + the companion's thought bubble),
+/// then one section per entry in `settings.homeWidgets` — companion, today summary/intent, quick
+/// log, macros, hygiene, ambient cards, milestones shelf, First Aid door, meal-photo strip, and
+/// plain action rows. The companion section owns the pet interaction (tap to pet, governed by
+/// `PetInteractionGovernor`'s anti-compulsion pacing; long-press opens
+/// ``CompanionCustomizationSheet``) and composes ``CompanionAmbienceLayer`` behind it.
+///
+/// Privacy-relevant detail: `refreshRecentPeriodActivity` owns its own HealthKit client, so it
+/// re-checks `allowedHealthCapabilities` itself and drops its resident answer when cycle tracking
+/// is hidden mid-session. Prior-day rows for "Recent bites" are cached per day rollover rather
+/// than re-decrypted every render.
 struct HomeView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -106,12 +119,10 @@ struct HomeView: View {
 
     // MARK: - Milestones entry card
 
-    /// A compact keepsake-shelf preview that always shows on the home feed — even when it's mostly
-    /// empty — and taps through to `MilestonesView`. Cumulative-only, never a scoreboard: it shows a
-    /// warm sentence and a soft coins aside, no streaks or percentages. Behaviour lives in
-    /// MilestonesView; this is a warm doorway to it.
-    /// One kind of care the user has kept, as a struck-coin token on the shelf. Stable order + tint per
-    /// kind so the shelf doesn't reshuffle between renders.
+    /// One kind of care the user has kept, as a struck-coin token on the shelf.
+    ///
+    /// Stable order + tint per kind so the shelf doesn't reshuffle between renders; built by
+    /// `keptKeepsakes(counts:worries:)` from the pre-read ledger values.
     private struct Keepsake: Identifiable {
         let id: MilestoneEventKind
         let icon: String
@@ -149,8 +160,10 @@ struct HomeView: View {
     }
 
     /// M1 "keepsake shelf": the kinds of care kept, as struck-coin tokens resting on a shelf ledge —
-    /// a keepsake shelf, not another nav row. Taps through to `MilestonesView`. Cumulative-only, never
-    /// a scoreboard: no streaks, no percentages, and the empty state is a gentle invitation.
+    /// a keepsake shelf, not another nav row. Always shows on the home feed (even when mostly empty)
+    /// and taps through to `MilestonesView`, which owns the behavior — this is a warm doorway to it.
+    /// Cumulative-only, never a scoreboard: a warm sentence and a soft coins aside, no streaks, no
+    /// percentages, and the empty state is a gentle invitation.
     private var milestonesCard: some View {
         // Read each lifetime ledger ONCE per render and derive the shelf, the summary, and the coin pill
         // from the same values — the ledgers are append-only and only grow, and this card re-renders on
@@ -1017,6 +1030,13 @@ struct HomeView: View {
     }
 }
 
+/// The companion customization sheet (reached by long-pressing the hero companion): a live
+/// preview header plus one selector row per slot (body / accessory / clothing / side item).
+///
+/// Each row pushes a slot picker that combines the built-in item grid + recolor controls with the
+/// user's own Wardrobe-designed items for the covered `ItemSlot`s; all writes go through
+/// `FernletStore.setCompanionAppearance` / the equip APIs, so the preview and the Home hero stay
+/// in lockstep.
 private struct CompanionCustomizationSheet: View {
     var store: FernletStore
     @Binding var petCount: Int
@@ -1513,6 +1533,12 @@ private extension Color {
     }
 }
 
+/// The reusable built-in item grid + color controls inside a slot picker: a 2-column grid of
+/// selectable items and (optionally) the preset swatches + custom `ColorPicker`.
+///
+/// Generic over the slot's item type so one card serves body styles, accessories, clothing, and
+/// side items; selection and color flow back through the bindings
+/// ``CompanionCustomizationSheet`` builds onto the store.
 private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelContent: View>: View {
     var title: String
     var items: [Item]
@@ -1597,6 +1623,11 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
     }
 }
 
+/// One derived signal expanded for the Trends modal: icon, title, value, explanation, a
+/// ``SignalTrendMeter``, the source-field chips, and any nutrient-gap rows.
+///
+/// All presentation choices (title/icon/color/strength/explanation) come from
+/// ``SignalPresentation`` so the row stays a dumb renderer of `DerivedSignalRecord`.
 struct SignalDetailRow: View {
     var signal: DerivedSignalRecord
 
@@ -1659,6 +1690,10 @@ struct SignalDetailRow: View {
     }
 }
 
+/// A five-segment strength meter for a signal value string.
+///
+/// Fill count and color both derive from ``SignalPresentation``, so the meter reads the same
+/// literals the signal engine emits.
 struct SignalTrendMeter: View {
     var value: String
 
@@ -1677,7 +1712,14 @@ struct SignalTrendMeter: View {
     }
 }
 
+/// Presentation lookup for derived signals: maps the engine's raw `signalName`/value literals to
+/// display titles, icons, tint colors, meter strength, and plain-language explanations.
+///
+/// Pure string matching against the exact literals `DerivedSignalsService` emits — shared by
+/// ``SignalDetailRow`` and ``SignalTrendMeter`` so every trends surface styles a signal the same
+/// way.
 enum SignalPresentation {
+    /// Display title for a raw signal name (falls back to the raw name for unknown signals).
     static func title(for name: String) -> String {
         switch name {
         case "moodTrend": "Mood trend"
@@ -1743,6 +1785,11 @@ enum SignalPresentation {
     }
 }
 
+/// The Trends sheet (`FernletSheet.trends`): every current derived signal as a
+/// ``SignalDetailRow``, with an empty-state invitation when there isn't enough logged data.
+///
+/// Read-only over the signals the store already computed — presenting it never triggers a
+/// recompute.
 struct TrendsModal: View {
     @Environment(\.dismiss) private var dismiss
     var signals: [DerivedSignalRecord]
@@ -1791,6 +1838,10 @@ struct TrendsModal: View {
 
 // FernletCard / SectionLabel / EmptyState moved to FernletUI (FernletPrimitives.swift).
 
+/// The companion's speech bubble: a rounded cream capsule for the ambient/tap thought text.
+///
+/// Rendered over the photowall strip on Home; the text itself comes from the store's companion
+/// thought (AI or deterministic fallback) or a tap reaction.
 struct ThoughtBubble: View {
     var text: String
 
@@ -1806,6 +1857,10 @@ struct ThoughtBubble: View {
     }
 }
 
+/// The twelve-segment care-score bar under the companion, tinted by companion state.
+///
+/// `value` is the 0–1 wellness score; an optional `heartGlow` appends the golden 24-hour
+/// afterglow cap when a friend sent a heart — presentation only, never an input to the score.
 struct HealthBar: View {
     var state: CompanionState
     var value: Double
@@ -1861,6 +1916,11 @@ struct HealthBar: View {
     }
 }
 
+/// A plain tappable action row on the Home feed for the simple `HomeWidget` cases (log food,
+/// recipe book, workout, journal, sleep, water, hygiene, trends).
+///
+/// The richer widget cases render bespoke sections in ``HomeView`` instead and return an empty
+/// subtitle here.
 struct HomeActionWidget: View {
     var widget: HomeWidget
     var action: () -> Void
@@ -1909,6 +1969,10 @@ struct HomeActionWidget: View {
     }
 }
 
+/// One tile in the quick-log grid: icon over title, highlighted moss when today already has that
+/// kind of entry.
+///
+/// Purely presentational; the action closure is supplied by ``HomeView``'s quick-log section.
 struct QuickLogButton: View {
     var title: String
     var systemImage: String
@@ -1933,6 +1997,10 @@ struct QuickLogButton: View {
     }
 }
 
+/// The "Macros today" card: three ``MacroRing``s (protein/carbs/fat) plus the calorie and fiber
+/// footer line.
+///
+/// Shared by Home and the Food tab; `showCalories` honors the user's calories-display setting.
 struct MacroCard: View {
     var totals: MacroTotals
     var targets: NutritionTargets
@@ -1961,6 +2029,11 @@ struct MacroCard: View {
     }
 }
 
+/// One macro progress ring: current grams over goal, with the fill clamped into [0, 1].
+///
+/// Rendered on Home, Food, and Journal via ``MacroCard``; the static `ringProgress` guard exists
+/// because a user-typed goal of 0 would otherwise feed `.nan` into `.trim(to:)` and crash the
+/// path builder.
 struct MacroRing: View {
     var label: String
     var color: Color
@@ -2000,6 +2073,10 @@ struct MacroRing: View {
     }
 }
 
+/// The hygiene / personal-care card: completion count, a segment bar, and an inline toggle grid
+/// of today's care tasks.
+///
+/// Task toggles mutate the store directly; tapping the card body opens the full hygiene sheet.
 struct HygieneCard: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -2045,6 +2122,11 @@ struct HygieneCard: View {
     }
 }
 
+/// A titled cream section container used across scroll screens: optional `SectionLabel` header
+/// over a rounded, softly shadowed content card.
+///
+/// The generic content builder keeps it a pure layout primitive; several tabs and the Private hub
+/// pages compose their row lists inside it.
 struct FernletScrollSection<Content: View>: View {
     var title: String?
     @ViewBuilder var content: Content
@@ -2072,6 +2154,10 @@ struct FernletScrollSection<Content: View>: View {
     }
 }
 
+/// The house hairline divider between rows inside a ``FernletScrollSection`` card.
+///
+/// A `Divider` tinted to the bark palette with the standard vertical padding, so row lists stay
+/// visually consistent across screens.
 struct FernletRowDivider: View {
     var body: some View {
         Divider()
@@ -2080,6 +2166,11 @@ struct FernletRowDivider: View {
     }
 }
 
+/// One polaroid on the Home photowall strip: caption, rotation, themed fallback color, and an
+/// optional friend-photo id to render as the image.
+///
+/// Mapped from ``PhotowallSeed``s (or the built-in placeholder set when no seeds exist); the id
+/// prefers the photo id so a re-seeded wall animates tile identity correctly.
 struct PhotowallTile: Identifiable {
     let caption: String
     let rotation: Double

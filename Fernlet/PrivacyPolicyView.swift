@@ -13,6 +13,12 @@
 import SwiftUI
 import FernletUI
 
+/// The in-app Privacy Policy screen: the full policy text rendered in Fernlet's type system.
+///
+/// Pushed from ``SettingsSheet`` via `SettingsRoute.privacyPolicy`. The copy is a static string
+/// parsed into ``PolicyBlock``s by ``PolicyMarkdown`` at render time — no web view, no network — and
+/// must stay in lockstep with `Docs/Privacy-Policy.md` and the publicly hosted copy entered in
+/// App Store Connect. Any material change updates the effective date in both places.
 struct PrivacyPolicyView: View {
     // MARK: - Publication facts (keep in lockstep with Docs/Privacy-Policy.md)
     private static let developerName = "Michael Bowman Olay"
@@ -99,6 +105,10 @@ struct PrivacyPolicyView: View {
 
 // MARK: - Minimal markdown block model + parser
 
+/// One renderable block of the policy document: a title, section header, paragraph, bullet, or rule.
+///
+/// Produced by ``PolicyMarkdown/parse(_:)`` and rendered by ``PrivacyPolicyView``; each case carries
+/// its own `view` so the screen body is just a ForEach over the parsed blocks.
 private enum PolicyBlock {
     case title(String)
     case header(String)
@@ -137,7 +147,14 @@ private enum PolicyBlock {
     }
 }
 
+/// Minimal line-oriented markdown parser for the policy text — headers, bullets, rules, paragraphs,
+/// and inline bold/italic.
+///
+/// Deliberately tiny: it supports exactly the constructs the policy uses, so the display copy can
+/// stay a readable markdown string shared verbatim with `Docs/Privacy-Policy.md` instead of
+/// hand-built views.
 private enum PolicyMarkdown {
+    /// Splits the markdown into ``PolicyBlock``s, one per non-empty line.
     static func parse(_ text: String) -> [PolicyBlock] {
         text.split(separator: "\n", omittingEmptySubsequences: false).compactMap { raw -> PolicyBlock? in
             let line = raw.trimmingCharacters(in: .whitespaces)

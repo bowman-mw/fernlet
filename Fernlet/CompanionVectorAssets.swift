@@ -2,6 +2,19 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
+/// The companion creature itself: the app-wide, fully vector-drawn avatar that reflects the
+/// user's wellbeing.
+///
+/// Renders the breathing body blob (``CompanionBlobShape`` in the appearance's style and
+/// state-resolved colors), eyes/mouth, the built-in accessory/clothing/side-item layers, and any
+/// equipped user-designed items (``CompanionCustomItemLayer``, stacked by
+/// ``CompanionView/itemPaintOrder(_:)``). Animation is one clock-driven `TimelineView(.animation)`
+/// — breath tempo and amplitude come from the `CompanionState`, and `interactionLevel` toggling
+/// parity produces the pet bounce. The `stressTint` / `calmTint` / `settled` flags are
+/// presentation-only accents (never persisted, never `CompanionState` cases — new raw values
+/// would fail decode on older builds) layering the frazzle, calm, and pet-cooldown looks.
+/// Used everywhere a companion appears: Home, activity rosters (friends' cached appearances),
+/// the studio preview, and more.
 struct CompanionView: View {
     var state: CompanionState
     var appearance: CompanionAppearance = .standard
@@ -189,6 +202,12 @@ struct CompanionView: View {
     }
 }
 
+/// The companion's body outline in one of the four `CompanionBodyStyle` silhouettes (circle,
+/// soft blob, pear, puddle).
+///
+/// `breath` is the animatable input: it wobbles the control points so the outline itself
+/// breathes, and the low-energy states (tired/resting/sick) add a small top slump. Filled with
+/// the appearance's state-resolved body color by ``CompanionView``.
 struct CompanionBlobShape: Shape {
     var style: CompanionBodyStyle
     var state: CompanionState
@@ -269,6 +288,10 @@ struct CompanionBlobShape: Shape {
     }
 }
 
+/// One companion eye: a round white-and-pupil eye, drooping to a half-lid when tired.
+///
+/// ``CompanionView`` places two of these; the `happyArc` flag swaps in the
+/// ``CompanionHappyArcEye`` crescent for the calm/settled accents and wins over `tired`.
 struct EyeView: View {
     var tired: Bool
     /// Presentation-only "happy arc" eye (calm/settled accents): an upward crescent instead of
@@ -297,8 +320,10 @@ struct EyeView: View {
     }
 }
 
-/// An upward-opening crescent — the calm/settled "happy arc" eye. Drawn as a quadratic arc so it
-/// reads as a gentle smile-shaped squint rather than a full closed lid.
+/// An upward-opening crescent — the calm/settled "happy arc" eye.
+///
+/// Drawn as a quadratic arc so it reads as a gentle smile-shaped squint rather than a full
+/// closed lid; stroked (not filled) by ``EyeView`` when its `happyArc` flag is set.
 struct CompanionHappyArcEye: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -312,6 +337,9 @@ struct CompanionHappyArcEye: Shape {
 }
 
 /// The settled pose's wide soft smile — a downward-opening lens (flat top, rounded bottom).
+///
+/// Replaces the default rounded-rectangle mouth only while ``CompanionView``'s `settled` flag is
+/// on, completing the droopy-happy "completely content" read of the pet cooldown.
 struct CompanionSettledMouth: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -327,7 +355,10 @@ struct CompanionSettledMouth: Shape {
 
 // MARK: - Frazzled / tense accent parts (presentation-only)
 
-/// The soft brow furrow: two short bars tipped up at their inner ends. Warm-neutral, never harsh.
+/// The soft brow furrow: two short bars tipped up at their inner ends.
+///
+/// Part of the stress-tint accent set ``CompanionView`` overlays while frazzled — warm-neutral
+/// ink, never harsh, so it reads as a set brow rather than a scowl.
 struct CompanionBrowFurrow: View {
     var size: CGFloat
 
@@ -347,7 +378,10 @@ struct CompanionBrowFurrow: View {
     }
 }
 
-/// Faint rising steam: two low-opacity squiggles that drift up and fade on a slow loop.
+/// Faint rising steam: low-opacity squiggle wisps that drift up and fade on a slow loop.
+///
+/// A stress-tint accent driven directly off the parent's `elapsed` clock (no animation of its
+/// own), so it stays in phase with the rest of the frazzle set and pauses with the timeline.
 struct CompanionSteam: View {
     var size: CGFloat
     var elapsed: TimeInterval
@@ -377,6 +411,9 @@ struct CompanionSteam: View {
 }
 
 /// One vertical S-squiggle used for the steam wisps.
+///
+/// A two-curve path ``CompanionSteam`` strokes at three slightly different sizes to build its
+/// little cluster of rising warmth.
 struct CompanionSquiggle: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -396,6 +433,9 @@ struct CompanionSquiggle: Shape {
 }
 
 /// One cool sweat bead that slides down and fades on a slow loop.
+///
+/// The third stress-tint accent: a blue-grey ``CompanionTeardrop`` with a glint, deliberately
+/// cool and dewy against the warm body — never a red-alert mark.
 struct CompanionSweatBead: View {
     var size: CGFloat
     var elapsed: TimeInterval
@@ -424,7 +464,10 @@ struct CompanionSweatBead: View {
     }
 }
 
-/// A teardrop: a rounded droplet with a pointed top (rotated so it hangs point-up like sweat).
+/// A teardrop: a rounded droplet with a pointed top (hanging point-up like sweat).
+///
+/// The fill shape behind ``CompanionSweatBead``; built from two quad curves and a bottom arc so
+/// it reads as water rather than a plain circle.
 struct CompanionTeardrop: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -454,6 +497,9 @@ struct CompanionTeardrop: Shape {
 // MARK: - Calm / settled accent parts (presentation-only)
 
 /// Two soft motes drifting up and fading — the quiet, positive counterpart to the frazzle steam.
+///
+/// The calm-tint accent: moss and goldenrod dots on offset phases that twinkle in scale and
+/// opacity as they rise, driven off the parent's shared `elapsed` clock.
 struct CompanionMotes: View {
     var size: CGFloat
     var elapsed: TimeInterval
@@ -483,6 +529,9 @@ struct CompanionMotes: View {
 }
 
 /// A single drifting "z" for the settled pose — rises, drifts, and fades on a slow loop.
+///
+/// A serif glyph with a slight rotation drift, overlaid by ``CompanionView`` only while the
+/// pet-cooldown `settled` flag is on: content and sleepy-happy, not asleep.
 struct CompanionDriftingZ: View {
     var size: CGFloat
     var elapsed: TimeInterval
@@ -500,6 +549,11 @@ struct CompanionDriftingZ: View {
     }
 }
 
+/// The built-in accessory layer (sprout, flower, glasses) from `CompanionAppearance`.
+///
+/// Draws the selected `CompanionAccessory` as pure vector parts positioned relative to the
+/// companion's frame; distinct from the user-designed ``CompanionCustomItemLayer`` items, which
+/// stack above it.
 struct CompanionAccessoryView: View {
     var accessory: CompanionAccessory
     var color: Color
@@ -555,6 +609,10 @@ struct CompanionAccessoryView: View {
     }
 }
 
+/// The built-in clothing layer (scarf, sleep cap) from `CompanionAppearance`.
+///
+/// Simple vector garments in the appearance's state-resolved clothing color; user-designed body
+/// items are a separate ``CompanionCustomItemLayer`` and do not replace this layer.
 struct CompanionClothingView: View {
     var clothing: CompanionClothing
     var color: Color
@@ -579,9 +637,12 @@ struct CompanionClothingView: View {
     }
 }
 
-/// Draws one equipped user-designed item onto the companion. The pixel grid is rendered once to a
-/// `CGImage` (cached in `@State`, regenerated only when the texture changes — never inside the
-/// per-frame breath loop) and placed in a slot-specific region, preserving the grid's aspect ratio.
+/// Draws one equipped user-designed item onto the companion.
+///
+/// The pixel grid is rendered once to a `CGImage` via ``ItemTextureRenderer`` (cached in
+/// `@State`, regenerated only when the texture changes — never inside the per-frame breath loop)
+/// and placed in a slot-specific region from ``CompanionCustomItemLayer/placement(for:size:texture:)``,
+/// preserving the grid's aspect ratio.
 struct CompanionCustomItemLayer: View {
     var item: CustomizationItem
     var size: CGFloat
@@ -635,6 +696,11 @@ struct CompanionCustomItemLayer: View {
     }
 }
 
+/// The little badge circle beside the companion holding its chosen side item (mug, book,
+/// dumbbell, water bottle — or a struck-through circle for none).
+///
+/// A cream disc with the item drawn in the appearance's side-item color, offset to the
+/// companion's lower trailing side by ``CompanionView``.
 struct CompanionSideItemView: View {
     var item: CompanionSideItem
     var color: Color

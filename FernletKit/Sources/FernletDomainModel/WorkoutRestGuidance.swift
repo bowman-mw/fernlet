@@ -24,6 +24,12 @@
 
 import Foundation
 
+/// Evidence-based default rest intervals between sets, keyed by movement demand and training goal.
+///
+/// Replaces the old coarse role-only rests with the two axes the literature actually separates
+/// rest by (see the header citations and Docs/Workout-Rest-Guidance-Research-2026-07-19.md).
+/// Defaults only: every value is per-exercise overridable (`PrescribedExercise.restSecondsOverride`
+/// baked into the guided run) and clamped into ``editableRange``.
 public nonisolated enum WorkoutRestGuidance {
 
     /// The rest-relevant *demand* of a movement: heavy multi-joint work needs the most recovery,

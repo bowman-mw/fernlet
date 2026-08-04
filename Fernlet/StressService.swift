@@ -24,6 +24,9 @@ import HealthKitGateway
 
 /// The scoring seam `FernletStore` holds — deliberately tiny so the store sees only the
 /// abstract assessment (and a scrub hook for reset/opt-out), never baselines or raw series.
+///
+/// ``StressService`` is the sole production conformer; tests supply fakes. Main-actor isolated to
+/// match the store it plugs into.
 @MainActor
 protocol StressScoringContextProviding: AnyObject {
     var currentStressAssessment: StressAssessment? { get }
@@ -33,6 +36,23 @@ protocol StressScoringContextProviding: AnyObject {
     func scrubStressLocalState()
 }
 
+/// App-side owner of the opt-in "Body signals" stress estimate.
+///
+/// Pulls day-bucketed HRV / resting-HR / respiration / wrist-temperature history from the
+/// HealthKit gateway (foreground pull only — no background delivery), joins it with diary
+/// confounders (workout days, sick days) read off ``FernletStore``, runs the pure `StressEngine`,
+/// and exposes the current gentle `StressAssessment` to Home and — via
+/// ``StressScoringContextProviding`` — to the capped scoring modifier.
+///
+/// Persistence is deliberate: the baselines/EWMA state live in a device-local JSON sidecar
+/// (`StressLocalState.json` in Application Support, written atomically with complete file
+/// protection) — NEVER in FernletSettings, the day records, `dailyScores`, or anything
+/// CloudKit-synced, because every existing structured store syncs when iCloud is on and a rolling
+/// clinical series must not ride along. Only the boolean opt-in flag syncs. Consent is honored
+/// aggressively: a disabled toggle, a closed HealthKit gate, and a mid-flight revocation all
+/// route through ``scrubStressLocalState()``, which deletes the sidecar so HealthKit-derived
+/// baselines never outlive the opt-in ("Reset everything" calls it too). Main-actor isolated and
+/// `@Observable`; refreshes are debounced to ``refreshInterval`` and guarded against overlap.
 @MainActor
 @Observable
 final class StressService: StressScoringContextProviding {
@@ -129,6 +149,8 @@ final class StressService: StressScoringContextProviding {
         }
     }
 
+    /// Deletes the device-local sidecar and clears the in-memory assessment — the reset/opt-out
+    /// hook required by ``StressScoringContextProviding``.
     func scrubStressLocalState() {
         assessment = nil
         lastRefreshedAt = nil

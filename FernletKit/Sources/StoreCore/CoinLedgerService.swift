@@ -5,15 +5,29 @@ import FernletDomainModel
 import FernletFoundation
 
 /// Owns the coin ledger in memory and persists it to its own per-row store (separate from the snapshot
-/// blob). Earning is recorded by `reconcile` — one idempotent `earn` row per active day, so the earned
-/// total never shrinks when the day history does (HealthKit disable, 370-day prune). Spending appends a
-/// `spend` row. The spendable balance is the aggregate (`CoinEconomy`, which collapses duplicate-id rows
-/// — the cross-device union-merge — since the store itself does not). Mirrors `CustomItemService`'s
-/// debounced-save shape, but the underlying store is APPEND-ONLY (`append`, never delete-unlisted), so
-/// flushing a stale in-memory set can't clobber rows that synced in from another device.
+/// blob). Earning is recorded by ``reconcile(activeDayKeys:)`` — one idempotent `earn` row per active day,
+/// so the earned total never shrinks when the day history does (HealthKit disable, 370-day prune).
+/// Spending appends a `spend` row. The spendable balance is the aggregate (`CoinEconomy`, which collapses
+/// duplicate-id rows — the cross-device union-merge — since the store itself does not). Mirrors
+/// ``CustomItemService``'s debounced-save shape, but the underlying store is APPEND-ONLY (`append`, never
+/// delete-unlisted), so flushing a stale in-memory set can't clobber rows that synced in from another device.
+///
+/// Collaborators: the injected `CoinLedgerRepositoring` store (concretely CloudKitSync's
+/// `CoinLedgerRepository`, kept behind the FernletPersistence protocol so this module needs no
+/// CloudKitSync edge), the pure `CoinEconomy` math in FernletDomainModel, and `FernletStore`, which
+/// owns the instance, reconciles on launch/foreground, and calls ``reloadFromStore()`` when a remote
+/// CloudKit change lands.
+///
+/// Invariants: rows are immutable once minted and carry deterministic ids (per-day earns, per-ref
+/// spends), which is what makes every write path idempotent; pending rows are the sole un-persisted
+/// copy of a mutation, so ``flushPendingSave()`` clears them only after a confirmed append and
+/// ``reloadFromStore()`` re-merges them after a failed one — an earned day or a spend is never
+/// silently dropped. `@MainActor` and `@Observable`; the injected `now` clock keeps row timestamps
+/// testable.
 @MainActor
 @Observable
 public final class CoinLedgerService {
+    /// The in-memory ledger, union-merged (deduplicated by id) on every load.
     public private(set) var entries: [CoinLedgerEntry] = []
 
     @ObservationIgnored private let repository: any CoinLedgerRepositoring
@@ -23,6 +37,7 @@ public final class CoinLedgerService {
     @ObservationIgnored private var saveScheduled = false
     @ObservationIgnored private let now: () -> Date
 
+    /// Creates the service over its per-row store; `initialEntries` seeds the ledger before the first load.
     public init(repository: any CoinLedgerRepositoring, initialEntries: [CoinLedgerEntry] = [], now: @escaping () -> Date = Date.init) {
         self.repository = repository
         self.entries = initialEntries
@@ -31,16 +46,21 @@ public final class CoinLedgerService {
 
     // MARK: - Derived balances
 
+    /// Total coins earned, per `CoinEconomy` (reset-boundary markers void pre-reset earns).
     public var earnedCoins: Int { CoinEconomy.earned(in: entries) }
+    /// Total coins spent, per `CoinEconomy` (reset-boundary markers void pre-reset spends).
     public var spentCoins: Int { CoinEconomy.spent(in: entries) }
+    /// The spendable balance — earned minus spent over the id-collapsed rows, floored at zero.
     public var balance: Int { CoinEconomy.balance(in: entries) }
 
     // MARK: - Loading
 
+    /// Replaces the in-memory ledger with the store's rows, union-merged by id.
     public func loadSync() {
         entries = CoinEconomy.deduplicatedByID(repository.load())
     }
 
+    /// Async variant of ``loadSync()`` for the off-main initial load.
     public func loadAsync() async {
         entries = CoinEconomy.deduplicatedByID(await repository.loadAsync())
     }
@@ -125,6 +145,7 @@ public final class CoinLedgerService {
         return deleted
     }
 
+    /// Writes any pending rows to the store now; a failed append keeps them queued for the next retry.
     public func flushPendingSave() {
         // Flush whenever rows are pending, NOT only when a debounced save is scheduled: a prior scheduled
         // flush that failed its append leaves `saveScheduled` false while `pendingAppends` still holds the
@@ -158,6 +179,7 @@ public final class CoinLedgerService {
         if added { scheduleSave() }
     }
 
+    /// Coalesces mutations into one debounced main-actor flush per burst.
     private func scheduleSave() {
         guard !saveScheduled else { return }
         saveScheduled = true

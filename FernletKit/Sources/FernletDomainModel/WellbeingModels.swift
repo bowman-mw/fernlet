@@ -3,6 +3,15 @@
 
 import Foundation
 
+/// One calendar day's diary: meals, workouts, plans, journals, sleep, water, care, and HealthKit
+/// context.
+///
+/// The per-day unit of persistence (a `DayRecord` row on the synced store), keyed by its
+/// `yyyy-MM-dd` `date`. `hygiene` decodes tolerantly with parked tokens; `plannedRecipeIDs` is an
+/// additive F3 field with a documented strip-on-write landmine for un-updated peers (see the
+/// decode note). ``hasLoggedContent`` is the single shared definition of "a day with something on
+/// it", feeding both fresh-install detection and the coin economy's active-day accrual — a bare
+/// HealthKit sync stamp deliberately does NOT count.
 public nonisolated struct FernletDay: Codable {
     public var date: String
     public var meals: [Meal]
@@ -106,6 +115,11 @@ public nonisolated struct FernletDay: Codable {
     }
 }
 
+/// The day's imported HealthKit context, grouped by domain (activity, body, cycle, mindfulness,
+/// intimate).
+///
+/// `merge` keeps the freshest non-nil group per sync; ``hasContent`` distinguishes real data from
+/// the bare `syncedAt` stamp HealthKit sync writes whenever integration is merely enabled.
 public nonisolated struct HealthDailyContext: Codable, Equatable {
 
     public init(syncedAt: Date = Date(), activity: HealthActivitySummary? = nil, body: HealthBodyContext? = nil, cycle: HealthCycleContext? = nil, mindfulness: HealthMindfulnessContext? = nil, intimate: HealthIntimateContext? = nil) {
@@ -145,6 +159,10 @@ public nonisolated struct HealthDailyContext: Codable, Equatable {
     }
 }
 
+/// Daily activity metrics from HealthKit: steps, active energy, exercise minutes.
+///
+/// All optional — absent means HealthKit had no sample, never zero. Retained on
+/// ``DailyHealthScore`` for scoring audit.
 public nonisolated struct HealthActivitySummary: Codable, Equatable {
 
     public init(steps: Int? = nil, activeEnergyKilocalories: Double? = nil, exerciseMinutes: Double? = nil) {
@@ -157,6 +175,10 @@ public nonisolated struct HealthActivitySummary: Codable, Equatable {
     public var exerciseMinutes: Double?
 }
 
+/// Daily body metrics from HealthKit: sleep hours/stages, resting heart rate, HRV.
+///
+/// Feeds the sleep-quality refinement and the opt-in stress-awareness baseline comparison; all
+/// optional so absent data never reads as zero.
 public nonisolated struct HealthBodyContext: Codable, Equatable {
 
     public init(sleepHours: Double? = nil, restingHeartRateBPM: Double? = nil, heartRateVariabilityMS: Double? = nil, sleepStages: SleepStagesData? = nil) {
@@ -198,6 +220,10 @@ public nonisolated struct SleepStagesData: Codable, Equatable {
     }
 }
 
+/// Non-sensitive cycle sync metadata: flow-event count and latest event time.
+///
+/// Deliberately coarse — the clinical cycle samples stay in HealthKit and the sealed store (S3);
+/// this only tells the diary that cycle data exists for the day.
 public nonisolated struct HealthCycleContext: Codable, Equatable {
 
     public init(menstrualFlowEventCount: Int? = nil, latestCycleEventAt: Date? = nil) {
@@ -208,6 +234,9 @@ public nonisolated struct HealthCycleContext: Codable, Equatable {
     public var latestCycleEventAt: Date?
 }
 
+/// Minutes of mindful sessions HealthKit recorded for the day.
+///
+/// Used for gentle reflection copy; never a score input.
 public nonisolated struct HealthMindfulnessContext: Codable, Equatable {
 
     public init(mindfulSessionMinutes: Double? = nil) {
@@ -216,6 +245,10 @@ public nonisolated struct HealthMindfulnessContext: Codable, Equatable {
     public var mindfulSessionMinutes: Double?
 }
 
+/// A bare count of intimate-activity events for the day.
+///
+/// A count only, by design — notes and details live sealed in the private store, and the whole
+/// field is age- and visibility-gated upstream before it is ever written.
 public nonisolated struct HealthIntimateContext: Codable, Equatable {
 
     public init(eventCount: Int? = nil) {
@@ -224,6 +257,13 @@ public nonisolated struct HealthIntimateContext: Codable, Equatable {
     public var eventCount: Int?
 }
 
+/// The computed daily wellbeing score with its full audit trail.
+///
+/// Stores not just the `score` and the derived ``CompanionState`` but everything that produced
+/// them: per-component sub-scores, the exact (sickness-adjusted) ``ScoringWeights`` vector, the
+/// sickness override flag, the period-phase label, and the HealthKit contexts that fed scoring.
+/// `companionState` decodes tolerantly; recomputing the day constructs a fresh record, which
+/// naturally drops any parked token.
 public nonisolated struct DailyHealthScore: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var dateKey: String
@@ -280,6 +320,13 @@ public nonisolated struct DailyHealthScore: Identifiable, Codable, Equatable {
     }
 }
 
+/// One journal entry (or one-tap mood check-in) for a day.
+///
+/// Sensitive by default: for entries whose ids are sealed, ``strippedIfSealed(in:)`` is the single
+/// definition of "strip before the synced blob" — a FAIL-CLOSED memberwise reconstruct that drops
+/// text/emotions and, by construction, any future field until it is consciously allowlisted (S3).
+/// `isQuickMood` is the positive discriminator between a genuine empty check-in and a sealed entry
+/// whose text was stripped; `tag` decodes tolerantly with a parked token.
 public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var text: String
@@ -346,6 +393,10 @@ public nonisolated struct JournalEntry: Identifiable, Codable, Equatable {
     }
 }
 
+/// The six-step mood tag on a journal entry (bright … hard).
+///
+/// Also the memory category for ``MemoryNote``'s journal capture; unknown tags from newer builds
+/// freeze to `.neutral` and park.
 public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable {
     case bright, good, neutral, quiet, tired, hard
 
@@ -354,6 +405,10 @@ public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable 
     public var label: String { rawValue.capitalized }
 }
 
+/// The user's manually logged sleep for a day: hours, quality, and a note.
+///
+/// Distinct from HealthKit sleep (``HealthBodyContext``) — this is the deliberate log. `quality`
+/// decodes tolerantly; re-logging constructs a fresh record, which drops any parked token.
 public nonisolated struct SleepLog: Codable, Equatable {
     public var hours: Double?
     public var quality: SleepQuality {
@@ -382,6 +437,9 @@ public nonisolated struct SleepLog: Codable, Equatable {
     }
 }
 
+/// The four-step subjective sleep rating with its journal-voice description.
+///
+/// Feeds the sleep component of the daily score alongside logged hours.
 public nonisolated enum SleepQuality: String, Codable, CaseIterable, Identifiable {
     case poor, ok, good, great
 
@@ -398,6 +456,10 @@ public nonisolated enum SleepQuality: String, Codable, CaseIterable, Identifiabl
     }
 }
 
+/// The built-in personal-care checklist items (teeth, floss, shower, skincare, sunscreen).
+///
+/// Also the seed for the default ``PersonalCareTask``s; day sets decode tolerantly so an item
+/// added by a newer build parks instead of dropping the day.
 public nonisolated enum HygieneItem: String, Codable, CaseIterable, Identifiable {
     case teethAM, teethPM, floss, shower, deodorant, skincareAM, skincarePM, sunscreen
 
@@ -437,6 +499,11 @@ public nonisolated enum HygieneItem: String, Codable, CaseIterable, Identifiable
     }
 }
 
+/// A configurable personal-care checklist task (built-in or user-created).
+///
+/// Built-ins mirror ``HygieneItem`` via `defaultHygieneRawValue` so legacy hygiene sets keep
+/// counting; `normalized` de-dupes, cleans labels, and falls back to the defaults when a decoded
+/// list is unusable.
 public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
 
     public init(id: String, label: String, systemImage: String, group: String, defaultHygieneRawValue: String? = nil) {
@@ -497,6 +564,11 @@ public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
     }
 }
 
+/// A short, screened memory captured from a journal entry.
+///
+/// `fromJournal` enforces the capture rules: minimum length, a 120-character cap, and the
+/// ``DiagnosticLanguage`` screen that silently rejects clinical language before anything is stored
+/// (spec §8).
 public nonisolated struct MemoryNote: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var category: String
@@ -526,6 +598,10 @@ public nonisolated struct MemoryNote: Identifiable, Codable, Equatable {
     }
 }
 
+/// A structured long-form goal: type, statement, timeframe, metric, and milestones.
+///
+/// Authored during onboarding/goal editing; `type` links it to the ``GoalType`` presets that drive
+/// nutrition and training defaults.
 public nonisolated struct FitnessGoal: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var type: GoalType
@@ -551,6 +627,13 @@ public nonisolated struct FitnessGoal: Identifiable, Codable, Equatable {
     }
 }
 
+/// The seven goal presets that shape nutrition targets, training splits, and rest guidance.
+///
+/// The module's central "what is the user optimizing for" switch — consumed by
+/// ``NutritionTargetCalculator``, `WorkoutSplitRecommender`, ``WorkoutGoalStyle``, and
+/// ``WorkoutRestGuidance``. `init(persistedToken:)` also maps the legacy display-string aliases
+/// early builds wrote; the lenient `init(from:)` freezes unrecognized tokens to `.wellness`, and
+/// ``FernletSettings`` additionally parks them in a side channel.
 public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable {
     case wellness
     case strength

@@ -16,6 +16,12 @@
 
 import Foundation
 
+/// Pure, wall-safe profanity gate plus name sanitizer for the in-person clothing shop.
+///
+/// `isAllowedForListing` screens a name only when the user lists an item FOR SALE (private
+/// creations are never gated); `sanitizedName` is the never-throwing wire-boundary coercion every
+/// received name passes through. Best-effort by design — see the header note on the Scunthorpe
+/// tradeoff and the warn-don't-drop listing UX.
 public nonisolated enum ItemNameModeration {
 
     /// Max characters an item name may carry on the wire / when listed. Names are cosmetic labels.

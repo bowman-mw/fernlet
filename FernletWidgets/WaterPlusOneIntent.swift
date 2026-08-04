@@ -10,6 +10,15 @@
 import AppIntents
 import WidgetKit
 
+/// The companion widget's interactive "+1" button: logs one bottle of water without opening the app.
+///
+/// Runs in the WIDGET process (a plain `AppIntent`, unlike the Live Activity intents), so it never
+/// touches the diary directly. Instead it appends a ``PendingWidgetAction`` row — stamped with the
+/// tap's OWN day key for day-rollover safety — to the app-group queue that
+/// `FernletStore.processPendingWidgetActions` drains idempotently, bumps the mirrored snapshot
+/// optimistically via ``WidgetSnapshotStore/applyOptimisticWaterPlusOne(dayKey:)`` so the ring
+/// updates instantly, and reloads the companion timeline. The app remains the source of truth and
+/// republishes the real snapshot on its next save/foreground.
 struct WaterPlusOneIntent: AppIntent {
     static let title: LocalizedStringResource = "Log a bottle of water"
     static let description = IntentDescription("Adds one bottle of water to today's Fernlet diary.")

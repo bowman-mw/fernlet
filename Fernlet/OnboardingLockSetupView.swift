@@ -3,6 +3,13 @@ import FernletDomainModel
 import FernletUI
 import FernletLockUI
 
+/// Onboarding step offering three ways through lock setup: set a passcode now, rely on biometrics,
+/// or skip until a lockable feature asks.
+///
+/// "Set a passcode" presents `FernletLockSetupView` (from `FernletLockUI`) as a sheet and reports
+/// completion via `setPasscodeAction` on dismiss; the other two choices call straight through. The
+/// coordinator model records the outcome in `UserDefaults` (``OnboardingDefaults``) and advances —
+/// biometrics-only is treated as a deferral, since no Fernlet passcode exists yet.
 struct OnboardingLockSetupView: View {
     var stepText: String
     var setPasscodeAction: () -> Void

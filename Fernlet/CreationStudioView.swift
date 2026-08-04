@@ -2,9 +2,16 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
-/// The Animal-Crossing-style fabric editor. The user paints a per-slot pixel grid from a fixed palette,
-/// names it, and saves it into their Wardrobe. New creations auto-equip so the result is immediately
-/// visible on the companion. Pushed within the Wardrobe's navigation stack.
+/// The Animal-Crossing-style fabric editor for custom companion clothing.
+///
+/// The user paints a per-slot pixel grid from a fixed palette on a ``ZoomablePixelCanvas`` (with
+/// per-stroke undo, mirror mode, and per-slot draft buffers so switching slots never loses a
+/// drawing), then taps Next into the confirmation step to name it and optionally list it in their
+/// shop — the save is unlisted-first, so a flagged name or a full shop still keeps the item. New
+/// creations auto-equip so the result is immediately visible on the companion. Pushed within the
+/// Wardrobe's navigation stack; pass `editingItem` to edit an existing item in place (id /
+/// createdAt / designer preserved, with cross-dimension textures resampled via
+/// ``CreationStudioView/editorPixels(for:palette:)``).
 struct CreationStudioView: View {
     var store: FernletStore
     /// When non-nil we edit an existing item in place (id / createdAt / designer preserved).
@@ -73,6 +80,11 @@ struct CreationStudioView: View {
         _selectedColor = State(initialValue: 0)
     }
 
+    /// The three ways `store.listCustomItemForSale` can refuse a listing, as alert cases.
+    ///
+    /// In every case the item itself was already saved (just left unlisted) — the alerts say so,
+    /// and `.nameFlagged` deliberately keeps the user on the confirmation screen to rename and
+    /// retry. Mirrors ``WardrobeView``'s enum of the same name for its swipe-to-sell path.
     private enum ShopAlert: Identifiable {
         case nameFlagged
         case capReached

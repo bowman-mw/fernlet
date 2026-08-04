@@ -17,6 +17,14 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
+/// The cooking-mode Live Activity widget: the Lock Screen card plus every Dynamic Island
+/// presentation (expanded, compact, minimal).
+///
+/// Registered in ``FernletWidgetsBundle`` alongside ``WorkoutLiveActivity``. Renders the
+/// ``CookingActivityAttributes`` content the app publishes; its one interactive control is the
+/// "Next" button (``NextCookingStepIntent``), which the system executes in the app's process. Stale
+/// snapshots (jetsam / force-quit orphans) degrade to a dimmed "Paused" register instead of a frozen
+/// timer or step count.
 struct CookingLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CookingActivityAttributes.self) { context in
@@ -127,6 +135,10 @@ private func hasTimer(_ state: CookingActivityAttributes.ContentState) -> Bool {
 }
 
 /// Crash-safe per-step countdown. See the CRASH RULE at the top of this file.
+///
+/// Reused across the Lock Screen card and every Dynamic Island slot; it renders
+/// `Text(timerInterval:)` only from a present, ordered `timerStartedAt...timerEndsAt` window and
+/// disappears entirely otherwise (its callers already gate on `hasTimer`).
 private struct StepCountdownText: View {
     let state: CookingActivityAttributes.ContentState
     var font: Font
@@ -176,6 +188,12 @@ private func nextStepButton(_ state: CookingActivityAttributes.ContentState) -> 
 
 // MARK: - Lock Screen card
 
+/// The Lock Screen / banner presentation of the cooking activity: recipe name, "Step X of Y", the
+/// step text, the countdown, and the "Next" button.
+///
+/// Splits on `isStale` — a live cream card with the interactive control, or a dimmed "Paused / Open
+/// Fernlet" resting-place for an activity that outlived its process. Used only from
+/// ``CookingLiveActivity``'s `ActivityConfiguration` closure.
 private struct CookingLockScreenView: View {
     let attributes: CookingActivityAttributes
     let state: CookingActivityAttributes.ContentState

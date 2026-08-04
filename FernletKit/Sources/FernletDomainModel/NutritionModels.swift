@@ -3,6 +3,13 @@
 
 import Foundation
 
+/// The user's body profile (age, weight, height, sex, activity) that drives calorie and macro
+/// targets.
+///
+/// A top-level field of ``FernletSettings`` in the synced blob: the numeric fields decode STRICTLY
+/// (fabricated defaults would silently mis-guide targets) while the enums decode tolerantly with
+/// parked tokens (``EnumDecodeCompat``). `sex` may be auto-assigned from HealthKit once per launch,
+/// which deliberately clears any parked token — Health is the local authority for that field.
 public nonisolated struct UserNutritionProfile: Codable, Equatable {
 
     public init(age: Int = 30, weightPounds: Double = 170, heightInches: Double = 68, sex: BiologicalSex = .male, activityLevel: ActivityLevel = .moderate) {
@@ -51,6 +58,10 @@ public nonisolated struct UserNutritionProfile: Codable, Equatable {
     public var heightCentimeters: Double { heightInches * 2.54 }
 }
 
+/// Eating-pattern and guidance-intensity preferences feeding the nutrition targets.
+///
+/// Same synced-settings tolerant-decode contract as ``UserNutritionProfile``
+/// (``EnumDecodeCompat``): unknown pattern/intensity tokens freeze to the defaults and park.
 public nonisolated struct UserNutritionPreferences: Codable, Equatable {
 
     public init(dietaryPattern: DietaryPattern = .balanced, guidanceIntensity: GuidanceIntensity = .steady) {
@@ -82,6 +93,10 @@ public nonisolated struct UserNutritionPreferences: Codable, Equatable {
     }
 }
 
+/// Biological sex used for resting-metabolic-rate and fiber-target math.
+///
+/// Also the derivation input for default period-surface visibility when the user has made no
+/// explicit choice (see ``FernletSettings``' `periodTrackingVisible`).
 public nonisolated enum BiologicalSex: String, Codable, CaseIterable, Identifiable {
     case female
     case male
@@ -96,6 +111,9 @@ public nonisolated enum BiologicalSex: String, Codable, CaseIterable, Identifiab
     }
 }
 
+/// Self-reported activity level; `multiplier` scales resting metabolic rate into a calorie target.
+///
+/// Also feeds the workout split recommender's specificity and session-tolerance scoring.
 public nonisolated enum ActivityLevel: String, Codable, CaseIterable, Identifiable {
     case sedentary
     case light
@@ -126,6 +144,10 @@ public nonisolated enum ActivityLevel: String, Codable, CaseIterable, Identifiab
     }
 }
 
+/// The eating pattern that biases macro splits (balanced, higher-protein, plant-forward,
+/// lower-carb).
+///
+/// Consumed by ``NutritionTargetCalculator`` for protein grams-per-kilogram and fat percentages.
 public nonisolated enum DietaryPattern: String, Codable, CaseIterable, Identifiable {
     case balanced
     case higherProtein
@@ -144,6 +166,9 @@ public nonisolated enum DietaryPattern: String, Codable, CaseIterable, Identifia
     }
 }
 
+/// How detailed the nutrition guidance copy should be (gentle, steady, detailed).
+///
+/// A tone preference only — it never changes any computed number.
 public nonisolated enum GuidanceIntensity: String, Codable, CaseIterable, Identifiable {
     case gentle
     case steady
@@ -160,6 +185,10 @@ public nonisolated enum GuidanceIntensity: String, Codable, CaseIterable, Identi
     }
 }
 
+/// One ingredient's contribution frozen into a logged meal (name, quantity, macros, micros).
+///
+/// Snapshotted at log time so later edits to the catalog food never rewrite a past meal's numbers;
+/// `foodItemId` is kept so the correction flow can re-bind against the catalog.
 public nonisolated struct MealComponentSnapshot: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var foodItemId: UUID?
@@ -188,6 +217,13 @@ public nonisolated struct MealComponentSnapshot: Identifiable, Codable, Equatabl
     }
 }
 
+/// One logged meal with its macro/micronutrient snapshots and provenance.
+///
+/// Lives both in the blob's top-level `recentMeals` AND inside each ``FernletDay``, so every enum
+/// field (`mealType`, `mealSource`, `quality`) decodes tolerantly with parked tokens
+/// (``EnumDecodeCompat``). The `*Snapshot` fields freeze the numbers as logged; `isAIFallback` and
+/// `confidence` record how trustworthy the resolution was, and `source` carries the free-string
+/// ``MealLogSource`` provenance token. `copyForToday()` re-logs a past meal under a fresh identity.
 public nonisolated struct Meal: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var name: String
@@ -403,6 +439,11 @@ public nonisolated struct MealResolution {
     public var needsReview: Bool { confidence.needsReview || isFallback }
 }
 
+/// Protein/carb/fat grams; `calories` derives via the 4/4/9 kcal-per-gram rule.
+///
+/// ``goodProteinThreshold`` is the single source of truth for the per-serving protein level that
+/// rates a meal `.good` rather than `.ok` (WI-Q) — referenced by MealBuilder, the correction and
+/// review paths, DiaryStore, and FoodView.
 public nonisolated struct Macros: Codable, Equatable, Sendable {
     public var protein: Int
     public var carbs: Int
@@ -422,6 +463,11 @@ public nonisolated struct Macros: Codable, Equatable, Sendable {
     public var calories: Int { protein * 4 + carbs * 4 + fat * 9 }
 }
 
+/// The 23 tracked optional micronutrient amounts for a food or meal.
+///
+/// Every field is optional so "not measured" stays distinct from zero: `add`/`scaled(by:)`
+/// preserve nil, and the coverage math (`populatedFieldCount`, `completeness`) counts only real
+/// data. Consumed by the gap analyzer, the label scanner, and recipe/meal snapshotting.
 public nonisolated struct Micronutrients: Codable, Equatable, Sendable {
     public var fiber: Double?
     public var sugar: Double?
@@ -628,11 +674,19 @@ extension Micronutrients {
     }
 }
 
+/// Whether a tracked nutrient is covered or in gap over the analysis window.
+///
+/// Intermediate coverage (25–50%) yields no row at all — see
+/// ``MicronutrientGapAnalyzer/gaps(from:windowDays:)``.
 public nonisolated enum NutrientGapStatus: String, Codable, Equatable {
     case covered
     case gap
 }
 
+/// One nutrient's coverage verdict over a rolling window, for the preventive-care nudge UI.
+///
+/// `coverageRatio` compares intake to the recommended window total; `dataCoverageRatio` records how
+/// many meals actually carried data — the analyzer suppresses verdicts on thin data.
 public nonisolated struct NutrientGap: Identifiable, Codable, Equatable {
 
     public init(nutrientKey: String, nutrientName: String, unit: String, windowDays: Int, coverageRatio: Double, dataCoverageRatio: Double, status: NutrientGapStatus) {
@@ -657,6 +711,10 @@ public nonisolated struct NutrientGap: Identifiable, Codable, Equatable {
     }
 }
 
+/// A tracked nutrient's identity, unit, recommended daily amount, and value accessor.
+///
+/// The row type of ``MicronutrientGapAnalyzer/trackedNutrients``; recommended amounts come from
+/// the shared ``FDADailyValues`` table.
 public nonisolated struct NutrientReference {
 
     public init(key: String, name: String, unit: String, recommendedDailyAmount: Double, value: @escaping (Micronutrients) -> Double?) {
@@ -673,6 +731,12 @@ public nonisolated struct NutrientReference {
     public var value: (Micronutrients) -> Double?
 }
 
+/// Deterministic micronutrient gap analysis over recent days' meals.
+///
+/// Only speaks when the data supports it: it requires at least half the window's meals to carry
+/// usable micronutrient data (and per-nutrient data coverage ≥ 50%) before rating a nutrient
+/// covered (≥ 50% of the FDA-DV window total) or a gap (< 25%). Pure ``Meal`` arithmetic kept in
+/// the domain layer so scoring can depend on it, never the reverse.
 public nonisolated enum MicronutrientGapAnalyzer {
     // Recommended daily amounts come from the single shared `FDADailyValues` table
     // (21 CFR 101.9), which the `NutritionLabelScanner` reads too. Calcium and
@@ -743,6 +807,12 @@ public nonisolated enum MicronutrientGapAnalyzer {
     }
 }
 
+/// The USDA/product dataset a food row came from (foundation, survey, SR legacy, branded,
+/// restaurant).
+///
+/// Sorted ABOVE relevance score in search: reference data wins for plain queries, and
+/// branded/restaurant data wins for brand queries — see
+/// ``FoodItemSearch/dataTypePriority(_:brandQuery:)``.
 public nonisolated enum FoodDataType: String, Codable, Sendable {
     case foundation   // USDA Foundation Foods
     case survey       // USDA/FNDDS survey foods
@@ -751,12 +821,21 @@ public nonisolated enum FoodDataType: String, Codable, Sendable {
     case restaurant   // Restaurant chain item
 }
 
+/// Who authored a food row: USDA data, an AI resolution, or the user.
+///
+/// Ranked manual > usda > aiResolved in search so the user's own foods always outrank lookalikes;
+/// decoded tolerantly on ``FoodItem`` (an unknown source freezes to `.manual`, never falsely
+/// claiming USDA or AI provenance).
 public nonisolated enum FoodItemSource: String, Codable, Sendable {
     case usda
     case aiResolved
     case manual
 }
 
+/// The free-string provenance tokens stamped into `Meal.source` (manual, label-scan, web-import, …).
+///
+/// Deliberately string constants rather than an enum so a token minted by a newer build round-trips
+/// through older devices unharmed.
 public nonisolated enum MealLogSource {
     nonisolated public static let manual = "manual"
     nonisolated public static let labelScan = "label-scan"
@@ -780,6 +859,13 @@ public nonisolated enum FoodBarcode {
     }
 }
 
+/// A catalog food: serving definition, macros, micronutrients, provenance, and portion table.
+///
+/// The unit every meal component and recipe ingredient binds to by `id`. Part of the synced blob's
+/// top-level `foodItems` (USDA rows are filtered out of that store and served read-only by the
+/// bundled catalog), so `source`/`dataType` decode tolerantly with parked tokens. `portions` powers
+/// unit→gram conversion (`gramsEquivalent(quantity:unit:)`), and `barcode` holds the normalized
+/// GTIN for instant re-scan matches.
 public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
     public var id = UUID()
     public var name: String
@@ -907,6 +993,10 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+/// One household-measure→gram mapping for a food (e.g. "1 cup = 240 g").
+///
+/// Powers `FoodItem.gramsEquivalent` and recipe-unit preference; `grams(for:)` scales the mapping
+/// by an arbitrary amount.
 public nonisolated struct FoodPortion: Codable, Equatable, Sendable {
 
     public init(amount: Double, unit: String, gramWeight: Double, description: String? = nil) {
@@ -921,6 +1011,10 @@ public nonisolated struct FoodPortion: Codable, Equatable, Sendable {
     public var description: String?
 }
 
+/// A numbered catalog candidate offered to the AI food-selection prompt.
+///
+/// The model picks candidate NUMBERS only; `promptLine` is the compact one-line rendering it sees,
+/// and code binds the number back to the ``FoodItem`` — the model never invents a food.
 public nonisolated struct FoodSelectionCandidate: Identifiable, Equatable, Sendable {
 
     public init(id: Int, foodItem: FoodItem) {
@@ -936,6 +1030,10 @@ public nonisolated struct FoodSelectionCandidate: Identifiable, Equatable, Senda
     }
 }
 
+/// The model's pick for one ingredient: a candidate id plus the quantity/unit it assigned.
+///
+/// Bound back to the numbered ``FoodSelectionCandidate`` by `candidateId` after the response
+/// parses.
 public nonisolated struct FoodSelectionIngredient: Identifiable, Equatable {
     public var id = UUID()
     public var candidateId: Int
@@ -952,6 +1050,9 @@ public nonisolated struct FoodSelectionIngredient: Identifiable, Equatable {
     }
 }
 
+/// One meal item in the AI selection plan, grouping its chosen ingredients under a name.
+///
+/// The intermediate grouping between the user's description and the bound ingredient list.
 public nonisolated struct FoodSelectionMealItem: Identifiable, Equatable {
 
     public init(id: UUID = UUID(), name: String, ingredients: [FoodSelectionIngredient]) {
@@ -964,6 +1065,10 @@ public nonisolated struct FoodSelectionMealItem: Identifiable, Equatable {
     public var ingredients: [FoodSelectionIngredient]
 }
 
+/// The parsed output of the AI food-selection tier: meal name/type plus per-item ingredient picks.
+///
+/// `ingredients` flattens the items for the binder that resolves candidate ids back to catalog
+/// foods.
 public nonisolated struct FoodSelectionPlan: Equatable {
 
     public init(mealName: String, mealType: MealType, items: [FoodSelectionMealItem]) {
@@ -980,6 +1085,11 @@ public nonisolated struct FoodSelectionPlan: Equatable {
     }
 }
 
+/// Splits a free-text meal description into separately-resolvable food items.
+///
+/// Normalizes separators ("&", commas, semicolons, "plus", most "with" clauses) to " and " — but
+/// keeps "with" attached when it introduces a quantity modifier of the preceding food ("burger
+/// with 2 patties") — then splits and trims, falling back to the whole description.
 public nonisolated enum MealItemSplitter {
     public static func items(from description: String) -> [String] {
         let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1090,6 +1200,12 @@ public nonisolated enum PreparedDishHeuristic {
     }
 }
 
+/// Builds the numbered candidate list for the AI selection prompt from a meal description.
+///
+/// Searches overlapping 3/2/1-word phrases against the catalog index, de-dupes, then demotes
+/// prepared dishes for bare-ingredient queries via ``PreparedDishHeuristic``. `searchPhrases` is
+/// shared with `FoodCatalog` so the SQLite-backed path builds the same candidate set as the
+/// in-memory array path.
 public nonisolated enum FoodSelectionCandidateBuilder {
     public static func candidates(for description: String, foodItems: [FoodItem], limit: Int = 18) -> [FoodSelectionCandidate] {
         let index = FoodItemSearch.Index(foodItems: foodItems)
@@ -1147,6 +1263,11 @@ public nonisolated enum FoodSelectionCandidateBuilder {
     }
 }
 
+/// One structured recipe line: a bound catalog food id, quantity, and unit.
+///
+/// Stores no nutrition of its own — macros/micros always derive from the bound ``FoodItem`` at
+/// read time via `scaledMacros(using:)`/`scaledMicronutrients(using:)`, which convert through the
+/// food's serving definition and portion table.
 public nonisolated struct RecipeIngredient: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var foodItemId: UUID
@@ -1204,6 +1325,10 @@ public nonisolated enum RecipeStepSanitizer {
     }
 }
 
+/// The canonical recipe units, with `normalized(_:)` mapping user/USDA spellings onto them.
+///
+/// Un-normalizable unit strings return nil and are treated as incompatible — quantity math never
+/// silently mixes units (see ``GroceryAggregation``'s merge rules).
 public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable {
     case gram = "g"
     case milliliter = "ml"
@@ -1325,6 +1450,15 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
     }
 }
 
+/// A recipe: servings, structured ingredients (or a web import), notes, cooking steps, and fork
+/// provenance.
+///
+/// The single recipe model for every path — manual, peer-shared, and web-imported (a non-nil
+/// `webImport` switches it to free-text ingredient lines with precomputed nutrition).
+/// `parentRecipeID` (F4 fork provenance) and `steps` (F5 cooking mode) are additive
+/// tolerant-decoded fields with documented blob-strip landmines: an un-updated paired device
+/// re-encoding the synced blob strips them, so correctness must never depend on either surviving a
+/// round-trip (see the field docs below).
 public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var name: String
@@ -1412,6 +1546,12 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
     }
 }
 
+/// The wire form of a recipe share (`fernlet.recipe`, version 1).
+///
+/// Decoded from untrusted peer text/envelopes, hence `Sendable` and flat snapshot fields. `steps`
+/// is an optional key ON version 1 by design: an older peer ignores it and decodes minus steps, so
+/// bumping `version` for steps would wrongly make every steps-carrying share unreadable — see the
+/// field note.
 public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
     public var format = "fernlet.recipe"
     public var version = 1
@@ -1439,6 +1579,10 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
     }
 }
 
+/// One wire recipe ingredient: name, quantity/unit, and flat macro grams.
+///
+/// Carries snapshot macros (not a food id) because the receiver has no matching catalog row —
+/// import re-binds or creates foods locally.
 public nonisolated struct SharedRecipeIngredient: Codable, Equatable, Sendable {
     public var name: String
     public var quantity: Double
@@ -1457,6 +1601,9 @@ public nonisolated struct SharedRecipeIngredient: Codable, Equatable, Sendable {
     }
 }
 
+/// Why pasted/shared recipe text failed to import, with user-facing copy.
+///
+/// `message` is the friendly sentence surfaced directly in the import sheet.
 public nonisolated enum RecipeImportError: Error, Equatable {
     case missingPayload
     case invalidPayload
@@ -1477,6 +1624,11 @@ public nonisolated enum RecipeImportError: Error, Equatable {
     }
 }
 
+/// The recipe editor's working form state for one ingredient row.
+///
+/// Either binds an existing catalog food (`selectedFoodItemId`) or describes a new custom one
+/// (name + macros + optional scanned micros/barcode) that ``CustomIngredientUpsert`` resolves on
+/// save. Never persisted — the saved artifacts are the ``FoodItem`` and ``RecipeIngredient``.
 public nonisolated struct ManualRecipeIngredientInput: Identifiable, Equatable {
 
     public init(id: UUID = UUID(), name: String = "", selectedFoodItemId: UUID? = nil, quantity: Double = 1, unit: String = "serving", protein: Int = 0, carbs: Int = 0, fat: Int = 0, scannedMicronutrients: Micronutrients? = nil, barcode: String? = nil) {
@@ -1638,12 +1790,20 @@ extension FoodPortion {
     }
 }
 
+/// How a meal row was assembled: from a meal definition, a recipe, or manually.
+///
+/// Decoded tolerantly on ``Meal`` with a parked token; distinct from the free-string
+/// ``MealLogSource`` provenance token.
 public nonisolated enum MealSource: String, Codable {
     case mealDefinition
     case recipe
     case manual
 }
 
+/// A running protein/carb/fat accumulator with derived 4/4/9 calories.
+///
+/// The transient sum type for day and recipe totals — unlike ``Macros`` it is not `Codable` and is
+/// never persisted.
 public nonisolated struct MacroTotals: Equatable {
     public var protein = 0
     public var carbs = 0
@@ -1658,6 +1818,11 @@ public nonisolated struct MacroTotals: Equatable {
     public var calories: Int { protein * 4 + carbs * 4 + fat * 9 }
 }
 
+/// The day's computed nutrition plan: calorie/macro/fiber targets plus sodium and saturated-fat
+/// ceilings.
+///
+/// Produced by ``NutritionTargetCalculator/targets(for:)``; the `*Limit` fields are ceilings, not
+/// goals, and render as such.
 public nonisolated struct NutritionTargets: Equatable {
 
     public init(calories: Int, protein: Int, carbs: Int, fat: Int, fiber: Int, sodiumLimit: Int, saturatedFatLimit: Int) {
@@ -1682,6 +1847,11 @@ public nonisolated struct NutritionTargets: Equatable {
     }
 }
 
+/// Derives ``NutritionTargets`` from settings: Mifflin-St Jeor RMR × activity, goal-adjusted.
+///
+/// User overrides pin calories/protein/fat individually and the plan re-solves around them — carbs
+/// is always the residual, floored so pinning protein+fat high pushes the totals slightly above
+/// the stated calories rather than going negative (see the inline note in `targets(for:)`).
 public nonisolated enum NutritionTargetCalculator {
     public static func targets(for settings: FernletSettings) -> NutritionTargets {
         let profile = settings.userProfile
@@ -1771,6 +1941,10 @@ public nonisolated enum NutritionTargetCalculator {
     }
 }
 
+/// When a meal was eaten (breakfast … post-workout).
+///
+/// Raw values are display strings AND persisted tokens; unknown values from newer builds park via
+/// ``Meal``'s tolerant decode.
 public nonisolated enum MealType: String, Codable, CaseIterable, Identifiable, Sendable {
     case breakfast = "Breakfast"
     case lunch = "Lunch"
@@ -1782,6 +1956,10 @@ public nonisolated enum MealType: String, Codable, CaseIterable, Identifiable, S
     public var id: String { rawValue }
 }
 
+/// The four-step meal quality rating (great/good/ok/low) shown on the meal row.
+///
+/// Assigned by the resolver (protein-driven via ``Macros/goodProteinThreshold``) or edited by the
+/// user; decodes tolerantly on ``Meal``.
 public nonisolated enum MealQuality: String, Codable, CaseIterable {
     case great, good, ok, low
 }

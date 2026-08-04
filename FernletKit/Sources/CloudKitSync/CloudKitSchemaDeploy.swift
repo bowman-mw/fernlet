@@ -21,7 +21,7 @@ import Foundation
 ///
 /// The deploy path is a **development tool only**. `isRequested(arguments:)` is pure and
 /// testable; the caller that reads `ProcessInfo` and performs the schema push is gated by
-/// `#if DEBUG` in `PersistenceController`, so the deploy cannot be triggered in Release.
+/// `#if DEBUG` in ``PersistenceController``, so the deploy cannot be triggered in Release.
 public enum CloudKitSchemaDeploy {
     /// Launch argument that requests a one-shot CloudKit schema initialization.
     /// Pass it in the Xcode scheme (Run ▸ Arguments ▸ Arguments Passed On Launch) or via

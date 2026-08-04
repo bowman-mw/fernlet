@@ -4,10 +4,15 @@ import CoreGraphics
 import FernletDomainModel
 import FernletUI
 
-/// Converts a palette-indexed `ItemGridTexture` into a crisp `CGImage` (one pixel per cell, nearest-
-/// neighbor on display). Generation is cheap (a few hundred cells), and callers cache the result in
-/// view `@State` keyed by the texture so it is never regenerated inside the companion's per-frame
-/// animation loop.
+/// Converts a palette-indexed `ItemGridTexture` into a crisp `CGImage` (one pixel per cell,
+/// nearest-neighbor on display).
+///
+/// The single rasterization path for custom clothing — ``CustomItemThumbnail``,
+/// ``CompanionCustomItemLayer``, and ``ZoomablePixelCanvas`` all draw through it. Transparent
+/// cells are left at (0,0,0,0) in premultipliedLast, which is what lets downstream `.medium`
+/// filtering avoid black halos. Generation is cheap (a few hundred cells), and callers cache the
+/// result in view `@State` keyed by the texture so it is never regenerated inside the companion's
+/// per-frame animation loop.
 enum ItemTextureRenderer {
     static func image(for texture: ItemGridTexture) -> CGImage? {
         let width = texture.cols
@@ -55,8 +60,12 @@ extension Color {
     }
 }
 
-/// A small fixed-size preview of a designed item, used in the Wardrobe and (later) the shop. Renders
-/// the texture pixel-perfect on a soft parchment tile, preserving the grid's aspect ratio.
+/// A small fixed-size preview of a designed item, used in the Wardrobe and the friend shop.
+///
+/// Renders the texture on a soft parchment tile, preserving the grid's aspect ratio, with the
+/// same `.medium` interpolation as `CompanionCustomItemLayer` so a thumbnail never looks like a
+/// different item from the one worn on the companion. The `CGImage` is cached in `@State` and
+/// regenerated only when the texture changes.
 struct CustomItemThumbnail: View {
     var texture: ItemGridTexture
     var size: CGFloat = 56

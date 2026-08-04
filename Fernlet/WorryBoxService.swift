@@ -20,9 +20,32 @@ import FernletFoundation
 import FernletLock
 import PrivateMemoryStore
 
+/// App-side owner of the Worry Box: sealed, LOCAL-ONLY worry notes.
+///
+/// Mirrors the ``JournalSealingCoordinator`` key model in miniature — the user lock content key
+/// when unlocked, a device Keychain key when no lock is configured (or as the write fallback while
+/// locked), with device-key rows folded under the user key at unlock via
+/// ``updateActivation(lockState:contentKey:)``.
+///
+/// Because worries live EXCLUSIVELY in the sealed private store (`WorryNarrativeRepository` —
+/// never in `FernletDay`, the synced blob, MemoryNotes, or any ``SealedBackupService`` payload),
+/// none of the journal strip/scrub/sealed-ID machinery is needed here. Deliberately device-only:
+/// "let it go" data shouldn't follow you across devices, and even the ``lifetimeLetGoCount``
+/// metadata stays in local `UserDefaults` rather than the synced milestone ledger.
+///
+/// Main-actor isolated and `@Observable`; ``WorryEntryView`` (First Aid) and ``WorryBoxView``
+/// (Private hub) drive it, ContentView's lock-state observers feed the activation lifecycle, and
+/// ``FernletStore``'s reset-all funnel calls ``releaseAll()``. A write always finds a key (device
+/// fallback while locked), so a worry never exists as plaintext at rest; reads yield an empty list
+/// whenever no key is active.
 @MainActor
 @Observable
 final class WorryBoxService {
+    /// The lock-lifecycle mode the service was last activated into, which decides the active
+    /// read/write key (device Keychain key, user content key, or none while locked/inactive).
+    ///
+    /// Set only by ``updateActivation(lockState:contentKey:)``; the `activeKey` computed
+    /// property is its sole reader.
     private enum ActivationMode {
         case inactive
         case noLock

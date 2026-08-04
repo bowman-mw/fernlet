@@ -17,6 +17,12 @@
 
 import Foundation
 
+/// The single FDA Daily Value reference table shared by the gap analyzer and the label scanner.
+///
+/// Verified against 21 CFR 101.9 (the RDIs in (c)(8)(iv) and DRVs in (c)(9), adults and children
+/// ≥ 4 years). A flat label-comparison reference by design — no age/sex/life-stage adjustment and
+/// no Tolerable Upper Intake Levels. The one carve-out is ``omega3ALAGrams``, a NASEM Adequate
+/// Intake, because FDA defines no omega-3 DV.
 public nonisolated enum FDADailyValues {
 
     // MARK: - Gap-analysis denominators (per-day intake targets)

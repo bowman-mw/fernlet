@@ -1,5 +1,12 @@
 import Foundation
 
+/// Upsert logic turning manual recipe-ingredient inputs into catalog ``FoodItem``s and bound
+/// ``RecipeIngredient``s.
+///
+/// `resolve` de-duplicates by normalized name against existing manual foods — preserving the stable
+/// food id, previously scanned micronutrients, and a remembered barcode when the new save carries
+/// none — while `recipeIngredients(from:...)` maps a whole editor form into bound ingredients,
+/// creating any missing custom foods along the way. Pure value logic; the caller owns persistence.
 public nonisolated struct CustomIngredientUpsert {
     public static func resolve(
         ingredient: ManualRecipeIngredientInput,

@@ -7,6 +7,15 @@ import FernletDomainModel
 import AppServices
 import FernletUI
 
+/// The nutrition-label OCR screen: photograph (or pick) a nutrition-facts label, run
+/// `NutritionLabelScanner` over it, review the detected values, and hand the chosen
+/// `NutritionLabelResult` back through `onResult`.
+///
+/// Reached from the recipe editor's label scan, the barcode not-found handoff, and the capture
+/// chooser. It handles two-column labels (per-serving vs. per-container) with a column picker, shows
+/// glare/framing tips when a scan reads fewer than 3 fields, and offers a torch toggle for dim
+/// lighting. Macros-first: the Calories row renders only behind the explicit `showCalories` opt-in —
+/// the parsed value still passes through `onResult` untouched.
 struct NutritionLabelCameraSheet: View {
     @Environment(\.dismiss) private var dismiss
     /// Macros-first: the detected Calories row renders only behind the explicit opt-in (the value
@@ -378,6 +387,11 @@ struct NutritionLabelCameraSheet: View {
 
 }
 
+/// A `UIViewControllerRepresentable` wrapper around `UIImagePickerController` for camera capture
+/// (with an optional flash mode) or library picking.
+///
+/// Shared by the label scanner, the barcode still-photo fallback, and other food-capture flows;
+/// delivers the original `UIImage` through `onImagePicked` and dismisses itself on pick or cancel.
 struct ImagePickerView: UIViewControllerRepresentable {
     var sourceType: UIImagePickerController.SourceType = .camera
     var flashMode: UIImagePickerController.CameraFlashMode = .auto
@@ -406,6 +420,11 @@ struct ImagePickerView: UIViewControllerRepresentable {
         Coordinator(onImagePicked: onImagePicked)
     }
 
+    /// The picker's delegate: forwards the picked original image to `onImagePicked` and dismisses
+    /// the controller on both pick and cancel.
+    ///
+    /// `UINavigationControllerDelegate` conformance is required by `UIImagePickerController.delegate`
+    /// even though no navigation callbacks are used.
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
         let onImagePicked: (UIImage) -> Void
 

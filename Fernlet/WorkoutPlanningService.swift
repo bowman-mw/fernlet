@@ -5,9 +5,11 @@ import FernletFoundation
 import FernletDomainModel
 import HealthKitGateway
 
-/// Read-side context the workout planner needs from the app store. Mirrors the
-/// `WorkoutSyncContext` host-protocol pattern so `WorkoutPlanningService` depends on
-/// this seam rather than the concrete `FernletStore` (plan §5d).
+/// Read-side context the workout planner needs from the app store.
+///
+/// Mirrors the `WorkoutSyncContext` host-protocol pattern so ``WorkoutPlanningService`` depends on
+/// this seam rather than the concrete ``FernletStore`` (plan §5d). `@MainActor` and class-bound so
+/// the service can hold its host `unowned`; ``FernletStore`` is the production conformer.
 @MainActor
 protocol WorkoutPlanningContext: AnyObject {
     var settings: FernletSettings { get }
@@ -20,14 +22,22 @@ protocol WorkoutPlanningContext: AnyObject {
 }
 
 /// Workout split recommendation + day-plan generation + AI day-plan adjustment,
-/// extracted from `FernletStore` (plan §5d). Owns the FoundationModels workout
-/// adjustment dependency, keeping it off the store/core path. Pure given its
-/// context inputs; the store keeps thin delegating wrappers so call sites are
-/// unchanged.
+/// extracted from ``FernletStore`` (plan §5d).
+///
+/// Owns the FoundationModels workout-adjustment dependency, keeping it off the store/core path.
+/// Pure given its context inputs; the store keeps thin delegating wrappers so call sites are
+/// unchanged. `@MainActor` like its host, which it holds `unowned` — the store owns the service,
+/// never the reverse. Generation is deterministic (split rotation by weekday, equipment/injury
+/// filtering, logged progression); only ``adjustWorkoutDayPlan(_:request:)`` touches AI, and it
+/// degrades to the unchanged plan on an empty request, AI-off, or any model failure.
 @MainActor
 final class WorkoutPlanningService {
+    /// The read-side seam into app state — `unowned` because the host (``FernletStore``) owns this
+    /// service for its whole lifetime.
     private unowned let host: any WorkoutPlanningContext
 
+    /// - Parameter host: The context provider (in production, ``FernletStore``); held `unowned`
+    ///   because the host owns this service.
     init(host: any WorkoutPlanningContext) {
         self.host = host
     }

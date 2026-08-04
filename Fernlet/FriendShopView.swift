@@ -3,10 +3,15 @@ import FernletDomainModel
 import ProximityKit
 import FernletUI
 
-/// Browse the shops of friends from your last session and buy items with coins. Catalogs are exchanged
-/// over the friend mesh while you're together; the shop OPENS when the session ends and stays browsable
-/// for one hour (Phase 3a post-session window — the entry card on the Friends tab carries the
-/// countdown). Only items you actually buy persist (stamped "designed by <friend>").
+/// Browse the shops of friends from your last session and buy items with coins.
+///
+/// Catalogs are exchanged over the friend mesh while you're together; the shop OPENS when the
+/// session ends and stays browsable for one hour (Phase 3a post-session window — the entry card
+/// on the Friends tab carries the countdown). Only items you actually buy persist (stamped
+/// "designed by <friend>"). Every rendered item is re-sanitized through ``ClothingShareCodec``
+/// and filtered against hidden items and banned sellers; the ••• menu is the report path App
+/// Store UGC compliance points at, and purchases run through `FernletStore.buyClothingItem`
+/// against the coin ledger.
 struct FriendShopView: View {
     var store: FernletStore
     var shop: MeshClothingShop
@@ -14,6 +19,10 @@ struct FriendShopView: View {
     @State private var feedback: String?
     @State private var reportTarget: ReportTarget?
 
+    /// The item (plus its seller's identity) a report confirmation is currently about.
+    ///
+    /// Captured at ••• time so the dialog keeps a stable target even if the catalog refreshes;
+    /// the seller keys let `reportClothingItem` both hide the item and block its sender.
     private struct ReportTarget: Identifiable {
         let id = UUID()
         let item: CustomizationItem

@@ -11,6 +11,9 @@ import Foundation
 import FernletScoring
 
 /// One of the small kindnesses Fernlet can offer on a heavier day.
+///
+/// Selected by ``GentleOfferEngine`` and rendered by `AmbientCardsView`'s gentle-offer card;
+/// breathing and worry-box deep-link into First Aid, the short walk is just a warm send-off.
 enum GentleOfferKind: String, CaseIterable, Equatable {
     case breathing
     case worryBox
@@ -37,9 +40,11 @@ enum GentleOfferKind: String, CaseIterable, Equatable {
     }
 }
 
-/// Pure, deterministic offer selection. The persisted once-per-day cap lives in
-/// `DiaryStore.isGentleOfferAvailable` / `dismissGentleOfferForToday`; this engine only decides
-/// WHETHER today warrants an offer and WHICH one.
+/// Pure, deterministic offer selection.
+///
+/// The persisted once-per-day cap lives in `DiaryStore.isGentleOfferAvailable` /
+/// `dismissGentleOfferForToday`; this engine only decides WHETHER today warrants an offer and
+/// WHICH one. Stateless and side-effect free so the gating and rotation are unit-testable.
 enum GentleOfferEngine {
     /// Picks today's offer, or `nil` when the day doesn't call for one.
     ///

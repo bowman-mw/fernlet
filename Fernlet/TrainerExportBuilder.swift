@@ -36,11 +36,26 @@ struct TrainerExportOptions: Equatable {
 
 // MARK: - Export DTO (curated, allowlisted projections)
 
+/// The curated trainer/nutritionist export: a human-readable about block, the training-safety
+/// profile, and per-day workout + nutrition projections.
+///
+/// This is the FAIL-CLOSED ALLOWLIST described in the file header — every field a trainer can see
+/// is hand-selected here, so a new store field stays invisible until someone consciously adds a
+/// projection for it. Built by `FernletStore.buildTrainerExport(options:)` from live decrypted
+/// state (never a copy-and-strip), encoded to stable pretty JSON by
+/// `encodeTrainerExport(_:)`, and reviewed in ``TrainerExportView`` before anything leaves the
+/// device. Sealed/sensitive data (journal, cycle/intimacy, photos, friends, location, recipe
+/// ingredients) has no representation in this type at all — that absence is the privacy guarantee.
 struct TrainerExportBundle: Codable, Equatable {
     var about: About
     var profile: TrainingProfile
     var days: [DayExport]
 
+    /// The self-describing preamble of the export: when it was prepared, and the human-readable
+    /// "includes" / "never includes" lists.
+    ///
+    /// Rendered at the top of the JSON so the person receiving the file (and the user reviewing it)
+    /// can see exactly what was and wasn't shared without reading the data itself.
     struct About: Codable, Equatable {
         var app = "Fernlet"
         var exportedOn: String
@@ -51,6 +66,10 @@ struct TrainerExportBundle: Codable, Equatable {
         var neverIncludes: [String]
     }
 
+    /// The user's training context: safety information (always included) plus the opt-in goal.
+    ///
+    /// Projected from `FernletSettings.workoutProfile`; empty strings and empty sets become `nil`
+    /// so the JSON only carries fields that say something.
     struct TrainingProfile: Codable, Equatable {
         // Training-safety context is always included — a trainer needs to know what to avoid.
         var injuryNotes: String?
@@ -63,6 +82,10 @@ struct TrainerExportBundle: Codable, Equatable {
         var goal: String?
     }
 
+    /// One day of the export: logged workouts, the nutrition summary, and the opt-in extras.
+    ///
+    /// Projected by `projectTrainerDay` — a day with nothing trainer-relevant (only journal or
+    /// other excluded data) is dropped entirely rather than exported empty.
     struct DayExport: Codable, Equatable {
         var day: String
         var workouts: [WorkoutExport]?
@@ -73,16 +96,29 @@ struct TrainerExportBundle: Codable, Equatable {
         var wasSick: Bool?
         var wellbeing: Wellbeing?
 
+        /// The day's water intake against the user's target, in bottles.
+        ///
+        /// Present only when `includeHydration` is on and the day logged at least one bottle.
         struct Hydration: Codable, Equatable {
             var bottles: Int
             var targetBottles: Int
         }
+        /// The derived wellbeing signal: a rounded score plus its companion-state label.
+        ///
+        /// Only the derived value is ever exported — never the score components or period phase —
+        /// and when sickness sharing is off the state is recomputed without the sick flag so this
+        /// channel can't leak sick days (see `projectTrainerDay`).
         struct Wellbeing: Codable, Equatable {
             var score: Double
             var state: String
         }
     }
 
+    /// One logged workout, as the user recorded it.
+    ///
+    /// A direct projection of `Workout`'s trainer-relevant fields — including the free-text
+    /// sets/reps/weights lines, RPE, and the user's own notes — with empty collections and strings
+    /// collapsed to `nil`.
     struct WorkoutExport: Codable, Equatable {
         var name: String
         var type: String
@@ -98,6 +134,10 @@ struct TrainerExportBundle: Codable, Equatable {
         var completedAt: Date
     }
 
+    /// One day's nutrition, summed from the per-meal SNAPSHOTS the user logged.
+    ///
+    /// Meal names and calorie/macro totals plus optional micronutrient totals — never the recipe
+    /// ingredient lists the snapshots were computed from (those are on the never-share list).
     struct NutritionSummary: Codable, Equatable {
         var mealNames: [String]
         var totalCalories: Int
@@ -108,6 +148,9 @@ struct TrainerExportBundle: Codable, Equatable {
     }
 
     /// Per-day micronutrient totals a nutritionist reviews — summed from the as-logged per-meal snapshots.
+    ///
+    /// Every field is optional: a nutrient nobody logged stays `nil`, and an all-nil value is
+    /// dropped from the day entirely (`isEmpty`) rather than exported as an empty object.
     struct MicronutrientTotals: Codable, Equatable {
         var fiber: Double?
         var sugar: Double?
@@ -129,6 +172,9 @@ struct TrainerExportBundle: Codable, Equatable {
         }
     }
 
+    /// One night's sleep summary: hours, the quality label, and the user's note if any.
+    ///
+    /// Opt-in only (`includeSleep`); projected from the day record's sleep entry.
     struct SleepExport: Codable, Equatable {
         var hours: Double?
         var quality: String

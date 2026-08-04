@@ -14,13 +14,30 @@ import FernletFoundation
 
 // MARK: - Payload
 
+/// One period-log narrative captured while the app lock was engaged, awaiting sealing under the real content key.
+///
+/// `PeriodTrackerStore` (in `PrivateHealthStore`) builds a payload when the user logs a cycle
+/// event that carries narrative content but no unlocked content key is available, and hands it to
+/// `FernletLockService.bufferPendingNarrative(_:)`. The lock service appends it to a
+/// ``PendingNarrativeBuffer``; after the next successful unlock the drained payloads are
+/// re-inserted as sealed `MenstrualNarrative` rows under the real ChaChaPoly column key.
+///
+/// The `…Bytes` fields hold plaintext encodings (UTF-8 note text, JSON-encoded symptom values):
+/// at-rest protection comes from the buffer's whole-file ChaChaPoly seal, not from the fields
+/// themselves.
 public struct PendingNarrativePayload: Codable {
+    /// The HealthKit external-UUID string tying this narrative to its saved cycle sample.
     public let hkExternalUUID: String
+    /// The entry's calendar day key.
     public let dateKey: String             // yyyy-MM-dd
+    /// UTF-8 bytes of the free-form note, or `nil` when the event had none.
     public let noteBytes: Data?
+    /// JSON-encoded array of symptom raw values, or `nil`.
     public let symptomFlagsBytes: Data?
+    /// JSON-encoded custom symptom-scale values, or `nil`.
     public let customSymptomScalesBytes: Data?
 
+    /// Creates a payload from already-encoded narrative fields.
     public init(
         hkExternalUUID: String,
         dateKey: String,
@@ -38,14 +55,40 @@ public struct PendingNarrativePayload: Codable {
 
 // MARK: - Buffer
 
+/// An encrypted on-disk holding pen for period-log narratives written while the Fernlet app lock is engaged.
+///
+/// `FernletLockService` (in `FernletLock`) owns the app's single instance and exposes it to
+/// `PeriodTrackerStore` through the `PeriodLockContext` seam: narratives logged without an
+/// unlocked content key are appended here, then drained after the next successful unlock and
+/// re-sealed as `MenstrualNarrative` rows under the real column key.
+///
+/// Storage and crypto:
+/// - All entries are JSON-encoded as a single array and sealed with ChaChaPoly into
+///   `Application Support/Fernlet/pending-narratives.bin`; each save excludes the file from
+///   backup and (best-effort) applies complete file protection.
+/// - The 256-bit buffer key is its own data-protection keychain item
+///   (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`), deliberately separate from the lock's
+///   content key so logging can reach the buffer without the user's Fernlet passcode. A legacy
+///   service-less keychain item is migrated into the scoped slot on first read.
+/// - The buffer caps at 50 entries; ``append(_:)`` evicts the oldest beyond the cap and records
+///   the eviction via `FernletAuditLog`.
+///
+/// - Important: ``drainAll()`` never deletes. Callers must durably persist the drained payloads
+///   first and only then call ``purge()``, so a partial re-seal failure cannot silently drop
+///   notes the user wrote while locked.
+///
+/// Concurrency: a plain nonisolated, non-`Sendable` class with no internal locking; correctness
+/// relies on the single lock-service-owned instance being driven from the main actor.
 public final class PendingNarrativeBuffer {
 
+    /// Creates a buffer handle; every instance shares the same on-disk file and keychain key.
     public init() {}
 
     private static let bufferKeyService = "com.fernlet.narrative-buffer"
     private static let bufferKeyAccount = "com.fernlet.buffer.key"           // legacy (no service)
     private static let bufferKeyAccountV2 = "com.fernlet.buffer.key.v2"      // current (with service)
     private static let maxEntries = 50
+    /// The sealed buffer file under `Application Support/Fernlet/`, creating the directory as a side effect.
     private var bufferFileURL: URL {
         let support = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)
@@ -57,6 +100,10 @@ public final class PendingNarrativeBuffer {
 
     // MARK: - Public API
 
+    /// Appends a payload to the sealed buffer, evicting (and audit-logging) the oldest entries
+    /// beyond the 50-entry cap.
+    ///
+    /// - Important: Each append decrypts, re-encodes, and re-seals the entire buffer file.
     public func append(_ payload: PendingNarrativePayload) throws {
         var entries = try loadEntries()
         entries.append(payload)
@@ -76,10 +123,16 @@ public final class PendingNarrativeBuffer {
     /// payloads, via an explicit `purge()` call. Purging here would lose any
     /// payloads the caller fails to persist (e.g. a partial insert failure),
     /// silently dropping notes the user wrote while the app was locked.
+    ///
+    /// - Returns: Every buffered payload, oldest first.
     public func drainAll() throws -> [PendingNarrativePayload] {
         try loadEntries()
     }
 
+    /// Deletes the buffer file outright.
+    ///
+    /// Call only after the drained payloads have been durably persisted, or when intentionally
+    /// discarding them (e.g. on lock reset or when period tracking is hidden).
     public func purge() throws {
         let url = bufferFileURL
         if FileManager.default.fileExists(atPath: url.path) {
@@ -89,6 +142,7 @@ public final class PendingNarrativeBuffer {
 
     // MARK: - Serialise / deserialise with ChaChaPoly
 
+    /// Decrypts and decodes the buffer file; returns `[]` when it does not exist or is empty.
     private func loadEntries() throws -> [PendingNarrativePayload] {
         let url = bufferFileURL
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
@@ -102,6 +156,8 @@ public final class PendingNarrativeBuffer {
         return try JSONDecoder().decode([PendingNarrativePayload].self, from: plaintext)
     }
 
+    /// JSON-encodes and ChaChaPoly-seals the entries, writes them atomically, then best-effort
+    /// re-applies backup exclusion and complete file protection to the fresh file.
     private func saveEntries(_ entries: [PendingNarrativePayload]) throws {
         let plaintext = try JSONEncoder().encode(entries)
         let key = try bufferKey()
@@ -125,11 +181,14 @@ public final class PendingNarrativeBuffer {
 
     // MARK: - Buffer key management
 
+    /// Returns the buffer key, creating and storing a fresh one on first use.
     private func bufferKey() throws -> SymmetricKey {
         if let existing = loadBufferKey() { return existing }
         return try createAndStoreBufferKey()
     }
 
+    /// Loads the buffer key from the keychain, migrating a legacy service-less item into the
+    /// scoped v2 slot when that is all that exists.
     private func loadBufferKey() -> SymmetricKey? {
         // Try current key (with service) first
         if let key = loadRawBufferKey(account: Self.bufferKeyAccountV2, service: Self.bufferKeyService) {
@@ -159,6 +218,7 @@ public final class PendingNarrativeBuffer {
         return nil
     }
 
+    /// Fetches a symmetric key from the data-protection keychain by account (and optional service).
     private func loadRawBufferKey(account: String, service: String?) -> SymmetricKey? {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -174,6 +234,8 @@ public final class PendingNarrativeBuffer {
         return SymmetricKey(data: data)
     }
 
+    /// Generates a 256-bit key and stores it background-accessible (after first unlock, this
+    /// device only); throws `FernletLockError.internalError` when the keychain write fails.
     private func createAndStoreBufferKey() throws -> SymmetricKey {
         let key = SymmetricKey(size: .bits256)
         let keyData = key.withUnsafeBytes { Data($0) }

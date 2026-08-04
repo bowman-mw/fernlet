@@ -60,6 +60,14 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
         }
     }
 
+    /// The UIKit-side broker between the scroll view's zoom/pan and the paint gestures.
+    ///
+    /// As `UIScrollViewDelegate` it supplies the zooming view and flips `paintSuppressed` around
+    /// scroll/zoom interactions (reverting a staggered-pinch stray stroke via `onStrokeCancelled`);
+    /// as `UIGestureRecognizerDelegate` it lets the one-finger paint pan/tap recognize
+    /// simultaneously with the scroll view's gestures. Each paint sample is mapped from the
+    /// content view's coordinates to a grid cell and reported through `onPaintCell` — the SwiftUI
+    /// editor keeps ownership of the pixel/undo/symmetry logic.
     final class Coordinator: NSObject, UIScrollViewDelegate, UIGestureRecognizerDelegate {
         var parent: ZoomablePixelCanvas
         private var isStroking = false
@@ -160,8 +168,12 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
     }
 }
 
-/// A `UIScrollView` set up for pinch-zoom + two-finger pan over a single content view, leaving one-finger
-/// touches free for the caller's paint gestures.
+/// A `UIScrollView` set up for pinch-zoom + two-finger pan over a single content view, leaving
+/// one-finger touches free for the caller's paint gestures.
+///
+/// Hosts the pixel image in a nearest-neighbor-magnified `UIImageView` (`content`) and tracks the
+/// grid dimensions so ``ZoomablePixelCanvas`` can detect a slot change (`gridColsRowsChanged`) and
+/// snap the zoom back to 1× for the fresh grid.
 final class ZoomScrollView: UIScrollView {
     let content = UIImageView()
     var gridCols = 0 { didSet { if gridCols != oldValue { gridColsRowsChanged = true } } }

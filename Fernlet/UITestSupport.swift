@@ -16,8 +16,11 @@
 import Foundation
 import FernletDomainModel
 
-/// Central reader for the UX-appearance-test launch flags. Keep all new
-/// `FERNLET_UI_TEST_*` reads here so the app source has a single, auditable seam.
+/// Central reader for the UX-appearance-test launch flags.
+///
+/// Keep all new `FERNLET_UI_TEST_*` reads here so the app source has a single, auditable seam.
+/// DEBUG-only: in release builds every flag is a hard-coded no-op, so none of the hooks (or the
+/// demo seed they enable) ships. Consumed by `FernletApp`, `ContentView`, and `HomeView`.
 enum UITestSupport {
     #if DEBUG
     private static var env: [String: String] { ProcessInfo.processInfo.environment }

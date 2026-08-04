@@ -15,10 +15,25 @@
 import ActivityKit
 import Foundation
 
+/// The ActivityKit contract for the cooking-mode Live Activity: the fixed attributes (recipe name)
+/// plus the per-step ``ContentState`` snapshot.
+///
+/// Compiled into BOTH targets: the app's `CookingLiveActivityController` requests and updates the
+/// activity with these values, and the widget's ``CookingLiveActivity`` renders them. A plain
+/// Codable/Hashable value type with no app or domain-model imports (S3 wall), mirroring
+/// ``WorkoutActivityAttributes`` exactly. The per-step timer ticks natively via
+/// `Text(timerInterval:)`, so the content state only changes on discrete step transitions — never
+/// per-second, never via push.
 struct CookingActivityAttributes: ActivityAttributes {
     /// The recipe's name (e.g. "Weeknight ragù"). Fixed for the life of the activity.
     var recipeName: String
 
+    /// The dynamic per-step snapshot the widget renders: instruction text, "Step X of Y" cursor, and
+    /// the optional fixed timer window.
+    ///
+    /// Produced only by `CookingRunState.contentState` (the app-group run state's Live Activity
+    /// mapping), so both drivers — the in-app walker and the Lock Screen intents — publish
+    /// byte-identical snapshots.
     struct ContentState: Codable, Hashable {
         /// The current step's instruction text.
         var stepText: String

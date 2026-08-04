@@ -18,6 +18,10 @@ import PrivateHealthStore
 // (the scoring layer consumes them). Only the raw→abstract conversion stays here, where `CyclePhase` (a
 // raw cycle type that must not cross down into scoring) is visible.
 nonisolated extension PeriodPhaseSignal {
+    /// Converts the raw sealed `CyclePhase` into the abstract exported signal, case for case.
+    ///
+    /// This initializer lives here rather than in `FernletScoring` (where `PeriodPhaseSignal` is
+    /// declared) because `CyclePhase` (PrivateHealthStore) must never be nameable below the bridge.
     public init(_ phase: CyclePhase) {
         switch phase {
         case .menstrual: self = .menstrual
@@ -30,12 +34,19 @@ nonisolated extension PeriodPhaseSignal {
 }
 
 /// Coarse position within the current cycle. No "days until" / "started N days ago" — just a band.
+///
+/// Part of the abstract egress vocabulary: companion/food/move surfaces consume this instead of a
+/// raw `CyclePhase`, so no date arithmetic can be reconstructed downstream. Produced by
+/// ``CyclePhaseResolver/band(for:)`` and read via ``PeriodContextBridge/currentPhaseBand()``.
 public nonisolated enum PeriodPhaseBand: String, Equatable {
     case menstruating, early, mid, late, unknown
 }
 
-/// Abstract nutrition hint — a kind plus a coarse strength, never a value. `.noData` when the cycle is
-/// unknown or the sealed narratives that gauge symptom severity are unreadable (locked).
+/// Abstract nutrition hint — a kind plus a coarse strength, never a value.
+///
+/// `.noData` when the cycle is unknown or the sealed narratives that gauge symptom severity are
+/// unreadable (locked). Emitted by ``PeriodContextBridge/nutritionSignal()`` for the food surface;
+/// the strength is a `PeriodSignalStrength` (FernletScoring), so no quantity ever crosses out.
 public nonisolated enum PeriodNutritionSignal: Equatable {
     case iron(PeriodSignalStrength)
     case complexCarbs(PeriodSignalStrength)
@@ -43,16 +54,22 @@ public nonisolated enum PeriodNutritionSignal: Equatable {
     case noData
 }
 
-/// Abstract exercise hint. `.noData` under the same conditions as `PeriodNutritionSignal`.
+/// Abstract exercise hint — gentleness versus strength-friendliness, never a prescription.
+///
+/// `.noData` under the same conditions as ``PeriodNutritionSignal`` (locked, or the phase is
+/// unresolved). Emitted by ``PeriodContextBridge/exerciseSignal()`` for the movement surface.
 public nonisolated enum PeriodExerciseSignal: Equatable {
     case gentleness(PeriodSignalStrength)
     case strengthFriendly(PeriodSignalStrength)
     case noData
 }
 
-/// Non-sensitive per-day wellbeing component scores supplied *into* the period module by `FernletStore` so
-/// the trend engine can correlate them against cycle phase. This flows inward only — the corresponding
-/// outward flow is the abstract `PeriodHealthTrend`, never these raw values.
+/// Non-sensitive per-day wellbeing component scores supplied *into* the period module by `FernletStore`.
+///
+/// ``PeriodPhaseTrendEngine`` correlates these against cycle phase. This flows inward only — the
+/// corresponding outward flow is the abstract ``PeriodHealthTrend``, never these raw values. Every
+/// field is an optional 0–1 component score; a missing metric simply drops that day from the
+/// metric's sample rather than counting as zero.
 public nonisolated struct PeriodWellbeingSample: Equatable {
     public var sleep: Double?
     public var mood: Double?
@@ -67,34 +84,61 @@ public nonisolated struct PeriodWellbeingSample: Equatable {
     }
 }
 
-/// The read-only seam the scoring engine consults. `FernletStore` holds one of these (defaulting to nil →
-/// no period awareness) and never sees the concrete bridge or any raw cycle type.
+/// The read-only seam the scoring engine consults for period-aware adjustments.
+///
+/// `FernletStore` holds one of these (defaulting to nil → no period awareness) and never sees the
+/// concrete bridge or any raw cycle type; `ContentView` wires the concrete ``PeriodContextBridge``
+/// via `attachPeriodScoringContext`. The store's `periodAdjustment(for:)` applies the user's opt-in
+/// setting *before* consulting this seam, so a conformer only ever answers for an opted-in user —
+/// the 3-cycle and confidence gates are the conformer's own job. `@MainActor`: called synchronously
+/// from the main-actor scoring path.
 @MainActor
 public protocol PeriodScoringContextProviding: AnyObject {
+    /// The abstract scoring adjustment for the day identified by the canonical `"yyyy-MM-dd"` key,
+    /// or `.none` (the identity) when the day's phase cannot be resolved.
     func scoringAdjustment(forDayKey dayKey: String) -> PeriodScoringAdjustment
 }
 
-/// The minimal live read surface the bridge needs from the period store. Keeping it a protocol decouples
-/// the bridge from `PeriodTrackerStore`'s Core Data / HealthKit dependencies (and lets tests drive it with
-/// a trivial fake, with no Core Data).
+/// The minimal live read surface the bridge needs from the period store.
+///
+/// Keeping it a protocol decouples the bridge from `PeriodTrackerStore`'s Core Data / HealthKit
+/// dependencies (and lets tests drive it with a trivial fake, with no Core Data). The bridge holds
+/// it `weak` and re-reads both properties live on every query, so a deletion in the source shows up
+/// on the very next read.
 @MainActor
 public protocol PeriodContextSource: AnyObject {
+    /// The current cycle log, one entry per logged day. A raw sealed type — visible *to* the bridge,
+    /// never re-exported by it.
     var entries: [CycleDayEntry] { get }
+    /// The current calendar-math prediction, or nil while locked or below the store's own
+    /// observation floor. Nil disables every non-observed phase downstream.
     var prediction: CyclePrediction? { get }
 }
 
+/// `PeriodTrackerStore` is the production conformer; the bridge only ever sees it through the seam.
 extension PeriodTrackerStore: PeriodContextSource {}
 
 // MARK: - Phase resolution (pure calendar math)
 
-/// Resolves a cycle phase for a given day from observed flow plus calendar-math prediction. Today the app
-/// only ever observes `.menstrual`/`.unknown`; this fills in follicular/ovulatory/luteal using the standard
-/// "luteal phase ≈ 14 days, ovulation ≈ cycleLength − 14" model anchored on detected period starts. Pure
-/// and deterministic — no persistence, no AI.
+/// Resolves a cycle phase for a given day from observed flow plus calendar-math prediction.
+///
+/// Today the app only ever observes `.menstrual`/`.unknown`; this fills in
+/// follicular/ovulatory/luteal using the standard "luteal phase ≈ 14 days, ovulation ≈
+/// cycleLength − 14" model anchored on detected period starts. Pure and deterministic — no
+/// persistence, no AI. Precedence is fixed: an observed bleeding day always wins; calendar math
+/// places non-bleeding days only while a prediction exists and the day sits within one (buffered)
+/// cycle of the last detected start — anything else is `.unknown`. A namespace enum: all members
+/// are static, and both ``PeriodContextBridge`` and its trend building call through here so every
+/// consumer sees identical phase decisions.
 public nonisolated enum CyclePhaseResolver {
+    /// Assumed bleeding-window length in days for calendar-math placement (an observed flow day
+    /// overrides this regardless of cycle day).
     private static let menstrualWindow = 5
+    /// Assumed luteal-phase length in days — the "ovulation ≈ cycleLength − 14" half of the model.
     private static let lutealLength = 14
 
+    /// Resolves the cycle phase for `date` — observed flow first, calendar math second.
+    ///
     /// - Parameter date: Day to resolve, compared at the start-of-day granularity of `calendar`.
     /// - Parameter entries: Observed cycle log entries used to detect bleeding days and period starts.
     /// - Parameter prediction: Optional calendar-math prediction that supplies the cycle length context.
@@ -104,6 +148,8 @@ public nonisolated enum CyclePhaseResolver {
     ///   optimization and never changes the result (they must equal `detectedPeriodStarts(from: entries)`).
     ///   The observed-flow check (step 1) always reads `entries` live, so a memoized `periodStarts` can only
     ///   ever affect the calendar-math phases, never the "is today a bleeding day" decision.
+    /// - Returns: The resolved phase, or `.unknown` when neither observed flow nor an in-window
+    ///   prediction can place the day.
     public static func phase(
         on date: Date,
         entries: [CycleDayEntry],
@@ -137,6 +183,8 @@ public nonisolated enum CyclePhaseResolver {
         return .luteal
     }
 
+    /// Collapses a raw phase to its coarse egress band (menstrual → `.menstruating`,
+    /// follicular → `.early`, ovulatory → `.mid`, luteal → `.late`).
     public static func band(for phase: CyclePhase) -> PeriodPhaseBand {
         switch phase {
         case .menstrual: .menstruating
@@ -147,6 +195,8 @@ public nonisolated enum CyclePhaseResolver {
         }
     }
 
+    /// True when the entry for `date`'s day key carries any HealthKit bleeding sample above `.none`.
+    /// Buckets the day via `FernletDate.dayKey`, matching how entries themselves are keyed.
     private static func hasObservedFlow(on date: Date, entries: [CycleDayEntry], calendar: Calendar) -> Bool {
         let key = FernletDate.dayKey(for: date)
         guard let entry = entries.first(where: { $0.dateKey == key }) else { return false }
@@ -160,20 +210,36 @@ public nonisolated enum CyclePhaseResolver {
 // MARK: - Bridge
 
 /// The single read-only path from private cycle data to scoring / companion / food / move suggestions.
+///
 /// Recomputes every signal on demand from the live `PeriodTrackerStore`, so deleting period data
 /// immediately makes outputs return `.unknown`/`.noData` — the "deliberate forgetfulness" the spec requires.
+/// This is the layer-4 "sanctioned egress" of the S3 wall: raw cycle types (`CycleDayEntry`,
+/// `CyclePrediction`, `CyclePhase`) flow *in* through the ``PeriodContextSource`` seam and only the
+/// abstract vocabulary (`PeriodScoringAdjustment`, ``PeriodPhaseBand``, ``PeriodNutritionSignal``,
+/// ``PeriodExerciseSignal``, ``PeriodHealthTrend``) flows out. `ContentView` constructs it over the
+/// period store and hands it to `FernletStore` as an `any` ``PeriodScoringContextProviding``; nothing
+/// downstream ever holds the concrete type. `@MainActor` `@Observable`; holds `source` weakly;
+/// persists nothing.
 ///
 /// The one memo is `cachedPeriodStarts` (the detected period starts): scoring reads `score` ~12×/render and
 /// each read would otherwise re-group up to 240 days of flow entries via `detectPeriods`. It is recomputed
 /// lazily from `source.entries` and invalidated in `refresh()` — the same lifecycle that already rebuilds
 /// `trends` on every mutation (launch / lock-change / delete / log-edit). The observed-flow check stays live
 /// (it never consults the cache), so a wiped entry still resolves to `.unknown` on the very next read.
+/// - Important: `refresh(unlocked:wellbeingByDay:)` is the ONLY invalidation point — every source
+///   mutation and every lock-state change must be followed by a `refresh` call, or `scoringAdjustment`
+///   keeps using memoized period starts and stale trends.
 ///
 /// Degradation:
-/// - **< 3 cycles or locked** (`prediction == nil`): only observed flow can place the user, so phase is
-///   `.menstrual`/`.unknown`, band follows, and nutrition/exercise are `.noData`. No scoring softening.
+/// - **Locked** (source `prediction == nil` and `unlocked == false`): only observed flow can place the
+///   user, so phase is `.menstrual`/`.unknown`, band follows, nutrition/exercise are `.noData`, and
+///   there is no scoring softening.
 ///   (This is intentionally stricter than period-intimacy-plan §5.3, which would have non-bleeding phases
 ///   resolve while locked from HK alone; see that section's note. The lock is a "forget the cycle" gate.)
+/// - **Unlocked, < 3 completed cycles** (`activePrediction == nil`): phase still degrades to
+///   `.menstrual`/`.unknown` (observed flow only) and there is no scoring softening, but on an observed
+///   bleeding day ``nutritionSignal()``/``exerciseSignal()`` DO emit the menstrual-phase hints — the
+///   3-cycle gate withholds calendar-math inference, not direct observation.
 /// - **Unlocked, ≥ 3 cycles**: full phase/band + phase-appropriate nutrition/exercise hints, and scoring
 ///   softening on phases the per-phase trends mark as historically harder (medium/high confidence only).
 @MainActor
@@ -184,9 +250,19 @@ public final class PeriodContextBridge: PeriodScoringContextProviding {
     /// so a completed cycle is `cyclesObserved - 1`.
     private static let minimumCompletedCycles = 3
 
+    /// The live period store, held weakly through the ``PeriodContextSource`` seam. When it
+    /// deallocates, every output degrades to `.unknown`/`.noData`/`.none`.
     @ObservationIgnored private weak var source: (any PeriodContextSource)?
+    /// Calendar for all day bucketing and cycle-day arithmetic (`.current` in the app; injectable
+    /// for deterministic tests).
     @ObservationIgnored private let calendar: Calendar
+    /// The lock state last pushed via ``refresh(unlocked:wellbeingByDay:)``. Fail-closed default:
+    /// `false` until the app says otherwise, which keeps the symptom-severity-dependent
+    /// nutrition/exercise signals at `.noData`.
     private var unlocked = false
+    /// Per-phase trends computed by the last ``refresh(unlocked:wellbeingByDay:)``. Empty while
+    /// locked or below the 3-completed-cycle gate; observed (not `@ObservationIgnored`) so the
+    /// trends UI re-renders when they change.
     private(set) var trends: [PeriodHealthTrend] = []
 
     /// Memoized detected period starts for the current `source.entries`. Recomputed lazily and cleared in
@@ -194,6 +270,11 @@ public final class PeriodContextBridge: PeriodScoringContextProviding {
     /// during a read must not churn the view graph.
     @ObservationIgnored private var cachedPeriodStarts: [Date]?
 
+    /// Creates a bridge over `source`. The source is held weakly; the caller (in the app,
+    /// `ContentView`) owns both and is responsible for driving ``refresh(unlocked:wellbeingByDay:)``.
+    /// - Parameters:
+    ///   - source: The live period store, seen only through the seam.
+    ///   - calendar: Calendar for day bucketing and cycle arithmetic; defaults to `.current`.
     public init(source: any PeriodContextSource, calendar: Calendar = .current) {
         self.source = source
         self.calendar = calendar
@@ -228,10 +309,15 @@ public final class PeriodContextBridge: PeriodScoringContextProviding {
 
     // MARK: Abstract egress
 
+    /// Today's abstract phase signal — resolved live from the source and converted, never cached.
     public func currentPhaseSignal() -> PeriodPhaseSignal { PeriodPhaseSignal(resolvedPhase(on: Date())) }
 
+    /// Today's coarse cycle band for companion/UI copy; same live resolution as ``currentPhaseSignal()``.
     public func currentPhaseBand() -> PeriodPhaseBand { CyclePhaseResolver.band(for: resolvedPhase(on: Date())) }
 
+    /// Today's abstract nutrition hint for the food surface.
+    /// - Returns: A phase-appropriate kind at `.suggested` strength, or `.noData` when locked or the
+    ///   phase is unresolved.
     public func nutritionSignal() -> PeriodNutritionSignal {
         // Nutrition strength depends on user-marked symptom severity, which is sealed — `.noData` if locked.
         guard unlocked else { return .noData }
@@ -243,6 +329,9 @@ public final class PeriodContextBridge: PeriodScoringContextProviding {
         }
     }
 
+    /// Today's abstract exercise hint for the movement surface — gentleness in menstrual/luteal,
+    /// strength-friendly in follicular/ovulatory.
+    /// - Returns: `.noData` when locked or the phase is unresolved, mirroring ``nutritionSignal()``.
     public func exerciseSignal() -> PeriodExerciseSignal {
         guard unlocked else { return .noData }
         switch resolvedPhase(on: Date()) {
@@ -257,6 +346,14 @@ public final class PeriodContextBridge: PeriodScoringContextProviding {
 
     // MARK: Scoring egress
 
+    /// The abstract scoring adjustment for a day — the ``PeriodScoringContextProviding`` conformance.
+    ///
+    /// Resolves the day's phase from live entries plus the gated prediction, then softens only when
+    /// the per-phase trends mark that phase historically harder at medium/high confidence. The phase
+    /// label is always carried (for the persisted audit field) even when no softening applies.
+    /// - Parameter dayKey: Canonical `"yyyy-MM-dd"` day key.
+    /// - Returns: `.none` (the identity) when the source is gone, the 3-cycle gate is unmet, the key
+    ///   doesn't parse, or the phase resolves `.unknown`.
     public func scoringAdjustment(forDayKey dayKey: String) -> PeriodScoringAdjustment {
         guard let source, let prediction = activePrediction,
               let date = FernletDate.date(fromDayKey: dayKey) else { return .none }
@@ -277,6 +374,8 @@ public final class PeriodContextBridge: PeriodScoringContextProviding {
 
     // MARK: Internals
 
+    /// Resolves `date`'s raw phase from the live source, honoring the 3-cycle/lock gate: with no
+    /// active prediction the resolver can only report `.menstrual` (observed flow) or `.unknown`.
     private func resolvedPhase(on date: Date) -> CyclePhase {
         guard let source else { return .unknown }
         // `activePrediction` is nil when locked or below the 3-completed-cycle gate; the resolver then
@@ -312,6 +411,9 @@ public final class PeriodContextBridge: PeriodScoringContextProviding {
         }
     }
 
+    /// Joins each logged cycle day with its wellbeing scores and sealed symptom load into the trend
+    /// engine's per-day observations, dropping unknown-phase days and days carrying no signal at all.
+    /// Symptom load is the fraction of `PeriodSymptom` cases flagged in the day's (decrypted) narrative.
     private func buildObservations(
         entries: [CycleDayEntry],
         prediction: CyclePrediction,

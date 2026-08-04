@@ -6,6 +6,34 @@ import Foundation
 import FernletDomainModel
 import FernletPersistence
 
+/// The Core Data + iCloud implementation of `FernletRepository` — Fernlet's synced persistence spine.
+///
+/// Selected when `StoragePreferences` choose Core Data + iCloud (vs. the local-JSON
+/// `LocalFernletRepository`, which this class also wraps as its one-time legacy migration
+/// source). State is split across two stores that must stay coherent:
+/// - the **aggregate blob**: a single `FernletDatabaseRecord` row holding the JSON-encoded
+///   `LocalFernletDatabase` (settings, memories, goals, recipes, retry queue, derived tables,
+///   day-content summary — everything except day history), and
+/// - the **per-row day store**: one `DayRecord` per day via the injected `DayRecordRepositoring`
+///   (normally ``DayRecordRepository``), which removed the blob's day cap and lets CloudKit
+///   merge different-day edits from different devices per record.
+///
+/// Key invariants:
+/// - **Sanitize-before-sync (S3)**: day writes accept only `SanitizedDay`/`SanitizedSnapshot`,
+///   and the one-time blob→row migration re-strips every legacy day through the same barrier, so
+///   cycle/intimate content never lands in a synced row.
+/// - **No empty rows**: a day with no logged content writes no row (and deletes a stale one), so
+///   a device that merely launched the app can't make other devices read "existing cloud data".
+/// - **Read-only recovery**: a failed record fetch or blob decode latches all saves off
+///   (`isInReadOnlyRecovery`) and serves an empty fallback, so a transient failure can't be
+///   persisted over real data; the latch clears on the next successful load or a full purge.
+/// - **Row-write-first**: `saveSnapshot`/`updateDay` persist the day row before touching the
+///   blob and return `false` (so `SnapshotSaveCoordinator` retries) when the row write fails.
+///
+/// Memoizes the decoded blob and the full day history, invalidating both on non-patching saves,
+/// on save failure, and whenever ``PersistenceController``'s remote-change publisher reports a
+/// CloudKit push with a changed record stamp — re-broadcast to the store layer through
+/// `remoteChangePublisher`. `@MainActor`; all Core Data work runs on the view context.
 @MainActor
 public final class CoreDataFernletRepository: FernletRepository, @MainActor RemoteChangePublishingRepository {
     private static let primaryRecordID = "primary"
@@ -34,10 +62,15 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// Fires after the local cache is invalidated due to a remote change.
     public let remoteChangeSubject = PassthroughSubject<Void, Never>()
 
+    /// Type-erased view of `remoteChangeSubject` — the `RemoteChangePublishingRepository`
+    /// conformance the store layer subscribes to for reload-on-sync.
     public var remoteChangePublisher: AnyPublisher<Void, Never> {
         remoteChangeSubject.eraseToAnyPublisher()
     }
 
+    /// Creates the repository, defaulting to the shared ``PersistenceController``, the standard
+    /// legacy JSON store, and a ``DayRecordRepository`` on the same controller; all three are
+    /// injectable for tests. Subscribes to the controller's remote-change publisher immediately.
     public init(
         controller: PersistenceController? = nil,
         legacyRepository: LocalFernletRepository? = nil,
@@ -56,6 +89,8 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             }
     }
 
+    /// Synchronously loads the full snapshot for `todayKey`, decoding (and lazily migrating)
+    /// the aggregate blob when the cache is cold and sourcing today's day from its row.
     public func loadSnapshot(todayKey: String) -> FernletSnapshot {
         StartupTiming.timed("CoreDataFernletRepository.loadSnapshot") {
             assert(!todayKey.isEmpty, "today key required")
@@ -64,6 +99,9 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         }
     }
 
+    /// Async variant of `loadSnapshot(todayKey:)`: the cold-cache blob decode runs off the main
+    /// actor, guarding against a concurrent `saveDatabase` installing a fresher cache mid-decode
+    /// (the fresher cache wins). Failure paths latch read-only recovery just like the sync path.
     public func loadSnapshotAsync(todayKey: String) async -> FernletSnapshot {
         let signpostID = StartupTiming.begin("CoreDataFernletRepository.loadSnapshotAsync")
         defer { StartupTiming.end("CoreDataFernletRepository.loadSnapshotAsync", signpostID: signpostID) }
@@ -116,6 +154,8 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         }
     }
 
+    /// Loads one day: warm day-history memo first, then its row, then the blob's copy (the
+    /// safety net while blob→row migration is incomplete), then an empty day.
     public func loadDay(for dateKey: String, todayKey: String) -> FernletDay {
         assert(!dateKey.isEmpty, "date key required")
         if let cached = cachedAllDays?[dateKey] { return cached }   // served from the shared day cache (no query)
@@ -130,6 +170,11 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             ?? FernletDay(date: dateKey)
     }
 
+    /// Persists a sanitized snapshot: today's day row first, then the aggregate blob with its
+    /// row-derived state refreshed.
+    ///
+    /// - Returns: `false` when the row write or blob save fails (nothing is half-persisted; the
+    ///   caller — `SnapshotSaveCoordinator` — must retry rather than treat the save as durable).
     @discardableResult public func saveSnapshot(_ sanitized: SanitizedSnapshot) -> Bool {
         let snapshot = sanitized.snapshot
         assert(!snapshot.todayKey.isEmpty, "snapshot key required")
@@ -178,6 +223,11 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         }
     }
 
+    /// Persists an edit to a single (typically past) day: writes/deletes its row, keeps any
+    /// pre-migration blob copy of that day consistent with the edit, and refreshes the blob's
+    /// row-derived tables.
+    ///
+    /// - Returns: `false` when the row write or blob save fails, so the caller retries.
     @discardableResult public func updateDay(_ sanitized: SanitizedDay, for dateKey: String, todayKey: String) -> Bool {
         let day = sanitized.day
         assert(!dateKey.isEmpty, "date key required")
@@ -232,10 +282,12 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         }
     }
 
+    /// Human-readable storage label shown in settings.
     public func storageDescription() -> String {
         "Core Data + iCloud"
     }
 
+    /// Drops every in-memory memo and notifies subscribers, forcing the next read to hit the store.
     public func invalidateCache() {
         cachedDatabase = nil
         cachedAllDays = nil
@@ -243,10 +295,14 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         remoteChangeSubject.send()
     }
 
+    /// Test hook: makes the next primary-record fetch fail with `error`, exercising the
+    /// read-only-recovery path without corrupting a real store.
     public func forceNextFetchFailureForTesting(_ error: Error = CocoaError(.fileReadUnknown)) {
         forcedFetchFailureForTesting = error
     }
 
+    /// Remote-change handler: drops the memos and re-broadcasts only when the persisted record's
+    /// `updatedAt` actually differs from the cached stamp (feedback from our own save is ignored).
     private func invalidateCacheIfRecordChanged() {
         let latestUpdatedAt = fetchRecordUpdatedAt()
         guard latestUpdatedAt != cachedRecordUpdatedAt else { return }
@@ -369,6 +425,8 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             .sorted { $0.0 < $1.0 }
     }
 
+    /// Loads the entire day history (rows, overlaid with any not-yet-migrated blob-only days),
+    /// memoizing the result only once migration has completed and the store is readable.
     public func loadAllDays() -> [String: FernletDay] {
         if let cached = cachedAllDays { return cached }
         let database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))  // ensure decoded + migration attempted
@@ -392,10 +450,12 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         return all
     }
 
+    /// Reads the Tier-2 memory records stored in the aggregate blob.
     public func loadTierTwoMemories() -> [TierTwoMemoryRecord] {
         loadDatabase(todayKey: FernletDate.dayKey(for: .now)).tierTwoMemories
     }
 
+    /// Replaces the blob's Tier-2 memory records wholesale and persists the blob.
     @discardableResult public func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord]) -> Bool {
         var database = loadDatabase(todayKey: FernletDate.dayKey(for: .now))
         database.tierTwoMemories = records
@@ -403,6 +463,9 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         return saveDatabase(database)
     }
 
+    /// The synchronous blob load: serves the memo, or fetches/decodes the primary record —
+    /// migrating from the legacy JSON store on first launch, retrying the blob→row backfill
+    /// whenever it is incomplete, and latching read-only recovery on fetch/decode failure.
     private func loadDatabase(todayKey: String) -> LocalFernletDatabase {
         assert(!todayKey.isEmpty, "today key required")
 
@@ -527,6 +590,9 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         return succeeded
     }
 
+    /// Encodes and persists the aggregate blob to its single Core Data record, refusing while a
+    /// read-only-recovery latch is set; on success the memo is updated with the known-good state,
+    /// on failure the context is rolled back and every memo is dropped.
     @discardableResult private func saveDatabase(_ database: LocalFernletDatabase, invalidatesDayCache: Bool = true) -> Bool {
         assert(database.schemaVersion >= 1, "schema version invalid")
         // Most saves (migration, tier-2 memories) may have changed the day history underneath the memo, so
@@ -595,12 +661,19 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         }
     }
 
+    /// Three-way outcome of the primary aggregate-record fetch.
+    ///
+    /// Distinguishing `missing` (first launch — safe to migrate from the legacy store) from
+    /// `failed` (store unreadable — must latch read-only recovery and never migrate) is what
+    /// keeps a transient Core Data error from being treated as a fresh install.
     private enum FetchRecordResult {
         case found(NSManagedObject)
         case missing
         case failed(Error)
     }
 
+    /// Fetches the primary aggregate record, self-healing duplicate records (which can form when
+    /// two devices first launch before the initial CloudKit import settles) by keeping the newest.
     private func fetchRecordResult() -> FetchRecordResult {
         if let forcedFetchFailureForTesting {
             self.forcedFetchFailureForTesting = nil
@@ -626,11 +699,14 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         }
     }
 
+    /// First-launch migration source: loads the legacy local-JSON database wholesale.
     private func migrateDatabase(todayKey: String) -> LocalFernletDatabase {
         assert(!todayKey.isEmpty, "today key required")
         return legacyRepository.loadDatabaseForMigration(todayKey: todayKey)
     }
 
+    /// Assembles the `FernletSnapshot` handed to the store: blob-held aggregates plus today's
+    /// day from its row (with the pre-migration blob fallback described inline).
     private func snapshot(from database: LocalFernletDatabase, todayKey: String) -> FernletSnapshot {
         // Today's day comes from its row (the authoritative day store). While migration is incomplete (a
         // failed/lagging backfill leaves `daysMigratedToRows` false) the row may not be written yet, so fall

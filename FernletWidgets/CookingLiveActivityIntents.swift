@@ -29,9 +29,11 @@ extension Notification.Name {
     static let cookingRunAdvancedByIntent = Notification.Name("MBO.Fernlet.cookingRunAdvancedByIntent")
 }
 
-/// "Next" — advances to the next step, or finishes the cook when already on the last step. The exact
-/// pattern the guided workout uses for "Done set": mutate the shared app-group state, reflect it onto
-/// the activity. Invoked by the Live Activity button and by "Hey Siri, next step in Fernlet".
+/// "Next" — advances to the next step, or finishes the cook when already on the last step.
+///
+/// The exact pattern the guided workout uses for "Done set": mutate the shared app-group state,
+/// reflect it onto the activity. Invoked by the Live Activity button and by "Hey Siri, next step in
+/// Fernlet"; the system runs `perform()` in the app's process via ``CookingIntentRunner``.
 struct NextCookingStepIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Next cooking step"
     static let description = IntentDescription("Moves to the next step of the recipe you're cooking.")
@@ -44,9 +46,11 @@ struct NextCookingStepIntent: LiveActivityIntent {
     }
 }
 
-/// "Repeat step" — restarts the current step's passive timer (the voice equivalent of tapping the
-/// in-app "Reset timer" and starting it again) so a cook whose hands are busy can re-fire the countdown
-/// without touching the phone. It never changes which step you're on. A step with no timer is a no-op.
+/// "Repeat step" — restarts the current step's passive timer without changing which step you're on.
+///
+/// The voice equivalent of tapping the in-app "Reset timer" and starting it again, so a cook whose
+/// hands are busy can re-fire the countdown without touching the phone. A step with no timer is a
+/// no-op. Executed in the app's process via ``CookingIntentRunner``.
 struct RepeatCookingStepIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Repeat cooking step"
     static let description = IntentDescription("Restarts the timer on the current cooking step.")
@@ -58,12 +62,19 @@ struct RepeatCookingStepIntent: LiveActivityIntent {
     }
 }
 
-/// Shared transition applier for the two intents. Reads → mutates → writes the app-group run state,
-/// then reflects it onto the activity. Guarded so a tap that races the app's own transition — or one
-/// that lands after the cook finished — is a harmless no-op.
+/// Shared transition applier for the two cooking intents.
+///
+/// Reads → mutates → writes the app-group run state via ``CookingRunStateStore``, posts
+/// `.cookingRunAdvancedByIntent` so the in-app walker reconciles immediately, then reflects the
+/// result onto the activity through ``CookingActivityBridge``. Guarded so a tap that races the app's
+/// own transition — or one that lands after the cook finished — is a harmless no-op.
 enum CookingIntentRunner {
-    // `directory` defaults to nil → the real app-group container. A test passes a temp dir so the intent
-    // path and the `FernletStore` under test share one isolated file, off the process-wide real one.
+    /// Advance the shared run one step (finishing it on the last step) and reflect the result onto
+    /// the activity. No-op when there is no run or it already finished.
+    ///
+    /// - Parameter directory: Defaults to nil → the real app-group container. A test passes a temp
+    ///   dir so the intent path and the `FernletStore` under test share one isolated file, off the
+    ///   process-wide real one.
     static func advance(directory: URL? = nil) async {
         let store = CookingRunStateStore(directory: directory)
         guard var state = store.read(), !state.isFinished else { return }
@@ -71,6 +82,10 @@ enum CookingIntentRunner {
         await apply(state, store: store)
     }
 
+    /// Restart the current step's passive timer (no cursor movement) and reflect the result onto the
+    /// activity. A step with no positive duration clears the timer instead; no run → no-op.
+    ///
+    /// - Parameter directory: Same test seam as ``advance(directory:)``.
     static func repeatStep(directory: URL? = nil) async {
         let store = CookingRunStateStore(directory: directory)
         guard var state = store.read(), !state.isFinished else { return }

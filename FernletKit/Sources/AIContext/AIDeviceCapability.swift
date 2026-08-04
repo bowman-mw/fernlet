@@ -2,8 +2,11 @@ import Foundation
 import FernletDomainModel
 
 /// A snapshot of which AI rungs the *device* can physically reach, independent of user settings.
-/// The router caps every resolution by this — an iPhone-11-class device with no Apple Intelligence
-/// gets `onDeviceFoundationModels == false` and lands on the deterministic path (Ladder decision 1).
+///
+/// ``FernletModelRouter`` caps every resolution by this — an iPhone-11-class device with no Apple
+/// Intelligence gets `onDeviceFoundationModels == false` and lands on the deterministic path
+/// (Ladder decision 1). Obtained through the ``AIDeviceCapabilityProviding`` seam so tests and the
+/// deterministic-only floor can substitute a fixed value.
 public struct AIDeviceCapability: Sendable, Equatable {
     /// The on-device Apple Foundation model is present and available (Apple Intelligence devices).
     public var onDeviceFoundationModels: Bool
@@ -14,6 +17,7 @@ public struct AIDeviceCapability: Sendable, Equatable {
     /// reachable. Always `false` on the installed SDK.
     public var externalProviders: Bool
 
+    /// Creates a snapshot; the cloud rungs default to `false`, matching the installed SDK's reality.
     public init(onDeviceFoundationModels: Bool, privateCloudCompute: Bool = false, externalProviders: Bool = false) {
         self.onDeviceFoundationModels = onDeviceFoundationModels
         self.privateCloudCompute = privateCloudCompute
@@ -37,16 +41,24 @@ public struct AIDeviceCapability: Sendable, Equatable {
     }
 }
 
-/// The injectable seam that reports device capability. Wrapping the existing
-/// `SystemLanguageModel.default.availability` check behind this protocol lets tests simulate a
-/// no-Apple-Intelligence device, and lets the cloud rungs slot in later at exactly one place.
+/// The injectable seam that reports device capability.
+///
+/// ``FernletModelRouter`` holds one of these and reads it fresh on every resolution. Wrapping the
+/// existing `SystemLanguageModel.default.availability` check behind this protocol lets tests
+/// simulate a no-Apple-Intelligence device, and lets the cloud rungs slot in later at exactly one
+/// place.
 public protocol AIDeviceCapabilityProviding: Sendable {
+    /// The rungs this device can reach right now.
     var capability: AIDeviceCapability { get }
 }
 
 /// A fixed-capability provider for tests and for the deterministic-only floor.
+///
+/// Wraps a constant ``AIDeviceCapability`` so a router can be built without touching the live
+/// `SystemLanguageModel` availability check.
 public struct StaticAIDeviceCapabilityProvider: AIDeviceCapabilityProviding {
     public let capability: AIDeviceCapability
+    /// Creates a provider that always reports `capability`.
     public init(_ capability: AIDeviceCapability) {
         self.capability = capability
     }

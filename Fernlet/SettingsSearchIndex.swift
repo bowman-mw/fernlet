@@ -13,9 +13,13 @@
 
 import Foundation
 
-/// Every addressable destination reachable from the Settings hub. Adding a case is a compile-time
-/// prompt to (a) return its view from `SettingsSheet.destination(for:)` and (b) give it at least one
-/// `SettingsSearchIndex` entry (asserted in `SettingsSearchIndexTests`).
+/// Every addressable destination reachable from the Settings hub.
+///
+/// The single Hashable value driving value-based navigation: every sub-page link and every search
+/// result pushes one of these, resolved by the hub's lone
+/// `.navigationDestination(for: SettingsRoute.self)`. Adding a case is a compile-time prompt to
+/// (a) return its view from `SettingsSheet.destination(for:)` and (b) give it at least one
+/// ``SettingsSearchIndex`` entry (asserted in `SettingsSearchIndexTests`).
 nonisolated enum SettingsRoute: Hashable, CaseIterable {
     case appearance
     case goalNutrition
@@ -35,7 +39,11 @@ nonisolated enum SettingsRoute: Hashable, CaseIterable {
 }
 
 /// One searchable leaf: the label shown in results, its search synonyms, a breadcrumb subtitle for
-/// context, and the route the row navigates to. `searchableTokens` is precomputed at construction.
+/// context, and the route the row navigates to.
+///
+/// Instances live only in ``SettingsSearchIndex/entries``; ``SettingsSheet`` renders matches as
+/// navigation rows. `searchableTokens` is precomputed at construction so per-keystroke matching
+/// never re-normalizes the catalog.
 nonisolated struct SettingsSearchEntry: Identifiable {
     let title: String
     let keywords: [String]
@@ -56,6 +64,15 @@ nonisolated struct SettingsSearchEntry: Identifiable {
     var id: String { "\(route)|\(breadcrumb)|\(title)" }
 }
 
+/// Namespace holding the hand-written settings search catalog and its matching/normalization logic.
+///
+/// ``SettingsSheet`` calls ``results(for:)`` whenever the search field is non-empty and renders one
+/// navigation row per match. The catalog is leaf-granular — one ``SettingsSearchEntry`` per
+/// meaningful control, including the Privacy & Data sub-page's cards — and ordered to mirror the hub
+/// top-to-bottom so results read in the same order the settings appear. Matching mirrors
+/// `FernletDomainModel.FoodItemSearch`'s token style (diacritic/case-insensitive, prefix-AND) but is
+/// deliberately self-contained, with no food-catalog import. `SettingsSearchIndexTests` asserts
+/// every ``SettingsRoute`` case has at least one entry.
 nonisolated enum SettingsSearchIndex {
     /// Prefix-AND match over `title + keywords`: an entry is returned iff every query token is a
     /// prefix of (or equal to) some searchable token. Empty/whitespace queries return nothing (the

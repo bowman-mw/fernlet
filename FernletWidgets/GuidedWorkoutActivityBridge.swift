@@ -12,6 +12,16 @@
 import ActivityKit
 import Foundation
 
+/// The single seam that reflects a ``GuidedWorkoutRunState`` onto the live workout activity —
+/// updating it while the workout is live and ending it on `.done`.
+///
+/// Shared by both drivers that run in the APP process: the in-app guided sheet (via `FernletStore`)
+/// and the App Intents (``GuidedWorkoutIntentRunner``, behind the Lock Screen buttons). Funneling
+/// both through one namespace keeps their activity updates byte-for-byte consistent. It enumerates
+/// ONLY `Activity<WorkoutActivityAttributes>`, so it never touches a live cooking activity.
+/// Requesting a NEW activity is deliberately out of scope — only the app
+/// (`WorkoutLiveActivityController`) ever starts a workout; this bridge only updates or ends what is
+/// already on screen. Stateless enum of async statics; safe to call from any task.
 enum GuidedWorkoutActivityBridge {
 
     /// Reflect the run state onto the live activity: update while the workout is live, end (immediate

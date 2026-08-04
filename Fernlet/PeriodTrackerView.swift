@@ -7,6 +7,16 @@ import PeriodContextBridge
 import HealthKitGateway
 import FernletUI
 
+/// The Period screen: a month calendar of logged cycle days, predictions, per-phase wellbeing
+/// trends, and recent cycle events.
+///
+/// Hosted inside ``PrivateHubView`` (behind the app-lock gate) or standalone. Reads sealed cycle
+/// data through `PeriodTrackerStore`, which only loads entries once `FernletLockService` reports
+/// an unlocked content key — the `.task(id: lockService.state)` reload keeps the screen empty
+/// while locked. Day taps push ``PeriodDayDetailView``; the header plus button and per-day edit
+/// route through ``FernletSheet`` `.logPeriod` so ``LogPeriodSheet`` owns all writes. The optional
+/// `PeriodContextBridge` is refreshed after loads and deletes so cached phase trends never outlive
+/// the entries they were computed from.
 struct PeriodTrackerView: View {
     var store: FernletStore
     var periodStore: PeriodTrackerStore
@@ -237,6 +247,10 @@ struct PeriodTrackerView: View {
 
 // MARK: - Prediction Cards
 
+/// Card showing the likely next-period date range, a confidence chip, and the cycles-tracked count.
+///
+/// Rendered by ``PeriodTrackerView`` only when predictions aren't hidden in settings; shows an
+/// empty-state nudge ("log at least 3 cycles") until `PeriodTrackerStore` produces a `CyclePrediction`.
 private struct PredictionsCard: View {
     var prediction: CyclePrediction?
 
@@ -286,6 +300,10 @@ private struct PredictionsCard: View {
     }
 }
 
+/// Card summarizing average cycle length and typical day-to-day variation.
+///
+/// The statistical companion to ``PredictionsCard``, shown at the bottom of ``PeriodTrackerView``
+/// once a prediction exists (and predictions aren't hidden).
 private struct TrendsCard: View {
     var prediction: CyclePrediction
 
@@ -306,6 +324,12 @@ private struct TrendsCard: View {
 
 // MARK: - Calendar Card
 
+/// The month-grid calendar card: flow-tinted day cells, projected-period shading, month paging,
+/// and a flow legend.
+///
+/// Builds a ``PeriodMonthModel`` per render and forwards day taps (past/today only — future cells
+/// are disabled) back to ``PeriodTrackerView`` via `onDayTapped`. Paging forward past the current
+/// month is disabled.
 private struct PeriodCalendarCard: View {
     @Binding var displayedMonth: Date
     var entriesByKey: [String: CycleDayEntry]
@@ -391,6 +415,11 @@ private struct PeriodCalendarCard: View {
 
 // MARK: - Calendar Cell
 
+/// A single tappable day cell in the period calendar grid.
+///
+/// Pure presentation over one ``PeriodMonthCell``: the model supplies the fill, today ring, future
+/// dimming, and accessibility label; the cell just draws them and disables itself for blanks and
+/// future days.
 private struct PeriodCalendarCell: View {
     var cell: PeriodMonthCell
     var onTap: () -> Void
@@ -430,6 +459,12 @@ private struct PeriodCalendarCell: View {
 
 // MARK: - Month Models
 
+/// One cell of the period month grid: a day number (or blank leading pad), its logged entry if
+/// any, and a projected flow level for predicted future days.
+///
+/// Built by ``PeriodMonthModel`` and rendered by `PeriodCalendarCell`. `fill` maps observed flow
+/// levels to graduated dusty-rose tints and predicted days to a flat projection tint, so the
+/// visual encoding lives in one place.
 struct PeriodMonthCell: Identifiable {
     let id = UUID()
     var day: Int?
@@ -475,6 +510,13 @@ struct PeriodMonthCell: Identifiable {
     }
 }
 
+/// Pure month-layout model for the period calendar: title, weekday symbols, and the padded cell
+/// grid with entries and projected flow attached.
+///
+/// Computed fresh each render from the entries-by-dayKey map plus an optional `CyclePrediction`;
+/// projected levels are only attached to days without a real entry, inside the prediction's likely
+/// start range (defaulting to `.medium` when the prediction has no per-day level). Extracted as a
+/// plain struct so the layout math is testable without SwiftUI.
 struct PeriodMonthModel {
     let monthTitle: String
     let weekdaySymbols: [String]
@@ -528,6 +570,10 @@ struct PeriodMonthModel {
 
 // MARK: - Supporting Types
 
+/// Identifiable wrapper around a tapped calendar date, used as the navigation-destination item.
+///
+/// Exists so `navigationDestination(item:)` has a `Hashable`/`Identifiable` value to drive the
+/// push into ``PeriodDayDetailView``; identity is the date's time interval.
 private struct SelectedPeriodDay: Identifiable, Hashable {
     var date: Date
     var id: TimeInterval { date.timeIntervalSinceReferenceDate }

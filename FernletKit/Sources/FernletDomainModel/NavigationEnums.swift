@@ -3,6 +3,10 @@
 
 import Foundation
 
+/// How much the proximity Connection Inspector records and shows (disabled, passive, live).
+///
+/// A synced setting on ``FernletSettings``, decoded tolerantly there so a mode added by a newer
+/// build parks instead of bricking the blob.
 public nonisolated enum ConnectionInspectorMode: String, Codable, CaseIterable, Identifiable {
     case disabled
     case passive
@@ -19,6 +23,10 @@ public nonisolated enum ConnectionInspectorMode: String, Codable, CaseIterable, 
     }
 }
 
+/// The navigable feature screens a shortcut or home widget can deep-link to.
+///
+/// Carries the display metadata (title/subtitle/symbol) each launcher surface renders; the
+/// sensitive screens are filtered through ``SensitiveSurfaceVisibility`` before display.
 public nonisolated enum FernletScreen: String, Codable, CaseIterable, Identifiable {
     case food
     case move
@@ -67,6 +75,11 @@ public nonisolated enum FernletScreen: String, Codable, CaseIterable, Identifiab
     }
 }
 
+/// The configurable home-feed widgets, in user-chosen order.
+///
+/// Persisted as raw tokens in ``FernletSettings``' `homeWidgets` with a parked side channel for
+/// tokens only newer builds know; `normalized` de-dupes and falls back to `defaultWidgets` when the
+/// list decodes empty.
 public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable, Sendable {
     case companion
     case todaySummary
@@ -156,6 +169,12 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
     }
 }
 
+/// The quick-log tiles on Home (at most six shown).
+///
+/// Persisted as raw tokens in ``FernletSettings``' `quickLogItems` with parked-token forward
+/// compat. Rendering filters through ``SensitiveSurfaceVisibility`` DISPLAY-ONLY — the stored
+/// array keeps every choice so un-hiding a surface restores the user's layout (see
+/// `visibleQuickLog`).
 public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifiable, Sendable {
     case meal
     case water

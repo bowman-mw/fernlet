@@ -16,6 +16,14 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
+/// The guided-workout Live Activity widget: the Lock Screen card plus every Dynamic Island
+/// presentation (expanded, compact, minimal).
+///
+/// Registered in ``FernletWidgetsBundle`` alongside ``CookingLiveActivity``. Renders the
+/// ``WorkoutActivityAttributes`` content the app publishes; its interactive controls are the "Done
+/// set" / "Skip rest" buttons (``GuidedWorkoutMarkSetDoneIntent`` / ``GuidedWorkoutSkipRestIntent``),
+/// which the system executes in the app's process. Stale snapshots (jetsam / force-quit orphans)
+/// degrade to a dimmed "Paused" register instead of a frozen timer or set count.
 struct WorkoutLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WorkoutActivityAttributes.self) { context in
@@ -156,6 +164,10 @@ private func nextUpLine(_ state: WorkoutActivityAttributes.ContentState) -> Stri
 }
 
 /// Crash-safe rest countdown. See the CRASH RULE at the top of this file.
+///
+/// Reused across the Lock Screen card and every Dynamic Island slot; it renders
+/// `Text(timerInterval:)` only while `.resting` with a present, ordered window, and otherwise falls
+/// back to a static "Rest" label — never a live `Date()` range.
 private struct RestCountdownText: View {
     let state: WorkoutActivityAttributes.ContentState
     var font: Font
@@ -196,6 +208,12 @@ private struct RestCountdownText: View {
 
 // MARK: - Lock Screen card
 
+/// The Lock Screen / banner presentation of the workout activity: title, exercise or "Rest" line,
+/// the countdown or progress dots, and the phase-appropriate action button.
+///
+/// Splits on `isStale` — a live cream card with the interactive control, or a dimmed "Paused / Open
+/// Fernlet" resting-place for an activity that outlived its process. Used only from
+/// ``WorkoutLiveActivity``'s `ActivityConfiguration` closure.
 private struct WorkoutLockScreenView: View {
     let attributes: WorkoutActivityAttributes
     let state: WorkoutActivityAttributes.ContentState
@@ -324,6 +342,9 @@ private func guidedActionButton(_ state: WorkoutActivityAttributes.ContentState)
 }
 
 /// A gentle "where are we in the session" indicator for the working state (no numbers shouting).
+///
+/// Dots are capped at 8 so a long session can't overflow the card, while the label above reports the
+/// true uncapped position ("Exercise 10 of 10"). Only shown on the Lock Screen card's working state.
 private struct ExerciseProgressDots: View {
     let index: Int
     let total: Int

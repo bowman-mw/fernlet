@@ -3,14 +3,27 @@ import Observation
 import FernletPersistence
 import FernletDomainModel
 
-/// Owns the user's custom-item collection in memory and persists it to its own per-row store (separate
-/// from the snapshot blob). Mirrors `CoinLedgerService`: mutations are queued per-row and flushed via an
-/// APPEND/UPSERT-ONLY repository, so flushing a stale in-memory set can never delete rows that synced in
-/// from another device (the cross-device clobber the in-person clothing shop's buy would otherwise
-/// trigger). Equip state is NOT here — it lives in settings (`DiaryStore`) as a tiny UUID map.
+/// Owns the user's custom-item (designed clothing) collection in memory and persists it to its own
+/// per-row store (separate from the snapshot blob). Mirrors ``CoinLedgerService``: mutations are queued
+/// per-row and flushed via an APPEND/UPSERT-ONLY repository, so flushing a stale in-memory set can never
+/// delete rows that synced in from another device (the cross-device clobber the in-person clothing
+/// shop's buy would otherwise trigger). Equip state is NOT here — it lives in settings (`DiaryStore`)
+/// as a tiny UUID map.
+///
+/// Collaborators: the injected `CustomItemRepositoring` store (concretely CloudKitSync's
+/// `CustomItemRepository`, behind the FernletPersistence protocol so this module needs no CloudKitSync
+/// edge) and `FernletStore`, which owns the instance and calls ``reloadFromStore()`` on remote CloudKit
+/// changes. The creation studio and in-person shop mutate through ``upsert(_:)`` /
+/// ``setShareable(id:_:)`` / ``setPrice(id:_:)``.
+///
+/// Invariants: the pending queues (`pendingUpserts`/`pendingDeletes`) are the sole un-persisted copy of
+/// a mutation — ``flushPendingSave()`` clears each queue only after its confirmed write, and
+/// ``reloadFromStore()`` re-applies still-pending mutations after a failed flush, so a just-designed or
+/// just-bought item is never silently lost. `@MainActor` and `@Observable`.
 @MainActor
 @Observable
 public final class CustomItemService {
+    /// The in-memory closet, union-merged (deduplicated by id) on init and every load.
     public private(set) var items: [CustomizationItem] = []
 
     @ObservationIgnored private let repository: any CustomItemRepositoring
@@ -20,15 +33,18 @@ public final class CustomItemService {
     @ObservationIgnored private var pendingDeletes: Set<UUID> = []
     @ObservationIgnored private var saveScheduled = false
 
+    /// Creates the service over its per-row store; `initialItems` seeds the closet before the first load.
     public init(repository: any CustomItemRepositoring, initialItems: [CustomizationItem] = []) {
         self.repository = repository
         self.items = Self.deduplicatedByID(initialItems)
     }
 
+    /// Replaces the in-memory closet with the store's rows, union-merged by id.
     public func loadSync() {
         items = Self.deduplicatedByID(repository.load())
     }
 
+    /// Async variant of ``loadSync()`` for the off-main initial load.
     public func loadAsync() async {
         items = Self.deduplicatedByID(await repository.loadAsync())
     }
@@ -59,17 +75,20 @@ public final class CustomItemService {
         enqueueUpsert(item)
     }
 
+    /// Removes the item from the closet and enqueues its per-row delete.
     public func delete(id: UUID) {
         items.removeAll { $0.id == id }
         enqueueDelete(id)
     }
 
+    /// Toggles whether the item is offered in the in-person shop; unknown ids are ignored.
     public func setShareable(id: UUID, _ shareable: Bool) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         items[index].isShareable = shareable
         enqueueUpsert(items[index])
     }
 
+    /// Sets the item's coin price for the in-person shop; unknown ids are ignored.
     public func setPrice(id: UUID, _ price: Int) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         items[index].price = price
@@ -88,6 +107,7 @@ public final class CustomItemService {
         return repository.deleteAll()
     }
 
+    /// Writes any pending upserts/deletes to the store now; a failed write keeps that queue for retry.
     public func flushPendingSave() {
         // Flush whenever mutations are pending, NOT only when a debounced save is scheduled: a prior
         // scheduled flush that failed its write leaves `saveScheduled` false while the pending queues still
@@ -111,12 +131,14 @@ public final class CustomItemService {
 
     // MARK: - Internals
 
+    /// Queues an upsert (cancelling any pending delete of the same id) and schedules a flush.
     private func enqueueUpsert(_ item: CustomizationItem) {
         pendingUpserts[item.id] = item
         pendingDeletes.remove(item.id)
         scheduleSave()
     }
 
+    /// Queues a delete (cancelling any pending upsert of the same id) and schedules a flush.
     private func enqueueDelete(_ id: UUID) {
         pendingDeletes.insert(id)
         pendingUpserts[id] = nil
@@ -134,6 +156,7 @@ public final class CustomItemService {
         return unique
     }
 
+    /// Coalesces mutations into one debounced main-actor flush per burst.
     private func scheduleSave() {
         guard !saveScheduled else { return }
         saveScheduled = true

@@ -10,6 +10,12 @@
 import SwiftUI
 import FernletUI
 
+/// The static "Safety & reporting" explainer screen (App Store UGC compliance, Guideline 1.2).
+///
+/// Pure copy, no state: it tells the user where the real report/block affordances live (shop item
+/// menus, Friends & Blocks, the in-session roster), states the no-tolerance policy, explains the
+/// on-device consequences of a report, and gives a developer contact route. Reached from Settings
+/// so the path is always available, even outside any session.
 struct SafetyReportingView: View {
     var body: some View {
         ScrollView {

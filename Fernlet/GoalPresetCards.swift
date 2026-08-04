@@ -25,6 +25,11 @@ struct GoalPresetCards: View {
     }
 }
 
+/// One selectable goal card: the goal's name and tagline plus its nutrition and training summary rows.
+///
+/// Rendered by ``GoalPresetCards`` for each `GoalType`; selection state draws the checkmark and moss
+/// outline, and the card carries its own `goalPreset.<goal>` accessibility identifier (which is why
+/// the container above deliberately has none).
 private struct GoalPresetCard: View {
     let goal: GoalType
     let isSelected: Bool

@@ -5,9 +5,10 @@ import UIKit
 import FernletDomainModel
 import AppServices
 
-/// Read-side context the photo recognizer needs from the app store — the
-/// `MealResolutionContext` host-protocol pattern, so tests can drive the flow
-/// with a fake host instead of a full `FernletStore`.
+/// Read-side context the photo recognizer needs from the app store.
+///
+/// The ``MealResolutionContext`` host-protocol pattern again, so tests can drive the flow with a fake
+/// host instead of a full `FernletStore` (the production conformer, via the extension below).
 @MainActor
 protocol MealPhotoRecognitionHost: AnyObject {
     var settings: FernletSettings { get }
@@ -16,6 +17,12 @@ protocol MealPhotoRecognitionHost: AnyObject {
 
 extension FernletStore: MealPhotoRecognitionHost {}
 
+/// The result of an "Identify from photo" run — what ``MealPhotoRecognizer`` hands back to the meal
+/// sheet.
+///
+/// Distinguishes AI-off (the entry point shouldn't even be offered) from nothing-recognized (offer
+/// the gentle typed fallback) from a resolved description + resolution (always reviewed, never
+/// silently committed).
 enum MealPhotoRecognitionOutcome {
     /// Inference is off (`settings.aiStatus == .off`) — the entry point should not even be offered.
     case aiOff
@@ -27,13 +34,20 @@ enum MealPhotoRecognitionOutcome {
 
 /// "Identify from photo": on-device Vision classification filtered to food labels composes a short
 /// text description that feeds the EXISTING `resolveMeals` cascade; the result always pauses at the
-/// normal pre-log review sheet (a photo guess never commits silently). Gated on `aiStatus` like the
-/// other inference paths. No new AI surface: the image never leaves the device and never reaches a
-/// language model — only the composed text enters the already-audited cascade.
+/// normal pre-log review sheet (a photo guess never commits silently).
+///
+/// Gated on `aiStatus` like the other inference paths. No new AI surface: the image never leaves the
+/// device and never reaches a language model — only the composed text enters the already-audited
+/// cascade. The classifier is injectable so tests can fake Vision.
 @MainActor
 struct MealPhotoRecognizer {
+    /// The Vision-backed food classifier — injectable so tests can fake image classification.
     var classifier: any FoodImageClassifying = VisionFoodImageClassifier()
 
+    /// Classifies `photo`, composes a text description from any food labels, and runs it through the
+    /// host's normal `resolveMeals` cascade.
+    /// - Returns: `.aiOff` when inference is disabled, `.nothingRecognized` when no food labels were
+    ///   found, or `.resolved` carrying the description plus the cascade's resolution for review.
     func identify(photo: UIImage, type: MealType?, host: any MealPhotoRecognitionHost) async -> MealPhotoRecognitionOutcome {
         guard host.settings.aiStatus != .off else { return .aiOff }
         let classifications = (try? await classifier.classifications(in: photo)) ?? []

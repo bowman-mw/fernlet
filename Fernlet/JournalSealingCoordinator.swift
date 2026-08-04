@@ -5,9 +5,12 @@ import FernletDomainModel
 import PrivateMemoryStore
 import HealthKitGateway
 
-/// The state the journal-sealing flow reads/mutates on the app store. Mirrors the
-/// `WorkoutSyncContext` host-protocol pattern so `JournalSealingCoordinator` depends
-/// on this seam rather than the concrete `FernletStore` (plan §5d).
+/// The state the journal-sealing flow reads/mutates on the app store.
+///
+/// Mirrors the `WorkoutSyncContext` host-protocol pattern so ``JournalSealingCoordinator`` depends
+/// on this seam rather than the concrete ``FernletStore`` (plan §5d), which is its only production
+/// conformer; tests supply fakes. Main-actor isolated because the coordinator mutates the host's
+/// live `day`/`previousJournals` in place.
 @MainActor
 protocol JournalSealingContext: AnyObject {
     var day: FernletDay { get set }
@@ -21,13 +24,36 @@ protocol JournalSealingContext: AnyObject {
     func requestPastDayJournalRescrub()
 }
 
-/// Sealed journal management (Phase S2), extracted from `FernletStore` (plan §5d).
-/// Owns the journal content key, the device fallback key (Keychain), the sealed-entry
-/// ID set, and the `JournalNarrativeRepository` — keeping the journal-text sealing
-/// store + keychain off the store/core path. The store delegates its journal mutation
-/// + snapshot paths here; `isSealed` drives the snapshot text-strip.
+/// Sealed journal management (Phase S2), extracted from ``FernletStore`` (plan §5d).
+///
+/// Owns the journal content key, the device fallback key (Keychain), the sealed-entry ID set, and
+/// the `JournalNarrativeRepository` — keeping the journal-text sealing store + keychain off the
+/// store/core path. The store delegates its journal mutation + snapshot paths here; ``isSealed(_:)``
+/// drives the snapshot text-strip.
+///
+/// Key invariants:
+/// - Journal text never reaches the iCloud-synced days blob in plaintext while it has a sealed
+///   narrative row: an id in ``sealedJournalIDs`` is stripped by `FernletSnapshot.forStorage` /
+///   `mutatePastDay`, and a seal/re-seal FAILURE deliberately keeps the id OUT of the set so the
+///   plaintext survives in the blob (bounded transient exposure) rather than being blanked against
+///   a missing or stale narrative — no data loss, ever.
+/// - Even with no lock configured, entries are sealed under a device-bound Keychain key, so the
+///   blob still never carries journal text.
+/// - Tag-only mood check-ins (empty text) are never sealed, keeping "empty text + no narrative
+///   row" unambiguous; see ``canIdentifyTagOnlyEntries`` for the locked-state caveat.
+///
+/// Failure recovery is two-tier: the per-activation migration re-seals today + `previousJournals`,
+/// and ``JournalSealingContext/requestPastDayJournalRescrub()`` re-arms the full-repository
+/// past-day scrub (``scrubbedLeakedPastDayJournals(in:)``) for leaks outside that window. Main-actor
+/// isolated; the host is held `unowned` because ``FernletStore`` owns the coordinator.
 @MainActor
 final class JournalSealingCoordinator {
+    /// The lock-lifecycle mode the coordinator was last activated into, which decides the active
+    /// key: none (inactive/locked), the device Keychain key (no lock configured), or the user
+    /// content key (unlocked).
+    ///
+    /// Set only by the activate/deactivate lifecycle calls; `activeJournalRefreshKey()` and
+    /// ``canIdentifyTagOnlyEntries`` are its two readers.
     private enum JournalActivationMode {
         case inactive
         case noLock
@@ -46,6 +72,7 @@ final class JournalSealingCoordinator {
     /// Readable by the store (passed to `FernletSnapshot.forStorage`); mutation stays here.
     private(set) var sealedJournalIDs: Set<UUID> = []
 
+    /// Creates the coordinator over its host seam (held `unowned`) and the sealed narrative store.
     init(host: any JournalSealingContext, narrativeRepository: any JournalNarrativeStoring) {
         self.host = host
         self.narrativeRepository = narrativeRepository

@@ -7,6 +7,10 @@ import UIKit
 // MARK: - Classification value + protocol seam
 
 /// One label from an on-device image classification pass.
+///
+/// A plain (identifier, confidence) pair produced by a ``FoodImageClassifying`` conformer and
+/// consumed by ``FoodImageTaxonomy/mealDescription(from:confidenceFloor:maxLabels:)``; keeping it a
+/// tiny `Sendable` value lets tests feed canned classifications without touching Vision.
 public nonisolated struct FoodImageClassification: Equatable, Sendable {
     public let identifier: String
     public let confidence: Double
@@ -19,12 +23,19 @@ public nonisolated struct FoodImageClassification: Equatable, Sendable {
 
 /// Image classification behind a seam so the meal-photo flow can be unit-tested with a fake
 /// classifier — the Vision specifics never leak into callers.
+///
+/// ``VisionFoodImageClassifier`` is the production conformer; the app-side `MealPhotoRecognizer`
+/// holds this seam type and pipes the resulting ``FoodImageClassification`` labels through
+/// ``FoodImageTaxonomy`` before meal resolution.
 public nonisolated protocol FoodImageClassifying: Sendable {
     func classifications(in image: UIImage) async throws -> [FoodImageClassification]
 }
 
 /// Production classifier: `VNClassifyImageRequest` (fully on-device — the photo never leaves the
-/// device). Returns the raw taxonomy labels; food filtering/composition is `FoodImageTaxonomy`'s job.
+/// device). Returns the raw taxonomy labels; food filtering/composition is ``FoodImageTaxonomy``'s job.
+///
+/// Conforms to ``FoodImageClassifying``; the Vision request runs inside a detached, user-initiated
+/// task so callers never block their own actor on inference.
 public nonisolated struct VisionFoodImageClassifier: FoodImageClassifying {
     public init() {}
 
@@ -65,6 +76,10 @@ public nonisolated struct VisionFoodImageClassifier: FoodImageClassifying {
 /// conservative: only concrete foods are kept (no generic "food"/"dessert" buckets — those resolve
 /// to nothing useful), a confidence floor drops wild guesses, and everything downstream still passes
 /// through the normal pre-log review sheet.
+///
+/// A pure, caseless namespace with no Vision dependency of its own, so its filtering and
+/// composition rules are unit-tested directly (`MealPhotoRecognitionTests`) against canned
+/// ``FoodImageClassification`` values. Consumed by the app-side `MealPhotoRecognizer`.
 public nonisolated enum FoodImageTaxonomy {
     public static let confidenceFloor = 0.3
     public static let maxLabels = 3

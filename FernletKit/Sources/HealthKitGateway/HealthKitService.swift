@@ -11,38 +11,70 @@ import UIKit
 import FernletDomainModel
 #endif
 
+/// The full HealthKit surface Fernlet's stores and coordinators consume — authorization,
+/// observation, reads, writes, and integration enable/disable.
+///
+/// ``HealthKitService`` is the production conformer; tests and previews inject fakes. Consumers
+/// (the app's `FernletStore`, `HealthSyncCoordinator`, `StressService`, the Privacy settings
+/// screens, and ``WorkoutHealthKitSync`` in this module) depend on this protocol rather than the
+/// concrete service so HealthKit never has to be live under test. `@MainActor`: conformers manage
+/// main-actor query/observation state, and handlers are invoked on the main actor.
 @MainActor
 public protocol HealthKitServicing {
+    /// Whether this device has a Health store at all (`HKHealthStore.isHealthDataAvailable()`).
     func isHealthDataAvailable() -> Bool
+    /// Presents the system authorization sheet for one ``HealthCapability`` and reports the
+    /// resulting per-type write statuses.
     func requestAuthorization(for capability: HealthCapability) async throws -> AuthorizationOutcome
+    /// Current availability + per-type write statuses across every capability, without prompting.
     func currentAuthorizationSnapshot() -> AuthorizationSnapshot
+    /// Starts a persistent anchored query for one sample type, delivering adds/deletes since the
+    /// keychain-persisted anchor to the handler (on the main actor).
     func startObserving(_ type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) async throws
     /// Observes workout additions AND deletions. The handler receives the added/updated samples and the
     /// UUIDs of samples deleted since the last anchor (so a Health-app-side deletion can remove its local
     /// mirror row).
     func startObservingWorkouts(handler: @escaping ([HKWorkout], [UUID]) -> Void) async throws
+    /// Tears down the long-lived workout observation query, if any.
     func stopObservingWorkouts()
+    /// One-shot fetch of workouts ending at or after `anchorDate`, newest first.
     func recentWorkouts(since anchorDate: Date) async throws -> [HKWorkout]
+    /// One-shot fetch of the trailing backfill window of workouts (30 days before `referenceDate`).
     func backfillWorkoutsFromHealth(referenceDate: Date) async throws -> [HKWorkout]
+    /// Saves arbitrary samples to Health (integration-gated).
     func save(_ samples: [HKObject]) async throws
+    /// Deletes specific fetched samples from Health (integration-gated).
     func delete(_ samples: [HKSample]) async throws
     /// Deletes the Fernlet-authored workout sample(s) matching `fernletWorkoutID` (our `fernlet.workoutID`
     /// / sync-identifier metadata). Returns whether anything was found and deleted. Only ever finds our own
     /// authored samples — imports carry no such metadata.
     func deleteWorkout(fernletWorkoutID: UUID) async throws -> Bool
+    /// Interval-bucketed statistics for one quantity type from `anchor` to now.
     func statistics(for type: HKQuantityType, options: HKStatisticsOptions, interval: DateComponents, anchor: Date) async throws -> [HKStatistics]
+    /// Prompts for body-profile read/write authorization, then loads the profile.
     func requestBodyProfileAuthorization() async throws -> HealthBodyProfile
+    /// Loads age/sex/height/weight from Health without prompting.
     func loadBodyProfile() async throws -> HealthBodyProfile
+    /// Writes the profile's height and weight to Health as fresh samples.
     func saveBodyProfileMeasurements(_ profile: UserNutritionProfile) async throws
+    /// Writes a completed workout to Health via `HKWorkoutBuilder`, returning the new sample's UUID.
     func saveWorkout(_ workout: Workout) async throws -> UUID
+    /// Merged asleep hours for the sleep night containing `referenceDate` (18:00–11:00 window).
     func loadLastNightSleepHours(referenceDate: Date) async throws -> Double?
+    /// Assembles the day's activity/body/cycle/mindfulness/intimate context for the requested
+    /// capabilities (all of them when `capabilities` is nil).
     func loadDailyHealthContext(referenceDate: Date, capabilities: Set<HealthCapability>?) async throws -> HealthDailyContext
+    /// Turns the integration off: stops queries, purges cached values and anchors, flips the master
+    /// toggle. Fail-closed — throws rather than leaving cached clinical data behind.
     func disableIntegration() async throws
+    /// Flips the master toggle on and restarts any registered observations.
     func enableIntegration() async throws
+    /// Deep-links to the Health privacy settings for Fernlet (best effort).
     func openHealthPrivacySettings() async
 }
 
-/// One calendar day of stress-relevant metrics from `stressMetricDays(daysBack:referenceDate:)`.
+/// One calendar day of stress-relevant metrics from ``HealthKitService/stressMetricDays(daysBack:referenceDate:)``.
+///
 /// Raw HealthKit aggregates only — the app-side `StressService` joins these with diary
 /// confounders (workouts, sick days) into `StressDaySample`s for the pure engine. This type
 /// must never be persisted into any synced store (the stress sidecar is device-local).
@@ -67,17 +99,31 @@ public struct StressMetricDay: Equatable, Sendable {
     }
 }
 
+/// The seven per-feature Health permission bundles Fernlet requests and gates on individually.
+///
+/// Each case maps to a concrete share/read type set (see `HealthKitService.types(for:)`) and to a
+/// per-capability opt-in flag in `StoragePreferences.healthKitCapabilityEnabled`. The Settings
+/// privacy screens iterate `allCases` to render one toggle-plus-summary row per capability, and the
+/// raw value doubles as the stable preference key — do not rename cases.
 public enum HealthCapability: String, CaseIterable, Identifiable {
+    /// Age, biological sex, height, and weight (read; height/weight write-back).
     case bodyProfile
+    /// Menstrual-cycle observations: flow, BBT, cervical mucus, spotting, ovulation tests (read + write).
     case cycleTracking
+    /// Recovery signals: sleep, resting HR, HRV, respiratory rate, wrist temperature (read-only).
     case bodyContext
+    /// Workouts plus their energy/distance samples (read + write).
     case workoutLogging
+    /// Daily activity: steps, active energy, exercise minutes (read-only).
     case activityContext
+    /// Mindful sessions completed in Fernlet (write; read for the day context).
     case mindfulness
+    /// Sexual activity samples, only when the intimacy feature is explicitly enabled (read + write).
     case intimateLogging
 
     public var id: String { rawValue }
 
+    /// Short display name for settings rows and status messages.
     public var title: String {
         switch self {
         case .bodyProfile: "Body profile"
@@ -90,6 +136,8 @@ public enum HealthCapability: String, CaseIterable, Identifiable {
         }
     }
 
+    /// User-facing sentence describing exactly what the capability reads and writes, shown beside
+    /// its settings toggle.
     public var summary: String {
         switch self {
         case .bodyProfile:
@@ -110,7 +158,13 @@ public enum HealthCapability: String, CaseIterable, Identifiable {
     }
 }
 
+/// The per-type write statuses reported after a ``HealthKitServicing/requestAuthorization(for:)``
+/// prompt.
+///
+/// Read statuses are deliberately absent: HealthKit never reveals read authorization, so write
+/// status is the only signal Fernlet can surface. Keys are HealthKit type identifier strings.
 public struct AuthorizationOutcome {
+    /// Write (share) status per HealthKit type identifier for the capability just requested.
     public let writeStatuses: [String: HKAuthorizationStatus]
 
     public init(writeStatuses: [String: HKAuthorizationStatus]) {
@@ -118,6 +172,12 @@ public struct AuthorizationOutcome {
     }
 }
 
+/// The body-profile fields Fernlet can import from Apple Health (age, sex, height, weight), each
+/// optional because Health may hold any subset.
+///
+/// Returned by ``HealthKitServicing/loadBodyProfile()`` and applied onto the user's
+/// `UserNutritionProfile` via ``applying(to:)``; the field-count helpers drive the settings
+/// messaging about what was imported versus what stays manual.
 public struct HealthBodyProfile {
     public var age: Int?
     public var sex: BiologicalSex?
@@ -131,10 +191,12 @@ public struct HealthBodyProfile {
         self.weightPounds = weightPounds
     }
 
+    /// How many of the four fields Health actually supplied.
     public var appliedFieldCount: Int {
         [age != nil, sex != nil, heightInches != nil, weightPounds != nil].filter { $0 }.count
     }
 
+    /// Names of the fields Health did not supply, for the "manual settings remain for …" message.
     public var missingFieldNames: [String] {
         var names: [String] = []
         if age == nil { names.append("age") }
@@ -144,6 +206,11 @@ public struct HealthBodyProfile {
         return names
     }
 
+    /// Overlays the Health-supplied fields onto an existing nutrition profile, leaving absent
+    /// fields untouched.
+    ///
+    /// - Important: Values are clamped to Fernlet's supported ranges (age 13–100, height 48–84 in,
+    ///   weight 70–500 lb) so an outlier Health sample cannot push the profile out of bounds.
     public func applying(to profile: UserNutritionProfile) -> UserNutritionProfile {
         var updated = profile
         if let age { updated.age = min(max(age, 13), 100) }
@@ -154,8 +221,17 @@ public struct HealthBodyProfile {
     }
 }
 
+/// A point-in-time view of the integration's availability and every capability's per-type write
+/// status, taken without prompting.
+///
+/// Produced by ``HealthKitServicing/currentAuthorizationSnapshot()``; consumed by the settings
+/// screens (status labels via `HKAuthorizationStatus.fernletLabel`) and by
+/// ``WorkoutHealthKitSync``'s authorization gate. `isAvailable` folds in the master toggle, not
+/// just device capability — a snapshot from a disabled integration reports unavailable.
 public struct AuthorizationSnapshot {
+    /// True only when the device has a Health store AND the master integration toggle is on.
     public let isAvailable: Bool
+    /// Write (share) status per HealthKit type identifier, across all capabilities' share types.
     public let writeStatuses: [String: HKAuthorizationStatus]
 
     public init(isAvailable: Bool, writeStatuses: [String: HKAuthorizationStatus]) {
@@ -163,12 +239,22 @@ public struct AuthorizationSnapshot {
         self.writeStatuses = writeStatuses
     }
 
+    /// Write status for one HealthKit type identifier, or nil when the type is not a share type.
     public func status(for identifier: String) -> HKAuthorizationStatus? {
         writeStatuses[identifier]
     }
 }
 
+/// Static lookup of which write-type identifiers each capability's settings row should display
+/// status for.
+///
+/// Purely presentational: the Settings sheet uses it to resolve which ``AuthorizationSnapshot``
+/// entries belong to a capability's row. Read-only capabilities (body/activity context) return an
+/// empty list since HealthKit exposes no read status to show.
 public struct HealthAuthorizationPresentation {
+    /// The HealthKit type identifiers whose write status represents this capability in the UI.
+    /// Note the workout-logging list shows the energy/distance sample types, not the workout type
+    /// itself.
     public static func writeTypeIdentifiers(for capability: HealthCapability) -> [String] {
         switch capability {
         case .bodyProfile:
@@ -201,8 +287,16 @@ public struct HealthAuthorizationPresentation {
     }
 }
 
+/// Errors thrown by ``HealthKitService`` and its conformance seams.
+///
+/// All three cases carry user-presentable `errorDescription`s; `healthDataUnavailable` doubles as
+/// the deliberate "gate closed" error for the master-toggle and per-capability opt-in guards, not
+/// only for devices without a Health store.
 public enum HealthKitServiceError: LocalizedError {
+    /// The device has no Health store, or an integration/capability gate is closed.
     case healthDataUnavailable
+    /// HealthKit returned no type object for this identifier (should not happen on supported OS
+    /// versions; carries the identifier for diagnostics).
     case missingHealthType(String)
     /// `disableIntegration()` was invoked on a `HealthKitService` with no concrete cache clearer
     /// installed. Disable fails closed rather than silently leaving opted-out clinical data behind.
@@ -220,21 +314,40 @@ public enum HealthKitServiceError: LocalizedError {
     }
 }
 
+/// The thin `HKHealthStore` seam ``HealthKitService`` routes its store operations through.
+///
+/// Exists so tests can substitute a fake store: ``SystemHealthKitStoreController`` is the
+/// production conformer (a pure pass-through to `HKHealthStore`), and the disable/delete-all test
+/// suites inject recorders. Note the service still calls `healthStore` directly for some one-shot
+/// sample/statistics queries — only authorization, observation lifecycle, saves, and deletes are
+/// guaranteed to pass through this seam.
 public protocol HealthKitStoreControlling: AnyObject {
+    /// Presents the system authorization sheet for the given share/read type sets.
     func requestAuthorization(toShare shareTypes: Set<HKSampleType>, read readTypes: Set<HKObjectType>) async throws
+    /// Write (share) status for a type; non-sample types report `.notDetermined`.
     func authorizationStatus(for type: HKObjectType) -> HKAuthorizationStatus
+    /// Starts a query on the underlying store.
     func execute(_ query: HKQuery)
+    /// Stops a long-running query.
     func stop(_ query: HKQuery)
+    /// Saves samples to the underlying store.
     func save(_ samples: [HKObject]) async throws
+    /// Deletes specific fetched samples from the underlying store.
     func delete(_ samples: [HKSample]) async throws
     /// Bulk-deletes objects of one type matching a predicate. Needed for "delete everything": deleting
     /// by fetched sample requires read authorization, but a user may have granted write-only — so
     /// Fernlet could have written samples it cannot read back and therefore cannot delete one-by-one.
     /// `HKHealthStore.deleteObjects(of:predicate:)` deletes only the caller's OWN samples regardless.
     func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws
+    /// Turns off background delivery registered for a type (part of integration teardown).
     func disableBackgroundDelivery(for type: HKObjectType) async throws
 }
 
+/// Production ``HealthKitStoreControlling`` conformer: a direct pass-through to `HKHealthStore`.
+///
+/// Internal by design — callers construct a ``HealthKitService`` and this wrapper is created for
+/// them; only tests ever supply a different controller. Non-sample types silently degrade
+/// (`.notDetermined` status, no-op bulk delete) to match the seam's contract.
 final class SystemHealthKitStoreController: HealthKitStoreControlling {
     private let healthStore: HKHealthStore
 
@@ -277,31 +390,57 @@ final class SystemHealthKitStoreController: HealthKitStoreControlling {
     }
 }
 
+/// Purges every HealthKit-derived value Fernlet has cached in its own stores.
+///
+/// The dependency-inversion seam that keeps this gateway off the CloudKitSync/LocalPersistence
+/// edge: the real conformer, the app-side `CoreDataHealthKitCacheCleaner`, needs both of those
+/// modules and is installed into ``HealthKitService/defaultCacheClearer`` at app launch.
+/// ``HealthKitService/disableIntegration()`` fails closed without a conformer — see
+/// ``NoopHealthKitCacheClearer`` for the explicit opt-out.
 public protocol HealthKitCacheClearing {
+    /// Removes cached HealthKit-derived clinical values from local/synced storage; throwing aborts
+    /// the disable so the opt-out never half-applies.
     func clearHealthKitCachedValues() throws
 }
 
 /// Explicit "clearing is genuinely not needed" cleaner, for the rare injection where a caller
 /// wants `disableIntegration()` to succeed without purging a cache (e.g. a test exercising the
-/// non-cache teardown). It is **no longer** the implicit default: a `HealthKitService` with no
-/// clearer installed now fails closed (`HealthKitServiceError.cacheClearerUnavailable`) so an
+/// non-cache teardown).
+///
+/// It is **no longer** the implicit default: a ``HealthKitService`` with no
+/// clearer installed now fails closed (``HealthKitServiceError/cacheClearerUnavailable``) so an
 /// opt-out can never silently leave cached clinical data behind. The real
 /// `CoreDataHealthKitCacheCleaner` lives app-side (it needs CloudKitSync's PersistenceController +
 /// LocalPersistence's LocalFernletDatabase) and is installed via
-/// `HealthKitService.defaultCacheClearer` at app launch.
+/// ``HealthKitService/defaultCacheClearer`` at app launch.
 struct NoopHealthKitCacheClearer: HealthKitCacheClearing {
     func clearHealthKitCachedValues() throws {}
 }
 
+/// Keychain persistence for the `HKQueryAnchor`s that make Fernlet's anchored queries incremental
+/// across launches.
+///
+/// One keychain item per observed sample type (account `healthKitAnchors.<identifier>`) plus a
+/// dedicated item for the workout observation, all under the `com.fernlet.healthkit-anchors`
+/// service with after-first-unlock, this-device-only accessibility (anchors are device-local state
+/// and must never roam). Anchors are `NSKeyedArchiver`-encoded with secure coding; every operation
+/// is best-effort — a corrupt or missing anchor simply restarts the query from scratch.
+/// ``HealthKitService/disableIntegration()`` deletes all anchors so a re-enable replays history
+/// rather than resuming from a stale position.
 public struct HealthKitAnchorKeychain {
+    /// Keychain service string shared by every anchor item.
     public static let service = "com.fernlet.healthkit-anchors"
+    /// Account-name prefix for per-sample-type anchors.
     public static let accountPrefix = "healthKitAnchors."
+    /// Dedicated account name for the workout observation anchor.
     public static let workoutAnchorKey = "fernlet.healthkit.workoutAnchor"
 
+    /// Keychain account name for one sample type's anchor.
     public static func account(for identifier: String) -> String {
         accountPrefix + identifier
     }
 
+    /// Deletes the stored anchors for every listed sample-type identifier.
     public static func deleteAll(for identifiers: [String]) {
         for identifier in identifiers {
             delete(identifier: identifier)
@@ -343,7 +482,9 @@ public struct HealthKitAnchorKeychain {
     }
 }
 
-/// Outcome of `HealthKitService.deleteAllAuthoredSamples()`. An enum rather than `Bool` because the
+/// Outcome of ``HealthKitService/deleteAllAuthoredSamples()``.
+///
+/// An enum rather than `Bool` because the
 /// two failure modes need DIFFERENT messages from the "delete everything" funnel: `.failed` invites a
 /// retry, while `.accessRevoked` cannot be fixed by retrying — once the user revokes Fernlet's share
 /// access, only the Health app can remove the samples Fernlet wrote earlier.
@@ -358,6 +499,37 @@ public enum AuthoredSampleDeleteOutcome: Sendable {
     case accessRevoked
 }
 
+/// Fernlet's production HealthKit gateway: the single class that talks to `HKHealthStore` for
+/// authorization, observation, daily-context reads, workout/cycle/intimacy/mindfulness writes, and
+/// the fail-closed integration disable.
+///
+/// The concrete ``HealthKitServicing`` conformer, and (via the `PeriodHealthKitServicing`
+/// extension below) the cycle-event seam `PeriodTrackerStore` in the sealed `PrivateHealthStore`
+/// module consumes — the one dependency edge that puts this module on the protected side of the S3
+/// wall's DAG. Several instances coexist at runtime (the app store's, the Privacy settings
+/// screen's, previews'), so cross-instance state deliberately lives outside the instance:
+///
+/// - **Gating:** almost every read/write first checks `isIntegrationEnabled`, which re-reads the
+///   `healthKitMasterEnabled` flag live from the keychain-backed `StoragePreferencesStore` (never a
+///   cached copy) so a toggle flipped by a *different* instance takes effect immediately. The
+///   stress and mindfulness paths additionally enforce their per-capability opt-in themselves.
+/// - **Persistence:** query anchors go through ``HealthKitAnchorKeychain``; preferences through
+///   `StoragePreferencesStore`; the one-time workout backfill marker through `UserDefaults`.
+///   Clinical samples live only in HealthKit — this class caches nothing itself.
+/// - **Provenance:** app-authored workout samples are stamped with `fernlet.workoutID` (plus the
+///   sync identifier) via ``makeMetadata(for:)``, which is what lets ``WorkoutHealthKitSync`` and
+///   ``deleteWorkout(fernletWorkoutID:)`` find only Fernlet's own samples later.
+/// - **Fail-closed disable:** ``disableIntegration()`` refuses to run without a
+///   ``HealthKitCacheClearing`` conformer (instance-injected or the app-installed
+///   ``defaultCacheClearer``) so opting out can never leave cached clinical values behind; every
+///   enable/disable step is logged to `FernletAuditLog`.
+///
+/// Concurrency: `@MainActor` (query bookkeeping and preferences are main-actor state); HealthKit's
+/// `@Sendable` completion handlers hop back via `Task { @MainActor in … }`, and the pure
+/// type-lookup/metadata statics are `nonisolated`. The target compiles in Swift 5 language mode
+/// specifically to keep those handler captures legal (see `Package.swift`). Failure mode for
+/// closed gates and missing types is ``HealthKitServiceError``; observation callbacks silently
+/// drop query errors (best-effort delivery).
 @MainActor
 public final class HealthKitService: HealthKitServicing {
     /// App-installed default cache cleaner. The concrete `CoreDataHealthKitCacheCleaner`
@@ -369,16 +541,32 @@ public final class HealthKitService: HealthKitServicing {
     /// silently skipping the purge of cached HealthKit-derived clinical values.
     public static var defaultCacheClearer: HealthKitCacheClearing?
 
+    /// The underlying Health store. Public because the `PeriodHealthKitServicing` conformance and
+    /// some one-shot queries use it directly (bypassing ``HealthKitStoreControlling``).
     public let healthStore: HKHealthStore
+    /// The seam all authorization/observation/save/delete traffic routes through (testable).
     private let storeController: HealthKitStoreControlling
     /// Optional: `nil` means "no clearer installed" → `disableIntegration()` throws rather than
     /// flipping the master switch off while leaving cached clinical data behind (fail-closed).
     private let cacheCleaner: HealthKitCacheClearing?
+    /// Keychain-backed preferences access; the master toggle and per-capability opt-ins are always
+    /// re-read live from here, never cached (see `isIntegrationEnabled`).
     private let preferencesStore: StoragePreferencesStore
+    /// The single long-lived workout anchored query, if observation is running.
     private var workoutObservationQuery: HKAnchoredObjectQuery?
+    /// Every currently executing long-lived query, so disable can stop them all.
     private var activeQueries: [HKQuery] = []
+    /// Registered per-type observation handlers, kept so ``enableIntegration()`` can restart the
+    /// anchored queries after a disable/enable cycle.
     private var observationRegistrations: [String: (type: HKSampleType, handler: (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void)] = [:]
 
+    /// Creates a service over the given (or a fresh) Health store.
+    ///
+    /// - Parameters:
+    ///   - storeController: Test seam; defaults to the pass-through ``SystemHealthKitStoreController``.
+    ///   - cacheCleaner: Falls back to ``defaultCacheClearer`` *as of construction*; ``disableIntegration()``
+    ///     re-checks the static at call time to close the construction-order window.
+    ///   - preferencesStore: Keychain preferences access; defaults to a fresh store on the standard service.
     public init(
         healthStore: HKHealthStore = HKHealthStore(),
         storeController: HealthKitStoreControlling? = nil,
@@ -395,6 +583,8 @@ public final class HealthKitService: HealthKitServicing {
         HKHealthStore.isHealthDataAvailable()
     }
 
+    /// Presents the system prompt for one capability's share/read types; integration-gated, and
+    /// reports only write statuses (HealthKit hides read authorization).
     public func requestAuthorization(for capability: HealthCapability) async throws -> AuthorizationOutcome {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         let types = try Self.types(for: capability)
@@ -473,6 +663,8 @@ public final class HealthKitService: HealthKitServicing {
         }
     }
 
+    /// Snapshot of the master gate (`isAvailable` folds the keychain toggle in, not just device
+    /// capability) plus every capability's per-type write status, without prompting.
     public func currentAuthorizationSnapshot() -> AuthorizationSnapshot {
         let shareTypes = HealthCapability.allCases.flatMap { capability in
             (try? Self.types(for: capability).share) ?? []
@@ -489,6 +681,9 @@ public final class HealthKitService: HealthKitServicing {
         startAnchoredQuery(for: type, handler: handler)
     }
 
+    /// Starts (replacing any prior) the anchored workout observation limited to the trailing
+    /// 30-day backfill window, resuming from the keychain-persisted anchor. Adds/deletes are
+    /// delivered to the handler on the main actor and the new anchor is persisted after each batch.
     public func startObservingWorkouts(handler: @escaping ([HKWorkout], [UUID]) -> Void) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         stopObservingWorkouts()
@@ -553,6 +748,10 @@ public final class HealthKitService: HealthKitServicing {
         try await storeController.delete(samples)
     }
 
+    /// Deletes the Fernlet-authored workout sample(s) carrying this workout id in their metadata.
+    ///
+    /// - Returns: Whether any matching sample was found and deleted. Only ever matches our own
+    ///   authored samples — imports carry no `fernlet.workoutID` / sync-identifier metadata.
     public func deleteWorkout(fernletWorkoutID id: UUID) async throws -> Bool {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         // We stamp both `fernlet.workoutID` and the sync identifier with the workout id on save; match
@@ -567,6 +766,7 @@ public final class HealthKitService: HealthKitServicing {
         return true
     }
 
+    /// One-shot unsorted workout fetch for a predicate (used by the authored-sample delete).
     private func fetchWorkouts(matching predicate: NSPredicate) async throws -> [HKWorkout] {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[HKWorkout], Error>) in
             let query = HKSampleQuery(
@@ -712,6 +912,13 @@ public final class HealthKitService: HealthKitServicing {
         try await healthStore.save(samples)
     }
 
+    /// Writes a completed workout to Health via `HKWorkoutBuilder`, attaching energy/distance
+    /// samples when present and the full `fernlet.*` provenance metadata.
+    ///
+    /// - Returns: The saved `HKWorkout`'s UUID, which the caller stamps onto the local row.
+    /// - Important: Gated only on device availability (`isHealthDataAvailable()`), not the master
+    ///   integration toggle — callers gate on workout-share authorization instead (see
+    ///   ``WorkoutHealthKitSync/isWorkoutLoggingAuthorized(_:)``).
     public func saveWorkout(_ workout: Workout) async throws -> UUID {
         guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
 
@@ -760,6 +967,10 @@ public final class HealthKitService: HealthKitServicing {
         return try await sleepHours(referenceDate: referenceDate)
     }
 
+    /// Assembles one day's `HealthDailyContext` (activity, body/sleep, cycle-event counts,
+    /// mindfulness minutes, intimate-event counts) for the requested capabilities — all of them
+    /// when `capabilities` is nil. Per-capability opt-in filtering is the CALLER's job here; only
+    /// the master toggle is enforced.
     public func loadDailyHealthContext(referenceDate: Date = Date(), capabilities: Set<HealthCapability>? = nil) async throws -> HealthDailyContext {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         let requested = capabilities ?? Set(HealthCapability.allCases)
@@ -805,6 +1016,8 @@ public final class HealthKitService: HealthKitServicing {
         return context
     }
 
+    /// Counts sexual-activity samples per day key across the month containing `month`, for the
+    /// intimacy calendar overlay. Integration-gated; returns an empty map for an undecodable month.
     public func loadIntimacyEventsByDay(for month: Date) async throws -> [String: Int] {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         let cal = Calendar.current
@@ -820,6 +1033,9 @@ public final class HealthKitService: HealthKitServicing {
         return result
     }
 
+    /// Writes one sexual-activity sample (1-minute span) stamped with the sealed store's external
+    /// UUID so the Health sample and the encrypted local note stay correlated. The clinical sample
+    /// lives in HealthKit; any narrative stays in the sealed store — never here. Audited on success.
     public func saveIntimacyEvent(date: Date, protectionUsed: Bool?, externalUUID: UUID) async throws {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
         var metadata: [String: Any] = [
@@ -870,6 +1086,9 @@ public final class HealthKitService: HealthKitServicing {
         FernletAuditLog.log("hk.write.saved", context: ["type": "mindfulSession"])
     }
 
+    /// Merged asleep hours inside the sleep-night window (18:00–11:00) containing `referenceDate`,
+    /// clipping samples to the window and de-duplicating overlaps across sources; nil when nothing
+    /// was asleep.
     private func sleepHours(referenceDate: Date) async throws -> Double? {
         let sleepType = try Self.categoryType(.sleepAnalysis)
         let interval = Self.sleepNightInterval(containing: referenceDate)
@@ -935,6 +1154,8 @@ public final class HealthKitService: HealthKitServicing {
         )
     }
 
+    /// Cumulative sum of one quantity type over an interval, in the given unit; nil when Health
+    /// has no samples.
     private func sumQuantity(_ identifier: HKQuantityTypeIdentifier, unit: HKUnit, in interval: DateInterval) async throws -> Double? {
         let type = try Self.quantityType(identifier)
         let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end, options: .strictStartDate)
@@ -950,6 +1171,8 @@ public final class HealthKitService: HealthKitServicing {
         }
     }
 
+    /// One-shot fetch of category samples matching a predicate (sleep, cycle, mindfulness,
+    /// intimacy paths).
     private func categorySamples(for type: HKCategoryType, predicate: NSPredicate?) async throws -> [HKCategorySample] {
         try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
@@ -963,6 +1186,8 @@ public final class HealthKitService: HealthKitServicing {
         }
     }
 
+    /// Most recent sample's value for one quantity type (any date), in the given unit; nil when
+    /// Health has none.
     private func latestQuantityValue(for type: HKQuantityType, unit: HKUnit) async throws -> Double? {
         try await withCheckedThrowingContinuation { continuation in
             let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
@@ -978,6 +1203,11 @@ public final class HealthKitService: HealthKitServicing {
         }
     }
 
+    /// Turns the HealthKit integration off, fail-closed: stops every query, disables background
+    /// delivery, purges the cached HealthKit-derived values via the cache clearer, deletes all
+    /// stored anchors, and only then flips the master toggle off and resets the per-capability
+    /// opt-ins. Throws (before any teardown) when no cache clearer is available, and rethrows any
+    /// step's failure so the opt-out never half-applies; every attempt/outcome is audited.
     public func disableIntegration() async throws {
         FernletAuditLog.log("healthkit.disable.attempt")
         // Fail-closed: disabling HealthKit MUST purge the cached HealthKit-derived clinical values.
@@ -1016,6 +1246,9 @@ public final class HealthKitService: HealthKitServicing {
         }
     }
 
+    /// Flips the master toggle on and restarts every registered per-type observation (anchors were
+    /// wiped on disable, so queries replay from scratch). Throws only when the device has no Health
+    /// store; audited.
     public func enableIntegration() async throws {
         FernletAuditLog.log("healthkit.enable.attempt")
         guard isHealthDataAvailable() else {
@@ -1031,6 +1264,8 @@ public final class HealthKitService: HealthKitServicing {
         FernletAuditLog.log("healthkit.enable.completed")
     }
 
+    /// Best-effort deep link to Fernlet's row in Health privacy settings (private `App-Prefs:`
+    /// scheme first, then the app's own Settings page). No-op on platforms without UIKit.
     public func openHealthPrivacySettings() async {
         #if canImport(UIKit)
         let candidateURLs = [
@@ -1045,6 +1280,8 @@ public final class HealthKitService: HealthKitServicing {
         #endif
     }
 
+    /// The master gate consulted by nearly every read/write: device has a Health store AND the
+    /// keychain `healthKitMasterEnabled` flag is on.
     private var isIntegrationEnabled: Bool {
         // Read the live keychain value rather than this instance's cached `preferences`.
         // Multiple HealthKitService instances exist (FernletStore, Privacy settings, etc.),
@@ -1055,6 +1292,9 @@ public final class HealthKitService: HealthKitServicing {
             && StoragePreferencesStore.currentPreferences(service: preferencesStore.keychainService).healthKitMasterEnabled
     }
 
+    /// Shared delivery path for both workout-query result handlers: extracts workouts + deleted
+    /// UUIDs off the query's callback queue, then hops to the main actor to invoke the handler and
+    /// persist the new anchor.
     nonisolated private static func deliver(workoutSamples samples: [HKSample]?, deletedObjects: [HKDeletedObject]?, anchor: HKQueryAnchor?, handler: @escaping ([HKWorkout], [UUID]) -> Void) {
         let workouts = samples?.compactMap { $0 as? HKWorkout } ?? []
         let deletedUUIDs = (deletedObjects ?? []).map(\.uuid)
@@ -1110,6 +1350,9 @@ public final class HealthKitService: HealthKitServicing {
         }
     }
 
+    /// Launches one persistent anchored query for a sample type, resuming from (and persisting) its
+    /// keychain anchor; both the initial and update handlers hop to the main actor before touching
+    /// the caller's handler.
     private func startAnchoredQuery(for type: HKSampleType, handler: @escaping (HKAnchoredObjectQuery, [HKSample], [HKDeletedObject]) -> Void) {
         let savedAnchor = HealthKitAnchorKeychain.loadAnchor(for: type.identifier)
         let query = HKAnchoredObjectQuery(
@@ -1139,6 +1382,8 @@ public final class HealthKitService: HealthKitServicing {
         storeController.execute(query)
     }
 
+    /// Deduplicated union of every registered observation type and every capability's share+read
+    /// types — the full set whose background delivery and anchors the disable path must clear.
     private func observedObjectTypes() -> [HKObjectType] {
         var types: [HKObjectType] = observationRegistrations.values.map(\.type)
         for capability in HealthCapability.allCases {
@@ -1159,6 +1404,8 @@ public final class HealthKitService: HealthKitServicing {
         })
     }
 
+    /// The authoritative share/read type sets for each capability — the single mapping every
+    /// authorization request, status snapshot, and delete-all sweep is built from.
     nonisolated private static func types(for capability: HealthCapability) throws -> (share: Set<HKSampleType>, read: Set<HKObjectType>) {
         switch capability {
         case .bodyProfile:
@@ -1201,6 +1448,9 @@ public final class HealthKitService: HealthKitServicing {
         }
     }
 
+    /// Builds the `HKWorkoutConfiguration` for a workout save: activity type via
+    /// ``ActivityTypeCatalog``, plus indoor/outdoor and swimming-location hints for the variants
+    /// HealthKit's activity type alone cannot express.
     public static func makeConfiguration(for workout: Workout) -> HKWorkoutConfiguration {
         let config = HKWorkoutConfiguration()
         switch workout.mode {
@@ -1224,6 +1474,11 @@ public final class HealthKitService: HealthKitServicing {
         return config
     }
 
+    /// Builds the provenance metadata written onto every app-authored workout sample: the
+    /// `fernlet.*` keys (id, name, mode, intensity, muscle groups, exercises, notes, effort,
+    /// planned-workout link, activity type) plus the HealthKit sync identifier/version. This is the
+    /// contract ``WorkoutHealthKitSync/parseFernletMetadata(_:)`` and the authored-sample delete
+    /// predicates read back.
     public static func makeMetadata(for workout: Workout) -> [String: Any] {
         var metadata: [String: Any] = [
             "fernlet.workoutID": workout.id.uuidString,
@@ -1257,6 +1512,8 @@ public final class HealthKitService: HealthKitServicing {
         return metadata
     }
 
+    /// Fallback duration in minutes when a workout was logged without one (30 for strength, the
+    /// activity type's default otherwise).
     public static func defaultDuration(for workout: Workout) -> Int {
         switch workout.mode {
         case .strengthTraining:
@@ -1266,14 +1523,18 @@ public final class HealthKitService: HealthKitServicing {
         }
     }
 
+    /// Start of the workout import window: 30 days before the reference date. Shared by the
+    /// one-time backfill and the observation predicate so both cover the same history.
     public static func workoutBackfillStartDate(referenceDate: Date, calendar: Calendar = .current) -> Date {
         calendar.date(byAdding: .day, value: -30, to: referenceDate) ?? referenceDate
     }
 
+    /// Whether the one-time workout backfill has not yet completed on this install.
     public static func shouldRunWorkoutBackfill(defaults: UserDefaults = .standard) -> Bool {
         !defaults.bool(forKey: workoutBackfillCompletedKey)
     }
 
+    /// Records the one-time workout backfill as done so it never reruns on this install.
     public static func markWorkoutBackfillCompleted(defaults: UserDefaults = .standard) {
         defaults.set(true, forKey: workoutBackfillCompletedKey)
     }
@@ -1302,6 +1563,9 @@ public final class HealthKitService: HealthKitServicing {
         (value * 10).rounded() / 10
     }
 
+    /// The 18:00–11:00 "sleep night" window a reference date belongs to: before 18:00 the date
+    /// reads as "this morning's wake-up", so last night's window is used; from 18:00 the window
+    /// rolls forward to tonight.
     private static func sleepNightInterval(containing date: Date) -> DateInterval {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: date)
@@ -1317,6 +1581,8 @@ public final class HealthKitService: HealthKitServicing {
         return DateInterval(start: start, end: end)
     }
 
+    /// Total seconds covered by the union of the intervals — overlaps merge, so simultaneous
+    /// samples from multiple sources (watch + phone) never double-count.
     private static func mergedDuration(for intervals: [DateInterval]) -> TimeInterval {
         let sorted = intervals.sorted { $0.start < $1.start }
         var merged: [DateInterval] = []
@@ -1382,6 +1648,8 @@ public final class HealthKitService: HealthKitServicing {
         return type
     }
 
+    /// Resolves a quantity-type identifier, throwing ``HealthKitServiceError/missingHealthType(_:)``
+    /// instead of returning an optional.
     nonisolated public static func quantityType(_ identifier: HKQuantityTypeIdentifier) throws -> HKQuantityType {
         guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else {
             throw HealthKitServiceError.missingHealthType(identifier.rawValue)
@@ -1389,6 +1657,8 @@ public final class HealthKitService: HealthKitServicing {
         return type
     }
 
+    /// Resolves a category-type identifier, throwing ``HealthKitServiceError/missingHealthType(_:)``
+    /// instead of returning an optional.
     nonisolated public static func categoryType(_ identifier: HKCategoryTypeIdentifier) throws -> HKCategoryType {
         guard let type = HKCategoryType.categoryType(forIdentifier: identifier) else {
             throw HealthKitServiceError.missingHealthType(identifier.rawValue)
@@ -1397,12 +1667,27 @@ public final class HealthKitService: HealthKitServicing {
     }
 }
 
+/// Observable view model behind the Health authorization UI (Settings sheet, period-tracker and
+/// log-period sheets): drives per-capability permission requests, body-profile import/sync, and
+/// per-capability context refreshes, publishing progress and user-facing status text.
+///
+/// A thin, stateless-by-intent layer over ``HealthKitServicing`` — it holds no health data, only
+/// the latest ``AuthorizationSnapshot``, an `isRequesting` flag, and a `statusMessage` the views
+/// render verbatim. Which capabilities the user has EVER requested is remembered in `UserDefaults`
+/// (HealthKit itself never reveals whether a prompt was shown), so the UI can distinguish
+/// "never asked" from "asked and denied". Errors are absorbed into `statusMessage` rather than
+/// thrown — every flow degrades to "manual entries remain available" messaging. `@MainActor`
+/// `@Observable`; the injected service is `@ObservationIgnored`.
 @MainActor
 @Observable
 public final class HealthKitAuthorizationViewModel {
+    /// Latest availability + write-status snapshot; refreshed after every request/flow.
     public private(set) var snapshot: AuthorizationSnapshot
+    /// User-facing outcome text for the last action, rendered verbatim by the settings UI.
     public private(set) var statusMessage: String = ""
+    /// True while an authorization or Health fetch is in flight (drives progress UI).
     public private(set) var isRequesting = false
+    /// Capabilities the user has ever been prompted for, persisted in `UserDefaults`.
     private(set) var requestedCapabilities: Set<HealthCapability>
 
     @ObservationIgnored
@@ -1418,14 +1703,18 @@ public final class HealthKitAuthorizationViewModel {
         }
     }
 
+    /// Re-reads the authorization snapshot without prompting (e.g. on scene re-activation).
     public func refresh() {
         snapshot = service.currentAuthorizationSnapshot()
     }
 
+    /// Whether this capability's system prompt has ever been triggered from Fernlet.
     public func hasRequested(_ capability: HealthCapability) -> Bool {
         requestedCapabilities.contains(capability)
     }
 
+    /// Runs the system authorization prompt for one capability, then refreshes the snapshot and
+    /// reports the outcome in `statusMessage`.
     public func request(_ capability: HealthCapability) async {
         isRequesting = true
         statusMessage = ""
@@ -1441,22 +1730,31 @@ public final class HealthKitAuthorizationViewModel {
         }
     }
 
+    /// Sets `statusMessage` to the manual-revocation walkthrough — iOS gives apps no API to revoke
+    /// Health permissions themselves.
     public func showRevocationInstructions(for capability: HealthCapability) {
         statusMessage = "To revoke \(capability.title.lowercased()) access, open Settings > Privacy & Security > Health > Fernlet. iOS does not allow apps to revoke Health permissions directly."
     }
 
+    /// Sets `statusMessage` to the 16+ age-gate explanation shown instead of the intimate-logging
+    /// authorization flow when the user is below the gate.
     public func showIntimateLoggingAgeWallMessage() {
         statusMessage = "Intimate logging is available at 16 and older. Fernlet checks your age range with Apple — see Settings › Intimacy."
     }
 
+    /// First-time body-profile import: prompts for authorization, then overlays Health's fields
+    /// onto the profile. Returns nil when Health supplied nothing (message explains the fallback).
     public func importBodyProfile(current profile: UserNutritionProfile) async -> UserNutritionProfile? {
         await loadBodyProfile(current: profile, requestsAuthorization: true)
     }
 
+    /// Re-pulls the body profile without prompting (for already-authorized refreshes).
     public func updateBodyProfile(current profile: UserNutritionProfile) async -> UserNutritionProfile? {
         await loadBodyProfile(current: profile, requestsAuthorization: false)
     }
 
+    /// Writes the profile's height/weight back to Health, but only when both types show write
+    /// authorization — otherwise silently no-ops rather than prompting.
     public func syncBodyProfileMeasurements(_ profile: UserNutritionProfile) async {
         guard snapshot.status(for: HKQuantityTypeIdentifier.height.rawValue) == .sharingAuthorized,
               snapshot.status(for: HKQuantityTypeIdentifier.bodyMass.rawValue) == .sharingAuthorized else { return }
@@ -1468,6 +1766,8 @@ public final class HealthKitAuthorizationViewModel {
         }
     }
 
+    /// Fetches today's `HealthDailyContext` restricted to one capability, for the settings "update
+    /// now" affordance. Returns nil (with a fallback message) on any failure.
     public func updateHealthContext(for capability: HealthCapability) async -> HealthDailyContext? {
         isRequesting = true
         statusMessage = ""
@@ -1529,6 +1829,8 @@ public final class HealthKitAuthorizationViewModel {
 }
 
 extension HKAuthorizationStatus {
+    /// Short user-facing label for a write status ("Not requested" / "Write denied" /
+    /// "Write allowed"), shown on the settings capability rows.
     public var fernletLabel: String {
         switch self {
         case .notDetermined: "Not requested"
@@ -1539,10 +1841,17 @@ extension HKAuthorizationStatus {
     }
 }
 
-// Cycle-event read/write conformance for the narrow `PeriodHealthKitServicing` seam used by
-// `PeriodTrackerStore` (in the PrivateHealthStore module). This conformance lives app-side because
-// it reaches into `HealthKitService` internals (`save`, `healthStore`, `categoryType`/`quantityType`).
+/// Cycle-event read/write conformance for the narrow `PeriodHealthKitServicing` seam owned by
+/// `PeriodTrackerStore` (in the PrivateHealthStore module). The conformance lives here — beside
+/// ``HealthKitService`` — because it reaches into the service's internals (`save`, `healthStore`,
+/// `categoryType`/`quantityType`); it is the reason this gateway target depends on
+/// PrivateHealthStore, a wall-legal edge (only AIProviders/CloudKitSync are barred from the
+/// sealed stores).
 extension HealthKitService: PeriodHealthKitServicing {
+    /// Writes one logged cycle event as its constituent Health samples (flow, BBT, mucus,
+    /// ovulation test, spotting — whichever fields are present), each stamped with the sealed
+    /// store's external UUID so the encrypted narrative and the clinical samples stay correlated.
+    /// Gated on device availability only; audited on success.
     public func savePeriodEvent(_ event: UserLoggedCycleEvent, externalUUID: UUID) async throws -> [HKSample] {
         guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
         let samples = try Self.periodSamples(for: event, externalUUID: externalUUID)
@@ -1553,6 +1862,9 @@ extension HealthKitService: PeriodHealthKitServicing {
         return samples
     }
 
+    /// Fetches every cycle-related sample (all five period sample types, whatever their source
+    /// app) in the range, sorted by start date — the raw feed `PeriodTrackerStore` folds into its
+    /// sealed cycle entries.
     public func loadPeriodEvents(in dateRange: DateInterval) async throws -> [HKSample] {
         guard isHealthDataAvailable() else { throw HealthKitServiceError.healthDataUnavailable }
         let predicate = HKQuery.predicateForSamples(withStart: dateRange.start, end: dateRange.end, options: .strictStartDate)
@@ -1563,6 +1875,9 @@ extension HealthKitService: PeriodHealthKitServicing {
         return allSamples.sorted { $0.startDate < $1.startDate }
     }
 
+    /// Pure sample-construction for one cycle event: emits a sample per populated field, all
+    /// sharing the external UUID and the `HKMetadataKeyMenstrualCycleStart` flag (forced false on
+    /// the intermenstrual-bleeding sample — spotting never starts a cycle).
     nonisolated public static func periodSamples(for event: UserLoggedCycleEvent, externalUUID: UUID) throws -> [HKSample] {
         let start = event.date
         let end = max(event.date.addingTimeInterval(60), event.date)
@@ -1593,6 +1908,7 @@ extension HealthKitService: PeriodHealthKitServicing {
         return samples
     }
 
+    /// The five cycle-tracking sample types the period seam reads and writes.
     nonisolated static func periodSampleTypes() throws -> [HKSampleType] {
         [
             try categoryType(.menstrualFlow),
@@ -1603,6 +1919,7 @@ extension HealthKitService: PeriodHealthKitServicing {
         ]
     }
 
+    /// One-shot unsorted sample fetch for any sample type (period seam helper).
     private func samples(for type: HKSampleType, predicate: NSPredicate?) async throws -> [HKSample] {
         try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in

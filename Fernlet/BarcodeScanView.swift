@@ -35,6 +35,11 @@ struct BarcodeResolveFlowView: View {
     }
 }
 
+/// A scanned barcode payload wrapped for navigation-destination identity.
+///
+/// ``BarcodeResolveFlowView`` sets one when a code has no catalog match, driving the push to
+/// ``BarcodeNotFoundView``; the code itself is the identity, so re-scanning the same code reuses the
+/// same destination.
 struct ScannedBarcode: Identifiable, Hashable {
     let code: String
     var id: String { code }
@@ -453,6 +458,14 @@ private extension View {
 
 // MARK: - Live viewfinder (VisionKit)
 
+/// The `UIViewControllerRepresentable` wrapper around VisionKit's `DataScannerViewController` that
+/// powers the live barcode viewfinder.
+///
+/// Delivers at most one payload per arming via the coordinator's `delivered` guard, pauses/re-arms
+/// under the parent's `paused` latch (see ``BarcodeScanView``), and surfaces runtime unavailability
+/// (camera permission revoked mid-session) through `onUnavailable` so the parent can drop to the
+/// still-photo fallback. The symbology list is injectable — the QR verify ceremony reuses this exact
+/// viewfinder with `[.qr]`.
 struct BarcodeDataScannerView: UIViewControllerRepresentable {
     /// The parent latches this true the moment it hands any code off, pausing the live scanner so a
     /// second barcode can't be recognized behind the pushed screen. The parent clears it (re-arming
@@ -499,6 +512,11 @@ struct BarcodeDataScannerView: UIViewControllerRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(onPayload: onPayload, onUnavailable: onUnavailable) }
 
+    /// The `DataScannerViewControllerDelegate` for the live viewfinder: delivers the first recognized
+    /// barcode payload exactly once per arming and reports scanner unavailability exactly once.
+    ///
+    /// `delivered` is reset by `updateUIViewController` on re-arm (pop back into the scanner), which
+    /// is why the cross-push single-delivery latch lives up in ``BarcodeScanView`` instead.
     @MainActor
     final class Coordinator: NSObject, DataScannerViewControllerDelegate {
         let onPayload: (String) -> Void

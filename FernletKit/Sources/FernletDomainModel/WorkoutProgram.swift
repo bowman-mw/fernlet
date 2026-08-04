@@ -2,6 +2,10 @@ import Foundation
 
 // MARK: - Experience level
 
+/// Training experience (beginner/intermediate/advanced).
+///
+/// Caps accessory slots per session (`maxSlotsPerDay`) and contributes points toward the
+/// recommended split specificity; decodes tolerantly on ``WorkoutProfile``.
 public nonisolated enum ExperienceLevel: String, Codable, CaseIterable, Identifiable {
     case beginner
     case intermediate
@@ -330,6 +334,9 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
         try c.encode(ownedEquipment.map(\.rawValue).sorted(), forKey: .ownedEquipment)
     }
 
+    /// Persisted JSON keys for a ``WorkoutLocation``'s wire format.
+    ///
+    /// `ownedEquipment` is written as sorted raw values (see `encode(to:)`) so output is deterministic.
     private enum CodingKeys: String, CodingKey { case id, name, ownedEquipment }
 
     /// Equipment available regardless of location (no gear required).
@@ -395,6 +402,10 @@ public nonisolated enum WorkoutSafetyFilter {
 
 // MARK: - Slot / session / split structure
 
+/// The role a slot plays in a session: main compound, accessory, or core work.
+///
+/// Drives set counts (``WorkoutGoalStyle``), exercise slot scoring, and rest demand
+/// (``WorkoutRestGuidance``).
 public nonisolated enum SlotRole {
     case main          // compound, heavier
     case accessory     // isolation / lighter
@@ -420,6 +431,10 @@ public nonisolated struct WorkoutSlotSpec {
     public var region: BodyRegion?
 }
 
+/// The kind of training session (strength, full-body, cardio, mobility, sport).
+///
+/// Cardio/mobility sessions render their conditioning descriptor directly; the others are filled
+/// from the catalog via slots.
 public nonisolated enum SessionKind: String {
     case strength
     case fullBody
@@ -491,6 +506,10 @@ public nonisolated enum SplitSpecificity: Int, CaseIterable {
     }
 }
 
+/// A named weekly training structure: specificity, goal fit, and its ordered days.
+///
+/// The unit ``WorkoutSplitRecommender`` ranks and the program engine rotates through; `id` is the
+/// stable token stored in `WorkoutProfile.selectedSplitID`.
 public nonisolated struct TrainingSplit: Identifiable {
 
     public init(id: String, name: String, summary: String, specificity: SplitSpecificity, goalFit: Set<GoalType>, days: [WorkoutSplitDay]) {
@@ -531,6 +550,11 @@ extension WorkoutSessionTemplate {
 
 // MARK: - Session library
 
+/// The static library of reusable session templates (full-body variants, PPL days, body-part days,
+/// cardio).
+///
+/// Immutable constants (`nonisolated(unsafe)` because they are built once and never mutated),
+/// composed into every ``TrainingSplit`` in ``WorkoutSplitCatalog``.
 public nonisolated enum WorkoutSessions {
     // Strength sessions. Vertical/horizontal pushes & pulls are distinguished by target muscles
     // (the catalog tags only movementPattern); "not used today" diversifies picks within a day.
@@ -649,6 +673,10 @@ public nonisolated enum WorkoutSessions {
 
 // MARK: - Split catalog (broad → specialized)
 
+/// The full split catalog, ordered from "just move" to specialized two-a-days.
+///
+/// `fallback` (Full Body ×3) is the safe default when nothing is selected or recommended; the
+/// recommender ranks `all` rather than filtering, so the user can still pick any split.
 public nonisolated enum WorkoutSplitCatalog {
     nonisolated public static var fallback: TrainingSplit { fullBody3 }
 
@@ -770,6 +798,9 @@ public nonisolated enum WorkoutSplitCatalog {
 
 // MARK: - Consistency + recommendation
 
+/// How consistently the user has been training lately (low/medium/high).
+///
+/// Derived from recent history app-side; contributes points to the recommended split specificity.
 public nonisolated enum WorkoutConsistency: Int {
     case low = 0
     case medium = 1
@@ -850,6 +881,10 @@ public nonisolated enum WorkoutSplitRecommender {
 
 // MARK: - Goal/energy → volume style
 
+/// The volume prescription for a goal: sets/reps by role, plus the conditioning line.
+///
+/// `style(for:energy:sport:)` is the goal→volume table; `adjustedSets` applies the day's energy
+/// (light trims a set, hard adds one, floored at 2).
 public nonisolated struct WorkoutGoalStyle {
 
     public init(mainSets: Int, mainReps: String, accessorySets: Int, accessoryReps: String, includeConditioning: Bool, conditioningLabel: String) {
@@ -945,7 +980,18 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
     public var line: String { fromCatalog ? "\(name) - \(sets) x \(reps)" : name }
 }
 
+/// The deterministic engine that turns a split day + profile + location into concrete sessions.
+///
+/// `dayPlan` picks the rotation day, filters the catalog through ``WorkoutSafetyFilter``, fills
+/// each slot with the best-scoring feasible exercise (deterministic tie-breaks on name/id),
+/// applies double progression from per-exercise completion counts, and honestly reports slots it
+/// had to drop. The AI adjuster's output re-enters via `applyAdjustment` and must run back through
+/// the safety filter, never around it.
 public nonisolated enum WorkoutProgram {
+    /// One rendered session: its prescribed exercises plus the displayable ``WorkoutSuggestion``.
+    ///
+    /// `workout(intensity:loggedFromGuidedSession:)` builds the loggable row; passing `true` tags
+    /// it as guided so name-based reconciliation only matches the guided flow's own logs.
     public struct SessionSuggestion: Identifiable {
         public var id = UUID()
         public var title: String
@@ -981,6 +1027,10 @@ public nonisolated enum WorkoutProgram {
         }
     }
 
+    /// The engine's full output for one day: sessions, dropped slots, and the location used.
+    ///
+    /// `droppedSlots` names the slots with no safe/feasible exercise so the session note can say
+    /// why, honestly.
     public struct DayPlan {
         public var splitName: String
         public var dayTitle: String

@@ -12,9 +12,11 @@ import FernletFoundation
 struct DestructiveConfirmation: Identifiable {
     /// A SECOND destructive outcome, for the rare dialog where the honest question isn't "do this or
     /// not" but "which of two irreversible things do you mean" — deleting everything Fernlet stores,
-    /// with or without the samples Fernlet wrote to Apple Health. Both outcomes are destructive, both
-    /// are spelled out in `message`, and offering the choice is what stops Fernlet from silently
-    /// picking on the user's behalf. Nil for every ordinary confirm-or-cancel dialog.
+    /// with or without the samples Fernlet wrote to Apple Health.
+    ///
+    /// Both outcomes are destructive, both are spelled out in `message`, and offering the choice is
+    /// what stops Fernlet from silently picking on the user's behalf. Nil for every ordinary
+    /// confirm-or-cancel dialog.
     struct SecondaryConfirm {
         /// Must say how it differs from `confirmLabel`, e.g. "Delete from Health too" beside "Delete".
         let label: String

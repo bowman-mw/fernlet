@@ -16,6 +16,14 @@
 import ActivityKit
 import Foundation
 
+/// App-target-only requester of the cooking Live Activity — starting an activity is the one thing
+/// only the app process can do.
+///
+/// Called from `FernletStore`'s cooking-run start transition; updates and ends go through the shared
+/// `CookingActivityBridge` instead (compiled into both targets), and the per-step countdown ticks
+/// natively in the widget via `Text(timerInterval:)`, so there is no time-based update path and no
+/// push channel. Degrades silently to in-app-only when Live Activities are disabled, and only ever
+/// ends prior `CookingActivityAttributes` instances — a live workout activity is untouched.
 @MainActor
 enum CookingLiveActivityController {
 

@@ -15,8 +15,11 @@ import SwiftUI
 // MARK: - Type roles
 
 /// The two-system type scale: **serif = the companion's world**, **sans = the interface layer**.
-/// Sizes mirror the design-system `--text-*` tokens; each role scales with Dynamic Type via the
-/// `relativeTo:` text style.
+///
+/// Each case names a semantic role from the design export rather than a raw font; views resolve a
+/// role to a bundled font via `Font.fernlet(_:)`, so every text style in the app, the lock UI, and
+/// the proximity sheets flows through this one vocabulary. Sizes mirror the design-system
+/// `--text-*` tokens; each role scales with Dynamic Type via the `relativeTo:` text style.
 public enum FernletTextRole: CaseIterable {
     case wordmark        // Playfair Display Italic — app logo only (reserved design-export role, no call site yet)
     case display         // Fraunces SemiBold 36 — avatar state / hero
@@ -52,7 +55,11 @@ public extension Font {
 }
 
 /// Exact PostScript names of the bundled fonts (see `Fernlet/Fonts` + Info.plist `UIAppFonts`).
-/// These are the instanced static weights — do not guess; they are verified by a test.
+///
+/// A caseless namespace enum consumed by `Font.fernlet(_:)`. These are the instanced static
+/// weights — do not guess; they are verified by a test. The font *files* stay registered by the
+/// app's Info.plist (this package resolves purely by name), so a renamed or missing file fails
+/// `FernletFontRegistrationTests` rather than silently falling back to the system font.
 public enum FernletFontName {
     public static let playfairItalic        = "PlayfairDisplayItalic-Italic"
     public static let frauncesSemiBold      = "Fraunces-72ptSemiBoldNonWonky"
@@ -107,6 +114,11 @@ public extension Color {
 
 // MARK: - Metrics (8pt grid + corner radii)
 
+/// Spacing and corner-radius constants for the design system's 8pt layout grid.
+///
+/// A caseless namespace enum: padding, gaps, and rounded corners across the app, lock UI, and
+/// proximity surfaces should come from these tokens (e.g. ``FernletCard`` uses `spaceMd` +
+/// `radiusMd`) rather than ad-hoc literals, so layout rhythm stays consistent everywhere.
 public enum FernletMetrics {
     // Spacing — 8pt base grid
     public static let spaceXs: CGFloat = 4
@@ -141,9 +153,13 @@ public extension View {
 
 // MARK: - Motion tokens
 
-/// Design-export motion vocabulary (reserved). These mirror the export's `--ease-*` / duration
-/// tokens; not every one has a call site yet, but they are the system's documented animation
-/// vocabulary — keep them even when currently unused (reserved, not dead code — do not re-flag).
+/// The design system's animation vocabulary: easing curves and springs for UI, avatar, loading,
+/// and celebration motion.
+///
+/// A caseless namespace enum of design-export motion tokens (reserved vocabulary). These mirror
+/// the export's `--ease-*` / duration tokens; not every one has a call site yet, but they are the
+/// system's documented animation vocabulary — keep them even when currently unused (reserved, not
+/// dead code — do not re-flag).
 public enum FernletMotion {
     public static let ui     = Animation.easeOut(duration: 0.25)   // UI transitions
     public static let avatar = Animation.spring(response: 0.4, dampingFraction: 0.7)   // avatar reactions

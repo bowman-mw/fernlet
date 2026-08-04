@@ -21,19 +21,32 @@ import Foundation
 
 /// A guided workout in progress, captured as a flat value so it survives process death in the
 /// app-group container and can be advanced by an App Intent with no live app state.
+///
+/// Carries everything a cold-launched process needs: the full `exercises` list (so a Lock Screen
+/// "Done set" needs no domain plan) and the complete logging payload (session id, day key,
+/// intensity, title, notes) so a workout finished entirely from the Lock Screen can still be logged
+/// on the app's next reconcile. Persisted as ISO-8601 JSON by ``GuidedWorkoutRunStateStore``; its
+/// two writers (the app while foregrounded, the App Intents otherwise) never run concurrently. All
+/// transitions are pure `mutating` functions mirroring the old WorkoutSessionRunner state machine,
+/// and the rest-window invariant (`restStartedAt`/`restEndsAt` set and cleared together, only while
+/// `.resting`) keeps the widget's `Text(timerInterval:)` from ever seeing an inverting range.
 struct GuidedWorkoutRunState: Codable, Hashable {
 
-    /// The runner's live phase. `.done` covers both a natural finish and an abandon; the
-    /// `completedNaturally` flag distinguishes them (only a natural finish is logged).
+    /// The runner's live phase.
+    ///
+    /// `.done` covers both a natural finish and an abandon; the `completedNaturally` flag
+    /// distinguishes them (only a natural finish is logged).
     enum Phase: String, Codable, Hashable {
         case working
         case resting
         case done
     }
 
-    /// One prescribed movement, with its per-exercise rest baked in at build time (research-backed
-    /// default, overridable by the editor / the future coach app) so advancing the workout from a
-    /// cold-launched intent needs no rest-length computation.
+    /// One prescribed movement, with its per-exercise rest baked in at build time.
+    ///
+    /// The rest is a research-backed default (overridable by the editor / the future coach app),
+    /// baked in so advancing the workout from a cold-launched intent needs no rest-length
+    /// computation.
     struct Exercise: Codable, Hashable, Identifiable {
         var id: UUID
         var name: String
@@ -232,8 +245,10 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         )
     }
 
-    /// Named stale-date budgets (mirrors the old ContentState.Staleness): generous enough that a real
-    /// long rest or set never trips them — they exist only to retire an orphaned activity.
+    /// Named stale-date budgets (mirrors the old ContentState.Staleness).
+    ///
+    /// Generous enough that a real long rest or set never trips them — they exist only to retire an
+    /// orphaned activity.
     enum Staleness {
         static let restGrace: TimeInterval = 10 * 60
         static let workingCap: TimeInterval = 30 * 60

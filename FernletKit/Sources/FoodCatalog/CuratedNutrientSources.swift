@@ -3,10 +3,13 @@ import FernletDomainModel
 import FernletScoring
 
 /// One hand-authored "good source" of a tracked micronutrient — the F2 gap-filling
-/// nudge's payload. Pinned to a real bundled-catalog `FoodItem` id so the card can
-/// bind the food deterministically and offer "add it"; `normalizedNameFallback` is
-/// the exact catalog `normalized_name` so a future catalog regeneration (which would
-/// re-mint ids) can still resolve the food by name.
+/// nudge's payload.
+///
+/// Pinned to a real bundled-catalog `FoodItem` id so the card can bind the food
+/// deterministically and offer "add it"; ``normalizedNameFallback`` is the exact
+/// catalog `normalized_name` so a future catalog regeneration (which would re-mint
+/// ids) can still resolve the food by name. Authored in `CuratedNutrientSources.json`
+/// and served by ``CuratedNutrientSources``.
 public nonisolated struct CuratedFoodSource: Codable, Sendable, Identifiable, Equatable {
     public let nutrientKey: String
     /// User-facing food name, as it appears in the nudge copy and is prefilled into
@@ -31,12 +34,21 @@ public nonisolated struct CuratedFoodSource: Codable, Sendable, Identifiable, Eq
     }
 }
 
-/// Loads and serves the curated good-sources table (`CuratedNutrientSources.json`,
-/// owned by this module via `Bundle.module`, mirroring `FoodCatalog.sqlite`). The
-/// table is small (~55 rows) and read-once; there is no index or catalog query
-/// involved — §3.3's deliberately cheap design.
+/// Loads and serves the curated good-sources table for the ambient nutrient nudge.
+///
+/// The table (`CuratedNutrientSources.json`, owned by this module via `Bundle.module`,
+/// mirroring `FoodCatalog.sqlite`) is small (~55 rows) and read-once; there is no
+/// index or catalog query involved — §3.3's deliberately cheap design.
+/// ``NutrientNudgePlanner`` asks it for the top curated foods per nutrient key, and
+/// ``resolve(_:in:)`` binds an entry back to a live ``FoodCatalog`` item (pinned id
+/// first, normalized-name fallback second). Immutable after init, so it is safe to
+/// share across actors (`@unchecked Sendable` on a nonisolated class).
 public nonisolated final class CuratedNutrientSources: @unchecked Sendable {
 
+    /// The on-disk JSON envelope — a version number wrapping the authored source rows.
+    ///
+    /// Decoded once by ``bundled(bundle:)``; the `version` field is decoded but not
+    /// currently branched on.
     private struct Payload: Decodable {
         let version: Int
         let sources: [CuratedFoodSource]
@@ -47,6 +59,8 @@ public nonisolated final class CuratedNutrientSources: @unchecked Sendable {
     public let all: [CuratedFoodSource]
     private let byNutrient: [String: [CuratedFoodSource]]
 
+    /// Creates a table directly from in-memory rows — the test seam; production uses
+    /// ``bundled(bundle:)``.
     public init(sources: [CuratedFoodSource]) {
         self.all = sources
         // `Dictionary(grouping:)` preserves first-seen order within each group, so the
@@ -93,10 +107,19 @@ public nonisolated final class CuratedNutrientSources: @unchecked Sendable {
     }
 }
 
-/// Chooses the ambient nutrient nudge to show, as a pure nonisolated function so the
-/// 7-vs-14-day window policy is unit-testable without the SwiftUI card.
+/// Chooses the ambient nutrient nudge to show.
+///
+/// A pure nonisolated namespace so the 7-vs-14-day window policy is unit-testable
+/// without the SwiftUI card: the app's ambient-cards surface feeds ``plan(from:sources:isActive:)``
+/// the derived-signal `NutrientGap`s plus the curated table and renders whatever
+/// single ``Plan`` comes back (or nothing).
 public nonisolated enum NutrientNudgePlanner {
 
+    /// The single nudge ``plan(from:sources:isActive:)`` selected — the surviving
+    /// nutrient gap plus any curated foods to name.
+    ///
+    /// `foods` is empty for a passive 7-day observation and populated only for a
+    /// 14-day gap; the card chooses passive vs. suggestion copy off ``namesFoods``.
     public struct Plan: Equatable {
         public let gap: NutrientGap
         /// Curated foods to name — empty for a passive 7-day observation, populated only

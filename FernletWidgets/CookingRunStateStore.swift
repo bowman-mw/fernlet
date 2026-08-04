@@ -15,6 +15,17 @@
 
 import Foundation
 
+/// Coordinated app-group reader/writer for the single in-progress ``CookingRunState`` JSON file.
+///
+/// The persistence seam between the two cooking drivers: `FernletStore` (in-app transitions and the
+/// foreground reconcile) and ``CookingIntentRunner`` (Lock Screen "Next" / Siri). Every access runs
+/// inside an `NSFileCoordinator` block; dates are ISO-8601 with sorted keys; writes are atomic with
+/// `.completeFileProtectionUntilFirstUserAuthentication`. Reads are nil-tolerant — a missing,
+/// corrupt, or still-protected file reads as "no active cooking run" — and every failure mode is
+/// silent by design (`try?` throughout): losing one write never crashes an intent. `write(_:)`
+/// re-stamps `updatedAt` so the app's reconcile can age-out an abandoned run. A byte-for-byte mirror
+/// of ``GuidedWorkoutRunStateStore``, self-contained (literal app-group id, own codecs) so the one
+/// file compiles identically in both targets.
 struct CookingRunStateStore {
     /// Documented duplicate of `fernletAppGroupIdentifier` — see file header.
     private static let appGroupIdentifier = "group.MBO.Fernlet"
@@ -32,6 +43,7 @@ struct CookingRunStateStore {
         self.fileURL = dir.appendingPathComponent("CookingRunState.json")
     }
 
+    /// Sorted-keys + ISO-8601 encoder — the file-format half of the cross-process contract.
     private func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -39,6 +51,7 @@ struct CookingRunStateStore {
         return encoder
     }
 
+    /// ISO-8601 decoder matching ``makeEncoder()``.
     private func makeDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601

@@ -6,6 +6,13 @@ import Foundation
 // ConnectionSessionLog) can reference these wire types without an upward edge. Codable identity is by
 // rawValue / case structure — moving the type's location does NOT change the persisted JSON.
 
+/// Every versioned wire payload type the proximity subsystem exchanges, by reverse-DNS raw value.
+///
+/// Carved down into DomainModel so the persistence/audit DTOs (``TrainerAuditEvent``,
+/// ``ConnectionSessionLog``) can reference wire types without an upward edge. Raw values ARE the
+/// wire identity — never rename a case. Which types must be sealed is decided in ProximityKit
+/// (`sealingRequiredTypes`); the per-case notes below record each payload's sealing stance and
+/// additive-compat behavior (older clients park unknown types instead of dropping the session).
 public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     // Handshake
     case identityIntroduction  = "fernlet.identity.intro.v1"
@@ -136,6 +143,10 @@ public nonisolated enum ProximityCapability: String, Codable, CaseIterable, Send
     case heartsAway
 }
 
+/// Whether an envelope's payload rides plaintext or sealed to a recipient key.
+///
+/// `sealedTo` carries the recipient's X25519 key-agreement public key; the sealing itself is
+/// performed in ProximityKit — this module only names the intent.
 public nonisolated enum PayloadEncryption: Codable, Equatable, Sendable {
     case none
     case sealedTo(recipientKeyAgreementPublicKey: Data)
@@ -153,6 +164,10 @@ public nonisolated struct DateRange: Codable, Equatable, Sendable {
     }
 }
 
+/// The human-readable disclosure summary shown before a payload is accepted.
+///
+/// Built by the sender to describe what a payload contains (title, item count, date range) so the
+/// receiving user can consent to it without the app decoding the body first.
 public nonisolated struct PayloadSummary: Codable, Equatable, Sendable {
     public let title: String
     public let subtitle: String?

@@ -6,9 +6,11 @@ import FernletScoring
 import FoodCatalog
 import HealthKitGateway
 
-/// Read-side context the meal resolver needs from the app store. Mirrors the
-/// `WorkoutSyncContext` host-protocol pattern so `MealResolutionService` depends on
-/// this seam rather than the concrete `FernletStore` (plan §5d).
+/// Read-side context the meal resolver needs from the app store.
+///
+/// Mirrors the `WorkoutSyncContext` host-protocol pattern so ``MealResolutionService`` depends on
+/// this seam rather than the concrete `FernletStore` (plan §5d) — tests drive the cascade with a fake
+/// host. `FernletStore` is the production conformer.
 @MainActor
 protocol MealResolutionContext: AnyObject {
     var settings: FernletSettings { get }
@@ -22,9 +24,11 @@ protocol MealResolutionContext: AnyObject {
 
 /// Ceilings above which a single quick-log is treated as an implausible resolution — almost always a
 /// hallucinated multi-ingredient decomposition (the "2 burger patties" → 81,688 kcal bug) rather than
-/// one real large meal. Deliberately generous so a genuine big restaurant plate still passes. Shared
-/// by the decompose-tier total guard (`FoundationDishDecomposition`) and the resolution-level
-/// plausibility gate below so both tiers agree on what "too big for one log" means.
+/// one real large meal.
+///
+/// Deliberately generous so a genuine big restaurant plate still passes. Shared by the decompose-tier
+/// total guard (``MealDecompositionResolver``) and the resolution-level plausibility gate below so
+/// both tiers agree on what "too big for one log" means.
 enum MealPlausibility {
     /// A single quick-log whose meals sum past this many kcal is downgraded to review (gate) or
     /// rejected (decompose tier).
@@ -36,10 +40,15 @@ enum MealPlausibility {
 /// The quick-log meal resolution cascade (AI dish decomposition → candidate-
 /// constrained AI selection → deterministic lexicon → deterministic plan →
 /// keyword-heuristic fallback) plus the catalog-grounded micronutrient fallback,
-/// extracted from `FernletStore` (plan §5d). Owns the FoundationModels meal
-/// dependencies (`FoundationDishDecompositionModel`/`FoundationFoodSelectionModel`)
-/// + `MealBuilder` + the `FoodCatalog` reads — keeping the AI providers off the
+/// extracted from `FernletStore` (plan §5d).
+///
+/// Owns the FoundationModels meal dependencies
+/// (``FoundationDishDecompositionModel``/`FoundationFoodSelectionModel`)
+/// + ``MealBuilder`` + the `FoodCatalog` reads — keeping the AI providers off the
 /// store/core path. Pure (no diary mutation); the store keeps the commit half.
+/// `@MainActor`, holding its host `unowned` (the store owns the service). Every
+/// multi-item resolution is folded to ONE meal, and every high-confidence result
+/// passes the calorie plausibility gate before it may auto-commit.
 @MainActor
 final class MealResolutionService {
     private unowned let host: any MealResolutionContext

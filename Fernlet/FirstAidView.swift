@@ -16,12 +16,26 @@ import HealthKitGateway
 import FernletUI
 
 /// The tools the First Aid sheet can open directly (e.g. from a gentle offer card).
+///
+/// Doubles as ``FirstAidView``'s navigation-path element: the menu pushes one of these, and
+/// `initialTool` deep-links straight onto a tool when a caller opened the sheet for it.
 enum FirstAidTool: String, Hashable {
     case breathing
     case grounding
     case worryBox
 }
 
+/// The calm, low-stimulation "first aid" menu sheet: slow breathing, 5-4-3-2-1 grounding, the
+/// Worry Box entry flow, and a static gentle-support row (call/text 988).
+///
+/// Presented by ContentView from the Home affordance near the companion, the body-signals
+/// explainer (``StressExplainerSheet``), and the gentle offer card; `initialTool` lets those
+/// callers land directly on one tool. Tools push via a ``FirstAidTool`` navigation path into
+/// ``BreathingExerciseView``, ``GroundingView``, and ``WorryEntryView``. The 988 support row is
+/// deliberately static and always visible — it is NOT the deferred extended-low-mood auto-nudge —
+/// and a completed breathing session is counted in the milestone ledger and quietly offered to
+/// Apple Health (every consent gate is enforced inside `saveMindfulSession`; a closed gate or
+/// failed write stays silent).
 struct FirstAidView: View {
     var store: FernletStore
     var worryBox: WorryBoxService

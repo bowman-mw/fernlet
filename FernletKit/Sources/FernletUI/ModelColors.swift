@@ -6,6 +6,7 @@ import SwiftUI
 import FernletDomainModel
 
 public extension MealType {
+    /// The design-system accent color for this meal slot (meal chips, diary rows, food summaries).
     var color: Color {
         switch self {
         case .breakfast: .goldenrod
@@ -19,6 +20,7 @@ public extension MealType {
 }
 
 public extension WorkoutSplit {
+    /// The design-system accent color for this workout split, used by plan/split pickers and cards.
     var color: Color {
         switch self {
         case .workout: .terracotta
@@ -31,6 +33,7 @@ public extension WorkoutSplit {
 }
 
 public extension WorkoutType {
+    /// The design-system accent color for this workout type, used by logged-workout rows and badges.
     var color: Color {
         switch self {
         case .upper, .armsBack, .mixed:
@@ -46,6 +49,7 @@ public extension WorkoutType {
 }
 
 public extension FeelingTag {
+    /// The design-system tint for this journal feeling tag (chips and journal summaries).
     var color: Color {
         switch self {
         case .bright: .sun
@@ -59,6 +63,7 @@ public extension FeelingTag {
 }
 
 public extension TextureTag {
+    /// The design-system tint for this journal texture tag (chips and journal summaries).
     var color: Color {
         switch self {
         case .tension: .terracotta
@@ -69,6 +74,8 @@ public extension TextureTag {
 }
 
 public extension CompanionPalette {
+    /// Resolves this user-chosen companion palette to a concrete tint; `.state` follows the
+    /// companion's current wellness color, the fixed cases override it.
     func color(for state: CompanionState) -> Color {
         switch self {
         case .state: state.color
@@ -81,6 +88,8 @@ public extension CompanionPalette {
 }
 
 public extension CompanionAssetColor {
+    /// Resolves a companion asset's declared color slot to a concrete tint; `.state` follows the
+    /// companion's current wellness color, the named cases are fixed design-system tokens.
     func color(for state: CompanionState) -> Color {
         switch self {
         case .state: state.color
@@ -97,6 +106,7 @@ public extension CompanionAssetColor {
 }
 
 public extension CompanionState {
+    /// The wellness tint for this companion state — the base color the avatar and state chips wear.
     var color: Color {
         switch self {
         case .thriving: .moss

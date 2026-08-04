@@ -2,12 +2,20 @@ import Foundation
 import CryptoKit
 
 /// One entry in the user's gym progress-photo timeline: a stored photo, when it was taken, and an
-/// optional short note. `capturedAt` drives the timeline order; `caption` is the user's own label
-/// (e.g. "8 weeks in"), which is why the index it lives in is sealed too — a body-photo timeline's
-/// dates and notes are as personal as the pictures.
+/// optional short note.
+///
+/// The unit of ``ProgressPhotoStore``'s sealed index (and the model the Move-tab timeline renders).
+/// `capturedAt` drives the timeline order; `caption` is the user's own label (e.g. "8 weeks in"),
+/// which is why the index it lives in is sealed too — a body-photo timeline's dates and notes are
+/// as personal as the pictures. The init routes captions through
+/// `ProgressPhotoStore.normalizedCaption(_:)` so blanks collapse to nil.
 public struct ProgressPhotoRecord: Codable, Identifiable, Hashable, Sendable {
+    /// Stable identity; also the key of the sealed photo file in the inner ``MealPhotoStore``.
     public let id: UUID
+    /// When the photo was taken — the timeline sort key (editable via
+    /// ``ProgressPhotoStore/updateCapturedAt(id:date:)``, which rebuilds the record).
     public let capturedAt: Date
+    /// The user's optional note, trimmed and nil when blank.
     public var caption: String?
 
     public init(id: UUID = UUID(), capturedAt: Date, caption: String? = nil) {
@@ -29,7 +37,11 @@ public struct ProgressPhotoRecord: Codable, Identifiable, Hashable, Sendable {
 ///
 /// Everything is fail-closed. A photo whose bytes can't be normalized/sealed is dropped rather than
 /// stored; an index that can't be sealed is not written in plaintext, and the just-saved photo file is
-/// removed so no orphan bytes are stranded.
+/// removed so no orphan bytes are stranded. Mutations refuse to rewrite a present-but-unreadable
+/// index (which would clobber a still-sealed timeline) — see `existingRecordsForWrite()`.
+///
+/// Owned by the app's `FernletStore` (main actor). Plain nonisolated struct: thread safety comes from
+/// the owner's isolation, shared with the inner photo store and key provider it constructs.
 public struct ProgressPhotoStore {
     private let directory: URL
     private let photoStore: MealPhotoStore
@@ -38,6 +50,14 @@ public struct ProgressPhotoStore {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
+    /// Creates a store rooted at `directory` (created if needed): sealed photo bytes go under a
+    /// `Photos/` subdirectory (via an inner ``MealPhotoStore`` with the legacy-plaintext path
+    /// disabled), the sealed index at `index.bin`.
+    ///
+    /// - Parameters:
+    ///   - directory: Root for this timeline's files.
+    ///   - keyProvider: Source of the shared at-rest key, passed through to the inner photo
+    ///     store so both seal under the same key; defaults to the keychain-backed provider.
     public init(directory: URL, keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider()) {
         self.directory = directory
         self.keyProvider = keyProvider
@@ -94,10 +114,13 @@ public struct ProgressPhotoStore {
         return record
     }
 
+    /// Returns the decrypted photo bytes for a record's `id`, or nil when missing or unopenable
+    /// (delegates to the inner sealed photo store, which fails closed on unsealed bytes).
     public func imageData(for id: UUID) -> Data? {
         photoStore.imageData(for: id)
     }
 
+    /// Rewrites a record's caption (normalized via `normalizedCaption`) in the sealed index.
     public func updateCaption(id: UUID, caption: String?) {
         // Fail-closed on an unreadable index: never overwrite it with a partial rebuild.
         guard var all = existingRecordsForWrite(),
@@ -116,6 +139,8 @@ public struct ProgressPhotoStore {
         _ = persist(all)
     }
 
+    /// Deletes one photo: the sealed bytes unconditionally, the index entry only when the index
+    /// is readable (a corrupt index is never clobbered by a partial rewrite).
     public func delete(id: UUID) {
         // Remove the photo bytes regardless (the user asked to delete this one)...
         photoStore.delete(id: id)
@@ -151,8 +176,11 @@ public struct ProgressPhotoStore {
 
     // MARK: - Sealed index
 
-    /// How the on-disk index resolved. `absent` (no/empty file) is safe to write over; `undecodable`
-    /// (a file that won't GCM-open + decode) is NOT — overwriting it would drop a still-sealed timeline.
+    /// How the on-disk index resolved when read.
+    ///
+    /// The distinction exists so writers can tell "nothing there yet" from "something we can't
+    /// read": `absent` (no/empty file) is safe to write over; `undecodable` (a file that won't
+    /// GCM-open + decode) is NOT — overwriting it would drop a still-sealed timeline.
     private enum IndexState {
         case absent
         case records([ProgressPhotoRecord])
@@ -194,6 +222,8 @@ public struct ProgressPhotoStore {
         }
     }
 
+    /// Encodes, GCM-seals, and atomically writes the index; false (nothing written) when the
+    /// records can't be encoded, no key is available, or sealing/writing fails.
     private func persist(_ records: [ProgressPhotoRecord]) -> Bool {
         guard let plaintext = try? encoder.encode(records),
               let key = keyProvider.mediaKey(),

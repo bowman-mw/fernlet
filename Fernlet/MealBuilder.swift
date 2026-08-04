@@ -2,13 +2,32 @@ import Foundation
 import FernletDomainModel
 import AIProviders
 
+/// Pure meal-construction helpers shared by every resolution tier: turning selection plans, recipes,
+/// and resolved ingredient pairs into fully snapshotted `Meal`s, and minting reusable recipes from
+/// multi-ingredient logs.
+///
+/// All inputs are passed in (recipes, catalog items, candidates) — nothing here reads or mutates the
+/// store; `@MainActor` because callers hand it main-actor store snapshots mid-resolve. Key
+/// invariants: a recipe meal divides by the recipe yield so one log is one plated serving, and a
+/// minted recipe's stored quantities are the per-serving portion × yield so re-logging it reproduces
+/// exactly one plate (decision §11.5). Macros and micronutrients always come from catalog-bound
+/// `FoodItem`s, never from model output. Used by ``MealResolutionService``,
+/// ``MealDecompositionResolver``, and ``DishTemplateLexicon``.
 @MainActor
 struct MealBuilder {
+    /// The outcome of building meals from a selection plan.
+    ///
+    /// Carries the meals plus any recipes auto-minted for multi-ingredient items, so the caller can
+    /// persist both together.
     struct PlanResult {
         let meals: [Meal]
         let createdRecipes: [RecipeDefinition]
     }
 
+    /// Builds meals from a candidate-constrained selection plan: each plan item logs via the best
+    /// matching saved recipe when one exists, otherwise from its resolved (and relevance-filtered)
+    /// ingredients — minting a new recipe when several ingredients back one item.
+    /// - Returns: The meals plus any created recipes, or `nil` when no item resolves.
     static func meals(
         from plan: FoodSelectionPlan,
         candidates: [FoodSelectionCandidate],
@@ -53,6 +72,9 @@ struct MealBuilder {
         return meals.isEmpty ? nil : PlanResult(meals: meals, createdRecipes: createdRecipes)
     }
 
+    /// One logged serving of `recipe`: component snapshots scaled to 1/servings, with macro and
+    /// micronutrient totals summed from them and the log source derived truthfully from the recipe's
+    /// provenance.
     static func mealFromRecipe(
         _ recipe: RecipeDefinition,
         mealType: MealType,
@@ -82,6 +104,9 @@ struct MealBuilder {
         )
     }
 
+    /// A meal assembled directly from resolved (ingredient, food item) pairs, with component
+    /// snapshots, summed totals, and a note naming the first few components; `confidenceLabel` names
+    /// the tier that produced it.
     static func mealFromIngredients(
         itemName: String,
         resolvedIngredients: [(FoodSelectionIngredient, FoodItem)],
@@ -111,6 +136,8 @@ struct MealBuilder {
         )
     }
 
+    /// The truthful provenance tag for a recipe log: web import, USDA-backed recipe, label-scan, or
+    /// plain manual — decided from the recipe's source and its ingredients' data quality.
     private static func mealLogSource(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> String {
         if recipe.source == MealLogSource.webImport || recipe.source == "imported" {
             return MealLogSource.webImport
@@ -175,6 +202,7 @@ struct MealBuilder {
         return 4
     }
 
+    /// Sums component snapshots into macro and micronutrient totals.
     static func totals(
         for components: [MealComponentSnapshot]
     ) -> (macros: MacroTotals, micronutrients: Micronutrients) {
@@ -186,6 +214,8 @@ struct MealBuilder {
         }
     }
 
+    /// Freezes resolved (ingredient, food item) pairs into component snapshots, with macros and
+    /// micronutrients scaled to each ingredient's quantity via `RecipeIngredient`'s scaling.
     static func componentSnapshots(
         for resolvedIngredients: [(FoodSelectionIngredient, FoodItem)]
     ) -> [MealComponentSnapshot] {
@@ -206,6 +236,8 @@ struct MealBuilder {
         }
     }
 
+    /// Component snapshots for one serving of a recipe: each ingredient resolved against `foodItems`
+    /// and scaled down by `divisor` (the recipe yield); unresolvable ingredients are dropped.
     private static func componentSnapshots(
         for recipe: RecipeDefinition,
         foodItems: [FoodItem],
@@ -225,6 +257,8 @@ struct MealBuilder {
         }
     }
 
+    /// Whole-recipe macro totals resolved against `foodItems` (unresolvable ingredients contribute
+    /// nothing).
     static func macroTotals(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> MacroTotals {
         recipe.ingredients.reduce(into: MacroTotals()) { totals, ingredient in
             guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }) else { return }
@@ -235,6 +269,7 @@ struct MealBuilder {
         }
     }
 
+    /// Whole-recipe micronutrient totals resolved against `foodItems`, mirroring `macroTotals`.
     static func micronutrientTotals(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> Micronutrients {
         recipe.ingredients.reduce(into: Micronutrients()) { totals, ingredient in
             guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }) else { return }
@@ -242,6 +277,9 @@ struct MealBuilder {
         }
     }
 
+    /// The saved recipe that best matches a plan item's name, by exact normalized match (1000),
+    /// token-subset match (700), or near-total token overlap — most recently updated wins ties.
+    /// Returns `nil` for names too short or too dissimilar to bind safely.
     private static func bestRecipeMatch(for itemName: String, in recipes: [RecipeDefinition]) -> RecipeDefinition? {
         let normalizedItem = FoodItemSearch.normalized(itemName)
         guard normalizedItem.count >= 3 else { return nil }
@@ -268,12 +306,15 @@ struct MealBuilder {
             .first?.recipe
     }
 
+    /// Tokens worth matching on: length ≥ 3 and non-numeric, so "2" and "of" never drive a bind.
     private static func meaningfulRecipeTokens(in normalizedText: String) -> Set<String> {
         Set(normalizedText.split(separator: " ").map(String.init).filter {
             $0.count >= 3 && Double($0) == nil
         })
     }
 
+    /// Whether a candidate food plausibly belongs to the named item — token overlap against the
+    /// item's name/category/tags, plus a couple of sandwich-shaped special cases.
     private static func isRelevant(foodItem: FoodItem, to itemName: String) -> Bool {
         let itemTokens = Set(FoodItemSearch.normalized(itemName).split(separator: " ").map(String.init).filter { $0.count >= 3 })
         let foodText = FoodItemSearch.normalized("\(foodItem.name) \(foodItem.category) \(foodItem.tags.joined(separator: " "))")

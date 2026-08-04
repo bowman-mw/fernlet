@@ -17,6 +17,27 @@ import PeriodContextBridge
 import HealthKitGateway
 import FernletUI
 
+/// The post-onboarding root shell: the five-tab pager, the single-active-sheet router, and the
+/// app's runtime wiring hub.
+///
+/// Structure: `launchRoot` shows `LaunchScreen` until ``LaunchPreparationService`` finishes, then
+/// the paged `TabView` (Home/Food/Move/Friends/Private) with the custom floating tab bar. All
+/// modal surfaces flow through one `activeSheet: FernletSheet?` slot (plus dedicated slots for the
+/// connection inspector and incoming proximity recipe shares), with dismiss-then-represent
+/// chaining for editor and First Aid handoffs.
+///
+/// Wiring owned here (mostly in the launch `.task`): the sensitive-surface visibility gates
+/// injected into `PeriodTrackerStore`/`IntimacyLogStore` BEFORE any load, the
+/// `PeriodContextBridge` and `StressService` scoring contexts, the lock-state → sealed-journal
+/// activation plumbing, the Worry Box seams, every "delete everything" hook the store can't reach
+/// itself (`attachDeleteAllHooks`), the widget bridge, and the proximity listener lifecycles
+/// (recipe shares, presence radio, heart-drop sync, friends discovery) gated on tab + scene +
+/// lock. Notification and App Intent deep-links are consumed through
+/// `consumePendingNotificationSheet`.
+///
+/// Invariants: `mainTabContent` must keep a single structural identity (swapping view types in
+/// that slot destroys every tab's @State — see its doc), and scrubs key off derived gate VALUES
+/// (`sensitiveSurfaceVisibility`), not the setters, so every writer is covered.
 struct ContentView: View {
     @Bindable var store: FernletStore
     @State private var launcher = LaunchPreparationService()
@@ -656,8 +677,6 @@ struct ContentView: View {
         refreshPeriodContext()
     }
 
-    /// Loads period entries with whatever content key is currently available (nil when locked / no lock),
-    /// so the bridge has cycle data for phase resolution and trends.
     /// Wires the "delete everything" seams for the sealed stores `FernletStore` doesn't own. Each drops
     /// rows WITHOUT decrypting them, so deletion stays available even while the app is locked and the
     /// data itself is unreadable.
@@ -741,6 +760,8 @@ struct ContentView: View {
         }
     }
 
+    /// Loads period entries with whatever content key is currently available (nil when locked / no lock),
+    /// so the bridge has cycle data for phase resolution and trends.
     private func loadPeriodEntriesIfPossible() async {
         let contentKey = { if case .unlocked = lockService.state { return lockService.contentKey() } else { return nil } }()
         await periodStore.loadEntries(unlockedContentKey: contentKey)
@@ -913,6 +934,12 @@ struct ContentView: View {
     }
 }
 
+/// One page of the Private hub (cycle, intimacy, friends notes, photos), keyed by `FernletScreen`.
+///
+/// The intimacy page is the interesting one: it holds decrypted `IntimacyLog` values in @State,
+/// so it scrubs itself the moment `isIntimacyTrackingVisible` flips off (hiding must drop resident
+/// plaintext, not just refuse the next load) and merges the sealed local logs with the HealthKit
+/// per-day event counts for the calendar.
 struct PersonalScreenView: View {
     var screen: FernletScreen
     @Bindable var store: FernletStore
@@ -1119,6 +1146,10 @@ struct PersonalScreenView: View {
     }
 }
 
+/// A short list of the user's `MemoryNote`s filtered by category substring (e.g. "friend").
+///
+/// Used by ``PersonalScreenView``'s friends page; caps at eight rows and shows the supplied empty
+/// state when nothing matches.
 struct PersonalMemoryList: View {
     var category: String
     var emptyText: String
@@ -1151,6 +1182,10 @@ struct PersonalMemoryList: View {
     }
 }
 
+/// The payload behind the transient "meal logged" toast: a title plus the summed macros.
+///
+/// Built by ``ContentView/showMealLogNotification`` from the meals a sheet just logged; the fresh
+/// `id` per instance is what lets a newer toast supersede an older one's auto-dismiss timer.
 struct MealLogNotification: Identifiable, Equatable {
     let id = UUID()
     let title: String
@@ -1166,6 +1201,10 @@ struct MealLogNotification: Identifiable, Equatable {
     }
 }
 
+/// The top-overlay toast card for a just-logged meal: checkmark, title, and a P/C/F macro line.
+///
+/// Presented by ``ContentView`` for ~3 seconds after a meal sheet reports a log; purely
+/// presentational (the timing and dismissal live with the presenting view).
 struct MealLogNotificationView: View {
     var notification: MealLogNotification
 
@@ -1204,6 +1243,13 @@ struct MealLogNotificationView: View {
 
 // MARK: - Launch screen
 
+/// The calm launch/loading screen: a time-of-day greeting, a rotating status line, and (once the
+/// store exists) the pulsing companion.
+///
+/// Shown twice per cold launch — by ``FernletApp`` while ``FernletStoreLoader`` runs (no
+/// companion) and by ``ContentView`` while ``LaunchPreparationService`` prepares (with the
+/// companion). Status text falls back to `LaunchPreparationService.initialStatusMessage` so the
+/// line never renders empty.
 struct LaunchScreen: View {
     var statusMessage: String
     var companionState: CompanionState = .thriving
@@ -1284,6 +1330,11 @@ struct LaunchScreen: View {
 
 // MARK: - Intimacy Calendar Card
 
+/// The month-grid calendar card on the intimacy page: paging chevrons (future months disabled)
+/// over a `LazyVGrid` of ``IntimacyCalendarCell``s.
+///
+/// Pure presentation over the pre-computed `eventsByDay` counts; the sealed-store and HealthKit
+/// reads happen in ``PersonalScreenView``'s `loadIntimacyCalendar`, never here.
 private struct IntimacyCalendarCard: View {
     @Binding var displayedMonth: Date
     var eventsByDay: [String: Int]
@@ -1340,6 +1391,10 @@ private struct IntimacyCalendarCard: View {
     }
 }
 
+/// One day tile in the intimacy calendar: day number, today ring, an event dot, and the
+/// cell-supplied fill/accessibility label.
+///
+/// Renders whatever ``IntimacyMonthCell`` computed — no date math of its own.
 private struct IntimacyCalendarCell: View {
     var cell: IntimacyMonthCell
 
@@ -1374,6 +1429,10 @@ private struct IntimacyCalendarCell: View {
     }
 }
 
+/// The view model for one intimacy-calendar tile: day number (nil for leading blanks), event
+/// presence, and today/future flags, plus the derived fill color and accessibility label.
+///
+/// Built by ``IntimacyMonthModel``; keeping the styling decisions here keeps the cell view dumb.
 private struct IntimacyMonthCell: Identifiable {
     let id = UUID()
     var day: Int?
@@ -1396,6 +1455,12 @@ private struct IntimacyMonthCell: Identifiable {
     }
 }
 
+/// Calendar math for one displayed intimacy month: title, weekday symbols, and the padded cell
+/// array (leading blanks + one ``IntimacyMonthCell`` per day).
+///
+/// Computed fresh in ``IntimacyCalendarCard``'s body from the month date and the day-keyed event
+/// counts; the `yyyy-MM-dd` keys it derives must match `FernletDate.dayKey` so today/event lookups
+/// line up.
 private struct IntimacyMonthModel {
     let monthTitle: String
     let weekdaySymbols: [String]

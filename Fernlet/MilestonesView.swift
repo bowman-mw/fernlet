@@ -20,6 +20,14 @@ import FernletDomainModel
 import StoreCore
 import FernletUI
 
+/// The lifetime-milestones screen: warm cumulative counts of care plus the coin gifts each
+/// milestone added.
+///
+/// Pushed from Home. Rows come from ``MilestoneRowModel`` over the store's append-only milestone
+/// ledger (plus the device-local worries-let-go count), so numbers only ever grow — no rates,
+/// streaks, or completion percentages, by design. A mostly-empty shelf swaps in a gentler header;
+/// otherwise a link opens the ``KeepsakeShelfView`` medallion view, and the coins summary uses
+/// the reset-aware `CoinEconomy.milestoneAwardCoins` so it can never disagree with the wallet.
 struct MilestonesView: View {
     var store: FernletStore
 
@@ -248,8 +256,11 @@ struct MilestonesView: View {
 // MARK: - Keepsake shelf (7b)
 
 /// The tap-in "shelf" view: each earned kind is a pressed-metal medallion resting on a wooden
-/// ledge, grouped three to a shelf. Only earned kinds appear — there are deliberately no locked or
-/// empty slots to goad a "collect them all". Counts stay soft (a small number under the medallion).
+/// ledge, grouped three to a shelf.
+///
+/// Only earned kinds appear — there are deliberately no locked or empty slots to goad a "collect
+/// them all" — and counts stay soft (a small number under the medallion). Receives its rows and
+/// coin total from ``MilestonesView`` so both surfaces always agree.
 private struct KeepsakeShelfView: View {
     let rows: [MilestoneRowModel]
     let totalMilestoneCoins: Int
@@ -362,8 +373,12 @@ private struct KeepsakeShelfView: View {
 
 // MARK: - Warm display copy
 
-/// Warm display copy per milestone kind. Kept as a tiny model so the row order and phrasing live
-/// in one place (and copy stays count-aware without pluralization bugs).
+/// Warm display copy per milestone kind.
+///
+/// Kept as a tiny model so the row order and phrasing live in one place (and copy stays
+/// count-aware without pluralization bugs). Built by ``MilestoneRowModel/rows(counts:worriesLetGo:)``,
+/// which also encodes the worry-kind exceptions: worry counts come from the device-local Worry
+/// Box rather than the synced ledger, and worries award no coins.
 struct MilestoneRowModel {
     let kind: MilestoneEventKind
     let icon: String

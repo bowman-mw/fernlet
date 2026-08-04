@@ -2,14 +2,23 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
-/// The closet: every item the user owns, grouped by slot. Tap a row to edit; swipe to equip/unequip or
-/// delete. Items received from friends show "designed by <friend>". Pushed within the customization
-/// sheet's navigation stack, so it pushes the Creation Studio without nesting sheets.
+/// The closet: every item the user owns, grouped by slot.
+///
+/// Tap a row to edit in ``CreationStudioView``; swipe leading to equip/unequip, trailing to
+/// delete or (for self-designed items only — provenance forbids reselling) list/unlist in the
+/// shop, with the same refusal alerts as the studio's confirmation step. Items received from
+/// friends show "designed by <friend>", the toolbar carries the always-reachable coin balance,
+/// and a status line summarizes the shop. Pushed within the customization sheet's navigation
+/// stack, so it pushes the Creation Studio without nesting sheets.
 struct WardrobeView: View {
     var store: FernletStore
 
     @State private var shopAlert: ShopAlert?
 
+    /// The listing refusals (`store.listCustomItemForSale`) surfaced from the swipe "Sell" action.
+    ///
+    /// Same three cases as ``CreationStudioView``'s enum of the same name — here the fix path is
+    /// "rename it in the editor" since this screen has no name field.
     private enum ShopAlert: Identifiable {
         case nameFlagged
         case capReached

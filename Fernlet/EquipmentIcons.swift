@@ -17,6 +17,12 @@ import FernletDomainModel
 // To swap an icon for an SF Symbol instead, just remove its entry — the card falls back to the
 // `systemImage` on `GymEquipment` / `LocationTemplate`.
 
+/// The hand-drawn vector artwork for every equipment and location glyph, stored as raw SVG-markup
+/// strings plus their viewBox sizes.
+///
+/// Each entry holds the inner elements of a stroke-only SVG (see the editing guide in the comment
+/// above). ``EquipmentGlyph`` and ``LocationGlyph`` look their artwork up here and fall back to an
+/// SF Symbol when an entry is missing — so deleting a string is how an icon opts back into symbols.
 enum EquipmentIconLibrary {
     static let equipmentViewBox: CGFloat = 44
     static let locationViewBox: CGFloat = 40
@@ -58,6 +64,11 @@ enum EquipmentIconLibrary {
 
 // MARK: - Glyph views (use the SVG icon, fall back to an SF Symbol)
 
+/// The tintable icon for one piece of gym equipment.
+///
+/// Renders the ``EquipmentIconLibrary`` vector when one exists for the item, otherwise falls back
+/// to the item's `systemImage` SF Symbol. Used by the equipment checklist cards in
+/// ``WorkoutLocationSetupView``; tint comes from the surrounding foreground style.
 struct EquipmentGlyph: View {
     let item: GymEquipment
     var size: CGFloat = 24
@@ -72,6 +83,11 @@ struct EquipmentGlyph: View {
     }
 }
 
+/// The tintable icon for a workout-location template.
+///
+/// Renders the ``EquipmentIconLibrary`` location vector for the template id when one exists,
+/// otherwise the given SF Symbol fallback. Used by the template cards in
+/// ``WorkoutLocationSetupView``.
 struct LocationGlyph: View {
     let templateID: String
     var fallbackSystemImage: String = "mappin.and.ellipse"
@@ -89,8 +105,12 @@ struct LocationGlyph: View {
 
 // MARK: - Renderer
 
-/// Renders SVG markup as a stroked, tintable icon. Stroke weight scales with the icon size to keep
-/// proportions consistent with the source design (≈1.9 units in the viewBox).
+/// Renders SVG markup as a stroked, tintable icon.
+///
+/// Stroke weight scales with the icon size to keep proportions consistent with the source design
+/// (≈1.9 units in the viewBox); the stroke color comes from the surrounding view's foreground
+/// style, which is how the glyph views tint. Wraps ``SVGShape`` in a `GeometryReader` so the line
+/// width can track the rendered size.
 struct VectorIcon: View {
     let markup: String
     var viewBox: CGFloat = 44
@@ -105,6 +125,10 @@ struct VectorIcon: View {
     }
 }
 
+/// A SwiftUI `Shape` whose path is parsed from SVG markup via ``SVGMarkupParser``.
+///
+/// Scales the viewBox-space path uniformly to fit the proposed rect (centered on the shorter axis),
+/// so ``VectorIcon`` can stroke it at any rendered size without distorting the artwork.
 private struct SVGShape: Shape {
     let markup: String
     let viewBox: CGFloat
@@ -158,6 +182,10 @@ enum SVGMarkupParser {
         return path
     }
 
+    /// One parsed SVG element: its tag name plus a raw attribute dictionary.
+    ///
+    /// The regex-based `elements(in:)` scan produces these; `number(_:)` is the shared numeric
+    /// attribute accessor the per-tag path builders use.
     private struct Element {
         let tag: String
         let attributes: [String: String]
@@ -351,6 +379,11 @@ enum SVGMarkupParser {
 
 // MARK: - Number scanner for path data
 
+/// A tiny forward-only tokenizer over SVG path-data ("d") strings.
+///
+/// Yields command letters, numbers, and single-character arc flags while skipping the
+/// comma/whitespace separators the SVG grammar allows; ``SVGMarkupParser``'s path-data walker is
+/// its only client.
 private struct NumberScanner {
     private let characters: [Character]
     private var index = 0

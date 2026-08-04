@@ -13,6 +13,10 @@ import VisionKit
 import FernletUI
 import CoreImage.CIFilterBuiltins
 
+/// Namespace for rendering a string into a scannable QR `UIImage` via CoreImage.
+///
+/// Used by ``VerifyQRDisplaySheet`` to draw this device's signed `fernlet://verify` URL; kept as
+/// a caseless enum because it is a pure function with no state.
 enum QRCodeRenderer {
     /// Sharp, screen-sized QR (medium error correction; nearest-neighbor upscale so modules stay
     /// crisp). Nil only when CoreImage fails outright.
@@ -28,6 +32,11 @@ enum QRCodeRenderer {
 }
 
 /// "Show my code": the signed, 5-minute-fresh verify QR for the peer to scan.
+///
+/// Presented from the slot row's Verify menu in ``NearbySlotRow``. The sheet auto-dismisses when
+/// the app leaves the foreground — the ceremony is an in-person, eyes-on-both-screens moment —
+/// and every dismissal path routes through the caller's `onDismiss` so the mesh manager stops
+/// honoring challenges for the displayed QR.
 struct VerifyQRDisplaySheet: View {
     let url: URL?
     let peerName: String
@@ -79,6 +88,11 @@ struct VerifyQRDisplaySheet: View {
 }
 
 /// "Scan their code": the same VisionKit viewfinder the barcode scanner uses, QR-only.
+///
+/// Hands the first parseable URL to `onScanned` exactly once (`handedOff` latches so a second
+/// frame can't double-fire) and dismisses itself; the caller reports success or failure back
+/// through the row's own alert after the sheet is gone. Falls back to guidance copy when the
+/// scanner is unavailable (camera access off).
 struct VerifyQRScanSheet: View {
     /// Called with the scanned URL; the caller runs `beginQRVerification` and reports back.
     let onScanned: (URL) -> Void

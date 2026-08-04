@@ -5,13 +5,13 @@ import WeatherKit
 import FernletDomainModel
 #endif
 
-/// Optional, opt-in weather-aware mood-recovery prompts (spec §12). Requests *coarse* location only
-/// when the user enables the feature, fetches current conditions via WeatherKit, and degrades
-/// gracefully — returning `nil` on any missing permission, missing entitlement, or network error —
-/// so nothing ever blocks or nags.
 /// Minimal walk-friendliness snapshot for the gentle short-walk offer: whether conditions are
 /// pleasant (clear-ish and mild) and whether it is currently daytime. Deliberately tiny — no raw
 /// condition, temperature, or location ever leaves the service.
+///
+/// Produced by ``WeatherKitService/currentComfort()`` (and the pure
+/// ``WeatherKitService/comfort(condition:temperatureCelsius:isDaylight:)`` classifier that tests
+/// pin); consumed by the app's gentle-offer surfaces (`AmbientCards`).
 public struct WeatherComfort: Equatable, Sendable {
     public let isPleasant: Bool
     public let isDaytime: Bool
@@ -25,6 +25,10 @@ public struct WeatherComfort: Equatable, Sendable {
 /// Coarse sky bucket for the Home ambience accents behind the companion. Deliberately
 /// tiny — the ambience layer only needs "what kind of sky", never a raw condition,
 /// temperature, or location.
+///
+/// Mapped from WeatherKit's `WeatherCondition` by the pure, test-pinned
+/// ``WeatherKitService/ambientSky(for:)``; carried to the app's `CompanionAmbienceLayer`
+/// inside a ``WeatherAmbient``.
 public enum AmbientSky: String, Equatable, Sendable {
     case clear
     case clouds
@@ -33,8 +37,11 @@ public enum AmbientSky: String, Equatable, Sendable {
 }
 
 /// Minimal structured ambience snapshot (sky bucket + day/night) for the Home
-/// environment layer. `nil` from `currentAmbient()` means "weather unknown" — the
-/// layer then falls back to its time-of-day tint alone.
+/// environment layer. `nil` from ``WeatherKitService/currentAmbient()`` means "weather
+/// unknown" — the layer then falls back to its time-of-day tint alone.
+///
+/// Pairs an ``AmbientSky`` with a daylight flag and nothing else, keeping the ambience
+/// surface as privacy-lean as ``WeatherComfort``.
 public struct WeatherAmbient: Equatable, Sendable {
     public let sky: AmbientSky
     public let isDaytime: Bool
@@ -45,8 +52,29 @@ public struct WeatherAmbient: Equatable, Sendable {
     }
 }
 
+/// Optional, opt-in weather-aware prompts and ambience (spec §12). Requests *coarse* location only
+/// when the user enables the feature, fetches current conditions via WeatherKit, and degrades
+/// gracefully — returning `nil` on any missing permission, missing entitlement, or network error —
+/// so nothing ever blocks or nags.
+///
+/// A `@MainActor` singleton (``shared``) serving three read surfaces off ONE cached conditions
+/// snapshot: ``moodRecoveryPrompt()`` (a gentle line when the sky is gloomy), ``currentComfort()``
+/// (the short-walk offer's ``WeatherComfort``), and ``currentAmbient()`` (the Home layer's
+/// ``WeatherAmbient``). Callers — the app's `HomeView`, `AmbientCards`,
+/// `CompanionAmbienceLayer`, and `SettingsSheet` — gate on `settings.weatherPromptsEnabled` and
+/// must treat `nil` as "feature simply absent".
+///
+/// Concurrency invariants: the snapshot is cached for ``cacheInterval`` (30 min), and BOTH the
+/// location fix and the WeatherKit fetch coalesce concurrent callers onto a single in-flight
+/// `Task` (`locationRequest` / `conditionsRequest`) — only that task ever installs
+/// `locationContinuation`, so a cold-launch burst of `.task`s cannot overwrite and leak another
+/// caller's continuation. `CLLocationManagerDelegate` callbacks arrive `nonisolated` and hop to
+/// the main actor before touching state. Everything is #if-gated so the type still compiles where
+/// WeatherKit is unavailable; every failure path resolves to `nil`, never a thrown error.
 @MainActor
 public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
+    /// The app-wide instance — a singleton so all surfaces share one conditions cache and one
+    /// in-flight location request.
     public static let shared = WeatherKitService()
 
     /// How long one fetched current-weather snapshot is reused before re-querying WeatherKit.
@@ -66,6 +94,9 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
 
     #if canImport(WeatherKit)
     /// The cached current-conditions snapshot (only the three fields Fernlet ever reads).
+    ///
+    /// `fetchedAt` drives the ``cacheInterval`` freshness check in `currentConditions()`; one
+    /// snapshot feeds all three public read surfaces.
     private struct ConditionsSnapshot {
         let condition: WeatherCondition
         let temperatureCelsius: Double
@@ -87,6 +118,7 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
         locationManager.desiredAccuracy = kCLLocationAccuracyReduced
     }
 
+    /// Whether when-in-use (or always) location authorization is currently granted.
     var isAuthorized: Bool {
         switch locationManager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways: return true

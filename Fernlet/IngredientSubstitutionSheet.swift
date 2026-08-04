@@ -276,6 +276,12 @@ struct IngredientSubstitutionSheet: View {
         )
     }
 
+    /// Everything the preview screen needs for one chosen swap: the substitute food, the
+    /// gram-matched replacement ingredient, the fully built fork, and before/after whole-recipe
+    /// totals.
+    ///
+    /// Built by `selectSubstitute` as a pure value transform — nothing is persisted until the
+    /// explicit "Save as new recipe" tap hands `fork` to `onSaveFork`.
     struct PendingFork {
         let substitute: FoodItem
         let newIngredient: RecipeIngredient

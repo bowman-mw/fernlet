@@ -7,10 +7,13 @@ import FoundationModels
 
 // MARK: - Outcome
 
-/// How an AI call turned out (Ladder §7.2). Persisted inside the device-local audit log, so it is a
+/// How an AI call turned out (Ladder §7.2).
+///
+/// Recorded on every ``AIAuditEntry`` and persisted inside the device-local audit log, so it is a
 /// brick-vector raw-value enum: a new case rides the `EnumDecodeCompat` freeze/park discipline
-/// (`AIAuditEntry`'s tolerant decode below), and an unknown token from a future build freezes to
-/// `freezeDefault` rather than failing the whole log.
+/// (``AIAuditEntry``'s tolerant decode below), and an unknown token from a future build freezes to
+/// ``freezeDefault`` rather than failing the whole log. ``fromModelError(_:)`` is the shared
+/// classifier both `AIProviders` and the app target use to map a thrown model error to a case.
 public enum AIAuditOutcome: String, Codable, Sendable, CaseIterable {
     /// The call produced a usable result.
     case succeeded
@@ -49,15 +52,25 @@ public enum AIAuditOutcome: String, Codable, Sendable, CaseIterable {
 
 // MARK: - Audit entry
 
-/// A record of a single AI call. Stores metadata only — never prompt text, generated content, or
-/// user data values. Persisted DEVICE-LOCAL ONLY (see `AIAuditLogPersisting`); it never enters
-/// `FernletSnapshot`, CloudKit, the sealed backup, or the data export (`AIContext` depends only on
-/// `FernletDomainModel`, so there is no wall-safe *synced* home for it, which is the point — a
-/// "what left my device" record that itself left the device would be the wrong privacy semantics).
+/// A record of a single AI call — metadata only, never content.
+///
+/// Created by ``AIAuditLog/record(payloadKind:destination:modelIdentifier:includedFields:memorySummaryCharCount:outcome:)``
+/// so a future settings UI can show the user exactly what left their device. Stores metadata only —
+/// never prompt text, generated content, or user data values. Persisted DEVICE-LOCAL ONLY (see
+/// ``AIAuditLogPersisting``); it never enters `FernletSnapshot`, CloudKit, the sealed backup, or the
+/// data export (`AIContext` depends only on `FernletDomainModel`, so there is no wall-safe *synced*
+/// home for it, which is the point — a "what left my device" record that itself left the device
+/// would be the wrong privacy semantics). The custom `Codable` pair below implements the
+/// `EnumDecodeCompat` freeze/park discipline for the two persisted enum fields.
 public struct AIAuditEntry: Identifiable, Sendable, Codable {
+    /// Stable identity for the entry; a caller that records at dispatch keeps this id so it can
+    /// `updateOutcome` the same entry at completion.
     public var id: UUID
+    /// When the call was recorded.
     public var timestamp: Date
+    /// The `AIContextPayload.payloadKind` of the payload that was sent (e.g. `"companion-thought"`).
     public var payloadKind: String
+    /// Where the call was routed (`AIDestination`) — the field that says whether data left the device.
     public var destination: AIDestination
     /// Which model handled the call (not just the vendor/destination). `nil` when there is no single
     /// model to name (e.g. the web-nutrition search path). For the on-device floor, pass
@@ -91,6 +104,8 @@ public struct AIAuditEntry: Identifiable, Sendable, Codable {
     /// a durable, greppable constant rather than a build-specific token.
     public static let onDeviceFoundationModel = "apple.ondevice.foundation-models"
 
+    /// Creates an entry. The defaults model the common completion-time on-device record: a fresh id,
+    /// `.succeeded`, no model identifier, no memory context, and no parked tokens.
     public init(
         id: UUID = UUID(),
         timestamp: Date,
@@ -115,6 +130,10 @@ public struct AIAuditEntry: Identifiable, Sendable, Codable {
         self.outcomeParkedToken = outcomeParkedToken
     }
 
+    /// Persisted key set for the custom `Codable` pair, including the parked-token keys.
+    ///
+    /// Private so the tolerant `init(from:)` / strict-compatible `encode(to:)` below stay the only
+    /// Codable surface of the entry.
     private enum CodingKeys: String, CodingKey {
         case id, timestamp, payloadKind
         case destination, destinationParkedToken
@@ -154,6 +173,8 @@ public struct AIAuditEntry: Identifiable, Sendable, Codable {
         outcomeParkedToken = out.parkedToken
     }
 
+    /// Backward-compatible encode: the main enum keys always carry a raw value this build knows, with
+    /// any parked future token re-encoded alongside so nothing is lost across a downgrade round-trip.
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
@@ -173,12 +194,14 @@ public struct AIAuditEntry: Identifiable, Sendable, Codable {
 
 // MARK: - Persistence sink
 
-/// The injectable DEVICE-LOCAL persistence seam for the audit log (Ladder §7.2). Declared here in
-/// `AIContext` so the log can be persisted without `AIContext` gaining a dependency on any storage
-/// module — the concrete file-backed store lives in the app (composition root) and conforms to this,
-/// exactly like `AICallQuotaStore`. It MUST be device-local only: never `CloudKitSync`, never the
-/// snapshot, never the sealed backup. A synced "what left my device" log would itself leave the
-/// device — the wrong semantics and the `AIDestination` brick-vector trigger.
+/// The injectable DEVICE-LOCAL persistence seam for the audit log (Ladder §7.2).
+///
+/// Declared here in `AIContext` so the log can be persisted without `AIContext` gaining a dependency
+/// on any storage module — the concrete file-backed store (`FileAIAuditLogStore`) lives in the app
+/// (composition root) and conforms to this, exactly like ``AICallQuotaStore``; ``AIAuditLog`` only
+/// ever sees the protocol. It MUST be device-local only: never `CloudKitSync`, never the snapshot,
+/// never the sealed backup. A synced "what left my device" log would itself leave the device — the
+/// wrong semantics and the `AIDestination` brick-vector trigger.
 public protocol AIAuditLogPersisting: Sendable {
     /// The persisted entries (oldest first), already capped to the ring-buffer limit. `[]` when none.
     func load() -> [AIAuditEntry]
@@ -196,9 +219,17 @@ public protocol AIAuditLogPersisting: Sendable {
 // MARK: - Audit log
 
 /// Thread-safe log of AI calls, backed by a device-local ring buffer once a sink is configured.
-/// Survives relaunch (the sink reloads it on `configure`) so a future settings UI can show the user
-/// what left their device — a log that died with the process could not.
+///
+/// Every AI call site — in the walled `AIProviders` module and in the app target alike — records
+/// through the ``shared`` instance, so the log is the single "what left my device" ledger the
+/// Ladder §7.2 audit requires. It is an `actor`: records arrive from arbitrary tasks (providers,
+/// view flows, launch preparation) and the isolation serializes them without a lock. Persistence
+/// goes through the injected ``AIAuditLogPersisting`` sink only; until `configure` runs, entries are
+/// held in memory and merged into the persisted history when the sink arrives, so the pre-configure
+/// race never drops a record. Survives relaunch (the sink reloads it on `configure`) so a future
+/// settings UI can show the user what left their device — a log that died with the process could not.
 public actor AIAuditLog {
+    /// The process-wide log every call site records through; tests may build their own instances.
     public static let shared = AIAuditLog()
 
     /// Ring-buffer cap for BOTH the in-memory working set and the persisted file (FIFO prune of the
@@ -206,9 +237,13 @@ public actor AIAuditLog {
     /// growth.
     public static let entryLimit = 500
 
+    /// The in-memory working set, oldest first, capped at ``entryLimit``. Mutated only through
+    /// `record` / `updateOutcome` / `clear` so the sink and memory never diverge.
     public private(set) var entries: [AIAuditEntry] = []
+    /// The device-local persistence sink; `nil` until `configure` wires one (entries stay in memory).
     private var sink: AIAuditLogPersisting?
 
+    /// Creates an empty, un-persisted log; call `configure(sink:)` to wire persistence.
     public init() {}
 
     /// Wire the device-local persistence sink and adopt whatever survived the last relaunch. At real
@@ -283,6 +318,7 @@ public actor AIAuditLog {
         sink?.save(entries)
     }
 
+    /// Wipes the in-memory working set and asks the sink to erase its file (delete-all-data).
     public func clear() {
         entries = []
         // The removal-failure signal belongs to the delete-all funnel, which clears the sink directly

@@ -4,6 +4,13 @@ import Foundation
 // decoded from untrusted peer plaintext exactly like the recipe/mesh wire types, so the whole peer-wire
 // surface is uniformly off-main-decode-safe. (FernletDomainModel has no `.defaultIsolation(MainActor.self)`,
 // so these need no `nonisolated` keyword — only the `Sendable` conformance.)
+/// The friend-photo wire payload: one shared photo, either plaintext (epoch 0) or AES-GCM sealed.
+///
+/// Encoded into `envelope.payload` and decoded from untrusted peer plaintext, so it is `Sendable`
+/// for off-main decode like the rest of the wire surface. `keyEpoch` 0 means legacy unencrypted
+/// `imageData`; epoch ≥ 1 carries `encryptedImageData` + `nonce`, decrypted by the receiving photo
+/// store which caches the result via `withDecryptedImageData(_:)`. `withoutImageData()` strips
+/// plaintext bytes for paths that must not hold them; `session` attaches the who/when metadata.
 public struct FriendPhotoPayload: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let imageData: Data?               // non-nil for epoch-0 unencrypted or locally-decrypted photos
@@ -117,6 +124,9 @@ public struct FriendPhotoPayload: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// One participant of a photo session, identified by mesh fingerprint with a display name.
+///
+/// The display name is untrusted wire data — identity is always the fingerprint.
 public struct FriendPhotoSessionParticipant: Codable, Equatable, Identifiable, Sendable {
     public var id: String { fingerprint }
 
@@ -129,6 +139,10 @@ public struct FriendPhotoSessionParticipant: Codable, Equatable, Identifiable, S
     }
 }
 
+/// Which session a shared photo came from: the mesh, when it started, and who was there.
+///
+/// Attached to photos so the wall can group "that evening with those friends" without carrying any
+/// location or content metadata.
 public struct FriendPhotoSessionMetadata: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let meshID: UUID?
@@ -145,6 +159,9 @@ public struct FriendPhotoSessionMetadata: Codable, Equatable, Identifiable, Send
     }
 }
 
+/// One row of a peer's photo manifest: photo id, sender fingerprint, and key epoch.
+///
+/// The epoch lets a receiver skip requesting photos from epochs it could not decrypt anyway.
 public struct FriendPhotoManifestEntry: Codable, Equatable, Sendable {
     public let id: UUID
     public let senderFingerprint: String
@@ -157,6 +174,10 @@ public struct FriendPhotoManifestEntry: Codable, Equatable, Sendable {
     }
 }
 
+/// The manifest a peer sends to advertise which photos it holds.
+///
+/// The receiver diffs it against its own wall and answers with a ``FriendPhotoRequestPayload`` for
+/// the ids it is missing.
 public struct FriendPhotoManifestPayload: Codable, Equatable, Sendable {
     public let entries: [FriendPhotoManifestEntry]
 
@@ -165,6 +186,10 @@ public struct FriendPhotoManifestPayload: Codable, Equatable, Sendable {
     }
 }
 
+/// A request for the specific photo ids the receiver is missing.
+///
+/// Sent in response to a ``FriendPhotoManifestPayload``; the peer replies with one
+/// ``FriendPhotoPayload`` per requested id.
 public struct FriendPhotoRequestPayload: Codable, Equatable, Sendable {
     public let missingPhotoIDs: [UUID]
 

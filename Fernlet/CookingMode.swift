@@ -22,6 +22,10 @@ import UIKit
 
 // MARK: - Cook availability gate
 
+/// Decides whether a recipe gets a "Cook" action at all.
+///
+/// Shared by `RecipeDetailView` (which shows/hides the Cook button) so the availability rule lives
+/// in one place; UIKit-free so it compiles on every platform slice of the target.
 enum CookingModeAvailability {
     /// The "Cook" action shows only when there is something to cook through: authored steps, structured
     /// ingredients, or a web import's free-text ingredient lines (mise-en-place renders those as-is). A
@@ -109,6 +113,18 @@ struct StepTimerControl: View {
 
 // MARK: - Cooking mode
 
+/// The F5 full-screen cooking flow: mise en place (with F4 "cook for N" scaling) → a one-step-per-
+/// screen walker with an explicit Next/Back pair and a passive per-step countdown → a finish screen
+/// that offers to log the meal to the day the cook began.
+///
+/// Presented as a full-screen cover from `RecipeDetailView` (fresh cook) and the Food-root resume
+/// card (`resuming: true`, jumping straight into the walker). Once a run starts, the SHARED
+/// `store.cookingRunState` is authoritative — its frozen step snapshot, cursor, and fixed timer
+/// window drive the walker, so an advance made from the Live Activity or Siri re-renders this view
+/// in step (reconciled from the app group on appear/foreground). Only the "timer fired" flag and its
+/// haptic task are local UI state. Keeps the screen awake while frontmost (the app's only
+/// `isIdleTimerDisabled` writer, via ``KeepScreenAwakeModifier``), and a timer expiry highlights
+/// Next + fires a haptic but NEVER auto-advances.
 struct CookingModeView: View {
     let store: FernletStore
     let recipe: RecipeDefinition
@@ -124,6 +140,10 @@ struct CookingModeView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
+    /// The cover's three screens: mise en place, the step walker, and the finish/log screen.
+    ///
+    /// Local presentation state layered over the shared run — `syncStageWithRun` maps run
+    /// transitions (finished, retired) onto it.
     private enum Stage: Equatable { case mise, cooking, finished }
 
     @State private var stage: Stage

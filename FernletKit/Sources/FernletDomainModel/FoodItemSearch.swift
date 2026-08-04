@@ -6,6 +6,11 @@
 
 import Foundation
 
+/// Restaurant-chain token lexicon for brand-aware food-search ranking.
+///
+/// Lets ``FoodItemSearch`` detect a brand-flavored query ("mcdonalds fries") and flip the data-type
+/// priority so restaurant/branded entries outrank USDA reference foods only when a chain was
+/// actually named.
 public nonisolated enum FoodBrandLexicon {
     nonisolated private static let chains: Set<String> = [
         "mcdonalds", "wendys", "burger king", "taco bell", "chick fil a", "subway",
@@ -29,6 +34,14 @@ public nonisolated enum FoodBrandLexicon {
     }
 }
 
+/// Pure relevance search over ``FoodItem``s: normalization, tokenization, scoring, and ranking.
+///
+/// The in-memory half of food search — the SQLite-backed `FoodCatalog` sits above it and reuses
+/// the same normalization/token/variant helpers (`searchTokens`, `matchVariants`) so its FTS5
+/// candidate query stays in lockstep with this scorer's hard match gate. Ranking sorts source
+/// priority (manual > USDA > AI) and brand-aware data-type priority ABOVE the relevance score, then
+/// applies preparation and form-specificity biases. `minimumBindScore`/`confidentBindScore` are the
+/// confidence floors quick-log binding applies to `scoredResults`.
 public nonisolated enum FoodItemSearch {
     nonisolated public static let minimumQueryLength = 3
 
@@ -39,6 +52,10 @@ public nonisolated enum FoodItemSearch {
     /// name hit). Between `minimumBindScore` and this, the bind is kept but flagged low-confidence.
     nonisolated public static let confidentBindScore = 250
 
+    /// A prebuilt search index over a food list: normalized names and token sets per item.
+    ///
+    /// Build once per catalog snapshot and reuse across queries — construction does the per-item
+    /// normalization so each query only normalizes itself.
     public struct Index {
         private var entries: [Entry]
 
@@ -100,6 +117,9 @@ public nonisolated enum FoodItemSearch {
                 .foodItem
         }
 
+        /// One indexed food with its precomputed normalized name and token sets.
+        ///
+        /// Internal to the index; exists so scoring never re-normalizes catalog text per query.
         fileprivate struct Entry {
             var foodItem: FoodItem
             var normalizedName: String

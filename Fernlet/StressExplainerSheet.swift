@@ -12,6 +12,14 @@ import SwiftUI
 import FernletScoring
 import FernletUI
 
+/// The gentle "how we estimate this" sheet behind the Home body-signals line.
+///
+/// Renders the current `StressAssessment` from ``StressService`` (nil during the ~7-day cold
+/// start) as plain-language wellness copy — the user's own baseline, the worked-out /
+/// possibly-unwell annotation, and a confidence line — plus an explicit not-medical disclaimer
+/// (App Store 1.4.1). The optional `onFirstAid` hook, wired by ContentView, chains into the
+/// ``FirstAidView`` sheet as an offer, never an instruction. Purely presentational: it computes
+/// nothing and stores nothing.
 struct StressExplainerSheet: View {
     /// Nil during cold start (fewer than ~7 days of body signals).
     var assessment: StressAssessment?

@@ -21,6 +21,14 @@ import FernletUI
 
 // MARK: - Phase A — select, aggregate, share
 
+/// The Phase A shopping-list builder: multi-select recipes (with an optional "cook for N" yield per
+/// scalable recipe), preview the aggregated list, and share it as plain text.
+///
+/// Reached from the recipe book and from ``WeeklyMealPlannerView``'s "Create shopping list" (which
+/// pre-seeds `initialSelection` with the week's plan, once). Aggregation runs through
+/// `FernletStore.groceryListText(for:)` — the pure `GroceryAggregation` engine — and delivery is a
+/// `ShareLink` (the share sheet IS the push-to-Notes mechanism). Nothing here persists: the selection
+/// and yields are view state, and the list is one-shot text.
 struct ShoppingListBuilderView: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -177,10 +185,19 @@ struct ShoppingListBuilderView: View {
 
 // MARK: - Phase B — weekly meal planner
 
+/// The Phase B weekly meal planner: assign recipes to each day of a browsable week, then run the
+/// week's de-duplicated plan through ``ShoppingListBuilderView``.
+///
+/// The plan is the only persisted state in the grocery feature — recipe ids ride
+/// `FernletDay.plannedRecipeIDs` via `FernletStore.planRecipe`/`unplanRecipe`. Past/future day rows
+/// aren't the observed `store.day`, so the view keeps its own `plannedByDay` copy and reloads it
+/// after every mutation and week switch. Dangling ids (recipes since deleted) are dropped silently.
 struct WeeklyMealPlannerView: View {
     var store: FernletStore
 
     /// A day key wrapped for `.sheet(item:)` identity — avoids a broad retroactive `String: Identifiable`.
+    ///
+    /// Setting one presents the ``RecipePickerSheet`` for that day; the key doubles as the plan date.
     private struct DayPick: Identifiable { let id: String }
 
     @State private var weekOffset = 0
@@ -337,6 +354,11 @@ struct WeeklyMealPlannerView: View {
 
 // MARK: - Recipe picker (assign to a day)
 
+/// The searchable "Add a meal" sheet the planner presents to assign one recipe to a day.
+///
+/// Lists both recipe stores unioned A–Z (matching the recipe book); tapping a row fires `onPick`
+/// with the recipe id and dismisses — the owning ``WeeklyMealPlannerView`` performs the actual
+/// `planRecipe` write and reload.
 private struct RecipePickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore

@@ -3,6 +3,13 @@ import FernletDomainModel
 import HealthKitGateway
 import FernletUI
 
+/// The activity half of the workout sheets' Kind toggle: search and pick a `WorkoutActivityType`,
+/// then fill its duration / distance / energy / effort fields.
+///
+/// Recent picks persist as a comma-joined raw-value list in `@AppStorage` (capped at five, most
+/// recent first) and render as one-tap chips. Selecting a type seeds sensible defaults into
+/// still-empty duration/effort fields; all value fields are bound to the presenting sheet
+/// (``WorkoutSheet`` / ``WorkoutPlanSheet``), which owns the save.
 struct ActivityPickerSection: View {
     @Binding var selectedActivityType: WorkoutActivityType?
     @Binding var duration: String

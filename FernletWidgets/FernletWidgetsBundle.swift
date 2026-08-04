@@ -11,10 +11,21 @@
 import SwiftUI
 import WidgetKit
 
+/// Namespace for the extension's WidgetKit `kind` identifiers.
+///
+/// The app addresses widget timelines by these strings (e.g.
+/// `WidgetCenter.shared.reloadTimelines(ofKind:)` after every snapshot mirror and from
+/// ``WaterPlusOneIntent``), so they are persisted identity — never change a value once shipped.
 enum FernletWidgetKind {
+    /// The companion widget (`FernletCompanionWidget`) — currently the only timeline-based widget.
     static let companion = "FernletCompanion"
 }
 
+/// The extension's `@main` entry point: registers every widget and Live Activity this target ships.
+///
+/// One companion widget (Home Screen + Lock Screen accessories) plus the two Live Activities
+/// (``WorkoutLiveActivity``, ``CookingLiveActivity``). Anything not listed here never appears in the
+/// widget gallery or on the Lock Screen, so a new surface must be added to this body.
 @main
 struct FernletWidgetsBundle: WidgetBundle {
     var body: some Widget {
@@ -24,8 +35,18 @@ struct FernletWidgetsBundle: WidgetBundle {
     }
 }
 
+/// One timeline entry for the companion widget: an entry date plus the mirrored app snapshot (nil
+/// before first launch or when the app-group file is unreadable).
+///
+/// The load-bearing part is the day gate: every rendered value flows through accessors that compare
+/// the snapshot's `dateKey` against THIS entry's `date` (via `WidgetDayGate`), so the same snapshot
+/// renders as live data in a same-day entry and as a fresh, empty day in the midnight-rollover entry
+/// ``FernletCompanionProvider`` appends. Views must read ``bottleCount`` /
+/// ``currentDayCompanionState`` — never `snapshot` fields directly — or the rollover gate is lost.
 struct FernletCompanionEntry: TimelineEntry {
+    /// The moment this entry represents (now, or the next local midnight for the rollover entry).
     let date: Date
+    /// The mirrored app-group snapshot this entry renders from; nil → the "Open Fernlet" placeholder.
     let snapshot: WidgetSnapshot?
 
     /// Whether the mirrored snapshot is for the SAME local day as THIS entry's date. Both the water
@@ -55,6 +76,13 @@ struct FernletCompanionEntry: TimelineEntry {
     }
 }
 
+/// Timeline provider for the companion widget: reads the mirrored app-group snapshot and builds a
+/// two-entry timeline (now + the next local midnight) refreshed hourly.
+///
+/// The midnight entry reuses the SAME snapshot — each entry's own day gate (see
+/// ``FernletCompanionEntry``) is what makes it render as a fresh day, so the rollover self-corrects
+/// with the app closed and no fetch. The hourly `.after` policy only backstops that; real refreshes
+/// are pushed by the app via `WidgetCenter` on every snapshot mirror.
 struct FernletCompanionProvider: TimelineProvider {
     func placeholder(in context: Context) -> FernletCompanionEntry {
         FernletCompanionEntry(date: Date(), snapshot: .placeholder)
@@ -86,6 +114,11 @@ struct FernletCompanionProvider: TimelineProvider {
     }
 }
 
+/// The companion widget configuration: mood + water at a glance, in systemSmall and the two Lock
+/// Screen accessory families.
+///
+/// A `StaticConfiguration` (no user options) keyed by ``FernletWidgetKind/companion`` and driven by
+/// ``FernletCompanionProvider``; ``FernletCompanionWidgetView`` picks the per-family layout.
 struct FernletCompanionWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: FernletWidgetKind.companion, provider: FernletCompanionProvider()) { entry in
@@ -99,8 +132,12 @@ struct FernletCompanionWidget: Widget {
 
 // MARK: - Palette (widget-local; the widget can't use the app's Color.* extension)
 
-// Widget-target-internal (not private) so the workout Live Activity can reuse the same colours
-// without re-declaring the literals — see WorkoutLiveActivity.swift.
+/// The widget target's local color palette (9b cream card, ink text, moss button, per-mood fills),
+/// translated from Docs/design-refs/widget.html.
+///
+/// Widget-target-internal (not private) so the workout and cooking Live Activities can reuse the
+/// same colours without re-declaring the literals — see WorkoutLiveActivity.swift. The widget can't
+/// use the app's `Color.*` extension, hence the duplication.
 enum FernletWidgetPalette {
     // Card + text (9b)
     static let card = Color(red: 0.984, green: 0.969, blue: 0.933)     // #FBF7EE
@@ -136,7 +173,15 @@ enum FernletWidgetPalette {
 // shape. Because the mood is told by the punched-out expression (not the fill colour), the glyph
 // survives the Lock Screen's monochrome/tinted rendering: pass `.white` for the accessory families.
 
+/// The companion's mood glyph (9a): a filled blob whose face is negative space, punched out with
+/// `.destinationOut` in a Canvas layer.
+///
+/// Because the mood is told by the punched-out EXPRESSION rather than the fill color, the glyph
+/// survives the Lock Screen's monochrome/tinted rendering — accessory families pass `.white` and let
+/// the system tint it. `nil` state draws the neutral (thriving-faced) blob. Shared by every widget
+/// family in this file.
 private struct CompanionGlyph: View {
+    /// The mood to draw; `nil` renders the neutral face (used pre-first-launch and after a day gate).
     let state: WidgetCompanionState?
     /// Single fill colour for the whole silhouette. Accessories pass `.white` (system tints it).
     var fill: Color
@@ -247,8 +292,15 @@ private struct CompanionGlyph: View {
 
 // MARK: - Water progress ring (9b/9c): a thick track + progress arc with a water-drop glyph inside
 
+/// The water progress ring (9b/9c): a thick track, a progress arc clamped at 100%, and a small
+/// water-drop glyph in the center.
+///
+/// Rendered on the systemSmall card next to the companion glyph; a `target` of zero degrades to an
+/// empty ring rather than dividing by zero.
 private struct WaterRing: View {
+    /// Bottles logged today (day-gated by the entry before it reaches here).
     let filled: Int
+    /// Today's hydration target in bottles.
     let target: Int
     var lineWidth: CGFloat = 6
     var track: Color = FernletWidgetPalette.waterTrack
@@ -275,6 +327,9 @@ private struct WaterRing: View {
 }
 
 /// A single teardrop path (the widget.html water-drop icon), authored in a 24×24 box.
+///
+/// A resolution-independent `Shape` so ``WaterRing`` can stroke it at any size; it scales uniformly
+/// to the smaller of the target rect's dimensions.
 private struct WaterDropGlyph: Shape {
     func path(in rect: CGRect) -> Path {
         let s = min(rect.width, rect.height) / 24.0
@@ -295,6 +350,13 @@ private struct WaterDropGlyph: Shape {
 
 // MARK: - Root view
 
+/// The companion widget's root view: switches on the widget family and applies the two cross-family
+/// modifiers (privacy redaction and the container background).
+///
+/// `.privacySensitive()` is deliberate policy, not decoration — the companion state encodes
+/// wellbeing (including sickness), so the whole widget redacts on a locked Lock Screen. Accessory
+/// families draw on the Lock Screen's own material (clear background); systemSmall gets the 9b cream
+/// card.
 struct FernletCompanionWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: FernletCompanionEntry
@@ -327,6 +389,11 @@ struct FernletCompanionWidgetView: View {
 
 // MARK: - 9b · Home Screen (systemSmall)
 
+/// The systemSmall Home Screen layout (9b): companion glyph + water ring on top, "N of M bottles
+/// today" + the interactive "+1" button below.
+///
+/// The "+1" button fires ``WaterPlusOneIntent`` directly from the Home Screen. With no snapshot yet
+/// (app never launched / file unreadable) it falls back to ``PlaceholderView``.
 private struct SmallCompanionView: View {
     let entry: FernletCompanionEntry
 
@@ -378,6 +445,9 @@ private struct SmallCompanionView: View {
 }
 
 /// 9b "Before first launch": a soft dashed blob outline + "Open Fernlet / to meet your companion".
+///
+/// Shown by ``SmallCompanionView`` whenever the entry carries no snapshot — the gentle invitation
+/// state rather than an error state.
 private struct PlaceholderView: View {
     var body: some View {
         VStack(spacing: 14) {
@@ -399,6 +469,9 @@ private struct PlaceholderView: View {
 }
 
 /// The dashed placeholder blob (a simple always-happy face, drawn as strokes not negative space).
+///
+/// Only used inside ``PlaceholderView``; unlike ``CompanionGlyph`` it never varies by mood, so the
+/// cheaper stroke drawing is fine here.
 private struct DashedCompanionOutline: View {
     var body: some View {
         Canvas { context, size in
@@ -424,6 +497,11 @@ private struct DashedCompanionOutline: View {
 
 // MARK: - 9c · Lock Screen · circular (companion glyph — monochrome-safe)
 
+/// The Lock Screen circular accessory (9c): just the companion glyph, white-filled so the system's
+/// vibrancy tint recolors it.
+///
+/// No snapshot AND a stale (previous-day) snapshot both resolve to the neutral glyph via the entry's
+/// day gate — the shape + negative-space design is what keeps it legible in single-tint rendering.
 private struct CircularCompanionView: View {
     let entry: FernletCompanionEntry
 
@@ -438,6 +516,11 @@ private struct CircularCompanionView: View {
 
 // MARK: - 9c · Lock Screen · rectangular (glyph + "Thriving · 3 of 6 bottles" + 6-segment bar)
 
+/// The Lock Screen rectangular accessory (9c): glyph + "Thriving · 3 of 6 bottles" + the 6-segment
+/// water bar.
+///
+/// The mood label falls back to "Fernlet" when the day gate yields no current-day state; with no
+/// snapshot at all it renders the neutral glyph + "Open Fernlet to say hi".
 private struct RectangularCompanionView: View {
     let entry: FernletCompanionEntry
 
@@ -479,6 +562,9 @@ private struct RectangularCompanionView: View {
 }
 
 /// The 6-segment fill bar under the rectangular accessory (caps at 6 segments per the mockup).
+///
+/// Segments filled beyond the cap simply stay filled — the numeric label above it carries the true
+/// count, so the bar can safely stay compact.
 private struct SegmentFillBar: View {
     let filled: Int
     let target: Int

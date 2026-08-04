@@ -13,6 +13,15 @@
 import ActivityKit
 import Foundation
 
+/// Requests the guided-workout Live Activity — the app-target-only half of the Live Activity flow.
+///
+/// Only the app process can start a Live Activity, so requesting one lives here; updates and ends
+/// are shared with the Live Activity buttons and go through `GuidedWorkoutActivityBridge` (compiled
+/// into both targets) from ``FernletStore``'s guided-run transitions. The rest countdown ticks
+/// natively in the widget via `Text(timerInterval:)`, so there is no time-based update path and no
+/// push/APNs — only discrete set/exercise transitions push a new snapshot. Degrades to in-app-only
+/// silently when Live Activities are disabled, and ends any activity already live before requesting,
+/// so at most one workout activity is ever on screen.
 @MainActor
 enum WorkoutLiveActivityController {
 

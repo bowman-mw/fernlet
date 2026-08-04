@@ -15,6 +15,31 @@ import AppServices
 import FernletUI
 import FernletLockUI
 
+/// The Settings hub: a searchable, sectioned Form that routes to every settings sub-page and hosts
+/// the app-wide toggles that don't warrant a page of their own.
+///
+/// Presented as a sheet from the main UI over a `NavigationStack`. Navigation is value-based: every
+/// link and every search result pushes a ``SettingsRoute``, resolved by the single
+/// `destination(for:)` factory — the scroll-wrapped tabs (appearance, goal & nutrition, layout,
+/// health, sleep, move, memories, signals, debug, connection inspector) are built inline here, while
+/// the standalone screens (``PrivacyDataSettingsView``, ``PrivacyPolicyView``, `SafetyReportingView`,
+/// ``AppLockSettingsView``) return with their own chrome. A non-empty search query swaps the Form
+/// for a ``SettingsSearchIndex`` results list.
+///
+/// Key collaborators: ``FernletStore`` (`@Bindable`, all setting mutations), `FernletLockService`
+/// and `StoragePreferencesStore` from the environment, `HealthKitAuthorizationViewModel` for the
+/// Health tab, and `NotificationService` for the daily check-in reminder (the pending notification
+/// request is that feature's persistence — the local `@State` merely mirrors it per visit).
+///
+/// Invariants this view enforces:
+/// - Nothing destructive happens silently: hiding period/intimacy tracking and "Delete everything"
+///   route through ``DestructiveConfirmation`` / ``DeleteAllDataConfirmation``, and a wipe raises
+///   `isDeletingEverything` to show ``DeletingEverythingOverlay``, disable the delete/Done buttons,
+///   and block interactive dismissal so a second confirm can't interleave.
+/// - The quick-log editor edits the STORED shortcut array, never a visibility-filtered one, so
+///   hiding a sensitive surface can't destroy the saved layout (see `quickLogEditorItems`).
+/// - Sensitive Health actions re-check visibility at the point of use (`canUseHealthCapability`),
+///   not just the point of display.
 struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -1728,6 +1753,12 @@ struct SettingsSheet: View {
     }
 }
 
+/// Sheet for editing a single core memory: its category, its text (capped at 240 characters), and a
+/// two-step inline delete.
+///
+/// Presented by ``SettingsSheet``'s Core memory tab via `.sheet(item:)`. The source date is shown
+/// read-only; Save routes through `FernletStore.updateMemory` and Delete through
+/// `FernletStore.deleteMemory`, so the sheet itself persists nothing.
 struct MemoryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var store: FernletStore
@@ -1815,6 +1846,16 @@ struct MemoryEditorSheet: View {
 
 // MARK: - App Lock settings view
 
+/// The App lock settings page: lock status, passcode change, manual lock, the biometric toggle, and
+/// the reset-lock danger zone.
+///
+/// Pushed from ``SettingsSheet`` via `SettingsRoute.appLock` (wrapped in `fernletLockGate` when a
+/// lock is configured, so reaching this page requires an unlock). All state lives in the
+/// environment's `FernletLockService`; when no lock is configured the page shows only a setup CTA
+/// presenting `FernletLockSetupView`. Enabling biometrics requires re-entering the current passcode
+/// (via the inline verify sheet); disabling does not. Resetting the lock is confirmed with an
+/// explicit warning that the sealed journal, cycle, and intimacy notes become permanently
+/// unreadable — the reset destroys the keys, not just the passcode.
 struct AppLockSettingsView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
@@ -2119,6 +2160,14 @@ struct AppLockSettingsView: View {
 
 // MARK: - Change passcode view (presented as sheet from AppLockSettingsView)
 
+/// Three-step change-passcode flow: verify the current passcode, pick a new kind and enter it, then
+/// confirm and commit.
+///
+/// Presented as a sheet from ``AppLockSettingsView``. Verification goes through
+/// `FernletLockService.unlock` and the commit through `changeCredential`, so the sealed stores are
+/// re-keyed by the service — this view only shepherds the input. PIN entries auto-advance when the
+/// digit count fills; alphanumeric steps use an explicit Continue button (minimum 8 characters for
+/// the new password).
 private struct FernletLockChangePasscodeView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
@@ -2342,6 +2391,10 @@ private struct FernletLockChangePasscodeView: View {
             .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
     }
 
+    /// The three sequential screens of the change-passcode flow.
+    ///
+    /// Strictly forward: `verifyOld` gates entry, `enterNew` collects the replacement, `confirmNew`
+    /// re-enters it and commits; a mismatch or service error resets the offending field in place.
     private enum ChangeStep { case verifyOld, enterNew, confirmNew }
 }
 

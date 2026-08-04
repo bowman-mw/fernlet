@@ -8,6 +8,14 @@
 
 import Foundation
 
+/// The per-component weight vector (journal/meal/workout/sleep/hydration/hygiene) behind a daily
+/// score.
+///
+/// Invariant: the weights sum to 1 (asserted in the memberwise `init`; note the synthesized
+/// `Codable` decode path does not re-run the assert). `adjustedForSickness` zeroes workout and
+/// redistributes into rest-oriented components; the period adjustment lives above the domain layer
+/// as an extension in FernletScoring. Persisted on ``DailyHealthScore`` so each day's exact vector
+/// is auditable.
 public nonisolated struct ScoringWeights: Codable, Equatable {
     public var journalWeight: Double
     public var mealWeight: Double
@@ -49,6 +57,10 @@ public nonisolated struct ScoringWeights: Codable, Equatable {
     }
 }
 
+/// A rendered workout suggestion: name, exercise text, and note copy.
+///
+/// The display/log bridge of the suggestion engine — held by ``WorkoutProgram``'s session
+/// suggestions, and `workout(intensity:)` turns it into a loggable ``Workout`` row.
 public nonisolated struct WorkoutSuggestion: Identifiable, Equatable {
     public var id = UUID()
     public var name: String

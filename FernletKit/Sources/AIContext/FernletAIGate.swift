@@ -1,14 +1,17 @@
 import Foundation
 import FernletDomainModel
 
-/// The single routing entry point every AI call site funnels through. It bundles the three seam
-/// pieces built in the provider-seam core — the capability-capped `FernletModelRouter`, the stored
-/// user intent (`FernletSettings.aiStatus`), and the device-local `AICallQuotaStore` — into one
-/// value the call site can consult right before it would dispatch a model call.
+/// The single routing entry point every AI call site funnels through.
+///
+/// It bundles the three seam pieces built in the provider-seam core — the capability-capped
+/// ``FernletModelRouter``, the stored user intent (`FernletSettings.aiStatus`), and the device-local
+/// ``AICallQuotaStore`` — into one value the call site can consult right before it would dispatch a
+/// model call. `dispatch`/`resolveRoute` are the ONLY places the daily quota is charged: exactly one
+/// call per chosen destination, never per retry or per decode attempt below the decision point.
 ///
 /// Placement: `AIContext` (alongside the router and quota contracts), so BOTH the walled
 /// `AIProviders` module and the app-target call sites can take a gate without any new dependency
-/// edge. The walled module still reaches the counter ONLY through the injected `AICallQuotaStore`
+/// edge. The walled module still reaches the counter ONLY through the injected ``AICallQuotaStore``
 /// protocol — the gate carries the store, it does not expose the concrete app-target type.
 ///
 /// The gate is a pure value carrying the *current* stored intent; the app rebuilds it per call so a
@@ -25,6 +28,8 @@ public struct FernletAIGate: Sendable {
     /// to derive the effective status; never written back (device A's usage cannot throttle device B).
     public let intent: AIStatus
 
+    /// Assembles a gate from the three seam pieces; the app (composition root) rebuilds one per call
+    /// so `intent` always reflects the current stored setting.
     public init(router: FernletModelRouter, quotaStore: AICallQuotaStore, intent: AIStatus) {
         self.router = router
         self.quotaStore = quotaStore

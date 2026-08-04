@@ -3,6 +3,15 @@ import FernletFoundation
 import FernletDomainModel
 import FernletUI
 
+/// The Journal screen: a one-tap mood row, a feeling-tinted month calendar, today's entries, and
+/// the recent-previous list.
+///
+/// Hosted inside ``PrivateHubView`` (behind the hub's lock gate) with `isInHub` hiding the nav
+/// bar. Reads entries from ``FernletStore`` — sealed journal text is already hydrated or stripped
+/// by ``JournalSealingCoordinator`` before it gets here — and reloads its `allDays` calendar cache
+/// on appear, on entry/meal count changes, and when an editor sheet dismisses. Calendar taps push
+/// ``DayDetailView`` by dateKey; row taps open ``JournalEntryEditorSheet``; the plus button raises
+/// the ``FernletSheet`` `.journal` compose sheet.
 struct JournalView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -100,6 +109,13 @@ struct JournalView: View {
 
 // MARK: - Journal Sheet
 
+/// The compose sheet for a new journal entry: a feeling chip row, a free-text editor capped at
+/// 800 characters, and the daily inspiration prompt.
+///
+/// Saves through ``FernletStore/addJournal`` (sealing happens inside the store's mutation path).
+/// The inspiration chip pulls the deterministic prompt of the day from ``JournalPromptLibrary``,
+/// and ``JournalContinuationDetector`` watches the text to surface a one-time-per-reason
+/// ``JournalPromptNotificationView`` banner suggesting the Moments app for long reflections.
 struct JournalSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -258,9 +274,22 @@ struct JournalSheet: View {
     }
 }
 
+/// Pure heuristics that decide when a journal draft has outgrown Fernlet's short-note format.
+///
+/// Shared by ``JournalSheet``, ``JournalEntryEditorSheet``, and ``DayEditSheet``: ``maxCharacters``
+/// is the hard 800-character cap those editors enforce, and ``reason(for:)`` classifies a draft as
+/// `.longReflection` (word/length thresholds, or a shorter draft with an unfinished-sounding
+/// ending) or `.limitReached` so the caller can suggest continuing in the Moments app. Entirely
+/// deterministic and string-local — no AI, matching the S3 wall around journal text.
 struct JournalContinuationDetector {
+    /// The hard cap every journal text editor enforces (characters, post-truncation).
     static let maxCharacters = 800
 
+    /// Classifies a draft, or returns nil when it is still comfortably short.
+    ///
+    /// - Returns: `.limitReached` at/over ``maxCharacters``; `.longReflection` for drafts of 90+
+    ///   words, 680+ characters, or 520+ characters ending mid-thought; otherwise nil (drafts
+    ///   under 220 trimmed characters never prompt).
     static func reason(for text: String) -> JournalPromptReason? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 220 else { return nil }
@@ -284,6 +313,12 @@ struct JournalContinuationDetector {
     }
 }
 
+/// Why a "keep going in Moments" banner is being shown: an organically long reflection, or the
+/// hard character limit.
+///
+/// Produced by ``JournalContinuationDetector`` and consumed by ``JournalPromptNotificationView``,
+/// which renders the per-reason title, message, and symbol. Each reason prompts at most once per
+/// editing session (the editors track a `promptedReasons` set).
 enum JournalPromptReason: Hashable {
     case longReflection
     case limitReached
@@ -312,11 +347,21 @@ enum JournalPromptReason: Hashable {
     }
 }
 
+/// One instance of the Moments-suggestion banner, identified so auto-dismissal can tell whether
+/// the banner it timed out is still the one on screen.
+///
+/// The editors hold at most one as optional state; the fresh `id` per showing lets the 6-second
+/// dismiss task no-op when a newer banner has replaced the one it was timing.
 struct JournalPromptNotification: Identifiable, Equatable {
     let id = UUID()
     var reason: JournalPromptReason
 }
 
+/// The floating banner card that suggests continuing a long entry in the Moments app.
+///
+/// Overlaid at the top of ``JournalSheet``, ``JournalEntryEditorSheet``, and ``DayEditSheet``;
+/// renders the ``JournalPromptReason``'s title/message/symbol and forwards the open-app button to
+/// the hosting sheet's `moments://` launcher.
 struct JournalPromptNotificationView: View {
     var notification: JournalPromptNotification
     var openJournalApp: () -> Void
@@ -361,6 +406,11 @@ struct JournalPromptNotificationView: View {
     }
 }
 
+/// Sheet-item wrapper pairing a journal entry with the dateKey of the day it belongs to.
+///
+/// ``JournalView`` and ``DayDetailView`` set this as their `.sheet(item:)` state to open
+/// ``JournalEntryEditorSheet``; the dateKey rides along because updating or deleting an entry
+/// must target the owning day, and identity follows the entry's own id.
 struct JournalEntryEditTarget: Identifiable {
     var entry: JournalEntry
     var dateKey: String
@@ -368,6 +418,13 @@ struct JournalEntryEditTarget: Identifiable {
     var id: UUID { entry.id }
 }
 
+/// The edit sheet for an existing journal entry: feeling tag, capped text, and a delete action.
+///
+/// The editing counterpart of ``JournalSheet``, opened via ``JournalEntryEditTarget`` from today's
+/// list, the previous list, or ``DayDetailView``. Saves through ``FernletStore/updateJournal``
+/// (which re-seals the narrative when the entry is sealed) and deletes through
+/// ``FernletStore/deleteJournal``; shares the ``JournalContinuationDetector`` long-entry banner
+/// with the compose sheet.
 struct JournalEntryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -501,6 +558,11 @@ struct JournalEntryEditorSheet: View {
 
 // MARK: - Calendar Card
 
+/// The journal month-grid card: feeling-tinted day cells, month paging, and a tag legend.
+///
+/// Builds a ``JournalMonthModel`` per render from the `allDays` cache and forwards day taps
+/// (by dateKey, past/today only) up to ``JournalView``, which pushes ``DayDetailView``. Paging
+/// forward past the current month is disabled, mirroring the period calendar.
 struct JournalCalendarCard: View {
     @Binding var displayedMonth: Date
     var allDays: [String: FernletDay]
@@ -578,6 +640,10 @@ struct JournalCalendarCard: View {
 
 // MARK: - Calendar Cell
 
+/// A single tappable day cell in the journal calendar grid.
+///
+/// Pure presentation over one ``JournalMonthCell``: feeling-tag fill, today ring, a small dot for
+/// days with non-journal data, and future-day dimming/disabling all come from the model.
 struct JournalCalendarCell: View {
     var cell: JournalMonthCell
     var onTap: () -> Void
@@ -626,6 +692,12 @@ struct JournalCalendarCell: View {
 
 // MARK: - Calendar Models
 
+/// One cell of the journal month grid: a day number (or blank pad), the day's last feeling tag,
+/// and whether the day holds any logged data at all.
+///
+/// Built by ``JournalMonthModel`` and rendered by ``JournalCalendarCell``. `fill` encodes the
+/// hierarchy — feeling-tag tint first, then today, then a neutral "has data" wash — so the color
+/// logic stays out of the view.
 struct JournalMonthCell: Identifiable {
     let id = UUID()
     var day: Int?
@@ -650,6 +722,12 @@ struct JournalMonthCell: Identifiable {
     }
 }
 
+/// Pure month-layout model for the journal calendar: title, weekday symbols, and the padded cell
+/// grid with feeling tags and has-data flags attached.
+///
+/// Computed fresh each render from the `allDays` map. Today's cell deliberately carries no tag
+/// (today is highlighted by the ring instead); `hasData` counts meals, workouts, sleep, journals,
+/// bottles, and hygiene. A plain struct so the layout math is testable without SwiftUI.
 struct JournalMonthModel {
     let monthTitle: String
     let todayText: String
@@ -701,6 +779,14 @@ struct JournalMonthModel {
 
 // MARK: - Journal Row
 
+/// A single journal entry row: tag dot and label, the entry text (or an honest placeholder), and
+/// any emotion labels.
+///
+/// Shared by today's list, the previous list (compact, with a date), and ``DayDetailView``. The
+/// empty-text branch is deliberately two-way: `isQuickMood` marks a genuine tag-only check-in,
+/// while empty text without that marker means the words are sealed and unavailable right now
+/// (locked, or synced ahead of the sealed narrative) — the row must never claim a sealed entry
+/// was "just a check-in".
 struct JournalRow: View {
     var entry: JournalEntry
     var compact = false
@@ -745,6 +831,14 @@ struct JournalRow: View {
 
 // MARK: - Day Detail View
 
+/// The full-day review screen for one dateKey: summary blurb and daily score, macros and
+/// micronutrients, meals, movement, water, sleep, journal entries, and the care checklist.
+///
+/// Pushed from the journal calendar. Loads its day via
+/// ``FernletStore/loadDayWithDecryptedJournals``, so sealed journal text is hydrated when a key is
+/// active, and refreshes after its ``DayEditSheet`` or ``JournalEntryEditorSheet`` dismisses. The
+/// score card recomputes ``FernletStore/dailyHealthScore`` for the day; the sugar limit row
+/// knowingly applies the FDA added-sugars reference to total sugar (see the inline note).
 struct DayDetailView: View {
     var store: FernletStore
     var dateKey: String
@@ -1110,6 +1204,12 @@ struct DayDetailView: View {
     }
 }
 
+/// Row model for one micronutrient in the day breakdown: value, target-or-limit, and derived
+/// progress, display strings, and status color.
+///
+/// Built by ``DayDetailView`` from the day's summed `Micronutrients` (tracked nutrients get
+/// targets; sodium, saturated fat, and sugar get limits) and rendered by ``DayMicronutrientRow``.
+/// For limits the status flips at the ceiling; for targets it grades by progress.
 struct DayMicronutrientBreakdownRow: Identifiable {
     var name: String
     var value: Double
@@ -1149,6 +1249,10 @@ struct DayMicronutrientBreakdownRow: Identifiable {
     }
 }
 
+/// The rendered micronutrient row: name, value, a thin progress bar, and the target/limit caption.
+///
+/// Pure presentation over one ``DayMicronutrientBreakdownRow``; all color and progress decisions
+/// live in the model.
 struct DayMicronutrientRow: View {
     var row: DayMicronutrientBreakdownRow
 
@@ -1185,6 +1289,14 @@ struct DayMicronutrientRow: View {
 
 // MARK: - Day Edit Sheet
 
+/// The catch-up editor for a whole (usually past) day: add a journal entry, a meal, a workout,
+/// and set water, sleep, and personal-care completion in one pass.
+///
+/// Opened from ``DayDetailView``'s "Edit day" button. Water and care are always written on save;
+/// sleep only when it existed or the user actually entered something; journal/meal/workout only
+/// when non-empty — all through the corresponding ``FernletStore`` dated mutation methods, so a
+/// past day's journal text still flows through the sealing path. Backfilled workouts are pinned to noon
+/// of the target day. Shares the ``JournalContinuationDetector`` long-entry banner.
 struct DayEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL

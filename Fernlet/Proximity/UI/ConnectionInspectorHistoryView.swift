@@ -5,6 +5,12 @@ import FernletDomainModel
 import FernletUI
 #endif
 
+/// The Settings debug screen listing every recorded proximity session, newest first.
+///
+/// Each row (peer, start time, end state, duration, envelope count, error badge) pushes the same
+/// ``ConnectionInspectorLogDetailView`` the live inspector uses; swipe-to-delete removes single
+/// sessions and the toolbar action exports the whole history as a JSON file through the system
+/// share sheet. Backed entirely by ``ConnectionInspector``'s `historicalLogs`.
 struct ConnectionInspectorHistoryView: View {
     var inspector: ConnectionInspector
     @State private var exportPayload: ExportPayload?
@@ -91,6 +97,10 @@ struct ConnectionInspectorHistoryView: View {
         }
     }
 
+    /// The written export file's URL, wrapped `Identifiable` so `.sheet(item:)` can present the
+    /// share sheet for it.
+    ///
+    /// A fresh `id` per export means re-exporting always re-presents, even for the same file name.
     private struct ExportPayload: Identifiable {
         let id = UUID()
         let url: URL
@@ -98,6 +108,11 @@ struct ConnectionInspectorHistoryView: View {
 }
 
 #if canImport(UIKit)
+/// Thin `UIViewControllerRepresentable` wrapper around `UIActivityViewController` for sharing the
+/// exported log file.
+///
+/// SwiftUI's `ShareLink` isn't used here because the file URL is produced on demand; this keeps
+/// the plain items-array presentation.
 private struct ActivityShareView: UIViewControllerRepresentable {
     let items: [Any]
 

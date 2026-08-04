@@ -12,8 +12,11 @@ import FernletUI
 /// Gentle, low-cost "ambient" home surfaces (spec §12): an at-most-once-a-day gentle offer
 /// (breathing / worry box / short walk), a looking-back journal card, a macro-gap meal nudge,
 /// forgotten-favorite meal chips, a forgotten-good workout nudge, and a dismissible
-/// preventive-care micronutrient bubble. Each renders only when it has something worth surfacing,
-/// so the section quietly disappears on a sparse day rather than nagging.
+/// preventive-care micronutrient bubble.
+///
+/// Each card renders only when it has something worth surfacing, so the section quietly
+/// disappears on a sparse day rather than nagging. Rendered by `HomeView`; the history reads
+/// (journal decryption, full-day scans, weather) run once in the `.task`, off the per-render path.
 struct AmbientCardsView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -31,6 +34,10 @@ struct AmbientCardsView: View {
     @State private var weatherPrompt: String?
     @State private var walkComfort: WeatherComfort?
 
+    /// One resurfaced journal moment for the looking-back card: the window label ("A year ago
+    /// today") plus the entry text.
+    ///
+    /// Computed once per load by `computeLookBack()` from the decrypted day records.
     struct LookBack: Equatable { let label: String; let text: String }
 
     var body: some View {
