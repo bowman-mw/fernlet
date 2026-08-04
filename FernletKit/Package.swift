@@ -116,7 +116,8 @@ let package = Package(
         ),
         // Layer 2.5 — shared sealed-storage substrate on the PROTECTED side of the
         // S3 wall. The sealed (local-only, never-iCloud) CoreData stack
-        // (PrivatePersistenceController + the 3 narrative entities + the history
+        // (PrivatePersistenceController + the 4 sealed entities — MenstrualNarrative,
+        // JournalNarrative, IntimacyLog, WorryNarrative — + the history
         // pruner) plus the pending-narrative buffer. Shared by BOTH PrivateHealthStore
         // and PrivateMemoryStore (the plan implicitly placed the controller in
         // PrivateHealthStore, but the journal repo + the lock service need it too)
@@ -163,7 +164,7 @@ let package = Package(
         // structs/classes). No FernletCrypto dep — these seal via CryptoKit directly with
         // their own keychain key, not ColumnCrypto. FriendPhotoPayload (their wire DTO) was
         // hoisted to FernletDomainModel in the C1 prep. The SwiftUI FriendPhotoReviewSheet
-        // stays in the app.
+        // lives in ProximityKit's UI/ folder.
         .target(
             name: "PrivateMediaStore",
             dependencies: ["FernletFoundation", "FernletDomainModel"]
@@ -226,8 +227,10 @@ let package = Package(
         // Layer 7 — the central store-side services lifted out of the app target:
         // DerivedSignalsService/DerivedSignalsRebuilder (derived-signal rebuild),
         // SnapshotSaveCoordinator (debounced snapshot persistence), AIRetryQueueService
-        // (meal-analysis retry queue), and SavedRecipeService (saved-recipe state). The
-        // 4 service classes are individually @MainActor; DerivedSignalsRebuilder is a
+        // (meal-analysis retry queue), SavedRecipeService (saved-recipe state), and the
+        // per-row ledger trio CoinLedgerService, MilestoneLedgerService, and
+        // CustomItemService (append-only coin/milestone/custom-item stores). The
+        // 7 service classes are individually @MainActor; DerivedSignalsRebuilder is a
         // plain nonisolated struct — so NO defaultIsolation(MainActor.self) here.
         // SavedRecipeService was inverted onto the SavedRecipeRepositoring protocol
         // (in FernletPersistence) so this module needs NO dependency on CloudKitSync.
@@ -284,8 +287,9 @@ let package = Package(
         // PendingNarrativeBuffer on unlock and defines FernletLockServicing: PeriodLockContext
         // (the PeriodLockContext seam is owned by PrivateHealthStore — a one-directional edge;
         // PrivateHealthStore never names FernletLock). Uses CryptoSwift's Scrypt directly. The
-        // SwiftUI lock views (FernletLockGate/FernletLockView/OnboardingLockSetupView) stay in
-        // the app (they use app Color/UI components). MainActor; crypto/date/uptime providers
+        // SwiftUI lock surface (FernletLockGate/FernletLockView/FernletLockSetupView/
+        // FernletNumericPad) lives in the FernletLockUI module below; only the app's thin
+        // OnboardingLockSetupView wrapper stays app-side. MainActor; crypto/date/uptime providers
         // are marked nonisolated within.
         .target(
             name: "FernletLock",
@@ -312,7 +316,9 @@ let package = Package(
         // the app (ConnectionInspector → FernletStore; the SwiftUI views on app Color/UI
         // components + FernletStore) STAY in the app, as does ProximityHostAdapter (the
         // FernletStore→ProximityHost conformance). Deps: PrivateMediaStore (MeshNetworkManager's
-        // photo cache) + FernletDomainModel + FernletFoundation. defaultIsolation(MainActor.self)
+        // photo cache) + FernletDomainModel + FernletFoundation + FernletUI (the packaged UI/
+        // sheets — FriendPhotoReviewSheet, KeepFriendsPromptSheet — use the design system).
+        // defaultIsolation(MainActor.self)
         // (the managers are @Observable @MainActor).
         // Layer 6.5 — the lock SwiftUI surface (setup, unlock, numeric pad, and the
         // fernletLockGate modifier), moved out of the app so the lock feature is
