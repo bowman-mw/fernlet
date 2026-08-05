@@ -1330,8 +1330,8 @@ struct LaunchScreen: View {
 
 // MARK: - Intimacy Calendar Card
 
-/// The month-grid calendar card on the intimacy page: paging chevrons (future months disabled)
-/// over a `LazyVGrid` of ``IntimacyCalendarCell``s.
+/// The month-grid calendar card on the intimacy page: the shared ``MonthCalendarCard`` chrome
+/// (paging chevrons, future months disabled) over ``IntimacyCalendarCell``s.
 ///
 /// Pure presentation over the pre-computed `eventsByDay` counts; the sealed-store and HealthKit
 /// reads happen in ``PersonalScreenView``'s `loadIntimacyCalendar`, never here.
@@ -1339,55 +1339,27 @@ private struct IntimacyCalendarCard: View {
     @Binding var displayedMonth: Date
     var eventsByDay: [String: Int]
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
-    private var cal: Calendar { .current }
     private var todayKey: String { FernletDate.dayKey(for: Date()) }
 
     var body: some View {
-        let model = IntimacyMonthModel(date: displayedMonth, eventsByDay: eventsByDay, todayKey: todayKey)
-        FernletCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center) {
-                    Button {
-                        displayedMonth = cal.date(byAdding: .month, value: -1, to: displayedMonth) ?? displayedMonth
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Color.slate)
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-
-                    Text(model.monthTitle)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                        .frame(maxWidth: .infinity)
-
-                    let isCurrentMonth = cal.isDate(displayedMonth, equalTo: .now, toGranularity: .month)
-                    Button {
-                        if !isCurrentMonth {
-                            displayedMonth = cal.date(byAdding: .month, value: 1, to: displayedMonth) ?? displayedMonth
-                        }
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(isCurrentMonth ? Color.slate.opacity(0.25) : Color.slate)
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isCurrentMonth)
-                }
-
-                LazyVGrid(columns: columns, spacing: 4) {
-                    ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
-                        Text(day).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
-                    }
-                    ForEach(model.cells) { cell in
-                        IntimacyCalendarCell(cell: cell)
-                    }
-                }
-            }
+        MonthCalendarCard(displayedMonth: $displayedMonth, todayKey: todayKey) { gridDay in
+            IntimacyCalendarCell(cell: intimacyCell(for: gridDay))
         }
+    }
+
+    /// Builds the cell model for one shared-grid slot: a blank pad for `nil`, else the day with
+    /// its event presence looked up in `eventsByDay` by canonical day key.
+    private func intimacyCell(for gridDay: MonthGridDay?) -> IntimacyMonthCell {
+        guard let gridDay else {
+            return IntimacyMonthCell(day: nil, dateKey: nil, hasEvent: false, isToday: false, isFuture: false)
+        }
+        return IntimacyMonthCell(
+            day: gridDay.day,
+            dateKey: gridDay.dateKey,
+            hasEvent: (eventsByDay[gridDay.dateKey] ?? 0) > 0,
+            isToday: gridDay.isToday,
+            isFuture: gridDay.isFuture
+        )
     }
 }
 
@@ -1432,7 +1404,8 @@ private struct IntimacyCalendarCell: View {
 /// The view model for one intimacy-calendar tile: day number (nil for leading blanks), event
 /// presence, and today/future flags, plus the derived fill color and accessibility label.
 ///
-/// Built by ``IntimacyMonthModel``; keeping the styling decisions here keeps the cell view dumb.
+/// Built by ``IntimacyCalendarCard`` from a shared-grid ``MonthGridDay``; keeping the styling
+/// decisions here keeps the cell view dumb.
 private struct IntimacyMonthCell: Identifiable {
     let id = UUID()
     var day: Int?
@@ -1452,48 +1425,6 @@ private struct IntimacyMonthCell: Identifiable {
         if isFuture { return "Day \(day)" }
         if isToday { return hasEvent ? "Today, day \(day), event logged" : "Today, day \(day)" }
         return hasEvent ? "Day \(day), event logged" : "Day \(day)"
-    }
-}
-
-/// Calendar math for one displayed intimacy month: title, weekday symbols, and the padded cell
-/// array (leading blanks + one ``IntimacyMonthCell`` per day).
-///
-/// Computed fresh in ``IntimacyCalendarCard``'s body from the month date and the day-keyed event
-/// counts; the `yyyy-MM-dd` keys it derives must match `FernletDate.dayKey` so today/event lookups
-/// line up.
-private struct IntimacyMonthModel {
-    let monthTitle: String
-    let weekdaySymbols: [String]
-    let cells: [IntimacyMonthCell]
-
-    init(date: Date, eventsByDay: [String: Int], todayKey: String, calendar: Calendar = .current) {
-        let monthInterval = calendar.dateInterval(of: .month, for: date)
-        let start = monthInterval?.start ?? date
-        let range = calendar.range(of: .day, in: .month, for: date) ?? 1..<2
-        let firstWeekday = calendar.component(.weekday, from: start)
-
-        self.monthTitle = date.formatted(.dateTime.month(.wide).year())
-        self.weekdaySymbols = calendar.veryShortWeekdaySymbols
-
-        let ymFormatter = DateFormatter()
-        ymFormatter.dateFormat = "yyyy-MM"
-        ymFormatter.calendar = Calendar(identifier: .gregorian)
-        let yearMonth = ymFormatter.string(from: date)
-
-        let blanks = (0..<(firstWeekday - 1)).map { _ in
-            IntimacyMonthCell(day: nil, dateKey: nil, hasEvent: false, isToday: false, isFuture: false)
-        }
-        let days = range.map { d -> IntimacyMonthCell in
-            let key = "\(yearMonth)-\(String(format: "%02d", d))"
-            return IntimacyMonthCell(
-                day: d,
-                dateKey: key,
-                hasEvent: (eventsByDay[key] ?? 0) > 0,
-                isToday: key == todayKey,
-                isFuture: key > todayKey
-            )
-        }
-        self.cells = blanks + days
     }
 }
 

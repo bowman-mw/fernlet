@@ -200,10 +200,7 @@ public nonisolated enum CyclePhaseResolver {
     private static func hasObservedFlow(on date: Date, entries: [CycleDayEntry], calendar: Calendar) -> Bool {
         let key = FernletDate.dayKey(for: date)
         guard let entry = entries.first(where: { $0.dateKey == key }) else { return false }
-        return entry.menstrualFlowSamples.contains { sample in
-            guard let flow = HKCategoryValueVaginalBleeding(rawValue: sample.value) else { return false }
-            return flow != .none
-        }
+        return entry.hasActualBleedingFlow
     }
 }
 
@@ -245,11 +242,6 @@ public nonisolated enum CyclePhaseResolver {
 @MainActor
 @Observable
 public final class PeriodContextBridge: PeriodScoringContextProviding {
-    /// Phase-aware behaviour (non-bleeding phases, signals, softening) only turns on after this many
-    /// *completed* cycles, per spec §4 / plan §3.5. `CyclePrediction.cyclesObserved` counts period starts,
-    /// so a completed cycle is `cyclesObserved - 1`.
-    private static let minimumCompletedCycles = 3
-
     /// The live period store, held weakly through the ``PeriodContextSource`` seam. When it
     /// deallocates, every output degrades to `.unknown`/`.noData`/`.none`.
     @ObservationIgnored private weak var source: (any PeriodContextSource)?
@@ -282,9 +274,12 @@ public final class PeriodContextBridge: PeriodScoringContextProviding {
 
     /// The prediction, but only once enough *completed* cycles exist to drive phase-aware behaviour.
     /// Below the threshold this is nil, so the bridge degrades to observed-flow-only (the 3-cycle gate).
+    /// Phase-aware behaviour (non-bleeding phases, signals, softening) only turns on after
+    /// ``PeriodPhaseTrendEngine/minimumCompletedCycles`` *completed* cycles, per spec §4 / plan §3.5.
+    /// `CyclePrediction.cyclesObserved` counts period starts, so a completed cycle is `cyclesObserved - 1`.
     private var activePrediction: CyclePrediction? {
         guard let prediction = source?.prediction,
-              prediction.cyclesObserved - 1 >= Self.minimumCompletedCycles else { return nil }
+              prediction.cyclesObserved - 1 >= PeriodPhaseTrendEngine.minimumCompletedCycles else { return nil }
         return prediction
     }
 

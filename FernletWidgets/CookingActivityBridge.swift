@@ -33,21 +33,12 @@ enum CookingActivityBridge {
     /// Reflect the run state onto the live activity: update while the cook is in progress, end
     /// (immediate dismissal) once it reaches `finished`. No-op when nothing is on screen.
     static func sync(to state: CookingRunState) async {
-        if state.isFinished {
-            await end()
-            return
-        }
-        let content = ActivityContent(state: state.contentState, staleDate: state.staleDate(postedAt: Date()))
-        for activity in Activity<CookingActivityAttributes>.activities {
-            await activity.update(content)
-        }
+        await LiveActivityReflector.sync(to: state)
     }
 
     /// End every live cooking activity immediately (used on finish, discard, and stale cleanup). Only
     /// cooking activities — never the workout activity.
     static func end() async {
-        for activity in Activity<CookingActivityAttributes>.activities {
-            await activity.end(nil, dismissalPolicy: .immediate)
-        }
+        await LiveActivityReflector.end(CookingActivityAttributes.self)
     }
 }

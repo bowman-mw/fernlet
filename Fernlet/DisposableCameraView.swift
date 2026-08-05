@@ -538,7 +538,7 @@ struct DisposableCameraView: View {
     // Phase 2 friend minting: candidates snapshotted when the review presents + the user's keeps.
     @State private var friendCandidates: [MeshSessionRosterEntry] = []
     @State private var keptFriendFingerprints: Set<String> = []
-    @State private var photoSaveError: String? = nil
+    @State private var photoSaveError: PhotoSaveFailure? = nil
     @State private var activeRemovalProposal: MeshRemovalProposalPayload?
     @State private var previousWindTranslation: CGFloat = 0
     // Orientation is @State (not a raw per-frame `size.width > size.height`) so a transient
@@ -622,9 +622,12 @@ struct DisposableCameraView: View {
             }
         )) {
             if let mesh = manager.currentMesh {
-                MeshAdmissionPromptSheet(
+                JoinPromptSheet(
                     requests: manager.pendingAdmissionRequests,
-                    meshName: mesh.name,
+                    targetName: mesh.name,
+                    displayName: { $0.requesterDisplayName },
+                    fingerprint: { $0.requesterFingerprint },
+                    accessibilityPrefix: "mesh.admission",
                     allow: { manager.allowAdmission($0) },
                     decline: { manager.declineAdmission($0) }
                 )
@@ -640,10 +643,7 @@ struct DisposableCameraView: View {
         }
         .alert(
             activeRemovalProposal.map { "Remove \($0.targetDisplayName)?" } ?? "Remove participant?",
-            isPresented: Binding(
-                get: { activeRemovalProposal != nil },
-                set: { if !$0 { activeRemovalProposal = nil } }
-            ),
+            isPresented: $activeRemovalProposal.isPresent(),
             presenting: activeRemovalProposal
         ) { proposal in
             if manager.canSecondRemoval(proposal) {
@@ -1283,12 +1283,8 @@ struct DisposableCameraView: View {
                     finalizeFriendKeeps()
                     await manager.leaveSessionAfterNotifyingPeers()
                     reviewPresented = false
-                } catch CocoaError.userCancelled {
-                    photoSaveError = "Fernlet needs access to your Photo Library to save photos. Open Settings to grant access."
-                } catch is FriendPhotoLibrarySaver.NothingSavedError {
-                    photoSaveError = "None of the selected pictures could be saved. They may be corrupted — try choosing different ones."
                 } catch {
-                    photoSaveError = "Could not save to your photo library. Please try again."
+                    photoSaveError = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: toSave.count)
                 }
             },
             discardAll: {
@@ -1300,22 +1296,7 @@ struct DisposableCameraView: View {
                 }
             }
         )
-        .alert("Couldn't Save Photos", isPresented: Binding(
-            get: { photoSaveError != nil },
-            set: { if !$0 { photoSaveError = nil } }
-        )) {
-            if photoSaveError?.contains("Settings") == true {
-                Button("Open Settings") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
-                    photoSaveError = nil
-                }
-            }
-            Button("OK", role: .cancel) { photoSaveError = nil }
-        } message: {
-            Text(photoSaveError ?? "")
-        }
+        .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
     }
 
     // MARK: - Info sheet

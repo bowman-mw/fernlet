@@ -1,6 +1,7 @@
 import CoreData
 import CryptoKit
 import Testing
+@testable import FernletCrypto
 import FernletDomainModel
 import PrivateMemoryStore
 import FernletFoundation
@@ -166,11 +167,13 @@ struct JournalNarrativeRepositoryTests {
     @Test func journalColumnKeyDiffersFromMenstrualNarrativeKey() {
         let contentKey = SymmetricKey(size: .bits256)
         // Journal uses "journal-narrative" HKDF label; MenstrualNarrative uses "menstrual-narrative".
-        let journalKey = HKDF<SHA256>.deriveKey(
-            inputKeyMaterial: contentKey, info: Data("journal-narrative".utf8), outputByteCount: 32
+        // Derived through the PRODUCTION helper (not a local HKDF copy) so this stays a statement
+        // about what the app actually does if the derivation ever changes.
+        let journalKey = ColumnCrypto.deriveColumnKey(
+            contentKey: contentKey, info: "journal-narrative", outputByteCount: 32
         )
-        let menstrualKey = HKDF<SHA256>.deriveKey(
-            inputKeyMaterial: contentKey, info: Data("menstrual-narrative".utf8), outputByteCount: 32
+        let menstrualKey = ColumnCrypto.deriveColumnKey(
+            contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 32
         )
         #expect(journalKey != menstrualKey)
     }

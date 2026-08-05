@@ -64,39 +64,88 @@ struct PhotoCaptureControl<Label: View>: View {
             Button("Choose from library") { isLibraryPickerActive = true }
             Button("Cancel", role: .cancel) {}
         }
-        .fullScreenCover(isPresented: $showingCamera) {
-            ImagePickerView(sourceType: .camera) { image in
-                onCameraCapture(image)
-            }
-            .ignoresSafeArea()
-        }
+        .photoCapturePlumbing(
+            showingCamera: $showingCamera,
+            selection: $selectedItem,
+            onCameraImage: onCameraCapture,
+            // Hand the bytes straight through — the store does the only (bounded) decode.
+            onLibraryData: onLibraryPickData.map { sink in
+                { data in sink(data, PhotoMetadata.creationDate(from: data)) }
+            },
+            onLibraryImage: onLibraryPick,
+            onLibraryLoadFailed: onLibraryPickFailed
+        )
         .photosPicker(isPresented: $isLibraryPickerActive, selection: $selectedItem, matching: .images)
         .onChange(of: showingCamera) { _, _ in reportCaptureUIPresentation() }
         .onChange(of: isLibraryPickerActive) { _, _ in reportCaptureUIPresentation() }
-        .onChange(of: selectedItem) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self) {
-                    if let onLibraryPickData {
-                        // Hand the bytes straight through — the store does the only (bounded) decode.
-                        onLibraryPickData(data, PhotoMetadata.creationDate(from: data))
-                    } else {
-                        // Legacy UIImage sink for callers that need a decoded image (meal preview).
-                        let handler = onLibraryPick ?? onCameraCapture
-                        if let image = UIImage(data: data) { handler(image) }
-                    }
-                } else {
-                    // A pick the user made but whose bytes couldn't load must not vanish silently —
-                    // the store-failure paths already show feedback, so this joins them.
-                    onLibraryPickFailed?()
-                }
-                selectedItem = nil
-            }
-        }
     }
 
     private func reportCaptureUIPresentation() {
         onCaptureUIPresentationChange?(showingCamera || isLibraryPickerActive)
+    }
+}
+
+/// Shared camera-cover + library-selection plumbing for the app's photo-capture surfaces.
+extension View {
+    /// Attaches the two halves of photo capture that every capture surface repeats: a full-screen
+    /// `ImagePickerView` camera cover driven by `showingCamera`, and consumption of a
+    /// `PhotosPickerItem` selection (load bytes, deliver, reset the selection to nil).
+    ///
+    /// Shared by ``PhotoCaptureControl``, `BarcodeScanView`'s still-photo fallback, and
+    /// `NutritionLabelCameraSheet`. The library picker's *presentation* is deliberately not part of
+    /// this modifier — the three call sites present theirs differently (an in-chain `photosPicker`,
+    /// a menu-anchored picker, and a `PhotosPicker` label button).
+    ///
+    /// Library delivery mirrors the sinks ``PhotoCaptureControl`` exposes:
+    /// - `onLibraryData`, when set, receives the raw picked bytes with no `UIImage` decode here —
+    ///   the jetsam-avoidance path (the store does the only, bounded decode).
+    /// - Otherwise the bytes are decoded and handed to `onLibraryImage`, falling back to
+    ///   `onCameraImage`; a failed decode is dropped silently, matching every pre-existing copy.
+    /// - `onLibraryLoadFailed` fires only when `loadTransferable` itself yields nothing (iCloud
+    ///   eviction, transfer error); when nil, that failure is silent too.
+    ///
+    /// - Parameters:
+    ///   - showingCamera: Presents the full-screen rear-camera cover while true.
+    ///   - selection: The `PhotosPicker` selection to consume; reset to nil after handling.
+    ///   - flashMode: Camera flash mode for `ImagePickerView` (the label scanner's torch toggle).
+    ///   - onCameraImage: Receives the captured camera image — and decoded library picks when no
+    ///     library-specific sink is provided.
+    ///   - onLibraryData: Priority library sink for the raw picked bytes; skips the decode.
+    ///   - onLibraryImage: Library sink for a decoded image; defaults to `onCameraImage`.
+    ///   - onLibraryLoadFailed: Called when the selection's bytes fail to load.
+    func photoCapturePlumbing(
+        showingCamera: Binding<Bool>,
+        selection: Binding<PhotosPickerItem?>,
+        flashMode: UIImagePickerController.CameraFlashMode = .auto,
+        onCameraImage: @escaping (UIImage) -> Void,
+        onLibraryData: ((Data) -> Void)? = nil,
+        onLibraryImage: ((UIImage) -> Void)? = nil,
+        onLibraryLoadFailed: (() -> Void)? = nil
+    ) -> some View {
+        self
+            .fullScreenCover(isPresented: showingCamera) {
+                ImagePickerView(sourceType: .camera, flashMode: flashMode) { image in
+                    onCameraImage(image)
+                }
+                .ignoresSafeArea()
+            }
+            .onChange(of: selection.wrappedValue) { _, newItem in
+                guard let newItem else { return }
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self) {
+                        if let onLibraryData {
+                            onLibraryData(data)
+                        } else if let image = UIImage(data: data) {
+                            (onLibraryImage ?? onCameraImage)(image)
+                        }
+                    } else {
+                        // A pick the user made but whose bytes couldn't load must not vanish
+                        // silently when the caller opted into failure feedback.
+                        onLibraryLoadFailed?()
+                    }
+                    selection.wrappedValue = nil
+                }
+            }
     }
 }
 

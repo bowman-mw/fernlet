@@ -25,9 +25,13 @@ It holds three kinds of media, each with its own store type but one shared at-re
 All three seal under a single symmetric key supplied by ``PrivateMediaKeyProviding``, whose
 production conformer ``KeychainPrivateMediaKeyProvider`` mints one random 256-bit key and stores
 it in a fixed keychain row — backup-restorable (`kSecAttrAccessibleAfterFirstUnlock`) so an
-iCloud device backup restored onto a new phone can still open the cache it carried. Note this
-module does NOT use `FernletCrypto`/ColumnCrypto: it seals via CryptoKit directly with its own
-keychain key. `UIImage` helpers for outbound friend-photo sizing round out the module.
+iCloud device backup restored onto a new phone can still open the cache it carried. The seal /
+open / seal-then-write mechanics are one internal extension on that protocol (`gcmSeal`,
+`gcmOpen`, `sealAndWrite` in `MediaAtRestCrypto.swift`) which all three stores call, replacing a
+hand-rolled copy per store; the helpers are deliberately policy-free, so each store's fail-closed
+decision stays at its own call site. Note this module does NOT use `FernletCrypto`/ColumnCrypto:
+it seals via CryptoKit directly with its own keychain key. `UIImage` helpers for outbound
+friend-photo sizing round out the module.
 
 ### Position relative to the S3 wall
 

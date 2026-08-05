@@ -73,14 +73,9 @@ public struct MealPhotoStore {
     /// than persisted in the clear (fail-closed, as with the sealed peer store).
     public func save(_ data: Data) -> UUID? {
         guard let normalized = Self.normalizedJPEG(from: data) else { return nil }
-        guard let sealed = seal(normalized) else { return nil }
         let id = UUID()
-        do {
-            try sealed.write(to: url(for: id), options: [.atomic, .completeFileProtection])
-            return id
-        } catch {
-            return nil
-        }
+        guard keyProvider.sealAndWrite(normalized, to: url(for: id)) else { return nil }
+        return id
     }
 
     /// Normalizes, seals and stores `data` under a CALLER-supplied id (overwriting any existing photo at
@@ -88,13 +83,8 @@ public struct MealPhotoStore {
     /// e.g. a recipe's own photo keyed by the recipe id — so there's no second id to track. Fail-closed
     /// like `save`: writes nothing on non-image bytes or no key.
     @discardableResult public func save(_ data: Data, forID id: UUID) -> Bool {
-        guard let normalized = Self.normalizedJPEG(from: data), let sealed = seal(normalized) else { return false }
-        do {
-            try sealed.write(to: url(for: id), options: [.atomic, .completeFileProtection])
-            return true
-        } catch {
-            return false
-        }
+        guard let normalized = Self.normalizedJPEG(from: data) else { return false }
+        return keyProvider.sealAndWrite(normalized, to: url(for: id))
     }
 
     /// Returns the decrypted photo bytes for `id`, or nil when there is no file, no key, or the
@@ -105,9 +95,7 @@ public struct MealPhotoStore {
     public func imageData(for id: UUID) -> Data? {
         guard let stored = try? Data(contentsOf: url(for: id)) else { return nil }
         // Sealed bytes (the normal case).
-        if let key = keyProvider.mediaKey(),
-           let box = try? AES.GCM.SealedBox(combined: stored),
-           let opened = try? AES.GCM.open(box, using: key) {
+        if let opened = keyProvider.gcmOpen(stored) {
             return opened
         }
         // A file written by the pre-sealing build is plaintext JPEG. GCM-open fails for it AND for
@@ -117,7 +105,7 @@ public struct MealPhotoStore {
         // Stores with NO legacy plaintext generation (body/recipe photos) skip this branch entirely:
         // an unsealed file that merely parses as an image is refused, not trusted and re-sealed.
         if allowsLegacyPlaintextUpgrade, PrivateMediaStore.isWithinSafePixelBounds(stored) {
-            reseal(stored, to: url(for: id))
+            keyProvider.sealAndWrite(stored, to: url(for: id))
             return stored
         }
         return nil
@@ -152,18 +140,6 @@ public struct MealPhotoStore {
         } catch {
             return false
         }
-    }
-
-    // MARK: - At-rest encryption
-
-    private func seal(_ plaintext: Data) -> Data? {
-        guard let key = keyProvider.mediaKey() else { return nil }
-        return try? AES.GCM.seal(plaintext, using: key).combined
-    }
-
-    private func reseal(_ plaintext: Data, to url: URL) {
-        guard let sealed = seal(plaintext) else { return }
-        try? sealed.write(to: url, options: [.atomic, .completeFileProtection])
     }
 
     // MARK: - Normalization

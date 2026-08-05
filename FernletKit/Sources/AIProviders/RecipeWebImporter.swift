@@ -814,21 +814,6 @@ public enum RecipeWebImporter {
 }
 
 #if canImport(FoundationModels)
-/// Availability probe for the on-device model, mirroring ``FoodSelectionAvailability``.
-///
-/// Currently unreferenced: the `FernletAIGate` routing inside `extractWithFoundationModel`
-/// superseded the direct availability check this wrapped, leaving it as dead code in this file.
-@available(iOS 26.0, macOS 26.0, visionOS 26.0, *)
-private enum RecipeExtractionAvailability {
-    /// `true` when the default `SystemLanguageModel` reports `.available`.
-    static var isFoundationModelAvailable: Bool {
-        if case .available = SystemLanguageModel.default.availability {
-            return true
-        }
-        return false
-    }
-}
-
 /// The `@Generable` response schema for AI recipe extraction: a name, raw ingredient lines, and a
 /// short method summary — no numbers, per the prompt's instructions.
 ///

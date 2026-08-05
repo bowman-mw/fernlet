@@ -18,16 +18,11 @@ import FoundationModels
 public enum FoodSelectionAvailability {
     /// `true` when the default `SystemLanguageModel` reports `.available` (iOS 26+ with
     /// FoundationModels importable); `false` on incapable hardware, with Apple Intelligence
-    /// disabled, or on SDKs without the framework.
+    /// disabled, or on SDKs without the framework. Delegates to the canonical probe,
+    /// `SystemLanguageModelCapabilityProvider.isOnDeviceModelAvailable`, which carries the
+    /// `#if canImport` / `#available` guards.
     public static var isFoundationModelAvailable: Bool {
-        #if canImport(FoundationModels)
-        if #available(iOS 26.0, *) {
-            if case .available = SystemLanguageModel.default.availability {
-                return true
-            }
-        }
-        #endif
-        return false
+        SystemLanguageModelCapabilityProvider.isOnDeviceModelAvailable
     }
 }
 

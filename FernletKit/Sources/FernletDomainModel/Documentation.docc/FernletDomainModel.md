@@ -36,8 +36,10 @@ persisted state, not untrusted peers, whose payloads instead pass boundary sanit
 
 Cross-device correctness without a server is handled by append-only ledgers with structurally
 deterministic row ids: ``CoinEconomy`` and ``MilestoneEconomy`` collapse duplicate-id rows in code
-(the storage layer does NOT de-duplicate), so two offline devices minting the same earn/award
-converge to a single grant, and reset boundaries void pre-reset rows without deleting anything.
+(the storage layer does NOT de-duplicate) through the one shared `Array.deduplicatedByID()` in
+`IdentityDedup.swift` — the same primitive `StoreCore`'s per-row services call on every load — so
+two offline devices minting the same earn/award converge to a single grant, and reset boundaries
+void pre-reset rows without deleting anything.
 
 Concurrency: this target deliberately has **no** `defaultIsolation(MainActor.self)` — everything
 is `nonisolated` pure value types, which is both required (the types cross-reference each other's

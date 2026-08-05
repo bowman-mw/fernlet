@@ -28,18 +28,6 @@ enum WorkoutLiveActivityController {
     /// Begin a Live Activity for a guided run. No-op (in-app-only) when the user hasn't enabled Live
     /// Activities. Ends any activity already live first, so only one workout activity is ever on screen.
     static func start(_ state: GuidedWorkoutRunState) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        for stale in Activity<WorkoutActivityAttributes>.activities {
-            Task { await stale.end(nil, dismissalPolicy: .immediate) }
-        }
-        let attributes = WorkoutActivityAttributes(workoutTitle: state.title)
-        do {
-            _ = try Activity.request(
-                attributes: attributes,
-                content: ActivityContent(state: state.contentState, staleDate: state.staleDate(postedAt: Date()))
-            )
-        } catch {
-            // Silent degrade: the in-app sheet remains the full experience.
-        }
+        LiveActivityStarter.start(state, attributes: WorkoutActivityAttributes(workoutTitle: state.title))
     }
 }

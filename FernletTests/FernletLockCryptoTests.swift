@@ -4,6 +4,7 @@ import Security
 import Testing
 import FernletDomainModel
 import FernletFoundation
+@testable import FernletCrypto
 @testable import FernletLock
 @testable import Fernlet
 
@@ -167,33 +168,43 @@ struct FernletLockCryptoTests {
     // MARK: Proves distinct HKDF info labels derive distinct column keys.
     @Test func hkdfDifferentInfoLabelsProduceDifferentKeys() {
         let contentKey = randomData(count: 32)
-        let narrative = FernletLockCrypto.deriveColumnKey(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 32)
-        let symptoms = FernletLockCrypto.deriveColumnKey(contentKey: contentKey, info: "menstrual-symptoms", outputByteCount: 32)
+        let narrative = derivedColumnKeyData(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 32)
+        let symptoms = derivedColumnKeyData(contentKey: contentKey, info: "menstrual-symptoms", outputByteCount: 32)
         #expect(narrative != symptoms)
     }
 
     // MARK: Proves HKDF derivation is deterministic for the same content key and label.
     @Test func hkdfSameInfoIsDeterministic() {
         let contentKey = randomData(count: 32)
-        let first = FernletLockCrypto.deriveColumnKey(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 32)
-        let second = FernletLockCrypto.deriveColumnKey(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 32)
+        let first = derivedColumnKeyData(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 32)
+        let second = derivedColumnKeyData(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 32)
         #expect(first == second)
     }
 
     // MARK: Proves HKDF output changes when the root content key changes.
     @Test func hkdfWrongContentKeyProducesDifferentOutput() {
-        let first = FernletLockCrypto.deriveColumnKey(contentKey: Data(repeating: 0x11, count: 32), info: "menstrual-narrative", outputByteCount: 32)
-        let second = FernletLockCrypto.deriveColumnKey(contentKey: Data(repeating: 0x22, count: 32), info: "menstrual-narrative", outputByteCount: 32)
+        let first = derivedColumnKeyData(contentKey: Data(repeating: 0x11, count: 32), info: "menstrual-narrative", outputByteCount: 32)
+        let second = derivedColumnKeyData(contentKey: Data(repeating: 0x22, count: 32), info: "menstrual-narrative", outputByteCount: 32)
         #expect(first != second)
     }
 
     // MARK: Proves HKDF honors 32-byte and 16-byte output lengths.
     @Test func hkdfOutputLengthMatchesRequest() {
         let contentKey = randomData(count: 32)
-        let long = FernletLockCrypto.deriveColumnKey(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 32)
-        let short = FernletLockCrypto.deriveColumnKey(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 16)
+        let long = derivedColumnKeyData(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 32)
+        let short = derivedColumnKeyData(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 16)
         #expect(long.count == 32)
         #expect(short.count == 16)
+    }
+
+    // MARK: Pins the production column-key derivation to a known-answer vector (RFC 5869
+    // HKDF-SHA256, empty salt, info = label). Any drift in ColumnCrypto's derivation —
+    // algorithm, salt, or info encoding — fails here loudly, because that drift would
+    // orphan every ciphertext already sealed at rest.
+    @Test func hkdfKnownAnswerVectorIsPinned() {
+        let contentKey = Data((0..<32).map { UInt8($0) })
+        let derived = derivedColumnKeyData(contentKey: contentKey, info: "menstrual-narrative", outputByteCount: 32)
+        #expect(derived.hexString == "e525a75bfcc621ea814161b685f4c637fbde3a8d1f88e5e1fce715aba7f95732")
     }
 
     // MARK: Proves verifier comparison does not use plain Data equality.
@@ -266,6 +277,17 @@ struct FernletLockCryptoTests {
         let service = FernletLockService(keychainService: "com.fernlet.lock.test.\(UUID().uuidString)")
         try? service.reset()
         return service
+    }
+
+    /// Calls the PRODUCTION column-key derivation (`ColumnCrypto.deriveColumnKey`, via
+    /// `@testable import FernletCrypto`) and returns the derived key's raw bytes —
+    /// extracted with `withUnsafeBytes` rather than relying on `SymmetricKey` equality.
+    private func derivedColumnKeyData(contentKey: Data, info: String, outputByteCount: Int) -> Data {
+        ColumnCrypto.deriveColumnKey(
+            contentKey: SymmetricKey(data: contentKey),
+            info: info,
+            outputByteCount: outputByteCount
+        ).withUnsafeBytes { Data($0) }
     }
 
     private func randomData(count: Int) -> Data {

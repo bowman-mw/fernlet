@@ -1249,7 +1249,7 @@ struct CollapsedIngredientRow: View {
     }
 
     private var calories: Int {
-        macros.protein * 4 + macros.carbs * 4 + macros.fat * 9
+        macros.calories
     }
 
     private var summaryLine: String {
@@ -2136,12 +2136,6 @@ struct MealSheet: View {
     }
     #endif
 
-    private var webNutritionLookupDisabledMessage: String {
-        store.settings.aiStatus == .off
-            ? "Turn off Manual off mode before using web nutrition lookup."
-            : "Turn on Web nutrition lookup in Settings to search the web for chain or packaged-food nutrition."
-    }
-
     #if canImport(UIKit)
     /// The styled label for the single prominent capture affordance — "one button points at food."
     /// It opens the camera (the delightful default); barcode/scan/import remain quiet helpers beneath
@@ -2552,7 +2546,7 @@ struct FoodProductReviewSheet: View {
     }
 
     private func calories(for product: ImportedFoodProduct) -> Int {
-        product.calories ?? (product.macros.protein * 4 + product.macros.carbs * 4 + product.macros.fat * 9)
+        product.calories ?? product.macros.calories
     }
 }
 

@@ -11,6 +11,7 @@ import Combine
 import CoreData
 import HealthKit
 import Testing
+import FernletFoundation
 import FernletDomainModel
 import FernletScoring
 import FernletPersistence
@@ -501,6 +502,26 @@ struct FernletTests {
         #expect(dayCells.first == 1)
         #expect(dayCells.last == 31)
         #expect(model.cells.contains { $0.day == 17 && $0.isToday })
+    }
+
+    @Test func monthGridModelDayKeysStayCanonicalInEdgeLocales() throws {
+        // The shared grid must key its days with the pinned POSIX/Gregorian FernletDate.dayKey
+        // even when the layout calendar is non-Gregorian and the locale uses non-Latin digits —
+        // exactly the configurations where locale-following formatters produce garbage keys that
+        // miss every event/today lookup.
+        var calendar = Calendar(identifier: .buddhist)
+        calendar.locale = Locale(identifier: "ar_SA")
+        // Buddhist era 2569 = Gregorian 2026, so this is 2026-05-17.
+        let date = try #require(calendar.date(from: DateComponents(year: 2569, month: 5, day: 17)))
+        let model = MonthGridModel(date: date, todayKey: FernletDate.dayKey(for: date), calendar: calendar)
+
+        #expect(model.days.count == 31)
+        #expect(model.days.first?.dateKey == "2026-05-01")
+        #expect(model.days.contains { $0.day == 17 && $0.isToday })
+        for day in model.days {
+            let cellDate = try #require(day.date)
+            #expect(day.dateKey == FernletDate.dayKey(for: cellDate))
+        }
     }
 
     @MainActor

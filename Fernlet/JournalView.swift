@@ -561,66 +561,26 @@ struct JournalEntryEditorSheet: View {
 /// The journal month-grid card: feeling-tinted day cells, month paging, and a tag legend.
 ///
 /// Builds a ``JournalMonthModel`` per render from the `allDays` cache and forwards day taps
-/// (by dateKey, past/today only) up to ``JournalView``, which pushes ``DayDetailView``. Paging
-/// forward past the current month is disabled, mirroring the period calendar.
+/// (by dateKey, past/today only) up to ``JournalView``, which pushes ``DayDetailView``. The card
+/// chrome and paging (forward past the current month disabled) come from the shared
+/// ``MonthCalendarCard``.
 struct JournalCalendarCard: View {
     @Binding var displayedMonth: Date
     var allDays: [String: FernletDay]
     var todayKey: String
     var onDayTapped: (String) -> Void
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
-    private var cal: Calendar { .current }
-
     var body: some View {
         let model = JournalMonthModel(date: displayedMonth, allDays: allDays, todayKey: todayKey)
-        return FernletCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center) {
-                    Button {
-                        displayedMonth = cal.date(byAdding: .month, value: -1, to: displayedMonth) ?? displayedMonth
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Color.slate)
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-
-                    Text(model.monthTitle)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                        .frame(maxWidth: .infinity)
-
-                    let isCurrentMonth = cal.isDate(displayedMonth, equalTo: .now, toGranularity: .month)
-                    Button {
-                        if !isCurrentMonth {
-                            displayedMonth = cal.date(byAdding: .month, value: 1, to: displayedMonth) ?? displayedMonth
-                        }
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(isCurrentMonth ? Color.slate.opacity(0.25) : Color.slate)
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isCurrentMonth)
+        MonthCalendarCard(displayedMonth: $displayedMonth, todayKey: todayKey) { gridDay in
+            let cell = model.cell(for: gridDay)
+            JournalCalendarCell(cell: cell) {
+                if let key = cell.dateKey, !cell.isFuture {
+                    onDayTapped(key)
                 }
-
-                LazyVGrid(columns: columns, spacing: 4) {
-                    ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
-                        Text(day).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
-                    }
-                    ForEach(model.cells) { cell in
-                        JournalCalendarCell(cell: cell) {
-                            if let key = cell.dateKey, !cell.isFuture {
-                                onDayTapped(key)
-                            }
-                        }
-                    }
-                }
-                tagLegend
             }
+        } footer: {
+            tagLegend
         }
     }
 
@@ -725,39 +685,29 @@ struct JournalMonthCell: Identifiable {
 /// Pure month-layout model for the journal calendar: title, weekday symbols, and the padded cell
 /// grid with feeling tags and has-data flags attached.
 ///
-/// Computed fresh each render from the `allDays` map. Today's cell deliberately carries no tag
-/// (today is highlighted by the ring instead); `hasData` counts meals, workouts, sleep, journals,
-/// bottles, and hygiene. A plain struct so the layout math is testable without SwiftUI.
+/// Layered over the shared ``MonthGridModel`` (which owns the calendar math and canonical day
+/// keys) and computed fresh each render from the `allDays` map. Today's cell deliberately carries
+/// no tag (today is highlighted by the ring instead); `hasData` counts meals, workouts, sleep,
+/// journals, bottles, and hygiene. A plain struct so the layout math is testable without SwiftUI.
 struct JournalMonthModel {
     let monthTitle: String
-    let todayText: String
     let weekdaySymbols: [String]
     let cells: [JournalMonthCell]
 
+    private let cellsByDay: [Int: JournalMonthCell]
+
     init(date: Date, allDays: [String: FernletDay], todayKey: String, calendar: Calendar = .current) {
-        let monthInterval = calendar.dateInterval(of: .month, for: date)
-        assert(monthInterval != nil, "month interval required")
-        let start = monthInterval?.start ?? date
-        let range = calendar.range(of: .day, in: .month, for: date) ?? 1..<2
-        let firstWeekday = calendar.component(.weekday, from: start)
+        let grid = MonthGridModel(date: date, todayKey: todayKey, calendar: calendar)
 
-        self.monthTitle = date.formatted(.dateTime.month(.wide).year())
-        self.todayText = Date.now.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
-        self.weekdaySymbols = calendar.veryShortWeekdaySymbols
+        self.monthTitle = grid.monthTitle
+        self.weekdaySymbols = grid.weekdaySymbols
 
-        let ymFormatter = DateFormatter()
-        ymFormatter.locale = Locale(identifier: "en_US_POSIX")
-        ymFormatter.dateFormat = "yyyy-MM"
-        ymFormatter.calendar = Calendar(identifier: .gregorian)
-        let yearMonth = ymFormatter.string(from: date)
-
-        let blanks = (0..<(firstWeekday - 1)).map { _ in
+        let blanks = (0..<grid.leadingBlanks).map { _ in
             JournalMonthCell(day: nil, dateKey: nil, tag: nil, isToday: false, isFuture: false, hasData: false)
         }
-        let days = range.map { d -> JournalMonthCell in
-            let key = "\(yearMonth)-\(String(format: "%02d", d))"
-            let dayData = allDays[key]
-            let tag = (key == todayKey) ? nil : dayData?.journals.last?.tag
+        let days = grid.days.map { gridDay -> JournalMonthCell in
+            let dayData = allDays[gridDay.dateKey]
+            let tag = gridDay.isToday ? nil : dayData?.journals.last?.tag
             let hasData: Bool = {
                 guard let dayData else { return false }
                 return !dayData.meals.isEmpty || !dayData.workouts.isEmpty
@@ -765,15 +715,25 @@ struct JournalMonthModel {
                     || dayData.bottleCount > 0 || !dayData.hygiene.isEmpty
             }()
             return JournalMonthCell(
-                day: d,
-                dateKey: key,
+                day: gridDay.day,
+                dateKey: gridDay.dateKey,
                 tag: tag,
-                isToday: key == todayKey,
-                isFuture: key > todayKey,
+                isToday: gridDay.isToday,
+                isFuture: gridDay.isFuture,
                 hasData: hasData
             )
         }
         self.cells = blanks + days
+        self.cellsByDay = Dictionary(uniqueKeysWithValues: zip(grid.days.map(\.day), days))
+    }
+
+    /// Returns the cell for one shared-grid slot: the blank pad cell for `nil`, else the computed
+    /// cell for that day of the month.
+    func cell(for gridDay: MonthGridDay?) -> JournalMonthCell {
+        guard let gridDay, let cell = cellsByDay[gridDay.day] else {
+            return JournalMonthCell(day: nil, dateKey: nil, tag: nil, isToday: false, isFuture: false, hasData: false)
+        }
+        return cell
     }
 }
 

@@ -238,6 +238,16 @@ public nonisolated struct CycleDayEntry: Identifiable, Equatable {
     public var menstrualFlowSamples: [HKCategorySample] {
         samples.compactMap { $0 as? HKCategorySample }.filter { $0.categoryType.identifier == HKCategoryTypeIdentifier.menstrualFlow.rawValue }
     }
+    /// True when this day carries any HealthKit menstrual-flow sample recording actual bleeding
+    /// (a decodable `HKCategoryValueVaginalBleeding` above `.none`). The single definition of an
+    /// "observed bleeding day" — the store's published phase and the bridge's phase resolution
+    /// both key off this, so the two can never drift.
+    public var hasActualBleedingFlow: Bool {
+        menstrualFlowSamples.contains { sample in
+            guard let flow = HKCategoryValueVaginalBleeding(rawValue: sample.value) else { return false }
+            return flow != .none
+        }
+    }
     /// Observed flow decoded from the day's first menstrual-flow sample, or `nil` with no sample.
     public var flowLevel: PeriodFlowLevel? {
         guard let sample = menstrualFlowSamples.first else { return nil }
@@ -578,11 +588,7 @@ public final class PeriodTrackerStore {
     public func currentPhaseFromObservations() -> CyclePhase {
         let todayKey = FernletDate.dayKey(for: Date())
         guard let entry = entries.first(where: { $0.dateKey == todayKey }) else { return .unknown }
-        let hasActualFlow = entry.menstrualFlowSamples.contains { sample in
-            guard let flow = HKCategoryValueVaginalBleeding(rawValue: sample.value) else { return false }
-            return flow != .none
-        }
-        return hasActualFlow ? .menstrual : .unknown
+        return entry.hasActualBleedingFlow ? .menstrual : .unknown
     }
 
     /// Assembles one ``CycleDayEntry`` per day key in `range`, attaching each day's samples and its

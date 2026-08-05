@@ -101,12 +101,9 @@ public nonisolated enum CoinEconomy {
     public static let coinsPerActiveDay = 5
 
     /// Collapses rows that share an id, keeping the first seen — the application-level union-merge.
+    /// Delegates to the shared `Array.deduplicatedByID()` (see `IdentityDedup.swift`).
     public static func deduplicatedByID(_ entries: [CoinLedgerEntry]) -> [CoinLedgerEntry] {
-        var seen = Set<String>()
-        var unique: [CoinLedgerEntry] = []
-        unique.reserveCapacity(entries.count)
-        for entry in entries where seen.insert(entry.id).inserted { unique.append(entry) }
-        return unique
+        entries.deduplicatedByID()
     }
 
     /// The most recent reset boundary among the rows, or nil if the ledger was never reset.

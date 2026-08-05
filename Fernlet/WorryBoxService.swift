@@ -175,14 +175,8 @@ final class WorryBoxService {
     }
 
     /// Device-bound key generated on first use and stored in the Keychain (never iCloud-synced).
-    /// Mirrors `JournalSealingCoordinator.deviceJournalKey`.
+    /// Shares `KeychainItem.loadOrCreateSymmetricKey` with `JournalSealingCoordinator.deviceJournalKey`.
     private var deviceWorryKey: SymmetricKey {
-        if let data = KeychainItem.load(for: .deviceWorryKey, service: KeychainItem.journalService) {
-            return SymmetricKey(data: data)
-        }
-        let key = SymmetricKey(size: .bits256)
-        let keyData = key.withUnsafeBytes { Data($0) }
-        KeychainItem.store(keyData, for: .deviceWorryKey, service: KeychainItem.journalService)
-        return key
+        KeychainItem.loadOrCreateSymmetricKey(for: .deviceWorryKey, service: KeychainItem.journalService)
     }
 }

@@ -48,8 +48,11 @@ never retained here. The repositories — ``MenstrualNarrativeRepository`` and
 `"menstrual-narrative"` and `"intimacy-log"`), fail closed on writes (`FernletLockError.locked`),
 degrade reads to empty results without a key, skip rows whose ciphertext fails to authenticate,
 and best-effort prune Core Data persistent history after every mutation so superseded ciphertext
-does not linger in the transaction log. When a narrative is logged *while locked*, it detours
-through the device-key `PendingNarrativeBuffer` (via ``PeriodLockContext``) and is re-sealed on
+does not linger in the transaction log. Their keyless `deleteAll()` sweeps route through
+`PrivateStoreCore`'s shared `PrivateRowPlumbing.deleteRows` sequence, whose history prune is
+rethrown rather than best-effort — removing the ciphertext from the log is part of a delete's
+promise. When a narrative is logged *while locked*, it detours through the device-key
+`PendingNarrativeBuffer` (via ``PeriodLockContext``) and is re-sealed on
 the next unlock by ``PeriodTrackerStore/drainPendingBuffer(contentKey:)`` — which is itself
 visibility-gated, because the buffer's device key is invisible to content-key withholding.
 ``MenstrualNarrativeRepository`` additionally owns the one-way "ever stored" divergence latch and

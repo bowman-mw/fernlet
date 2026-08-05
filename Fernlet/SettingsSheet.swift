@@ -34,8 +34,9 @@ import FernletLockUI
 /// Invariants this view enforces:
 /// - Nothing destructive happens silently: hiding period/intimacy tracking and "Delete everything"
 ///   route through ``DestructiveConfirmation`` / ``DeleteAllDataConfirmation``, and a wipe raises
-///   `isDeletingEverything` to show ``DeletingEverythingOverlay``, disable the delete/Done buttons,
-///   and block interactive dismissal so a second confirm can't interleave.
+///   `deleteFlow.isDeleting` (``DeleteEverythingFlow``) to show ``DeletingEverythingOverlay``,
+///   disable the delete/Done buttons, and block interactive dismissal so a second confirm can't
+///   interleave.
 /// - The quick-log editor edits the STORED shortcut array, never a visibility-filtered one, so
 ///   hiding a sensitive surface can't destroy the saved layout (see `quickLogEditorItems`).
 /// - Sensitive Health actions re-check visibility at the point of use (`canUseHealthCapability`),
@@ -49,9 +50,9 @@ struct SettingsSheet: View {
     @AppStorage("fernletDarkModeEnabled") private var isDarkModeEnabled = false
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
-    /// Non-nil when a wipe came back incomplete — drives the failure alert. A silently half-finished
-    /// delete is the exact failure mode this screen is being fixed for, so it gets a surface.
-    @State private var deleteAllFailure: FernletStore.DeleteAllOutcome?
+    /// This screen's own "delete everything" wipe state (busy / success / failure) plus the shared
+    /// confirmation glue — deliberately per-screen, never shared with ``PrivacyDataSettingsView``'s.
+    @State private var deleteFlow = DeleteEverythingFlow()
     /// Confirmation for consequential Settings changes (see `DestructiveConfirmation`). Hiding period /
     /// intimacy keeps the data, but changes what Fernlet reads and how the score behaves — so it is
     /// confirmed rather than silent.
@@ -71,11 +72,6 @@ struct SettingsSheet: View {
     /// Hearts require presence (Group 2): when the user turns hearts ON while Nearby Friends is
     /// off, offer to enable presence too — hearts are dead without it.
     @State private var offerPresenceForHearts = false
-    /// True while a "delete everything" wipe runs — drives the busy overlay, disables the delete and Done
-    /// buttons, and blocks interactive dismissal so a second confirm can't interleave a wipe.
-    @State private var isDeletingEverything = false
-    /// True after a clean wipe; its alert affirms success, then dismisses the sheet on OK.
-    @State private var showDeleteSuccess = false
     /// Settings search query (item 10). Non-empty swaps the Form for a results List; the search bar
     /// lives on the stable `settingsContent` so it persists across that swap.
     @State private var settingsSearch = ""
@@ -99,26 +95,17 @@ struct SettingsSheet: View {
         }
         .background(Color.parchment)
         .overlay {
-            if isDeletingEverything {
+            if deleteFlow.isDeleting {
                 DeletingEverythingOverlay()
             }
         }
         // No swipe-to-dismiss mid-wipe: a wipe is multi-second and the sheet must not close (or re-run)
         // out from under it.
-        .interactiveDismissDisabled(isDeletingEverything)
+        .interactiveDismissDisabled(deleteFlow.isDeleting)
         .destructiveConfirmation($pendingDestructiveAction)
-        .alert("Couldn't delete everything", isPresented: Binding(
-            get: { deleteAllFailure != nil },
-            set: { if !$0 { deleteAllFailure = nil } }
-        ), presenting: deleteAllFailure) { _ in
-            Button("OK", role: .cancel) { deleteAllFailure = nil }
-        } message: { outcome in
-            Text(DeleteAllDataConfirmation.failureMessage(for: outcome))
-        }
-        .alert("Everything deleted", isPresented: $showDeleteSuccess) {
-            Button("Done") { dismiss() }
-        } message: {
-            Text("Fernlet removed everything it stored on this device.")
+        // Success ("Done") dismisses the sheet — the visit is over; failure keeps it put for a retry.
+        .deleteEverythingAlerts(deleteFlow, successButtonTitle: "Done", successButtonRole: nil) {
+            dismiss()
         }
         .onAppear { healthKit.refresh() }
     }
@@ -1667,31 +1654,12 @@ struct SettingsSheet: View {
     private var resetSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button("Delete everything", role: .destructive) {
-                pendingDestructiveAction = DeleteAllDataConfirmation.make(
-                    canDeleteHealthSamples: storagePreferencesStore.preferences.healthKitMasterEnabled,
-                    hasICloudDayCopy: storagePreferencesStore.preferences.hasICloudDayCopy,
-                    hasSealedBackup: storagePreferencesStore.preferences.hasSealedBackup,
-                    delete: { includeHealth in
-                        // Set here (right after the user confirms) so the busy overlay covers the whole
-                        // multi-second wipe, disabling the buttons and blocking a second confirm.
-                        isDeletingEverything = true
-                        return await store.deleteAllData(includingHealthKitSamples: includeHealth)
-                    },
-                    onFinished: { outcome in
-                        isDeletingEverything = false
-                        // Affirm success (its alert dismisses the sheet on OK) only on a clean wipe. On
-                        // failure the sheet stays put behind the failure alert so the user can read which
-                        // store survived and retry — dismissing regardless would hide the failure behind
-                        // an app that merely looks empty.
-                        if outcome.isComplete {
-                            showDeleteSuccess = true
-                        } else {
-                            deleteAllFailure = outcome
-                        }
-                    }
+                pendingDestructiveAction = deleteFlow.makeConfirmation(
+                    preferences: storagePreferencesStore.preferences,
+                    store: store
                 )
             }
-            .disabled(isDeletingEverything)
+            .disabled(deleteFlow.isDeleting)
             .accessibilityIdentifier("settings.deleteAll")
         }
         .font(.fernlet(.label))
@@ -1707,7 +1675,7 @@ struct SettingsSheet: View {
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
                 .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
-                .disabled(isDeletingEverything)
+                .disabled(deleteFlow.isDeleting)
         }
         .padding(20)
         .background(Color.parchment)

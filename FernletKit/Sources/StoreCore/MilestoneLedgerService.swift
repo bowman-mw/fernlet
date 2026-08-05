@@ -23,14 +23,15 @@ public final class MilestoneLedgerService {
     public private(set) var entries: [MilestoneLedgerEntry] = []
 
     @ObservationIgnored private let repository: any MilestoneLedgerRepositoring
-    /// Rows minted locally but not yet written. Only these are appended on flush, so the persisted
-    /// store is touched surgically per-row and never re-writes the rest of the ledger.
-    @ObservationIgnored private var pendingAppends: [MilestoneLedgerEntry] = []
-    @ObservationIgnored private var saveScheduled = false
+    /// The shared debounced append-only queue — the sole un-persisted copy of locally minted rows,
+    /// appended surgically per-row so the persisted store never re-writes the rest of the ledger
+    /// (see ``DebouncedAppendBuffer``). Its append closure captures `repository`, never `self`.
+    @ObservationIgnored private let buffer: DebouncedAppendBuffer<MilestoneLedgerEntry>
 
     /// Creates the service over its per-row store; `initialEntries` seeds the ledger before the first load.
     public init(repository: any MilestoneLedgerRepositoring, initialEntries: [MilestoneLedgerEntry] = []) {
         self.repository = repository
+        self.buffer = DebouncedAppendBuffer(append: { repository.append($0) })
         self.entries = initialEntries
     }
 
@@ -55,13 +56,13 @@ public final class MilestoneLedgerService {
 
     /// Re-reads the store (flushing any unsaved rows first), picking up event rows that synced in
     /// from another device. Mirrors `CoinLedgerService.reloadFromStore`, including the failed-flush
-    /// re-merge: rows a failed append left only in `pendingAppends` are folded back on top of the
+    /// re-merge: rows a failed append left only in the pending queue are folded back on top of the
     /// freshly loaded set so a not-yet-persisted event never vanishes from the in-memory counts.
     public func reloadFromStore() {
         flushPendingSave()
         loadSync()
-        guard !pendingAppends.isEmpty else { return }
-        entries = MilestoneEconomy.deduplicatedByID(pendingAppends + entries)
+        guard !buffer.pending.isEmpty else { return }
+        entries = MilestoneEconomy.deduplicatedByID(buffer.pending + entries)
     }
 
     // MARK: - Recording (idempotent)
@@ -76,36 +77,19 @@ public final class MilestoneLedgerService {
         var added = false
         for entry in newEntries where existingIDs.insert(entry.id).inserted {
             entries.append(entry)
-            pendingAppends.append(entry)
+            buffer.enqueue(entry)
             added = true
         }
-        if added { scheduleSave() }
+        if added { buffer.scheduleSave() }
     }
 
     // MARK: - Flush
 
     /// Same retry contract as `CoinLedgerService.flushPendingSave`: pending rows are the sole
     /// un-persisted copy, so they are cleared only after a confirmed save; a failed append keeps
-    /// them queued for the next flush (and `reloadFromStore` re-merges them meanwhile).
+    /// them queued for the next flush (and `reloadFromStore` re-merges them meanwhile). The full
+    /// durability contract lives on ``DebouncedAppendBuffer/flush()``.
     public func flushPendingSave() {
-        saveScheduled = false
-        guard !pendingAppends.isEmpty else { return }
-        let saved = repository.append(pendingAppends)
-        if saved { pendingAppends = [] }
-    }
-
-    // MARK: - Internals
-
-    /// Coalesces mutations into one debounced main-actor flush per burst.
-    private func scheduleSave() {
-        guard !saveScheduled else { return }
-        saveScheduled = true
-        Task { [weak self] in
-            await Task.yield()
-            await MainActor.run {
-                guard let self else { return }
-                self.flushPendingSave()
-            }
-        }
+        buffer.flush()
     }
 }

@@ -255,7 +255,7 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
     public var photoID: UUID?
 
     public var calories: Int {
-        macros.protein * 4 + macros.carbs * 4 + macros.fat * 9
+        macros.calories
     }
 
     public func copyForToday() -> Meal {
@@ -289,7 +289,7 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
         self.mealType = mealType
         self.macros = macros
         self.macroSnapshot = macroSnapshot ?? macros
-        self.calorieSnapshot = calorieSnapshot ?? Self.calories(for: macroSnapshot ?? macros)
+        self.calorieSnapshot = calorieSnapshot ?? (macroSnapshot ?? macros).calories
         self.micronutrientSnapshot = micronutrientSnapshot
         self.componentSnapshots = componentSnapshots
         self.mealSource = mealSource
@@ -313,7 +313,7 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
         unknownMealTypeToken = mealTypeSplit.parkedToken
         macros = try container.decode(Macros.self, forKey: .macros)
         macroSnapshot = try container.decodeIfPresent(Macros.self, forKey: .macroSnapshot) ?? macros
-        calorieSnapshot = try container.decodeIfPresent(Int.self, forKey: .calorieSnapshot) ?? Self.calories(for: macroSnapshot)
+        calorieSnapshot = try container.decodeIfPresent(Int.self, forKey: .calorieSnapshot) ?? macroSnapshot.calories
         micronutrientSnapshot = try container.decodeIfPresent(Micronutrients.self, forKey: .micronutrientSnapshot) ?? Micronutrients()
         componentSnapshots = try container.decodeIfPresent([MealComponentSnapshot].self, forKey: .componentSnapshots) ?? []
         let mealSourceSplit = try container.decodeTolerantEnum(
@@ -331,10 +331,6 @@ public nonisolated struct Meal: Identifiable, Codable, Equatable {
         source = try container.decodeIfPresent(String.self, forKey: .source) ?? MealLogSource.manual
         loggedAt = try container.decodeIfPresent(Date.self, forKey: .loggedAt) ?? Date()
         photoID = try container.decodeIfPresent(UUID.self, forKey: .photoID)
-    }
-
-    private static func calories(for macros: Macros) -> Int {
-        macros.protein * 4 + macros.carbs * 4 + macros.fat * 9
     }
 }
 
@@ -460,6 +456,9 @@ public nonisolated struct Macros: Codable, Equatable, Sendable {
         self.fat = fat
     }
 
+    /// Derived kilocalories via the 4/4/9 kcal-per-gram rule. The single source of the formula —
+    /// `Meal.calories`, `FoodItem.calories`, `MacroTotals.calories`, and the app-target call sites
+    /// all route through here.
     public var calories: Int { protein * 4 + carbs * 4 + fat * 9 }
 }
 
@@ -899,7 +898,7 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
     public var barcode: String?
 
     public var calories: Int {
-        macros.protein * 4 + macros.carbs * 4 + macros.fat * 9
+        macros.calories
     }
 
     /// Short, human-readable provenance shown on ingredient-search rows so the user can tell where a
@@ -1815,7 +1814,7 @@ public nonisolated struct MacroTotals: Equatable {
         self.fat = fat
     }
 
-    public var calories: Int { protein * 4 + carbs * 4 + fat * 9 }
+    public var calories: Int { Macros(protein: protein, carbs: carbs, fat: fat).calories }
 }
 
 /// The day's computed nutrition plan: calorie/macro/fiber targets plus sodium and saturated-fat
@@ -1878,7 +1877,7 @@ public nonisolated enum NutritionTargetCalculator {
             carbs: carbs,
             fat: fat,
             fiber: fiber,
-            sodiumLimit: 2_300,
+            sodiumLimit: Int(FDADailyValues.sodiumLimitMilligrams),
             saturatedFatLimit: saturatedFatLimit
         )
     }

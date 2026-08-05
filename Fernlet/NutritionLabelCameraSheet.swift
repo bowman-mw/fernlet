@@ -174,22 +174,12 @@ struct NutritionLabelCameraSheet: View {
         .background(Color.parchment)
         .navigationTitle("Scan label")
         .navigationBarTitleDisplayMode(.inline)
-        .fullScreenCover(isPresented: $showingCamera) {
-            ImagePickerView(sourceType: .camera, flashMode: isFlashOn ? .on : .off) { image in
-                handlePickedImage(image)
-            }
-            .ignoresSafeArea()
-        }
-        .onChange(of: selectedPhotoItem) { _, newValue in
-            guard let newValue else { return }
-            Task {
-                if let data = try? await newValue.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    handlePickedImage(image)
-                }
-                selectedPhotoItem = nil
-            }
-        }
+        .photoCapturePlumbing(
+            showingCamera: $showingCamera,
+            selection: $selectedPhotoItem,
+            flashMode: isFlashOn ? .on : .off,
+            onCameraImage: handlePickedImage
+        )
     }
 
     private var hasCameraFlash: Bool {

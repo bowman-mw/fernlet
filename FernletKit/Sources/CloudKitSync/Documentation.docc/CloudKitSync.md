@@ -32,7 +32,13 @@ Beside the day store sit the sibling per-row repositories — ``CoinLedgerReposi
 ``MilestoneLedgerRepository``, ``CustomItemRepository``, and ``SavedRecipeRepository`` — all
 sharing one discipline: **upsert-only writes** (a store only ever touches the rows it is handed, so
 a stale in-memory set on one device can never clobber rows synced in from another) and one JSON
-coder configuration (the internal `RowPayloadCoders`: sorted keys + ISO-8601 whole-second dates).
+coder configuration — `RowPayloadCoders` (sorted keys + ISO-8601 whole-second dates), imported
+from `FernletFoundation`, which is where it lives rather than here so the local-only blob file in
+`LocalPersistence` encodes under the same configuration. The coin-ledger, milestone-ledger, and
+custom-item stores are thin wrappers over one internal load/upsert engine (`AppendOnlyRowStore`,
+parameterized by entity name and labels); the engine deliberately has no delete method, so each
+repository's deletion policy — or its total absence — stays visible on the repository type
+itself.
 Because CloudKit mirrors by record identity rather than by logical id, two devices can produce
 duplicate rows for one logical key; only ``DayRecordRepository`` collapses duplicates itself (most
 recent `updatedAt` wins, with a deliberately tie-conservative self-heal that makes a mutual

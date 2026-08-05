@@ -59,14 +59,14 @@ struct FriendShopView: View {
             learnDesignerNames()
         }
         .onChange(of: shop.peerCatalogs.count) { _, _ in learnDesignerNames() }
-        .alert("Shop", isPresented: Binding(get: { feedback != nil }, set: { if !$0 { feedback = nil } })) {
+        .alert("Shop", isPresented: $feedback.isPresent()) {
             Button("OK", role: .cancel) { feedback = nil }
         } message: {
             Text(feedback ?? "")
         }
         .confirmationDialog(
             "Report this item?",
-            isPresented: Binding(get: { reportTarget != nil }, set: { if !$0 { reportTarget = nil } }),
+            isPresented: $reportTarget.isPresent(),
             presenting: reportTarget
         ) { target in
             ForEach(ReportReason.allCases) { reason in

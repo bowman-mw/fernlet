@@ -290,7 +290,7 @@ enum TierTwoMemoryEngine {
         guard workoutWithMood.count >= 2, restWithMood.count >= 2 else { return nil }
 
         func avgMood(_ pairs: [(String, FernletDay)]) -> Double {
-            let scores = pairs.flatMap { $0.1.journals }.map { moodScore($0.tag) }
+            let scores = pairs.flatMap { $0.1.journals }.map { $0.tag.moodScore }
             guard !scores.isEmpty else { return 0 }
             return scores.reduce(0, +) / Double(scores.count)
         }
@@ -326,18 +326,5 @@ enum TierTwoMemoryEngine {
             confidence: confidence,
             dataWindowDays: window.count
         )
-    }
-
-    /// Maps a journal `FeelingTag` onto the fixed 0.2–1.0 mood scale (duplicated in
-    /// ``DerivedSignalFactory`` — keep the two tables in sync).
-    private static func moodScore(_ tag: FeelingTag) -> Double {
-        switch tag {
-        case .bright: return 1
-        case .good: return 0.85
-        case .neutral: return 0.65
-        case .quiet: return 0.55
-        case .tired: return 0.35
-        case .hard: return 0.2
-        }
     }
 }

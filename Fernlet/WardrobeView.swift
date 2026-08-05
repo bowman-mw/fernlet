@@ -13,24 +13,8 @@ import FernletUI
 struct WardrobeView: View {
     var store: FernletStore
 
-    @State private var shopAlert: ShopAlert?
-
     /// The listing refusals (`store.listCustomItemForSale`) surfaced from the swipe "Sell" action.
-    ///
-    /// Same three cases as ``CreationStudioView``'s enum of the same name — here the fix path is
-    /// "rename it in the editor" since this screen has no name field.
-    private enum ShopAlert: Identifiable {
-        case nameFlagged
-        case capReached
-        case storeBanned
-        var id: Int {
-            switch self {
-            case .nameFlagged: 0
-            case .capReached: 1
-            case .storeBanned: 2
-            }
-        }
-    }
+    @State private var shopAlert: ShopAlert?
 
     var body: some View {
         List {
@@ -112,28 +96,7 @@ struct WardrobeView: View {
                     .accessibilityIdentifier("wardrobe.coinBalance")
             }
         }
-        .alert(item: $shopAlert) { alert in
-            switch alert {
-            case .nameFlagged:
-                return Alert(
-                    title: Text("Pick a friendlier name"),
-                    message: Text("This name can't be used in your shop. Rename it in the editor, then list it again. (Private items can be named anything.)"),
-                    dismissButton: .default(Text("OK"))
-                )
-            case .capReached:
-                return Alert(
-                    title: Text("Your shop is full"),
-                    message: Text("You can list up to \(ClothingShopLimits.maxListedItems) items at once. Unlist one to make room."),
-                    dismissButton: .default(Text("OK"))
-                )
-            case .storeBanned:
-                return Alert(
-                    title: Text("Your shop is closed"),
-                    message: Text("Your shop is paused because items you shared were reported. It reopens automatically after a while — your items are still saved."),
-                    dismissButton: .default(Text("OK"))
-                )
-            }
-        }
+        .alert(item: $shopAlert) { $0.alert(in: .wardrobe) }
     }
 
     private var shopStatusText: String {

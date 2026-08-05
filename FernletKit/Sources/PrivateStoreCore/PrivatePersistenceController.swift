@@ -150,14 +150,14 @@ public final class PrivatePersistenceController {
         entity.name = "MenstrualNarrative"
         entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
         entity.properties = [
-            makeAttribute("id", type: .UUIDAttributeType),
-            makeAttribute("hkExternalUUID", type: .stringAttributeType),
-            makeAttribute("dateKey", type: .stringAttributeType),
-            makeAttribute("noteCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
-            makeAttribute("symptomFlagsCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
-            makeAttribute("customSymptomScalesCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
-            makeAttribute("createdAt", type: .dateAttributeType),
-            makeAttribute("updatedAt", type: .dateAttributeType)
+            CoreDataModelBuilding.makeAttribute("id", type: .UUIDAttributeType),
+            CoreDataModelBuilding.makeAttribute("hkExternalUUID", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("dateKey", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("noteCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
+            CoreDataModelBuilding.makeAttribute("symptomFlagsCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
+            CoreDataModelBuilding.makeAttribute("customSymptomScalesCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
+            CoreDataModelBuilding.makeAttribute("createdAt", type: .dateAttributeType),
+            CoreDataModelBuilding.makeAttribute("updatedAt", type: .dateAttributeType)
         ]
         if let dateKeyProp = entity.propertiesByName["dateKey"] {
             entity.indexes = [NSFetchIndexDescription(name: "byDateKey", elements: [
@@ -177,14 +177,14 @@ public final class PrivatePersistenceController {
         // This store is local-only (never iCloud-synced), so exposure is limited to local forensic
         // analysis ("which days have entries"). All text content lives in sealed ciphertext columns.
         entity.properties = [
-            makeAttribute("id", type: .UUIDAttributeType),
-            makeAttribute("dayKey", type: .stringAttributeType),
-            makeAttribute("tag", type: .stringAttributeType),
-            makeAttribute("entryDate", type: .dateAttributeType),
-            makeAttribute("textCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
-            makeAttribute("emotionsCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
-            makeAttribute("createdAt", type: .dateAttributeType),
-            makeAttribute("updatedAt", type: .dateAttributeType)
+            CoreDataModelBuilding.makeAttribute("id", type: .UUIDAttributeType),
+            CoreDataModelBuilding.makeAttribute("dayKey", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("tag", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("entryDate", type: .dateAttributeType),
+            CoreDataModelBuilding.makeAttribute("textCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
+            CoreDataModelBuilding.makeAttribute("emotionsCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
+            CoreDataModelBuilding.makeAttribute("createdAt", type: .dateAttributeType),
+            CoreDataModelBuilding.makeAttribute("updatedAt", type: .dateAttributeType)
         ]
         if let dayKeyProp = entity.propertiesByName["dayKey"] {
             entity.indexes = [NSFetchIndexDescription(name: "byDayKey", elements: [
@@ -202,13 +202,13 @@ public final class PrivatePersistenceController {
         entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
         // Dates are plaintext so the calendar can be indexed. Free-form details are always sealed.
         entity.properties = [
-            makeAttribute("id", type: .UUIDAttributeType),
-            makeAttribute("dayKey", type: .stringAttributeType),
-            makeAttribute("eventDate", type: .dateAttributeType),
-            makeAttribute("noteCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
-            makeAttribute("healthKitExternalUUID", type: .stringAttributeType),
-            makeAttribute("createdAt", type: .dateAttributeType),
-            makeAttribute("updatedAt", type: .dateAttributeType)
+            CoreDataModelBuilding.makeAttribute("id", type: .UUIDAttributeType),
+            CoreDataModelBuilding.makeAttribute("dayKey", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("eventDate", type: .dateAttributeType),
+            CoreDataModelBuilding.makeAttribute("noteCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true),
+            CoreDataModelBuilding.makeAttribute("healthKitExternalUUID", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("createdAt", type: .dateAttributeType),
+            CoreDataModelBuilding.makeAttribute("updatedAt", type: .dateAttributeType)
         ]
         if let dayKeyProp = entity.propertiesByName["dayKey"] {
             entity.indexes = [NSFetchIndexDescription(name: "intimacyByDayKey", elements: [
@@ -229,28 +229,11 @@ public final class PrivatePersistenceController {
         // data shouldn't follow you across devices. Model kept minimal: plaintext id/createdAt for
         // ordering + deletion, all text in the sealed ciphertext column (same NEW-4 posture as journals).
         entity.properties = [
-            makeAttribute("id", type: .UUIDAttributeType),
-            makeAttribute("createdAt", type: .dateAttributeType),
-            makeAttribute("textCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true)
+            CoreDataModelBuilding.makeAttribute("id", type: .UUIDAttributeType),
+            CoreDataModelBuilding.makeAttribute("createdAt", type: .dateAttributeType),
+            CoreDataModelBuilding.makeAttribute("textCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: true)
         ]
         return entity
-    }
-
-    /// Builds one optional attribute description, optionally flagged for external binary storage
-    /// (used by the ciphertext columns).
-    private static func makeAttribute(
-        _ name: String,
-        type: NSAttributeType,
-        defaultValue: Any? = nil,
-        allowsExternalBinaryDataStorage: Bool = false
-    ) -> NSAttributeDescription {
-        let attribute = NSAttributeDescription()
-        attribute.name = name
-        attribute.attributeType = type
-        attribute.isOptional = true
-        attribute.defaultValue = defaultValue
-        attribute.allowsExternalBinaryDataStorage = allowsExternalBinaryDataStorage
-        return attribute
     }
 }
 

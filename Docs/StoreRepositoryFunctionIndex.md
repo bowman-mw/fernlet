@@ -7,17 +7,17 @@ This index maps the core store, repository, persistence, and extracted store ser
 | Need | Prefer Reusing |
 | --- | --- |
 | Mutating app state and scheduling persistence | `FernletStore.batchSnapshotPersistence(...)`, `FernletStore.mutateDay(date:_:)`, `SnapshotSaveCoordinator.schedule()` |
-| Loading or saving the whole app snapshot | `FernletRepository.loadSnapshot(todayKey:)`, `saveSnapshot(_:)`, `CoreDataFernletRepository`, `LocalFernletRepository` |
+| Loading or saving the whole app snapshot | `FernletRepository.loadSnapshot(todayKey:)`, `saveSnapshot(_:)`, `CoreDataFernletRepository`, `LocalFernletRepository`. 2026-08 consolidation: both backends now assemble snapshots through the shared `FernletSnapshot.assembled(todayKey:day:from:)` (LocalPersistence), and their duplicated JSON encoder/decoder factories were consolidated into `RowPayloadCoders` (FernletFoundation). |
 | Past-date day edits | `FernletStore.loadDay(for:)`, `loadDays()`, `mutateDay(date:_:)`, `FernletRepository.updateDay(_:for:todayKey:)` |
-| Main app Core Data / CloudKit container setup | `PersistenceController.reload(with:)`, `makeContainer(...)`, `configure(...)` |
-| Local-only sealed narrative storage | `PrivatePersistenceController`, `JournalNarrativeRepository`, `MenstrualNarrativeRepository`, `PendingNarrativeBuffer` |
-| Debounced snapshot saves and remote reloads | `SnapshotSaveCoordinator.schedule()`, `flushPending()`, `subscribeRemote(...)` |
+| Main app Core Data / CloudKit container setup | `PersistenceController.reload(with:)`, `makeContainer(...)`, `configure(...)`. 2026-08 consolidation: the `NSAttributeDescription` factory previously duplicated across the CloudKitSync and PrivateStoreCore model builders now lives in `CoreDataModelBuilding.makeAttribute(...)` (FernletFoundation). |
+| Local-only sealed narrative storage | `PrivatePersistenceController`, `JournalNarrativeRepository`, `MenstrualNarrativeRepository`, `PendingNarrativeBuffer`. 2026-08 consolidation: the four duplicated keyless bulk-delete sequences in the narrative/intimacy repositories were consolidated into `PrivateRowPlumbing.deleteRows(...)` (PrivateStoreCore), and `PendingNarrativeBuffer`'s raw SecItem keychain idiom now routes through the shared `KeychainItem` helpers (FernletFoundation). |
+| Debounced snapshot saves and remote reloads | `SnapshotSaveCoordinator.schedule()`, `flushPending()`, `subscribeRemote(...)`. 2026-08 consolidation: the separate four-way debounced pending-write idiom in the row/ledger services was consolidated into `StoreCore/PendingWriteBuffer.swift` (`DebouncedRowBuffer` / `DebouncedAppendBuffer`), which now backs `SavedRecipeService`, `CustomItemService`, `CoinLedgerService`, and `MilestoneLedgerService`. |
 | AI retry queue lifecycle | `AIRetryQueueService.queueMealRetry(_:)`, `clear(id:)`, `apply(_:)`, `reset()` |
-| Derived signal rebuilds | `DerivedSignalsService.rebuild(...)`, `scheduleDeferredRebuild(...)`, `DerivedSignalsRebuilder.rebuild(...)`, `DerivedSignalFactory.makeSignals(...)` |
-| Saved URL recipe persistence and logging | `SavedRecipeService.add(_:)`, `update(_:)`, `delete(_:)`, `makeMeal(from:mealType:)` |
+| Derived signal rebuilds | `DerivedSignalsService.rebuild(...)`, `scheduleDeferredRebuild(...)`, `DerivedSignalsRebuilder.rebuild(...)`, `DerivedSignalFactory.makeSignals(...)`. 2026-08 consolidation: the FeelingTag-to-mood-score table previously duplicated in `DerivedSignalFactory` and `TierTwoMemoryEngine` was consolidated into `FeelingTag.moodScore` (LocalPersistence/FeelingTagMoodScale.swift). |
+| Saved URL recipe persistence and logging | `SavedRecipeService.add(_:)`, `update(_:)`, `delete(_:)`, `makeMeal(from:mealType:)`. 2026-08 consolidation: the service's debounce/pending-write plumbing now sits on the shared `DebouncedRowBuffer` (StoreCore/PendingWriteBuffer.swift), and the cloned per-row ledger repositories (coin/milestone/custom item) were consolidated onto the generic `AppendOnlyRowStore` engine (CloudKitSync). |
 | Bundled catalog loading | `BundledFoodSeedingService.load()`, `FernletStore.ensureBundledFoodItemsSeeded()` |
 | Launch photowall/day summary/companion thought prep | `LaunchPreparationService.prepare(store:)`, `PhotowallPhotoSelector.selectPhotoIDs(...)` |
-| Keychain-backed storage preferences | `StoragePreferencesStore.update(_:)`, `StoragePreferences.defaultHealthKitCapabilityEnabled` |
+| Keychain-backed storage preferences | `StoragePreferencesStore.update(_:)`, `StoragePreferences.defaultHealthKitCapabilityEnabled`. 2026-08 consolidation: the last inline duplicate of the preferences load (in `PersistenceController.shared`) was consolidated onto `StoragePreferencesStore.currentPreferences()`. |
 
 ## Store And Snapshot Contract
 
@@ -86,8 +86,9 @@ This index maps the core store, repository, persistence, and extracted store ser
 | `FernletSnapshot.init(...)` | Builds the full persisted snapshot contract for current day, settings, history, food, recipes, scores, retry, proximity logs/trust, and audit data. |
 | `FernletSnapshot.init(from:)` | Decodes snapshots with defaults for fields added after older saved data. |
 | `LocalFernletDatabase.init(from:)` | Decodes the full local database with defaults for older schema fields and derived tables. |
-| `LocalFernletRepository.init(fileURL:)` | Resolves the JSON database URL and configures ISO-8601 coding. |
-| `loadSnapshot(todayKey:)` | Loads the database, selects or creates today's day, and returns a `FernletSnapshot`. |
+| `FernletSnapshot.assembled(todayKey:day:from:)` | Shared read-side slice mapping — builds the snapshot from an already-resolved day plus a `LocalFernletDatabase`'s aggregate slices. Both repositories call it; day resolution stays at the call sites because it differs per backend. The read-side counterpart of `LocalFernletDatabase.apply(_:maxStoredDays:)`. |
+| `LocalFernletRepository.init(fileURL:)` | Resolves the JSON database URL and configures coding through `RowPayloadCoders` (pretty-printed). |
+| `loadSnapshot(todayKey:)` | Loads the database, selects or creates today's day, and returns `FernletSnapshot.assembled(...)`. |
 | `saveSnapshot(_:)` | Applies a snapshot, rebuilds derived tables, and atomically writes the JSON database. |
 | `updateDay(_:for:todayKey:)` | Replaces one date's day, rebuilds derived tables, and saves without rebuilding the whole store state in memory. |
 | `databaseFileURL()` | Exposes the JSON file URL for diagnostics or migration code. |
@@ -103,16 +104,15 @@ This index maps the core store, repository, persistence, and extracted store ser
 | `migratedDatabase(todayKey:)` | Creates a database from legacy `UserDefaults` keys. |
 | `loadLegacy(_:key:)` | Decodes one legacy `UserDefaults` value. |
 | `defaultFileURL()` | Builds the default Application Support JSON path. |
-| `makeEncoder()` / `makeDecoder()` | Configure pretty/sorted JSON and ISO-8601 dates. |
+| `RowPayloadCoders.makeEncoder(prettyPrinted:)` / `makeDecoder()` | The shared sorted-keys + ISO-8601 coder config (FernletFoundation) that replaced this file's private `makeEncoder()` / `makeDecoder()`; this repository opts into `prettyPrinted` for its on-disk blob. |
 | `LegacyKeys.day(_:)` | Builds the legacy per-day `UserDefaults` key. |
-| `LocalFernletDatabase.apply(_:)` | Copies snapshot fields into the database and updates `updatedAt`. |
-| `LocalFernletDatabase.rebuildDerivedTables(todayKey:)` | Rebuilds daily, meal, workout, journal, derived signal, and tier-two memory tables. |
-| `sortedDayPairs(_:)` | Orders day records and enforces max stored days. |
+| `LocalFernletDatabase.apply(_:maxStoredDays:)` | Copies snapshot fields into the database, updates `updatedAt`, and trims the blob's own `days` window when a bound is passed (the Core Data path bounds it; the local path passes nil). |
+| `LocalFernletDatabase.rebuildDerivedTables(todayKey:recentDays:)` | Rebuilds daily, meal, workout, journal, and tier-two memory tables, optionally over an injected bounded day window. |
+| `sortedDayPairs(_:)` | Orders day records oldest-first by date key. |
 | `makeDailyLogs(from:)` | Builds daily rollup records from stored days. |
 | `makeMealLogs(from:)` | Builds capped meal log records with daily macro totals. |
 | `makeWorkoutLogs(from:)` | Builds capped workout log records. |
 | `makeJournalLogs(from:)` | Builds capped journal log records. |
-| `makeDerivedSignals(from:todayKey:)` | Builds recent-window derived signals through `DerivedSignalFactory`. |
 | `DailyLogRecord.init(dateKey:day:)` | Converts a day into daily score/audit fields. |
 | `DailyLogRecord.init(from:)` | Decodes older daily logs with defaults for optional fields. |
 | `MealLogRecord.init(dateKey:meal:totals:)` | Converts a meal into a denormalized log row. |
@@ -129,7 +129,8 @@ This index maps the core store, repository, persistence, and extracted store ser
 | `micronutrientTrend(from:start:end:windowDays:)` | Converts nutrient gap analysis into a derived signal. |
 | `dailyMoodScores(from:)` / `dailyEnergyScores(from:)` | Convert day records into trend input scores. |
 | `trendValue(scores:rising:falling:steady:)` | Converts score deltas into trend labels. |
-| `moodScore(_:)` / `sleepEnergyScore(_:)` / `dailyTrainingLoad(_:)` / `average(_:)` | Shared scoring helpers for derived signal logic. |
+| `sleepEnergyScore(_:healthSleepHours:)` / `dailyTrainingLoad(_:)` / `average(_:)` | Shared scoring helpers for derived signal logic. |
+| `FeelingTag.moodScore` | The single 0.2–1.0 tag-to-mood-score scale (`FeelingTagMoodScale.swift`), replacing the private `moodScore(_:)` copies this factory and `TierTwoMemoryEngine` each carried. |
 | `TierTwoMemoryEngine.updateInferences(existing:from:goals:)` | Updates longer-term behavioral memory records only when state changes. |
 | `prune(_:)` | Caps tier-two memories per category and globally, preferring active/recent records. |
 | `goalBehaviorGap(window:goals:)` | Infers alignment between stated goals and logged behavior. |
@@ -156,11 +157,11 @@ This index maps the core store, repository, persistence, and extracted store ser
 | `loadDatabase(todayKey:)` | Uses cache, fetches the primary record, migrates from legacy JSON when absent, and decodes payload data. |
 | `saveDatabase(_:)` | Encodes the database into the single primary Core Data record and updates cache metadata. |
 | `fetchRecordUpdatedAt()` | Reads the latest primary record timestamp. |
-| `fetchRecord()` | Fetches the primary `FernletDatabaseRecord` by record ID. |
+| `fetchRecordResult()` | Fetches the primary `FernletDatabaseRecord` by record ID, distinguishing a found record, no record, and a failed fetch. |
 | `migrateDatabase(todayKey:)` | Loads the legacy local database for first Core Data save. |
-| `snapshot(from:todayKey:)` | Converts a database payload into a `FernletSnapshot`. |
+| `snapshot(from:todayKey:)` | Resolves today's day from its `DayRecord` row (with the pre-migration blob fallback), then maps the blob-held aggregates through the shared `FernletSnapshot.assembled(todayKey:day:from:)`. |
 | `decodeDatabaseAsync(from:)` | Decodes the payload off the main synchronous path while keeping signpost timing. |
-| `makeEncoder()` / `makeDecoder()` | Configure sorted JSON payload coding and ISO-8601 dates. |
+| `RowPayloadCoders.makeEncoder(prettyPrinted:)` / `makeDecoder()` | The shared sorted-keys + ISO-8601 payload coder config this repository (and every other per-row store) encodes through; it moved from `CloudKitSync` to `FernletFoundation`. |
 
 ### `FernletStore.swift`
 
@@ -170,8 +171,8 @@ This index maps the core store, repository, persistence, and extracted store ser
 | `webImportedFoodItems` | Filters saved food items to web imports. |
 | `allowsWebNutritionLookup` | Gates web lookup behind settings and AI availability. |
 | `savedRecipes`, `trustedProximityPeers`, `trainerAuditEvents`, `retryQueue`, `derivedSignals` | Expose extracted service/vault state through the store. |
-| `init(date:repository:savedRecipeRepository:healthKitService:journalNarrativeRepository:)` | Loads the active repository snapshot, saved recipes, trust vault, retry queue, journal repository, inspector, save hooks, derived signals, and remote reload subscription. |
-| `private init(snapshot:todayKey:repository:savedRecipeService:healthKitService:)` | Builds a store from an already loaded snapshot for async startup. |
+| `init(date:repository:savedRecipeRepository:customItemRepository:coinLedgerRepository:milestoneLedgerRepository:healthKitService:journalNarrativeRepository:foodCatalog:sensitiveVisibilityDefaults:aiAuditLogStore:cookingRunDirectory:)` | Every dependency is defaulted; loads the active repository snapshot, saved recipes, custom items, coin/milestone ledgers, trust vault, retry queue, journal repository, inspector, save hooks, derived signals, and remote reload subscription. |
+| `private init(snapshot:todayKey:repository:savedRecipeService:customItemService:coinLedgerService:milestoneLedgerService:healthKitService:foodCatalog:)` | Builds a store from an already loaded snapshot for async startup. |
 | `score` / `companionState` | Compute current day score and companion state from store data. |
 | `macroTotals` / `micronutrientTotals` / `nutritionTargets` | Compute nutrition aggregates and targets for current settings/day. |
 | `tierTwoMemories` | Loads behavioral memory records from the repository. |
@@ -226,15 +227,15 @@ This index maps the core store, repository, persistence, and extracted store ser
 | `reloadFromRepository()` | Debounced remote reload handler that async-loads Core Data when available and applies a snapshot. |
 | `apply(_:)` | Replaces in-memory store state from a snapshot and reapplies extracted service/vault state. |
 | `currentSnapshot()` | Builds the persistable snapshot, stripping sealed journal text before cloud-eligible storage. |
-| `strippedForStorage(day:previousJournals:)` | Returns day/journal copies with sealed text and emotions removed. |
+| `FernletSnapshot.forStorage(...)` | The strip itself, in the nonisolated `FernletPersistence` module: returns the `SanitizedSnapshot` with sealed journal text/emotions and sensitive health fields removed. Sealing state is passed in as the sealed-ID set. |
 | `batchSnapshotPersistence(_:)` | Runs synchronous mutations and schedules one debounced snapshot save. |
 | `markLaunchScreenDismissed()` | Placeholder hook for launch UI lifecycle. |
 | `ensureBundledFoodItemsSeeded()` | Starts one async bundled food load and stores returned catalog items. |
 | `activateNoLockJournals()` | Uses the device journal key to seal legacy plaintext journals and hydrate sealed text. |
 | `activateSealedJournals(contentKey:)` | Sets the user content key, migrates device-key entries, hydrates text, and seals legacy plaintext. |
 | `deactivateSealedJournals()` | Scrubs sealed journal text/emotions from memory and clears the content key. |
-| `deviceJournalKey` | Loads or creates the device-bound fallback journal sealing key. |
-| `sealJournalEntry(_:dayKey:)` | Writes journal text/emotions to `JournalNarrativeRepository` and marks the entry sealed. |
+| `deviceJournalKey` | Loads or creates the device-bound fallback journal sealing key through the shared `KeychainItem.loadOrCreateSymmetricKey(for:service:)` (FernletFoundation), which replaced the per-caller copies of that mint-on-first-use idiom. |
+| `seal(_:dayKey:)` | Writes journal text/emotions to `JournalNarrativeRepository` and marks the entry sealed. |
 | `migrateDeviceKeyEntriesToUserKey(userKey:)` | Re-encrypts device-key narratives under the user content key. |
 | `refreshSealedJournals(contentKey:)` | Hydrates empty journal entries from sealed narrative storage. |
 | `migrateExistingJournalsToSealedStore(contentKey:)` | One-time migration that seals plaintext journal entries and schedules a stripped snapshot save. |
@@ -243,6 +244,8 @@ This index maps the core store, repository, persistence, and extracted store ser
 | `setWorkoutHealthKitUUID(workoutID:hkUUID:date:)` | Finds a workout across today/past days and stores its HealthKit UUID. |
 | `upsertWorkout(_:date:)` | Workout sync insertion hook; currently delegates to `addWorkout(_:date:)`. |
 | `static load(date:repository:statusUpdate:)` | Async startup loader that creates repositories/services, loads snapshot and saved recipes, and returns a ready store. |
+
+The journal-sealing rows above (`activateNoLockJournals()` through `migrateExistingJournalsToSealedStore(contentKey:)`, plus `deviceJournalKey` and `seal(_:dayKey:)`) now live on `JournalSealingCoordinator` (`Fernlet/JournalSealingCoordinator.swift`), which the store owns and reaches through the `JournalSealingContext` host protocol.
 
 ### `FernletStoreLoader.swift`
 
@@ -258,7 +261,7 @@ This index maps the core store, repository, persistence, and extracted store ser
 
 | Function Or Property | What It Does |
 | --- | --- |
-| `PersistenceController.shared` | Creates the app-wide Core Data controller from keychain storage preferences while currently forcing iCloud sync off at startup. |
+| `PersistenceController.shared` | Creates the app-wide Core Data controller from `StoragePreferencesStore.currentPreferences()` while currently forcing iCloud sync off at startup. |
 | `PersistenceController.preview` | Creates an in-memory controller for previews. |
 | `init(inMemory:preferences:storeURL:iCloudAvailable:)` | Builds, loads, configures, and observes the main persistent container. |
 | `reload(with:)` | Saves/reset old context, removes stores, rebuilds the container for new preferences, loads stores async, and publishes a remote-change notification. |
@@ -275,7 +278,7 @@ This index maps the core store, repository, persistence, and extracted store ser
 | `makeManagedObjectModel()` | Builds the main cloud-safe model entities in code. |
 | `makeFernletDatabaseRecordEntity()` | Defines the single blob record entity for `LocalFernletDatabase` payload data. |
 | `makeSavedRecipeRecordEntity()` | Defines saved URL recipe records in the main store. |
-| `makeAttribute(...)` | Creates optional Core Data attributes for programmatic models. |
+| `CoreDataModelBuilding.makeAttribute(_:type:defaultValue:allowsExternalBinaryDataStorage:)` | The shared optional-attribute factory (FernletFoundation) both programmatic model builders now call; it replaced the private `makeAttribute(...)` copy in this file. |
 
 ### `CoreDataFernletRepository.swift`
 
@@ -291,8 +294,16 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 | `makeMenstrualNarrativeEntity()` | Defines encrypted menstrual narrative columns and a date-key index. |
 | `makeJournalNarrativeEntity()` | Defines local-only journal metadata plus sealed text/emotion columns and a day-key index. |
 | `makeIntimacyLogEntity()` | Defines local-only intimacy metadata plus sealed note columns and a day-key index. |
-| `makeAttribute(...)` | Creates optional Core Data attributes for private model entities. |
+| `makeWorryNarrativeEntity()` | Defines local-only Worry Box metadata plus sealed text columns. |
+| `CoreDataModelBuilding.makeAttribute(_:type:defaultValue:allowsExternalBinaryDataStorage:)` | The same shared attribute factory the synced model builder uses (FernletFoundation); it replaced this file's private copy, so the two builders cannot drift. |
+| `purgeEncryptedEntities()` | Destructive lock-reset wipe; deliberately batches all sealed entities under a single save rather than using `PrivateRowPlumbing.deleteRows(...)`, so the wipe stays atomic across entities. |
 | `PrivatePersistentHistoryPruner.prune(context:before:)` | Deletes private-store persistent history before a date. |
+
+### `PrivateRowPlumbing.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `PrivateRowPlumbing.deleteRows(entityName:predicate:fetchLimit:in:)` | The shared keyless fetch → delete → save → history-prune sequence the sealed repositories' `deleteAll()` methods each repeated inline (journal, worry, intimacy, menstrual narratives). Deletes without decrypting, so deletion stays available while the app is locked or the feature is hidden; returns whether any row was deleted and rethrows fetch/save/prune errors. |
 
 ### `StoragePreferences.swift`
 
@@ -303,7 +314,8 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 | `StoragePreferencesStore.init(keychainService:now:)` | Loads preferences from keychain or defaults. |
 | `update(_:)` | Applies a mutation, updates `lastModifiedAt`, publishes, and persists to keychain. |
 | `persist(_:)` | Encodes and stores preferences in keychain. |
-| `loadPreferences(service:)` | Reads and decodes keychain preferences with default fallback. |
+| `currentPreferences(service:)` | The `nonisolated` shared read — a pure keychain read plus JSON decode — for callers that need the persisted preferences without holding a store instance (`PersistenceController.shared`, `PrivatePersistenceController`, `CloudKitDataService`, `HealthKitService`). |
+| `loadPreferences(service:)` | Reads and decodes keychain preferences with default fallback; the private body behind `currentPreferences(service:)` and the store's own load. |
 
 ## Extracted Store Services
 
@@ -348,16 +360,31 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 
 | Function | What It Does |
 | --- | --- |
-| `init()` / `init(repository:initialRecipes:)` | Wires the saved recipe repository and optional initial state. |
-| `loadAsync()` / `loadSync()` | Loads saved URL recipes from the repository. |
-| `add(_:)` | De-duplicates by source URL, inserts newest first, and schedules a save. |
-| `update(_:)` | Replaces a saved recipe by ID and schedules a save. |
-| `delete(_:)` | Removes a saved recipe by ID and schedules a save. |
-| `reset()` | Clears saved recipes and schedules a save. |
-| `flushPendingSave()` | Writes scheduled saved recipe changes immediately. |
+| `init(repository:initialRecipes:)` | Wires the saved recipe repository, builds the shared `DebouncedRowBuffer` over its upsert/delete primitives, and de-duplicates any initial state by ID. |
+| `loadAsync()` / `loadSync()` | Loads saved URL recipes from the repository, union-merged by ID through `Array.deduplicatedByID()`. |
+| `reloadFromStore()` | Flushes first, re-reads the store, then re-applies still-pending buffer mutations so a failed write never drops a recipe from the in-memory list. |
+| `add(_:)` | De-duplicates by source URL, inserts newest first, and enqueues the upsert (plus deletes for superseded rows). |
+| `update(_:)` | Replaces a saved recipe by ID and enqueues its upsert. |
+| `delete(_:)` | Removes a saved recipe by ID and enqueues its delete. |
+| `reset()` | Clears saved recipes, clears the buffer so a pending write cannot resurrect them, and returns whether the persisted rows were deleted. |
+| `flushPendingSave()` | Delegates to `DebouncedRowBuffer.flush()` — writes pending upserts/deletes now, keeping a failed queue for retry. |
 | `shareText(for:)` | Builds user-shareable saved recipe text with macros, summary, ingredients, and source URL. |
 | `makeMeal(from:mealType:)` | Converts a saved URL recipe into a `Meal`. |
-| `scheduleSave()` | Debounces repository writes until the next main-actor turn. |
+
+The debounce/queue mechanics this service used to own now live in `PendingWriteBuffer.swift` (below), shared with `CustomItemService`, `CoinLedgerService`, and `MilestoneLedgerService`.
+
+### `PendingWriteBuffer.swift`
+
+| Function Or Type | What It Does |
+| --- | --- |
+| `DebouncedRowBuffer<Item>` | The debounced per-row pending-write queue shared by `SavedRecipeService` and `CustomItemService`. Its write closures capture the owning service's repository, never the service. |
+| `DebouncedRowBuffer.enqueueUpsert(_:)` / `enqueueDelete(_:)` | Queue a row mutation keyed by ID (each cancels a pending opposite for the same ID) and schedule the debounced flush. |
+| `DebouncedRowBuffer.flush()` | Writes pending upserts/deletes now, clearing each queue only after its confirmed write; a failed write keeps that queue for retry and never traps. |
+| `DebouncedRowBuffer.pendingUpserts` / `pendingDeletes` / `hasPending` | Read-only queue state for the owner's `reloadFromStore()` re-merge after a failed flush. |
+| `DebouncedRowBuffer.clear()` | Drops every queued mutation and any scheduled flush — for the owner's `reset()`, where a pending write must not resurrect deleted rows. |
+| `DebouncedAppendBuffer<Entry>` | The append-only variant shared by `CoinLedgerService` and `MilestoneLedgerService`; `enqueue(_:)` deliberately schedules nothing so callers batch N rows and call `scheduleSave()` once per burst. |
+| `DebouncedAppendBuffer.flush()` / `pending` / `clear()` | Same durability contract as the row buffer: `pending` is the sole un-persisted copy, cleared only after a confirmed append. |
+| `scheduleSave()` | Coalesces mutations into one debounced main-actor flush per burst; the task's weak self-capture keeps "owner gone → flush skipped" semantics. Private on `DebouncedRowBuffer` (the enqueues call it), public on `DebouncedAppendBuffer` (the ledger services call it once per batch). |
 
 ### `BundledFoodSeedingService.swift`
 
@@ -371,22 +398,20 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 | Function Or Type | What It Does |
 | --- | --- |
 | `PhotowallPhotoRanking.rankedCandidates(from:context:)` | Strategy protocol for ordering photowall photo candidates. |
-| `RandomPhotowallPhotoRanking.rankedCandidates(from:context:)` | Default shuffled photo ranking. |
-| `PhotowallPhotoSelector.init(defaults:historyKey:ranking:)` | Wires history persistence and ranking strategy. |
+| `RandomPhotowallPhotoRanking.rankedCandidates(from:context:)` | Uniform shuffle; the injectable test baseline, and the behavior favorite weighting degrades to when nothing is hearted. |
+| `FavoriteWeightedPhotowallPhotoRanking.rankedCandidates(from:context:)` | The production default ranking — hearted photos drawn ~3× as often, via the seedable `WeightedPhotowallOrdering.weightedOrder(ids:favoriteIDs:favoriteWeight:using:)`. |
+| `PhotowallPhotoSelector.init(defaults:historyKey:ranking:)` | Wires history persistence and ranking strategy (defaulting to the favorite-weighted ranking). |
 | `selectPhotoIDs(from:count:context:)` | De-duplicates photos, prefers IDs not recently selected, stores the new history, and returns selected IDs. |
 | `previousPhotoIDs()` | Reads prior photowall photo IDs from `UserDefaults`. |
 | `LaunchPreparationService.init(photowallPhotoSelector:)` | Configures launch preparation and photowall selection. |
-| `prepare(store:)` | Runs one launch preparation pass: photowall seeds, yesterday summary, companion thought, HealthKit backfill, status timing, and launch completion. |
+| `prepare(store:)` | Runs one launch preparation pass: guided-workout and cooking run reconciliation, data-export sweep, photowall seeds, day-summary backfill, companion thought, HealthKit backfill, status timing, and launch completion. |
 | `buildPhotowallSeeds(store:)` | Builds four home photowall seeds from memories and selected mesh photos. |
-| `generateDaySummary(for:)` | Optional async day-summary path that avoids replacing an existing summary. |
-| `makeDaySummaryText(for:store:)` | Uses FoundationModels when available, otherwise deterministic summary text. |
-| `deterministicDaySummary(for:)` | Builds a compact summary from meals, workouts, sleep, hydration, and journal tag. |
-| `deterministicDaySummaryForYesterday(store:)` | Builds yesterday's deterministic summary when there is log data and no existing summary. |
+| `backfillDaySummaries(for:)` | Generates missing day summaries for logged past days, newest first, capped per run and gated to once per calendar day. |
+| `makeDaySummaryText(for:store:)` | Returns a FoundationModels day summary when available; otherwise nil, leaving the slot intentionally empty (spec) rather than filling deterministic text. |
 | `generateCompanionThought(for:)` | Optional async companion thought path using FoundationModels when available. |
 | `deterministicThought(for:)` | Selects companion thought text from derived signal values. |
 | `isFoundationModelAvailable` | Delegates FoundationModels availability to food-selection availability. |
-| `yesterdayKey()` | Computes yesterday's Fernlet date key. |
-| `foundationModelsDaySummary(for:)` | Builds and audits a day-summary payload, prompts an on-device model, and returns bounded text. |
+| `foundationModelsDaySummary(for:gate:)` | Builds and audits a day-summary payload, prompts an on-device model, and returns bounded text. |
 | `foundationModelsThought(for:)` | Builds and audits signal/memory context, prompts an on-device model, and returns a short observation. |
 
 ### `PendingNarrativeBuffer.swift`
@@ -400,5 +425,6 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 | `loadEntries()` | Opens the ChaChaPoly buffer file with the buffer key and decodes payloads. |
 | `saveEntries(_:)` | Encodes, encrypts, atomically writes, excludes from backup, and marks complete file protection. |
 | `bufferKey()` | Loads or creates the background-accessible buffer key. |
-| `loadBufferKey()` | Reads the buffer key from the data-protection keychain. |
-| `createAndStoreBufferKey()` | Creates a 256-bit buffer key and stores it as after-first-unlock-this-device-only. |
+| `loadBufferKey()` | Reads the buffer key through the shared `KeychainItem.load(account:service:)`, migrating a legacy v1 row into the scoped v2 slot via `KeychainItem.store(...)`. |
+| `loadLegacyServicelessKey()` | Raw `SecItemCopyMatching` read of the service-less v1 key — the one keychain call `KeychainItem` cannot express; dies with the v1 migration. |
+| `createAndStoreBufferKey()` | Creates a 256-bit buffer key and stores it after-first-unlock-this-device-only through `KeychainItem.store(...)`. |

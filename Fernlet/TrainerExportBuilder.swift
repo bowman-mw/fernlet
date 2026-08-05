@@ -227,27 +227,21 @@ extension FernletStore {
     }
 
     /// Encodes the bundle to pretty, stable JSON bytes (for the reviewable preview and the future sealed
-    /// coach send).
+    /// coach send). Encodes through the shared `makeExportJSONEncoder()`, so the bytes are the same
+    /// stable dialect as the Phase-1 data export.
     func encodeTrainerExport(_ bundle: TrainerExportBundle) -> Data? {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .iso8601
-        return try? encoder.encode(bundle)
+        try? Self.makeExportJSONEncoder().encode(bundle)
     }
 
     /// Writes the reviewed bundle to a protected temp JSON file and returns its URL — the interim way to
     /// hand the summary to a coach (share sheet) until the dedicated in-person `fernlet-coach` transport
-    /// ships. `.completeFileProtection` like the Phase-1 data export.
+    /// ships. Writes through `writeProtectedExport` into `dataExportsDirectory` (atomic +
+    /// `.completeFileProtection`, like the Phase-1 data export), so the file — injury notes, sickness
+    /// days, wellbeing scores in the clear — is covered by the launch sweep, the share-completion purge,
+    /// and "Delete everything" by construction instead of surviving in the tmp/ root.
     func writeTrainerExportFile(options: TrainerExportOptions) -> URL? {
         guard let data = encodeTrainerExport(buildTrainerExport(options: options)) else { return nil }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Fernlet-training-\(todayKey).json")
-        do {
-            try data.write(to: url, options: [.atomic, .completeFileProtection])
-            return url
-        } catch {
-            return nil
-        }
+        return try? writeProtectedExport(data, kind: "training")
     }
 
     /// The user's daily hydration goal in bottles (mirrors the Phase-1 export's `settings.hydrationTarget`).

@@ -194,7 +194,7 @@ enum MealDecompositionResolver {
         let totalCalories = deduped.reduce(0.0) { cal, pair in
             let ri = RecipeIngredient(foodItemId: pair.1.id, quantity: pair.0.quantity, unit: pair.0.unit)
             let m = ri.scaledMacros(using: pair.1)
-            return cal + Double(m.protein * 4 + m.carbs * 4 + m.fat * 9)
+            return cal + Double(m.calories)
         }
         let caloriesPerGram = totalCalories / max(totalGrams, 1)
         guard caloriesPerGram >= 0.3 && caloriesPerGram <= 9 else { return nil }

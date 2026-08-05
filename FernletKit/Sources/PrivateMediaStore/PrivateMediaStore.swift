@@ -117,12 +117,13 @@ public struct PrivateMediaStore {
             }
             // Encrypt the plaintext bytes (post-validation) before they touch disk. If no key is
             // available we skip persisting bytes rather than write plaintext; the metadata index
-            // is still saved and the photo rehydrates from the mesh on demand.
-            guard let sealedImage = encrypt(imageData) else { continue }
+            // is still saved and the photo rehydrates from the mesh on demand. Deliberately
+            // two-step (seal, then best-effort write) rather than `sealAndWrite`: a failed image
+            // write still proceeds to the thumbnail write, while a nil key skips both.
+            guard let sealedImage = keyProvider.gcmSeal(imageData) else { continue }
             try? sealedImage.write(to: imageURL(for: photo.id), options: [.atomic, .completeFileProtection])
-            if let thumbnailData = Self.safeThumbnailData(from: imageData),
-               let sealedThumbnail = encrypt(thumbnailData) {
-                try? sealedThumbnail.write(to: thumbnailURL(for: photo.id), options: [.atomic, .completeFileProtection])
+            if let thumbnailData = Self.safeThumbnailData(from: imageData) {
+                keyProvider.sealAndWrite(thumbnailData, to: thumbnailURL(for: photo.id))
             }
         }
         guard let data = try? encoder.encode(capped.map { $0.withoutImageData() }) else { return }
@@ -144,7 +145,7 @@ public struct PrivateMediaStore {
             return data
         case .legacyPlaintext(let data):
             // Upgrade a pre-encryption plaintext file to ciphertext on first access (spec §11).
-            reseal(data, to: imageURL(for: photo.id))
+            keyProvider.sealAndWrite(data, to: imageURL(for: photo.id))
             return data
         case .unreadable:
             return nil
@@ -162,7 +163,7 @@ public struct PrivateMediaStore {
             case .opened(let data):
                 return data
             case .legacyPlaintext(let data):
-                reseal(data, to: thumbnailURL(for: photo.id))
+                keyProvider.sealAndWrite(data, to: thumbnailURL(for: photo.id))
                 return data
             case .unreadable:
                 break  // corrupt/unopenable thumbnail — regenerate from the full image below
@@ -170,7 +171,7 @@ public struct PrivateMediaStore {
         }
         guard let data = imageData(for: photo),
               let thumbnailData = Self.safeThumbnailData(from: data) else { return nil }
-        reseal(thumbnailData, to: thumbnailURL(for: photo.id))
+        keyProvider.sealAndWrite(thumbnailData, to: thumbnailURL(for: photo.id))
         return thumbnailData
     }
 
@@ -204,18 +205,6 @@ public struct PrivateMediaStore {
         case unreadable             // no key, or bytes that are neither openable nor a valid image
     }
 
-    /// Seals plaintext bytes with AES-256-GCM under the store's key. Returns nil if no key.
-    private func encrypt(_ plaintext: Data) -> Data? {
-        guard let key = keyProvider.mediaKey() else { return nil }
-        return try? AES.GCM.seal(plaintext, using: key).combined
-    }
-
-    /// Encrypts and atomically overwrites a file with the sealed bytes (best-effort).
-    private func reseal(_ plaintext: Data, to url: URL) {
-        guard let sealed = encrypt(plaintext) else { return }
-        try? sealed.write(to: url, options: [.atomic, .completeFileProtection])
-    }
-
     /// Opens AES-256-GCM bytes. GCM open fails both for legacy pre-encryption plaintext files and
     /// for genuinely undecodable bytes (wrong/lost key, corruption). We distinguish the two by
     /// checking whether the raw bytes are themselves a valid image — so a wrong key or a corrupt
@@ -223,9 +212,10 @@ public struct PrivateMediaStore {
     /// back as if it were a photo. Files that predate encryption passed the same pixel-bounds gate
     /// at save time, so they are recognised as `.legacyPlaintext` and upgraded on access.
     private func openSealed(_ stored: Data) -> OpenResult {
-        guard let key = keyProvider.mediaKey() else { return .unreadable }
-        if let box = try? AES.GCM.SealedBox(combined: stored),
-           let plaintext = try? AES.GCM.open(box, using: key) {
+        // The explicit nil-key guard is load-bearing: without a key NOTHING opens — a legacy
+        // plaintext file is `.unreadable` here, never handed back as a photo.
+        guard keyProvider.mediaKey() != nil else { return .unreadable }
+        if let plaintext = keyProvider.gcmOpen(stored) {
             return .opened(plaintext)
         }
         return Self.isWithinSafePixelBounds(stored) ? .legacyPlaintext(stored) : .unreadable

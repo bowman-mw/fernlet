@@ -31,15 +31,16 @@ public final class CoinLedgerService {
     public private(set) var entries: [CoinLedgerEntry] = []
 
     @ObservationIgnored private let repository: any CoinLedgerRepositoring
-    /// Rows minted locally but not yet written. Only these are appended on flush, so the persisted store
-    /// is touched surgically per-row and never re-writes (or deletes) the rest of the ledger.
-    @ObservationIgnored private var pendingAppends: [CoinLedgerEntry] = []
-    @ObservationIgnored private var saveScheduled = false
+    /// The shared debounced append-only queue — the sole un-persisted copy of locally minted rows,
+    /// appended surgically per-row so the persisted store never re-writes (or deletes) the rest of
+    /// the ledger (see ``DebouncedAppendBuffer``). Its append closure captures `repository`, never `self`.
+    @ObservationIgnored private let buffer: DebouncedAppendBuffer<CoinLedgerEntry>
     @ObservationIgnored private let now: () -> Date
 
     /// Creates the service over its per-row store; `initialEntries` seeds the ledger before the first load.
     public init(repository: any CoinLedgerRepositoring, initialEntries: [CoinLedgerEntry] = [], now: @escaping () -> Date = Date.init) {
         self.repository = repository
+        self.buffer = DebouncedAppendBuffer(append: { repository.append($0) })
         self.entries = initialEntries
         self.now = now
     }
@@ -70,14 +71,14 @@ public final class CoinLedgerService {
     public func reloadFromStore() {
         flushPendingSave()
         loadSync()
-        // If the flush FAILED, its rows survive only in `pendingAppends` (append rolled the Core Data context
+        // If the flush FAILED, its rows survive only in the pending queue (append rolled the Core Data context
         // back), and `loadSync()` just replaced `entries` with store contents that LACK them — dropping an
         // un-persisted earn/spend from the in-memory ledger and inflating the balance (the user could re-spend
         // the same coins). Re-merge the still-pending rows on top of the freshly loaded set (union by id, via
         // the same dedup used everywhere), keeping the pending queue intact so the next scheduled save retries.
-        // On a SUCCESSFUL flush `pendingAppends` is empty, so this is a no-op and `loadSync()` stays authoritative.
-        guard !pendingAppends.isEmpty else { return }
-        entries = CoinEconomy.deduplicatedByID(pendingAppends + entries)
+        // On a SUCCESSFUL flush the queue is empty, so this is a no-op and `loadSync()` stays authoritative.
+        guard !buffer.pending.isEmpty else { return }
+        entries = CoinEconomy.deduplicatedByID(buffer.pending + entries)
     }
 
     // MARK: - Earning (idempotent)
@@ -135,34 +136,18 @@ public final class CoinLedgerService {
         let at = now()
         let marker = CoinLedgerEntry.reset(dayKey: FernletDate.dayKey(for: at), at: at)
         entries = [marker]
-        saveScheduled = false
-        if repository.append([marker]) {
-            pendingAppends = []
-        } else {
-            pendingAppends = [marker]
-            scheduleSave()
+        buffer.clear()
+        if !repository.append([marker]) {
+            buffer.enqueue(marker)
+            buffer.scheduleSave()
         }
         return deleted
     }
 
-    /// Writes any pending rows to the store now; a failed append keeps them queued for the next retry.
+    /// Writes any pending rows to the store now; a failed append keeps them queued for the next
+    /// retry (the full durability contract lives on ``DebouncedAppendBuffer/flush()``).
     public func flushPendingSave() {
-        // Flush whenever rows are pending, NOT only when a debounced save is scheduled: a prior scheduled
-        // flush that failed its append leaves `saveScheduled` false while `pendingAppends` still holds the
-        // only un-persisted copy, so gating on `saveScheduled` here made the background retry
-        // (flushPendingSnapshotSave) a no-op and silently dropped an earned day or a spend on the next
-        // launch. `pendingAppends.isEmpty` is the real "nothing to do" condition.
-        saveScheduled = false
-        guard !pendingAppends.isEmpty else { return }
-        // Clear the pending queue only AFTER a confirmed save — `pendingAppends` is the sole un-persisted
-        // copy of these rows (the per-row store has no other retry queue), so dropping them on a failed
-        // append would silently lose an earned day or a spend. On failure, keep them; the next mutation
-        // (or the background flush in `flushPendingSnapshotSave`) retries, and `reloadFromStore` re-merges
-        // them so the in-memory balance still reflects the pending rows. A failed append is an expected,
-        // handled runtime condition (Core Data / CloudKit hiccup), NOT a precondition violation — so it must
-        // not trap; the retry path above is exactly what makes it recoverable.
-        let saved = repository.append(pendingAppends)
-        if saved { pendingAppends = [] }
+        buffer.flush()
     }
 
     // MARK: - Internals
@@ -173,22 +158,9 @@ public final class CoinLedgerService {
         var added = false
         for entry in newEntries where !entries.contains(where: { $0.id == entry.id }) {
             entries.append(entry)
-            pendingAppends.append(entry)
+            buffer.enqueue(entry)
             added = true
         }
-        if added { scheduleSave() }
-    }
-
-    /// Coalesces mutations into one debounced main-actor flush per burst.
-    private func scheduleSave() {
-        guard !saveScheduled else { return }
-        saveScheduled = true
-        Task { [weak self] in
-            await Task.yield()
-            await MainActor.run {
-                guard let self else { return }
-                self.flushPendingSave()
-            }
-        }
+        if added { buffer.scheduleSave() }
     }
 }

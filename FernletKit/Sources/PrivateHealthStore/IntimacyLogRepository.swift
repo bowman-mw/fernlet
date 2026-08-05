@@ -155,16 +155,10 @@ public nonisolated final class IntimacyLogRepository {
     }
 
     /// Drops every stored log. Deletes rows WITHOUT decrypting them, so it works while the app is locked
-    /// and while intimacy tracking is hidden. Mirrors `WorryNarrativeRepository.deleteAll()`.
+    /// and while intimacy tracking is hidden. Routes through the shared `PrivateRowPlumbing.deleteRows`
+    /// sequence, like every sealed repository's `deleteAll()`.
     public func deleteAll() throws {
-        try context.performAndWait {
-            let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
-            let rows = try context.fetch(request)
-            guard !rows.isEmpty else { return }
-            rows.forEach(context.delete)
-            try context.save()
-            try PrivatePersistentHistoryPruner.prune(context: context)
-        }
+        try PrivateRowPlumbing.deleteRows(entityName: "IntimacyLog", in: context)
     }
 
     /// Records the HealthKit external UUID on an already-saved row — plaintext metadata only; the

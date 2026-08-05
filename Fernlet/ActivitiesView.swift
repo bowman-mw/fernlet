@@ -46,9 +46,12 @@ struct ActivitiesView: View {
         .onAppear { manager.gcExpired() }
         .sheet(isPresented: joinPromptBinding) {
             if let first = manager.pendingJoinRequests.first {
-                ActivityJoinPromptSheet(
+                JoinPromptSheet(
                     requests: manager.pendingJoinRequests,
-                    activityTitle: titleForActivity(first.activityID),
+                    targetName: titleForActivity(first.activityID),
+                    displayName: { $0.displayName },
+                    fingerprint: { $0.verifiedFingerprint },
+                    accessibilityPrefix: "activity.join",
                     errorMessage: manager.activityError,
                     dismissError: { manager.activityError = nil },
                     allow: { manager.admitJoin($0) },
@@ -369,11 +372,11 @@ struct ActivitiesView: View {
     }
 
     private var endBinding: Binding<Bool> {
-        Binding(get: { pendingEnd != nil }, set: { if !$0 { pendingEnd = nil } })
+        $pendingEnd.isPresent()
     }
 
     private var removalBinding: Binding<Bool> {
-        Binding(get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } })
+        $pendingRemoval.isPresent()
     }
 
     private func titleForActivity(_ id: UUID) -> String {

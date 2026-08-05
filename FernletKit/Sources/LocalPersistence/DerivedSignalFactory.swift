@@ -202,7 +202,7 @@ public enum DerivedSignalFactory {
     /// omitted, not zeroed).
     private static func dailyMoodScores(from days: [(String, FernletDay)]) -> [Double] {
         days.compactMap { _, day in
-            let scores = day.journals.prefix(FernletLimits.maxJournalsPerDay).map { moodScore($0.tag) }
+            let scores = day.journals.prefix(FernletLimits.maxJournalsPerDay).map { $0.tag.moodScore }
             guard scores.isEmpty == false else { return nil }
             return average(scores)
         }
@@ -216,7 +216,7 @@ public enum DerivedSignalFactory {
             if let sleep = day.sleep {
                 components.append(sleepEnergyScore(sleep, healthSleepHours: day.healthContext?.body?.sleepHours))
             }
-            let journalScores = day.journals.prefix(FernletLimits.maxJournalsPerDay).map { moodScore($0.tag) }
+            let journalScores = day.journals.prefix(FernletLimits.maxJournalsPerDay).map { $0.tag.moodScore }
             if journalScores.isEmpty == false {
                 components.append(average(journalScores))
             }
@@ -240,19 +240,6 @@ public enum DerivedSignalFactory {
         if delta >= 0.12 { return rising }
         if delta <= -0.12 { return falling }
         return steady
-    }
-
-    /// Maps a journal `FeelingTag` onto the fixed 0.2–1.0 mood scale (duplicated in
-    /// `TierTwoMemoryEngine.moodScore` — keep the two tables in sync).
-    private static func moodScore(_ tag: FeelingTag) -> Double {
-        switch tag {
-        case .bright: 1
-        case .good: 0.85
-        case .neutral: 0.65
-        case .quiet: 0.55
-        case .tired: 0.35
-        case .hard: 0.2
-        }
     }
 
     /// 0–1 sleep-energy score: 60% hours (normalized against 8h) + 40% subjective quality,
