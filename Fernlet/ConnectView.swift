@@ -36,7 +36,7 @@ struct FriendsView: View {
     @State private var friendCandidates: [MeshSessionRosterEntry] = []
     @State private var keptFriendFingerprints: Set<String> = []
     @State private var keepFriendsPromptPresented = false
-    @State private var photoSaveError: String? = nil
+    @State private var photoSaveError: PhotoSaveFailure? = nil
     @State private var selectedAlbumPostID: UUID?
     @State private var sessionSearchText = ""
     @State private var cacheWarningDismissed = false
@@ -117,12 +117,8 @@ struct FriendsView: View {
                         finalizeFriendKeeps()
                         await manager.leaveSessionAfterNotifyingPeers()
                         disconnectReviewPresented = false
-                    } catch CocoaError.userCancelled {
-                        photoSaveError = "Fernlet needs access to your Photo Library to save photos. Open Settings to grant access."
-                    } catch is FriendPhotoLibrarySaver.NothingSavedError {
-                        photoSaveError = "None of the selected pictures could be saved. They may be corrupted — try choosing different ones."
                     } catch {
-                        photoSaveError = "Could not save to your photo library. Please try again."
+                        photoSaveError = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: toSave.count)
                     }
                 },
                 discardAll: {
@@ -136,22 +132,7 @@ struct FriendsView: View {
                 loadImageData: { manager.imageData(for: $0) }
             )
             .interactiveDismissDisabled()
-            .alert("Couldn't Save Photos", isPresented: Binding(
-                get: { photoSaveError != nil },
-                set: { if !$0 { photoSaveError = nil } }
-            )) {
-                if photoSaveError?.contains("Settings") == true {
-                    Button("Open Settings") {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(url)
-                        }
-                        photoSaveError = nil
-                    }
-                }
-                Button("OK", role: .cancel) { photoSaveError = nil }
-            } message: {
-                Text(photoSaveError ?? "")
-            }
+            .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
         }
         // Sessions with no photos but eligible new-friend candidates get the compact prompt.
         // Dismissing without choosing = skip all: onDismiss mints only the toggled keeps and
@@ -165,12 +146,7 @@ struct FriendsView: View {
             )
             .presentationDetents([.medium, .large])
         }
-        .fullScreenCover(
-            isPresented: Binding(
-                get: { selectedAlbumPostID != nil },
-                set: { if !$0 { selectedAlbumPostID = nil } }
-            )
-        ) {
+        .fullScreenCover(isPresented: $selectedAlbumPostID.isPresent()) {
             FriendPhotoFeedView(
                     posts: filteredPhotoWallPosts,
                     initialPostID: selectedAlbumPostID,
@@ -616,7 +592,7 @@ private struct FriendPhotoCarouselPostView: View {
     @State private var chromeVisible = true
     @State private var chromeTask: Task<Void, Never>?
     @State private var pendingDeletePhotoID: UUID?
-    @State private var saveErrorMessage: String?
+    @State private var saveErrorMessage: PhotoSaveFailure?
     @State private var savedPhotoIDs: Set<UUID> = []
 
     init(post: FriendPhotoWallPost, manager: MeshNetworkManager, width: CGFloat) {
@@ -680,10 +656,7 @@ private struct FriendPhotoCarouselPostView: View {
         .onDisappear { chromeTask?.cancel() }
         .confirmationDialog(
             "Delete this picture?",
-            isPresented: Binding(
-                get: { pendingDeletePhotoID != nil },
-                set: { if !$0 { pendingDeletePhotoID = nil } }
-            ),
+            isPresented: $pendingDeletePhotoID.isPresent(),
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) {
@@ -694,22 +667,7 @@ private struct FriendPhotoCarouselPostView: View {
         } message: {
             Text("This removes it from this device. It can't be undone.")
         }
-        .alert("Couldn't Save Photo", isPresented: Binding(
-            get: { saveErrorMessage != nil },
-            set: { if !$0 { saveErrorMessage = nil } }
-        )) {
-            if saveErrorMessage?.contains("Settings") == true {
-                Button("Open Settings") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
-                    saveErrorMessage = nil
-                }
-            }
-            Button("OK", role: .cancel) { saveErrorMessage = nil }
-        } message: {
-            Text(saveErrorMessage ?? "")
-        }
+        .photoSaveFailureAlert("Couldn't Save Photo", failure: $saveErrorMessage)
     }
 
     private var header: some View {
@@ -791,19 +749,15 @@ private struct FriendPhotoCarouselPostView: View {
             let hydrated = manager.hydratedPhotos([photo])
             // If the bytes can't be loaded/decrypted, don't report a false success.
             guard !hydrated.isEmpty else {
-                saveErrorMessage = "Could not save to your photo library. Please try again."
+                saveErrorMessage = .generic
                 return
             }
             do {
                 try await FriendPhotoLibrarySaver.save(hydrated)
                 savedPhotoIDs.insert(photo.id)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
-            } catch CocoaError.userCancelled {
-                saveErrorMessage = "Fernlet needs access to your Photo Library to save photos. Open Settings to grant access."
-            } catch is FriendPhotoLibrarySaver.NothingSavedError {
-                saveErrorMessage = "This picture couldn't be saved. It may be corrupted."
             } catch {
-                saveErrorMessage = "Could not save to your photo library. Please try again."
+                saveErrorMessage = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: 1)
             }
         }
     }
@@ -983,10 +937,7 @@ private struct NearbySlotRow: View {
                     .buttonStyle(ChipButtonStyle(selected: true))
                     .accessibilityIdentifier("friends.manualCommit.\(slot.id)")
             }
-            .sheet(isPresented: Binding(
-                get: { verifyQRURL != nil },
-                set: { if !$0 { verifyQRURL = nil } }
-            ), onDismiss: onDismissVerifyQR) {
+            .sheet(isPresented: $verifyQRURL.isPresent(), onDismiss: onDismissVerifyQR) {
                 VerifyQRDisplaySheet(url: verifyQRURL, peerName: peerName)
             }
             .sheet(isPresented: $showVerifyScanner, onDismiss: {

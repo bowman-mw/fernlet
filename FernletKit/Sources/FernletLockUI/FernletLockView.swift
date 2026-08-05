@@ -427,7 +427,8 @@ public struct FernletLockSetupView: View {
 /// `FernletLockService.unlock(passcode:)`, which verifies it and unwraps the content key.
 /// It mirrors the service's full failure-state machine:
 ///
-/// - An attempt counter warns how many tries remain before the service's 4-attempt lockout.
+/// - An attempt counter warns how many tries remain before the service's lockout
+///   (`FernletLockService.attemptsPerCooldownBatch` failed attempts per cooldown batch).
 /// - While a cooldown deadline is active, input is replaced by a countdown card refreshed by
 ///   a 1-second timer; when the deadline passes, the service state is refreshed so input
 ///   returns.
@@ -510,7 +511,8 @@ public struct FernletLockView: View {
                 // Attempt counter
                 let attempts = lockService.currentAttemptCount
                 if attempts > 0 && !isInputDisabled {
-                    Text("\(4 - attempts) attempt\(4 - attempts == 1 ? "" : "s") remaining before lockout")
+                    let remaining = FernletLockService.attemptsPerCooldownBatch - attempts
+                    Text("\(remaining) attempt\(remaining == 1 ? "" : "s") remaining before lockout")
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.goldenrod)
                 }

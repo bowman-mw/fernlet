@@ -105,8 +105,10 @@ struct PrivacyDataSettingsView: View {
     @State private var deleteConfirmationText = ""
     @State private var isShowingDisableConfirmation = false
     @State private var isShowingEnableConfirmation = false
-    /// Non-nil when a wipe came back incomplete — drives the failure alert.
-    @State private var deleteAllFailure: FernletStore.DeleteAllOutcome?
+    /// This screen's own "delete everything" wipe state (busy / success / failure) plus the shared
+    /// confirmation glue — deliberately per-screen, never shared with ``SettingsSheet``'s (the
+    /// enclosing sheet's dismiss guard keys off ITS flag; see the mid-wipe comment on `body`).
+    @State private var deleteFlow = DeleteEverythingFlow()
     @State private var isUpdatingStorage = false
     @State private var isDetectingCloudData = false
     @State private var operationError: String?
@@ -119,12 +121,6 @@ struct PrivacyDataSettingsView: View {
     @State private var isResolvingEscrowConflict = false
     @State private var exportPayload: DataExportPayload?
     @State private var isBuildingExport = false
-    /// True for the duration of a "delete everything" wipe — drives the busy overlay, disables the delete
-    /// button, and (with the overlay swallowing taps) stops a second confirm from interleaving a wipe.
-    @State private var isDeletingEverything = false
-    /// True after a clean wipe, so success is affirmed rather than the screen just looking empty.
-    @State private var showDeleteSuccess = false
-
     private let cloudDataService: any PrivacyCloudDataManaging
     private let persistenceController: any PrivacyPersistenceReloading
     private let store: FernletStore?
@@ -151,19 +147,20 @@ struct PrivacyDataSettingsView: View {
 
             if isUpdatingStorage {
                 storageSpinner
-            } else if isDeletingEverything {
+            } else if deleteFlow.isDeleting {
                 DeletingEverythingOverlay()
             }
         }
         .navigationTitle("Privacy & Data")
         // Mid-wipe escape hatches, mirroring the SettingsSheet entry point's guard set. The busy
         // overlay lives INSIDE this pushed view, so the nav bar's Back chevron stays tappable above
-        // it — and the enclosing Settings sheet's own `interactiveDismissDisabled` keys off ITS delete
-        // flag, which is false for a wipe started here. Either escape tears down the @State that
-        // presents the success/FAILURE alert (a silently failed wipe) and re-enables the delete
-        // button mid-wipe. `interactiveDismissDisabled` applies from a pushed child of the sheet.
-        .navigationBarBackButtonHidden(isDeletingEverything)
-        .interactiveDismissDisabled(isDeletingEverything)
+        // it — and the enclosing Settings sheet's own `interactiveDismissDisabled` keys off ITS
+        // per-screen `DeleteEverythingFlow`, which is idle for a wipe started here. Either escape
+        // tears down the @State-owned flow that presents the success/FAILURE alert (a silently
+        // failed wipe) and re-enables the delete button mid-wipe. `interactiveDismissDisabled`
+        // applies from a pushed child of the sheet.
+        .navigationBarBackButtonHidden(deleteFlow.isDeleting)
+        .interactiveDismissDisabled(deleteFlow.isDeleting)
         .sheet(isPresented: $showLockSetup) {
             FernletLockSetupView()
                 .environment(lockService)
@@ -177,10 +174,7 @@ struct PrivacyDataSettingsView: View {
         } message: {
             Text("Your local data will upload to iCloud and sync to your other Fernlet devices.")
         }
-        .alert("Turn on encrypted backup?", isPresented: Binding(
-            get: { pendingSealedBackupEnable != nil },
-            set: { if !$0 { pendingSealedBackupEnable = nil } }
-        )) {
+        .alert("Turn on encrypted backup?", isPresented: $pendingSealedBackupEnable.isPresent()) {
             Button("Cancel", role: .cancel) { pendingSealedBackupEnable = nil }
             Button("Encrypt & back up") {
                 if let payload = pendingSealedBackupEnable { applySealedBackup(payload, enabled: true) }
@@ -190,18 +184,9 @@ struct PrivacyDataSettingsView: View {
             Text(sealedBackupDisclosure(for: pendingSealedBackupEnable))
         }
         .destructiveConfirmation($pendingDestructiveAction)
-        .alert("Couldn't delete everything", isPresented: Binding(
-            get: { deleteAllFailure != nil },
-            set: { if !$0 { deleteAllFailure = nil } }
-        ), presenting: deleteAllFailure) { _ in
-            Button("OK", role: .cancel) { deleteAllFailure = nil }
-        } message: { outcome in
-            Text(DeleteAllDataConfirmation.failureMessage(for: outcome))
-        }
-        .alert("Everything deleted", isPresented: $showDeleteSuccess) {
-            Button("OK", role: .cancel) { showDeleteSuccess = false }
-        } message: {
-            Text("Fernlet removed everything it stored on this device.")
+        // Success ("OK") just clears the flag — this is a pushed screen, so it stays put either way.
+        .deleteEverythingAlerts(deleteFlow, successButtonTitle: "OK", successButtonRole: .cancel) {
+            deleteFlow.showSuccess = false
         }
         .sheet(item: $exportPayload) { payload in
             ActivityShareView(items: [payload.url]) {
@@ -749,25 +734,15 @@ struct PrivacyDataSettingsView: View {
     private var deleteEverythingButton: some View {
         if let store {
             Button(role: .destructive) {
-                pendingDestructiveAction = DeleteAllDataConfirmation.make(
-                    canDeleteHealthSamples: storagePreferencesStore.preferences.healthKitMasterEnabled,
-                    hasICloudDayCopy: storagePreferencesStore.preferences.hasICloudDayCopy,
-                    hasSealedBackup: storagePreferencesStore.preferences.hasSealedBackup,
-                    delete: { includeHealth in
-                        // Set here (the first thing after the user confirms) so the busy overlay is up for
-                        // the whole multi-second wipe, disabling the button and swallowing a second tap.
-                        isDeletingEverything = true
-                        return await store.deleteAllData(includingHealthKitSamples: includeHealth)
-                    },
-                    onFinished: { outcome in
-                        isDeletingEverything = false
+                pendingDestructiveAction = deleteFlow.makeConfirmation(
+                    preferences: storagePreferencesStore.preferences,
+                    store: store,
+                    onWipeFinished: {
                         // The wipe has just swept the exported file off disk; drop the view's reference to
                         // it too, so re-presenting the share sheet can't hand a now-deleted plaintext URL
                         // to UIActivityViewController. `.sheet(item:)` already nils this on dismiss, so in
                         // practice it is nil here — this is belt-and-braces against a retained stale URL.
                         exportPayload = nil
-                        if outcome.isComplete { showDeleteSuccess = true }
-                        else { deleteAllFailure = outcome }
                     }
                 )
             } label: {
@@ -779,7 +754,7 @@ struct PrivacyDataSettingsView: View {
             .foregroundStyle(.white)
             .padding(.vertical, 11)
             .background(Color.terracotta, in: RoundedRectangle(cornerRadius: 12))
-            .disabled(isDeletingEverything)
+            .disabled(deleteFlow.isDeleting)
             .accessibilityIdentifier("privacy.lock.deleteProtectedData")
         }
     }

@@ -172,8 +172,8 @@ public struct LocalFernletRepository: FernletRepository {
         let resolvedURL = fileURL ?? Self.defaultFileURL()
         assert(!resolvedURL.path.isEmpty, "repository path must not be empty")
         self.fileURL = resolvedURL
-        self.encoder = Self.makeEncoder()
-        self.decoder = Self.makeDecoder()
+        self.encoder = RowPayloadCoders.makeEncoder(prettyPrinted: true)
+        self.decoder = RowPayloadCoders.makeDecoder()
     }
 
     /// Loads the full aggregate for `todayKey`, substituting a fresh empty day when no day row
@@ -183,23 +183,7 @@ public struct LocalFernletRepository: FernletRepository {
         assert(!todayKey.isEmpty, "today key required")
         let database = loadDatabase(todayKey: todayKey)
         let day = database.days[todayKey] ?? FernletDay(date: todayKey)
-        return FernletSnapshot(
-            todayKey: todayKey,
-            day: day,
-            settings: database.settings,
-            recentMeals: database.recentMeals,
-            previousJournals: database.previousJournals,
-            memories: database.memories,
-            goals: database.goals,
-            workshop: database.workshop,
-            foodItems: database.foodItems,
-            recipes: database.recipes,
-            dailyScores: database.dailyScores,
-            retryQueue: database.retryQueue,
-            connectionSessionLogs: database.connectionSessionLogs,
-            trustedProximityPeers: database.trustedProximityPeers,
-            trainerAuditEvents: database.trainerAuditEvents
-        )
+        return .assembled(todayKey: todayKey, day: day, from: database)
     }
 
     /// Persists a privacy-stripped snapshot: read-modify-write of the whole file, including a
@@ -433,25 +417,6 @@ public struct LocalFernletRepository: FernletRepository {
             .appendingPathComponent("FernletDatabase.json")
     }
 
-    /// The blob encoder: pretty-printed, sorted keys (stable diffs), ISO-8601 dates. Must stay
-    /// in lockstep with ``makeDecoder()`` and the CloudKitSync copy of the same configuration.
-    private static func makeEncoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        assert(encoder.outputFormatting.contains(.prettyPrinted), "encoder formatting invalid")
-        return encoder
-    }
-
-    /// The blob decoder, paired with ``makeEncoder()``. ISO-8601 date decoding drops fractional
-    /// seconds, so timestamps round-trip at second precision.
-    private static func makeDecoder() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        assert(String(describing: decoder.dateDecodingStrategy).contains("iso8601"), "decoder date strategy invalid")
-        return decoder
-    }
-
     /// The pre-database UserDefaults keys the original app persisted under.
     ///
     /// Retained solely so ``migratedDatabase(todayKey:)`` can hydrate a first database from an
@@ -565,6 +530,36 @@ extension LocalFernletDatabase {
         return Array(nested.joined().prefix(FernletLimits.maxJournalLogs))
     }
 
+}
+
+extension FernletSnapshot {
+    /// Assembles the snapshot handed to the store from an already-resolved `day` plus the
+    /// aggregate slices of a ``LocalFernletDatabase`` — the shared read-side counterpart of the
+    /// shared write-side ``LocalFernletDatabase/apply(_:maxStoredDays:)``.
+    ///
+    /// Day resolution deliberately stays at the call sites because it differs per backend:
+    /// ``LocalFernletRepository/loadSnapshot(todayKey:)`` reads the blob's own `days`, while
+    /// `CoreDataFernletRepository` (in `CloudKitSync`) prefers its per-row `DayRecord` store
+    /// with a pre-migration blob fallback. Only the (identical) slice mapping is shared here.
+    public static func assembled(todayKey: String, day: FernletDay, from database: LocalFernletDatabase) -> FernletSnapshot {
+        FernletSnapshot(
+            todayKey: todayKey,
+            day: day,
+            settings: database.settings,
+            recentMeals: database.recentMeals,
+            previousJournals: database.previousJournals,
+            memories: database.memories,
+            goals: database.goals,
+            workshop: database.workshop,
+            foodItems: database.foodItems,
+            recipes: database.recipes,
+            dailyScores: database.dailyScores,
+            retryQueue: database.retryQueue,
+            connectionSessionLogs: database.connectionSessionLogs,
+            trustedProximityPeers: database.trustedProximityPeers,
+            trainerAuditEvents: database.trainerAuditEvents
+        )
+    }
 }
 
 /// The persistence-layer size caps: derived-table windows, per-day entry clamps, and log-table

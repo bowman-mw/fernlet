@@ -246,13 +246,7 @@ final class JournalSealingCoordinator {
     /// Device-bound key generated on first use and stored in Keychain (not iCloud-synced).
     /// Used to seal journal text when no user lock is configured, ensuring text never reaches the blob.
     private var deviceJournalKey: SymmetricKey {
-        if let data = KeychainItem.load(for: .deviceJournalKey, service: KeychainItem.journalService) {
-            return SymmetricKey(data: data)
-        }
-        let key = SymmetricKey(size: .bits256)
-        let keyData = key.withUnsafeBytes { Data($0) }
-        KeychainItem.store(keyData, for: .deviceJournalKey, service: KeychainItem.journalService)
-        return key
+        KeychainItem.loadOrCreateSymmetricKey(for: .deviceJournalKey, service: KeychainItem.journalService)
     }
 
     /// When the user sets up a lock for the first time, re-encrypts entries that were previously

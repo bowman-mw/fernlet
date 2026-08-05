@@ -705,8 +705,9 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         return legacyRepository.loadDatabaseForMigration(todayKey: todayKey)
     }
 
-    /// Assembles the `FernletSnapshot` handed to the store: blob-held aggregates plus today's
-    /// day from its row (with the pre-migration blob fallback described inline).
+    /// Assembles the `FernletSnapshot` handed to the store: blob-held aggregates (via the shared
+    /// `FernletSnapshot.assembled(todayKey:day:from:)` slice mapping) plus today's day from its
+    /// row (with the pre-migration blob fallback described inline).
     private func snapshot(from database: LocalFernletDatabase, todayKey: String) -> FernletSnapshot {
         // Today's day comes from its row (the authoritative day store). While migration is incomplete (a
         // failed/lagging backfill leaves `daysMigratedToRows` false) the row may not be written yet, so fall
@@ -716,23 +717,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         let day = dayRecordRepository.load(dateKeys: [todayKey])[todayKey]
             ?? database.days[todayKey]
             ?? FernletDay(date: todayKey)
-        return FernletSnapshot(
-            todayKey: todayKey,
-            day: day,
-            settings: database.settings,
-            recentMeals: database.recentMeals,
-            previousJournals: database.previousJournals,
-            memories: database.memories,
-            goals: database.goals,
-            workshop: database.workshop,
-            foodItems: database.foodItems,
-            recipes: database.recipes,
-            dailyScores: database.dailyScores,
-            retryQueue: database.retryQueue,
-            connectionSessionLogs: database.connectionSessionLogs,
-            trustedProximityPeers: database.trustedProximityPeers,
-            trainerAuditEvents: database.trainerAuditEvents
-        )
+        return .assembled(todayKey: todayKey, day: day, from: database)
     }
 
     /// A coarse count of logged items on a day, used ONLY as the migration content-merge tiebreak (item D)

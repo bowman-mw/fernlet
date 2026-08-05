@@ -80,24 +80,6 @@ struct CreationStudioView: View {
         _selectedColor = State(initialValue: 0)
     }
 
-    /// The three ways `store.listCustomItemForSale` can refuse a listing, as alert cases.
-    ///
-    /// In every case the item itself was already saved (just left unlisted) — the alerts say so,
-    /// and `.nameFlagged` deliberately keeps the user on the confirmation screen to rename and
-    /// retry. Mirrors ``WardrobeView``'s enum of the same name for its swipe-to-sell path.
-    private enum ShopAlert: Identifiable {
-        case nameFlagged
-        case capReached
-        case storeBanned
-        var id: Int {
-            switch self {
-            case .nameFlagged: 0
-            case .capReached: 1
-            case .storeBanned: 2
-            }
-        }
-    }
-
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
@@ -381,28 +363,7 @@ struct CreationStudioView: View {
         // `dismiss()` (the user stays to rename and retry). An alert anchored to the editor — by then the
         // covered middle of the stack (Wardrobe → editor → confirmation) — is not reliably presented, so
         // the refusal read as an inert Save button while the item was quietly saved-but-unlisted.
-        .alert(item: $shopAlert) { alert in
-            switch alert {
-            case .nameFlagged:
-                return Alert(
-                    title: Text("Pick a friendlier name"),
-                    message: Text("This name can't be used in your shop. Your item is saved — rename it and try listing again. (Private items can be named anything.)"),
-                    dismissButton: .default(Text("OK"))
-                )
-            case .capReached:
-                return Alert(
-                    title: Text("Your shop is full"),
-                    message: Text("You can list up to \(ClothingShopLimits.maxListedItems) items at once. Unlist one to make room. Your item is saved and ready whenever you are."),
-                    dismissButton: .default(Text("OK"))
-                )
-            case .storeBanned:
-                return Alert(
-                    title: Text("Your shop is closed"),
-                    message: Text("Your shop is paused because items you shared were reported. It reopens automatically after a while — your items are still saved."),
-                    dismissButton: .default(Text("OK"))
-                )
-            }
-        }
+        .alert(item: $shopAlert) { $0.alert(in: .studioConfirmation) }
     }
 
     private var shopSection: some View {

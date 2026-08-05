@@ -105,22 +105,11 @@ struct BarcodeScanView: View {
             // the live scanner; if it's still denied, becameUnavailable flips us back.
             if newPhase == .active, liveScannerUnavailable { liveScannerUnavailable = false }
         }
-        .fullScreenCover(isPresented: $showingCamera) {
-            ImagePickerView(sourceType: .camera) { image in
-                handlePickedImage(image)
-            }
-            .ignoresSafeArea()
-        }
-        .onChange(of: selectedPhotoItem) { _, newValue in
-            guard let newValue else { return }
-            Task {
-                if let data = try? await newValue.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    handlePickedImage(image)
-                }
-                selectedPhotoItem = nil
-            }
-        }
+        .photoCapturePlumbing(
+            showingCamera: $showingCamera,
+            selection: $selectedPhotoItem,
+            onCameraImage: handlePickedImage
+        )
     }
 
     // MARK: Live viewfinder (11a)

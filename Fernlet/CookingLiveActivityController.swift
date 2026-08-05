@@ -31,18 +31,6 @@ enum CookingLiveActivityController {
     /// Activities. Ends any cooking activity already live first, so only one cooking activity is ever on
     /// screen — a workout activity (a different type) is untouched.
     static func start(_ state: CookingRunState) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        for stale in Activity<CookingActivityAttributes>.activities {
-            Task { await stale.end(nil, dismissalPolicy: .immediate) }
-        }
-        let attributes = CookingActivityAttributes(recipeName: state.recipeName)
-        do {
-            _ = try Activity.request(
-                attributes: attributes,
-                content: ActivityContent(state: state.contentState, staleDate: state.staleDate(postedAt: Date()))
-            )
-        } catch {
-            // Silent degrade: the in-app cooking walker remains the full experience.
-        }
+        LiveActivityStarter.start(state, attributes: CookingActivityAttributes(recipeName: state.recipeName))
     }
 }

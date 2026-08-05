@@ -32,7 +32,8 @@ dropped without being decrypted), so releasing a worry or running the full "dele
 reset works even while the app is locked. Reads skip individual rows that fail to decrypt rather
 than blanking the whole result, and every mutation prunes the store's persistent-history log via
 `PrivatePersistentHistoryPruner` so superseded ciphertext does not linger in the transaction log
-(best-effort after upserts and re-seals, rethrown after deletes).
+(best-effort after upserts and re-seals; rethrown after deletes, which run through
+`PrivateStoreCore`'s shared `PrivateRowPlumbing.deleteRows` sequence).
 
 The two repositories differ in lifecycle, on purpose. Journal narratives are the sealed half of a
 strip/hydrate cycle driven by the app's `JournalSealingCoordinator` (through the

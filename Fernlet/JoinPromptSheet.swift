@@ -1,24 +1,32 @@
-import ProximityKit
 import SwiftUI
-import FernletDomainModel
 import FernletUI
 
-/// The host's "someone wants to join" confirmation for Group Activities (Phase 6).
+/// The shared "someone wants to join" confirmation sheet shown to the gatekeeper of a closed
+/// in-person group — the existing members of a mesh session and the host of a Group Activity.
 ///
-/// A clone of ``MeshAdmissionPromptSheet``: pure presentation, zero manager reference. It shows
-/// the first pending join request (with the joiner's transport-VERIFIED fingerprint) + an "N more
-/// waiting" pill, and calls the two closures. Swipe-to-dismiss declines all (fail-closed) — wired
-/// at the presentation site in ``ActivitiesView``.
-struct ActivityJoinPromptSheet: View {
-    let requests: [ProximityActivityManager.PendingActivityJoin]
-    let activityTitle: String
+/// Pure presentation, zero manager reference: it renders the first pending request (display name +
+/// fingerprint for eyeball verification) with an "N more waiting" pill, and forwards Allow/Decline
+/// through the closures. The `displayName`/`fingerprint` extractor closures keep it generic over the
+/// request payload type without a retroactive protocol conformance, and `accessibilityPrefix`
+/// namespaces the button identifiers (`<prefix>.allow`, `<prefix>.decline`, `<prefix>.error`,
+/// `<prefix>.error.dismiss`) so each presentation surface keeps its own UI-test hooks.
+/// Swipe-to-dismiss declines everything still pending (fail-closed) — wired at the presentation
+/// sites: ``DisposableCameraView`` presents it for `MeshNetworkManager.pendingAdmissionRequests`
+/// and ``ActivitiesView`` for `ProximityActivityManager.pendingJoinRequests`.
+struct JoinPromptSheet<Request>: View {
+    let requests: [Request]
+    let targetName: String
+    let displayName: (Request) -> String
+    let fingerprint: (Request) -> String
+    let accessibilityPrefix: String
     /// An admit-time error (e.g. "This activity is full.") to show INLINE here. A root-level `.alert`
     /// can't present over this sheet while other requests keep it open, so the host would never see it;
     /// rendering it in the sheet — and clearing it via `dismissError` — is what actually surfaces it.
-    let errorMessage: String?
-    let dismissError: () -> Void
-    let allow: (ProximityActivityManager.PendingActivityJoin) -> Void
-    let decline: (ProximityActivityManager.PendingActivityJoin) -> Void
+    /// Presentation sites without an inline error (the mesh admission flow) leave it `nil`.
+    var errorMessage: String? = nil
+    var dismissError: () -> Void = {}
+    let allow: (Request) -> Void
+    let decline: (Request) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,24 +48,24 @@ struct ActivityJoinPromptSheet: View {
                             Button("Dismiss") { dismissError() }
                                 .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
-                                .accessibilityIdentifier("activity.join.error.dismiss")
+                                .accessibilityIdentifier("\(accessibilityPrefix).error.dismiss")
                         }
                         .padding(14)
                         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.35), lineWidth: 1)
                         )
-                        .accessibilityIdentifier("activity.join.error")
+                        .accessibilityIdentifier("\(accessibilityPrefix).error")
                     }
 
                     if let request = requests.first {
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("\(Text(request.displayName).bold()) wants to join \(Text(activityTitle).bold())")
+                            Text("\(Text(displayName(request)).bold()) wants to join \(Text(targetName).bold())")
                                 .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                                 .fernletWrappingText()
 
-                            Text(request.verifiedFingerprint)
+                            Text(fingerprint(request))
                                 .font(.system(.caption, design: .monospaced))
                                 .foregroundStyle(Color.slate)
                                 .lineLimit(2)
@@ -81,13 +89,13 @@ struct ActivityJoinPromptSheet: View {
                                     allow(request)
                                 }
                                 .buttonStyle(ChipButtonStyle(selected: true))
-                                .accessibilityIdentifier("activity.join.allow")
+                                .accessibilityIdentifier("\(accessibilityPrefix).allow")
 
                                 Button("Decline") {
                                     decline(request)
                                 }
                                 .buttonStyle(ChipButtonStyle(selected: false))
-                                .accessibilityIdentifier("activity.join.decline")
+                                .accessibilityIdentifier("\(accessibilityPrefix).decline")
                             }
                         }
                         .padding(16)

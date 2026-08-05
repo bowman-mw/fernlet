@@ -29,8 +29,12 @@ that synced in from another device. They share one durability contract: locally 
 sit in a pending queue that is the *sole* un-persisted copy; a flush clears the queue only after
 a confirmed write; a failed write keeps the queue for retry; and `reloadFromStore()` re-merges
 still-pending mutations on top of freshly loaded rows so nothing vanishes from the in-memory view
-while a retry is outstanding. Cross-device correctness is application-level: deterministic row
-ids (one earn per day, one spend per purchase ref, one milestone per event) plus dedup-by-id on
+while a retry is outstanding. That contract is factored into two shared debounced buffers each
+service owns — ``DebouncedRowBuffer`` (upsert + delete rows, for the recipe and custom-item
+stores) and ``DebouncedAppendBuffer`` (append-only rows, for the two ledgers) — whose write
+closures capture the injected repository, never the service. Cross-device correctness is
+application-level: deterministic row ids (one earn per day, one spend per purchase ref, one
+milestone per event) plus dedup-by-id on
 every load form the union-merge that makes earning idempotent and double-spends structurally
 impossible, because `NSPersistentCloudKitContainer` does not enforce id uniqueness itself. The
 ledgers differ deliberately at the edges: the coin ledger's `reset()` appends a reset-boundary
@@ -57,8 +61,10 @@ through these services.
 
 **Concurrency:** the target sets no default isolation. The seven service classes are individually
 `@MainActor` (six of them `@Observable`; ``SnapshotSaveCoordinator`` deliberately not, as it
-holds no UI-facing state), and ``DerivedSignalsRebuilder`` is a nonisolated pure struct. Debounce
-work uses self-cancelling `Task`s that hop back to the main actor before mutating state; clocks
+holds no UI-facing state), the two generic pending-write buffers are `@MainActor` (not
+`@Observable` — they hold no UI-facing state), and ``DerivedSignalsRebuilder`` is a nonisolated
+pure struct. Debounce work uses self-cancelling `Task`s that hop back to the main actor before
+mutating state; clocks
 (`now`) are injected where timestamps or TTLs matter, keeping the services deterministic under
 test.
 
@@ -74,6 +80,8 @@ test.
 - ``MilestoneLedgerService``
 - ``CustomItemService``
 - ``SavedRecipeService``
+- ``DebouncedRowBuffer``
+- ``DebouncedAppendBuffer``
 
 ### Derived signals
 

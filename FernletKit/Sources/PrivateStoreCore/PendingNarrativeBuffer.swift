@@ -191,22 +191,23 @@ public final class PendingNarrativeBuffer {
     /// scoped v2 slot when that is all that exists.
     private func loadBufferKey() -> SymmetricKey? {
         // Try current key (with service) first
-        if let key = loadRawBufferKey(account: Self.bufferKeyAccountV2, service: Self.bufferKeyService) {
-            return key
+        if let data = KeychainItem.load(account: Self.bufferKeyAccountV2, service: Self.bufferKeyService) {
+            return SymmetricKey(data: data)
         }
         // Migrate legacy key (no service) into the scoped service slot
-        if let key = loadRawBufferKey(account: Self.bufferKeyAccount, service: nil) {
+        if let key = loadLegacyServicelessKey() {
             let keyData = key.withUnsafeBytes { Data($0) }
-            let addQuery: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: Self.bufferKeyService,
-                kSecAttrAccount as String: Self.bufferKeyAccountV2,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-                kSecUseDataProtectionKeychain as String: true,
-                kSecValueData as String: keyData
-            ]
-            SecItemDelete(addQuery as CFDictionary)
-            SecItemAdd(addQuery as CFDictionary, nil)
+            // Status deliberately ignored: the legacy key is still returned below, so a failed
+            // migration write only means the migration re-runs on the next load.
+            KeychainItem.store(
+                keyData,
+                account: Self.bufferKeyAccountV2,
+                service: Self.bufferKeyService,
+                accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            )
+            // Raw SecItemDelete: KeychainItem cannot express a service-less query (service is a
+            // required parameter), and the v1 row was stored without one. Dies with the v1
+            // migration when it is retired.
             let deleteQuery: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrAccount as String: Self.bufferKeyAccount,
@@ -218,16 +219,19 @@ public final class PendingNarrativeBuffer {
         return nil
     }
 
-    /// Fetches a symmetric key from the data-protection keychain by account (and optional service).
-    private func loadRawBufferKey(account: String, service: String?) -> SymmetricKey? {
-        var query: [String: Any] = [
+    /// Reads the legacy v1 buffer key, which was stored WITHOUT a `kSecAttrService` attribute.
+    ///
+    /// Kept as a raw `SecItemCopyMatching` call because `KeychainItem` cannot express a
+    /// service-less query (service is a required parameter of its contract). This whole helper
+    /// dies when the v1-to-v2 migration in ``loadBufferKey()`` is retired.
+    private func loadLegacyServicelessKey() -> SymmetricKey? {
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: account,
+            kSecAttrAccount as String: Self.bufferKeyAccount,
             kSecMatchLimit as String: kSecMatchLimitOne,
             kSecReturnData as String: true,
             kSecUseDataProtectionKeychain as String: true
         ]
-        if let service { query[kSecAttrService as String] = service }
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
               let data = result as? Data else { return nil }
@@ -240,17 +244,13 @@ public final class PendingNarrativeBuffer {
         let key = SymmetricKey(size: .bits256)
         let keyData = key.withUnsafeBytes { Data($0) }
 
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.bufferKeyService,
-            kSecAttrAccount as String: Self.bufferKeyAccountV2,
-            // Background-accessible: works after first device unlock, no passcode required
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-            kSecUseDataProtectionKeychain as String: true,
-            kSecValueData as String: keyData
-        ]
-        SecItemDelete(query as CFDictionary)
-        let status = SecItemAdd(query as CFDictionary, nil)
+        // Background-accessible: works after first device unlock, no passcode required
+        let status = KeychainItem.store(
+            keyData,
+            account: Self.bufferKeyAccountV2,
+            service: Self.bufferKeyService,
+            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        )
         guard status == errSecSuccess else {
             throw FernletLockError.internalError("buffer key creation failed: \(status)")
         }

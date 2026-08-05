@@ -97,12 +97,9 @@ public nonisolated enum MilestoneEconomy {
 
     /// Collapses rows that share an id, keeping the first seen — the application-level union-merge
     /// (the synced store can hold duplicate-id rows minted independently on two devices).
+    /// Delegates to the shared `Array.deduplicatedByID()` (see `IdentityDedup.swift`).
     public static func deduplicatedByID(_ entries: [MilestoneLedgerEntry]) -> [MilestoneLedgerEntry] {
-        var seen = Set<String>()
-        var unique: [MilestoneLedgerEntry] = []
-        unique.reserveCapacity(entries.count)
-        for entry in entries where seen.insert(entry.id).inserted { unique.append(entry) }
-        return unique
+        entries.deduplicatedByID()
     }
 
     /// Lifetime count for one kind: the number of DISTINCT event rows. Monotonic by construction.

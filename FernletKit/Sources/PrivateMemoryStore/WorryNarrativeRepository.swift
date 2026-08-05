@@ -148,17 +148,10 @@ public final class WorryNarrativeRepository: WorryStoring {
     }
 
     /// Drops every worry row without decrypting anything, so the full data reset works even while
-    /// the private lock is closed (see ``WorryStoring/deleteAll()``). Mirrors
-    /// ``JournalNarrativeRepository/deleteAll()``.
+    /// the private lock is closed (see ``WorryStoring/deleteAll()``). Routes through the shared
+    /// `PrivateRowPlumbing.deleteRows` sequence, like every sealed repository's `deleteAll()`.
     public func deleteAll() throws {
-        try context.performAndWait {
-            let request = NSFetchRequest<NSManagedObject>(entityName: Self.entityName)
-            let rows = try context.fetch(request)
-            guard !rows.isEmpty else { return }
-            rows.forEach(context.delete)
-            try context.save()
-            try PrivatePersistentHistoryPruner.prune(context: context)
-        }
+        try PrivateRowPlumbing.deleteRows(entityName: Self.entityName, in: context)
     }
 
     /// Migrates every row sealed under `oldKey` to `newKey` in one transaction — the device-key →

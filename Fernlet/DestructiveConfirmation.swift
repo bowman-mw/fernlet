@@ -1,5 +1,6 @@
 import SwiftUI
 import FernletFoundation
+import FernletUI
 
 /// A single destructive/irreversible action pending the user's explicit confirmation.
 ///
@@ -74,10 +75,7 @@ extension View {
     func destructiveConfirmation(_ pending: Binding<DestructiveConfirmation?>) -> some View {
         alert(
             pending.wrappedValue?.title ?? "",
-            isPresented: Binding(
-                get: { pending.wrappedValue != nil },
-                set: { if !$0 { pending.wrappedValue = nil } }
-            ),
+            isPresented: pending.isPresent(),
             presenting: pending.wrappedValue
         ) { action in
             Button("Cancel", role: .cancel) { pending.wrappedValue = nil }

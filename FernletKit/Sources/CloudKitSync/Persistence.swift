@@ -65,8 +65,7 @@ nonisolated public final class PersistenceController {
     /// sync off — the app decides when to enable mirroring via `reload(with:)` once
     /// onboarding/consent state is known.
     nonisolated(unsafe) public static let shared: PersistenceController = {
-        let data = KeychainItem.load(for: .storagePreferences, service: KeychainItem.storagePreferencesService)
-        var startupPreferences = data.flatMap { try? JSONDecoder().decode(StoragePreferences.self, from: $0) } ?? StoragePreferences()
+        var startupPreferences = StoragePreferencesStore.currentPreferences()
         startupPreferences.iCloudSyncEnabled = false
         return PersistenceController(preferences: startupPreferences)
     }()
@@ -526,9 +525,9 @@ nonisolated public final class PersistenceController {
         entity.name = "FernletDatabaseRecord"
         entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
         entity.properties = [
-            makeAttribute("recordID", type: .stringAttributeType),
-            makeAttribute("payloadData", type: .binaryDataAttributeType),
-            makeAttribute("updatedAt", type: .dateAttributeType)
+            CoreDataModelBuilding.makeAttribute("recordID", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("payloadData", type: .binaryDataAttributeType),
+            CoreDataModelBuilding.makeAttribute("updatedAt", type: .dateAttributeType)
         ]
         return entity
     }
@@ -538,17 +537,17 @@ nonisolated public final class PersistenceController {
         entity.name = "SavedRecipeRecord"
         entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
         entity.properties = [
-            makeAttribute("idString", type: .stringAttributeType),
-            makeAttribute("sourceURLString", type: .stringAttributeType),
-            makeAttribute("name", type: .stringAttributeType),
-            makeAttribute("ingredientsText", type: .stringAttributeType),
-            makeAttribute("summary", type: .stringAttributeType),
-            makeAttribute("servings", type: .integer64AttributeType, defaultValue: 1),
-            makeAttribute("protein", type: .integer64AttributeType, defaultValue: 0),
-            makeAttribute("carbs", type: .integer64AttributeType, defaultValue: 0),
-            makeAttribute("fat", type: .integer64AttributeType, defaultValue: 0),
-            makeAttribute("micronutrientsJSON", type: .stringAttributeType),
-            makeAttribute("savedAt", type: .dateAttributeType),
+            CoreDataModelBuilding.makeAttribute("idString", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("sourceURLString", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("name", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("ingredientsText", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("summary", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("servings", type: .integer64AttributeType, defaultValue: 1),
+            CoreDataModelBuilding.makeAttribute("protein", type: .integer64AttributeType, defaultValue: 0),
+            CoreDataModelBuilding.makeAttribute("carbs", type: .integer64AttributeType, defaultValue: 0),
+            CoreDataModelBuilding.makeAttribute("fat", type: .integer64AttributeType, defaultValue: 0),
+            CoreDataModelBuilding.makeAttribute("micronutrientsJSON", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("savedAt", type: .dateAttributeType),
             // STEP 0 (Docs/AI-Feature-Expansion-2026-07-23.md §9.1): the full structured
             // `RecipeDefinition` (structured ingredients, real source, optional webImport) as a
             // versioned JSON blob — the same `idString + payloadData` shape as DayRecord / CoinLedger /
@@ -561,7 +560,7 @@ nonisolated public final class PersistenceController {
             // (shouldMigrateStoreAutomatically / shouldInferMappingModelAutomatically). NOTE: this new
             // attribute must go through the STEP 0c CloudKit prod-schema deploy ritual
             // (Docs/CloudKit-Schema-Deploy.md) before any shipping build writes it.
-            makeAttribute("payloadData", type: .binaryDataAttributeType)
+            CoreDataModelBuilding.makeAttribute("payloadData", type: .binaryDataAttributeType)
         ]
         return entity
     }
@@ -571,13 +570,13 @@ nonisolated public final class PersistenceController {
         entity.name = "CustomItemRecord"
         entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
         entity.properties = [
-            makeAttribute("idString", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("idString", type: .stringAttributeType),
             // The whole CustomizationItem (incl. palette-indexed pixel grid) as JSON. Plain binary, NOT
             // external storage: NSPersistentCloudKitContainer rejects `allowsExternalBinaryDataStorage`
             // at store load (see the makeContainer note above), and a palette-indexed texture is ~1 KB —
             // far under CloudKit's per-field budget — so inline binary is both required and sufficient.
-            makeAttribute("payloadData", type: .binaryDataAttributeType),
-            makeAttribute("createdAt", type: .dateAttributeType)
+            CoreDataModelBuilding.makeAttribute("payloadData", type: .binaryDataAttributeType),
+            CoreDataModelBuilding.makeAttribute("createdAt", type: .dateAttributeType)
         ]
         return entity
     }
@@ -593,10 +592,10 @@ nonisolated public final class PersistenceController {
             // uniqueness), so two devices can produce two rows with the same idString — `CoinEconomy`
             // collapses those by id when aggregating. That application-level dedup is what makes coins
             // idempotent and double-grant-free across devices.
-            makeAttribute("idString", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("idString", type: .stringAttributeType),
             // The CoinLedgerEntry as JSON (plain binary, tens of bytes — far under CloudKit's budget).
-            makeAttribute("payloadData", type: .binaryDataAttributeType),
-            makeAttribute("createdAt", type: .dateAttributeType)
+            CoreDataModelBuilding.makeAttribute("payloadData", type: .binaryDataAttributeType),
+            CoreDataModelBuilding.makeAttribute("createdAt", type: .dateAttributeType)
         ]
         return entity
     }
@@ -609,10 +608,10 @@ nonisolated public final class PersistenceController {
             // `idString` is the milestone event's deterministic id (e.g. "event:journal:<uuid>").
             // Same dedup story as CoinLedgerRecord: one device upserts by it; across devices CloudKit
             // can hold duplicate-id rows and `MilestoneEconomy` collapses them when aggregating.
-            makeAttribute("idString", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("idString", type: .stringAttributeType),
             // The MilestoneLedgerEntry as JSON (plain binary, tens of bytes).
-            makeAttribute("payloadData", type: .binaryDataAttributeType),
-            makeAttribute("createdAt", type: .dateAttributeType)
+            CoreDataModelBuilding.makeAttribute("payloadData", type: .binaryDataAttributeType),
+            CoreDataModelBuilding.makeAttribute("createdAt", type: .dateAttributeType)
         ]
         return entity
     }
@@ -627,30 +626,15 @@ nonisolated public final class PersistenceController {
             // NOT collapse rows by this attribute (it mirrors by record identity), so two devices can
             // produce two rows for one dateKey; `DayRecordRepository` collapses those on load by max
             // `updatedAt` (a dict read can't hold two rows for one key) and self-heals the duplicate.
-            makeAttribute("dateKey", type: .stringAttributeType),
+            CoreDataModelBuilding.makeAttribute("dateKey", type: .stringAttributeType),
             // One FernletDay (already privacy-sanitized at the write boundary) as JSON. Plain binary, not
             // external storage (CloudKit rejects external storage at store load) — a single day is far
             // under CloudKit's per-field budget, which is exactly why per-day rows remove the 370 cap.
-            makeAttribute("payloadData", type: .binaryDataAttributeType),
+            CoreDataModelBuilding.makeAttribute("payloadData", type: .binaryDataAttributeType),
             // Per-day last-writer-wins stamp: lets a same-day cross-device conflict resolve by recency and
             // gives a future mesh-sync a max(updatedAt) union key.
-            makeAttribute("updatedAt", type: .dateAttributeType)
+            CoreDataModelBuilding.makeAttribute("updatedAt", type: .dateAttributeType)
         ]
         return entity
-    }
-
-    private static func makeAttribute(
-        _ name: String,
-        type: NSAttributeType,
-        defaultValue: Any? = nil,
-        allowsExternalBinaryDataStorage: Bool = false
-    ) -> NSAttributeDescription {
-        let attribute = NSAttributeDescription()
-        attribute.name = name
-        attribute.attributeType = type
-        attribute.isOptional = true
-        attribute.defaultValue = defaultValue
-        attribute.allowsExternalBinaryDataStorage = allowsExternalBinaryDataStorage
-        return attribute
     }
 }

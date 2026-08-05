@@ -7,13 +7,13 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | Need | Prefer Reusing |
 | --- | --- |
 | Signed peer-to-peer payloads | `FernletIdentityEnvelope.signed(...)`, `FernletIdentityEnvelope.verify(...)`, `canonicalBytes(for:)` |
-| Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)` |
+| Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are now thin wrappers over it. |
 | Mesh group-key wrapping | `IdentityService.encryptGroupKey(_:for:)`, `IdentityService.decryptGroupKey(_:)`, `MeshNetworkManager.initiateRotation()` |
 | Proximity commit gates | `ProximityCommitDetector.ingest(distanceMeters:at:)`, `ProximityCoordinator.commitManualProximity()` |
-| Friend mesh lifecycle | `MeshNetworkManager.startJoin()`, `stopJoin()`, `leaveSession()`, `leaveSessionAfterNotifyingPeers()` |
-| Mesh membership/admission | `MeshNetworkManager.allowAdmission(_:)`, `declineAdmission(_:)`, `handleAdmissionRequest(_:)`, `handleAdmissionGrant(_:)` |
+| Friend mesh lifecycle | `MeshNetworkManager.startJoin()`, `stopJoin()`, `leaveSession()`, `leaveSessionAfterNotifyingPeers()`. 2026-08 consolidation: the three duplicated pending-connection expiry idioms were consolidated into `MeshMultipeerSession.registerPendingConnection(_:)`, and the hand-rolled `withObservationTracking` re-arm loops in the mesh/recipe/presence managers were consolidated into `ObservationLoop.start(on:tracking:onChange:)` (ProximityKit/Engine/ObservationLoop.swift). Local advertised names come from `ProximityHost.resolvedProximityDisplayName` (ProximityKit/PeerDisplayNames.swift), which replaced the three identical private `displayName` vars. |
+| Mesh membership/admission | `MeshNetworkManager.allowAdmission(_:)`, `declineAdmission(_:)`, `handleAdmissionRequest(_:)`, `handleAdmissionGrant(_:)`. 2026-08 consolidation: the twin mesh-admission and activity-join confirmation sheets were consolidated into the shared generic `JoinPromptSheet` (Fernlet/JoinPromptSheet.swift, app target), and receive-side peer-name moderation now goes through `ItemNameModeration.moderatedPeerDisplayName(_:)`. |
 | Mesh removal | `proposeRemoval(of:)`, `canSecondRemoval(_:)`, `secondRemoval(_:)`, `applyApprovedRemoval(_:)` |
-| Friend photos | `MeshNetworkManager.addPhoto(_:)`, `cachePhoto(_:)`, `deletePhoto(_:)`, `syncPhotoManifest(to:)`, `PrivateMediaStore` |
+| Friend photos | `MeshNetworkManager.addPhoto(_:)`, `cachePhoto(_:)`, `deletePhoto(_:)`, `syncPhotoManifest(to:)`, `PrivateMediaStore`. 2026-08 consolidation: the three duplicated photo-save catch-ladders and alert blocks were consolidated into `FriendPhotoLibrarySaver.userFacingFailure(for:photoCount:)` + the `photoSaveFailureAlert(_:failure:)` view extension (ProximityKit); the media stores' hand-rolled AES-GCM seal/open now routes through the shared extension on `PrivateMediaKeyProviding` (MediaAtRestCrypto.swift); JSON sidecar state — including the photo-wall preferences store — was consolidated into `JSONSidecarFile` (ProximityKit/Support/JSONSidecarFile.swift). |
 | Recipe sharing | `ProximityRecipeShareManager.start()`, `sendRecipeShare(_:to:)`, `proximityCoordinator(_:didReceive:plaintext:from:)` |
 | Audit/diagnostics | `ConnectionInspector`, `ConnectionSessionLog`, `TrainerAuditEvent`, `ProximityRecipeShareDiagnostics` |
 
@@ -26,6 +26,12 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `init(proximityThreshold:dwellSeconds:minimumSamples:)` | Configures a rolling distance-window detector. Defaults to 15 cm, 0.8 seconds, and 3 samples. |
 | `ingest(distanceMeters:at:)` | Adds a distance sample, trims samples older than the dwell window, and returns `true` when enough samples average below the threshold for the full dwell time. |
 | `reset()` | Clears the rolling sample window. |
+
+### `ObservationLoop.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `ObservationLoop.start(on:tracking:onChange:)` | The one `withObservationTracking` re-arm loop behind `MeshNetworkManager.startObserving()`, `ProximityRecipeShareManager.startObserving()`, and `PresenceManager.startHeartObserving()`: registers the caller's tracked reads, suspends until Observation reports a change, runs the caller's check on the main actor, and re-arms. Holds the owner weakly (so dealloc ends the loop) and finishes the stream continuation explicitly (so repeated sessions leave no suspended observer tasks). Returns the loop task for the caller's stop path. |
 
 ### `ProximityCoordinator.swift`
 
@@ -86,8 +92,8 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | Function | What It Does |
 | --- | --- |
 | `FriendPhotoWallPost.isCarousel` | Returns true when a post contains more than one photo. |
-| `FriendPhotoWallPreferencesStore.load()` | Loads persisted wall aggregation/cover/favorite preferences, or defaults. |
-| `FriendPhotoWallPreferencesStore.save(_:)` | Persists wall preferences with atomic protected file writes. |
+| `JSONSidecarFile<FriendPhotoWallPreferences>.load()` | Loads persisted wall aggregation/cover/favorite preferences, or `nil` (caller substitutes defaults). Was `FriendPhotoWallPreferencesStore.load()`, now the shared sidecar helper in `Support/JSONSidecarFile.swift`. |
+| `JSONSidecarFile<FriendPhotoWallPreferences>.save(_:)` | Persists wall preferences with atomic protected file writes. Was `FriendPhotoWallPreferencesStore.save(_:)`. |
 | `init(store:)` | Provisions identity, initializes photo cache/preferences, loads cached photos, and configures mesh session callbacks. |
 | `isInSession` | Returns true when a mesh exists or any slot has a committed fingerprint. |
 | `filmRemaining` | Returns the remaining session photo quota, capped at zero. |
@@ -115,7 +121,7 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `vouchLabel(for:)` | Returns a friend-of-friend label from unexpired vouch cache. |
 | `block(_:)` | Finds a participant's signing key and blocks it in the store/vault. |
 | `sendVouchList(to:)` | Sends this device's non-blocked/non-revoked trusted fingerprints as a temporary vouch list. |
-| `displayName` | Uses proximity display-name setting or falls back to device name. |
+| `displayName` | Delegates to the shared `ProximityHost.resolvedProximityDisplayName` (`PeerDisplayNames.swift`): the proximity display-name setting, trimmed, falling back to the device name. |
 | `activeSlots` | Filters slots to active slot kind. |
 | `setupMeshSession()` | Installs discovery, channel-ready, disconnect/retry, and invite-acceptance callbacks. |
 | `startSearching()` | Starts mesh advertising/browsing and observation. |
@@ -161,12 +167,14 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `makePhotoWallPosts()` | Converts cached photos and aggregation preferences into wall post models. |
 | `newestUnaggregatedSession()` | Finds the newest multi-photo session not yet aggregated. |
 | `photos(in:)` | Returns photos for a session sorted oldest to newest. |
-| `persistPhotoWallPreferences()` | Saves wall preferences. |
+| `persistPhotoWallPreferences()` | Saves wall preferences through the store's `JSONSidecarFile<FriendPhotoWallPreferences>`. |
 | `isPhotoFromCurrentSession(_:)` | Checks whether an inbound photo belongs to a current session payload. |
 | `syncPhotoManifest(to:)` | Sends current session photo manifest, encrypted as metadata in closed meshes. |
 | `handlePhotoManifest(_:from:)` | Requests missing, unblocked, decryptable photos from a peer. |
 | `sendRequestedPhotos(_:to:)` | Hydrates and sends requested session photos sealed to a slot. |
-| `sendEnvelope(_:encodable:via:sealed:)` | Encodes, optionally pairwise-seals, signs, and sends a payload to a slot. |
+| `sendEnvelope(_:encodable:via:sealed:)` | Post-commit send: resolves the slot's verified key-agreement key for a sealed send (returning false when it is missing) and forwards to `sendEnvelopeCore(...)` with send-failure auditing on. |
+| `sendVerifyEnvelope(_:encodable:to:via:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)` | Pre-commit ceremony send: seals to the identity carried by the gate state (the slot's verified key fields are not populated yet) through `sendEnvelopeCore(...)`, with send-failure auditing off. |
+| `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)` | The shared seal+sign+send core behind both senders above: encodes the payload, optionally seals it (wire2 or legacy; an empty key fails closed instead of downgrading to an unsealed send), signs the envelope, and sends it reliably on the slot channel; returns whether the wire write succeeded. |
 | `encryptPhoto(_:key:)` | AES-GCM encrypts image data with the mesh group key and returns ciphertext+tag plus nonce. |
 | `decryptPhoto(_:nonce:key:)` | AES-GCM decrypts a friend photo payload. |
 | `encryptPayload(_:key:)` | Shared AES-GCM wrapper for closed-mode metadata encryption. |
@@ -185,7 +193,7 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `handleRotationSync(_:)` | Non-coordinator sync response that waits for drain then sends key ack. |
 | `handleKeyRotation(_:)` | Non-coordinator key application from elected coordinator and ack back to coordinator. |
 | `handleKeyAck(_:)` | Coordinator-side collection of sync-phase acks. |
-| `startObserving()` | Observes slot coordinator states/distances and calls state/distance maintenance after changes. |
+| `startObserving()` | Observes slot coordinator states/distances through the shared `ObservationLoop.start(on:tracking:onChange:)` and calls state/distance maintenance after each observed change. |
 | `checkCoordinatorStates()` | Commits newly connected slots with verified keys and removes stale uncommitted slots. |
 | `injectUITestStateIfNeeded()` | Seeds deterministic mesh/admission state from UI test environment variables. |
 
@@ -204,9 +212,10 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `start(serviceType:discoveryInfo:)` | Ensures MCSession exists, then starts advertiser and browser. |
 | `updateDiscoveryInfo(_:)` | Restarts advertiser with new discovery info. |
 | `stop()` | Stops advertiser/browser, disconnects session, and clears channels/caches/pending peers. |
-| `invite(_:)` | Invites a peer if not already pending/connected and clears pending state after timeout. |
+| `invite(_:)` | Invites a peer if not already pending/connected (and not while discovery is paused), opening the connecting window through `registerPendingConnection(_:)`. |
 | `send(_:to:mode:)` | Sends data through MCSession and maps failures to transport errors. |
 | `prepareChannel(for:)` | Returns or creates the channel adapter for an MC peer. |
+| `registerPendingConnection(_:)` | The one copy of the pending-connection expiry idiom: mints an invite token, records it in `pendingConnectionPeers`, and schedules the 31-second self-expiry that removes it unless a newer registration or a connect/disconnect transition already replaced it. Called by `invite(_:)`, the `.connecting` session transition (behind its own nil guard so the window is not refreshed), and the accepted-invitation path. |
 | `ensureSession()` | Creates the shared required-encryption MCSession. |
 | `startAdvertiser(info:)` | Starts `MCNearbyServiceAdvertiser`. |
 | `startBrowser()` | Starts `MCNearbyServiceBrowser`. |
@@ -453,7 +462,8 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `imageData(for:)` | Returns inline image data or reads + decrypts it from disk. |
 | `thumbnailData(for:)` | Reads + decrypts an existing thumbnail, or generates/encrypts/stores one from full image data. |
 | `hydrated(_:)` | Returns an image-data payload by loading + decrypting image bytes from disk. |
-| `encrypt(_:)` / `decrypt(_:)` | AES-256-GCM seal/open under the provider key; `decrypt` falls back to raw bytes for legacy pre-encryption (plaintext) files. |
+| `openSealed(_:)` | Three-way read of on-disk bytes — `.opened`, `.legacyPlaintext` (a pre-encryption file, recognised by the pixel-bounds check and re-sealed in place on access), or `.unreadable` (no key, or bytes that are neither openable nor a valid image) — so a wrong key or corruption never hands ciphertext back as a photo. |
+| `PrivateMediaKeyProviding.gcmSeal(_:)` / `gcmOpen(_:)` / `sealAndWrite(_:to:)` | The shared AES-256-GCM at-rest helpers this store now seals/opens through (`MediaAtRestCrypto.swift`), also used by `MealPhotoStore` and `ProgressPhotoStore`; they replaced the per-store `encrypt(_:)` / `reseal(_:to:)` copies. Each call site keeps its own fail-closed decision. |
 | `isWithinSafePixelBounds(_:)` | Rejects decompression-bomb dimensions/area via ImageIO before any decode. |
 | `removeOrphanedFiles(keeping:)` | Deletes image/thumbnail files not present in retained IDs (also the per-photo delete mechanism). |
 
@@ -472,6 +482,8 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `FriendPhotoReviewSheet.body` | Renders review grid and delete/save controls. |
 | `toggle(_:)` | Toggles a photo ID in the selected set. |
 | `FriendPhotoLibrarySaver.save(_:)` | Requests add-only Photos permission and saves selected payload images to the photo library. |
+| `FriendPhotoLibrarySaver.userFacingFailure(for:photoCount:)` | Maps a `save(_:)` error onto the shared `PhotoSaveFailure` alert content: the permission denial (the only one offering Open Settings), the singular/plural corruption wording for `NothingSavedError`, or `PhotoSaveFailure.generic`. |
+| `View.photoSaveFailureAlert(_:failure:)` | Presents that failure identically at every save surface (session-end review, disconnect review, album carousel): message body, conditional Open Settings button, OK; every button clears the binding. |
 
 ### `ProximityRecipeShareManager.swift`
 
@@ -489,11 +501,11 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `proximityCoordinator(_:didReceive:plaintext:from:)` | Accepts valid `recipeShare` envelopes and inserts pending review items. |
 | `setupSession()` | Installs recipe-share discovery/lost/channel/disconnect/acceptance callbacks. |
 | `discoveryInfo()` | Builds recipe-share discovery metadata. |
-| `displayName` | Uses proximity display-name setting or device name. |
+| `displayName` | Delegates to the shared `ProximityHost.resolvedProximityDisplayName` (`PeerDisplayNames.swift`), like the mesh and presence managers. |
 | `handlePeerDiscovered(_:)` | Filters self/blocked peers and updates sorted nearby recipients. |
 | `handlePeerLost(_:)` | Removes lost peer and records diagnostics. |
 | `handleChannelReady(_:)` | Creates a coordinator-backed recipe-share connection and starts friend handshake. |
-| `startObserving()` | Observes connection coordinator states and calls `checkCoordinatorStates()`. |
+| `startObserving()` | Observes connection coordinator states through the shared `ObservationLoop.start(on:tracking:onChange:)` and calls `checkCoordinatorStates()` after each observed change. |
 | `checkCoordinatorStates()` | Captures verified fingerprints/KA keys, ensures recipients, sends pending payloads, and drops stale connections. |
 | `ensureRecipient(for:identity:)` | Adds/updates a recipient from verified identity. |
 | `sendPendingPayload(via:)` | Encodes, seals, sends queued recipe payload, updates send state, and records diagnostics. |
@@ -561,6 +573,26 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `ActivityShareView.makeUIViewController(context:)` | Creates a UIKit share sheet for exported logs. |
 | `ActivityShareView.updateUIViewController(_:context:)` | No-op representable update. |
 
+## Shared Support
+
+### `PeerDisplayNames.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityHost.resolvedProximityDisplayName` | The local display name a proximity radio advertises: the host's `proximityDisplayName` trimmed, falling back to the device name. One home for the previously identical private `displayName` vars in `MeshNetworkManager`, `ProximityRecipeShareManager`, and `PresenceManager`. |
+| `ItemNameModeration.moderatedPeerDisplayName(_:)` | Wire-boundary coercion for a peer-supplied name before it is shown or persisted: `sanitizedName(_:)`, falling back to "A friend" when nothing displayable remains. Replaces the sanitize-or-"A friend" idiom repeated in the heart-receive paths, the vouch-list cache, the session chat store, and the keep-as-friend rows. |
+
+### `Support/JSONSidecarFile.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `JSONSidecarFile.defaultFileURL(name:)` | Builds the production sidecar path (`Application Support/Fernlet/<name>`). |
+| `JSONSidecarFile.load()` | Reads and decodes the sidecar, returning `nil` on any failure (absent, unreadable, or undecodable) — deliberately the naive idiom, so callers substitute their own defaults. Data of record must use `ProtectedSidecar` instead, which classifies read failures. |
+| `JSONSidecarFile.save(_:)` | Encodes, creates the parent directory, and writes atomically with `.completeFileProtection`; failures are silently dropped. Unlike `ProtectedSidecar`, it does not exclude the file from backup. |
+| `JSONSidecarFile.removeFile()` | Best-effort delete for the clear-all/reset path. |
+
+Shared by `FriendStateCache`, `ClosenessLedger`, `ModerationLedger`, `ProximityActivityManager`, and the mesh photo-wall preferences.
+
 ## Expansion Plan For The Rest Of The App
 
 The rest of the function index should not be one long alphabetical dump. Group it by ownership and duplicate-risk boundaries, so each section answers: "Where should I look before implementing this behavior again?"
@@ -576,7 +608,7 @@ The rest of the function index should not be one long alphabetical dump. Group i
 | Health, movement, activity catalog | `MoveView.swift`, `ActivityPickerSection.swift`, `ActivityTypeCatalog.swift`, `HealthKitService.swift`, `WorkoutHealthKitSync.swift`, `WorkoutExercises.json` consumers | Movement and HealthKit functions overlap around workout types, authorization, imports, and workout logging. | Is HealthKit mapping duplicated outside `ActivityTypeCatalog`? Are workout imports and manual logging using the same normalization/upsert behavior? |
 | Journal, cycle, period, intimacy | `JournalView.swift`, `JournalNarrativeRepository.swift`, `PeriodTrackerStore.swift`, `PeriodTrackerView.swift`, `PeriodDayDetailView.swift`, `CyclePredictionEngine.swift`, `LogPeriodSheet.swift`, `LogIntimacySheet.swift`, `IntimacyLogRepository.swift`, `MenstrualNarrativeRepository.swift` | These files share date-based personal history, cycle state, symptoms, predictions, and narrative persistence. | Are date-window calculations duplicated? Is cycle prediction used through `CyclePredictionEngine`? Are narrative repositories split by intent rather than reimplemented storage? |
 | AI, memory, audit context | `MemoryAgent.swift`, `AIContextPayload.swift`, `AIAuditLog.swift`, `AIRetryQueueService.swift`, Foundation model helper files | AI context, retry, audit, and memory payloads should be indexed together because errors often come from repeated prompt/context assembly. | Is context assembly duplicated in views? Are retry and audit paths consistently using the existing queue/log types? |
-| Social, friends, camera UI | `ConnectView.swift`, `SocialHubView.swift`, `FriendListView.swift`, `MeshAdmissionPromptSheet.swift`, `DisposableCameraView.swift` | This sits above the proximity layer already indexed. It owns user-facing session/photo/friend flows and should reference the proximity index instead of restating internals. | Is UI state duplicating `MeshNetworkManager` state? Are friend/block/session actions routed through proximity/trust managers? |
+| Social, friends, camera UI | `ConnectView.swift`, `SocialHubView.swift`, `FriendListView.swift`, `JoinPromptSheet.swift` (the shared generic join/admission sheet that replaced `MeshAdmissionPromptSheet.swift` and `ActivityJoinPromptSheet.swift`), `DisposableCameraView.swift` | This sits above the proximity layer already indexed. It owns user-facing session/photo/friend flows and should reference the proximity index instead of restating internals. | Is UI state duplicating `MeshNetworkManager` state? Are friend/block/session actions routed through proximity/trust managers? |
 | Cloud and external data | `CloudKitDataService.swift`, importers, repository sync/load helpers | CloudKit, web import, and external product data all handle outside data normalization and error boundaries. | Are remote/local merge rules duplicated? Are web/product importers converging on shared recipe/food models? |
 | Tests and mocks | `FernletTests`, `FernletUITests`, proximity mocks | Tests document expected behavior and often contain reusable fakes/harnesses. | Are new tests creating another mock when `Mocks/MockMultipeerTransport.swift` or similar exists? Are edge cases already covered by an adjacent test file? |
 

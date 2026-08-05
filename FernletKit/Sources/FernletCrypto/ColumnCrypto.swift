@@ -102,11 +102,33 @@ public nonisolated struct ColumnCrypto {
         return try JSONDecoder().decode(T.self, from: plaintext)
     }
 
+    // MARK: - Key derivation
+
+    /// Derives a purpose-bound subkey from the content key via salt-free HKDF-SHA256,
+    /// with `info` as the domain-separating label.
+    ///
+    /// This is THE column-key derivation every sealed ciphertext depends on: the label
+    /// and the derivation are part of the at-rest format, so any change here orphans
+    /// all existing sealed columns. Module-internal (least privilege, per the WI-7
+    /// precedent) — production code reaches it only through the sealing methods above,
+    /// while `FernletLockCryptoTests` characterizes it directly via
+    /// `@testable import FernletCrypto`, including a pinned known-answer vector.
+    ///
+    /// - Parameters:
+    ///   - contentKey: The unlocked content key used as the HKDF input key material.
+    ///   - info: The domain-separation label (the HKDF `info` input, UTF-8 encoded).
+    ///   - outputByteCount: The derived-key length in bytes (32 for ChaCha20 column keys).
+    /// - Returns: The deterministically derived subkey.
+    static func deriveColumnKey(contentKey: SymmetricKey, info: String, outputByteCount: Int) -> SymmetricKey {
+        HKDF<SHA256>.deriveKey(inputKeyMaterial: contentKey, info: Data(info.utf8), outputByteCount: outputByteCount)
+    }
+
     // MARK: - Private
 
     /// Derives this column's 32-byte ChaCha20 subkey from the content key via
-    /// HKDF-SHA256, using ``label`` as the domain-separating `info` input.
+    /// ``deriveColumnKey(contentKey:info:outputByteCount:)``, using ``label``
+    /// as the domain-separating `info` input.
     private func columnKey(from contentKey: SymmetricKey) -> SymmetricKey {
-        HKDF<SHA256>.deriveKey(inputKeyMaterial: contentKey, info: Data(label.utf8), outputByteCount: 32)
+        Self.deriveColumnKey(contentKey: contentKey, info: label, outputByteCount: 32)
     }
 }

@@ -186,7 +186,7 @@ public struct UnlockResult {
 // MARK: - Cryptographic primitives
 
 /// The lock's raw cryptographic primitives: scrypt passcode derivation, content-key
-/// generation and ChaChaPoly wrapping, HKDF column-key derivation, and the verifier digest.
+/// generation and ChaChaPoly wrapping, and the verifier digest.
 ///
 /// A caseless namespace of `nonisolated` statics — pure functions with no state. The
 /// scheme: a passcode plus a random salt run through the memory-hard scrypt KDF
@@ -265,18 +265,6 @@ enum FernletLockCrypto {
         let wrappingKey = SymmetricKey(data: wrappingKeyData)
         let sealedBox = try ChaChaPoly.SealedBox(combined: wrappedContentKey)
         return try ChaChaPoly.open(sealedBox, using: wrappingKey)
-    }
-
-    /// Derives a purpose-bound subkey from the content key via HKDF-SHA256, with `info`
-    /// as the domain-separation label — how sealed stores obtain per-column keys.
-    nonisolated static func deriveColumnKey(contentKey: Data, info: String, outputByteCount: Int) -> Data {
-        let inputKey = SymmetricKey(data: contentKey)
-        let derivedKey = HKDF<SHA256>.deriveKey(
-            inputKeyMaterial: inputKey,
-            info: Data(info.utf8),
-            outputByteCount: outputByteCount
-        )
-        return derivedKey.withUnsafeBytes { Data($0) }
     }
 
     /// The at-rest passcode verifier is the SHA-256 digest of the scrypt-derived key — NOT the derived
@@ -1078,16 +1066,25 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         return Int(byte)
     }
 
+    /// Failed passcode attempts allowed per batch before the cooldown ladder escalates.
+    public static let attemptsPerCooldownBatch = 4
+
+    /// Number of levels in the cooldown ladder (60s → 15min → 1h → 4h); failing a batch
+    /// at the final level flips `requiresReset` instead of starting another cooldown.
+    /// Semantically distinct from ``attemptsPerCooldownBatch`` — the two policy knobs
+    /// merely happen to share the value 4.
+    private static let cooldownLadderDepth = 4
+
     /// Registers one failed passcode attempt and applies the escalation policy: every
-    /// 4th failure advances the cooldown ladder (persisting deadline, uptime anchor, and
-    /// duration); failing a batch at level 4 flips `requiresReset` instead of starting
-    /// another cooldown.
+    /// ``attemptsPerCooldownBatch``th failure advances the cooldown ladder (persisting
+    /// deadline, uptime anchor, and duration); failing a batch at the final ladder level
+    /// (`cooldownLadderDepth`) flips `requiresReset` instead of starting another cooldown.
     private func recordFailedAttempt() throws {
         let newAttemptCount = currentAttemptCount + 1
         let currentLevel = loadCooldownLevel()
 
-        if newAttemptCount >= 4 {
-            if currentLevel >= 4 {
+        if newAttemptCount >= Self.attemptsPerCooldownBatch {
+            if currentLevel >= Self.cooldownLadderDepth {
                 try storeVerified(Data([1]), for: .requiresReset)
                 try storeAttemptCount(0)
                 state = .locked(cooldownDeadline: nil)

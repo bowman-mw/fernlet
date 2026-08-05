@@ -241,15 +241,6 @@ public enum NutritionLabelScanError: LocalizedError {
 /// ``NutritionLabelScanError`` when no text is readable; individual unrecognized fields simply
 /// stay `nil`.
 public final class NutritionLabelScanner {
-    /// Single-column convenience: OCR the image and parse the first (left) column.
-    ///
-    /// - Important: currently has no callers — every production path uses ``scanAll(image:)``.
-    static func scan(image: UIImage) async throws -> NutritionLabelResult {
-        let lines = try await recognizeText(in: image)
-        guard lines.isEmpty == false else { throw NutritionLabelScanError.noTextFound }
-        return parse(lines: lines)
-    }
-
     /// OCRs the image and returns the primary (left-column) result plus dual-column info when the
     /// label has two columns ("as prepared" marker detected).
     ///

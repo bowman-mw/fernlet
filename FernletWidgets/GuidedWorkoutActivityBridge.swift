@@ -27,20 +27,11 @@ enum GuidedWorkoutActivityBridge {
     /// Reflect the run state onto the live activity: update while the workout is live, end (immediate
     /// dismissal) once it reaches `.done`. No-op when nothing is on screen.
     static func sync(to state: GuidedWorkoutRunState) async {
-        if state.isDone {
-            await end()
-            return
-        }
-        let content = ActivityContent(state: state.contentState, staleDate: state.staleDate(postedAt: Date()))
-        for activity in Activity<WorkoutActivityAttributes>.activities {
-            await activity.update(content)
-        }
+        await LiveActivityReflector.sync(to: state)
     }
 
     /// End every live workout activity immediately (used on finish, abandon, and stale cleanup).
     static func end() async {
-        for activity in Activity<WorkoutActivityAttributes>.activities {
-            await activity.end(nil, dismissalPolicy: .immediate)
-        }
+        await LiveActivityReflector.end(WorkoutActivityAttributes.self)
     }
 }

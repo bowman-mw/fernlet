@@ -5,8 +5,8 @@ import AIContext
 import FoundationModels
 #endif
 
-/// The production `AIDeviceCapabilityProviding` — wraps the existing on-device availability check
-/// (`SystemLanguageModel.default.availability`, the same idiom `FoodSelectionAvailability` uses) so
+/// The production `AIDeviceCapabilityProviding` — wraps the on-device availability check
+/// (`SystemLanguageModel.default.availability`, the probe `FoodSelectionAvailability` delegates to) so
 /// the router can gate on real device capability while tests inject a `StaticAIDeviceCapabilityProvider`.
 ///
 /// The Private Cloud Compute and BYOK rungs report `false` here: their symbols
@@ -34,9 +34,9 @@ public struct SystemLanguageModelCapabilityProvider: AIDeviceCapabilityProviding
         )
     }
 
-    /// `true` when the default `SystemLanguageModel` reports `.available` — the shared availability
-    /// idiom (see also ``FoodSelectionAvailability``); `false` on incapable hardware or SDKs without
-    /// `FoundationModels`.
+    /// `true` when the default `SystemLanguageModel` reports `.available` — the canonical
+    /// availability probe (``FoodSelectionAvailability`` delegates here); `false` on incapable
+    /// hardware or SDKs without `FoundationModels`.
     static var isOnDeviceModelAvailable: Bool {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {

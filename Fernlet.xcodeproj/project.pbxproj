@@ -115,6 +115,7 @@
 		68FE5E00000000000000B003 /* Exceptions for "FernletWidgets" folder in "Fernlet" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				AppGroupRunStateStore.swift,
 				CookingActivityAttributes.swift,
 				CookingActivityBridge.swift,
 				CookingLiveActivityIntents.swift,
@@ -124,6 +125,7 @@
 				GuidedWorkoutLiveActivityIntents.swift,
 				GuidedWorkoutRunState.swift,
 				GuidedWorkoutRunStateStore.swift,
+				LiveActivityRunReflecting.swift,
 				WorkoutActivityAttributes.swift,
 			);
 			target = 6869C2E12FB8D39D0098A0F3 /* Fernlet */;

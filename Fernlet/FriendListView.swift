@@ -181,7 +181,7 @@ struct FriendListView: View {
         .navigationBarTitleDisplayMode(.large)
         .confirmationDialog(
             "Report this person?",
-            isPresented: Binding(get: { peerToReport != nil }, set: { if !$0 { peerToReport = nil } }),
+            isPresented: $peerToReport.isPresent(),
             presenting: peerToReport
         ) { peer in
             ForEach(ReportReason.allCases) { reason in
@@ -481,10 +481,7 @@ struct FriendListView: View {
         .accessibilityIdentifier("friends.sendHeart")
         .alert(
             "Deliver hearts when you're apart?",
-            isPresented: Binding(
-                get: { awayConsentPeer != nil },
-                set: { if !$0 { awayConsentPeer = nil } }
-            )
+            isPresented: $awayConsentPeer.isPresent()
         ) {
             Button("Turn on") {
                 if let consented = awayConsentPeer {

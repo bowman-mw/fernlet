@@ -225,17 +225,14 @@ public nonisolated final class MenstrualNarrativeRepository {
 
     /// Drops every stored narrative. Deletes rows WITHOUT decrypting them, so it works while the app is
     /// locked and while cycle tracking is hidden — the property that lets "delete my data" stay
-    /// available even when reading that data is not. Mirrors `WorryNarrativeRepository.deleteAll()`.
+    /// available even when reading that data is not. Routes through the shared
+    /// `PrivateRowPlumbing.deleteRows` sequence, like every sealed repository's `deleteAll()`, and sets
+    /// the divergence latch iff rows were actually removed.
     public func deleteAll() throws {
-        try context.performAndWait {
-            let request = NSFetchRequest<NSManagedObject>(entityName: "MenstrualNarrative")
-            let rows = try context.fetch(request)
-            guard !rows.isEmpty else { return }
-            rows.forEach(context.delete)
-            try context.save()
-            try PrivatePersistentHistoryPruner.prune(context: context)
-            // Same reasoning as `delete(id:)`: emptying the store is divergence, and the rows it just
-            // dropped may never have latched (pre-upgrade inserts). Non-empty guaranteed by the guard.
+        // Same reasoning as `delete(id:)`: emptying the store is divergence, and the rows it just
+        // dropped may never have latched (pre-upgrade inserts). Latch only when rows were actually
+        // deleted (and the save + prune succeeded) — exactly what the helper's `true` return means.
+        if try PrivateRowPlumbing.deleteRows(entityName: "MenstrualNarrative", in: context) {
             markNarrativeStored()
         }
     }

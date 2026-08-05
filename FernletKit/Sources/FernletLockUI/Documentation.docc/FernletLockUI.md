@@ -56,10 +56,9 @@ main-actor isolated (`defaultIsolation(MainActor.self)` in `Package.swift`), mat
 role as a pure SwiftUI surface; asynchronous unlock and configuration calls hop through
 `Task { @MainActor in ... }` and back onto the service.
 
-One UI-side coupling is worth knowing before editing: the unlock screen's
-"attempts remaining" counter hardcodes the same 4-attempt lockout threshold that
-`FernletLockService` enforces internally. If the service's threshold ever changes, the
-counter here must change with it.
+The unlock screen's "attempts remaining" counter reads the lockout threshold from
+`FernletLockService.attemptsPerCooldownBatch` — the same constant the service enforces
+internally — so a service-side policy change updates the counter automatically.
 
 ## Topics
 

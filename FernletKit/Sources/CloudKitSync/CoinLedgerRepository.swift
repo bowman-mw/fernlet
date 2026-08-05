@@ -2,10 +2,12 @@
 // CloudKitSync
 //
 // Per-row Core Data + iCloud store for the coin ledger, separate from the snapshot blob so each device's
-// earn/spend rows sync independently instead of last-writer-wins on a shared blob. Mirrors
-// `CustomItemRepository`, with one deliberate difference: this store is APPEND-ONLY — `append` upserts
-// the rows it is given and never deletes others, so a stale in-memory set on one device can't wipe rows
-// that synced in from another device. Each entry is a JSON `payloadData` blob keyed by its id.
+// earn/spend rows sync independently instead of last-writer-wins on a shared blob. The load/upsert
+// machinery is the shared `AppendOnlyRowStore` engine (also behind `MilestoneLedgerRepository` and
+// `CustomItemRepository`); this store is APPEND-ONLY — `append` upserts the rows it is given and never
+// deletes others, so a stale in-memory set on one device can't wipe rows that synced in from another
+// device. Each entry is a JSON `payloadData` blob keyed by its id. The only delete is the local
+// `deleteAll()` reset path.
 //
 // NOTE: this store does NOT collapse duplicate-id rows across devices — CloudKit mirrors by record
 // identity, not by the `idString` attribute, so two devices that mint the same deterministic id produce
@@ -22,15 +24,17 @@ import FernletPersistence
 /// The `CoinLedgerRepositoring` conformer used under Core Data storage. Each entry is one
 /// `CoinLedgerRecord` row — a JSON `payloadData` blob (encoded via ``RowPayloadCoders``) keyed
 /// by the entry's stable deterministic `idString` — so each device's earn/spend rows sync
-/// independently instead of last-writer-wins on the snapshot blob. `append` upserts only the
-/// rows it is handed and never deletes others, so a stale in-memory set on one device cannot
-/// wipe rows synced in from another. Duplicate-id rows minted by two devices are NOT collapsed
-/// here (CloudKit mirrors by record identity, not `idString`); the union-merge dedup lives in
-/// `CoinEconomy` aggregation. Failed saves assert in Debug builds, roll the context back, and
-/// return `false`. MainActor-isolated by the module default, working on
-/// ``PersistenceController``'s view context.
+/// independently instead of last-writer-wins on the snapshot blob. Load and `append` delegate
+/// to the shared ``AppendOnlyRowStore`` engine: `append` upserts only the rows it is handed and
+/// never deletes others, so a stale in-memory set on one device cannot wipe rows synced in from
+/// another. Duplicate-id rows minted by two devices are NOT collapsed here (CloudKit mirrors by
+/// record identity, not `idString`); the union-merge dedup lives in `CoinEconomy` aggregation.
+/// Failed saves assert in Debug builds, roll the context back, and return `false`. The one
+/// delete path is `deleteAll()`, kept local to this type (the engine has none). MainActor-isolated
+/// by the module default, working on ``PersistenceController``'s view context.
 public struct CoinLedgerRepository: CoinLedgerRepositoring {
     private let controller: PersistenceController
+    private let store: AppendOnlyRowStore<CoinLedgerEntry>
 
     public init() {
         self.init(controller: .shared)
@@ -38,69 +42,33 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
 
     public init(controller: PersistenceController) {
         self.controller = controller
+        self.store = AppendOnlyRowStore(
+            controller: controller,
+            entityName: "CoinLedgerRecord",
+            loadTimingLabel: "CoinLedgerRepository.load",
+            loadAsyncTimingLabel: "CoinLedgerRepository.loadAsync",
+            debugLabel: "coin ledger",
+            saveFailureMessage: "coin ledger Core Data save failed",
+            idString: { $0.id },
+            createdAt: { $0.createdAt }
+        )
     }
 
     /// Loads every ledger entry, oldest first; undecodable rows are dropped per row.
     public func load() -> [CoinLedgerEntry] {
-        StartupTiming.timed("CoinLedgerRepository.load") { loadRecords() }
+        store.load()
     }
 
     /// Async-signature variant of `load()` (the fetch itself still runs on the main actor).
     public func loadAsync() async -> [CoinLedgerEntry] {
-        StartupTiming.timed("CoinLedgerRepository.loadAsync") { loadRecords() }
-    }
-
-    private func loadRecords() -> [CoinLedgerEntry] {
-        let context = controller.container.viewContext
-        let request = NSFetchRequest<NSManagedObject>(entityName: "CoinLedgerRecord")
-        request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
-        guard let records = try? context.fetch(request) else {
-            assertionFailure("coin ledger fetch failed")
-            return []
-        }
-        return records.compactMap(Self.entry(from:))
+        await store.loadAsync()
     }
 
     /// Upserts the given entries by `idString`, never deleting rows it wasn't handed.
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
     @discardableResult public func append(_ entries: [CoinLedgerEntry]) -> Bool {
-        guard !entries.isEmpty else { return true }
-        let context = controller.container.viewContext
-        do {
-            // Look up the rows we're about to touch in ONE fetch, then upsert by idString. We do NOT
-            // delete rows we weren't handed (unlike CustomItemRepository's full-replace save) — the
-            // ledger is append-only, so flushing a stale set can't clobber rows synced from another device.
-            let incomingIDs = entries.map(\.id)
-            let request = NSFetchRequest<NSManagedObject>(entityName: "CoinLedgerRecord")
-            request.predicate = NSPredicate(format: "idString IN %@", incomingIDs)
-            var existingByID: [String: NSManagedObject] = [:]
-            for record in try context.fetch(request) {
-                if let idString = record.value(forKey: "idString") as? String {
-                    existingByID[idString] = record
-                }
-            }
-            let encoder = RowPayloadCoders.makeEncoder()
-            for entry in entries {
-                guard let payload = try? encoder.encode(entry) else {
-                    assertionFailure("coin ledger encode failed")
-                    continue
-                }
-                let record = existingByID[entry.id]
-                    ?? NSEntityDescription.insertNewObject(forEntityName: "CoinLedgerRecord", into: context)
-                record.setValue(entry.id, forKey: "idString")
-                record.setValue(payload, forKey: "payloadData")
-                record.setValue(entry.createdAt, forKey: "createdAt")
-            }
-            if context.hasChanges {
-                try context.save()
-            }
-            return true
-        } catch {
-            assertionFailure("coin ledger Core Data save failed")
-            context.rollback()
-            return false
-        }
+        store.append(entries)
     }
 
     /// Removes every ledger row — the delete-all/reset path only (normal operation never deletes).
@@ -120,10 +88,5 @@ public struct CoinLedgerRepository: CoinLedgerRepositoring {
             context.rollback()
             return false
         }
-    }
-
-    private static func entry(from record: NSManagedObject) -> CoinLedgerEntry? {
-        guard let data = record.value(forKey: "payloadData") as? Data else { return nil }
-        return try? RowPayloadCoders.makeDecoder().decode(CoinLedgerEntry.self, from: data)
     }
 }

@@ -247,7 +247,7 @@ public final class CloudKitDataService {
         // so reading a MainActor-isolated instance property here would be a data race.
         self.isCloudKitSyncEnabled = isCloudKitSyncEnabled ?? { StoragePreferencesStore.currentPreferences().iCloudSyncEnabled }
         self.now = now
-        self.decoder = Self.makeDecoder()
+        self.decoder = RowPayloadCoders.makeDecoder()
     }
 
     /// Seam initializer for tests: injects the account provider, database, and a fixed zone.
@@ -263,7 +263,7 @@ public final class CloudKitDataService {
         self.zoneIDOverride = zoneID
         self.isCloudKitSyncEnabled = isCloudKitSyncEnabled
         self.now = now
-        self.decoder = Self.makeDecoder()
+        self.decoder = RowPayloadCoders.makeDecoder()
     }
 
     /// Counts the Fernlet data already in this iCloud account across every zone.
@@ -652,12 +652,6 @@ public final class CloudKitDataService {
             }
         }
         return nil
-    }
-
-    private static func makeDecoder() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
     }
 }
 

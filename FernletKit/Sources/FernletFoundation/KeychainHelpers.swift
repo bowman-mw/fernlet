@@ -4,6 +4,7 @@
 // Generic Keychain accessors shared by FernletLockService and IdentityService.
 // Lock-specific typed wrappers (LockKeychainKey) live in FernletLockService.swift.
 
+import CryptoKit
 import Foundation
 import Security
 
@@ -71,6 +72,20 @@ public nonisolated enum KeychainItem {
         }
     }
 
+    /// Three-way result of a keychain read that distinguishes "no such item" from "the keychain
+    /// could not be read" — the distinction ``load(account:service:synchronizable:)`` deliberately
+    /// collapses into `nil`. Stores that mint a fresh secret on absence use it to fail closed on a
+    /// transient error instead of minting over an unreadable row.
+    public enum ReadResult {
+        /// The item exists; carries its data.
+        case found(Data)
+        /// No item matches the query (`errSecItemNotFound`) — safe to treat as "never stored".
+        case absent
+        /// The keychain call failed (any other `OSStatus`), or reported success without returning
+        /// data; the item's existence is unknown, so callers must not mint a replacement.
+        case unreadable(OSStatus)
+    }
+
     /// Service string for the app-lock credentials (`FernletLockService`'s production slot).
     nonisolated public static let productionService = "com.fernlet.lock"
     /// Service string under which the ``StoragePreferences`` blob is stored.
@@ -122,6 +137,39 @@ public nonisolated enum KeychainItem {
         ]
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
         return result as? Data
+    }
+
+    /// Loads the single item matching `service` + `account` within `synchronizable` scope,
+    /// distinguishing the three outcomes ``load(account:service:synchronizable:)`` collapses:
+    /// ``ReadResult/found(_:)`` with the item's data, ``ReadResult/absent`` when no item exists,
+    /// and ``ReadResult/unreadable(_:)`` carrying the failing `OSStatus`. Used by stores whose
+    /// mint-fresh-on-absent path must fail closed on a transient read error (the heart-drop
+    /// prekey blob and the sidecar seal key).
+    public static func loadDistinguishingAbsence(
+        account: String,
+        service: String,
+        synchronizable: SynchronizableScope = .any
+    ) -> ReadResult {
+        var result: AnyObject?
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecAttrSynchronizable as String: synchronizable.queryValue,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnData as String: true,
+            kSecUseDataProtectionKeychain as String: true
+        ]
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        switch status {
+        case errSecSuccess:
+            guard let data = result as? Data else { return .unreadable(status) }
+            return .found(data)
+        case errSecItemNotFound:
+            return .absent
+        default:
+            return .unreadable(status)
+        }
     }
 
     /// Enumerates EVERY generic-password item under `service` (optionally restricted to a synchronizable
@@ -193,5 +241,22 @@ public nonisolated enum KeychainItem {
     /// Deletes the item stored for a well-known ``Account``; a no-match is silently ignored.
     public static func delete(for account: Account, service: String) {
         delete(account: account.rawValue, service: service)
+    }
+
+    /// Loads the device-bound `SymmetricKey` stored for a well-known ``Account``, minting and
+    /// persisting a fresh 256-bit key on first use.
+    ///
+    /// Goes through the typed ``load(for:service:)`` / ``store(_:for:service:)`` overloads, so the
+    /// row is pinned to `AfterFirstUnlockThisDeviceOnly` accessibility (device-bound, never
+    /// iCloud-synced) and a failed store is silently discarded — exactly the semantics of the
+    /// historical per-caller copies this replaces (the journal and Worry Box device keys).
+    public static func loadOrCreateSymmetricKey(for account: Account, service: String) -> SymmetricKey {
+        if let data = load(for: account, service: service) {
+            return SymmetricKey(data: data)
+        }
+        let key = SymmetricKey(size: .bits256)
+        let keyData = key.withUnsafeBytes { Data($0) }
+        store(keyData, for: account, service: service)
+        return key
     }
 }

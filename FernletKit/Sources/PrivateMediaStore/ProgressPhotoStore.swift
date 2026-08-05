@@ -197,9 +197,7 @@ public struct ProgressPhotoStore {
     /// fail-closed: bytes that don't decrypt resolve to `.undecodable`, never to trusted plaintext.
     private func readIndex() -> IndexState {
         guard let stored = try? Data(contentsOf: indexURL), !stored.isEmpty else { return .absent }
-        guard let key = keyProvider.mediaKey(),
-              let box = try? AES.GCM.SealedBox(combined: stored),
-              let opened = try? AES.GCM.open(box, using: key),
+        guard let opened = keyProvider.gcmOpen(stored),
               let records = try? decoder.decode([ProgressPhotoRecord].self, from: opened) else {
             return .undecodable
         }
@@ -225,14 +223,7 @@ public struct ProgressPhotoStore {
     /// Encodes, GCM-seals, and atomically writes the index; false (nothing written) when the
     /// records can't be encoded, no key is available, or sealing/writing fails.
     private func persist(_ records: [ProgressPhotoRecord]) -> Bool {
-        guard let plaintext = try? encoder.encode(records),
-              let key = keyProvider.mediaKey(),
-              let sealed = try? AES.GCM.seal(plaintext, using: key).combined else { return false }
-        do {
-            try sealed.write(to: indexURL, options: [.atomic, .completeFileProtection])
-            return true
-        } catch {
-            return false
-        }
+        guard let plaintext = try? encoder.encode(records) else { return false }
+        return keyProvider.sealAndWrite(plaintext, to: indexURL)
     }
 }

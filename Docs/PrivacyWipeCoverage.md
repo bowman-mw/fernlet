@@ -37,7 +37,7 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Progress photos | PrivateMediaStore | `progressPhotoStore.deleteAll` |
 | Recipe photos | PrivateMediaStore | `recipePhotoStore.deleteAll` |
 | Share-extension import queue | App group | `sharedRecipeImportQueue.clear` |
-| Data export files | Documents | `purgeDataExports` |
+| Data export files — the "export my data" dump (`Fernlet-data-*.json`) AND the trainer/nutritionist summary (`Fernlet-training-*.json`) | tmp/DataExports (+ legacy tmp/-root strays of both prefixes) | `purgeDataExports` |
 | Friends' clothing catalogs (1 h window) | Memory | `clothingShop.clearAll` |
 | Session temp messages | Memory (SessionMessageStore) | `sessionMessages.clear` |
 | Presence radio + discovery state | PresenceManager | `presenceManager.stop` |

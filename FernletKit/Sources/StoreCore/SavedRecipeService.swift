@@ -15,10 +15,10 @@ import FernletScoring
 /// storage, the type also hosts two pure recipe conveniences: ``shareText(for:)`` (the share-sheet body)
 /// and ``makeMeal(from:mealType:)`` (recipe → loggable meal).
 ///
-/// Invariants: the pending queues are the sole un-persisted copy of a mutation — ``flushPendingSave()``
-/// clears each queue only after its confirmed write, and ``reloadFromStore()`` re-applies still-pending
-/// mutations after a failed flush, so a just-saved recipe is never silently lost. `@MainActor` and
-/// `@Observable`.
+/// Invariants: the buffer's pending queues are the sole un-persisted copy of a mutation —
+/// ``flushPendingSave()`` clears each queue only after its confirmed write, and ``reloadFromStore()``
+/// re-applies still-pending mutations after a failed flush, so a just-saved recipe is never silently
+/// lost (the shared contract lives on ``DebouncedRowBuffer``). `@MainActor` and `@Observable`.
 @MainActor
 @Observable
 public final class SavedRecipeService {
@@ -26,24 +26,28 @@ public final class SavedRecipeService {
     public private(set) var savedRecipes: [RecipeDefinition] = []
 
     @ObservationIgnored private let repository: any SavedRecipeRepositoring
-    @ObservationIgnored private var pendingUpserts: [UUID: RecipeDefinition] = [:]
-    @ObservationIgnored private var pendingDeletes: Set<UUID> = []
-    @ObservationIgnored private var saveScheduled = false
+    /// The shared debounced per-row queue — the sole un-persisted copy of local mutations (see
+    /// ``DebouncedRowBuffer``). Its write closures capture `repository`, never `self`.
+    @ObservationIgnored private let buffer: DebouncedRowBuffer<RecipeDefinition>
 
     /// Creates the service over its per-row store; `initialRecipes` seeds the list before the first load.
     public init(repository: any SavedRecipeRepositoring, initialRecipes: [RecipeDefinition] = []) {
         self.repository = repository
-        self.savedRecipes = Self.deduplicatedByID(initialRecipes)
+        self.buffer = DebouncedRowBuffer(
+            upsert: { repository.upsert($0) },
+            delete: { repository.delete(ids: $0) }
+        )
+        self.savedRecipes = initialRecipes.deduplicatedByID()
     }
 
     /// Async variant of ``loadSync()`` for the off-main initial load.
     public func loadAsync() async {
-        savedRecipes = Self.deduplicatedByID(await repository.loadAsync())
+        savedRecipes = await repository.loadAsync().deduplicatedByID()
     }
 
     /// Replaces the in-memory list with the store's rows, union-merged by id.
     public func loadSync() {
-        savedRecipes = Self.deduplicatedByID(repository.load())
+        savedRecipes = repository.load().deduplicatedByID()
     }
 
     /// Re-reads the store (flushing any unsaved rows first), picking up recipe rows that synced in from
@@ -57,9 +61,9 @@ public final class SavedRecipeService {
         // upserts win by id via the same dedup used everywhere; pending deletes are removed), keeping the
         // queues intact so the next scheduled save retries. On a SUCCESSFUL flush both queues are empty, so
         // this is a no-op and `loadSync()` stays authoritative.
-        guard !pendingUpserts.isEmpty || !pendingDeletes.isEmpty else { return }
-        let merged = Self.deduplicatedByID(Array(pendingUpserts.values) + savedRecipes)
-        savedRecipes = merged.filter { !pendingDeletes.contains($0.id) }
+        guard buffer.hasPending else { return }
+        let merged = (Array(buffer.pendingUpserts.values) + savedRecipes).deduplicatedByID()
+        savedRecipes = merged.filter { !buffer.pendingDeletes.contains($0.id) }
     }
 
     /// Inserts a recipe at the top of the list, routing to ``update(_:)`` when its id already exists.
@@ -80,23 +84,23 @@ public final class SavedRecipeService {
                 .filter { $0.webImport?.sourceURLString == sourceURLString && $0.id != recipe.id }
                 .map { $0.id }
             savedRecipes.removeAll { $0.webImport?.sourceURLString == sourceURLString }
-            for id in supersededIDs { enqueueDelete(id) }
+            for id in supersededIDs { buffer.enqueueDelete(id) }
         }
         savedRecipes.insert(recipe, at: 0)
-        enqueueUpsert(recipe)
+        buffer.enqueueUpsert(recipe)
     }
 
     /// Replaces the stored recipe with the same id in place; unknown ids are ignored.
     public func update(_ recipe: RecipeDefinition) {
         guard let index = savedRecipes.firstIndex(where: { $0.id == recipe.id }) else { return }
         savedRecipes[index] = recipe
-        enqueueUpsert(recipe)
+        buffer.enqueueUpsert(recipe)
     }
 
     /// Removes the recipe from the list and enqueues its per-row delete.
     public func delete(_ recipe: RecipeDefinition) {
         savedRecipes.removeAll { $0.id == recipe.id }
-        enqueueDelete(recipe.id)
+        buffer.enqueueDelete(recipe.id)
     }
 
     /// Returns whether the persisted rows were actually deleted. Threaded back so "delete everything" can
@@ -105,32 +109,14 @@ public final class SavedRecipeService {
     @discardableResult
     public func reset() -> Bool {
         savedRecipes = []
-        pendingUpserts = [:]
-        pendingDeletes = []
-        saveScheduled = false
+        buffer.clear()
         return repository.deleteAll()
     }
 
-    /// Writes any pending upserts/deletes to the store now; a failed write keeps that queue for retry.
+    /// Writes any pending upserts/deletes to the store now; a failed write keeps that queue for
+    /// retry (the full durability contract lives on ``DebouncedRowBuffer/flush()``).
     public func flushPendingSave() {
-        // Flush whenever mutations are pending, NOT only when a debounced save is scheduled: a prior
-        // scheduled flush that failed its write leaves `saveScheduled` false while the pending queues still
-        // hold the only un-persisted copy, so gating on `saveScheduled` made the background retry a no-op and
-        // silently lost a saved recipe. The pending queues are the real "nothing to do" check.
-        saveScheduled = false
-        guard !pendingUpserts.isEmpty || !pendingDeletes.isEmpty else { return }
-        let upserts = Array(pendingUpserts.values)
-        let deletes = Array(pendingDeletes)
-        // Clear each pending queue only AFTER its confirmed write — the queues are the sole un-persisted
-        // copy of these mutations, so dropping them on a failed write would silently lose a saved recipe. On
-        // failure, keep them; the next mutation (or the background flush) retries, and `reloadFromStore`
-        // re-applies them so the in-memory list still reflects the pending mutations. A failed write is an
-        // expected, handled runtime condition (Core Data / CloudKit hiccup), NOT a precondition violation — so
-        // it must not trap; the retry path above is exactly what makes it recoverable.
-        let upsertOK = upserts.isEmpty || repository.upsert(upserts)
-        let deleteOK = deletes.isEmpty || repository.delete(ids: deletes)
-        if upsertOK { pendingUpserts = [:] }
-        if deleteOK { pendingDeletes = [] }
+        buffer.flush()
     }
 
     /// Renders the plain-text share-sheet body for a recipe: name, per-serving macros, notes,
@@ -172,44 +158,5 @@ public final class SavedRecipeService {
             note: hasMacros ? "Logged from URL recipe." : "Logged from URL recipe. Macros not available.",
             source: MealLogSource.webImport
         )
-    }
-
-    // MARK: - Internals
-
-    /// Queues an upsert (cancelling any pending delete of the same id) and schedules a flush.
-    private func enqueueUpsert(_ recipe: RecipeDefinition) {
-        pendingUpserts[recipe.id] = recipe
-        pendingDeletes.remove(recipe.id)
-        scheduleSave()
-    }
-
-    /// Queues a delete (cancelling any pending upsert of the same id) and schedules a flush.
-    private func enqueueDelete(_ id: UUID) {
-        pendingDeletes.insert(id)
-        pendingUpserts[id] = nil
-        scheduleSave()
-    }
-
-    /// Collapses rows that share an id, keeping the first seen — the application-level union-merge
-    /// for the per-row store. Mirrors `CoinEconomy.deduplicatedByID`.
-    private static func deduplicatedByID(_ recipes: [RecipeDefinition]) -> [RecipeDefinition] {
-        var seen = Set<UUID>()
-        var unique: [RecipeDefinition] = []
-        unique.reserveCapacity(recipes.count)
-        for recipe in recipes where seen.insert(recipe.id).inserted { unique.append(recipe) }
-        return unique
-    }
-
-    /// Coalesces mutations into one debounced main-actor flush per burst.
-    private func scheduleSave() {
-        guard !saveScheduled else { return }
-        saveScheduled = true
-        Task { [weak self] in
-            await Task.yield()
-            await MainActor.run {
-                guard let self else { return }
-                self.flushPendingSave()
-            }
-        }
     }
 }

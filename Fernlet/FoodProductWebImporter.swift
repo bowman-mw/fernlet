@@ -670,7 +670,7 @@ enum FoodProductWebImporter {
                 }
                 // Plausibility: per-field bounds + macro-calorie consistency
                 let p = product.macros.protein, c = product.macros.carbs, f = product.macros.fat
-                let macroCalories = p * 4 + c * 4 + f * 9
+                let macroCalories = product.macros.calories
                 if let reportedCalories = product.calories {
                     let allowedLow = max(0, reportedCalories / 2 - 50)
                     let allowedHigh = reportedCalories * 2 + 100
