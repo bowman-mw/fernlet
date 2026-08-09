@@ -261,4 +261,24 @@ extension RecipeDefinition {
             steps: importedRecipe.steps
         )
     }
+
+    /// Builds the refreshed definition for an explicit "Re-import from source" (owner decision
+    /// 2026-08-09): the fresh import's content over the existing row's user-owned state.
+    ///
+    /// **Fresh** (from `reimported`): name, servings, ingredient lines, macros, micronutrients,
+    /// steps, source URL, and the page's image URL. **Preserved** (from `existing`): the `id` —
+    /// deliberate, because the sealed recipe photo is keyed by it, so reusing the id carries the
+    /// photo across the refresh with no migration — plus the user's `notes` verbatim (the import
+    /// summary only seeds notes on FIRST import; a refresh never overwrites what the user may
+    /// have edited), `createdAt`, fork provenance, and `webImageFetchAttempted` (a user who
+    /// deleted the web picture, or already has one, must not get a surprise re-download from a
+    /// refresh).
+    public init(reimported: ImportedRecipe, preserving existing: RecipeDefinition, now: Date = Date()) {
+        self.init(importedRecipe: reimported, now: now)
+        id = existing.id
+        notes = existing.notes
+        createdAt = existing.createdAt
+        parentRecipeID = existing.parentRecipeID
+        webImport?.webImageFetchAttempted = existing.webImport?.webImageFetchAttempted
+    }
 }

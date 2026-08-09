@@ -2003,14 +2003,28 @@ final class FernletStore {
         // SavedRecipeService.add). The sealed photo is keyed by the recipe id and the photo store
         // lives HERE, not in StoreCore — so delete the superseded rows' photos before they become
         // unreachable, or every re-import strands one (auto-fetched default pictures would make
-        // that routine, not rare).
+        // that routine, not rare). "Same source" must be the SAME normalized match the service's
+        // supersede uses, or a row deleted there keeps its photo here.
         if let sourceURLString = recipe.webImport?.sourceURLString, !sourceURLString.isEmpty {
             for superseded in savedRecipeService.savedRecipes
-            where superseded.webImport?.sourceURLString == sourceURLString && superseded.id != recipe.id {
+            where superseded.id != recipe.id
+                && RecipeSourceURLMatcher.urlsMatch(superseded.webImport?.sourceURLString ?? "", sourceURLString) {
                 recipePhotoStore.delete(id: superseded.id)
             }
         }
         savedRecipeService.add(recipe)
+    }
+
+    /// The saved recipe already imported from `url`, matched under `RecipeSourceURLMatcher`
+    /// normalization (case-insensitive scheme/host, fragment ignored, query significant), or `nil`.
+    ///
+    /// The zero-network duplicate check (owner decision 2026-08-09): both import paths — the
+    /// foreground paste-a-URL sheet and the share-extension queue drain — consult this BEFORE
+    /// fetching, and on a hit they surface/keep the existing recipe with no network at all.
+    /// Refreshing an already-saved recipe is the explicit "Re-import from source" affordance
+    /// (``reimportSavedRecipeFromSource(_:)``), never an implicit repeat import.
+    func savedRecipe(matchingSourceURL url: URL) -> RecipeDefinition? {
+        savedRecipeService.recipe(matchingSourceURL: url.absoluteString)
     }
 
     func processSharedRecipeImportQueue() async {
@@ -2026,6 +2040,14 @@ final class FernletStore {
                 continue
             }
             if record.attemptCount >= 3 || Date().timeIntervalSince(record.queuedAt) > maxAge {
+                queue.remove(record)
+                continue
+            }
+            // Zero-network duplicate skip (owner decision 2026-08-09): a queued URL that matches an
+            // already-saved recipe is treated as SUCCESS — removed from the queue with no fetch and
+            // no retry bookkeeping. Re-sharing a page you already imported should not re-download
+            // it; refreshing is the detail page's explicit "Re-import from source" affordance.
+            if savedRecipe(matchingSourceURL: url) != nil {
                 queue.remove(record)
                 continue
             }
@@ -3464,6 +3486,43 @@ final class FernletStore {
         webImport.webImageFetchAttempted = true
         current.webImport = webImport
         updateSavedRecipe(current)
+    }
+
+    /// Re-runs the web importer for a saved recipe's source page and replaces the definition IN
+    /// PLACE — the explicit, user-invoked refresh that the zero-network duplicate skip
+    /// (``savedRecipe(matchingSourceURL:)``) points repeat imports at.
+    ///
+    /// The refreshed row **keeps the recipe's id**, which is the whole preservation story: the
+    /// sealed photo is keyed by that id, so reusing it carries the photo across with no
+    /// delete/migrate dance, and the same-id route through ``updateSavedRecipe(_:)`` never runs
+    /// the supersede path (which deletes superseded rows' photos). The user's notes,
+    /// `createdAt`, fork provenance, and `webImageFetchAttempted` state are carried too — see
+    /// `RecipeDefinition.init(reimported:preserving:)` for the exact merge. A thrown import
+    /// (bad URL, network failure, no recipe on the page) mutates NOTHING: the merge+update runs
+    /// only after the fetch succeeds.
+    /// - Returns: The refreshed definition now in the saved-recipe store.
+    func reimportSavedRecipeFromSource(_ recipe: RecipeDefinition) async throws -> RecipeDefinition {
+        guard let sourceURL = recipe.webImport?.sourceURL, sourceURL.isSafariPresentable else {
+            throw RecipeWebImportError.invalidURL
+        }
+        let imported = try await RecipeWebImporter.importRecipe(
+            from: sourceURL,
+            catalog: foodCatalog,
+            aiEnabled: settings.aiStatus != .off,
+            userInvoked: true,
+            gate: aiGate
+        )
+        return applyReimportedRecipe(imported, to: recipe)
+    }
+
+    /// The no-network half of ``reimportSavedRecipeFromSource(_:)``, split out so tests can
+    /// exercise the replace-and-preserve contract without a live fetch: merges the fresh import
+    /// over the existing row (same id → photo carried, notes preserved) and persists it through
+    /// the saved-recipe update path.
+    func applyReimportedRecipe(_ imported: ImportedRecipe, to existing: RecipeDefinition) -> RecipeDefinition {
+        let refreshed = RecipeDefinition(reimported: imported, preserving: existing)
+        updateSavedRecipe(refreshed)
+        return refreshed
     }
 
     // NOTE (deviation): macroTotals/micronutrientTotals(for:) STAY IN THE FACADE — app-target
