@@ -42,7 +42,14 @@ HTTPS fetch of a user-supplied recipe page, preferring the page's own JSON-LD st
 model call at all) and falling back to gated on-device extraction. Its error enum encodes the
 distinction deferred queues rely on: a *transient* daily-budget fallback
 (``RecipeWebImportError/aiBudgetExhausted``, clears at midnight) versus *persistent* device
-incapability (``RecipeWebImportError/modelUnavailable``).
+incapability (``RecipeWebImportError/modelUnavailable``). It also owns the app's only
+recipe-image HTTP path (owner decision 2026-08-09, reversing the 2026-07-16 "no external image
+fetch" tester decision): ``RecipeWebImporter/extractedImageURL(from:sourceURL:)`` pulls the page's
+main food-picture URL from the already-fetched HTML (JSON-LD `image` first, OpenGraph/Twitter meta
+fallback — no extra request), and ``RecipeWebImporter/downloadImage(from:userAgent:maxBytes:)``
+downloads image bytes under the same SSRF/redirect guard plus an `image/*` MIME check and an
+oversize-aborting byte cap. Import itself never downloads the image — only user-present app paths
+do (see `Docs/No-Tracking-Wall.md` §4b), and the app-side caller owns sealing and storage.
 
 Concurrency: the target sets `defaultIsolation(MainActor.self)`, so the provider enums are
 MainActor-isolated; pure value types (``WorkoutAdjustmentCandidate``, ``ImportedRecipe``) and the

@@ -54,6 +54,24 @@ public enum HTMLScraper {
         return String(text[captureRange])
     }
 
+    // MARK: - Meta tags
+
+    /// The `content` attribute of the first `<meta>` tag whose `property` **or** `name` attribute
+    /// equals `property` (case-insensitive), or `nil` when the page has no such tag.
+    ///
+    /// The shape both importers need for OpenGraph / Twitter-card reads (`og:image`,
+    /// `twitter:image`, `og:title`, …). The attribute order is fixed — `property`/`name` before
+    /// `content` — matching how real pages emit these tags and how both importers' private copies
+    /// already matched. The captured value is returned raw; entity decoding stays the caller's
+    /// policy (see ``htmlDecoded(_:decodingNumericEntities:)``).
+    public static func metaContent(named property: String, in html: String) -> String? {
+        let escapedProperty = NSRegularExpression.escapedPattern(for: property)
+        return firstMatchLastCapture(
+            in: html,
+            pattern: #"(?is)<meta\b[^>]*(?:property|name)\s*=\s*["']\#(escapedProperty)["'][^>]*content\s*=\s*["'](.*?)["'][^>]*>"#
+        )
+    }
+
     // MARK: - Entity decoding
 
     /// The named HTML entities both importers decode, in the order they must be applied.

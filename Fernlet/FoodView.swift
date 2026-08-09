@@ -566,7 +566,13 @@ struct RecipeImportSheet: View {
         Task {
             do {
                 let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: store.foodCatalog, aiEnabled: store.settings.aiStatus != .off, userInvoked: true, gate: store.aiGate)
-                store.addSavedRecipe(RecipeDefinition(importedRecipe: importedRecipe))
+                let recipe = RecipeDefinition(importedRecipe: importedRecipe)
+                store.addSavedRecipe(recipe)
+                // Foreground import path (owner decision 2026-08-09): the user is present, so fetch
+                // the page's main picture now as the recipe's default photo. Runs as its own task so
+                // a slow image host never delays the import feedback — and an image failure never
+                // fails the import (the store marks the one attempt either way).
+                Task { await store.fetchRecipeWebImageIfNeeded(for: recipe) }
                 notice = "\(importedRecipe.name) added to your recipes."
                 isImportingURL = false
                 try? await Task.sleep(for: .seconds(1.2))
@@ -3413,6 +3419,13 @@ struct RecipeDetailView: View {
             didLoadPhoto = true
             if let data = store.recipePhotoData(for: recipe.id) {
                 photo = await UIImage(data: data)?.byPreparingForDisplay()
+            } else if let fetched = await store.fetchRecipeWebImageIfNeeded(for: recipe) {
+                // Lazy web-image path (owner decision 2026-08-09): a share-extension-imported
+                // recipe stored only the page's image URL — download it on this first open (the
+                // user is present), sealed and one-attempt-only inside the store method. Recipes
+                // whose fetch was already attempted, whose photo was deleted, or that arrived over
+                // the mesh all no-op here.
+                photo = await UIImage(data: fetched)?.byPreparingForDisplay()
             }
         }
         .destructiveConfirmation($pendingDestructiveAction)

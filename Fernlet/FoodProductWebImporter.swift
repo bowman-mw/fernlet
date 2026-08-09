@@ -1,5 +1,6 @@
 import Foundation
 import AIContext
+import AIProviders
 import AppServices
 import WebScrapingKit
 
@@ -557,22 +558,18 @@ enum FoodProductWebImporter {
         return importedProduct(from: scanned, fallbackName: fallbackName, sourceURL: sourceURL)
     }
 
+    /// Fetches one candidate label image through the recipe importer's guarded image downloader —
+    /// upgraded (2026-08-09) from a bare https-scheme check to the full page-fetch guard rigor:
+    /// SSRF host validation, per-hop redirect re-validation, an `image/*` MIME requirement, the 15 s
+    /// timeout, and a streaming 12 MB cap that aborts oversize bodies instead of buffering them
+    /// whole. Transport stays `EphemeralWebSession.shared` (inside the downloader), and this
+    /// importer's Safari User-Agent spoof is preserved so retailer CDNs keep serving real images.
     private static func fetchImage(from url: URL) async -> UIImage? {
-        guard url.scheme == "https" else { return nil }
-        // Explicit 15s timeout (vs the 60s default): up to 8 candidate images are fetched
-        // sequentially, so a stalling host would otherwise chain into a multi-minute hang.
-        var request = URLRequest(url: url, timeoutInterval: 15)
-        request.setValue("image/*", forHTTPHeaderField: "Accept")
-        request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
-        // Same private-browsing transport as the HTML fetch. Label images are the likeliest place a
-        // tracking pixel hides, so this path must not be the one that keeps a cookie jar.
-        guard let (data, response) = try? await EphemeralWebSession.shared.data(for: request),
-              let httpResponse = response as? HTTPURLResponse,
-              (200..<300).contains(httpResponse.statusCode),
-              data.count <= 12_000_000 else {
-            return nil
-        }
+        guard let data = try? await RecipeWebImporter.downloadImage(
+            from: url,
+            userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+            maxBytes: 12_000_000
+        ) else { return nil }
         return UIImage(data: data)
     }
     #endif
@@ -903,9 +900,10 @@ enum FoodProductWebImporter {
         return components.url?.absoluteString ?? url.absoluteString
     }
 
+    /// Delegates to the shared `HTMLScraper.metaContent(named:in:)` — an identical pattern that was
+    /// hand-copied here before the helper existed; behavior-preserving by construction.
     private static func metadataContent(named property: String, in html: String) -> String? {
-        let escapedProperty = NSRegularExpression.escapedPattern(for: property)
-        return firstCapture(in: html, pattern: #"(?is)<meta\b[^>]*(?:property|name)\s*=\s*["']\#(escapedProperty)["'][^>]*content\s*=\s*["'](.*?)["'][^>]*>"#)
+        HTMLScraper.metaContent(named: property, in: html)
     }
 
     fileprivate static func nutritionDoubleValue(_ value: Any?) -> Double? {

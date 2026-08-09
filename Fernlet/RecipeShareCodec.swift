@@ -1,6 +1,10 @@
 import ProximityKit
 import Foundation
 import FernletDomainModel
+#if canImport(UIKit)
+import UIKit
+import PrivateMediaStore
+#endif
 
 /// Encodes and decodes recipes for sharing — the human-readable share text with its embedded
 /// machine-readable JSON payload, and the proximity-mesh wire payload.
@@ -131,4 +135,27 @@ struct RecipeShareCodec {
         guard let data = try? encoder.encode(payload) else { return nil }
         return String(data: data, encoding: .utf8)
     }
+
+    #if canImport(UIKit)
+    /// Re-encodes decrypted recipe-photo bytes into a wire-ready JPEG at most `maxBytes`
+    /// (`ProximityRecipeSharePayload.maxImageBytes` by default), stepping dimension and quality
+    /// down until it fits; `nil` when the bytes aren't an image or nothing fits (the share then
+    /// simply goes out without a picture). Lives in the APP target on purpose: the sealed photo
+    /// store is `PrivateMediaStore`, which `ProximityKit` must never import (S3 wall) — the store
+    /// decrypts, this downscales, and only the bounded JPEG reaches the wire payload.
+    static func wireImageJPEG(fromPhotoData data: Data, maxBytes: Int = ProximityRecipeSharePayload.maxImageBytes) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        // Stored recipe photos are already normalized to <=1600 px JPEG, so the first rung almost
+        // always fits; the ladder exists for pathological (dense, noisy) images.
+        for dimension: CGFloat in [1024, 768, 512, 384] {
+            let scaled = image.resizedForFriendSharing(maxDimension: dimension)
+            for quality: CGFloat in [0.7, 0.5] {
+                if let jpeg = scaled.jpegData(compressionQuality: quality), jpeg.count <= maxBytes {
+                    return jpeg
+                }
+            }
+        }
+        return nil
+    }
+    #endif
 }

@@ -42,6 +42,10 @@ behaviour happened to be shorter:
 - ``HTMLScraper/cleanedBodyText(from:decodingNumericEntities:characterLimit:)`` returns `nil` on an
   empty page instead of throwing, because each importer threw its *own* error case with its own
   user-facing copy and retry semantics. Each caller maps `nil` to its own error.
+- ``HTMLScraper/metaContent(named:in:)`` reads the `content` of a `<meta>` tag by its `property` or
+  `name` — the OpenGraph/Twitter-card shape (`og:image`, `twitter:image`, `og:title`) both importers
+  match with the identical pattern. The captured value is returned raw; entity decoding stays each
+  caller's stated policy.
 - ``JSONLDScraper/object(ofType:in:)`` carries one intentional behaviour change, in the safe
   direction: the recipe importer's version returned early out of the `@graph` branch and never
   reached `itemListElement`, while the product importer's fell through. The merged version falls

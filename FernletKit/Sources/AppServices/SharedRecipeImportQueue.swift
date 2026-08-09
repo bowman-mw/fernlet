@@ -251,7 +251,10 @@ extension RecipeDefinition {
                     carbs: max(importedRecipe.carbs, 0),
                     fat: max(importedRecipe.fat, 0)
                 ),
-                micronutrients: importedRecipe.micronutrients
+                micronutrients: importedRecipe.micronutrients,
+                // The page's main-picture URL rides along so user-present paths can download it
+                // later (owner decision 2026-08-09); the background drain itself never fetches it.
+                imageURLString: importedRecipe.imageURL?.absoluteString
             ),
             // F5: preserve JSON-LD-parsed ordered cooking steps. Persisted per-row via the
             // `SavedRecipeRecord.payloadData` blob (STEP 0), so they survive on this path.
