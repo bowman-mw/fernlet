@@ -30,14 +30,18 @@ extension FernletStore {
     /// Populate today's diary with representative demo content. Invoked from
     /// ContentView's launch task when `UITestSupport.shouldSeedDemoContent` is set.
     ///
-    /// Idempotent per DAY: bails if today's meals/workouts already exist so repeated
-    /// launches don't stack duplicates. The guard must stay day-scoped — journals and
-    /// memories persist across days, so gating on them left any simulator that had
-    /// seeded on a previous calendar day permanently unseedable (empty Food/Move tabs);
-    /// those two seeders carry their own cross-day duplicate checks instead.
+    /// The age record and the sensitive-surface visibility flags apply on EVERY seeded launch
+    /// (the Cycle-page gallery variants relaunch with different hide flags on one simulator);
+    /// the diary content below them is idempotent per DAY: it bails if today's meals/workouts
+    /// already exist so repeated launches don't stack duplicates. The guard must stay
+    /// day-scoped — journals and memories persist across days, so gating on them left any
+    /// simulator that had seeded on a previous calendar day permanently unseedable (empty
+    /// Food/Move tabs); those two seeders carry their own cross-day duplicate checks instead.
     @MainActor
     func seedDemoContent() {
-        guard day.meals.isEmpty, day.workouts.isEmpty else { return }
+        // Age + surface visibility apply on EVERY seeded launch, BEFORE the day-scoped meal guard
+        // below: the Cycle-page gallery variants relaunch the app on the same simulator with
+        // different hide flags, and a previous launch's persisted visibility choice must not stick.
 
         // Ensure the age-gated surfaces are reachable for appearance review. The profile age no longer
         // gates anything — both gates read the device-local age record — so seed that instead, with a
@@ -48,14 +52,17 @@ extension FernletStore {
             provenance: .selfDeclared
         )
 
-        // Ensure the Period section is reachable for appearance review. Mirrors the age
-        // bump above: the Period surface gates on `isPeriodTrackingVisible`, which absent
-        // an explicit choice derives from `userProfile.sex` (default `.male` → hidden).
-        // Setting the explicit opt-in surfaces the Private hub's Period page for the
-        // gallery without asserting a biological sex on the demo persona. This only makes
-        // the surface MORE visible, so there is nothing to scrub — a direct settings write
-        // (like the age bump) is enough; no need to route through `setPeriodTrackingVisible`.
-        if settings.periodTrackingVisible != true { settings.periodTrackingVisible = true }
+        // Ensure the Cycle section renders the requested halves for appearance review. Mirrors the
+        // age bump above: the period half gates on `isPeriodTrackingVisible`, which absent an
+        // explicit choice derives from `userProfile.sex` (default `.male` → hidden). Setting the
+        // explicit opt-in surfaces the Private hub's Cycle page for the gallery without asserting a
+        // biological sex on the demo persona. Direct settings writes (like the age bump) are enough:
+        // nothing sensitive has loaded yet at seed time, and the derived gates cover every later
+        // read — ContentView's value-keyed scrub handles any mid-session flip.
+        settings.periodTrackingVisible = !UITestSupport.hidePeriodSurface
+        settings.intimacyTrackingVisible = !UITestSupport.hideIntimacySurface
+
+        guard day.meals.isEmpty, day.workouts.isEmpty else { return }
 
         seedMeals()
         seedRecipes()

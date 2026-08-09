@@ -434,7 +434,11 @@ struct FernletTests {
         )
 
         #expect(!store.isIntimateLoggingAllowed)
-        #expect(!PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility).contains(.intimacy))
+        // The merged Cycle section carries the intimacy half; with period ALSO hidden in this
+        // fixture (fresh store: `periodTrackingVisible` nil, `sex` defaults `.male`), the underage
+        // gate must remove the whole page.
+        #expect(!store.isPeriodTrackingVisible)
+        #expect(!PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility).contains(.cycle))
 
         let quickLogItems = FernletShortcut.visibleQuickLog(
             [.meal, .water, .move, .sleep, .journal, .intimacyTracking],
@@ -449,7 +453,7 @@ struct FernletTests {
         )
 
         #expect(store.isIntimateLoggingAllowed)
-        #expect(PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility).contains(.intimacy))
+        #expect(PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility).contains(.cycle))
     }
 
     @MainActor

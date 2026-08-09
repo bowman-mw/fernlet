@@ -7,50 +7,78 @@ import PeriodContextBridge
 import HealthKitGateway
 import FernletUI
 
-/// The Period screen: a month calendar of logged cycle days, predictions, per-phase wellbeing
-/// trends, and recent cycle events.
+/// The Private hub's merged Cycle page: ONE layered month calendar carrying both period flow
+/// tints and a distinct intimacy marker, with the period predictions/trends cards below and a
+/// single plus-menu that can log either kind of event.
 ///
-/// Hosted inside ``PrivateHubView`` (behind the app-lock gate) or standalone. Reads sealed cycle
-/// data through `PeriodTrackerStore`, which only loads entries once `FernletLockService` reports
-/// an unlocked content key — the `.task(id: lockService.state)` reload keeps the screen empty
-/// while locked. Day taps push ``PeriodDayDetailView``; the header plus button and per-day edit
-/// route through ``FernletSheet`` `.logPeriod` so ``LogPeriodSheet`` owns all writes. The optional
-/// `PeriodContextBridge` is refreshed after loads and deletes so cached phase trends never outlive
-/// the entries they were computed from.
-struct PeriodTrackerView: View {
+/// Replaces the separate Period and Intimacy pages. Each half renders only when its own derived
+/// gate allows (`isPeriodTrackingVisible` / `isIntimacyTrackingVisible`), the page itself exists
+/// only while at least one is visible (``PrivateHubView`` owns that), and the hidden half gets NO
+/// on-page mention — Settings' AgeGateNotice owns the true reason.
+///
+/// Data rules carried over unchanged from the two retired pages:
+/// - Period reads go through `PeriodTrackerStore` (fail-closed `isVisible` seam), reloaded via
+///   `.task(id: lockService.state)`; the view additionally skips the HealthKit *authorization
+///   request* while period is hidden, since that prompt is view-level and outside the seam.
+/// - Intimacy presence max-merges the sealed `IntimacyLogStore` funnel with HealthKit per-day
+///   counts, and the view-level guard in `loadIntimacyCalendar` both SKIPS the HealthKit read
+///   while hidden (the sealed seam never covered that read) and scrubs the decrypted @State the
+///   moment the derived gate flips off.
+/// Day taps push ``CycleDayDetailView`` with both halves, each gated the same way; the header
+/// plus-menu routes through ``FernletSheet`` `.logPeriod` / `.logIntimacy` so the sheets own all
+/// writes. The optional `PeriodContextBridge` is refreshed after loads and deletes so cached
+/// phase trends never outlive the entries they were computed from.
+struct CycleTrackerView: View {
     var store: FernletStore
     var periodStore: PeriodTrackerStore
+    /// The gated funnel for intimacy sealed-note reads. Owned by `ContentView`, threaded through
+    /// `PrivateHubView`. Its `isVisible` is wired to the derived gate in `ContentView`'s launch
+    /// task, so the `logs()` call in `loadIntimacyCalendar` decrypts nothing while hidden.
+    var intimacyStore: IntimacyLogStore
     var periodContext: PeriodContextBridge? = nil
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
     @Environment(FernletLockService.self) private var lockService
+    @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @State private var authorization = HealthKitAuthorizationViewModel()
-    @State private var selectedDay: SelectedPeriodDay?
+    @State private var selectedDay: SelectedCycleDay?
     @State private var displayedMonth: Date = .now
+    /// Merged per-day intimacy event counts (sealed logs max-merged with HealthKit). Plaintext-
+    /// adjacent view state: scrubbed the moment the derived intimacy gate flips off.
+    @State private var intimacyEventsByDay: [String: Int] = [:]
+    /// Decrypted intimacy logs resident for the day detail. Scrubbed with `intimacyEventsByDay`.
+    @State private var intimacyLogs: [IntimacyLog] = []
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header
-                    periodAwarePrimer
-                    if showsPrediction {
-                        PredictionsCard(prediction: periodStore.prediction)
+                    if store.isPeriodTrackingVisible {
+                        periodAwarePrimer
+                        if showsPrediction {
+                            PredictionsCard(prediction: periodStore.prediction)
+                        }
+                        phaseTrendsCard
                     }
-                    phaseTrendsCard
-                    PeriodCalendarCard(
+                    CycleCalendarCard(
                         displayedMonth: $displayedMonth,
                         entriesByKey: entriesByKey,
+                        intimacyDayKeys: intimacyDayKeys,
                         todayKey: FernletDate.dayKey(for: Date()),
-                        prediction: showsPrediction ? periodStore.prediction : nil,
-                        onDayTapped: { date in selectedDay = SelectedPeriodDay(date: date) }
+                        prediction: store.isPeriodTrackingVisible && showsPrediction ? periodStore.prediction : nil,
+                        showsFlowLegend: store.isPeriodTrackingVisible,
+                        showsIntimacyLegend: store.isIntimacyTrackingVisible,
+                        onDayTapped: { date in selectedDay = SelectedCycleDay(date: date) }
                     )
                     privacyBanner
-                    recentEvents
-                    if showsPrediction, let prediction = periodStore.prediction {
-                        TrendsCard(prediction: prediction)
+                    if store.isPeriodTrackingVisible {
+                        recentEvents
+                        if showsPrediction, let prediction = periodStore.prediction {
+                            TrendsCard(prediction: prediction)
+                        }
                     }
                 }
                 .padding(20)
@@ -60,8 +88,15 @@ struct PeriodTrackerView: View {
             .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)
             .navigationDestination(item: $selectedDay) { day in
                 let dayEntry = entry(for: day.date)
-                PeriodDayDetailView(
+                let dayKey = FernletDate.dayKey(for: day.date)
+                CycleDayDetailView(
                     entry: dayEntry,
+                    showsPeriodHalf: store.isPeriodTrackingVisible,
+                    showsIntimacyHalf: store.isIntimacyTrackingVisible,
+                    intimacyLogs: store.isIntimacyTrackingVisible
+                        ? intimacyLogs.filter { $0.dayKey == dayKey }.sorted { $0.eventDate < $1.eventDate }
+                        : [],
+                    intimacyEventCount: store.isIntimacyTrackingVisible ? (intimacyEventsByDay[dayKey] ?? 0) : 0,
                     onEdit: { activeSheet = .logPeriod(targetDate: day.date, editingEntry: dayEntry) },
                     onDelete: {
                         Task {
@@ -74,12 +109,79 @@ struct PeriodTrackerView: View {
                     }
                 )
             }
-            .task(id: lockService.state) { await loadIfUnlocked() }
+            .task(id: lockService.state) {
+                await loadPeriodIfUnlocked()
+                await loadIntimacyCalendar()
+            }
+            .task(id: displayedMonth) { await loadIntimacyCalendar() }
+            // Period entries reload on `.logPeriod` dismiss globally in ContentView (the sheet can
+            // also be opened from Home); the month-scoped intimacy merge is this view's own.
+            .onChange(of: activeSheet?.id) { _, newValue in
+                if newValue == nil { Task { await loadIntimacyCalendar() } }
+            }
+            // Hiding must drop plaintext already on screen, not just refuse the next load — this
+            // view holds decrypted logs in @State for as long as it stays in the hierarchy. Keyed
+            // on the DERIVED value so every writer (Settings toggle, profile edit, age change,
+            // HealthKit import) is covered by construction.
+            .onChange(of: store.isIntimacyTrackingVisible) { _, visible in
+                if !visible { scrubIntimacyState() }
+            }
         }
     }
 
     var showsPrediction: Bool {
         !store.settings.hidePredictions
+    }
+
+    private var header: some View {
+        HStack(alignment: .top) {
+            ScreenHeader(title: "Cycle", subtitle: headerSubtitle, identifier: "screen.cycle")
+            Spacer()
+            logButton
+        }
+    }
+
+    /// Phase-aware while period is visible; a neutral line otherwise (never mentions the hidden half).
+    private var headerSubtitle: String {
+        guard store.isPeriodTrackingVisible else { return "Your private calendar." }
+        return periodStore.currentPhase == .unknown ? "Your cycle, at a glance." : periodStore.currentPhase.title
+    }
+
+    /// ONE plus button for the whole page: a menu when both halves can log, a direct button when
+    /// only one is visible. The hidden half's option simply doesn't exist — no explanation.
+    @ViewBuilder
+    private var logButton: some View {
+        if store.isPeriodTrackingVisible && store.isIntimacyTrackingVisible {
+            Menu {
+                Button {
+                    activeSheet = .logPeriod(targetDate: nil, editingEntry: nil)
+                } label: {
+                    Label("Log period", systemImage: "drop.fill")
+                }
+                Button {
+                    activeSheet = .logIntimacy
+                } label: {
+                    Label("Log intimacy", systemImage: "heart.fill")
+                }
+            } label: {
+                // Mirrors HeaderActionButton's chrome so the pill looks identical either way.
+                Image(systemName: "plus")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.bark)
+                    .frame(minWidth: 58, minHeight: 58)
+                    .background(Color.cream.opacity(0.9), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(Color.bark.opacity(0.08), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Log")
+        } else if store.isPeriodTrackingVisible {
+            HeaderActionButton(systemImage: "plus") { activeSheet = .logPeriod(targetDate: nil, editingEntry: nil) }
+        } else if store.isIntimacyTrackingVisible {
+            HeaderActionButton(systemImage: "plus") { activeSheet = .logIntimacy }
+        }
     }
 
     /// One-time first-use primer explaining period-aware care + the opt-in. Dismissal persists via
@@ -169,27 +271,30 @@ struct PeriodTrackerView: View {
         return "\(verb) during your \(phase) phase."
     }
 
+    /// Names only the visible halves — mentioning the hidden one here would leak its existence.
     private var privacyBanner: some View {
-        Text("Your period data stays on this device, behind your app lock.")
+        let subject: String
+        if store.isPeriodTrackingVisible && store.isIntimacyTrackingVisible {
+            subject = "Your period and intimacy data stay"
+        } else if store.isIntimacyTrackingVisible {
+            subject = "Your intimacy data stays"
+        } else {
+            subject = "Your period data stays"
+        }
+        return Text("\(subject) on this device, behind your app lock.")
             .font(.fernlet(.bubble))
             .foregroundStyle(Color.slate)
             .fernletWrappingText()
     }
 
-    private var header: some View {
-        HStack(alignment: .top) {
-            ScreenHeader(title: "Period", subtitle: phaseSubtitle, identifier: "screen.period")
-            Spacer()
-            HeaderActionButton(systemImage: "plus") { activeSheet = .logPeriod(targetDate: nil, editingEntry: nil) }
-        }
-    }
-
-    private var phaseSubtitle: String {
-        periodStore.currentPhase == .unknown ? "Your cycle, at a glance." : periodStore.currentPhase.title
-    }
-
     private var entriesByKey: [String: CycleDayEntry] {
         Dictionary(uniqueKeysWithValues: periodStore.entries.map { ($0.dateKey, $0) })
+    }
+
+    /// Days with at least one intimacy event, from the merged sealed + HealthKit counts. Empty
+    /// while intimacy is hidden (the state is scrubbed), so the calendar layer simply vanishes.
+    private var intimacyDayKeys: Set<String> {
+        Set(intimacyEventsByDay.filter { $0.value > 0 }.keys)
     }
 
     private var recentEvents: some View {
@@ -223,14 +328,47 @@ struct PeriodTrackerView: View {
         }
     }
 
-    private func loadIfUnlocked() async {
+    private func loadPeriodIfUnlocked() async {
         periodStore.attachLockService(lockService)
+        // The store's own `isVisible` seam already refuses hidden loads (fail-closed), but the
+        // HealthKit AUTHORIZATION prompt below is view-level and outside that seam — never ask
+        // for cycle-tracking permission while the user has the period surface hidden.
+        guard store.isPeriodTrackingVisible else { return }
         guard case .unlocked = lockService.state, let contentKey = lockService.contentKey() else { return }
         if !authorization.hasRequested(.cycleTracking) {
             await authorization.request(.cycleTracking)
         }
         await periodStore.loadEntries(unlockedContentKey: contentKey)
         refreshContext()
+    }
+
+    /// Drops the intimacy plaintext held in view state. Safe to call when already empty.
+    private func scrubIntimacyState() {
+        intimacyLogs = []
+        intimacyEventsByDay = [:]
+    }
+
+    private func loadIntimacyCalendar() async {
+        // Back-stop to the authoritative gate. The sealed-note decrypt is gated at the seam by
+        // `intimacyStore` (fail-closed), so this view-level check no longer guards the plaintext — but
+        // it still does real extra work: it scrubs the logs already resident in @State (hiding
+        // mid-session must drop them, not leave them readable until process death) and skips the
+        // HealthKit read below, which the sealed store never covered.
+        guard store.isIntimacyTrackingVisible else {
+            scrubIntimacyState()
+            return
+        }
+        let contentKey = lockService.contentKey()
+        let localLogs: [IntimacyLog] = (try? intimacyStore.logs(contentKey: contentKey)) ?? []
+        intimacyLogs = localLogs
+        let localEventsByDay = Dictionary(grouping: localLogs, by: \.dayKey).mapValues(\.count)
+        do {
+            let service = HealthKitService(preferencesStore: storagePreferencesStore)
+            let healthEventsByDay = try await service.loadIntimacyEventsByDay(for: displayedMonth)
+            intimacyEventsByDay = healthEventsByDay.merging(localEventsByDay) { max($0, $1) }
+        } catch {
+            intimacyEventsByDay = localEventsByDay
+        }
     }
 
     private func refreshContext() {
@@ -249,8 +387,9 @@ struct PeriodTrackerView: View {
 
 /// Card showing the likely next-period date range, a confidence chip, and the cycles-tracked count.
 ///
-/// Rendered by ``PeriodTrackerView`` only when predictions aren't hidden in settings; shows an
-/// empty-state nudge ("log at least 3 cycles") until `PeriodTrackerStore` produces a `CyclePrediction`.
+/// Rendered by ``CycleTrackerView`` only when the period half is visible and predictions aren't
+/// hidden in settings; shows an empty-state nudge ("log at least 3 cycles") until
+/// `PeriodTrackerStore` produces a `CyclePrediction`.
 private struct PredictionsCard: View {
     var prediction: CyclePrediction?
 
@@ -302,8 +441,8 @@ private struct PredictionsCard: View {
 
 /// Card summarizing average cycle length and typical day-to-day variation.
 ///
-/// The statistical companion to ``PredictionsCard``, shown at the bottom of ``PeriodTrackerView``
-/// once a prediction exists (and predictions aren't hidden).
+/// The statistical companion to ``PredictionsCard``, shown at the bottom of ``CycleTrackerView``
+/// once a prediction exists (and the period half + predictions are visible).
 private struct TrendsCard: View {
     var prediction: CyclePrediction
 
@@ -324,45 +463,65 @@ private struct TrendsCard: View {
 
 // MARK: - Calendar Card
 
-/// The month-grid calendar card: flow-tinted day cells, projected-period shading, month paging,
-/// and a flow legend.
+/// The layered month-grid calendar card: flow-tinted day cells, projected-period shading, a
+/// distinct intimacy marker per day, month paging, and a per-half legend.
 ///
-/// Builds a ``PeriodMonthModel`` per render and forwards day taps (past/today only — future cells
-/// are disabled) back to ``PeriodTrackerView`` via `onDayTapped`. The card chrome and paging
-/// (forward past the current month disabled) come from the shared ``MonthCalendarCard``.
-private struct PeriodCalendarCard: View {
+/// Builds a ``CycleMonthModel`` per render and forwards day taps (past/today only — future cells
+/// are disabled) back to ``CycleTrackerView`` via `onDayTapped`. Each legend half appears only
+/// when its surface is visible, so a hidden half leaves no trace on the card. The card chrome and
+/// paging (forward past the current month disabled) come from the shared ``MonthCalendarCard``.
+private struct CycleCalendarCard: View {
     @Binding var displayedMonth: Date
     var entriesByKey: [String: CycleDayEntry]
+    var intimacyDayKeys: Set<String>
     var todayKey: String
     var prediction: CyclePrediction?
+    var showsFlowLegend: Bool
+    var showsIntimacyLegend: Bool
     var onDayTapped: (Date) -> Void
 
     var body: some View {
-        let model = PeriodMonthModel(date: displayedMonth, entriesByKey: entriesByKey, todayKey: todayKey, prediction: prediction)
+        let model = CycleMonthModel(
+            date: displayedMonth,
+            entriesByKey: entriesByKey,
+            intimacyDayKeys: intimacyDayKeys,
+            todayKey: todayKey,
+            prediction: prediction
+        )
         MonthCalendarCard(displayedMonth: $displayedMonth, todayKey: todayKey) { gridDay in
             let cell = model.cell(for: gridDay)
-            PeriodCalendarCell(cell: cell) {
+            CycleCalendarCell(cell: cell) {
                 if let date = cell.date, !cell.isFuture {
                     onDayTapped(date)
                 }
             }
         } footer: {
-            flowLegend
+            legend
         }
     }
 
-    private var flowLegend: some View {
+    private var legend: some View {
         HStack(spacing: 12) {
-            ForEach([
-                (Color.dustyRose.opacity(0.22), "Light"),
-                (Color.dustyRose.opacity(0.40), "Medium"),
-                (Color.dustyRose.opacity(0.60), "Heavy")
-            ], id: \.1) { color, label in
+            if showsFlowLegend {
+                ForEach([
+                    (Color.dustyRose.opacity(0.22), "Light"),
+                    (Color.dustyRose.opacity(0.40), "Medium"),
+                    (Color.dustyRose.opacity(0.60), "Heavy")
+                ], id: \.1) { color, label in
+                    HStack(spacing: 4) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(color)
+                            .frame(width: 10, height: 10)
+                        Text(label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
+                    }
+                }
+            }
+            if showsIntimacyLegend {
                 HStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(color)
-                        .frame(width: 10, height: 10)
-                    Text(label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 8))
+                        .foregroundStyle(Color.terracotta)
+                    Text("Intimacy").font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
             }
         }
@@ -373,13 +532,15 @@ private struct PeriodCalendarCard: View {
 
 // MARK: - Calendar Cell
 
-/// A single tappable day cell in the period calendar grid.
+/// A single tappable day cell in the layered cycle calendar grid.
 ///
-/// Pure presentation over one ``PeriodMonthCell``: the model supplies the fill, today ring, future
-/// dimming, and accessibility label; the cell just draws them and disables itself for blanks and
-/// future days.
-private struct PeriodCalendarCell: View {
-    var cell: PeriodMonthCell
+/// Pure presentation over one ``CycleMonthCell``: the model supplies the fill, today ring, future
+/// dimming, intimacy flag, and accessibility label; the cell just draws them — the intimacy
+/// marker is a tiny terracotta heart pinned to the cell's bottom edge, deliberately NOT the
+/// dusty-rose flow tint so the two layers can never be confused — and disables itself for blanks
+/// and future days.
+private struct CycleCalendarCell: View {
+    var cell: CycleMonthCell
     var onTap: () -> Void
 
     var body: some View {
@@ -407,6 +568,14 @@ private struct PeriodCalendarCell: View {
                         .padding(.bottom, 2)
                 }
             }
+            .overlay(alignment: .bottom) {
+                if cell.hasIntimacyEvent {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 6))
+                        .foregroundStyle(Color.terracotta)
+                        .padding(.bottom, 1.5)
+                }
+            }
         }
         .buttonStyle(.plain)
         .aspectRatio(1, contentMode: .fit)
@@ -417,19 +586,24 @@ private struct PeriodCalendarCell: View {
 
 // MARK: - Month Models
 
-/// One cell of the period month grid: a day number (or blank leading pad), its logged entry if
-/// any, and a projected flow level for predicted future days.
+/// One cell of the layered cycle month grid: a day number (or blank leading pad), its logged
+/// period entry if any, a projected flow level for predicted future days, and whether the day has
+/// an intimacy event.
 ///
-/// Built by ``PeriodMonthModel`` and rendered by `PeriodCalendarCell`. `fill` maps observed flow
-/// levels to graduated dusty-rose tints and predicted days to a flat projection tint, so the
-/// visual encoding lives in one place.
-struct PeriodMonthCell: Identifiable {
+/// Built by ``CycleMonthModel`` and rendered by `CycleCalendarCell`. `fill` maps observed flow
+/// levels to graduated dusty-rose tints and predicted days to a flat projection tint, so the flow
+/// encoding lives in one place; the intimacy layer is the separate `hasIntimacyEvent` flag drawn
+/// as a distinct marker, never a fill.
+struct CycleMonthCell: Identifiable {
     let id = UUID()
     var day: Int?
     var date: Date?
     var dateKey: String?
     var entry: CycleDayEntry?
     var projectedLevel: PredictedFlowLevel?
+    /// Whether at least one intimacy event (sealed log or HealthKit sample) exists on this day.
+    /// Always false while the intimacy surface is hidden — the model receives an empty key set.
+    var hasIntimacyEvent: Bool
     var isToday: Bool
     var isFuture: Bool
 
@@ -461,29 +635,37 @@ struct PeriodMonthCell: Identifiable {
 
     var accessibilityLabel: String {
         guard let day else { return "Empty calendar cell" }
-        if isFuture { return "Day \(day)" }
-        if isToday { return "Today, day \(day)" }
-        if let entry, entry.hasObservedEvent { return "Day \(day), \(entry.flowLabel)" }
-        return "Day \(day)"
+        var label = isToday ? "Today, day \(day)" : "Day \(day)"
+        if !isFuture, let entry, entry.hasObservedEvent { label += ", \(entry.flowLabel)" }
+        if hasIntimacyEvent { label += ", intimacy logged" }
+        return label
     }
 }
 
-/// Pure month-layout model for the period calendar: title, weekday symbols, and the padded cell
-/// grid with entries and projected flow attached.
+/// Pure month-layout model for the layered cycle calendar: title, weekday symbols, and the padded
+/// cell grid with period entries, projected flow, and intimacy presence attached.
 ///
 /// Layered over the shared ``MonthGridModel`` (which owns the calendar math and canonical day
-/// keys) and computed fresh each render from the entries-by-dayKey map plus an optional
-/// `CyclePrediction`; projected levels are only attached to days without a real entry, inside the
-/// prediction's likely start range (defaulting to `.medium` when the prediction has no per-day
-/// level). Extracted as a plain struct so the layout math is testable without SwiftUI.
-struct PeriodMonthModel {
+/// keys) and computed fresh each render from the entries-by-dayKey map, the intimacy day-key set,
+/// and an optional `CyclePrediction`; projected levels are only attached to days without a real
+/// entry, inside the prediction's likely start range (defaulting to `.medium` when the prediction
+/// has no per-day level). Extracted as a plain struct so the layout math is testable without
+/// SwiftUI.
+struct CycleMonthModel {
     let monthTitle: String
     let weekdaySymbols: [String]
-    let cells: [PeriodMonthCell]
+    let cells: [CycleMonthCell]
 
-    private let cellsByDay: [Int: PeriodMonthCell]
+    private let cellsByDay: [Int: CycleMonthCell]
 
-    init(date: Date, entriesByKey: [String: CycleDayEntry], todayKey: String, prediction: CyclePrediction?, calendar: Calendar = .current) {
+    init(
+        date: Date,
+        entriesByKey: [String: CycleDayEntry],
+        intimacyDayKeys: Set<String> = [],
+        todayKey: String,
+        prediction: CyclePrediction?,
+        calendar: Calendar = .current
+    ) {
         let grid = MonthGridModel(date: date, todayKey: todayKey, calendar: calendar)
 
         self.monthTitle = grid.monthTitle
@@ -491,16 +673,17 @@ struct PeriodMonthModel {
 
         let projectedLevelsByDay = Self.projectedLevelsByDay(for: prediction, calendar: calendar)
         let blanks = (0..<grid.leadingBlanks).map { _ in
-            PeriodMonthCell(day: nil, date: nil, dateKey: nil, entry: nil, projectedLevel: nil, isToday: false, isFuture: false)
+            CycleMonthCell(day: nil, date: nil, dateKey: nil, entry: nil, projectedLevel: nil, hasIntimacyEvent: false, isToday: false, isFuture: false)
         }
-        let days = grid.days.map { gridDay -> PeriodMonthCell in
+        let days = grid.days.map { gridDay -> CycleMonthCell in
             let entry = entriesByKey[gridDay.dateKey]
-            return PeriodMonthCell(
+            return CycleMonthCell(
                 day: gridDay.day,
                 date: gridDay.date,
                 dateKey: gridDay.dateKey,
                 entry: entry,
                 projectedLevel: entry == nil ? projectedLevelsByDay[gridDay.dateKey] : nil,
+                hasIntimacyEvent: intimacyDayKeys.contains(gridDay.dateKey),
                 isToday: gridDay.isToday,
                 isFuture: gridDay.isFuture
             )
@@ -511,9 +694,9 @@ struct PeriodMonthModel {
 
     /// Returns the cell for one shared-grid slot: the blank pad cell for `nil`, else the computed
     /// cell for that day of the month.
-    func cell(for gridDay: MonthGridDay?) -> PeriodMonthCell {
+    func cell(for gridDay: MonthGridDay?) -> CycleMonthCell {
         guard let gridDay, let cell = cellsByDay[gridDay.day] else {
-            return PeriodMonthCell(day: nil, date: nil, dateKey: nil, entry: nil, projectedLevel: nil, isToday: false, isFuture: false)
+            return CycleMonthCell(day: nil, date: nil, dateKey: nil, entry: nil, projectedLevel: nil, hasIntimacyEvent: false, isToday: false, isFuture: false)
         }
         return cell
     }
@@ -537,8 +720,8 @@ struct PeriodMonthModel {
 /// Identifiable wrapper around a tapped calendar date, used as the navigation-destination item.
 ///
 /// Exists so `navigationDestination(item:)` has a `Hashable`/`Identifiable` value to drive the
-/// push into ``PeriodDayDetailView``; identity is the date's time interval.
-private struct SelectedPeriodDay: Identifiable, Hashable {
+/// push into ``CycleDayDetailView``; identity is the date's time interval.
+private struct SelectedCycleDay: Identifiable, Hashable {
     var date: Date
     var id: TimeInterval { date.timeIntervalSinceReferenceDate }
 }

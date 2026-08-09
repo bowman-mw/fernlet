@@ -306,17 +306,32 @@ struct SensitiveSurfaceGateTests {
         #expect(store.visibleHealthCapabilities.contains(.activityContext))
     }
 
+    /// The merged Cycle page's four-combination truth table: the page exists while EITHER half is
+    /// visible and vanishes only when both gates hide. Ungated sections are unaffected throughout.
     @Test func hubSectionsFollowVisibility() {
+        // Both visible.
         #expect(PrivateHubSection.visibleSections(visibility: .all) == PrivateHubSection.allCases)
 
-        let hidden = PrivateHubSection.visibleSections(
+        // Period only.
+        let periodOnly = PrivateHubSection.visibleSections(
+            visibility: SensitiveSurfaceVisibility(intimacy: false, period: true)
+        )
+        #expect(periodOnly.contains(.cycle))
+
+        // Intimacy only.
+        let intimacyOnly = PrivateHubSection.visibleSections(
+            visibility: SensitiveSurfaceVisibility(intimacy: true, period: false)
+        )
+        #expect(intimacyOnly.contains(.cycle))
+
+        // Both hidden — the ONLY combination that removes the page.
+        let neither = PrivateHubSection.visibleSections(
             visibility: SensitiveSurfaceVisibility(intimacy: false, period: false)
         )
-        #expect(!hidden.contains(.intimacy))
-        #expect(!hidden.contains(.period))
+        #expect(!neither.contains(.cycle))
         // Ungated sections are unaffected.
-        #expect(hidden.contains(.journal))
-        #expect(hidden.contains(.worryBox))
+        #expect(neither.contains(.journal))
+        #expect(neither.contains(.worryBox))
     }
 
     // MARK: - Mixed-version multi-device key-drop (end-to-end)

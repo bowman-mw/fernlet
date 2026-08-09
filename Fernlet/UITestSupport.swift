@@ -31,10 +31,20 @@ enum UITestSupport {
     static var shouldSeedDemoContent: Bool { env["FERNLET_UI_TEST_SEED_DEMO"] == "1" }
 
     /// `FERNLET_UI_TEST_BYPASS_PRIVATE_LOCK=1` — render the Private hub's
-    /// Journal/Period/Intimacy screens without configuring an app passcode. This only
+    /// Journal/Cycle screens without configuring an app passcode. This only
     /// disables the *gate overlay* for appearance review; it does not unseal real
     /// private data (sealed cycle/intimacy content stays encrypted).
     static var bypassPrivateLockGate: Bool { env["FERNLET_UI_TEST_BYPASS_PRIVATE_LOCK"] == "1" }
+
+    /// `FERNLET_UI_TEST_HIDE_PERIOD=1` — seed the demo persona with the period surface explicitly
+    /// hidden, so the appearance gallery can review the merged Cycle page's intimacy-only
+    /// rendering. Consumed by `FernletStore.seedDemoContent` on every seeded launch.
+    static var hidePeriodSurface: Bool { env["FERNLET_UI_TEST_HIDE_PERIOD"] == "1" }
+
+    /// `FERNLET_UI_TEST_HIDE_INTIMACY=1` — seed the demo persona with the intimacy surface
+    /// explicitly hidden, for the Cycle page's period-only rendering. Consumed by
+    /// `FernletStore.seedDemoContent` on every seeded launch.
+    static var hideIntimacySurface: Bool { env["FERNLET_UI_TEST_HIDE_INTIMACY"] == "1" }
 
     /// `FERNLET_UI_TEST_OPEN_SHEET=<FernletSheet.id>` — present a sheet directly on
     /// launch (e.g. "workout", "settings", "trends"). Generalizes the older
@@ -58,6 +68,8 @@ enum UITestSupport {
     #else
     static var shouldSeedDemoContent: Bool { false }
     static var bypassPrivateLockGate: Bool { false }
+    static var hidePeriodSurface: Bool { false }
+    static var hideIntimacySurface: Bool { false }
     static var initialSheet: FernletSheet? { nil }
     static var shouldOpenCustomize: Bool { false }
     static var shouldSeedStudioCanvas: Bool { false }

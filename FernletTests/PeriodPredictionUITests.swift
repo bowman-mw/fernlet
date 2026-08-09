@@ -19,9 +19,10 @@ struct PeriodPredictionUITests {
         var isTabBarCompact = false
         var tabResetToken = 0
 
-        let view = PeriodTrackerView(
+        let view = CycleTrackerView(
             store: store,
             periodStore: periodStore,
+            intimacyStore: IntimacyLogStore(),
             activeSheet: Binding(get: { activeSheet }, set: { activeSheet = $0 }),
             isTabBarCompact: Binding(get: { isTabBarCompact }, set: { isTabBarCompact = $0 }),
             tabResetToken: Binding(get: { tabResetToken }, set: { tabResetToken = $0 })
@@ -47,9 +48,10 @@ struct PeriodPredictionUITests {
             phase: .menstrual
         )
 
-        let model = PeriodMonthModel(
+        let model = CycleMonthModel(
             date: month,
             entriesByKey: [loggedEntry.dateKey: loggedEntry],
+            intimacyDayKeys: ["2026-06-10", loggedEntry.dateKey],
             todayKey: "2026-06-01",
             prediction: prediction,
             calendar: calendar
@@ -63,6 +65,12 @@ struct PeriodPredictionUITests {
         #expect(cellsByDay[15]?.entry?.flowLevel == .medium)
         #expect(cellsByDay[16]?.projectedLevel == .medium)
         #expect(cellsByDay[17]?.projectedLevel == .light)
+
+        // The intimacy layer rides the same grid as its own flag: marked days carry it, a marked
+        // day can coexist with a logged flow entry, and unmarked days stay clean.
+        #expect(cellsByDay[10]?.hasIntimacyEvent == true)
+        #expect(cellsByDay[15]?.hasIntimacyEvent == true)
+        #expect(cellsByDay[16]?.hasIntimacyEvent == false)
     }
 
     @Test func predictionPathDoesNotReferenceAICode() throws {
@@ -105,7 +113,7 @@ struct PeriodPredictionUITests {
         let paths = [
             "FernletKit/Sources/PrivateHealthStore/CyclePredictionEngine.swift",
             "FernletKit/Sources/PrivateHealthStore/PeriodTrackerStore.swift",
-            "Fernlet/PeriodTrackerView.swift"
+            "Fernlet/CycleTrackerView.swift"
         ]
         let regex = try NSRegularExpression(pattern: pattern)
         var matches: [String] = []

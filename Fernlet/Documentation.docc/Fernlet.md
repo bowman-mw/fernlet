@@ -30,7 +30,7 @@ The in-person social layer plus the companion economy that feeds it. The Friends
 
 ### Cycle, Journal & Private Data
 
-The sealed/private surface: everything the app promises stays encrypted, device-local, or behind the app lock. ``PrivateHubView`` (wrapped in the app-lock gate) pages between the Journal, Period tracker, Intimacy log, and Worry Box, with the sensitive pages conditional on the store's derived visibility and a clamped selection that can never land on a hidden page. The journal, period, and intimacy pages all draw their month grids from one shared ``MonthCalendarCard`` — canonical day keys, paging chevrons, weekday row — and fill it with their own per-feature cells. Clinical cycle facts live as HealthKit samples, while free-text narratives are sealed into the `Private*` stores under the lock content key or a device-bound Keychain fallback — ``JournalSealingCoordinator`` enforces that plaintext never reaches the synced snapshot blob, and ``WorryBoxService`` is its deliberately simpler, never-synced sibling. ``SealedBackupCrypto``, ``SealedBackupService``, and ``SealedBackupCoordinator`` add the opt-in AES-GCM sealed CloudKit backup with escrow-key reconciliation and fail-closed, no-clobber restore gates. ``FirstAidView`` offers slow breathing, grounding, the Worry Box, and a static 988 support row; ``StressService`` computes the opt-in body-signals estimate into a device-local sidecar it scrubs the moment consent lapses. ``AgeAssuranceStore`` walls intimacy tracking (16+) and mesh chat (13+) behind DeclaredAgeRange verdicts, stored device-locally and failing closed on anything undetermined.
+The sealed/private surface: everything the app promises stays encrypted, device-local, or behind the app lock. ``PrivateHubView`` (wrapped in the app-lock gate) pages between the Journal, the merged Cycle page, and Worry Box, with the Cycle page conditional on the store's derived visibility — it exists while either the period or the intimacy half is visible, each half gates itself independently inside ``CycleTrackerView``, and the clamped selection can never land on a hidden page. The journal and cycle pages draw their month grids from one shared ``MonthCalendarCard`` — canonical day keys, paging chevrons, weekday row — and fill it with their own per-feature cells; the cycle calendar layers period flow tints and a distinct intimacy marker in one grid, and day taps open the combined ``CycleDayDetailView``. Clinical cycle facts live as HealthKit samples, while free-text narratives are sealed into the `Private*` stores under the lock content key or a device-bound Keychain fallback — ``JournalSealingCoordinator`` enforces that plaintext never reaches the synced snapshot blob, and ``WorryBoxService`` is its deliberately simpler, never-synced sibling. ``SealedBackupCrypto``, ``SealedBackupService``, and ``SealedBackupCoordinator`` add the opt-in AES-GCM sealed CloudKit backup with escrow-key reconciliation and fail-closed, no-clobber restore gates. ``FirstAidView`` offers slow breathing, grounding, the Worry Box, and a static 988 support row; ``StressService`` computes the opt-in body-signals estimate into a device-local sidecar it scrubs the moment consent lapses. ``AgeAssuranceStore`` walls intimacy tracking (16+) and mesh chat (13+) behind DeclaredAgeRange verdicts, stored device-locally and failing closed on anything undetermined.
 
 ### Onboarding, Settings & Shared UI
 
@@ -163,7 +163,8 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``AgeAssuranceStore``
 - ``AgeAssuranceRequest``
 - ``AgeGateNotice``
-- ``PeriodTrackerView``
+- ``CycleTrackerView``
+- ``CycleDayDetailView``
 - ``LogPeriodSheet``
 - ``LogIntimacySheet``
 - ``JournalView``

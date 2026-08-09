@@ -39,7 +39,7 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | File | Purpose |
 | --- | --- |
 | `Fernlet/Fernlet/FernletApp.swift` | SwiftUI app entry point. Creates the shared persistence, app store, period tracker, launch preparation service, and lock service objects. |
-| `Fernlet/Fernlet/ContentView.swift` | Main app container and navigation shell. Hosts primary tabs, launch state, `IntimacyScreenView` (the Private hub's intimacy page), lock gate integration, quick sheets, and meal/journal notifications. |
+| `Fernlet/Fernlet/ContentView.swift` | Main app container and navigation shell. Hosts primary tabs, launch state, lock gate integration, quick sheets, and meal/journal notifications. |
 | `Fernlet/FernletKit/Sources/FernletUI/FernletUIComponents.swift` | Shared UI primitives: adaptive color tokens, headers, chip styles, sheet fields, section pickers, layout helpers, searching pulse, medallion/coin glyphs. |
 | `Fernlet/FernletKit/Sources/FernletUI/FernletPrimitives.swift` | `FernletCard`, `SectionLabel`, `EmptyState` — the cross-screen layout primitives extracted from HomeView for package-resident views. |
 | `Fernlet/FernletKit/Sources/FernletUI/FernletTheme.swift` | App-wide color palette, theme defaults, custom light/dark background support, and UIKit/SwiftUI color vending. |
@@ -63,10 +63,10 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | `Fernlet/Fernlet/MoveView.swift` | Movement/workout screen with workout logging, suggestions, workout rows, and goal summaries. Hosts `WorkoutExerciseDraft`, the exercise-draft state machine shared by `WorkoutSheet` and `WorkoutPlanSheet`. |
 | `Fernlet/Fernlet/ActivityPickerSection.swift` | Activity-mode workout picker, recent activity shortcuts, and activity-specific workout fields. |
 | `Fernlet/Fernlet/JournalView.swift` | Journal calendar, prompts, entry creation/editing, day detail, day nutrition breakdowns, and daily edit sheets. |
-| `Fernlet/Fernlet/PeriodTrackerView.swift` | Cycle tracking main view. |
-| `Fernlet/Fernlet/PeriodDayDetailView.swift` | Detail view for a specific period/cycle day. |
+| `Fernlet/Fernlet/CycleTrackerView.swift` | The Private hub's merged Cycle page: one layered calendar (period flow tints + a distinct intimacy marker), period predictions/trends, and a single plus-menu; each half gates on its own derived visibility. |
+| `Fernlet/Fernlet/CycleDayDetailView.swift` | Combined day detail for the Cycle calendar: the period half (samples, narrative, edit/delete) and the intimacy half (events/notes), each rendered only when its own gate allows. |
 | `Fernlet/Fernlet/LogPeriodSheet.swift` | Sheet for logging period events. |
-| `Fernlet/Fernlet/MonthCalendarCard.swift` | `MonthGridModel` + `MonthCalendarCard` — the shared month-calendar chrome (paging chevrons with future months disabled, weekday row, 7-column grid inside a `FernletCard`) plus its pure layout math, whose day keys are canonicalized through `FernletDate.dayKey` rather than a locale-following formatter. The single home of the three previously duplicated month grids: `JournalView`, `PeriodTrackerView`, and the intimacy calendar in `ContentView`; each still supplies its own day cells and footer. |
+| `Fernlet/Fernlet/MonthCalendarCard.swift` | `MonthGridModel` + `MonthCalendarCard` — the shared month-calendar chrome (paging chevrons with future months disabled, weekday row, 7-column grid inside a `FernletCard`) plus its pure layout math, whose day keys are canonicalized through `FernletDate.dayKey` rather than a locale-following formatter. The single home of the previously duplicated month grids, now filled by `JournalView` and the layered cycle calendar in `CycleTrackerView`; each supplies its own day cells and footer. |
 | `Fernlet/Fernlet/PrivateHubView.swift` | Private hub screen with private-section navigation. |
 | `Fernlet/Fernlet/SocialHubView.swift` | Social hub entry point for the Friends photo wall and active disposable-camera session flow. |
 | `Fernlet/Fernlet/ConnectView.swift` | Friends tab photo wall, nearby-discovery status, connection-success transition, session photo review, and full-screen saved-photo feed. Presents `DisposableCameraView` while a Friends session is active. |

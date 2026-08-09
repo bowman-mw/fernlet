@@ -377,7 +377,7 @@ final class FernletStore {
     /// plaintext synchronously — a gate that only refuses the NEXT load would leave up to 240 days of
     /// decrypted narratives in memory until process death.
     ///
-    /// Intimacy has no equivalent hook: its caches are `@State` on `IntimacyScreenView`, which this
+    /// Intimacy has no equivalent hook: its caches are `@State` on `CycleTrackerView`, which this
     /// layer cannot reach. That view scrubs itself via `.onChange(of: isIntimacyTrackingVisible)`, and
     /// `loadIntimacyCalendar`'s own gate catches anything that slips past.
     @ObservationIgnored var periodScrubHook: (() -> Void)?
