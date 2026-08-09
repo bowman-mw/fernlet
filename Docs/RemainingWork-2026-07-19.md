@@ -253,9 +253,20 @@ here now, so the archived docs are not load-bearing.
 
 **From the design briefs (open *design* asks, not implementation work):**
 
-11. **Briefs 12–14** — adventure/rest energy loop, proud-dandelion cumulative growth, and the
-    cumulative history/insights view. Zero code exists for any of them; each brief is a question to a
-    designer, so these need design answers before they can be scoped.
+11. **Briefs 12–14 — DECIDED 2026-08-09 (owner).**
+    - **Brief 12 (adventure / rest energy loop): CUT.** The companion must not leave the screen, which
+      removes the away-state the whole brief was built around. Nothing to scope.
+    - **Brief 13 (proud-dandelion cumulative growth): parked**, and effectively moot — it and brief 12
+      were two shapes of the same "give good days a non-streak payoff" idea, and cutting 12 removes
+      the collision that made choosing between them urgent.
+    - **Brief 14 (cumulative history / insights view): CHOSEN — the one to build.** Still needs a
+      design answer before it can be scoped: what "patterns, not grades" actually renders. The
+      material already exists as per-feature month calendars (journal / period / intimacy) that could
+      unify into one component — note `MonthGridModel` + `MonthCalendarCard` already exist and are the
+      natural substrate. Constraint from [FernletSpecificationV3.md](FernletSpecificationV3.md) §12:
+      ambient features must avoid dashboards, charts, percentiles, comparisons, and nags, so this can
+      show neither completion rates nor streaks nor scores. Weigh against Trends, which already covers
+      part of the ground.
 
 ---
 

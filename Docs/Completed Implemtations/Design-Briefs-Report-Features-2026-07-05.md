@@ -227,6 +227,11 @@ photo instead). Macros shown as a small P/C/F trio — **no calorie number anywh
 These need a *concept*, not just styling — what they are and how they behave, then the look. Sketches or
 notes are enough to unblock implementation.
 
+> **Owner decision 2026-08-09 on briefs 12–14:** brief 12 (adventure / rest loop) is **CUT** — the
+> companion must not leave the screen, which removes its away-state premise. Brief 13 is parked.
+> **Brief 14 (cumulative history / insights) is the one to build**, and is tracked in
+> [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md) §9 item 11.
+
 > **Status reconciled 2026-08-09.** Briefs 1–11 were mocked and shipped — their design outputs are
 > the HTML files in [`design-refs/`](../design-refs/) and the corresponding UI is live (first aid,
 > breathing, grounding, worry box, companion states, weather/day-night ambiance, milestones, pet
