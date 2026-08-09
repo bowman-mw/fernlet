@@ -35,6 +35,13 @@ with `Scripts/spm-wall-check.sh`. The flag must be on the build command (it does
 synthesized SwiftPM targets from the pbxproj). `FernletTests/S3BoundaryTests` is the complementary
 grep-wall.
 
+**No-tracking wall:** a second, independent boundary — no advertising/attribution/analytics SDK
+anywhere, and an **exact allowlist of outbound network destinations**. Unlike the S3 wall it has *no
+compiler half* (a tracking SDK is an honest new dependency, so the DAG compiles clean), so
+`FernletTests/NoTrackingBoundaryTests` is the whole enforcement. Adding a network endpoint or an SPM
+dependency fails CI until it is deliberately allowlisted there **and** documented in
+[Docs/No-Tracking-Wall.md](Docs/No-Tracking-Wall.md), in the same commit.
+
 **Pre-merge ritual (enforce the wall):**
 - Once per clone, install the git hooks: `Scripts/install-git-hooks.sh` (points `core.hooksPath` at
   `Scripts/git-hooks`). The committed `pre-push` hook then runs `Scripts/spm-wall-check.sh` whenever a
@@ -78,7 +85,8 @@ Consult them before adding code so existing behavior is reused, not duplicated:
 | [Docs/FileIndex.md](Docs/FileIndex.md) | Map of every main source file to its responsibility, grouped by feature area. |
 | [Docs/StoreRepositoryFunctionIndex.md](Docs/StoreRepositoryFunctionIndex.md) | Store / repository / persistence / derived-signals function index + duplication hotspots. Read before any data-mutation, save/load, or storage-preference work. |
 | [Docs/ProximityFunctionIndex.md](Docs/ProximityFunctionIndex.md) | Proximity & mesh subsystem function index (identity, transport, trust, recipe-share, friend-photo) + duplication hotspots. |
+| [Docs/No-Tracking-Wall.md](Docs/No-Tracking-Wall.md) | The no-tracking wall: no user data reaches the developer or any third party for advertising/analytics. Permitted-destination allowlist + what is enforced mechanically. Read before adding any network call or SPM dependency. |
 | [Docs/FernletSpecificationV3.md](Docs/FernletSpecificationV3.md) | Canonical product & architecture spec (privacy-first, module-enforced boundaries). The source of truth for intended behavior. |
 | [Docs/ImplementationPlan.md](Docs/ImplementationPlan.md) | Phased implementation plan and planning assumptions (iOS 26, AI fallbacks, privacy-before-features). |
-| [Docs/Completed Implemtations/CODE_REVIEW_2026-06-12.md](Docs/Completed%20Implemtations/CODE_REVIEW_2026-06-12.md) | Archived multi-agent code review: 195 findings, 185 fixed. The 10 survivors live on the tracker (RemainingWork §9), so read this for resolutions and author design decisions, not for open work. |
+| [Docs/Completed Implemtations/CODE_REVIEW_2026-06-12.md](Docs/Completed%20Implemtations/CODE_REVIEW_2026-06-12.md) | Archived multi-agent code review: 195 findings, 186 fixed. The 9 survivors live on the tracker (RemainingWork §9), so read this for resolutions and author design decisions, not for open work. |
 | `Docs/Completed Implemtations/` | Per-feature implementation plans that have already shipped (HealthKit, mesh, period/intimacy, startup/biometric, etc.). |

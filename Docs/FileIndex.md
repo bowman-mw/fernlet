@@ -587,6 +587,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletTests/RecentBitesTests.swift` | Home "Recent bites" 7-day photographed-meal window tests. |
 | `Fernlet/FernletTests/RecipeWebImporterTests.swift` | Recipe web-importer SSRF/URL-safety allow- and block-list tests. |
 | `Fernlet/FernletTests/ReplayCacheTests.swift` | Replay-cache oldest-eviction and envelope-replay-detection tests. |
+| `Fernlet/FernletTests/NoTrackingBoundaryTests.swift` | No-tracking wall: banned advertising/analytics SDKs and symbols across every target, exact SPM dependency + hardcoded-destination allowlists, pinned HTTP-client files, and PrivacyInfo.xcprivacy/entitlements assertions. See [No-Tracking-Wall.md](No-Tracking-Wall.md). |
 | `Fernlet/FernletTests/S3BoundaryTests.swift` | S3 privacy-wall grep-based backstop tests scanning AI-facing sources for sealed-store access. |
 | `Fernlet/FernletTests/SavedRecipeMigrationTests.swift` | Legacy SavedRecipe-to-RecipeDefinition migration round-trip tests. |
 | `Fernlet/FernletTests/SealedBackupChunkTests.swift` | Sealed-backup chunked-export paging and multi-chunk restore-writeback tests. |
@@ -700,6 +701,7 @@ layer and live in-source at `Documentation.docc/`; the tables below are the plan
 | `Docs/Sealed-Backup-Escrow-Recovery-FollowUp-2026-06-28.md` | Sealed-backup escrow follow-ups, including BIP39 recovery codes. Not started. |
 | `Docs/Privacy-Policy.md` | The published privacy policy text, mirrored by the in-app view. |
 | `Docs/App-Privacy-Nutrition-Labels.md` | Draft answers for the App Store Connect App Privacy questionnaire (owner-entered). |
+| `Docs/No-Tracking-Wall.md` | The enforced no-tracking boundary: permitted network destinations and why each exists, mechanical vs. policy enforcement, and how to add a destination. Backed by `NoTrackingBoundaryTests`. |
 | `Docs/PrivacyWipeCoverage.md` | The enforced delete-all coverage checklist, backed by `PrivacyWipeCoverageTests`. |
 | `Docs/CloudKit-Schema-Deploy.md` | Runbook for pushing the Core Data model to CloudKit's server-side schema — a manual, developer-run ritual. |
 | `Docs/Friend-Shop-Real-Device-Validation.md` | Two-device validation script for the in-person friend shop. |

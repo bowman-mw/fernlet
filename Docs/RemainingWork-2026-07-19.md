@@ -91,6 +91,11 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
    **OpenFoodFacts API (free, keyless)** primary, USDA FoodData Central API (free key) as
    US-branded fallback; sends barcode digits only. No subscription. The offline ODR branded
    catalog stays the roadmap endgame.
+   **Note (2026-08-09):** neither host is contacted today — USDA data ships bundled offline and the
+   only host the app itself chooses is DuckDuckGo (product search, same opt-in). Shipping this item
+   therefore ADDS two outbound destinations and must update the allowlist in
+   `FernletTests/NoTrackingBoundaryTests` plus [No-Tracking-Wall.md](No-Tracking-Wall.md) in the same
+   commit, or CI fails. That is the wall working as intended, not an obstacle.
 4. **Mesh admission prompt: WIRE `MeshAdmissionPromptSheet`** (don't delete the path).
 5. **Hearts copy: keep "for now"** — remote send-heart ships when the CloudKit dead-drop
    foundation lands with coach P1.
