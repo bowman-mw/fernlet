@@ -326,6 +326,16 @@ final class FernletStore {
         directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
             .appendingPathComponent("ProgressPhotos", isDirectory: true)
     )
+    /// The Private hub's photo wall — freely imported photos, sealed on the same hardened media path
+    /// as the progress timeline, in their own directory.
+    ///
+    /// Owned here rather than by the view so the wipe funnel below can reach it. `ProgressPhotoStore`
+    /// is a stateless value type over the filesystem, so `PhotoWallLibrary` constructing a second
+    /// instance at the same directory is safe — they are two handles on one store, not two stores.
+    @ObservationIgnored private let photoWallStore = ProgressPhotoStore(
+        directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
+            .appendingPathComponent("PhotoWall", isDirectory: true)
+    )
     /// The user's OWN photo for a recipe (#1), sealed and keyed by the recipe id. No external image
     /// fetch (tester decision) — this only ever holds a photo the user chose.
     @ObservationIgnored private let recipePhotoStore = MealPhotoStore(
@@ -3796,6 +3806,12 @@ final class FernletStore {
         if !progressPhotoStore.deleteAll() {
             outcome.incompleteStores.append("progress photos")
         }
+        // 4b-ii. The Private hub photo wall. Same reasoning as the timeline above, and the same
+        // failure mode if it is forgotten: a store the wipe does not enumerate leaves the user's
+        // photos on disk while the dialog promises they are gone.
+        if !photoWallStore.deleteAll() {
+            outcome.incompleteStores.append("photo wall")
+        }
         // 4c. Recipe photos (#1), keyed by recipe id. The saved recipes themselves are cleared by the
         // repository purge below; their photos live in a separate sealed store that the purge can't reach.
         if !recipePhotoStore.deleteAll() {
@@ -3956,6 +3972,7 @@ final class FernletStore {
         // hygiene for the emptied stores (next read re-fetches the surviving row).
         mealPhotoStore.invalidateEncryptionKeyCache()
         progressPhotoStore.invalidateEncryptionKeyCache()
+        photoWallStore.invalidateEncryptionKeyCache()
         recipePhotoStore.invalidateEncryptionKeyCache()
 
         if storagePreferencesResetHook?(sealedBackupDeleteFailed, cloudCopyDeleteFailed) != true {

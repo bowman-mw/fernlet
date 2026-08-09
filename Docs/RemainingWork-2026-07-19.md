@@ -234,10 +234,22 @@ here now, so the archived docs are not load-bearing.
 
 9. **Global IA (A1)** — flatten the Private tab to a NavigationStack list, or keep nested paging?
    Still a paged `TabView`.
-10. **Settings (A2) + the placeholder `PersonalScreenView`** — decide whether Debug/Tier-2/Signals
-    compile out under `DEBUG`; and the legacy `PersonalScreenView` path is still reachable **and
-    still renders placeholder copy** ("Tap to view your cycle" on a non-tappable card; "Photo imports
-    can live here when the photo picker is added"). Shipped placeholder UI — treat as a defect.
+10. **Settings (A2)** — decide whether Debug/Tier-2/Signals compile out under `DEBUG`.
+
+11. **`PersonalScreenView`'s cycle and photo pages are unreachable** — *corrected 2026-08-09.* Both
+    the 2026-08-04 doc pass and an earlier edit of this tracker claimed the placeholder surfaces were
+    "still reachable" and therefore shipped defects. **They were not.** `PersonalScreenView` is
+    instantiated exactly once in the repo — `Fernlet/PrivateHubView.swift:67`, with
+    `screen: .intimacyTracking` — so the `.periodTracking` and `.photos` arms were dead code and no
+    user ever saw the placeholder copy. Both arms have since been built out for real (live cycle
+    summary pushing `PeriodTrackerView`; a sealed `PhotosPicker` photo wall), but **they still have no
+    call site.** Making them reachable needs a new `PrivateHubSection` case + TabView page in
+    `PrivateHubView.swift`, or a new `FernletSheet` case. Open question first: the hub already has a
+    full `.period` page, so a cycle *summary* card inside the hub may be redundant — its natural home
+    is a launcher or widget route. Decide the destination before wiring the call site.
+    Also outstanding on that surface: `periodStore`/`periodContext` are optional with `nil` defaults
+    (the card degrades to non-interactive) until the call site passes them, and EXIF capture dates are
+    lost on import because `PhotoMetadata.creationDate(from:)` is `private` in `PhotoCaptureControl.swift`.
 
 **From the design briefs (open *design* asks, not implementation work):**
 

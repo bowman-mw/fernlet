@@ -112,6 +112,7 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | `Fernlet/Fernlet/GuidedWorkout.swift` | `GuidedWorkoutSheet` — in-app guided workout runner (current exercise, set X of Y, live rest countdown) driven by `store.guidedRunState` and mirrored to the Live Activity. |
 | `Fernlet/Fernlet/GuidedWorkoutEditorSheet.swift` | `GuidedWorkoutEditorSheet` — manual editor for a suggested session (per-exercise sets/reps/rest override, remove, reorder, add from catalog); saving replaces the session in today's plan. |
 | `Fernlet/Fernlet/EquipmentIcons.swift` | `EquipmentIconLibrary` + a lightweight SVG renderer — editable stroke-only vector glyphs for gym equipment / locations, tinted to foreground, with SF Symbol fallback. |
+| `Fernlet/Fernlet/PhotoWallView.swift` | `PhotoWallLibrary` / `PhotoWallSection` / `PhotoWallTile` / `PhotoWallDetailView` — the Private hub's photo wall: multi-select `PhotosPicker` import sealed at rest through a `ProgressPhotoStore` rooted at `Documents/PhotoWall/`, rendered as polaroids behind the hub's lock gate with app-switcher redaction and a caption/date/delete detail sheet. **Not yet reachable** — `PersonalScreenView`'s `.photos` arm has no call site (see RemainingWork §9). |
 | `Fernlet/Fernlet/ProgressPhotoTimeline.swift` | `ProgressPhotoSection` — Move-tab gym progress-photo timeline: sealed-at-rest body photos behind the global Fernlet lock, with camera/library add and tap-through detail. |
 
 ## Custom Clothing, Coins, And Friend Shop
