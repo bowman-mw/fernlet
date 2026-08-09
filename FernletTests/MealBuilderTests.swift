@@ -17,8 +17,7 @@ struct MealBuilderTests {
             from: plan,
             candidates: [],
             recipes: [],
-            foodItems: [],
-            originalDescription: "turkey sandwich"
+            foodItems: []
         )
 
         #expect(result == nil)
@@ -44,8 +43,7 @@ struct MealBuilderTests {
             from: plan,
             candidates: [],
             recipes: [recipe],
-            foodItems: [turkey, bread],
-            originalDescription: "turkey sandwich"
+            foodItems: [turkey, bread]
         ))
 
         #expect(result.createdRecipes.isEmpty)
@@ -81,8 +79,7 @@ struct MealBuilderTests {
             from: plan,
             candidates: candidates,
             recipes: [],
-            foodItems: [oats, yogurt],
-            originalDescription: "protein oats"
+            foodItems: [oats, yogurt]
         ))
 
         #expect(result.createdRecipes.count == 1)
@@ -114,8 +111,7 @@ struct MealBuilderTests {
             from: plan,
             candidates: candidates,
             recipes: [],
-            foodItems: [banana],
-            originalDescription: "banana"
+            foodItems: [banana]
         ))
 
         #expect(result.createdRecipes.isEmpty)
@@ -151,8 +147,7 @@ struct MealBuilderTests {
                     ingredients: [RecipeIngredient(foodItemId: steak.id, quantity: 1, unit: RecipeUnit.serving.rawValue)]
                 )
             ],
-            foodItems: [chickenMelt, steak],
-            originalDescription: "2 costco chicken melts"
+            foodItems: [chickenMelt, steak]
         ))
 
         let meal = try #require(result.meals.first)
@@ -265,8 +260,7 @@ struct MealBuilderTests {
             from: plan,
             candidates: candidates,
             recipes: [],
-            foodItems: [bread, cheese],
-            originalDescription: "sandwich"
+            foodItems: [bread, cheese]
         ))
 
         #expect(result.createdRecipes.count == 1)
@@ -293,8 +287,7 @@ struct MealBuilderTests {
             from: plan,
             candidates: candidates,
             recipes: [],
-            foodItems: [sourdough],
-            originalDescription: "grilled cheese"
+            foodItems: [sourdough]
         ))
 
         #expect(result.createdRecipes.isEmpty)

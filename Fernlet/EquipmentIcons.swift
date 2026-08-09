@@ -309,8 +309,6 @@ enum SVGMarkupParser {
                 return
             }
         }
-
-        func point(_ p: CGPoint) -> CGPoint { p }
     }
 
     private static func reflectedControl(_ last: CGPoint?, around current: CGPoint) -> CGPoint {

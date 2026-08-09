@@ -28,7 +28,6 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Pending debounced snapshot saves | SnapshotSaveCoordinator | `snapshotSaveCoordinator.cancelPending` (start AND after purge) |
 | Sealed iCloud backups (all payload types) | CloudKit private DB | `setSealedBackupEnabled` |
 | Sealed-backup rollback high-water mark | `UserDefaults` (device-local) | `SealedBackupGenerationStore.reset` |
-| Photo wall images + dated index | `Documents/PhotoWall/` (sealed) | `photoWallStore.deleteAll` |
 | Kept cloud copy | CloudKit | `cloudCopyDeleteHook` |
 | Cycle narratives (sealed rows) | Private stores | `periodDataDeleteHook` |
 | Intimacy logs (sealed rows) | Private stores | `intimacyDataDeleteHook` |

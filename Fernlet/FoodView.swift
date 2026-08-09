@@ -776,7 +776,6 @@ struct SavedRecipeNotesSheet: View {
 /// `navigationDestination(for:)` path values.
 enum MealFlowDestination: Hashable {
     case scanBarcode
-    case reviewScan(NutritionLabelResult)
     case recipeSearch
     case productPageImport
     case productSearch(String)
@@ -1591,8 +1590,6 @@ struct MealSheet: View {
                         #else
                         EmptyView()
                         #endif
-                    case .reviewScan:
-                        EmptyView()
                     #if canImport(UIKit)
                     case .captureBarcode(let payload):
                         // The auto-router already read this barcode from the captured photo — resolve

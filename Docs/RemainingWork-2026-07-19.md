@@ -236,20 +236,20 @@ here now, so the archived docs are not load-bearing.
    Still a paged `TabView`.
 10. **Settings (A2)** — decide whether Debug/Tier-2/Signals compile out under `DEBUG`.
 
-11. **`PersonalScreenView`'s cycle and photo pages are unreachable** — *corrected 2026-08-09.* Both
-    the 2026-08-04 doc pass and an earlier edit of this tracker claimed the placeholder surfaces were
-    "still reachable" and therefore shipped defects. **They were not.** `PersonalScreenView` is
-    instantiated exactly once in the repo — `Fernlet/PrivateHubView.swift:67`, with
-    `screen: .intimacyTracking` — so the `.periodTracking` and `.photos` arms were dead code and no
-    user ever saw the placeholder copy. Both arms have since been built out for real (live cycle
-    summary pushing `PeriodTrackerView`; a sealed `PhotosPicker` photo wall), but **they still have no
-    call site.** Making them reachable needs a new `PrivateHubSection` case + TabView page in
-    `PrivateHubView.swift`, or a new `FernletSheet` case. Open question first: the hub already has a
-    full `.period` page, so a cycle *summary* card inside the hub may be redundant — its natural home
-    is a launcher or widget route. Decide the destination before wiring the call site.
-    Also outstanding on that surface: `periodStore`/`periodContext` are optional with `nil` defaults
-    (the card degrades to non-interactive) until the call site passes them, and EXIF capture dates are
-    lost on import because `PhotoMetadata.creationDate(from:)` is `private` in `PhotoCaptureControl.swift`.
+11. ✅ **`PersonalScreenView`'s dead arms — REMOVED 2026-08-09.** The arms were never reachable
+    (`PersonalScreenView` had exactly one call site, `PrivateHubView.swift:67`, passing
+    `.intimacyTracking`), and everything they would have shown already ships elsewhere: the Home
+    photowall, the Friends photo feed, the meal-photo Home card, the lock-gated progress timeline on
+    Move, and the hub's own period page. Rather than wire them up, the owner had them pruned. Removed:
+    every unreachable arm, the vestigial `screen:`/`periodStore:`/`periodContext:` parameters (the
+    type is now `IntimacyScreenView`, which is what it always was), `PhotoWallView.swift`, the
+    `photoWallStore` and its delete-all wiring, and `PersonalMemoryList` (whose only call site was the
+    dead `.friends` arm). ~1,100 lines net.
+    **Follow-up for the owner:** `FernletScreen` (FernletDomainModel) now has **zero real consumers** —
+    its `title`/`subtitle`/`systemImage` are read by nobody, and its two remaining touch points
+    (`FernletShortcut.screen`, `SensitiveSurfaceVisibility.allows(_:)`) have no callers either.
+    Removing it is a public-API cleanup that also edits a DocC Topics list, so it was left for an
+    explicit call.
 
 **From the design briefs (open *design* asks, not implementation work):**
 

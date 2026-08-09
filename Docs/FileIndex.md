@@ -38,7 +38,7 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | File | Purpose |
 | --- | --- |
 | `Fernlet/Fernlet/FernletApp.swift` | SwiftUI app entry point. Creates the shared persistence, app store, period tracker, launch preparation service, and lock service objects. |
-| `Fernlet/Fernlet/ContentView.swift` | Main app container and navigation shell. Hosts primary tabs, launch state, personal screen, lock gate integration, quick sheets, and meal/journal notifications. |
+| `Fernlet/Fernlet/ContentView.swift` | Main app container and navigation shell. Hosts primary tabs, launch state, `IntimacyScreenView` (the Private hub's intimacy page), lock gate integration, quick sheets, and meal/journal notifications. |
 | `Fernlet/FernletKit/Sources/FernletUI/FernletUIComponents.swift` | Shared UI primitives: adaptive color tokens, headers, chip styles, sheet fields, section pickers, layout helpers, searching pulse, medallion/coin glyphs. |
 | `Fernlet/FernletKit/Sources/FernletUI/FernletPrimitives.swift` | `FernletCard`, `SectionLabel`, `EmptyState` — the cross-screen layout primitives extracted from HomeView for package-resident views. |
 | `Fernlet/FernletKit/Sources/FernletUI/FernletTheme.swift` | App-wide color palette, theme defaults, custom light/dark background support, and UIKit/SwiftUI color vending. |
@@ -112,7 +112,6 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | `Fernlet/Fernlet/GuidedWorkout.swift` | `GuidedWorkoutSheet` — in-app guided workout runner (current exercise, set X of Y, live rest countdown) driven by `store.guidedRunState` and mirrored to the Live Activity. |
 | `Fernlet/Fernlet/GuidedWorkoutEditorSheet.swift` | `GuidedWorkoutEditorSheet` — manual editor for a suggested session (per-exercise sets/reps/rest override, remove, reorder, add from catalog); saving replaces the session in today's plan. |
 | `Fernlet/Fernlet/EquipmentIcons.swift` | `EquipmentIconLibrary` + a lightweight SVG renderer — editable stroke-only vector glyphs for gym equipment / locations, tinted to foreground, with SF Symbol fallback. |
-| `Fernlet/Fernlet/PhotoWallView.swift` | `PhotoWallLibrary` / `PhotoWallSection` / `PhotoWallTile` / `PhotoWallDetailView` — the Private hub's photo wall: multi-select `PhotosPicker` import sealed at rest through a `ProgressPhotoStore` rooted at `Documents/PhotoWall/`, rendered as polaroids behind the hub's lock gate with app-switcher redaction and a caption/date/delete detail sheet. **Not yet reachable** — `PersonalScreenView`'s `.photos` arm has no call site (see RemainingWork §9). |
 | `Fernlet/Fernlet/ProgressPhotoTimeline.swift` | `ProgressPhotoSection` — Move-tab gym progress-photo timeline: sealed-at-rest body photos behind the global Fernlet lock, with camera/library add and tap-through detail. |
 
 ## Custom Clothing, Coins, And Friend Shop
@@ -430,7 +429,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletKit/Sources/PrivateMediaStore/PrivateMediaStore.swift` | Disk-backed mesh photo index with **AES-256-GCM at-rest encryption** of image/thumbnail bytes, thumbnail generation, hydration, FIFO eviction (1000 cap / 900 warn), and orphan cleanup. (Formerly `MeshPhotoCacheStore`.) |
 | `Fernlet/FernletKit/Sources/PrivateMediaStore/PrivateMediaKeyStore.swift` | `PrivateMediaKeyProviding` + keychain-backed (backup-restorable, `AfterFirstUnlock`) AES key provider for `PrivateMediaStore`. |
 | `Fernlet/FernletKit/Sources/PrivateMediaStore/MediaAtRestCrypto.swift` | Shared AES-256-GCM at-rest helpers on `PrivateMediaKeyProviding` (`gcmSeal`, `gcmOpen`, `sealAndWrite` — the last writes nothing at all on a nil key or seal failure, so plaintext never reaches disk). The one home of the seal / open / seal-then-write idiom `PrivateMediaStore`, `MealPhotoStore`, and `ProgressPhotoStore` each hand-rolled; deliberately policy-free, so each store keeps its own fail-closed decision (and its legacy-plaintext branch) at the call site. |
-| `Fernlet/FernletKit/Sources/PrivateMediaStore/FriendPhotoImageHelpers.swift` | `UIImage` resizing and thumbnail JPEG helpers for friend-photo sharing. |
+| `Fernlet/FernletKit/Sources/PrivateMediaStore/FriendPhotoImageHelpers.swift` | `UIImage` resizing helper for friend-photo sharing. |
 | `Fernlet/FernletKit/Sources/PrivateMediaStore/MealPhotoStore.swift` | `MealPhotoStore`: on-device AES-256-GCM-sealed store for meal and other private photos with bounded downscale. |
 | `Fernlet/FernletKit/Sources/PrivateMediaStore/ProgressPhotoStore.swift` | `ProgressPhotoStore`: sealed gym progress-photo timeline over `MealPhotoStore` bytes plus a GCM-sealed dated index. |
 

@@ -934,42 +934,24 @@ struct ContentView: View {
     }
 }
 
-/// One page of the Private hub (cycle, intimacy, friends notes, photos), keyed by `FernletScreen`.
+/// The Private hub's intimacy page: the month calendar, the privacy note, and the sealed notes list.
 ///
-/// The intimacy page is the interesting one: it holds decrypted `IntimacyLog` values in @State,
-/// so it scrubs itself the moment `isIntimacyTrackingVisible` flips off (hiding must drop resident
-/// plaintext, not just refuse the next load) and merges the sealed local logs with the HealthKit
-/// per-day event counts for the calendar.
+/// It holds decrypted `IntimacyLog` values in @State, so it scrubs itself the moment
+/// `isIntimacyTrackingVisible` flips off (hiding must drop resident plaintext, not just refuse the
+/// next load) and merges the sealed local logs with the HealthKit per-day event counts for the
+/// calendar.
 ///
-/// The cycle page is a *summary* of the real period surface, not a second copy of it: it renders
-/// live state off the same ``PeriodTrackerStore`` the period screen uses and pushes
-/// ``PeriodTrackerView`` when tapped. It deliberately owns no cycle state of its own — the store is
-/// the fail-closed funnel (inert while cycle tracking is hidden, keyless while locked), so the
-/// summary string can only ever describe what that store was already entitled to load. The two
-/// string-level gates in ``cycleSummary`` are belt-and-suspenders on top of it.
-///
-/// The photos page is the private photo wall; its sealed store, picker and lock gate all live in
-/// ``PhotoWallSection`` (PhotoWallView.swift) so this file stays the hub's routing layer.
-struct PersonalScreenView: View {
-    var screen: FernletScreen
+/// This used to be a `PersonalScreenView` switching over every `FernletScreen` case, but only the
+/// intimacy arm was ever built — the cycle, photo-wall, friends-notes, food, move and journal arms
+/// had no call site, and every surface they described already ships elsewhere (``PeriodTrackerView``
+/// on the hub's own period page, the Home photowall and `FriendPhotoFeedView` for photos,
+/// `ProgressPhotoSection` on the workout page). The type is what it always actually was.
+struct IntimacyScreenView: View {
     @Bindable var store: FernletStore
     /// The gated funnel for intimacy sealed-note reads. Owned by `ContentView`, threaded through
     /// `PrivateHubView`. Its `isVisible` is wired to the derived gate in `ContentView`'s launch task, so
     /// the `logs()` call in `loadIntimacyCalendar` decrypts nothing while intimacy tracking is hidden.
     var intimacyStore: IntimacyLogStore
-    /// The gated funnel for cycle reads, needed only by the `.periodTracking` page (both for its
-    /// live summary and as the push destination's store).
-    ///
-    /// Optional with a `nil` default ON PURPOSE: `PrivateHubView` builds this view solely for the
-    /// intimacy page and must keep compiling untouched, and there is no safe fallback to invent —
-    /// constructing a second `PeriodTrackerStore` here would mint an UNGATED store (its `isVisible`
-    /// defaults to fail-closed, but nothing would ever wire the real derived gate into it) and would
-    /// duplicate the 240-day HealthKit read the app already owns exactly once. So when it is nil the
-    /// cycle card degrades to a non-interactive, detail-free card rather than guessing.
-    var periodStore: PeriodTrackerStore? = nil
-    /// The sanctioned cycle egress, used here only for its already-gated abstract phase band. Nil
-    /// simply drops the phase line from the summary.
-    var periodContext: PeriodContextBridge? = nil
     @Binding var activeSheet: FernletSheet?
     var isInHub: Bool = false
     @Binding var isTabBarCompact: Bool
@@ -979,13 +961,6 @@ struct PersonalScreenView: View {
     @State private var intimacyDisplayedMonth: Date = .now
     @State private var intimacyEventsByDay: [String: Int] = [:]
     @State private var intimacyLogs: [IntimacyLog] = []
-    /// The photo wall's sealed store + record cache. Held here (not inside ``PhotoWallSection``) so the
-    /// header "+" and the wall's own add tile drive one library instance, and so the records survive
-    /// the section's own view identity churn.
-    @State private var photoWall = PhotoWallLibrary()
-    /// Drives the wall's `PhotosPicker`. Owned here because the header "+" is rendered by this view
-    /// while the picker itself is attached inside ``PhotoWallSection``.
-    @State private var isPresentingPhotoWallPicker = false
 
     var body: some View {
         NavigationStack {
@@ -993,24 +968,18 @@ struct PersonalScreenView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top) {
                         ScreenHeader(
-                            title: screen.title,
-                            subtitle: screen.subtitle,
-                            identifier: screen == .intimacyTracking ? "screen.intimacy" : nil
+                            title: "Intimacy",
+                            subtitle: "Private intimacy notes.",
+                            identifier: "screen.intimacy"
                         )
                         Spacer()
-                        HeaderActionButton(systemImage: primaryActionIcon) {
-                            handlePrimaryAction()
+                        HeaderActionButton(systemImage: "plus") {
+                            activeSheet = .logIntimacy
                         }
                     }
                     .padding(.top, 4)
 
-                    if screen == .intimacyTracking {
-                        personalScreenBody
-                    } else {
-                        FernletScrollSection(todaySectionTitle) {
-                            personalScreenBody
-                        }
-                    }
+                    intimacyBody
                 }
                 .padding(20)
             }
@@ -1021,270 +990,55 @@ struct PersonalScreenView: View {
         }
     }
 
-    private var todaySectionTitle: String {
-        switch screen {
-        case .periodTracking: "Cycle"
-        case .intimacyTracking: "Private"
-        case .friends: "People"
-        case .photos: "Photo wall"
-        case .food, .move, .journal: "Today"
-        }
-    }
+    private var intimacyBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            IntimacyCalendarCard(
+                displayedMonth: $intimacyDisplayedMonth,
+                eventsByDay: intimacyEventsByDay
+            )
+            Text("Intimacy access is private, optional, and age-gated.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
 
-    private var primaryActionIcon: String {
-        switch screen {
-        case .periodTracking, .intimacyTracking:
-            "plus"
-        case .photos:
-            "photo.badge.plus"
-        case .friends:
-            "square.and.pencil"
-        case .food, .move, .journal:
-            "plus"
-        }
-    }
-
-    @ViewBuilder
-    private var personalScreenBody: some View {
-        switch screen {
-        case .periodTracking:
-            cycleSummaryCard
-                // Same reload trigger the period screen itself uses: the store is keyless (and
-                // therefore narrative-less and prediction-less) until the lock reports unlocked, so
-                // the summary has to be recomputed on every lock transition rather than once on
-                // appear. Locking mid-session runs this too, and the load's own gate then leaves the
-                // store scrubbed — the card falls back to the locked copy with nothing resident.
-                .task(id: lockService.state) { await loadCycleSummaryIfPossible() }
-                // Logging a period writes HealthKit + the sealed narrative without mutating the
-                // in-memory entries, so the summary would otherwise still describe the pre-log state
-                // after the sheet closes. Mirrors the intimacy page's dismiss-driven reload below.
-                .onChange(of: activeSheet?.id) { _, newValue in
-                    if newValue == nil { Task { await loadCycleSummaryIfPossible() } }
-                }
-                // No hide-scrub of its own, unlike the intimacy page below. That page holds decrypted
-                // logs in `@State`, which nothing outside the view can reach; this card holds NO cycle
-                // state — every value it renders is read live off `periodStore`, and `ContentView`'s
-                // `periodScrubHook` (fired from the derived-visibility `onChange`) already empties that
-                // store AND invalidates the bridge's memoized starts/trends the moment the gate flips.
-                // A second scrub here would be a duplicate of the authoritative one, not a backstop.
-        case .intimacyTracking:
-            VStack(alignment: .leading, spacing: 12) {
-                IntimacyCalendarCard(
-                    displayedMonth: $intimacyDisplayedMonth,
-                    eventsByDay: intimacyEventsByDay
-                )
-                Text("Intimacy access is private, optional, and age-gated.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-
-                FernletScrollSection("Notes") {
-                    if intimacyLogs.isEmpty {
-                        EmptyState(text: "No private intimacy notes yet.")
-                    } else {
-                        ForEach(Array(intimacyLogs.prefix(12).enumerated()), id: \.element.id) { index, log in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(log.eventDate.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+            FernletScrollSection("Notes") {
+                if intimacyLogs.isEmpty {
+                    EmptyState(text: "No private intimacy notes yet.")
+                } else {
+                    ForEach(Array(intimacyLogs.prefix(12).enumerated()), id: \.element.id) { index, log in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(log.eventDate.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+                                .font(.fernlet(.labelSmall))
+                                .foregroundStyle(Color.slate)
+                            if !log.note.isEmpty {
+                                Text(log.note)
+                                    .font(.fernlet(.body))
+                                    .foregroundStyle(Color.bark)
+                                    .fernletWrappingText()
+                            }
+                            if log.healthKitExternalUUID != nil {
+                                Label("Saved to Apple Health", systemImage: "heart.text.square")
                                     .font(.fernlet(.labelSmall))
-                                    .foregroundStyle(Color.slate)
-                                if !log.note.isEmpty {
-                                    Text(log.note)
-                                        .font(.fernlet(.body))
-                                        .foregroundStyle(Color.bark)
-                                        .fernletWrappingText()
-                                }
-                                if log.healthKitExternalUUID != nil {
-                                    Label("Saved to Apple Health", systemImage: "heart.text.square")
-                                        .font(.fernlet(.labelSmall))
-                                        .foregroundStyle(Color.moss)
-                                }
+                                    .foregroundStyle(Color.moss)
                             }
-                            .padding(.vertical, 4)
-                            if index < intimacyLogs.prefix(12).count - 1 {
-                                FernletRowDivider()
-                            }
+                        }
+                        .padding(.vertical, 4)
+                        if index < intimacyLogs.prefix(12).count - 1 {
+                            FernletRowDivider()
                         }
                     }
                 }
             }
-            .task(id: intimacyDisplayedMonth) { await loadIntimacyCalendar() }
-            .onChange(of: activeSheet?.id) { _, newValue in
-                if newValue == nil { Task { await loadIntimacyCalendar() } }
-            }
-            // Hiding must drop plaintext already on screen, not just refuse the next load — this view
-            // holds decrypted logs in @State for as long as it stays in the hierarchy.
-            .onChange(of: store.isIntimacyTrackingVisible) { _, visible in
-                if !visible { scrubIntimacyState() }
-            }
-        case .friends:
-            PersonalMemoryList(category: "friend", emptyText: "No friend notes yet.", store: store)
-        case .photos:
-            PhotoWallSection(library: photoWall, isPresentingPicker: $isPresentingPhotoWallPicker)
-        case .food, .move, .journal:
-            EmptyView()
         }
-    }
-
-    // MARK: - Cycle summary card
-
-    /// The cycle page's single card: live cycle state that actually opens the period surface.
-    ///
-    /// The card used to say "Tap to view your cycle" on a view with no tap target at all, which is why
-    /// the whole card (not a trailing chevron) is the hit region now — the promise and the affordance
-    /// have to be the same object. The push destination is the REAL ``PeriodTrackerView`` rather than a
-    /// re-implementation, so predictions, the calendar, the phase trends, and every write path stay in
-    /// exactly one place; `isInHub: true` suppresses its inner navigation bar so the pushed page shows
-    /// only this stack's back button.
-    ///
-    /// With no `periodStore` wired the card is deliberately inert and detail-free (see the property's
-    /// doc): a dead link is worse than an honest card, and inventing a store here would create an
-    /// ungated second cycle reader.
-    @ViewBuilder
-    private var cycleSummaryCard: some View {
-        if let periodStore {
-            NavigationLink {
-                PeriodTrackerView(
-                    store: store,
-                    periodStore: periodStore,
-                    periodContext: periodContext,
-                    activeSheet: $activeSheet,
-                    isInHub: true,
-                    isTabBarCompact: $isTabBarCompact,
-                    tabResetToken: $tabResetToken
-                )
-            } label: {
-                cycleSummaryCardBody(isTappable: true)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("personal.cycleSummary")
-            .accessibilityHint("Opens your cycle calendar and predictions")
-        } else {
-            cycleSummaryCardBody(isTappable: false)
+        .task(id: intimacyDisplayedMonth) { await loadIntimacyCalendar() }
+        .onChange(of: activeSheet?.id) { _, newValue in
+            if newValue == nil { Task { await loadIntimacyCalendar() } }
         }
-    }
-
-    private func cycleSummaryCardBody(isTappable: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Label(cycleSummary, systemImage: screen.systemImage)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                    .fernletWrappingText()
-                Spacer(minLength: 0)
-                if isTappable {
-                    Image(systemName: "chevron.right")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                }
-            }
-            Text(cycleSummaryFootnote(isTappable: isTappable))
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+        // Hiding must drop plaintext already on screen, not just refuse the next load — this view
+        // holds decrypted logs in @State for as long as it stays in the hierarchy.
+        .onChange(of: store.isIntimacyTrackingVisible) { _, visible in
+            if !visible { scrubIntimacyState() }
         }
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // The whole card is the tap target, including the padding and the footnote — otherwise the
-        // hit region is just the glyph and the text, which is what made the old copy feel like a lie.
-        .contentShape(Rectangle())
-    }
-
-    /// The card's headline: real cycle state, or an honest reason there is none.
-    ///
-    /// Two string-level gates come first, in this order, and neither may be relaxed:
-    ///
-    /// 1. **Visibility.** While cycle tracking is hidden the user asked Fernlet to leave the cycle
-    ///    alone; the store is already inert, but a summary that read "no cycle days logged yet" would
-    ///    still be a claim about their cycle. Say the surface is off instead.
-    /// 2. **Lock.** `.locked` yields no content key, so `PeriodTrackerStore` holds no narratives and no
-    ///    prediction — but it can still hold plain HealthKit samples from a load that happened before
-    ///    the lock engaged, and `currentPhase`/the phase band are derived from exactly those samples.
-    ///    "Is she bleeding today" is the single most sensitive bit on this screen, so the locked branch
-    ///    refuses ALL of it rather than trusting the key-gating to have emptied the store.
-    ///    `.notConfigured` deliberately falls through: there is no lock to unlock, and the store is
-    ///    empty anyway (the period screen's own load requires an unlocked content key), so the card
-    ///    lands on the "nothing logged yet" copy rather than telling the user to unlock nothing.
-    ///
-    /// Everything past the gates is read from existing period types only — no new inference:
-    /// ``PeriodContextBridge/currentPhaseBand()`` (already gated behind the bridge's own lock and
-    /// 3-completed-cycle rules) with `PeriodTrackerStore.currentPhase` as the observation-only
-    /// fallback, plus `PeriodTrackerStore.prediction`'s likely-start window under the same
-    /// `hidePredictions` setting the period screen honours. Day-of-cycle is intentionally absent —
-    /// nothing publishes it, and deriving one here would be new prediction logic.
-    private var cycleSummary: String {
-        guard store.isPeriodTrackingVisible else { return "Cycle tracking is off in Settings." }
-        if case .locked = lockService.state { return "Locked — unlock to see your cycle." }
-        guard periodStore != nil else { return "Your cycle log lives on the Period page." }
-
-        let parts = [cyclePhaseLine, cyclePredictionLine].compactMap { $0 }
-        guard !parts.isEmpty else {
-            return hasLoggedCycleDays ? "Nothing new logged recently." : "No cycle days logged yet."
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    private func cycleSummaryFootnote(isTappable: Bool) -> String {
-        guard store.isPeriodTrackingVisible else {
-            return "Turn Period tracking back on in Settings to see cycle context here. Your entries are kept, not deleted."
-        }
-        if isTappable { return "Tap for your calendar, predictions, and phase trends." }
-        return "Use Health access in Settings to keep cycle context available here."
-    }
-
-    /// The phase half of the summary, preferring the bridge's already-gated abstract band and falling
-    /// back to the store's observation-only phase.
-    ///
-    /// The band is used rather than a raw `CyclePhase` because it is the value the app has already
-    /// decided is safe to render: the bridge withholds it while locked or below the 3-completed-cycle
-    /// floor. Resolving a phase here with `CyclePhaseResolver` directly would quietly bypass that
-    /// floor and show a follicular/luteal guess the spec says shouldn't be inferred yet. The
-    /// `currentPhase == .menstrual` fallback is pure observation (a flow sample logged today), needs
-    /// no prediction, and is the same value the period screen shows as its subtitle.
-    private var cyclePhaseLine: String? {
-        if let band = periodContext?.currentPhaseBand() {
-            switch band {
-            case .menstruating: return "Period days"
-            case .early: return "Early in your cycle"
-            case .mid: return "Mid-cycle"
-            case .late: return "Later in your cycle"
-            case .unknown: break   // fall through to the observation-only fallback
-            }
-        }
-        return periodStore?.currentPhase == .menstrual ? "Period days" : nil
-    }
-
-    /// The forecast half of the summary. Suppressed entirely by the user's "Hide predictions" setting —
-    /// the same gate ``PeriodTrackerView/showsPrediction`` applies — and absent whenever the store has
-    /// no prediction (locked, hidden, or below the engine's 3-period floor).
-    private var cyclePredictionLine: String? {
-        guard !store.settings.hidePredictions, let prediction = periodStore?.prediction else { return nil }
-        let start = FernletDate.shortDate(for: prediction.likelyStartRange.lowerBound)
-        let end = FernletDate.shortDate(for: prediction.likelyStartRange.upperBound)
-        return start == end ? "next around \(start)" : "next around \(start)–\(end)"
-    }
-
-    /// Whether anything at all sits in the loaded window, used only to choose between two empty-state
-    /// sentences. Reads `hasObservedEvent`, so it counts a sealed note-only day as well as a sample.
-    private var hasLoggedCycleDays: Bool {
-        periodStore?.entries.contains(where: \.hasObservedEvent) ?? false
-    }
-
-    /// Refreshes the cycle summary through the same fail-closed path the period screen uses.
-    ///
-    /// Deliberately NOT a copy of `PeriodTrackerView.loadIfUnlocked()`: it omits that method's
-    /// HealthKit authorization request. A summary card must never be the thing that raises a Health
-    /// permission prompt — the user hasn't asked for the cycle surface yet at that point — so the
-    /// prompt stays owned by the destination screen. Everything else is identical, and both of the
-    /// store's own gates still apply: `loadEntries` scrubs and returns while cycle tracking is hidden,
-    /// and without an unlocked content key there is nothing to load with.
-    private func loadCycleSummaryIfPossible() async {
-        guard let periodStore else { return }
-        periodStore.attachLockService(lockService)
-        guard case .unlocked = lockService.state, let contentKey = lockService.contentKey() else { return }
-        await periodStore.loadEntries(unlockedContentKey: contentKey)
-        // `refresh` is the bridge's ONLY invalidation point (see its type doc), so the entries we just
-        // loaded and the band this card reads would otherwise be computed from different generations.
-        periodContext?.refresh(unlocked: true, wellbeingByDay: store.periodWellbeingByDay)
     }
 
     /// Drops the intimacy plaintext held in view state. Safe to call when already empty.
@@ -1313,70 +1067,6 @@ struct PersonalScreenView: View {
             intimacyEventsByDay = healthEventsByDay.merging(localEventsByDay) { max($0, $1) }
         } catch {
             intimacyEventsByDay = localEventsByDay
-        }
-    }
-
-    private func handlePrimaryAction() {
-        switch screen {
-        case .periodTracking:
-            // The header "+" used to open the SETTINGS sheet — a plus glyph on a cycle page that did
-            // something else entirely (UI/UX brief A3, "affordance ≠ result on privacy-sensitive
-            // screens"). It logs a period now, routing through the same `.logPeriod` sheet
-            // `PeriodTrackerView`'s own "+" uses, so `LogPeriodSheet` stays the single writer.
-            //
-            // Suppressed while cycle tracking is hidden: `PeriodTrackerStore.logEvent` throws
-            // `PeriodTrackingHiddenError` on that path by design, so offering the affordance would only
-            // produce a dead-ended sheet. The page itself shouldn't be reachable while hidden — this is
-            // the belt to that suspenders.
-            guard store.isPeriodTrackingVisible else { return }
-            activeSheet = .logPeriod(targetDate: nil, editingEntry: nil)
-        case .intimacyTracking:
-            activeSheet = .logIntimacy
-        case .friends:
-            activeSheet = .journal
-        case .photos:
-            // "photo.badge.plus" now does what it draws: the wall's `PhotosPicker` is attached inside
-            // `PhotoWallSection` but driven by this flag, so the header button and the wall's own add
-            // tile open the same picker.
-            isPresentingPhotoWallPicker = true
-        case .food, .move, .journal:
-            break
-        }
-    }
-}
-
-/// A short list of the user's `MemoryNote`s filtered by category substring (e.g. "friend").
-///
-/// Used by ``PersonalScreenView``'s friends page; caps at eight rows and shows the supplied empty
-/// state when nothing matches.
-struct PersonalMemoryList: View {
-    var category: String
-    var emptyText: String
-    @Bindable var store: FernletStore
-
-    private var memories: [MemoryNote] {
-        store.memories.filter { $0.category.localizedCaseInsensitiveContains(category) }
-    }
-
-    var body: some View {
-        if memories.isEmpty {
-            EmptyState(text: emptyText)
-        } else {
-            ForEach(Array(memories.prefix(8).enumerated()), id: \.element.id) { index, memory in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(memory.text)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                        .fernletWrappingText()
-                    Text(memory.sourceDate.formatted(.dateTime.month(.abbreviated).day().year()))
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                }
-                .padding(.vertical, 4)
-                if index < min(memories.count, 8) - 1 {
-                    FernletRowDivider()
-                }
-            }
         }
     }
 }
@@ -1533,7 +1223,7 @@ struct LaunchScreen: View {
 /// (paging chevrons, future months disabled) over ``IntimacyCalendarCell``s.
 ///
 /// Pure presentation over the pre-computed `eventsByDay` counts; the sealed-store and HealthKit
-/// reads happen in ``PersonalScreenView``'s `loadIntimacyCalendar`, never here.
+/// reads happen in ``IntimacyScreenView``'s `loadIntimacyCalendar`, never here.
 private struct IntimacyCalendarCard: View {
     @Binding var displayedMonth: Date
     var eventsByDay: [String: Int]

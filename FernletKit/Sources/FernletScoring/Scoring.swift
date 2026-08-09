@@ -620,5 +620,3 @@ public struct WorkoutSuggestionLibrary {
         ]
     ]
 }
-
-// MARK: - Screens
