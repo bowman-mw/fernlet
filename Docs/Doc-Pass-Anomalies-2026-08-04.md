@@ -1,5 +1,16 @@
 # Anomalies logged during the 2026-08-04 documentation pass
 
+> **Triage 2026-08-09 (partial).** This log had never been triaged. Resolved in the dead-code prune:
+> the `PersonalScreenView` placeholder surfaces (entry under *Fernlet/App Shell & Core State*) — the
+> arms were unreachable and were removed, not wired; `MealBuilder`'s dead `originalDescription`
+> parameter; `MealFlowDestination.reviewScan`; the nested `point(_:)` in `EquipmentIcons`. Found
+> already fixed by earlier rounds, no action needed: `NutritionLabelScanner.scan(image:)`,
+> `JournalMonthModel.todayText`, and `MealSheet.webNutritionLookupDisabledMessage` (the 2026-08-05
+> consolidation removed the dead copy — this log predates it by a day and is stale on that point).
+> **Everything else here remains open**, including the two real defects worth attention: the
+> `PeriodTrackerStore.loadEntries` crash-on-duplicate-`hkExternalUUID`, and the `DisposableCameraView`
+> in-session photo save that skips `hydratedPhotos(_:)` and therefore appears to always fail.
+
 The documentation agents were instructed to change comments only and log anything that
 looked like a bug, dead code, or a smell instead of fixing it. Raw log, grouped by module.
 

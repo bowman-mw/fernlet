@@ -111,8 +111,7 @@ struct MealDecompositionRecipeWireTests {
             from: plan,
             candidates: candidates,
             recipes: [],
-            foodItems: [oats, yogurt],
-            originalDescription: "protein oats"
+            foodItems: [oats, yogurt]
         ))
 
         let createdRecipe = try #require(result.createdRecipes.first)

@@ -600,6 +600,10 @@ struct PrivacyDataSettingsView: View {
             return "Couldn't reach your \(noun) backup just now. We'll keep trying, or tap Retry."
         case .notRecognized:
             return "A \(noun) backup was found in iCloud, but it isn't encrypted with this account's key, so it can't be restored on this device."
+        case .rolledBack:
+            // No Retry hint: retrying re-fetches the same record. The honest ask is to re-upload
+            // from a device that still holds the data, which is the only path that recovers.
+            return "The \(noun) backup in iCloud is older than one this device already has, so Fernlet didn't restore it — that shouldn't happen on its own. Nothing was changed. If you still have this data on another device, back it up again from there."
         case .restored, .nothingToRestore, .skippedStoreNotEmpty:
             return ""
         }

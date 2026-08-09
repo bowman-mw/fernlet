@@ -57,3 +57,14 @@ jobs:
             -scheme Fernlet \
             -destination "$FERNLET_DESTINATION" \
             -only-testing:FernletTests/S3BoundaryTests
+
+      - name: No-tracking wall (NoTrackingBoundaryTests)
+        # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an
+        # honest new dependency that compiles clean. The test IS the enforcement, so it must run
+        # even when the S3 steps above pass. See Docs/No-Tracking-Wall.md.
+        run: |
+          set -euo pipefail
+          xcodebuild test-without-building \
+            -scheme Fernlet \
+            -destination "$FERNLET_DESTINATION" \
+            -only-testing:FernletTests/NoTrackingBoundaryTests

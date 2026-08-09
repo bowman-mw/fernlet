@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — SHIPPED.** The append-only ledger design is on `main`: `FernletKit/Sources/StoreCore/CoinLedgerService.swift` + `FernletKit/Sources/CloudKitSync/CoinLedgerRepository.swift` over the shared `AppendOnlyRowStore` engine (the same engine also backs `MilestoneLedgerRepository`). The "derive balance from day history" model this doc replaced is gone. Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Coin Ledger — Design (Increment 2 redesign)
 
 **Status:** proposed, awaiting sign-off. Supersedes the "derive balance from day history + `coinsSpent`

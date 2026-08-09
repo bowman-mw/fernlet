@@ -84,3 +84,13 @@ STEP 0 adds a `payloadData` attribute to the `SavedRecipeRecord` entity
       `CD_SavedRecipeRecord` in the console, promote to Production.
 - [ ] Only then ship the build that writes `payloadData`.
 - [ ] `Scripts/spm-wall-check.sh` passes for the `CloudKitSync` change.
+
+## Schema changes pending promotion to Production
+
+Development auto-creates new record types and fields on first save; **Production does not** — each
+must be promoted in the CloudKit console before the build that writes it ships.
+
+| Record type | Field | Added | Why |
+| --- | --- | --- | --- |
+| `HeartDrop` | `tag` (queryable), `payload` (bytes) | 2026-07-25 | Offline away-hearts dead-drop. |
+| `SealedBackupRecord` | `generation` (Int64) | 2026-08-09 | Sealed-backup rollback defense (code review finding 14). It is bound into the GCM AAD and required on decode, so **a Production container without this field cannot restore any backup at all** — promote it before shipping. |

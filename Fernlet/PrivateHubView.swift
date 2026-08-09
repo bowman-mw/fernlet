@@ -33,7 +33,7 @@ enum PrivateHubSection: String, CaseIterable, Identifiable {
 }
 
 /// The Personal tab's paged container for every sensitive surface: ``JournalView``,
-/// ``PeriodTrackerView``, the intimacy screen, and ``WorryBoxView``, all behind one lock gate.
+/// ``PeriodTrackerView``, ``IntimacyScreenView``, and ``WorryBoxView``, all behind one lock gate.
 ///
 /// The whole hub sits behind `fernletLockGate` (bypassable only via the DEBUG UI-test hook), so
 /// each child screen inherits the app-lock requirement instead of gating itself. Section
@@ -64,7 +64,7 @@ struct PrivateHubView: View {
                     .tag(PrivateHubSection.period)
             }
             if store.isIntimacyTrackingVisible {
-                PersonalScreenView(screen: .intimacyTracking, store: store, intimacyStore: intimacyStore, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
+                IntimacyScreenView(store: store, intimacyStore: intimacyStore, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                     .tag(PrivateHubSection.intimacy)
             }
             WorryBoxView(worryBox: worryBox)

@@ -8,7 +8,10 @@
 #
 # To keep everyday pushes fast, the (full Xcode build) wall check runs ONLY when the push touches
 # wall-relevant code: the package manifest, any package source, the AI-facing app files the grep-wall
-# covers, or the wall script itself. githooks(5) passes the ref updates on stdin.
+# covers, or the wall script itself. The pbxproj, privacy manifests, and the no-tracking wall's own
+# test are in the list too — they are the inputs to the SECOND wall (Docs/No-Tracking-Wall.md), whose
+# dependency and destination allowlists a project-file edit can silently widen.
+# githooks(5) passes the ref updates on stdin.
 set -u
 
 if [ "${SKIP_S3_WALL_CHECK:-0}" = "1" ]; then
@@ -17,7 +20,7 @@ if [ "${SKIP_S3_WALL_CHECK:-0}" = "1" ]; then
 fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-wall_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/|Fernlet/.*\.swift|Scripts/spm-wall-check\.sh|Scripts/spm-wall-selftest\.sh)'
+wall_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/|Fernlet/.*\.swift|Fernlet\.xcodeproj/project\.pbxproj|.*\.xcprivacy|FernletTests/NoTrackingBoundaryTests\.swift|Scripts/spm-wall-check\.sh|Scripts/spm-wall-selftest\.sh)'
 zero="0000000000000000000000000000000000000000"
 
 changed_files=""

@@ -2,14 +2,16 @@ import ProximityKit
 import CryptoKit
 import Foundation
 import FernletDomainModel
+import FernletFoundation
 import CloudKitSync
 
 /// AES-GCM seal/open for `SealedBackupRecord`s — the pure crypto half of the sealed iCloud backup.
 ///
-/// ``seal(_:payloadType:identityService:chunkIndex:chunkCount:updatedAt:)`` encrypts a payload
-/// chunk under the identity's backup-escrow-derived key and binds the payload type, signing
-/// identity, and chunk position into the GCM additional-authenticated-data, so a chunk cannot be
-/// replayed in another slot or across differently-sized backup generations.
+/// ``seal(_:payloadType:identityService:chunkIndex:chunkCount:updatedAt:generation:)`` encrypts a
+/// payload chunk under the identity's backup-escrow-derived key and binds the payload type, signing
+/// identity, chunk position, and the backup's generation + timestamp into the GCM
+/// additional-authenticated-data, so a chunk cannot be replayed in another slot, across
+/// differently-sized backup generations, or as part of an older generation.
 /// ``open(_:identityService:)`` attempts decryption against every escrow key candidate the device
 /// holds and consults the record's identity tag only to classify failures (someone else's record
 /// versus a tampered/corrupt one of ours). Records are bound to the backup-escrow public key
@@ -33,7 +35,8 @@ enum SealedBackupCrypto {
         identityService: IdentityService,
         chunkIndex: Int = 0,
         chunkCount: Int = 1,
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        generation: Int64
     ) throws -> SealedBackupRecord {
         let key = try identityService.sealedBackupKey()
         let nonce = AES.GCM.Nonce()
@@ -46,7 +49,9 @@ enum SealedBackupCrypto {
                 payloadType: payloadType,
                 signingPublicKey: signingPublicKey,
                 chunkIndex: chunkIndex,
-                chunkCount: chunkCount
+                chunkCount: chunkCount,
+                generation: generation,
+                updatedAt: updatedAt
             )
         )
         return SealedBackupRecord(
@@ -62,7 +67,8 @@ enum SealedBackupCrypto {
             tag: sealedBox.tag,
             updatedAt: updatedAt,
             chunkIndex: chunkIndex,
-            chunkCount: chunkCount
+            chunkCount: chunkCount,
+            generation: generation
         )
     }
 
@@ -92,7 +98,9 @@ enum SealedBackupCrypto {
                 payloadType: record.payloadType,
                 signingPublicKey: record.signingPublicKey,
                 chunkIndex: record.chunkIndex,
-                chunkCount: record.chunkCount
+                chunkCount: record.chunkCount,
+                generation: record.generation,
+                updatedAt: record.updatedAt
             )
             for candidate in candidates {
                 if let plaintext = try? AES.GCM.open(sealedBox, using: candidate.key, authenticating: aad) {
@@ -106,18 +114,43 @@ enum SealedBackupCrypto {
         throw SealedBackupError.malformedRecord
     }
 
-    /// Binds the payload type, signing identity, and the record's position within its chunk set into
-    /// the GCM additional-authenticated-data. Including `chunkIndex`/`chunkCount` makes a chunk's
-    /// ciphertext unopenable in any other slot (reordering/substitution) or across a differently-sized
-    /// backup generation, so a partially-overwritten chunk set fails closed on restore.
+    /// Binds the payload type, signing identity, the record's position within its chunk set, and the
+    /// backup's generation + timestamp into the GCM additional-authenticated-data.
+    ///
+    /// `chunkIndex`/`chunkCount` make a chunk's ciphertext unopenable in any other slot (reordering
+    /// or substitution) or across a differently-sized generation, so a partially-overwritten chunk
+    /// set fails closed on restore. `generation` and `updatedAt` close the rollback hole (code
+    /// review finding 14): before they were bound, both fields were attacker-editable metadata, so a
+    /// substituted older backup authenticated cleanly and restored silently.
+    ///
+    /// Note the AEAD alone cannot *detect* rollback — a wholesale older generation is authentic by
+    /// construction. Binding the counter is what makes the app-side high-water check
+    /// (`SealedBackupGenerationStore`) trustworthy: the generation a record claims is now the
+    /// generation it was sealed with.
+    ///
+    /// **Encoding** follows the `CanonicalSignatureSerializer` precedent rather than string
+    /// interpolation: a version tag first, then fixed big-endian integers and a whole-second
+    /// timestamp. `\(chunkIndex)/\(chunkCount)` is kept for the two chunk fields only because
+    /// changing it would buy nothing — the whole AAD is already versioned by the `v2` tag, and every
+    /// field is length-delimited by a `0` separator or a fixed width.
     private static func authenticatedData(
         payloadType: SealedBackupPayloadType,
         signingPublicKey: Data,
         chunkIndex: Int,
-        chunkCount: Int
+        chunkCount: Int,
+        generation: Int64,
+        updatedAt: Date
     ) -> Data {
-        Data(payloadType.rawValue.utf8) + Data([0]) + signingPublicKey
-            + Data([0]) + Data("\(chunkIndex)/\(chunkCount)".utf8)
+        var aad = Data("fernlet.sealed-backup.aad.v2".utf8) + Data([0])
+        aad += Data(payloadType.rawValue.utf8) + Data([0])
+        aad += signingPublicKey + Data([0])
+        aad += Data("\(chunkIndex)/\(chunkCount)".utf8) + Data([0])
+        aad += withUnsafeBytes(of: UInt64(bitPattern: generation).bigEndian) { Data($0) }
+        // Whole seconds: a Double's sub-second bits are not reproducible across an encode/decode
+        // round trip through CloudKit, and would make an otherwise valid record fail to open.
+        let seconds = Int64(updatedAt.timeIntervalSince1970.rounded(.down))
+        aad += withUnsafeBytes(of: UInt64(bitPattern: seconds).bigEndian) { Data($0) }
+        return aad
     }
 }
 
@@ -135,11 +168,21 @@ enum SealedBackupCrypto {
 final class SealedBackupService {
     private let cloudDataService: CloudKitDataService
     private let identityService: IdentityService
+    /// Device-local rollback high-water mark. `var` because minting and accepting both mutate it.
+    private var generationStore: SealedBackupGenerationStore
 
     /// Creates the service over its CloudKit transport and the sealing identity.
-    init(cloudDataService: CloudKitDataService, identityService: IdentityService) {
+    ///
+    /// - Parameter generationStore: Injectable so tests can drive rollback scenarios against an
+    ///   isolated `UserDefaults` suite; production takes the `.standard`-backed default.
+    init(
+        cloudDataService: CloudKitDataService,
+        identityService: IdentityService,
+        generationStore: SealedBackupGenerationStore = SealedBackupGenerationStore()
+    ) {
         self.cloudDataService = cloudDataService
         self.identityService = identityService
+        self.generationStore = generationStore
     }
 
     /// Single-record reconcile for payloads that fit one sealed blob (sensitive notes; period-disable).
@@ -149,7 +192,8 @@ final class SealedBackupService {
             let record = try SealedBackupCrypto.seal(
                 plaintext,
                 payloadType: payloadType,
-                identityService: identityService
+                identityService: identityService,
+                generation: generationStore.mintNext(for: payloadType)
             )
             try await cloudDataService.saveSealedBackup(record)
         } else {
@@ -169,21 +213,43 @@ final class SealedBackupService {
         chunk: (Int) throws -> Data
     ) async throws {
         let count = max(1, chunkCount)
+        // ONE generation for the whole set, minted before the first write. Minting per chunk would
+        // make every multi-chunk backup look mixed-generation and fail its own restore check.
+        let generation = generationStore.mintNext(for: payloadType)
         for index in stride(from: count - 1, through: 1, by: -1) {
-            try await saveChunk(chunk(index), payloadType: payloadType, chunkIndex: index, chunkCount: count)
+            try await saveChunk(
+                chunk(index),
+                payloadType: payloadType,
+                chunkIndex: index,
+                chunkCount: count,
+                generation: generation
+            )
         }
-        try await saveChunk(chunk(0), payloadType: payloadType, chunkIndex: 0, chunkCount: count)
+        try await saveChunk(
+            chunk(0),
+            payloadType: payloadType,
+            chunkIndex: 0,
+            chunkCount: count,
+            generation: generation
+        )
         try await cloudDataService.deleteSealedBackupChunks(payloadType: payloadType, withIndexAtLeast: count)
     }
 
     /// Seals one chunk and uploads it (shared by both `reconcileChunked` write phases).
-    private func saveChunk(_ plaintext: Data, payloadType: SealedBackupPayloadType, chunkIndex: Int, chunkCount: Int) async throws {
+    private func saveChunk(
+        _ plaintext: Data,
+        payloadType: SealedBackupPayloadType,
+        chunkIndex: Int,
+        chunkCount: Int,
+        generation: Int64
+    ) async throws {
         let record = try SealedBackupCrypto.seal(
             plaintext,
             payloadType: payloadType,
             identityService: identityService,
             chunkIndex: chunkIndex,
-            chunkCount: chunkCount
+            chunkCount: chunkCount,
+            generation: generation
         )
         try await cloudDataService.saveSealedBackup(record)
     }
@@ -195,7 +261,28 @@ final class SealedBackupService {
     func restoreChunks(payloadType: SealedBackupPayloadType) async throws -> [Data]? {
         let records = try await cloudDataService.sealedBackupChunks(payloadType: payloadType)
         guard !records.isEmpty else { return nil }
-        return try records.map { try SealedBackupCrypto.open($0, identityService: identityService) }
+
+        // Open FIRST, then check the generation. Order matters: the generation is only meaningful
+        // once the AEAD has authenticated it, since an unopened record's fields are attacker-typed
+        // bytes. Checking before opening would let a forged high generation suppress the check.
+        let plaintexts = try records.map {
+            try SealedBackupCrypto.open($0, identityService: identityService)
+        }
+
+        // Every chunk shares one generation (enforced in `sealedBackupChunks`), so the head speaks
+        // for the set.
+        let generation = records[0].generation
+        let lastSeen = generationStore.lastSeen(for: payloadType)
+        guard generation >= lastSeen else {
+            FernletAuditLog.log("sealedBackup.restore.staleGeneration", context: [
+                "payloadType": payloadType.rawValue,
+                "found": String(generation),
+                "lastSeen": String(lastSeen)
+            ])
+            throw SealedBackupError.staleGeneration(found: generation, lastSeen: lastSeen)
+        }
+        generationStore.recordAccepted(generation, for: payloadType)
+        return plaintexts
     }
 }
 

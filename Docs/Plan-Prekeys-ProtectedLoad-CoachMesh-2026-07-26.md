@@ -1,7 +1,7 @@
 # Plan — sidecar durability, prekey coverage, coach-path posture (2026-07-26)
 
 Branch: `claude/heartdrop-durability` (off `main` @ `db40340`). Source: three research passes over the
-just-merged bitchat-adoptions round ([Docs/Plan-Bitchat-Adoptions-2026-07-25.md](Plan-Bitchat-Adoptions-2026-07-25.md))
+just-merged bitchat-adoptions round ([Docs/Plan-Bitchat-Adoptions-2026-07-25.md](Completed%20Implemtations/Plan-Bitchat-Adoptions-2026-07-25.md))
 plus a spot-check of the shipped code. bitchat remains the pattern reference (Unlicense); nothing is
 copied verbatim.
 

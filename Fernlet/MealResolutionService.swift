@@ -118,7 +118,7 @@ final class MealResolutionService {
                 if let plan = try await FoundationFoodSelectionModel.resolve(
                     FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type),
                     gate: gate
-                ), let resolution = highConfidenceResolution(from: plan, candidates: candidates, description: description) {
+                ), let resolution = highConfidenceResolution(from: plan, candidates: candidates) {
                     return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
                 }
             } catch {}
@@ -133,7 +133,7 @@ final class MealResolutionService {
         // Deterministic tier 2: candidate-constrained plan.
         let candidates = host.foodCatalog.candidates(for: description)
         if let plan = FoundationFoodSelectionModel.deterministicPlan(description: description, candidates: candidates, fallbackType: type),
-           let resolution = highConfidenceResolution(from: plan, candidates: candidates, description: description) {
+           let resolution = highConfidenceResolution(from: plan, candidates: candidates) {
             return Self.plausibilityGated(Self.mergedIntoSingleMeal(resolution, description: description))
         }
 
@@ -148,15 +148,13 @@ final class MealResolutionService {
     /// which differ only in how they obtain `plan`.
     private func highConfidenceResolution(
         from plan: FoodSelectionPlan,
-        candidates: [FoodSelectionCandidate],
-        description: String
+        candidates: [FoodSelectionCandidate]
     ) -> MealResolution? {
         guard let result = MealBuilder.meals(
             from: plan,
             candidates: candidates,
             recipes: host.recipes,
-            foodItems: candidates.map(\.foodItem) + host.foodCatalog.items(forRecipes: host.recipes),
-            originalDescription: description
+            foodItems: candidates.map(\.foodItem) + host.foodCatalog.items(forRecipes: host.recipes)
         ), result.meals.isEmpty == false else { return nil }
         return MealResolution(meals: result.meals, createdRecipes: result.createdRecipes, confidence: .high, isFallback: false)
     }

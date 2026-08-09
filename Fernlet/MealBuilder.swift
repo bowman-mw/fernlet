@@ -32,10 +32,8 @@ struct MealBuilder {
         from plan: FoodSelectionPlan,
         candidates: [FoodSelectionCandidate],
         recipes: [RecipeDefinition],
-        foodItems: [FoodItem],
-        originalDescription: String
+        foodItems: [FoodItem]
     ) -> PlanResult? {
-        _ = originalDescription
         var availableRecipes = recipes
         var createdRecipes: [RecipeDefinition] = []
         let meals = plan.items.compactMap { item -> Meal? in

@@ -1,6 +1,7 @@
 import Foundation
 import AIContext
 import AppServices
+import WebScrapingKit
 
 #if canImport(UIKit)
 import UIKit
@@ -162,15 +163,13 @@ enum FoodProductWebSearch {
         .joined(separator: " ")
     }
 
+    /// The href out of an `<a>` tag's attributes.
+    ///
+    /// Routes to `WebScrapingKit`. This helper used to read capture group **1** where
+    /// ``FoodProductWebImporter``'s read the *last* group; for its single-capture-group href pattern
+    /// the two indices are the same group, so the shared last-group rule is exact here.
     private static func firstCapture(in text: String, pattern: String) -> String? {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        guard let match = regex.firstMatch(in: text, range: range),
-              match.numberOfRanges > 1,
-              let captureRange = Range(match.range(at: 1), in: text) else {
-            return nil
-        }
-        return String(text[captureRange])
+        HTMLScraper.firstMatchLastCapture(in: text, pattern: pattern)
     }
 }
 
@@ -400,6 +399,14 @@ enum FoodProductWebImporter {
     /// Fetches a page as HTML with a Safari-like User-Agent: https-only, 15 s timeout, 2xx +
     /// text/html content-type required, and the body capped at 3 MB (streamed so an oversized page
     /// aborts early).
+    ///
+    /// Transport is `WebScrapingKit`'s `EphemeralWebSession` — no cookie jar, no cache, no credential
+    /// store — so a retailer page cannot set state during one lookup and read it back during the
+    /// next. Everything *else* here is this importer's own policy and deliberately differs from the
+    /// recipe importer's: the https guard is inline (not the SSRF helper), the User-Agent spoofs
+    /// Safari so retailer bot-walls serve real markup, the content-type check reads the raw header
+    /// string, and an over-cap body THROWS rather than truncating (a half-read nutrition table is
+    /// worse than no table).
     /// - Throws: ``FoodProductWebImportError/fetchFailed`` / `emptyHTML` / `invalidURL`.
     static func fetchHTML(from url: URL) async throws -> String {
         guard url.scheme == "https" else {
@@ -411,7 +418,7 @@ enum FoodProductWebImporter {
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
         let (asyncBytes, response): (URLSession.AsyncBytes, URLResponse)
         do {
-            (asyncBytes, response) = try await URLSession.shared.bytes(for: request)
+            (asyncBytes, response) = try await EphemeralWebSession.shared.bytes(for: request)
         } catch {
             throw FoodProductWebImportError.fetchFailed
         }
@@ -439,10 +446,10 @@ enum FoodProductWebImporter {
     }
 
     private static func productDictionary(in html: String) -> [String: Any]? {
-        for rawJSON in jsonLDScriptContents(from: html) {
+        for rawJSON in JSONLDScraper.scriptContents(from: html) {
             guard let data = htmlDecoded(rawJSON).data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data),
-                  let product = productObject(in: object) else {
+                  let product = JSONLDScraper.object(ofType: "Product", in: object) else {
                 continue
             }
             return product
@@ -450,45 +457,10 @@ enum FoodProductWebImporter {
         return nil
     }
 
-    private static func productObject(in object: Any) -> [String: Any]? {
-        if let dictionary = object as? [String: Any] {
-            if schemaTypes(in: dictionary).contains("product") {
-                return dictionary
-            }
-            if let graph = dictionary["@graph"] as? [Any] {
-                for item in graph {
-                    if let product = productObject(in: item) {
-                        return product
-                    }
-                }
-            }
-            if let itemList = dictionary["itemListElement"] as? [Any] {
-                for item in itemList {
-                    if let product = productObject(in: item) {
-                        return product
-                    }
-                }
-            }
-        }
-        if let array = object as? [Any] {
-            for item in array {
-                if let product = productObject(in: item) {
-                    return product
-                }
-            }
-        }
-        return nil
-    }
-
-    private static func schemaTypes(in dictionary: [String: Any]) -> Set<String> {
-        if let type = dictionary["@type"] as? String {
-            return [type.lowercased()]
-        }
-        if let types = dictionary["@type"] as? [String] {
-            return Set(types.map { $0.lowercased() })
-        }
-        return []
-    }
+    // `productObject` / `schemaTypes` now live in WebScrapingKit as
+    // `JSONLDScraper.object(ofType:in:)` / `JSONLDScraper.schemaTypes(in:)`, shared with the recipe
+    // importer. The algorithm is unchanged for this side — the search order and the lowercased
+    // `@type` comparison are exactly what `productObject` did.
 
     private static func importedProduct(from dictionary: [String: Any], sourceURL: URL) -> ImportedFoodProduct? {
         guard let name = stringValue(dictionary["name"]), let nutrition = nutritionDictionary(from: dictionary) else {
@@ -593,7 +565,9 @@ enum FoodProductWebImporter {
         request.setValue("image/*", forHTTPHeaderField: "Accept")
         request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
+        // Same private-browsing transport as the HTML fetch. Label images are the likeliest place a
+        // tracking pixel hides, so this path must not be the one that keeps a cookie jar.
+        guard let (data, response) = try? await EphemeralWebSession.shared.data(for: request),
               let httpResponse = response as? HTTPURLResponse,
               (200..<300).contains(httpResponse.statusCode),
               data.count <= 12_000_000 else {
@@ -703,17 +677,16 @@ enum FoodProductWebImporter {
         throw FoodProductWebImportError.modelUnavailable
     }
 
+    /// Reduces the page to model-ready plain text for the last-resort model tier.
+    ///
+    /// The pass itself is `WebScrapingKit`'s; only the *empty-page* verdict is this importer's, which
+    /// is why the shared helper returns `nil` instead of throwing — `.productNotFound` carries product
+    /// copy the recipe importer's `.noRecipeFound` does not.
     private static func cleanedBodyText(from html: String) throws -> String {
-        let bodyHTML = firstCapture(in: html, pattern: #"(?is)<body\b[^>]*>(.*?)</body>"#) ?? html
-        let withoutNoise = ["nav", "footer", "header", "aside", "script", "style"].reduce(bodyHTML) { currentHTML, tagName in
-            currentHTML.replacingOccurrences(of: #"(?is)<\#(tagName)\b[^>]*>.*?</\#(tagName)>"#, with: " ", options: .regularExpression)
-        }
-        let text = htmlDecoded(withoutNoise.replacingOccurrences(of: #"(?is)<[^>]+>"#, with: " ", options: .regularExpression))
-        let normalized = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
-        guard !normalized.isEmpty else {
+        guard let text = HTMLScraper.cleanedBodyText(from: html, decodingNumericEntities: false) else {
             throw FoodProductWebImportError.productNotFound
         }
-        return String(normalized.prefix(12_000))
+        return text
     }
 
     private static func visibleTextLines(from html: String) -> [String] {
@@ -800,7 +773,7 @@ enum FoodProductWebImporter {
     }
 
     private static func jsonLDImageCandidates(from html: String, sourceURL: URL) -> [ImageCandidate] {
-        jsonLDScriptContents(from: html).flatMap { rawJSON -> [ImageCandidate] in
+        JSONLDScraper.scriptContents(from: html).flatMap { rawJSON -> [ImageCandidate] in
             guard let data = htmlDecoded(rawJSON).data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data) else { return [] }
             return imageValues(in: object).compactMap { source in
@@ -866,7 +839,7 @@ enum FoodProductWebImporter {
         if let graph = dictionary["@graph"] {
             values.append(contentsOf: imageValues(in: graph))
         }
-        if schemaTypes(in: dictionary).contains("imageobject"), let url = dictionary["url"] {
+        if JSONLDScraper.schemaTypes(in: dictionary).contains("imageobject"), let url = dictionary["url"] {
             values.append(contentsOf: imageValues(in: url))
         }
         return values
@@ -930,21 +903,6 @@ enum FoodProductWebImporter {
         return components.url?.absoluteString ?? url.absoluteString
     }
 
-    private static func jsonLDScriptContents(from html: String) -> [String] {
-        let pattern = #"(?is)<script\b([^>]*)>(.*?)</script>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let range = NSRange(html.startIndex..<html.endIndex, in: html)
-        return regex.matches(in: html, range: range).compactMap { match in
-            guard match.numberOfRanges >= 3,
-                  let attributesRange = Range(match.range(at: 1), in: html),
-                  let contentRange = Range(match.range(at: 2), in: html),
-                  String(html[attributesRange]).range(of: "application/ld+json", options: .caseInsensitive) != nil else {
-                return nil
-            }
-            return String(html[contentRange])
-        }
-    }
-
     private static func metadataContent(named property: String, in html: String) -> String? {
         let escapedProperty = NSRegularExpression.escapedPattern(for: property)
         return firstCapture(in: html, pattern: #"(?is)<meta\b[^>]*(?:property|name)\s*=\s*["']\#(escapedProperty)["'][^>]*content\s*=\s*["'](.*?)["'][^>]*>"#)
@@ -977,29 +935,30 @@ enum FoodProductWebImporter {
     }
 
     private static func allCaptures(in text: String, pattern: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        return regex.matches(in: text, range: range).compactMap { match in
-            guard match.numberOfRanges > 1,
-                  let captureRange = Range(match.range(at: match.numberOfRanges - 1), in: text) else { return nil }
-            return String(text[captureRange])
-        }
+        HTMLScraper.allLastCaptures(in: text, pattern: pattern)
     }
 
+    /// The last capture of the first *usable* match.
+    ///
+    /// Kept as `allCaptures(...).first` rather than `HTMLScraper.firstMatchLastCapture` because the
+    /// two differ when a first match's capture group does not participate: this form falls through to
+    /// the next match, that one returns nil. Every pattern here has a mandatory trailing group so they
+    /// agree today, but the shape this file has always had is the one it keeps.
     private static func firstCapture(in text: String, pattern: String) -> String? {
         allCaptures(in: text, pattern: pattern).first
     }
 
-    /// Decodes the handful of HTML entities that matter for titles, hrefs, and JSON-LD blobs
-    /// (`&amp;` deliberately last so double-encoded text unwraps one layer per pass).
+    /// This importer's entity-decoding policy: named entities ONLY — a numeric character reference
+    /// (`&#8217;`) is left as literal text.
+    ///
+    /// The machinery is shared with the recipe importer via `WebScrapingKit`, but the policy is not:
+    /// that importer also decodes numeric references. The difference changes what an href and a
+    /// JSON-LD blob look like after decoding, so it is a required parameter there rather than a
+    /// guess. Kept as a one-line shim so this file states its policy in exactly one place.
+    /// (`&amp;` is still decoded last inside the shared helper, so double-encoded text unwraps one
+    /// layer per pass exactly as before.)
     static func htmlDecoded(_ text: String) -> String {
-        let entities: [(String, String)] = [
-            ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""),
-            ("&#39;", "'"), ("&apos;", "'"), ("&nbsp;", " "), ("&amp;", "&")
-        ]
-        return entities.reduce(text) { result, entity in
-            result.replacingOccurrences(of: entity.0, with: entity.1, options: .caseInsensitive)
-        }
+        HTMLScraper.htmlDecoded(text, decodingNumericEntities: false)
     }
 }
 

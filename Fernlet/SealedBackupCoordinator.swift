@@ -55,6 +55,11 @@ enum SealedBackupRestoreOutcome: Equatable {
     case deferredTransient
     /// The record isn't ours (escrow-identity mismatch) or is corrupt — a distinct, honest message.
     case notRecognized
+    /// The backup in iCloud authenticates but is OLDER than one this device already wrote or
+    /// restored — a rollback (code review finding 14). Deliberately **terminal, not retryable**:
+    /// retrying re-fetches the same substituted record forever, and silently retrying is exactly the
+    /// failure mode the rollback defense exists to end. The user is told, and nothing is written.
+    case rolledBack
 
     var didRestore: Bool {
         if case .restored = self { return true }
@@ -65,7 +70,8 @@ enum SealedBackupRestoreOutcome: Equatable {
     /// (restored / nothing-to-restore / skipped-non-empty) do not.
     var needsAttention: Bool {
         switch self {
-        case .deferredKeyNotSynced, .deferredLocked, .deferredTransient, .notRecognized: return true
+        case .deferredKeyNotSynced, .deferredLocked, .deferredTransient, .notRecognized, .rolledBack:
+            return true
         case .restored, .nothingToRestore, .skippedStoreNotEmpty: return false
         }
     }
@@ -75,7 +81,10 @@ enum SealedBackupRestoreOutcome: Equatable {
     var isRetryable: Bool {
         switch self {
         case .deferredKeyNotSynced, .deferredLocked, .deferredTransient: return true
-        case .restored, .nothingToRestore, .skippedStoreNotEmpty, .notRecognized: return false
+        // `.rolledBack` sits with `.notRecognized`: retrying re-fetches the identical record, so a
+        // Retry affordance would only promise something it can never deliver.
+        case .restored, .nothingToRestore, .skippedStoreNotEmpty, .notRecognized, .rolledBack:
+            return false
         }
     }
 }
@@ -485,6 +494,15 @@ final class SealedBackupCoordinator {
         case SealedBackupError.keyAgreementIdentityMismatch:
             FernletAuditLog.log("sealedBackup.restoreNotRecognized", context: ["payload": payloadType.rawValue])
             return .notRecognized
+        case SealedBackupError.staleGeneration(let found, let lastSeen):
+            // Terminal on purpose — see `.rolledBack`. Falling through to the retryable default
+            // would re-pull the substituted record on every launch and never tell anyone.
+            FernletAuditLog.log("sealedBackup.restoreRolledBack", context: [
+                "payload": payloadType.rawValue,
+                "found": String(found),
+                "lastSeen": String(lastSeen)
+            ])
+            return .rolledBack
         case IdentityError.notProvisioned:
             FernletAuditLog.log("sealedBackup.restoreDeferredKeyNotSynced", context: ["payload": payloadType.rawValue])
             return .deferredKeyNotSynced

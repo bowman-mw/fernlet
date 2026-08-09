@@ -2,12 +2,18 @@
 
 This index maps the core store, repository, persistence, and extracted store service functions to their responsibilities. Use it before adding data mutation, save/load, derived signal, retry queue, saved recipe, launch preparation, storage preference, or sealed-buffer behavior so existing lifecycle code is reused instead of duplicated.
 
+**Last refreshed: 2026-08-09.** This pass added the AI routing/budget seam (gate, router, quota, audit log), the `AppendOnlyRowStore` engine and the three ledger services built on it, `RowPayloadCoders`, and the CloudKit heart-drop transport.
+
+
 ## Duplication Hotspots
 
 | Need | Prefer Reusing |
 | --- | --- |
 | Mutating app state and scheduling persistence | `FernletStore.batchSnapshotPersistence(...)`, `FernletStore.mutateDay(date:_:)`, `SnapshotSaveCoordinator.schedule()` |
 | Loading or saving the whole app snapshot | `FernletRepository.loadSnapshot(todayKey:)`, `saveSnapshot(_:)`, `CoreDataFernletRepository`, `LocalFernletRepository`. 2026-08 consolidation: both backends now assemble snapshots through the shared `FernletSnapshot.assembled(todayKey:day:from:)` (LocalPersistence), and their duplicated JSON encoder/decoder factories were consolidated into `RowPayloadCoders` (FernletFoundation). |
+| Routing any AI call | `FernletAIGate.dispatch(tier:userInvoked:)` — never call a model provider directly; the gate is the sole quota-charge point and the sole capability cap. |
+| Device-local (never-synced) counters and ledgers | `UserDefaultsAICallQuotaStore`, `FileAIAuditLogStore`, `WorkoutTombstoneStore` — the established pattern for state that must stay off the synced blob. |
+| Append-only per-row cloud stores | `AppendOnlyRowStore` (CloudKitSync) — the generic engine behind the coin, milestone, and custom-item repositories. |
 | Past-date day edits | `FernletStore.loadDay(for:)`, `loadDays()`, `mutateDay(date:_:)`, `FernletRepository.updateDay(_:for:todayKey:)` |
 | Main app Core Data / CloudKit container setup | `PersistenceController.reload(with:)`, `makeContainer(...)`, `configure(...)`. 2026-08 consolidation: the `NSAttributeDescription` factory previously duplicated across the CloudKitSync and PrivateStoreCore model builders now lives in `CoreDataModelBuilding.makeAttribute(...)` (FernletFoundation). |
 | Local-only sealed narrative storage | `PrivatePersistenceController`, `JournalNarrativeRepository`, `MenstrualNarrativeRepository`, `PendingNarrativeBuffer`. 2026-08 consolidation: the four duplicated keyless bulk-delete sequences in the narrative/intimacy repositories were consolidated into `PrivateRowPlumbing.deleteRows(...)` (PrivateStoreCore), and `PendingNarrativeBuffer`'s raw SecItem keychain idiom now routes through the shared `KeychainItem` helpers (FernletFoundation). |
@@ -305,6 +311,35 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 | --- | --- |
 | `PrivateRowPlumbing.deleteRows(entityName:predicate:fetchLimit:in:)` | The shared keyless fetch → delete → save → history-prune sequence the sealed repositories' `deleteAll()` methods each repeated inline (journal, worry, intimacy, menstrual narratives). Deletes without decrypting, so deletion stays available while the app is locked or the feature is hidden; returns whether any row was deleted and rethrows fetch/save/prune errors. |
 
+### `AppendOnlyRowStore.swift`
+
+The generic per-row Core Data + CloudKit engine behind `CoinLedgerRepository`, `MilestoneLedgerRepository`, and the other append-only stores — the consolidation of what used to be cloned repositories.
+
+| Function | What It Does |
+| --- | --- |
+| `load()` / `loadAsync()` | Fetch and decode all rows. |
+| `append(_:)` | Batch upsert. **Known limitation:** the `existingByID` map is not refreshed mid-batch, so a single call containing two entries with the same id would insert duplicate local rows; current callers never pass intra-batch duplicates. |
+
+### `RowPayloadCoders.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `RowPayloadCoders.makeEncoder(prettyPrinted:)` / `makeDecoder()` | The single JSON encoder/decoder pair for row payloads, consolidating the duplicated factories the two repository backends each carried. |
+
+### `HeartDropCloudTransport.swift`
+
+The production `HeartDropTransporting` conformer — the app's only CloudKit **public**-database use. It sees rotating day tags and ciphertext, never identities.
+
+| Function | What It Does |
+| --- | --- |
+| `accountAvailable()` | Gates sync on a usable iCloud account. |
+| `upload(tag:payload:)` | Writes one sealed drop, returning the server record name the outbox needs for its own expiry cleanup. |
+| `fetch(tags:)` | Fetches a friend's tag window. |
+| `chunked(_:)` / `perChunkBudget(chunkCount:)` | Per-chunk anti-starvation budgeting so one friend's tags cannot consume the whole pass. |
+| `deleteOwnRecords(recordNames:)` | Expiry sweep of records this device wrote. |
+
+**Owner action:** the `HeartDrop` record type (`tag` queryable, `payload` bytes) must be promoted from the CloudKit Development schema to Production — dev auto-creates it on first save, production will not. See [CloudKit-Schema-Deploy.md](CloudKit-Schema-Deploy.md).
+
 ### `StoragePreferences.swift`
 
 | Function Or Type | What It Does |
@@ -316,6 +351,45 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 | `persist(_:)` | Encodes and stores preferences in keychain. |
 | `currentPreferences(service:)` | The `nonisolated` shared read — a pure keychain read plus JSON decode — for callers that need the persisted preferences without holding a store instance (`PersistenceController.shared`, `PrivatePersistenceController`, `CloudKitDataService`, `HealthKitService`). |
 | `loadPreferences(service:)` | Reads and decodes keychain preferences with default fallback; the private body behind `currentPreferences(service:)` and the store's own load. |
+
+## AI Routing And Budget Seam
+
+The provider seam every AI call site funnels through (Ladder §3). Lives in `AIContext`; the walled
+`AIProviders` module reaches the device-local counter and audit sink only through the protocols
+declared here, never by naming the app-target types that implement them.
+
+### `FernletAIGate.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `dispatch(tier:userInvoked:)` | The single entry point: resolves a route and returns the destination, or `nil` for the deterministic path. **The only place the daily quota is charged** — exactly once per dispatch. |
+| `resolveRoute(tier:userInvoked:)` | Same resolution, returning the full `AIRouteResolution` when the caller needs the fallback reason. |
+
+### `FernletModelRouter.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `resolve(...)` | Picks the cheapest destination meeting the declared tier, capped by device capability and the user's configured ceiling. |
+| `stepDown(...)` | Escalation-ladder descent when a rung is unavailable. |
+| `finalize(_:tier:)` | Applies the release-build fail-closed pin. **Known inaccuracy:** a light-tier destination leaving the device returns `.deterministicFallback(.deviceIncapable)`, which mislabels a sensitive-work pin as a capability limit (safe direction, wrong reason). |
+
+### `AICallQuota.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `AICallQuota.dayKey(for:calendar:)` | Day-key rollover, pinned to a Gregorian/`en_US_POSIX` calendar so behavior cannot vary with the user's calendar preference. |
+| `effectiveCount(now:calendar:)` / `recordingCall(now:calendar:)` | Read and increment as a pure value; the caller persists device-locally. |
+| `derivedStatus(...)` / `effectiveStatus(...)` | The derived `.sleepy` / `.resting` states. **These must never be written back into synced `FernletSettings`**, or one device's usage would throttle another. |
+| `AICallQuotaStore` (protocol) | `currentQuota()` / `reset()` — implemented app-side by `UserDefaultsAICallQuotaStore`. |
+
+### `AIAuditLog.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `record(...)` | Logs one AI call's payload kind, destination, `modelIdentifier`, included field names, and memory char count — metadata only, never content. |
+| `updateOutcome(id:to:)` / `AIAuditOutcome.fromModelError(_:)` | Completion-side outcome stamping, including refusals. |
+| `configure(sink:)` | Installs the persistence sink; `AIAuditLogPersisting` (`load`/`save`/`clear`) is implemented app-side by `FileAIAuditLogStore`. |
+| `clear()` | Wipe path. |
 
 ## Extracted Store Services
 
@@ -372,6 +446,32 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 | `makeMeal(from:mealType:)` | Converts a saved URL recipe into a `Meal`. |
 
 The debounce/queue mechanics this service used to own now live in `PendingWriteBuffer.swift` (below), shared with `CustomItemService`, `CoinLedgerService`, and `MilestoneLedgerService`.
+
+### `CoinLedgerService.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `loadSync()` / `loadAsync()` / `reloadFromStore()` | Hydrate the append-only coin ledger from its per-row store (the design that replaced the unsound "derive earned from day history" model — day history shrinks). |
+| `reconcile(activeDayKeys:)` | Mints any missing earn rows for active days, capped so future-day minting cannot run away. |
+| `grantEarns(_:)` / `spend(amount:ref:)` | Append earns; `spend` returns `false` rather than going negative. |
+| `reset()` / `flushPendingSave()` | Wipe path and the debounce flush. |
+
+### `MilestoneLedgerService.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `loadSync()` / `loadAsync()` / `reloadFromStore()` | Hydrate the append-only milestone ledger. |
+| `record(_:)` | Appends milestone rows. Note: milestone rows deliberately survive a cloud reset, and `CloudKitDataService.allRecordTypes` omits them from the delete-all sweep. |
+| `flushPendingSave()` | Debounce flush. |
+
+### `CustomItemService.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `loadSync()` / `loadAsync()` / `reloadFromStore()` | Hydrate custom clothing items from the per-row store. |
+| `upsert(_:)` / `delete(id:)` | Row mutations through the shared `DebouncedRowBuffer`. |
+| `setShareable(id:_:)` / `setPrice(id:_:)` | Friend-shop listing controls. |
+| `reset()` | Wipe path. |
 
 ### `PendingWriteBuffer.swift`
 

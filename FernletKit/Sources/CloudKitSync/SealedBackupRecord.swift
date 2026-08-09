@@ -49,6 +49,20 @@ public struct SealedBackupRecord: Equatable {
     /// notes, or a short period history) is a single record at `chunkIndex == 0, chunkCount == 1`.
     public var chunkIndex: Int
     public var chunkCount: Int
+    /// Monotonic per-payload-type write counter, minted once per backup generation and shared by
+    /// every chunk of that generation.
+    ///
+    /// **This is the rollback defense** (code review finding 14, fixed 2026-08-09). It is bound into
+    /// the GCM additional-authenticated-data along with `updatedAt`, so it cannot be edited without
+    /// breaking authentication — an attacker who can write to the CloudKit container can still
+    /// *substitute* a whole older-but-validly-sealed generation, but the app-side
+    /// `SealedBackupGenerationStore` remembers the highest generation this device has written or
+    /// accepted and refuses anything older on restore.
+    ///
+    /// Counters are device-local, so two devices that both write can mint the same number. That is
+    /// fine: the guarantee is "never accept older than what I have already seen", which holds
+    /// regardless of which device minted a given value.
+    public var generation: Int64
 
     public init(
         payloadType: SealedBackupPayloadType,
@@ -59,7 +73,8 @@ public struct SealedBackupRecord: Equatable {
         tag: Data,
         updatedAt: Date,
         chunkIndex: Int = 0,
-        chunkCount: Int = 1
+        chunkCount: Int = 1,
+        generation: Int64
     ) {
         self.payloadType = payloadType
         self.signingPublicKey = signingPublicKey
@@ -70,6 +85,7 @@ public struct SealedBackupRecord: Equatable {
         self.updatedAt = updatedAt
         self.chunkIndex = chunkIndex
         self.chunkCount = chunkCount
+        self.generation = generation
     }
 }
 
@@ -78,8 +94,15 @@ public struct SealedBackupRecord: Equatable {
 /// `malformedRecord` covers both an undecodable CloudKit record and an incomplete or
 /// inconsistent chunk set (restore is all-or-nothing, so a corrupt history is never
 /// reassembled); `keyAgreementIdentityMismatch` is thrown by the app-side restore service when
-/// a fetched backup's escrow identity does not match the current user's keys.
+/// a fetched backup's escrow identity does not match the current user's keys;
+/// `staleGeneration` is the rollback rejection.
 public enum SealedBackupError: Error, Equatable {
     case keyAgreementIdentityMismatch
     case malformedRecord
+    /// The fetched backup authenticates correctly but its generation predates one this device has
+    /// already written or restored — i.e. someone substituted an older, validly sealed backup.
+    ///
+    /// Carries both values so the UI can be specific instead of saying "corrupt". This is never a
+    /// normal outcome: a legitimate backup only ever moves forward.
+    case staleGeneration(found: Int64, lastSeen: Int64)
 }

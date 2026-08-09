@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — SHIPPED.** Every work item in the §1a status table is ✅: WI-1 through WI-10 plus WI-Q. The two architectural follow-ups deferred at the time (WI-6 cross-platform canonical signing, WI-9 ProximityKit off-main decode) both landed — ProximityKit now builds in Swift-6 language mode with `.v5` dropped entirely. Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Security Hardening Plan — S3 Wall Review Follow-ups (2026-06-27)
 
 > **Handoff doc.** This plan is self-contained. A fresh session should be able to execute it

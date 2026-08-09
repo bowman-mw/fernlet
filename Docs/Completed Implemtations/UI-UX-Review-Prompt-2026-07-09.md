@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — SPENT.** Review prompt for the `claude/uiux-no-mockup-fixes` branch, long since merged; the redesign it reviewed shipped through the three UX-Batch-Continuation rounds (2026-07-17, -17b, -18). The brief it reviews against, [UI-UX-Redesign-Brief-2026-07-08.md](UI-UX-Redesign-Brief-2026-07-08.md), stays active — it still carries 4 unresolved questions. Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Fernlet UI/UX Redesign — Review Prompt (2026-07-09)
 
 Use this to review the `claude/uiux-no-mockup-fixes` branch on **three axes**: design fidelity vs the

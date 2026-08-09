@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — SHIPPED.** Merged 2026-07-26 (`claude/bitchat-adoptions`): wire2 sealed-payload compress+pad framing, the enforced privacy-wipe coverage checklist, the offline-hearts CloudKit dead-drop with one-time-prekey forward secrecy and day-rotating HMAC tags, and the QR verification ceremony for non-UWB commits. Still deferred by decision: §E BLE wake-on-proximity presence (design sketch only — revisit with the Android/cross-platform transport work). Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Plan — bitchat-inspired mesh adoptions (2026-07-25)
 
 Branch: `claude/bitchat-adoptions` (off `cb798e4`). Source analysis: bitchat repo review + Fernlet

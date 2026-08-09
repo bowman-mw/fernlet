@@ -21,10 +21,4 @@ extension UIImage {
             draw(in: CGRect(origin: .zero, size: targetSize))
         }
     }
-
-    /// Downscales to thumbnail size and JPEG-encodes, for a compact friend-photo preview.
-    /// (Currently uncalled; kept alongside ``resizedForFriendSharing(maxDimension:)``.)
-    func friendPhotoThumbnailData(maxDimension: CGFloat = 320) -> Data? {
-        resizedForFriendSharing(maxDimension: maxDimension).jpegData(compressionQuality: 0.72)
-    }
 }

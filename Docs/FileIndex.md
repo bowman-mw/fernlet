@@ -2,7 +2,7 @@
 
 This index maps the main project files to their responsibilities. It is intended as a quick orientation guide for app navigation, feature work, tests, and documentation.
 
-Last updated: 2026-08-05. Paths are written from the directory containing the repo checkout, so `Fernlet/…` is the repo root: `Fernlet/Fernlet/…` is the app target folder, `Fernlet/FernletKit/…` is the local Swift package, and `Fernlet/FernletTests/…` etc. are the sibling test/extension targets.
+Last updated: 2026-08-09. Paths are written from the directory containing the repo checkout, so `Fernlet/…` is the repo root: `Fernlet/Fernlet/…` is the app target folder, `Fernlet/FernletKit/…` is the local Swift package, and `Fernlet/FernletTests/…` etc. are the sibling test/extension targets.
 
 ## FernletKit Package (Module Map)
 
@@ -13,6 +13,7 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | `Fernlet/FernletKit/Package.swift` | Package manifest: the layered target DAG, per-target MainActor isolation choices, and the single external dependency (CryptoSwift, for FernletLock's Scrypt KDF). |
 | `FernletFoundation` | Layer 0 — shared utilities: dates, keychain helpers, audit log, storage preferences, monotonic clock, startup timing, backup exclusion. |
 | `FernletCrypto` | Layer 0 — pure sealing primitives (`ColumnCrypto`, CryptoKit-only). |
+| `WebScrapingKit` | Layer 0 — zero-dependency web-scraping substrate: shared HTML/JSON-LD helpers for both web importers, plus `EphemeralWebSession`, the no-cookie/no-cache/no-credential "private tab" URLSession every outbound fetch goes through. |
 | `FernletDomainModel` | Layer 1 — portable, nonisolated domain value types (nutrition/workout/wellbeing/companion models, settings aggregate, wire DTOs). |
 | `FernletScoring` | Layer 1 — scoring/goal-weight/meal-parse/workout-plan engines, abstract period-scoring signal types, and the stress engine. |
 | `FoodCatalog` | Layer 1 — USDA food search/scoring; owns the bundled read-only `FoodCatalog.sqlite` resource (loaded via `Bundle.module`). |
@@ -38,7 +39,7 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | File | Purpose |
 | --- | --- |
 | `Fernlet/Fernlet/FernletApp.swift` | SwiftUI app entry point. Creates the shared persistence, app store, period tracker, launch preparation service, and lock service objects. |
-| `Fernlet/Fernlet/ContentView.swift` | Main app container and navigation shell. Hosts primary tabs, launch state, personal screen, lock gate integration, quick sheets, and meal/journal notifications. |
+| `Fernlet/Fernlet/ContentView.swift` | Main app container and navigation shell. Hosts primary tabs, launch state, `IntimacyScreenView` (the Private hub's intimacy page), lock gate integration, quick sheets, and meal/journal notifications. |
 | `Fernlet/FernletKit/Sources/FernletUI/FernletUIComponents.swift` | Shared UI primitives: adaptive color tokens, headers, chip styles, sheet fields, section pickers, layout helpers, searching pulse, medallion/coin glyphs. |
 | `Fernlet/FernletKit/Sources/FernletUI/FernletPrimitives.swift` | `FernletCard`, `SectionLabel`, `EmptyState` — the cross-screen layout primitives extracted from HomeView for package-resident views. |
 | `Fernlet/FernletKit/Sources/FernletUI/FernletTheme.swift` | App-wide color palette, theme defaults, custom light/dark background support, and UIKit/SwiftUI color vending. |
@@ -51,6 +52,7 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | `Fernlet/Fernlet/Assets.xcassets` | Image and color assets used by the app. |
 | `Fernlet/Fernlet/Info.plist` | App bundle metadata and platform configuration. |
 | `Fernlet/Fernlet/Fernlet.entitlements` | App capability entitlements. |
+| `Fernlet/Fernlet/SettingsSearchIndex.swift` | `SettingsRoute` (every addressable Settings destination, driving the hub's single `navigationDestination`) and `SettingsSearchIndex` (the searchable entry table). Adding a route is a compile-time prompt to give it a view and at least one search entry. |
 
 ## Feature Views
 
@@ -58,7 +60,7 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | --- | --- |
 | `Fernlet/Fernlet/HomeView.swift` | Home dashboard with companion state, quick logging, signal trends, macro summaries, hygiene, and photo wall UI. |
 | `Fernlet/Fernlet/FoodView.swift` | Food logging, recipes, imported recipe review, ingredient editing, meal creation, macro display, saved recipe book, and Safari presentation. Also hosts the in-file `RecipeDetailView` (sealed photo, macros, edit/log/share actions, in-app Safari source link). |
-| `Fernlet/Fernlet/MoveView.swift` | Movement/workout screen with workout logging, suggestions, workout rows, and goal summaries. |
+| `Fernlet/Fernlet/MoveView.swift` | Movement/workout screen with workout logging, suggestions, workout rows, and goal summaries. Hosts `WorkoutExerciseDraft`, the exercise-draft state machine shared by `WorkoutSheet` and `WorkoutPlanSheet`. |
 | `Fernlet/Fernlet/ActivityPickerSection.swift` | Activity-mode workout picker, recent activity shortcuts, and activity-specific workout fields. |
 | `Fernlet/Fernlet/JournalView.swift` | Journal calendar, prompts, entry creation/editing, day detail, day nutrition breakdowns, and daily edit sheets. |
 | `Fernlet/Fernlet/PeriodTrackerView.swift` | Cycle tracking main view. |
@@ -216,6 +218,9 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | `Fernlet/FernletKit/Sources/PrivateMemoryStore/WorryNarrativeRepository.swift` | Sealed, device-only Worry Box store: `WorryNarrative` model, `WorryStoring` protocol, and its encrypted repository. |
 | `Fernlet/FernletKit/Sources/PeriodContextBridge/PeriodContextBridge.swift` | Period-module egress bridge: raw→abstract cycle conversions (`PeriodPhaseBand`) exporting only coarse enums past the S3 wall. |
 | `Fernlet/FernletKit/Sources/PeriodContextBridge/PeriodPhaseTrendEngine.swift` | `PeriodHealthTrend` device-sealed per-phase wellbeing trend (coarse direction + confidence band) from the user's own history. |
+| `Fernlet/FernletKit/Sources/CloudKitSync/HeartDropCloudTransport.swift` | CloudKit **public**-database ferry for heart drops (the app's only public-DB use): upload one sealed drop per tag, fetch a friend's tag window with per-chunk anti-starvation budgeting. Sees tags and ciphertext only. |
+| `Fernlet/Fernlet/SealedBackupGenerationStore.swift` | Device-local, never-synced high-water mark of the highest sealed-backup generation this device has written or accepted, per payload type — the state half of the rollback defense. The crypto half is the generation binding in `SealedBackupCrypto.authenticatedData`. Cleared by the delete-all path. |
+| `Fernlet/FernletKit/Sources/CloudKitSync/CloudKitSchemaDeploy.swift` | The schema-deploy launch flag. `isRequested(arguments:)` is pure and testable; the caller that actually pushes the schema is `#if DEBUG`-gated so it cannot fire in Release. See [CloudKit-Schema-Deploy.md](CloudKit-Schema-Deploy.md). |
 
 ## Domain Models (FernletDomainModel)
 
@@ -253,6 +258,11 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletKit/Sources/FernletDomainModel/ActivityModels.swift` | Pure value types for proximity group activities: host-signed versioned rosters, join tokens, and `ActivityLimits`. |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/ProximityCoordinatorEnums.swift` | Top-level proximity enums (`ProximityRole`, `ProximityMode`, `ProximityRangingMode`) hoisted out of `ProximityCoordinator`. |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/ProximityPersistenceRecords.swift` | Codable proximity trust/audit DTOs (`ProximityTrustedPeerRecord`) for the persisted, synced trust vault. |
+| `Fernlet/FernletKit/Sources/FernletDomainModel/FDADailyValues.swift` | The single FDA Daily Value reference table shared by the gap analyzer and the label scanner, verified against 21 CFR 101.9. Flat label-comparison reference — no age/sex adjustment, no upper intake levels. |
+| `Fernlet/FernletKit/Sources/FernletDomainModel/GroceryAggregation.swift` | Pure, catalog-free shopping-list aggregation (F3, §11.3): merges several recipes' ingredients into one consolidated list. Below the wall, no I/O — `FoodItem` resolution stays the caller's job. |
+| `Fernlet/FernletKit/Sources/FernletDomainModel/RecipeScaling.swift` | Pure proportional recipe scaling (F4, §11.4). A non-persisted view/share-time transform returning scaled *copies* — it never mutates a stored recipe, resolves no `FoodItem`, and touches no catalog. |
+| `Fernlet/FernletKit/Sources/FernletDomainModel/RecipeSubstitution.swift` | A bound substitution suggestion: a catalog `FoodItem` proposed to replace one ingredient, plus an optional display-only reason. The model picks a candidate *number*; code binds it back to the catalog. |
+| `Fernlet/FernletKit/Sources/FernletDomainModel/HeartDropTransport.swift` | The `HeartDropRecord` (rotating pairwise day tag + sealed blob) and the `HeartDropTransporting` seam. The transport neither knows nor can learn who either endpoint is — this is why the wall holds across CloudKit. |
 
 ## Food, Nutrition, And Recipe Services
 
@@ -287,6 +297,16 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletKit/Sources/FernletScoring/PeriodScoringSignals.swift` | Abstract period-scoring vocabulary (`PeriodSignalStrength`, `PeriodPhaseSignal`, `PeriodScoringAdjustment`) consumed by the scoring engine. |
 | `Fernlet/FernletKit/Sources/AppServices/BarcodeScanner.swift` | Vision still-photo product-barcode detection (`BarcodePayloadDetecting` seam + `VisionBarcodeDetector`/`BarcodeScanner`) over EAN-13/EAN-8/UPC-E, the fallback for devices lacking live `DataScannerViewController`. |
 | `Fernlet/FernletKit/Sources/AppServices/FoodImageClassifier.swift` | On-device meal-photo image classification behind the `FoodImageClassifying` seam (`VisionFoodImageClassifier` via `VNClassifyImageRequest`), returning raw taxonomy labels; the photo never leaves the device. |
+| `Fernlet/FernletKit/Sources/WebScrapingKit/EphemeralWebSession.swift` | `EphemeralWebSession` — the single private-browsing `URLSession` (ephemeral + cookies/cache/credentials explicitly disabled) that both web importers fetch through. The per-setting rationale, including which knobs are redundant under `.ephemeral` and why they are set anyway, lives here (see [No-Tracking-Wall.md](No-Tracking-Wall.md) §2a). |
+| `Fernlet/FernletKit/Sources/WebScrapingKit/HTMLScraper.swift` | `HTMLScraper` — shared regex capture reads, HTML-entity decoding (`decodingNumericEntities:` preserves both importers' differing policies), and the body-to-plain-text pass; returns `nil` on an empty page so each caller throws its own error. |
+| `Fernlet/FernletKit/Sources/WebScrapingKit/JSONLDScraper.swift` | `JSONLDScraper` — `application/ld+json` script extraction, `@type` reading, and the recursive `@graph`/`itemListElement` search that finds a schema.org `Product` or `Recipe`. |
+| `Fernlet/FernletKit/Sources/FoodCatalog/CuratedNutrientSources.swift` | Hand-authored "good source" foods per tracked micronutrient — the F2 gap-filling nudge's payload, pinned to real bundled-catalog ids so the card can bind the food and offer "add it". |
+| `Fernlet/Fernlet/GroceryListComposer.swift` | F3 app-target glue between the recipe stores and the pure `GroceryAggregation` engine: catalog resolution the engine refuses to do, F4 "cook for N" scaling, and web-import lines through `DataExportBuilder.recipeIngredientLines`. The list is one-shot share text; only the weekly plan persists. |
+| `Fernlet/Fernlet/GroceryPlannerView.swift` | The Phase A shopping-list builder: multi-select recipes with an optional per-recipe yield, preview the aggregated list, share as plain text. Nothing here persists. |
+| `Fernlet/Fernlet/IngredientSubstitutionSheet.swift` | F4 substitution UI (§11.4): replace ONE structured ingredient. Applying forks a new recipe only on an explicit "Save as new recipe" tap — cancelling forks nothing and never mutates the source. |
+| `Fernlet/Fernlet/CookingMode.swift` | `CookingModeAvailability` — the single rule deciding whether a recipe gets a "Cook" action (authored steps, structured ingredients, or a web import's free-text lines). UIKit-free. |
+| `Fernlet/Fernlet/CookingLiveActivityController.swift` | App-target-only requester of the cooking Live Activity (starting one is the only thing solely the app process can do). Updates/ends go through the shared `CookingActivityBridge`. |
+| `Fernlet/Fernlet/BarcodeServingStepView.swift` | The quick serving-count step after a barcode scan, plus its device-local last-serving memory keyed by normalized GTIN — a `UserDefaults` sidecar deliberately kept off the synced/sealed blob path. |
 
 ## AI Context And Providers
 
@@ -296,6 +316,16 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletKit/Sources/AIContext/MemoryAgent.swift` | Gate routing Tier-2 memory into AI prompts through a destination allowlist, recency filter, confidence filter, and diagnostic-language post-classifier, returning a char-capped context string. |
 | `Fernlet/FernletKit/Sources/AIContext/AIAuditLog.swift` | `AIAuditEntry` metadata record plus the in-session `AIAuditLog` actor logging each AI call's payload kind, destination, included field names, and memory char count — metadata only, never persisted. |
 | `Fernlet/FernletKit/Sources/AIProviders/FoundationWorkoutAdjustment.swift` | On-device workout adjuster: `WorkoutAdjustmentCandidateBuilder` builds the equipment/injury-filtered, ranked, capped candidate pool and `FoundationWorkoutAdjustmentModel` maps a natural-language request to substitutions within it via FoundationModels. |
+| `Fernlet/FernletKit/Sources/AIContext/AICapabilityTier.swift` | The minimum capability an AI task declares, plus its ordered `escalationLadder`. The router picks the *cheapest available* destination meeting the tier, never above device capability or the user's ceiling (Ladder §3.1). |
+| `Fernlet/FernletKit/Sources/AIContext/AIDeviceCapability.swift` | Snapshot of which AI rungs the *device* can physically reach, independent of user settings; obtained through the `AIDeviceCapabilityProviding` seam so tests can inject a fixed value. `.webNutritionLookup` always reports false by design (settings-gated web path, not an LLM rung). |
+| `Fernlet/FernletKit/Sources/AIContext/AICallQuota.swift` | The daily AI-call budget with day-key rollover (Ladder §3.2). A pure value the *caller* stores device-locally — the derived `.sleepy`/`.resting` states must never reach synced `FernletSettings`, or one device's usage would throttle another. |
+| `Fernlet/FernletKit/Sources/AIContext/FernletModelRouter.swift` | Capability-capped route resolution and its `AIRouteResolution`/fallback-reason vocabulary, letting deferred tasks tell a transient budget fallback from a persistent one before spending a retry. |
+| `Fernlet/FernletKit/Sources/AIContext/FernletAIGate.swift` | The single routing entry point every AI call site funnels through — router + stored user intent + device-local quota in one value. `dispatch`/`resolveRoute` are the only places the daily quota is charged. |
+| `Fernlet/FernletKit/Sources/AIProviders/SystemLanguageModelCapabilityProvider.swift` | Production `AIDeviceCapabilityProviding`: wraps `SystemLanguageModel.default.availability`. The PCC and BYOK rungs report false here — their symbols are iOS 27 APIs. |
+| `Fernlet/FernletKit/Sources/AIProviders/FoundationIngredientSubstitution.swift` | On-device stage for F4 substitution: the model contributes world knowledge only (substitute food *names* plus an optional reason) — never a quantity, macro, or binding. Code rebinds each name through the local catalog. |
+| `Fernlet/Fernlet/FernletAIComposition.swift` | Composition-root factory for the AI provider seam. Lives in its own file on purpose: naming `SystemLanguageModel…` matches the S3 grep-wall's AI-facing marker, keeping the type out of `FernletStore.swift`. |
+| `Fernlet/Fernlet/AICallQuotaStore.swift` | The device-local, non-synced daily AI-call counter backed by `UserDefaults`. Deliberately app-target-only: the walled AI module reaches it solely through the `AICallQuotaStore` protocol declared in `AIContext`. |
+| `Fernlet/Fernlet/FileAIAuditLogStore.swift` | Device-local, non-synced persistence sink for the AI audit log (Ladder §7.2) — one JSON file in Application Support, reached only through the `AIAuditLogPersisting` protocol. |
 
 ## Health And Launch Services
 
@@ -383,6 +413,18 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletKit/Sources/ProximityKit/Wire/RecipeSharePayloads.swift` | `ProximityRecipeSharePayload` wire envelope wrapping a `ProximitySharedRecipe` for in-person recipe sharing, with a share-notes convenience check. |
 | `Fernlet/FernletKit/Sources/ProximityKit/Wire/SealedIntroductionEnvelope.swift` | Transport wrapper carrying only the ciphertext of a KA-sealed identity intro/ack for presence-heart handshakes, so a tag-replay forger cannot deanonymize the sender's identity. |
 | `Fernlet/FernletKit/Sources/ProximityKit/Wire/TrainerPayloads.swift` | `TrainerExportPayload` wire envelope carrying the opaque, size-bounded curated Trainer/Nutritionist export bundle; sealing-required so an unsealed send fails closed at verify. |
+| `Fernlet/FernletKit/Sources/ProximityKit/Wire/SealedPayloadFraming.swift` | wire2 sealed-body framing (compress + pad inside the AEAD). Threaded through `IdentityService.seal/open` and envelope verify; derived from the peer's advertised capabilities, never from the bytes alone. |
+| `Fernlet/FernletKit/Sources/ProximityKit/Wire/ProximityVerification.swift` | The QR verification ceremony that upgrades a non-UWB `awaitingManualCommit` slot to ceremony grade: the QR proves the signing key is physically on screen, the sealed challenge/response proves the live peer holds it. |
+| `Fernlet/FernletKit/Sources/ProximityKit/Trust/CoachVerificationCeremony.swift` | Slot-independent verification ceremony for the in-person coach session (Increment 10). Carries the nonce-binding rules — per-peer nonce, sign-after-check, wrong-peer drop must not clear. **No production callers yet:** the coach session manager is unbuilt. |
+| `Fernlet/FernletKit/Sources/ProximityKit/Trust/CoachSessionTrustPolicy.swift` | `CoachSessionContract` (the written-down coach/trainee role split) and the coach trust policy — a coach is NOT a friend, so only an unrevoked `.trainer` vault record with `unknownModeToken == nil` auto-confirms. **No production callers yet.** |
+| `Fernlet/FernletKit/Sources/ProximityKit/HeartSharing/HeartDropService.swift` | Offline "away" hearts over the CloudKit public-DB dead-drop. All crypto happens here on the sealed side of the wall; the injected transport only ever sees rotating day tags plus ciphertext. |
+| `Fernlet/FernletKit/Sources/ProximityKit/HeartSharing/HeartDropSealer.swift` | The outer seal for heart drops: versioned wire form with a prekey id (all-zeros = sealed to the static key). Gates payload size *before* key agreement. |
+| `Fernlet/FernletKit/Sources/ProximityKit/HeartSharing/HeartPrekeyStore.swift` | One-time X25519 prekeys for forward-secret drops, plus the X3DH-style signed prekey. Private halves live in one keychain blob (`AfterFirstUnlockThisDeviceOnly`, never synchronizable). |
+| `Fernlet/FernletKit/Sources/ProximityKit/HeartSharing/HeartDropPeerBundleCache.swift` | Cached prekey bundles gossiped by friends plus per-friend consumed-prekey marking. A bundle is only ever stored from a verified, signed identity intro, keyed by the sender's full signing key. |
+| `Fernlet/FernletKit/Sources/ProximityKit/HeartSharing/HeartDropOutbox.swift` | Persisted sender-side queue for offline drops plus the durable receive dedup — two sidecars beside `HeartLedger.json`, deliberately outside the synced snapshot. |
+| `Fernlet/FernletKit/Sources/ProximityKit/HeartSharing/ProtectedSidecar.swift` | The `ProtectedSidecar` state machine (absent / deferred / corrupt / loaded) and `SidecarSeal`. Fixes the class of data loss where any read failure read as "no data" and the next persist overwrote the real file. |
+| `Fernlet/FernletKit/Sources/ProximityKit/HeartSharing/HeartDropSidecarKey.swift` | Keychain-backed ChaChaPoly seal for the heart-drop sidecars at rest — the plaintext versions were a timestamped log of who the user sent affection to. One-way plaintext→sealed migration. |
+| `Fernlet/Fernlet/VerifyQRViews.swift` | `QRCodeRenderer` plus the verify-QR display/scan sheets — renders this device's signed `fernlet://verify` URL for the ceremony above. |
 
 ## Private Media Stores
 
@@ -391,7 +433,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletKit/Sources/PrivateMediaStore/PrivateMediaStore.swift` | Disk-backed mesh photo index with **AES-256-GCM at-rest encryption** of image/thumbnail bytes, thumbnail generation, hydration, FIFO eviction (1000 cap / 900 warn), and orphan cleanup. (Formerly `MeshPhotoCacheStore`.) |
 | `Fernlet/FernletKit/Sources/PrivateMediaStore/PrivateMediaKeyStore.swift` | `PrivateMediaKeyProviding` + keychain-backed (backup-restorable, `AfterFirstUnlock`) AES key provider for `PrivateMediaStore`. |
 | `Fernlet/FernletKit/Sources/PrivateMediaStore/MediaAtRestCrypto.swift` | Shared AES-256-GCM at-rest helpers on `PrivateMediaKeyProviding` (`gcmSeal`, `gcmOpen`, `sealAndWrite` — the last writes nothing at all on a nil key or seal failure, so plaintext never reaches disk). The one home of the seal / open / seal-then-write idiom `PrivateMediaStore`, `MealPhotoStore`, and `ProgressPhotoStore` each hand-rolled; deliberately policy-free, so each store keeps its own fail-closed decision (and its legacy-plaintext branch) at the call site. |
-| `Fernlet/FernletKit/Sources/PrivateMediaStore/FriendPhotoImageHelpers.swift` | `UIImage` resizing and thumbnail JPEG helpers for friend-photo sharing. |
+| `Fernlet/FernletKit/Sources/PrivateMediaStore/FriendPhotoImageHelpers.swift` | `UIImage` resizing helper for friend-photo sharing. |
 | `Fernlet/FernletKit/Sources/PrivateMediaStore/MealPhotoStore.swift` | `MealPhotoStore`: on-device AES-256-GCM-sealed store for meal and other private photos with bounded downscale. |
 | `Fernlet/FernletKit/Sources/PrivateMediaStore/ProgressPhotoStore.swift` | `ProgressPhotoStore`: sealed gym progress-photo timeline over `MealPhotoStore` bytes plus a GCM-sealed dated index. |
 
@@ -416,13 +458,19 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/Fernlet/FernletNavigation.swift` | App navigation enums (`FernletTab`, `FernletSheet`) — split out of the design system when it moved into the FernletUI package target (`FernletSheet` references app-resident `FirstAidTool`). |
 | `Fernlet/Fernlet/FernletAppIntents.swift` | App Intents — `LogWaterIntent` (background app-group queue append, no app launch), `LogMealIntent` / `OpenJournalIntent` (open the app to the matching sheet via a persisted deep-link). |
 | `Fernlet/Fernlet/FernletShortcuts.swift` | `FernletShortcuts` (`AppShortcutsProvider`) — surfaces the log-water/log-meal/open-journal App Intents to Siri and Spotlight with natural phrases. |
+| `Fernlet/FernletWidgets/CookingActivityAttributes.swift` | ActivityKit contract for the cooking Live Activity (recipe name + per-step `ContentState`), compiled into both targets. |
+| `Fernlet/FernletWidgets/CookingLiveActivity.swift` | The cooking Live Activity widget: Lock Screen card plus every Dynamic Island presentation. Registered in `FernletWidgetsBundle` alongside the workout activity. |
+| `Fernlet/FernletWidgets/CookingActivityBridge.swift` | The single seam reflecting a `CookingRunState` onto the live activity — shared by the in-app walker and the Lock Screen intents. Delegates its loop to `LiveActivityReflector`. |
+| `Fernlet/FernletWidgets/CookingLiveActivityIntents.swift` | `LiveActivityIntent`s for the cooking activity's "Next"/repeat-step buttons and the matching Siri phrases; `CookingIntentRunner` performs them in the app's process and posts the notification `FernletStore` reconciles on. |
+| `Fernlet/FernletWidgets/CookingRunState.swift` | A cooking session as a flat value that survives process death in the app group, carrying the full ordered `steps` so a cold-launched intent can render the next step with no live app state. |
+| `Fernlet/FernletWidgets/CookingRunStateStore.swift` | Coordinated app-group reader/writer for `CookingRunState.json` — the persistence seam between `FernletStore` and the Lock Screen/Siri intent runner. |
 
 ## Share Extension
 
 | File | Purpose |
 | --- | --- |
 | `Fernlet/FernletShareExtension/ShareViewController.swift` | Share-extension entry `UIViewController` that extracts the shared URL and enqueues it via `SharedRecipeImportQueueWriter`. |
-| `Fernlet/FernletShareExtension/SharedRecipeImportQueueWriter.swift` | App-group JSON queue writer that records shared recipe URLs (`SharedRecipeImportRecord`) for the app to import later. |
+| `Fernlet/FernletShareExtension/SharedRecipeImportQueueWriter.swift` | App-group JSON queue writer that records shared recipe URLs (`SharedRecipeImportRecord`) for the app to import later. A deliberate hand-copied twin of `AppServices/SharedRecipeImportQueue.swift` (the extension links no FernletKit products); field list, coder config, container fallback chain, and `NSFileCoordinator` coordination must stay in sync — enforced by `SharedRecipeImportQueueMirrorTests`. |
 | `Fernlet/FernletKit/Sources/AppServices/SharedRecipeImportQueue.swift` | App-group-backed queue of shared recipe-URL import records (`SharedRecipeImportRecord` with attempt/error tracking) handed off from the share extension for later import. |
 
 ## Tests
@@ -543,6 +591,10 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletTests/RecentBitesTests.swift` | Home "Recent bites" 7-day photographed-meal window tests. |
 | `Fernlet/FernletTests/RecipeWebImporterTests.swift` | Recipe web-importer SSRF/URL-safety allow- and block-list tests. |
 | `Fernlet/FernletTests/ReplayCacheTests.swift` | Replay-cache oldest-eviction and envelope-replay-detection tests. |
+| `Fernlet/FernletTests/SharedRecipeImportQueueMirrorTests.swift` | Drift guard for the share extension's hand-copied `SharedRecipeImportRecord` mirror: parses both source files and requires identical field lists (the `budgetDeferredDayKey` stripping regression), plus wire-format round-trip, `NSFileCoordinator` coordination, and container-fallback-order parity. |
+| `Fernlet/FernletTests/CoreDataStagedBlobLoadTests.swift` | Parity coverage for `CoreDataFernletRepository`'s two aggregate-blob entry points: async/sync agreement, first-launch legacy migration, and read-only-recovery latching on fetch failure and corrupt payload via `loadSnapshotAsync`. |
+| `Fernlet/FernletTests/JournalAppendPathTests.swift` | Pins the single journal-append path (`addJournal` overloads + `logQuickMood`): today updates day/`previousJournals`/memories, a back-dated entry touches none of the today-scoped state but persists and hydrates on its own day. |
+| `Fernlet/FernletTests/NoTrackingBoundaryTests.swift` | No-tracking wall: banned advertising/analytics SDKs and symbols across every target, exact SPM dependency + hardcoded-destination allowlists, pinned HTTP-client files, and PrivacyInfo.xcprivacy/entitlements assertions. See [No-Tracking-Wall.md](No-Tracking-Wall.md). |
 | `Fernlet/FernletTests/S3BoundaryTests.swift` | S3 privacy-wall grep-based backstop tests scanning AI-facing sources for sealed-store access. |
 | `Fernlet/FernletTests/SavedRecipeMigrationTests.swift` | Legacy SavedRecipe-to-RecipeDefinition migration round-trip tests. |
 | `Fernlet/FernletTests/SealedBackupChunkTests.swift` | Sealed-backup chunked-export paging and multi-chunk restore-writeback tests. |
@@ -563,6 +615,38 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletTests/WorkoutProgramTests.swift` | Workout-program location identity-stability and template-ID collision tests. |
 | `Fernlet/FernletTests/WorkoutRecoveryTests.swift` | Logged-workout removal/edit recoverability and bookkeeping-reversal tests. |
 | `Fernlet/FernletTests/WorryBoxTests.swift` | Worry Box sealed repository round-trip, deletion, and key-migration tests. |
+| `Fernlet/FernletTests/FernletModelRouterTests.swift` | Router resolution: capability caps, tier escalation ladders, and fallback-reason classification. |
+| `Fernlet/FernletTests/FernletAIGateTests.swift` | Gate dispatch: the single quota-charge point, user intent, and route resolution. |
+| `Fernlet/FernletTests/AICallQuotaTests.swift` | Daily AI-call budget: day-key rollover and the derived `.sleepy`/`.resting` states. |
+| `Fernlet/FernletTests/AIAuditLogTests.swift` | AI audit entries: `modelIdentifier`/outcome fields and device-local persistence. |
+| `Fernlet/FernletTests/HeartDropTests.swift` | Heart-drop core: sealing, prekey selection and consumption, tag rotation, outbox and dedup behavior. |
+| `Fernlet/FernletTests/HeartDropAppWiringTests.swift` | App-side heart-drop wiring: opt-in gating, delivery paths, and wipe coverage. |
+| `Fernlet/FernletTests/ProtectedSidecarTests.swift` | The sidecar state machine: absent/deferred/corrupt/loaded classification and the fail-closed persist policy. |
+| `Fernlet/FernletTests/SealedPayloadFramingTests.swift` | wire2 compress+pad framing round-trips and capability gating. |
+| `Fernlet/FernletTests/ProximityVerificationTests.swift` | QR ceremony: nonce binding, sign-after-check ordering, and wrong-peer drops that must not clear state. |
+| `Fernlet/FernletTests/CoachSessionHardeningTests.swift` | Coach-path hardening as an executable contract: the role split, coach-vs-friend trust policy, the freeze-default `.trainer` guard, and the pre-decrypt wire-size gate. |
+| `Fernlet/FernletTests/SealedBackupRollbackTests.swift` | Rollback defense: AAD binding (editing `generation`/`updatedAt` breaks authentication, sub-second timestamps still open) and the high-water mark (monotonic minting, per-payload independence, forward-only accept, wipe reset, and the authentic-older-generation rejection). |
+| `Fernlet/FernletTests/PrivacyWipeCoverageTests.swift` | The enforced delete-all coverage checklist — identity and sidecar keys must die with the wipe. See [PrivacyWipeCoverage.md](PrivacyWipeCoverage.md). |
+| `Fernlet/FernletTests/GroceryAggregationTests.swift` | Pure aggregation engine: unit merging, duplicate collapse, and unresolvable-line passthrough. |
+| `Fernlet/FernletTests/GroceryListComposerTests.swift` | App-side composition: catalog resolution, "cook for N" scaling, and web-import line unification. |
+| `Fernlet/FernletTests/RecipeScalingTests.swift` | Proportional scaling arithmetic and the non-persistence guarantee. |
+| `Fernlet/FernletTests/IngredientSubstitutionTests.swift` | Substitution: candidate-number binding, gram-equivalence quantities, and fork-only-on-save. |
+| `Fernlet/FernletTests/RecipeStepsTests.swift` | `RecipeStep` schema, web-import step preservation, and mesh wire compatibility. |
+| `Fernlet/FernletTests/CookingRunStateTests.swift` | Cooking run value semantics: step numbering, last-step detection, and advance/finish. |
+| `Fernlet/FernletTests/CookingRunStoreTests.swift` | App-group cooking-run persistence, including the injectable directory seam. |
+| `Fernlet/FernletTests/SavedRecipePayloadMigrationTests.swift` | The `SavedRecipeRecord` typed-column → payload-blob migration that unblocked F3/F4/F5. |
+| `Fernlet/FernletTests/MealDecompositionRecipeWireTests.swift` | Meal-decomposition recipe payloads over the wire. |
+| `Fernlet/FernletTests/FDADailyValuesTests.swift` | Daily Value table values and their single-source coupling to the gap analyzer. |
+| `Fernlet/FernletTests/NutrientSuggestionTests.swift` | The gap-filling nutrient nudge: curated-source binding and suppression rules. |
+| `Fernlet/FernletTests/BarcodeServingStepTests.swift` | Serving-step prefill memory keyed by normalized GTIN, and its wipe. |
+| `Fernlet/FernletTests/CloudKitSchemaDeployTests.swift` | Purity of the schema-deploy launch-flag parse. |
+| `Fernlet/FernletTests/SettingsSearchIndexTests.swift` | Asserts every `SettingsRoute` case has at least one search entry and a destination. |
+| `Fernlet/FernletTests/AdaptiveColorIsolationTests.swift` | Theme-token resolution isolation across trait changes. |
+| `Fernlet/FernletTests/DisposableCameraOrientationTests.swift` | Camera landscape/rotation and Dynamic-Island-merge geometry. |
+| `Fernlet/FernletTests/MeshSessionHeartTests.swift` | In-session hearts delivered over the mesh. |
+| `Fernlet/FernletTests/SessionMessageUnreadTests.swift` | Mesh session message unread signalling. |
+| `Fernlet/FernletTests/MeshFavoriteObservationTests.swift` | Favorite-peer observation and its effect on home weighting. |
+| `Fernlet/FernletTests/WeightedPhotowallOrderingTests.swift` | Weighted photo-wall ordering. |
 
 ### Test Mocks
 
@@ -595,39 +679,85 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletUITests/ItemCreationFlowUITests.swift` | UI test for the split item-creation flow: the drawing-only editor leading to a separate naming/shop-listing confirmation step. |
 | `Fernlet/FernletUITests/DeleteAllDataUITests.swift` | End-to-end UI test proving "Delete everything" empties the app and stays deleted across a relaunch. |
 | `Fernlet/FernletUITests/DeleteAllDialogAppearanceUITests.swift` | Screenshots the "Delete everything?" confirm dialog and logs its rendered copy/buttons for review. |
+| `Fernlet/FernletUITests/TrainerExportShareUITests.swift` | Trainer-summary share flow, including the delete-on-share-completion path. |
 
 ## Documentation
+
+DocC landing pages (one per SPM module, plus the app and extension targets) are the orientation
+layer and live in-source at `Documentation.docc/`; the tables below are the planning-doc layer.
 
 ### Active
 
 | File | Purpose |
 | --- | --- |
-| `Docs/FernletSpecificationV3.md` | Product specification. |
-| `Docs/ImplementationPlan.md` | Implementation planning notes. |
-| `Docs/SPM-Module-Carveup-Plan.md` | SPM carve-up plan for the `FernletKit` package: the S3 compile-time privacy wall and the cross-platform shared-core layering. |
-| `Docs/CODE_REVIEW_2026-06-12.md` | 2026-06-12 multi-agent code review report: 193 confirmed findings, resolutions, and author design decisions. |
-| `Docs/Custom-Clothing-Plan-2026-06-29.md` | Phased plan for the custom-clothing feature: Increment 1 (grid editor / wardrobe — shipped), Increment 2 (coins), Increment 3 (in-person friend shop). Self-contained per-increment sections for one-increment-per-session work. |
-| `Docs/Fernlet-Review-and-Plan-Updates.md` | 2026-05-28 architecture review: security/privacy findings (SEC-1 through SEC-8), progress-vs-spec audit, French-fries meal bug root-cause, new phases S1/S2/M1/S3 and Mesh Phase 4, settings consolidation IA, and friction-reduction features. |
+| `Docs/FernletSpecificationV3.md` | Canonical product & architecture specification — the source of truth for intended behavior. |
+| `Docs/ImplementationPlan.md` | Phase definitions and rationale, with a reconciled phase-status table and the current "Next up" ordering at the end. |
+| `Docs/RemainingWork-2026-07-19.md` | The live work tracker: App Store items, user-visible defects, the owner-decided implementation queue, unstarted feature work, tech debt, and the real-device verification queue. |
+| `Docs/FernletCoach-Specification-2026-07-19.md` | The Fernlet Coach track (P0→P4), both apps. **§3.3/§3.6/§6/§8 need revising** — they still describe the iMessage+CloudKit hybrid as primary, reversed by the owner on 2026-07-26. |
+| `Docs/Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md` | Sidecar durability, signed prekey, and the coach path. Tracks A and B shipped; Track C stopped at Increment 10's hardening subset — the coach session manager/UI is the outstanding work. |
+| `Docs/Data-Provenance-Coach-Trust-2026-07-12.md` | The coach trust model the coach spec builds on: origin class, trust basis, and per-source revocation. |
+| `Docs/D11-LinkMetadata-Prototype.md` | Harness for the coach P0 `LPLinkMetadata` device test. |
+| `Docs/AI-Provider-Ladder-2026-07-23.md` | The routed provider ladder. Provider seam shipped; the cloud/PCC, BYOK, and iOS-27 tracks remain gated. |
+| `Docs/AI-Feature-Expansion-2026-07-23.md` | Seven features riding the ladder, and the canonical build order for both AI docs. F3/F4/F5 shipped; F6/F7 deferred by decision D-C. |
+| `Docs/SPM-Module-Carveup-Plan.md` | The `FernletKit` carve-up: the S3 compile-time privacy wall and cross-platform layering. One optional item remains (§14 AI-file inversions). |
+| `Docs/Doc-Pass-Anomalies-2026-08-04.md` | Bugs, dead code, and smells logged during the DocC pass. **Never triaged** — several entries are real defects, not smells. |
+| `Docs/Meal-Estimation-Overhaul-Plan.md` | Meal-estimation overhaul. Partially shipped; the chain-restaurant importer and dynamic product-image discovery were not re-audited item-by-item. |
+| `Docs/Multi-Device-Without-iCloud-Design-2026-06-29.md` | Multi-device without iCloud. Phase 1 shipped; Phases 2–3 (owned-device pairing, mesh backup transfer, offline escrow, live merge) unstarted. |
+| `Docs/Custom-Clothing-Plan-2026-06-29.md` | Custom clothing: Increment 1 shipped (grid editor / wardrobe); Increments 2 (coins) and 3 (in-person friend shop) pending. |
+| `Docs/Localization-Plan-2026-07-19.md` | es/fr/de localization. Nothing implemented; Phase 0 fixes are live locale bugs even in English. |
+| `Docs/Sealed-Backup-Escrow-Recovery-FollowUp-2026-06-28.md` | Sealed-backup escrow follow-ups, including BIP39 recovery codes. Not started. |
+| `Docs/Privacy-Policy.md` | The published privacy policy text, mirrored by the in-app view. |
+| `Docs/App-Privacy-Nutrition-Labels.md` | Draft answers for the App Store Connect App Privacy questionnaire (owner-entered). |
+| `Docs/No-Tracking-Wall.md` | The enforced no-tracking boundary: permitted network destinations and why each exists, mechanical vs. policy enforcement, and how to add a destination. Backed by `NoTrackingBoundaryTests`. |
+| `Docs/PrivacyWipeCoverage.md` | The enforced delete-all coverage checklist, backed by `PrivacyWipeCoverageTests`. |
+| `Docs/CloudKit-Schema-Deploy.md` | Runbook for pushing the Core Data model to CloudKit's server-side schema — a manual, developer-run ritual. |
+| `Docs/Friend-Shop-Real-Device-Validation.md` | Two-device validation script for the in-person friend shop. |
+| `Docs/Recipe-P2P-Real-Device-Validation.md` | Two-device validation script for recipe sharing. |
 | `Docs/FileIndex.md` | This file index. |
-| `Docs/ProximityFunctionIndex.md` | Function-level map for proximity, mesh, transport, identity, trust, audit, friend-photo, recipe-share, and related UI code. Use this before adding proximity or mesh behavior to avoid duplicating existing helpers and flows. |
-| `Docs/StoreRepositoryFunctionIndex.md` | Function-level map for `FernletStore`, models, repositories, persistence controllers, storage preferences, snapshot saves, launch preparation, and extracted store services. Use this before adding data mutation, save/load, derived-signal, retry, saved-recipe, or sealed-buffer behavior. |
+| `Docs/ProximityFunctionIndex.md` | Function-level map for proximity, mesh, transport, identity, trust, audit, friend-photo, and recipe-share code. Read before adding proximity behavior. |
+| `Docs/StoreRepositoryFunctionIndex.md` | Function-level map for `FernletStore`, repositories, persistence, storage preferences, snapshot saves, and the extracted store services. Read before adding data-mutation or save/load behavior. |
+| `Docs/design-refs/*.html` | Design mockups the shipped UI was ported from (widget, first aid, companion moments, home ambiance, milestones, good vibes, barcode handoff). Cited from `FernletWidgetsBundle.swift`. |
 
 ### Completed Implementations
 
+Archived plans, each carrying a closure banner stating what shipped and what (if anything) was
+carried to the tracker.
+
 | File | Purpose |
 | --- | --- |
-| `Docs/Completed Implemtations/PR0-Incremental-Migration-Plan.md` | PR0 incremental @Observable migration plan. |
+| `Docs/Completed Implemtations/Security-Hardening-Plan-2026-06-27.md` | S3-wall security hardening. WI-1 through WI-10 plus WI-Q all shipped, including the two deferred architectural items. |
+| `Docs/Completed Implemtations/Canonical-Signing-Encoding-Fix.md` | Cross-platform canonical signing encoder, delivered as WI-6 (`CanonicalSignatureSerializer`, envelope schema v2 with dual verify). |
+| `Docs/Completed Implemtations/WI-6-WI-9-session-prompt.md` | Spent handoff prompt for those two items. |
+| `Docs/Completed Implemtations/Plan-Bitchat-Adoptions-2026-07-25.md` | wire2 framing, privacy-wipe coverage, offline hearts dead-drop, QR ceremony. Merged 2026-07-26; §E BLE presence still deferred. |
+| `Docs/Completed Implemtations/Coin-Ledger-Design-2026-06-29.md` | The append-only coin ledger that replaced the unsound derive-from-day-history model. |
+| `Docs/Completed Implemtations/Social-AppStore-Implementation-Plan-2026-07-11.md` | App Store blockers + the friend social layer, all 6 phases. |
+| `Docs/Completed Implemtations/Phase6-7-Kickoff-Prompt.md` | Spent kickoff prompt for Phases 6–7 of that plan. |
+| `Docs/Completed Implemtations/UI-UX-Review-Prompt-2026-07-09.md` | Spent review prompt for the merged redesign branch. |
+| `Docs/Completed Implemtations/UX-Batch-Continuation-2026-07-17.md` | UX batch round 1. |
+| `Docs/Completed Implemtations/UX-Batch-Continuation-2026-07-17b.md` | UX batch round 2, including the goal preset cards. |
+| `Docs/Completed Implemtations/UX-Batch-Continuation-2026-07-18.md` | UX batch round 3 plus the workout Live Activity. |
+| `Docs/Completed Implemtations/Plan-Goal-Presets-And-Workout-LiveActivity-2026-07-17.md` | Goal presets and the guided-workout Live Activity design. |
+| `Docs/Completed Implemtations/CODE_REVIEW_2026-06-12.md` | Multi-agent review, triage complete: 195 findings, 185 fixed. The 10 survivors are on the tracker (§9). |
+| `Docs/Completed Implemtations/UI-UX-Redesign-Brief-2026-07-08.md` | The parchment redesign brief, delivered via the UX-Batch rounds. Two of its four open questions turned out to be answered by shipped code; two moved to the tracker. |
+| `Docs/Completed Implemtations/Design-Briefs-Report-Features-2026-07-05.md` | Paste-ready mockup briefs; 1–11 shipped (outputs in `design-refs/`). Briefs 12–14 are unanswered design asks, now on the tracker. |
+| `Docs/Completed Implemtations/Fernlet-Review-and-Plan-Updates.md` | 2026-05-28 architecture review; its SEC findings were fixed by the later hardening work. Superseded as a live document. |
+| `Docs/Completed Implemtations/RemainingWork-2026-06-23.md` | The previous work tracker. |
+| `Docs/Completed Implemtations/Day-PerRow-Split-Plan-2026-06-29.md` | The per-row `DayRecord` split. |
+| `Docs/Completed Implemtations/Proximity-Mesh-Redesign-2026-07-10.md` | Proximity mesh redesign, all 5 phases. |
+| `Docs/Completed Implemtations/Proximity-Mesh-Consolidation-Plan.md` | Proximity/mesh consolidation. |
 | `Docs/Completed Implemtations/MeshNetworkImplementationPlan.md` | Mesh network and MultipeerConnectivity implementation plan. |
-| `Docs/Completed Implemtations/FernletStore-Refactor-Plan-v2.md` | Refactor plan for the FernletStore architecture (v2). |
-| `Docs/Completed Implemtations/Life-Tab-Redesign-Implementation-Plan.md` | Life tab (Friends/social) redesign implementation plan. |
-| `Docs/Completed Implemtations/Dead-Code-and-Carryover-Gap-Review.md` | Dead-code review plus the `MeshLobbyView` → `ConnectView`/disposable-camera carryover-gap audit. |
-| `Docs/Completed Implemtations/healthkit-integration-plan.md` | HealthKit integration plan. |
-| `Docs/Completed Implemtations/fernlet-period-intimacy-plan.md` | Period and intimacy feature plan. |
-| `Docs/Completed Implemtations/PeriodAlgorithimResearch.md` | Research notes on period/cycle prediction algorithms. |
 | `Docs/Completed Implemtations/phase7-proximity-implementation-plan.md` | Phase 7 proximity feature implementation plan. |
 | `Docs/Completed Implemtations/proximity-handshake-process-map.md` | Process map for the proximity identity handshake flow. |
-| `Docs/Completed Implemtations/StartupAndBiometricFixPlan.md` | Plan for startup sequence and biometric authentication fixes. |
-| `Docs/Completed Implemtations/codex-implementation-prompts.md` | Codex-style prompts used to guide feature implementation. |
+| `Docs/Completed Implemtations/FernletStore-Refactor-Plan-v2.md` | FernletStore architecture refactor (v2). |
+| `Docs/Completed Implemtations/PR0-Incremental-Migration-Plan.md` | PR0 incremental `@Observable` migration plan. |
+| `Docs/Completed Implemtations/Life-Tab-Redesign-Implementation-Plan.md` | Life tab (Friends/social) redesign. |
+| `Docs/Completed Implemtations/StartupAndBiometricFixPlan.md` | Startup sequence and biometric authentication fixes. |
+| `Docs/Completed Implemtations/healthkit-integration-plan.md` | HealthKit integration plan. |
+| `Docs/Completed Implemtations/fernlet-period-intimacy-plan.md` | Period and intimacy feature plan. |
+| `Docs/Completed Implemtations/PeriodAlgorithimResearch.md` | Research behind period/cycle prediction. |
+| `Docs/Completed Implemtations/Workout-Rest-Guidance-Research-2026-07-19.md` | Evidence base behind the shipped `WorkoutRestGuidance` defaults. |
+| `Docs/Completed Implemtations/Dead-Code-and-Carryover-Gap-Review.md` | Dead-code review plus the `MeshLobbyView` → `ConnectView` carryover-gap audit. |
+| `Docs/Completed Implemtations/codex-implementation-prompts.md` | Codex-style prompts used to guide the Move refactor and trainer integration. |
 
 ## Scripts And CI
 

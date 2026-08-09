@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — SHIPPED.** Delivered as WI-6 of [Security-Hardening-Plan-2026-06-27.md](Security-Hardening-Plan-2026-06-27.md) §1a: `CanonicalSignatureSerializer` (positional, length-prefixed binary) replaced the `JSONEncoder(.sortedKeys)` signing path, envelopes bump to `currentSchemaVersion = 2` with dual v1/v2 verify, `makeCanonicalSignatureEncoder()` is deleted, and golden-vector tests live in `FernletTests/FernletIdentityEnvelopeTests.swift`. The §7 checklist below was never ticked but every item is verified done on `main`. Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Canonical Signing Encoding — Cross-Platform Fix
 
 **Status:** Proposed (prerequisite for the Android port; see [cross-platform direction]).
@@ -13,7 +15,7 @@ signs or verifies. Must be fixed **before the first non-Apple peer ships**.
 
 Every peer-to-peer message in the proximity mesh is **signed over canonical JSON** produced by
 Apple's `Foundation.JSONEncoder` (`makeCanonicalSignatureEncoder()` in
-[`FernletIdentityEnvelope.swift`](../Fernlet/Proximity/Wire/FernletIdentityEnvelope.swift)). The
+[`FernletIdentityEnvelope.swift`](../../FernletKit/Sources/ProximityKit/Wire/FernletIdentityEnvelope.swift)). The
 signature is **recomputed independently by the receiver** from the decoded struct, so **sender and
 receiver must produce byte-identical canonical bytes** or the signature fails to verify.
 
@@ -37,7 +39,7 @@ Two types are signed. Both zero their signature field, encode via the shared can
 Ed25519-sign the result.
 
 ### 2.1 `FernletIdentityEnvelope` — every P2P transfer
-([`FernletIdentityEnvelope.swift:11`](../Fernlet/Proximity/Wire/FernletIdentityEnvelope.swift))
+([`FernletIdentityEnvelope.swift:11`](../../FernletKit/Sources/ProximityKit/Wire/FernletIdentityEnvelope.swift))
 
 ```
 schemaVersion: Int
@@ -55,7 +57,7 @@ expiresAt: Date?                        // ⚠ optional + ISO8601
 signature: Data                         // zeroed during signing
 ```
 
-`PayloadSummary` ([`PayloadType.swift:53`](../Fernlet/Proximity/Wire/PayloadType.swift)) is the
+`PayloadSummary` ([`PayloadType.swift:53`](../../FernletKit/Sources/FernletDomainModel/PayloadType.swift)) is the
 worst offender — it concentrates three divergence vectors at once:
 
 ```
@@ -66,12 +68,12 @@ dateRange: DateRange?          // ⚠ optional; nested DateRange { start: Date; 
 extraDetails: [String: String] // ⚠ ARBITRARY keys + values (sort order + escaping)
 ```
 
-`PayloadEncryption` ([`PayloadType.swift:41`](../Fernlet/Proximity/Wire/PayloadType.swift)) is an
+`PayloadEncryption` ([`PayloadType.swift:41`](../../FernletKit/Sources/FernletDomainModel/PayloadType.swift)) is an
 enum with an associated value (`case sealedTo(recipientKeyAgreementPublicKey: Data)`), which Swift
 synthesizes into a nested `{"sealedTo": { … }}` JSON shape.
 
 ### 2.2 `MeshAdmissionToken` — mesh join authorization
-([`MeshPayloads.swift:77`](../Fernlet/Proximity/Wire/MeshPayloads.swift))
+([`MeshPayloads.swift:77`](../../FernletKit/Sources/ProximityKit/Wire/MeshPayloads.swift))
 
 ```
 meshID: UUID
@@ -106,9 +108,9 @@ Sign = `IdentityService.sign` → `Curve25519.Signing.PrivateKey.signature(for:)
 Verify = `Curve25519.Signing.PublicKey.isValidSignature(_:for:)`.
 
 **Critical:** the wire/transport encoding is a *separate, plain* `JSONEncoder()` (e.g.
-[`ProximityCoordinator.swift:299`](../Fernlet/Proximity/Engine/ProximityCoordinator.swift)). The
+[`ProximityCoordinator.swift:299`](../../FernletKit/Sources/ProximityKit/Engine/ProximityCoordinator.swift)). The
 receiver **decodes the wire JSON, then re-runs `canonicalBytes(for:)` on the decoded struct** and
-checks the signature ([`FernletIdentityEnvelope.swift:69`](../Fernlet/Proximity/Wire/FernletIdentityEnvelope.swift)).
+checks the signature ([`FernletIdentityEnvelope.swift:69`](../../FernletKit/Sources/ProximityKit/Wire/FernletIdentityEnvelope.swift)).
 So the canonical bytes are reconstructed independently on each peer — which is exactly why
 cross-platform determinism is mandatory.
 
@@ -255,7 +257,7 @@ platforms, using only the standard library (`Data`, `UInt32` big-endian, UTF-8) 
   `schemaVersion == 1`).
 - **No persisted-signature migration needed.** Everything signed is ephemeral — envelopes are
   transient and admission tokens expire in ~2 h
-  ([`MeshPayloads.swift:165`](../Fernlet/Proximity/Wire/MeshPayloads.swift)). Nothing signed is
+  ([`MeshPayloads.swift:165`](../../FernletKit/Sources/ProximityKit/Wire/MeshPayloads.swift)). Nothing signed is
   stored long-term, so there is no historical data to re-sign.
 - **It is a coordinated wire change**, not a compatibility shim: a v1 and a v2 peer cannot interop
   (different signed bytes). Since proximity is in-person and both devices run whatever build they
@@ -278,7 +280,7 @@ identically, you pin the bytes and assert them on every platform.
 3. **Cross-stack round-trip.** Sign on stack A, verify on stack B, and vice-versa, for both types.
 4. **Property test:** `verify(sign(x)) == true` and any single-field mutation ⇒ `signatureInvalid`.
 5. Home for these: extend
-   [`FernletTests/FernletIdentityEnvelopeTests.swift`](../FernletTests/FernletIdentityEnvelopeTests.swift).
+   [`FernletTests/FernletIdentityEnvelopeTests.swift`](../../FernletTests/FernletIdentityEnvelopeTests.swift).
 
 ---
 

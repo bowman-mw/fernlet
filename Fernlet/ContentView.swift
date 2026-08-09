@@ -934,14 +934,19 @@ struct ContentView: View {
     }
 }
 
-/// One page of the Private hub (cycle, intimacy, friends notes, photos), keyed by `FernletScreen`.
+/// The Private hub's intimacy page: the month calendar, the privacy note, and the sealed notes list.
 ///
-/// The intimacy page is the interesting one: it holds decrypted `IntimacyLog` values in @State,
-/// so it scrubs itself the moment `isIntimacyTrackingVisible` flips off (hiding must drop resident
-/// plaintext, not just refuse the next load) and merges the sealed local logs with the HealthKit
-/// per-day event counts for the calendar.
-struct PersonalScreenView: View {
-    var screen: FernletScreen
+/// It holds decrypted `IntimacyLog` values in @State, so it scrubs itself the moment
+/// `isIntimacyTrackingVisible` flips off (hiding must drop resident plaintext, not just refuse the
+/// next load) and merges the sealed local logs with the HealthKit per-day event counts for the
+/// calendar.
+///
+/// This used to be a `PersonalScreenView` switching over every `FernletScreen` case, but only the
+/// intimacy arm was ever built — the cycle, photo-wall, friends-notes, food, move and journal arms
+/// had no call site, and every surface they described already ships elsewhere (``PeriodTrackerView``
+/// on the hub's own period page, the Home photowall and `FriendPhotoFeedView` for photos,
+/// `ProgressPhotoSection` on the workout page). The type is what it always actually was.
+struct IntimacyScreenView: View {
     @Bindable var store: FernletStore
     /// The gated funnel for intimacy sealed-note reads. Owned by `ContentView`, threaded through
     /// `PrivateHubView`. Its `isVisible` is wired to the derived gate in `ContentView`'s launch task, so
@@ -963,24 +968,18 @@ struct PersonalScreenView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top) {
                         ScreenHeader(
-                            title: screen.title,
-                            subtitle: screen.subtitle,
-                            identifier: screen == .intimacyTracking ? "screen.intimacy" : nil
+                            title: "Intimacy",
+                            subtitle: "Private intimacy notes.",
+                            identifier: "screen.intimacy"
                         )
                         Spacer()
-                        HeaderActionButton(systemImage: primaryActionIcon) {
-                            handlePrimaryAction()
+                        HeaderActionButton(systemImage: "plus") {
+                            activeSheet = .logIntimacy
                         }
                     }
                     .padding(.top, 4)
 
-                    if screen == .intimacyTracking {
-                        personalScreenBody
-                    } else {
-                        FernletScrollSection(todaySectionTitle) {
-                            personalScreenBody
-                        }
-                    }
+                    intimacyBody
                 }
                 .padding(20)
             }
@@ -991,114 +990,55 @@ struct PersonalScreenView: View {
         }
     }
 
-    private var todaySectionTitle: String {
-        switch screen {
-        case .periodTracking: "Cycle"
-        case .intimacyTracking: "Private"
-        case .friends: "People"
-        case .photos: "Photo wall"
-        case .food, .move, .journal: "Today"
-        }
-    }
+    private var intimacyBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            IntimacyCalendarCard(
+                displayedMonth: $intimacyDisplayedMonth,
+                eventsByDay: intimacyEventsByDay
+            )
+            Text("Intimacy access is private, optional, and age-gated.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
 
-    private var primaryActionIcon: String {
-        switch screen {
-        case .periodTracking, .intimacyTracking:
-            "plus"
-        case .photos:
-            "photo.badge.plus"
-        case .friends:
-            "square.and.pencil"
-        case .food, .move, .journal:
-            "plus"
-        }
-    }
-
-    @ViewBuilder
-    private var personalScreenBody: some View {
-        switch screen {
-        case .periodTracking:
-            VStack(alignment: .leading, spacing: 8) {
-                Label(cycleSummary, systemImage: screen.systemImage)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                Text("Use Health access in Settings to keep cycle context available here.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-            .padding(.vertical, 8)
-        case .intimacyTracking:
-            VStack(alignment: .leading, spacing: 12) {
-                IntimacyCalendarCard(
-                    displayedMonth: $intimacyDisplayedMonth,
-                    eventsByDay: intimacyEventsByDay
-                )
-                Text("Intimacy access is private, optional, and age-gated.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-
-                FernletScrollSection("Notes") {
-                    if intimacyLogs.isEmpty {
-                        EmptyState(text: "No private intimacy notes yet.")
-                    } else {
-                        ForEach(Array(intimacyLogs.prefix(12).enumerated()), id: \.element.id) { index, log in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(log.eventDate.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+            FernletScrollSection("Notes") {
+                if intimacyLogs.isEmpty {
+                    EmptyState(text: "No private intimacy notes yet.")
+                } else {
+                    ForEach(Array(intimacyLogs.prefix(12).enumerated()), id: \.element.id) { index, log in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(log.eventDate.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+                                .font(.fernlet(.labelSmall))
+                                .foregroundStyle(Color.slate)
+                            if !log.note.isEmpty {
+                                Text(log.note)
+                                    .font(.fernlet(.body))
+                                    .foregroundStyle(Color.bark)
+                                    .fernletWrappingText()
+                            }
+                            if log.healthKitExternalUUID != nil {
+                                Label("Saved to Apple Health", systemImage: "heart.text.square")
                                     .font(.fernlet(.labelSmall))
-                                    .foregroundStyle(Color.slate)
-                                if !log.note.isEmpty {
-                                    Text(log.note)
-                                        .font(.fernlet(.body))
-                                        .foregroundStyle(Color.bark)
-                                        .fernletWrappingText()
-                                }
-                                if log.healthKitExternalUUID != nil {
-                                    Label("Saved to Apple Health", systemImage: "heart.text.square")
-                                        .font(.fernlet(.labelSmall))
-                                        .foregroundStyle(Color.moss)
-                                }
+                                    .foregroundStyle(Color.moss)
                             }
-                            .padding(.vertical, 4)
-                            if index < intimacyLogs.prefix(12).count - 1 {
-                                FernletRowDivider()
-                            }
+                        }
+                        .padding(.vertical, 4)
+                        if index < intimacyLogs.prefix(12).count - 1 {
+                            FernletRowDivider()
                         }
                     }
                 }
             }
-            .task(id: intimacyDisplayedMonth) { await loadIntimacyCalendar() }
-            .onChange(of: activeSheet?.id) { _, newValue in
-                if newValue == nil { Task { await loadIntimacyCalendar() } }
-            }
-            // Hiding must drop plaintext already on screen, not just refuse the next load — this view
-            // holds decrypted logs in @State for as long as it stays in the hierarchy.
-            .onChange(of: store.isIntimacyTrackingVisible) { _, visible in
-                if !visible { scrubIntimacyState() }
-            }
-        case .friends:
-            PersonalMemoryList(category: "friend", emptyText: "No friend notes yet.", store: store)
-        case .photos:
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: -8) {
-                    PolaroidTile(color: .fern.opacity(0.45), caption: "today", rotation: -2)
-                    PolaroidTile(color: .dustyRose.opacity(0.38), caption: "people", rotation: 2)
-                    PolaroidTile(color: .goldenrod.opacity(0.45), caption: "places", rotation: -1)
-                }
-                Text("Photo imports can live here when the photo picker is added.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-            .padding(.vertical, 4)
-        case .food, .move, .journal:
-            EmptyView()
         }
-    }
-
-    private var cycleSummary: String {
-        "Tap to view your cycle"
+        .task(id: intimacyDisplayedMonth) { await loadIntimacyCalendar() }
+        .onChange(of: activeSheet?.id) { _, newValue in
+            if newValue == nil { Task { await loadIntimacyCalendar() } }
+        }
+        // Hiding must drop plaintext already on screen, not just refuse the next load — this view
+        // holds decrypted logs in @State for as long as it stays in the hierarchy.
+        .onChange(of: store.isIntimacyTrackingVisible) { _, visible in
+            if !visible { scrubIntimacyState() }
+        }
     }
 
     /// Drops the intimacy plaintext held in view state. Safe to call when already empty.
@@ -1127,57 +1067,6 @@ struct PersonalScreenView: View {
             intimacyEventsByDay = healthEventsByDay.merging(localEventsByDay) { max($0, $1) }
         } catch {
             intimacyEventsByDay = localEventsByDay
-        }
-    }
-
-    private func handlePrimaryAction() {
-        switch screen {
-        case .periodTracking:
-            activeSheet = .settings
-        case .intimacyTracking:
-            activeSheet = .logIntimacy
-        case .friends:
-            activeSheet = .journal
-        case .photos:
-            break
-        case .food, .move, .journal:
-            break
-        }
-    }
-}
-
-/// A short list of the user's `MemoryNote`s filtered by category substring (e.g. "friend").
-///
-/// Used by ``PersonalScreenView``'s friends page; caps at eight rows and shows the supplied empty
-/// state when nothing matches.
-struct PersonalMemoryList: View {
-    var category: String
-    var emptyText: String
-    @Bindable var store: FernletStore
-
-    private var memories: [MemoryNote] {
-        store.memories.filter { $0.category.localizedCaseInsensitiveContains(category) }
-    }
-
-    var body: some View {
-        if memories.isEmpty {
-            EmptyState(text: emptyText)
-        } else {
-            ForEach(Array(memories.prefix(8).enumerated()), id: \.element.id) { index, memory in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(memory.text)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                        .fernletWrappingText()
-                    Text(memory.sourceDate.formatted(.dateTime.month(.abbreviated).day().year()))
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                }
-                .padding(.vertical, 4)
-                if index < min(memories.count, 8) - 1 {
-                    FernletRowDivider()
-                }
-            }
         }
     }
 }
@@ -1334,7 +1223,7 @@ struct LaunchScreen: View {
 /// (paging chevrons, future months disabled) over ``IntimacyCalendarCell``s.
 ///
 /// Pure presentation over the pre-computed `eventsByDay` counts; the sealed-store and HealthKit
-/// reads happen in ``PersonalScreenView``'s `loadIntimacyCalendar`, never here.
+/// reads happen in ``IntimacyScreenView``'s `loadIntimacyCalendar`, never here.
 private struct IntimacyCalendarCard: View {
     @Binding var displayedMonth: Date
     var eventsByDay: [String: Int]

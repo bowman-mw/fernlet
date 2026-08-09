@@ -91,6 +91,11 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
    **OpenFoodFacts API (free, keyless)** primary, USDA FoodData Central API (free key) as
    US-branded fallback; sends barcode digits only. No subscription. The offline ODR branded
    catalog stays the roadmap endgame.
+   **Note (2026-08-09):** neither host is contacted today — USDA data ships bundled offline and the
+   only host the app itself chooses is DuckDuckGo (product search, same opt-in). Shipping this item
+   therefore ADDS two outbound destinations and must update the allowlist in
+   `FernletTests/NoTrackingBoundaryTests` plus [No-Tracking-Wall.md](No-Tracking-Wall.md) in the same
+   commit, or CI fails. That is the wall working as intended, not an obstacle.
 4. **Mesh admission prompt: WIRE `MeshAdmissionPromptSheet`** (don't delete the path).
 5. **Hearts copy: keep "for now"** — remote send-heart ships when the CloudKit dead-drop
    foundation lands with coach P1.
@@ -133,7 +138,7 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
   importer shipped; the chain-restaurant importer extension and dynamic product-image discovery from
   [Meal-Estimation-Overhaul-Plan.md](Meal-Estimation-Overhaul-Plan.md) were not re-audited item-by-item.
 - ✅ **Send-heart remote delivery SHIPPED 2026-07-25** (bitchat adoptions Increment 3, branch
-  `claude/bitchat-adoptions`, [Plan-Bitchat-Adoptions-2026-07-25.md](Plan-Bitchat-Adoptions-2026-07-25.md)):
+  `claude/bitchat-adoptions`, [Plan-Bitchat-Adoptions-2026-07-25.md](Completed%20Implemtations/Plan-Bitchat-Adoptions-2026-07-25.md)):
   CloudKit public-DB E2EE dead-drop + proximity hybrid, with one-time-prekey forward secrecy and
   day-rotating HMAC tags; opt-in `heartsAwayDelivery` (default OFF). The same round also landed
   wire2 sealed-payload compress+pad framing, the enforced privacy-wipe coverage checklist
@@ -142,7 +147,7 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
   `payload` bytes) from the CloudKit Development schema to Production in the console — dev
   auto-creates it on first save; production will not.
 - **BLE wake-on-proximity presence** — deferred by decision 2026-07-25; design sketch in
-  [Plan-Bitchat-Adoptions-2026-07-25.md](Plan-Bitchat-Adoptions-2026-07-25.md) §E (tags/envelopes
+  [Plan-Bitchat-Adoptions-2026-07-25.md](Completed%20Implemtations/Plan-Bitchat-Adoptions-2026-07-25.md) §E (tags/envelopes
   kept transport-agnostic for it); revisit with the Android/cross-platform transport work.
 - **Cloud cascading-trust for large group activities** — deferred by scope from the social plan.
 
@@ -188,16 +193,108 @@ offline App Attest verify prototype, D11 `LPLinkMetadata` device test
 ([harness ready](D11-LinkMetadata-Prototype.md)), App Clip fragment survival, universal-link domain
 (D6). D5 licensing: ✅ resolved 2026-07-19 by the Apache-2.0 LICENSE.
 
+## 9. Survivors from the three closed review/brief docs (added 2026-08-09)
+
+`CODE_REVIEW_2026-06-12.md`, `UI-UX-Redesign-Brief-2026-07-08.md`, and
+`Design-Briefs-Report-Features-2026-07-05.md` were closed into `Completed Implemtations/` on
+2026-08-09 after a code-verified reconciliation. Everything still genuinely open from them lives
+here now, so the archived docs are not load-bearing.
+
+**From the code review (9 of 195 findings open; 186 fixed):**
+
+- ✅ **Sealed backup replay/rollback — FIXED 2026-08-09.** Generation counter + `updatedAt` bound into
+  a versioned GCM AAD, plus the device-local `SealedBackupGenerationStore` high-water mark that
+  rejects an older-but-authentic generation as the terminal `.rolledBack` outcome. No migration was
+  needed (no users yet), so the field ships required and fail-closed. **OWNER ACTION:** promote the
+  `generation` field on `SealedBackupRecord` to the CloudKit **Production** schema before shipping —
+  a Production container without it cannot restore any backup. See
+  [CloudKit-Schema-Deploy.md](CloudKit-Schema-Deploy.md).
+2. **`SharedRecipeImportRecord` duplicated across the app and share-extension targets** with
+   divergent App-Group fallback paths — and the extension-side mirror omits `budgetDeferredDayKey`
+   while rewriting the whole queue file, so any share strips the budget-deferral stamp from every
+   queued record. Also uncoordinated (no `NSFileCoordinator`) on the extension side. *This is now a
+   real bug, not just duplication.*
+3. **HTML fetch / JSON-LD helpers duplicated** between `RecipeWebImporter` and
+   `FoodProductWebImporter` (`fetchHTML` still defined in both). Blocked by the
+   `AppServices`→`AIProviders` cycle in [SPM-Module-Carveup-Plan.md](SPM-Module-Carveup-Plan.md) §14.
+4. **Draft-exercise state machine copy-pasted** across `WorkoutSheet` and `WorkoutPlanSheet`
+   (`MoveView.swift` 748/763 vs 2976/3005) — the row editor is shared, the state machine is not.
+5. **Two parallel proximity audit trails** (`ConnectionSessionLog` + `TrainerAuditLog`) record the
+   same events. Needs a keep-both-or-merge decision; may be intentional.
+6. **`loadSnapshotAsync` duplicates the `loadDatabase` pipeline** in `CoreDataFernletRepository`. The
+   snapshot-assembly half was fixed by `FernletSnapshot.assembled`; the load pipeline was not.
+7. **`addJournal` overloads duplicate bookkeeping** — the today path uses `batchSnapshotPersistence`,
+   the dated path uses `diary.mutateDay`.
+8. ✅ **`SUPPORTED_PLATFORMS` — FIXED 2026-08-09.** Narrowed to `"iphoneos iphonesimulator"` on all
+   ten configurations, matching the widget and extension targets. (Two inert
+   `LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]` conditionals remain; they are template leftovers that can
+   never apply now and were left alone.)
+
+**From the UI/UX brief (2 of 4 open questions; the other 2 were answered by shipped code):**
+
+9. **Global IA (A1)** — flatten the Private tab to a NavigationStack list, or keep nested paging?
+   Still a paged `TabView`.
+10. **Settings (A2)** — decide whether Debug/Tier-2/Signals compile out under `DEBUG`.
+
+11. ✅ **`PersonalScreenView`'s dead arms — REMOVED 2026-08-09.** The arms were never reachable
+    (`PersonalScreenView` had exactly one call site, `PrivateHubView.swift:67`, passing
+    `.intimacyTracking`), and everything they would have shown already ships elsewhere: the Home
+    photowall, the Friends photo feed, the meal-photo Home card, the lock-gated progress timeline on
+    Move, and the hub's own period page. Rather than wire them up, the owner had them pruned. Removed:
+    every unreachable arm, the vestigial `screen:`/`periodStore:`/`periodContext:` parameters (the
+    type is now `IntimacyScreenView`, which is what it always was), `PhotoWallView.swift`, the
+    `photoWallStore` and its delete-all wiring, and `PersonalMemoryList` (whose only call site was the
+    dead `.friends` arm). ~1,100 lines net.
+    **Follow-up for the owner:** `FernletScreen` (FernletDomainModel) now has **zero real consumers** —
+    its `title`/`subtitle`/`systemImage` are read by nobody, and its two remaining touch points
+    (`FernletShortcut.screen`, `SensitiveSurfaceVisibility.allows(_:)`) have no callers either.
+    Removing it is a public-API cleanup that also edits a DocC Topics list, so it was left for an
+    explicit call.
+
+**From the design briefs (open *design* asks, not implementation work):**
+
+11. **Briefs 12–14 — DECIDED 2026-08-09 (owner).**
+    - **Brief 12 (adventure / rest energy loop): CUT.** The companion must not leave the screen, which
+      removes the away-state the whole brief was built around. Nothing to scope.
+    - **Brief 13 (proud-dandelion cumulative growth): parked**, and effectively moot — it and brief 12
+      were two shapes of the same "give good days a non-streak payoff" idea, and cutting 12 removes
+      the collision that made choosing between them urgent.
+    - **Brief 14 (cumulative history / insights view): CHOSEN — the one to build.** Still needs a
+      design answer before it can be scoped: what "patterns, not grades" actually renders. The
+      material already exists as per-feature month calendars (journal / period / intimacy) that could
+      unify into one component — note `MonthGridModel` + `MonthCalendarCard` already exist and are the
+      natural substrate. Constraint from [FernletSpecificationV3.md](FernletSpecificationV3.md) §12:
+      ambient features must avoid dashboards, charts, percentiles, comparisons, and nags, so this can
+      show neither completion rates nor streaks nor scores. Weigh against Trends, which already covers
+      part of the ground.
+
+---
+
 ## 8. Reference docs status
 
-- [ImplementationPlan.md](ImplementationPlan.md) — historical phase statuses are stale (2026-05-18
-  era); trust this tracker instead. Kept for phase definitions and rationale.
+> **Doc-structure pass 2026-08-09.** Nine completed plans were closed into `Completed Implemtations/`
+> (security hardening + its WI-6 canonical-signing fix and session prompt, the bitchat-adoptions
+> round, the coin ledger, the social Phase 6–7 and UI/UX review prompts, the 2026-05-28 architecture
+> review, and the workout-rest research). All three indexes were refreshed, `ImplementationPlan.md`
+> gained a reconciled phase-status table, and every markdown link in the repo now resolves.
+
+- [ImplementationPlan.md](ImplementationPlan.md) — **refreshed 2026-08-09:** now carries a reconciled
+  per-phase status table and a current "Next up" section. Its per-phase *prose* remains
+  as-written-at-the-time; take completion state from the table, and fine-grained remaining work from
+  this tracker.
 - [Meal-Estimation-Overhaul-Plan.md](Meal-Estimation-Overhaul-Plan.md) — partially shipped; not
   re-audited item-by-item (see §4).
-- [Fernlet-Review-and-Plan-Updates.md](Fernlet-Review-and-Plan-Updates.md) — historical 2026-05-28
+- [Fernlet-Review-and-Plan-Updates.md](Completed%20Implemtations/Fernlet-Review-and-Plan-Updates.md) — historical 2026-05-28
   review; its SEC-1/2/3 findings were fixed by the later security-hardening work.
 - Function indexes ([StoreRepositoryFunctionIndex.md](StoreRepositoryFunctionIndex.md),
-  [ProximityFunctionIndex.md](ProximityFunctionIndex.md)) — not refreshed in this pass; verify
-  against source when in doubt. [FileIndex.md](FileIndex.md) refreshed 2026-07-19.
-- Ten completed plans were closed into `Completed Implemtations/` on 2026-07-19, each with a status
-  banner.
+  [ProximityFunctionIndex.md](ProximityFunctionIndex.md)) — **refreshed 2026-08-09** with the
+  subsystems shipped since 2026-07-19: away-hearts dead-drop, `ProtectedSidecar`, wire2 framing, the
+  QR ceremony, the coach trust/ceremony types, the AI routing/budget seam, `AppendOnlyRowStore` and
+  its ledger services, and the CloudKit heart-drop transport.
+  [FileIndex.md](FileIndex.md) — **refreshed 2026-08-09**; a coverage scan now confirms every source
+  file in the repo has a row (75 were missing, mostly the July AI-ladder, heart-drop, coach, and
+  cooking-mode rounds).
+- Ten completed plans were closed into `Completed Implemtations/` on 2026-07-19 and twelve more on
+  2026-08-09, each with a status banner. The last three (the 2026-06-12 code review, the UI/UX
+  redesign brief, and the report-feature design briefs) were closed after a code-verified
+  reconciliation; their survivors are §9 above.

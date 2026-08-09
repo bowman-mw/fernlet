@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — REFERENCE.** The evidence base behind the shipped `FernletKit/Sources/FernletDomainModel/WorkoutRestGuidance.swift`. No implementation work outstanding; archived alongside [PeriodAlgorithimResearch.md](PeriodAlgorithimResearch.md) as standing research. Every value it recommends is a default and stays overridable per exercise.
+
 # Inter-set rest guidance — evidence base (2026-07-19)
 
 Research behind `FernletDomainModel/WorkoutRestGuidance.swift`: how long the guided-workout rest
