@@ -3,9 +3,13 @@
 Scoping for seven features that ride on the provider ladder in
 [AI-Provider-Ladder-2026-07-23.md](AI-Provider-Ladder-2026-07-23.md).
 
-**Status:** planned, not started. Every file:line below was read and adversarially re-verified
-against `main` @ `4916cd0`. Where a survey claim was refuted, the corrected fact is what appears
-here.
+**Status (2026-08-09):** **partially shipped** — see the SHIPPED STATUS block in §1 for the
+authoritative per-step state. Landed: STEP 0b/0c/0, F1(a), F2, the provider-seam refactor, and
+features F4 (scaling + substitution), F3 (grocery share-text + weekly planner), F5 (cooking mode +
+Live Activity + Siri intents). Not landed: the cloud/BYOK/iOS-27 tracks (gated), and F6/F7
+(deferred by decision D-C). Every file:line below was read and adversarially re-verified against
+`main` @ `4916cd0` at authoring time. Where a survey claim was refuted, the corrected fact is what
+appears here.
 
 **Revised 2026-07-24** — post-audit revision (99-agent verification pass) plus owner decisions D-A
 (recipe store), D-B (PCC consent), D-C (F6/F7 deferred), D-D (two-adapter BYOK). §1 below is now the

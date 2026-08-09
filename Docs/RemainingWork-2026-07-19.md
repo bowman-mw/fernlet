@@ -133,7 +133,7 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
   importer shipped; the chain-restaurant importer extension and dynamic product-image discovery from
   [Meal-Estimation-Overhaul-Plan.md](Meal-Estimation-Overhaul-Plan.md) were not re-audited item-by-item.
 - ✅ **Send-heart remote delivery SHIPPED 2026-07-25** (bitchat adoptions Increment 3, branch
-  `claude/bitchat-adoptions`, [Plan-Bitchat-Adoptions-2026-07-25.md](Plan-Bitchat-Adoptions-2026-07-25.md)):
+  `claude/bitchat-adoptions`, [Plan-Bitchat-Adoptions-2026-07-25.md](Completed%20Implemtations/Plan-Bitchat-Adoptions-2026-07-25.md)):
   CloudKit public-DB E2EE dead-drop + proximity hybrid, with one-time-prekey forward secrecy and
   day-rotating HMAC tags; opt-in `heartsAwayDelivery` (default OFF). The same round also landed
   wire2 sealed-payload compress+pad framing, the enforced privacy-wipe coverage checklist
@@ -142,7 +142,7 @@ All decided by the owner in the 2026-07-19 decision round; the first four are no
   `payload` bytes) from the CloudKit Development schema to Production in the console — dev
   auto-creates it on first save; production will not.
 - **BLE wake-on-proximity presence** — deferred by decision 2026-07-25; design sketch in
-  [Plan-Bitchat-Adoptions-2026-07-25.md](Plan-Bitchat-Adoptions-2026-07-25.md) §E (tags/envelopes
+  [Plan-Bitchat-Adoptions-2026-07-25.md](Completed%20Implemtations/Plan-Bitchat-Adoptions-2026-07-25.md) §E (tags/envelopes
   kept transport-agnostic for it); revisit with the Android/cross-platform transport work.
 - **Cloud cascading-trust for large group activities** — deferred by scope from the social plan.
 
@@ -190,14 +190,27 @@ offline App Attest verify prototype, D11 `LPLinkMetadata` device test
 
 ## 8. Reference docs status
 
-- [ImplementationPlan.md](ImplementationPlan.md) — historical phase statuses are stale (2026-05-18
-  era); trust this tracker instead. Kept for phase definitions and rationale.
+> **Doc-structure pass 2026-08-09.** Nine completed plans were closed into `Completed Implemtations/`
+> (security hardening + its WI-6 canonical-signing fix and session prompt, the bitchat-adoptions
+> round, the coin ledger, the social Phase 6–7 and UI/UX review prompts, the 2026-05-28 architecture
+> review, and the workout-rest research). All three indexes were refreshed, `ImplementationPlan.md`
+> gained a reconciled phase-status table, and every markdown link in the repo now resolves.
+
+- [ImplementationPlan.md](ImplementationPlan.md) — **refreshed 2026-08-09:** now carries a reconciled
+  per-phase status table and a current "Next up" section. Its per-phase *prose* remains
+  as-written-at-the-time; take completion state from the table, and fine-grained remaining work from
+  this tracker.
 - [Meal-Estimation-Overhaul-Plan.md](Meal-Estimation-Overhaul-Plan.md) — partially shipped; not
   re-audited item-by-item (see §4).
-- [Fernlet-Review-and-Plan-Updates.md](Fernlet-Review-and-Plan-Updates.md) — historical 2026-05-28
+- [Fernlet-Review-and-Plan-Updates.md](Completed%20Implemtations/Fernlet-Review-and-Plan-Updates.md) — historical 2026-05-28
   review; its SEC-1/2/3 findings were fixed by the later security-hardening work.
 - Function indexes ([StoreRepositoryFunctionIndex.md](StoreRepositoryFunctionIndex.md),
-  [ProximityFunctionIndex.md](ProximityFunctionIndex.md)) — not refreshed in this pass; verify
-  against source when in doubt. [FileIndex.md](FileIndex.md) refreshed 2026-07-19.
-- Ten completed plans were closed into `Completed Implemtations/` on 2026-07-19, each with a status
-  banner.
+  [ProximityFunctionIndex.md](ProximityFunctionIndex.md)) — **refreshed 2026-08-09** with the
+  subsystems shipped since 2026-07-19: away-hearts dead-drop, `ProtectedSidecar`, wire2 framing, the
+  QR ceremony, the coach trust/ceremony types, the AI routing/budget seam, `AppendOnlyRowStore` and
+  its ledger services, and the CloudKit heart-drop transport.
+  [FileIndex.md](FileIndex.md) — **refreshed 2026-08-09**; a coverage scan now confirms every source
+  file in the repo has a row (75 were missing, mostly the July AI-ladder, heart-drop, coach, and
+  cooking-mode rounds).
+- Ten completed plans were closed into `Completed Implemtations/` on 2026-07-19 and nine more on
+  2026-08-09, each with a status banner.

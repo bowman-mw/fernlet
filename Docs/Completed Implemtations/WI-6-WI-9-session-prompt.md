@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — SPENT.** Handoff prompt for the two deferred S3-wall items; both are ✅ Done in [Security-Hardening-Plan-2026-06-27.md](Security-Hardening-Plan-2026-06-27.md) §1a, so re-pasting this prompt has nothing left to do. Kept for the reasoning it records about why each was deferred. Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Handoff prompt — WI-6 + WI-9 (fresh session)
 
 > Paste the block below into a fresh session to finish the two deferred S3-wall hardening items.

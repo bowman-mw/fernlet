@@ -4,7 +4,7 @@
 
 Derived from a multi-agent spec-vs-code audit (18 feature areas, each verified against actual
 source with an adversarial confirmation pass). This supersedes the stale "Prototype status"
-markers in [ImplementationPlan.md](ImplementationPlan.md) where they conflict — several items the
+markers in [ImplementationPlan.md](../ImplementationPlan.md) where they conflict — several items the
 plan calls "not complete" are in fact implemented, and a few marked "complete" have regressed.
 
 **Legend:** `[ ]` not started · `[~]` in progress · `[x]` done · 🚨 safety-critical
@@ -425,15 +425,15 @@ by the carve-up, not introduced by it) were flagged as low-priority hardening ba
 blocks a merge; both are non-security-impacting in practice.
 
 - [ ] **Bound the period sealed-backup narrative fetch.** `SealedBackupCoordinator.sealedBackupPlaintext`
-  ([SealedBackupCoordinator.swift:48-51](../Fernlet/SealedBackupCoordinator.swift)) calls
+  ([SealedBackupCoordinator.swift:48-51](../../Fernlet/SealedBackupCoordinator.swift)) calls
   `MenstrualNarrativeRepository.allNarratives(contentKey:)`, loading every narrative into memory before
   upload. **No confidentiality/integrity impact** — the payload is AES-GCM sealed end-to-end before
   CloudKit egress; this is purely a memory/availability concern (a very long cycle history could
   pressure memory or fail the upload). → Page/stream the fetch, or cap + chunk the payload.
 - [ ] **Re-assert the empty-store guard inside `applyRestoredPayload` (defense-in-depth).**
-  `SealedBackupCoordinator.applyRestoredPayload` ([SealedBackupCoordinator.swift:130](../Fernlet/SealedBackupCoordinator.swift))
+  `SealedBackupCoordinator.applyRestoredPayload` ([SealedBackupCoordinator.swift:130](../../Fernlet/SealedBackupCoordinator.swift))
   is `internal` and does not itself re-check `isEmptyStoreForRestore`; the no-clobber guard lives only in
-  its sole production caller `restoreSealedBackup` ([:100](../Fernlet/SealedBackupCoordinator.swift)).
+  its sole production caller `restoreSealedBackup` ([:100](../../Fernlet/SealedBackupCoordinator.swift)).
   The unguarded entry point is reachable only from in-module test code today (no widening vs baseline), so
   there is no current exploit — but a future caller could bypass the guard. → Either move/duplicate the
   empty-store check into `applyRestoredPayload`, or document the precondition + keep it test-only.
@@ -441,4 +441,4 @@ blocks a merge; both are non-security-impacting in practice.
 ---
 
 *Full audit narrative and per-area evidence: see the workflow result that generated this doc
-(2026-06-23). Canonical intent: [FernletSpecificationV3.md](FernletSpecificationV3.md).*
+(2026-06-23). Canonical intent: [FernletSpecificationV3.md](../FernletSpecificationV3.md).*

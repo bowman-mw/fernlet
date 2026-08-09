@@ -1,9 +1,47 @@
 # Fernlet Implementation Plan
 
-> **Status note (2026-07-19):** per-phase completion statuses in this document are stale — much of
-> what it lists as pending has shipped (SQLite food catalog, the S3 module wall, App Store readiness
-> items, and more). Keep using it for phase definitions and rationale, but for what is actually left
-> consult [RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md).
+> **Status reconciled 2026-08-09.** This document is the **phase definition + rationale** reference;
+> the table below is its status layer, reconciled against the live tracker
+> ([RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md)) plus code spot-checks. The prose
+> inside each phase section is **as-written-at-the-time** and is not updated as work lands — read it
+> for intent, and take completion state from this table. For the fine-grained list of what is
+> actually left, the tracker remains authoritative.
+
+## Phase status at a glance (2026-08-09)
+
+Legend: ✅ shipped · ⚠️ partial (residuals on the tracker) · ⏸ deferred/superseded · 🔜 next up
+
+| Phase | Status | Notes |
+| --- | --- | --- |
+| **0** — Data model, storage, website port | ✅ | Typed persistence + repositories shipped. |
+| **P1** — Prototype scoring & sickness | ✅ | |
+| **P2** — Prototype AI resilience | ✅ | Deterministic fallbacks + retry queue. |
+| **S1** — Proximity security hardening | ✅ | Full signing-key trust, `.required` encryption, sealed 1:1 payloads, tap gate, envelope expiry. |
+| **S2** — At-rest sealing + CloudKit period isolation | ✅ | Sealed entities on a non-mirrored store; `S3BoundaryTests` asserts it. |
+| **M1** — Meal-tracking & food-search overhaul | ⚠️ | Core shipped (data-type classification, generic-first ranking, SQLite catalog). Residue: chain-restaurant importer, dynamic product-image discovery — see [Meal-Estimation-Overhaul-Plan.md](Meal-Estimation-Overhaul-Plan.md). |
+| **P3** — Memory, derived signals, trends | ⚠️ | Derived signals + trends shipped. Outstanding: editable Core Memory UI, natural-language forget/edit, derived-signal inspection. |
+| **P4a** — Food KB, recipes, micronutrients | ⚠️ | Backend shipped (`micronutrientTotals(for:)`); no recipe-builder UI binding yet. |
+| **P4** — Ambient, recipe, day-history features | ⚠️ | Most ambient cards shipped; crisis nudge decided-SHIP but unbuilt (see Phase 16). |
+| **1** — Baseline hygiene & file split | ✅ | |
+| **2** — Scoring v3 | ✅ | |
+| **3 / S3** — Privacy modules, AI boundary, sealed stores | ✅ | The `FernletKit` carve-up + compile-time S3 wall, CI-enforced (`Scripts/spm-wall-check.sh`). One optional carve item remains (AI-file inversions, [SPM-Module-Carveup-Plan.md](SPM-Module-Carveup-Plan.md) §14). |
+| **4** — Onboarding & permissions | ⚠️ | Flow shipped; production polish outstanding. Known defect: the lock-setup sheet advances on Cancel. |
+| **5** — HealthKit integration | ✅ | Residuals: no contextual first-use request (Settings-only), sleep HealthKit summary. |
+| **6** — Core screens v3 | ⚠️ | Residual: Move per-exercise progress. |
+| **11** (deferred) — Foundation Models on-device AI | ✅ | Shipped, with the provider ladder layered on top — see [AI-Provider-Ladder-2026-07-23.md](AI-Provider-Ladder-2026-07-23.md). |
+| **12** (deferred) — Production memory system | ⚠️ | Storage-time classifier shipped; two-tier AI journal extraction deferred. |
+| **13** (deferred) — Period tracking & context bridge | ✅ | |
+| **14** (deferred) — Photos & photowall | ⚠️ | Shipped. Outstanding: manual people-tagging UI; photo-surfacing exclusion (blocked on the deferred Sensitive Memory store). |
+| **7** — Identity, proximity handshake, local file sharing | ✅ | |
+| **8** — Trainer/nutritionist local sharing | ✅ | Trainer export + allowlist shipped; the file is now deleted on share completion. |
+| **9** — Cloud-assisted multi-person group sharing | ⏸ | Cloud cascading-trust for large group activities deferred by scope. |
+| **10** — Friends, hearts, activities, shops | ✅ | Includes remote send-heart (CloudKit E2EE dead-drop, opt-in, default OFF). |
+| **15** — Wardrobe, backgrounds, milestones, Creation Studio | ⚠️ | Increment 1 shipped; Increments 2–3 pending — [Custom-Clothing-Plan-2026-06-29.md](Custom-Clothing-Plan-2026-06-29.md). |
+| **16** — Ambient features | ⚠️ | Crisis nudge (`moodTrend` → First Aid) decided SHIP 2026-07-19, still unbuilt — closes a safety flag. |
+| **17** — Third-party AI via OHTTP | ⏸ | Superseded for the third-party tier by [AI-Provider-Ladder-2026-07-23.md](AI-Provider-Ladder-2026-07-23.md) §8. Cloud/BYOK tracks gated. |
+| **18a** — iCloud sync + encrypted sealed backup | ✅ | Outstanding follow-up: BIP39 recovery codes. |
+| **18** — App Store readiness | ⚠️ | Code-side done. Remaining steps are **owner-only** in App Store Connect (hosted policy URL, support email, nutrition labels, encryption declaration) plus promoting the `HeartDrop` record type to the CloudKit Production schema. |
+| **Coach track** | 🔜 | Not in this plan — specified in [FernletCoach-Specification-2026-07-19.md](FernletCoach-Specification-2026-07-19.md). Primitives shipped; the in-person session manager/UI is the next build. See "Next up" below. |
 
 This plan assumes the current app is a single-target SwiftUI prototype with local `UserDefaults` persistence. The next implementation step is a local data model and storage layer integrated into the SwiftUI work ported from the website. That storage layer replaces Notion as an implementation dependency/source of truth. The production v3 spec still moves toward module-enforced privacy boundaries, typed persistence, HealthKit, on-device AI, and proximity features.
 
@@ -744,39 +782,35 @@ Exit criteria:
 - Data flow claims are backed by module boundaries and tests.
 - CloudKit data deletion is verified to remove records from the private database.
 
-## Suggested Immediate Next Sprint
+## Next up (2026-08-09)
 
-Revised 2026-05-28. Security-first ordering based on the architecture audit in `Fernlet-Review-and-Plan-Updates.md`.
+> Supersedes the "Suggested Immediate Next Sprint" block that stood here from 2026-05-28. All four
+> of its priorities — S1, S2, M1, and S3 — have since shipped, and its "after security phases" list
+> is now split across the table above and the tracker.
 
-**Priority 1 — Phase S1 (Proximity Security Hardening):**
-- Re-key trust decisions on the full signing public key; remove auto-confirm on fingerprint match alone.
-- Set `encryptionPreference: .required` on all `MCSession` instances.
-- Send 1:1 friend photos and trainer attachments sealed with `IdentityService.seal`.
-- Add UWB-tap or explicit-confirmation gate to friend handshake.
-- Set `expiresAt` on all outbound envelopes.
+**1 — Fernlet Coach: the in-person session (primary channel).** The blocking track. The 2026-07-27
+round shipped the coach *primitives* — `CoachVerificationCeremony`, `CoachSessionTrustPolicy`, the
+all-hardware tap-gate fix, a pre-decrypt wire-size gate — and deliberately stopped short of the
+session manager and UI. Those primitives currently have **zero production callers**; no
+`ProximityCoordinator` is constructed in `.trainer` mode. Before writing code, revise
+[FernletCoach-Specification-2026-07-19.md](FernletCoach-Specification-2026-07-19.md) §3.3, §3.6, §6
+and §8: they still describe the iMessage + CloudKit hybrid as the primary channel, which the owner
+reversed on 2026-07-26 (in-person mesh is primary; the hybrid is the off-week fallback). The session
+manager must pass a real `localCapabilities` array or wire2 silently degrades to legacy for the whole
+coach channel. Detail: [Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md](Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md)
+Increment 10 + the "Coach channel model" note.
 
-**Priority 2 — Phase S2 (At-Rest Sealing and CloudKit Period Isolation):**
-- Move sealed Core Data entities to a non-mirrored store configuration.
-- Extend ChaChaPoly sealing to journal text/emotions and local intimacy notes.
-- Add test asserting no sealed entity appears in the CloudKit-mirrored model.
+**2 — The owner-decided queue from 2026-07-19 (small, none built).** Crisis nudge (Phase 16 —
+closes a safety flag); body-photo lock-setup nudge; barcode web UPC lookup behind
+`webNutritionLookupEnabled`; wire `MeshAdmissionPromptSheet`. Plus the dead "Request access" button
+in Settings → Move, which advertises a shipped feature as unbuilt. See
+[RemainingWork-2026-07-19.md](RemainingWork-2026-07-19.md) §2–§3.
 
-**Priority 3 — Phase M1 (Meal-Tracking Overhaul):**
-- Add `FoodItem` data-type classification (foundation/srLegacy/branded).
-- Fix `deterministicIngredients` to return one best match per atomic food.
-- Replace count-based composite trigger with lexicon-based detection.
-- Generic-first search ranking with brand-variant deduplication.
+**3 — Triage [Doc-Pass-Anomalies-2026-08-04.md](Doc-Pass-Anomalies-2026-08-04.md).** Never triaged.
+Several entries are real defects rather than smells — notably the `PeriodTrackerStore.loadEntries`
+crash-on-duplicate-`hkExternalUUID`, the in-session photo save that skips rehydration, and the
+in-app privacy policy still claiming 18+ for intimacy where the shipped gate is 16+.
 
-**Priority 4 — Phase S3 (AI Privacy Boundary) — before any OHTTP path:**
-- Split sealed types into Swift packages with import-boundary build checks.
-- Define typed `AIContextPayload`s with forbidden-field unit tests.
-- Add the local AI audit log.
-- Route Tier-2 memory through a Memory Agent with diagnostic-language filter.
-
-**After security phases — continue existing work:**
-1. Finish Phase P3: editable Core Memory UI, natural-language forget/edit shell, derived-signal computation, and local signals inspection surface.
-2. Complete Day Detail gaps: micronutrient summary, `daySummaryText` display, and invalidation rules.
-3. Implement the overnight Foundation Models day-summary batch.
-4. Close the recipe loop: merge URL-imported `SavedRecipe` into `RecipeDefinition`, add import, and nutrition-change notice.
-5. Expand AI retry beyond meals to journal and recipe analyses.
-6. Add ambient features: macro-gap meal suggestions, forgotten-good-things prompts, preventive-care bubbles, year-ago journal card.
-7. Settings consolidation (5-section IA) and friction-reduction features (one-tap re-log, widgets, smarter defaults) — see `Fernlet-Review-and-Plan-Updates.md` Parts G and H.
+**Then, unsequenced:** localization Phase 0 (live locale bugs even in English), multi-device without
+iCloud Phases 2–3, BIP39 recovery codes, Background App Refresh, the memory-controls suite, and the
+coach dead-drop (Increment 9) as the secondary channel.

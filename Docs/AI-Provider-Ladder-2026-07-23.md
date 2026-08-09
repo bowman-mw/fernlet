@@ -3,8 +3,14 @@
 Plan for raising Fernlet's AI ceiling on two features (recipe creation, workout suggestions) by
 adding a routed provider ladder underneath the existing on-device path.
 
-**Status:** planned, not started. Supersedes the OHTTP design in
-[FernletSpecificationV3 §17](FernletSpecificationV3.md) for the third-party tier (see §8).
+**Status (2026-08-09):** **partially shipped.** The provider seam is on `main` — capability tiers,
+`FernletModelRouter`, `AIDestination` cases, the AI audit log with `modelIdentifier`/outcome fields
+and device-local persistence, the net-new quota counter, and every AI call site routed through the
+seam. **Still gated:** the cloud/PCC tier, the BYOK two-adapter track (including its keychain-purge
+leg in `deleteAllData` — there is no BYOK key to purge yet), and the iOS-27 rungs. Supersedes the
+OHTTP design in [FernletSpecificationV3 §17](FernletSpecificationV3.md) for the third-party tier
+(see §8). The canonical build order for both docs lives in
+[AI-Feature-Expansion §1](AI-Feature-Expansion-2026-07-23.md); §9 here is superseded by it.
 
 **Revised 2026-07-24** — post-audit revision (99-agent verification pass against Fernlet @ `1ecc8a8`)
 plus four owner decisions (D-A recipe store, D-B PCC consent, D-C F6/F7 deferral, D-D two-adapter

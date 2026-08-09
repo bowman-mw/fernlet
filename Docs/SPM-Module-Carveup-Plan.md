@@ -1,9 +1,9 @@
 # SPM Module Carve-Up Plan
 
 **Status:** Proposed. Serves two goals with one set of cuts: the **S3 compile-time privacy walls**
-and the **cross-platform shared core** (see [RemainingWork-2026-06-23.md §2](./RemainingWork-2026-06-23.md)
+and the **cross-platform shared core** (see [RemainingWork-2026-06-23.md §2](Completed%20Implemtations/RemainingWork-2026-06-23.md)
 for S3, and the canonical-signing prerequisite in
-[Canonical-Signing-Encoding-Fix.md](./Canonical-Signing-Encoding-Fix.md)).
+[Canonical-Signing-Encoding-Fix.md](Completed%20Implemtations/Canonical-Signing-Encoding-Fix.md)).
 **Scope:** structure + sequencing of the package split. The Proximity *internal* refactor is
 explicitly **out of scope** — Proximity is treated here as one black-box module boundary.
 

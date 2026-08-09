@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — SUPERSEDED.** Historical 2026-05-28 architecture review. Its SEC-1/2/3 findings were fixed by the later security-hardening work, and its Parts D–H change-lists were applied to the three referenced planning docs at the time. Superseded as a live document by [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md); kept for the rationale behind the phase ordering it introduced.
+
 # Fernlet — Architecture Review & Planning Updates
 
 **Date:** 2026-05-28

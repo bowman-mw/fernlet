@@ -212,24 +212,16 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		681896D72FEB3706004E15E9 /* Recovered References */ = {
-			isa = PBXGroup;
-			children = (
-				68FE5E00000000000000A001 /* FernletShareExtension */,
-			);
-			name = "Recovered References";
-			sourceTree = "<group>";
-		};
 		6869C2D92FB8D39D0098A0F3 = {
 			isa = PBXGroup;
 			children = (
 				6869C2E42FB8D39D0098A0F3 /* Fernlet */,
 				6869C2F92FB8D39D0098A0F3 /* FernletTests */,
 				6869C3032FB8D39D0098A0F3 /* FernletUITests */,
+				68FE5E00000000000000A001 /* FernletShareExtension */,
 				68FE5E00000000000000B001 /* FernletWidgets */,
 				6869C2E32FB8D39D0098A0F3 /* Products */,
 				6869C37B2FBBF3450098A0F3 /* Docs */,
-				681896D72FEB3706004E15E9 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -254,7 +246,6 @@
 				68187DC62FD0E119004E15E9 /* Meal-Estimation-Overhaul-Plan.md */,
 				6869C37E2FBBF4AF0098A0F3 /* ImplementationPlan.md */,
 				684018E02FBFAC4500EFC6D6 /* FileIndex.md */,
-				68B9EE4E2FC9048C00AF8FB6 /* Fernlet-Review-and-Plan-Updates.md */,
 				68187DDB2FD20EB8004E15E9 /* ProximityFunctionIndex.md */,
 				68187DDC2FD261F7004E15E9 /* StoreRepositoryFunctionIndex.md */,
 			);
@@ -268,6 +259,7 @@
 				68B9EC132FC4A86B00AF8FB6 /* FernletStore-Refactor-Plan-v2.md */,
 				6861B78A2FCCAEA900B26022 /* Proximity-Mesh-Consolidation-Plan.md */,
 				681899F22FECB144004E15E9 /* RemainingWork-2026-06-23.md */,
+				68B9EE4E2FC9048C00AF8FB6 /* Fernlet-Review-and-Plan-Updates.md */,
 				68B9EC112FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md */,
 				6861B7882FCCA74600B26022 /* Dead-Code-and-Carryover-Gap-Review.md */,
 				684018E32FC0B3DF00EFC6D6 /* PeriodAlgorithimResearch.md */,

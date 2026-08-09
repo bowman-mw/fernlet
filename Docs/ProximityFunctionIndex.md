@@ -2,6 +2,9 @@
 
 This index maps the proximity and mesh subsystem functions to their responsibilities. Use it before adding proximity, mesh, recipe-share, friend-photo, identity, audit, or trust logic so existing behavior is reused instead of duplicated.
 
+**Last refreshed: 2026-08-09.** This pass added the away-hearts dead-drop subsystem, the `ProtectedSidecar` durability primitive, wire2 sealed-payload framing, the QR verification ceremony, and the coach trust/ceremony types (which have no production callers yet).
+
+
 ## Duplication Hotspots
 
 | Need | Prefer Reusing |
@@ -9,6 +12,10 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | Signed peer-to-peer payloads | `FernletIdentityEnvelope.signed(...)`, `FernletIdentityEnvelope.verify(...)`, `canonicalBytes(for:)` |
 | Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are now thin wrappers over it. |
 | Mesh group-key wrapping | `IdentityService.encryptGroupKey(_:for:)`, `IdentityService.decryptGroupKey(_:)`, `MeshNetworkManager.initiateRotation()` |
+| Durable sidecar state (data of record) | `ProtectedSidecar` — classifies absent / deferred / corrupt / loaded and keeps memory authoritative on write failure. Do NOT use `JSONSidecarFile` for data of record: it collapses every read failure to `nil`. |
+| Sealing a payload to a peer, with framing | `IdentityService.seal(_:to:)` + `SealedPayloadFormat` (capability-derived, never inferred from bytes) |
+| Verifying a human holds a key | `ProximityVerifyQR` + `ProximityVerifySignature.message(...)` — shared transcript, so the friend and coach ceremonies cannot diverge |
+| Coach-channel trust | `CoachSessionTrustPolicy` / `CoachSessionContract` — never `FriendSessionTrustPolicy`, whose `isTrustedProximityPeer` returns `true` unconditionally and reads the friend vault |
 | Proximity commit gates | `ProximityCommitDetector.ingest(distanceMeters:at:)`, `ProximityCoordinator.commitManualProximity()` |
 | Friend mesh lifecycle | `MeshNetworkManager.startJoin()`, `stopJoin()`, `leaveSession()`, `leaveSessionAfterNotifyingPeers()`. 2026-08 consolidation: the three duplicated pending-connection expiry idioms were consolidated into `MeshMultipeerSession.registerPendingConnection(_:)`, and the hand-rolled `withObservationTracking` re-arm loops in the mesh/recipe/presence managers were consolidated into `ObservationLoop.start(on:tracking:onChange:)` (ProximityKit/Engine/ObservationLoop.swift). Local advertised names come from `ProximityHost.resolvedProximityDisplayName` (ProximityKit/PeerDisplayNames.swift), which replaced the three identical private `displayName` vars. |
 | Mesh membership/admission | `MeshNetworkManager.allowAdmission(_:)`, `declineAdmission(_:)`, `handleAdmissionRequest(_:)`, `handleAdmissionGrant(_:)`. 2026-08 consolidation: the twin mesh-admission and activity-join confirmation sheets were consolidated into the shared generic `JoinPromptSheet` (Fernlet/JoinPromptSheet.swift, app target), and receive-side peer-name moderation now goes through `ItemNameModeration.moderatedPeerDisplayName(_:)`. |
@@ -443,6 +450,47 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `TransportInfo.averageRttMs` | Computes average recorded RTT. |
 | `TransportInfo.init(...)` | Creates transport state, counters, flags, and RTT sample storage. |
 
+### `SealedPayloadFraming.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `SealedPayloadFormat` | `.legacy` (plaintext sealed as-is) vs `.wire2` (compress + pad inside the AEAD). Chosen from the peer's advertised capabilities, never inferred from the bytes. |
+| `SealedPayloadFraming.frame(_:)` | Tags, optionally compresses (above a 128-byte threshold), and pads the body to a 4 KiB bucket so ciphertext length leaks little about content. |
+| `SealedPayloadFraming.unframe(_:)` | Reverses the framing, enforcing `maxInflatedByteCount` (16 MiB) so a compression bomb cannot expand unbounded. |
+| `SealedPayloadFraming.bucketLength(for:)` | The padding bucket function. |
+
+### `ProximityVerification.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityVerifyQR.makeURL(identity:now:)` | Mints this device's signed `fernlet://verify` URL (signing key, key-agreement key, timestamp, random nonce, signature) and returns it with the nonce to match a response against. |
+| `ProximityVerifyQR.canonicalBytes(...)` | The domain-tagged (`fernlet.verify.qr.v1`) byte sequence the QR signature covers. |
+| `ProximityVerifyQR.parse(...)` / `freshnessWindow` | Parses and validates a scanned URL, rejecting payloads older than the 5-minute window. |
+| `ProximityVerifySignature.message(...)` | The challenge/response transcript both ceremonies sign, so the friend and coach paths can never diverge. |
+
+### `CoachSessionTrustPolicy.swift`
+
+**No production callers yet** — the coach session manager is unbuilt (see the coach spec and `Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md` Increment 10).
+
+| Function | What It Does |
+| --- | --- |
+| `CoachSessionContract.fernletRole` / `.coachAppRole` | The written-down role split (Fernlet browses, the coach app advertises) so it cannot be gotten backwards. |
+| `CoachSessionTrustPolicy.isTrustedProximityPeer(signingPublicKey:)` | Unlike `FriendSessionTrustPolicy` (which returns `true` unconditionally), auto-confirms only an unrevoked, unblocked `.trainer` vault record whose `unknownModeToken` is `nil` — `.trainer` is the decode freeze default, so a record from a newer build must not silently inherit coach privilege. |
+| `isRevokedProximitySigningKey(_:)` / `isBlockedProximitySigningKey(_:)` | Read the **coach** vault, not the friend vault. |
+| `recordTrainerAudit(_:)` | Coach-channel audit hook. |
+
+### `CoachVerificationCeremony.swift`
+
+**No production callers yet.** Slot-independent by design: the friend QR ceremony is bound to `PeerSlot`s and a coach session has no slot.
+
+| Function | What It Does |
+| --- | --- |
+| `makeDisplayURL(forPeerSigningKey:)` | Mints the display QR bound to the specific peer being verified, retaining the nonce for the round. |
+| `clearDisplay()` | Drops the active display state. |
+| `handleChallenge(...)` | Verifies the incoming challenge against the displayed nonce and signs the transcript — sign-after-check ordering is load-bearing. |
+| `beginVerification(...)` | Starts a round against a scanned QR, minting the challenge nonce. |
+| `handleResponse(...)` | Validates the peer's response; **a wrong-peer response must be dropped without clearing the pending round**, or an attacker could cancel a legitimate ceremony. |
+
 ## Photos And Recipe Sharing
 
 ### `FriendPhotoImageHelpers.swift`
@@ -538,6 +586,77 @@ This index maps the proximity and mesh subsystem functions to their responsibili
 | `macrosText` | Summarizes macros when present. |
 | `duplicateWarning` | Detects duplicate local recipe or saved recipe by name/source URL. |
 | `importShare()` | Imports payload through store, dismisses pending share, or shows import error. |
+
+## Away Hearts (Offline Dead-Drop)
+
+Shipped in the bitchat-adoptions round (Increment 3) and hardened in the prekeys/protected-load round
+(Increments 1–7). All crypto lives here on the sealed side of the S3 wall; the injected
+`HeartDropTransporting` conformer (`CloudKitSync/HeartDropCloudTransport`) only ever sees a rotating
+day tag and ciphertext. Opt-in via `heartsAwayDelivery`, default OFF.
+
+### `HeartDropService.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `queueHeart(to:)` | The entry point: picks a prekey (or the static key), seals, and enqueues — returning a `QueueOutcome` that includes `storageUnavailable` when the sidecar refuses to persist, so nothing is silently dropped. |
+| `currentLocalBundle()` / `storePeerBundle(_:friendSigningKey:)` | Gossip the local prekey bundle and cache a peer's; a peer bundle is only ever stored from a verified, signed identity intro. |
+| `syncNow(force:)` / `syncOnce()` | Trigger a sync pass; coalesced internally so overlapping calls collapse into one run. |
+| `flush(_:)` | Uploads pending drops and **stops and surfaces** when a record name cannot be persisted — the fix for orphaned public-DB records. |
+| `fetchIncoming(_:)` / `openIncoming(_:expectedSender:)` | Fetch a friend's tag window and open drops, re-gating wire size before key agreement. |
+| `pendingCount(for:)` / `acknowledgeDeliveryProblem()` | Surfacing hooks for the two UI paths. |
+| `cleanup(_:)` | Expiry sweep of this device's own uploaded records. |
+
+### `HeartDropSealer.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `HeartDropSealer.seal(...)` | Builds the versioned wire form `[version][prekeyID (all-zeros = static key)][ciphertext]`. |
+| `HeartDropSealer.open(...)` | Opens a drop, **gating payload size before key agreement** (the ordering the coach path still needs to adopt for `TrainerExportPayload`). |
+
+### `HeartPrekeyStore.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `currentBundle()` | The local bundle of one-time X25519 prekeys plus the X3DH-style signed prekey, minted in batches of 16. |
+| `privateKey(forPrekeyID:)` | Resolves a private half for opening; private halves live in one keychain blob (`AfterFirstUnlockThisDeviceOnly`, never synchronizable). |
+| `pruneRetainedKeys()` | Ages out keys past the 29-day retention window. |
+| `wipeForDeleteAll()` | Delete-all coverage — identity/prekey material must die with the wipe. |
+
+### `HeartDropOutbox.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `enqueue(_:)` / `hasCapacity(forFriendSigningKey:)` / `hasDailyCapacity(...)` | Bounded, per-friend and per-day admission. |
+| `pendingUploads()` / `markUploaded(id:recordName:)` / `recordAttempt(id:)` | The upload cycle; `markUploaded` reports persist failure to the caller rather than swallowing it. |
+| `expiredEntries()` / `remove(ids:)` / `removeUnchanged(_:)` | Expiry and compare-and-remove, so a concurrent enqueue is not clobbered. |
+| `snapshot()` / `uploadedRecordNames()` | Return **`nil` when the sidecar is unloaded** — never an empty array, which would read as "nothing queued". |
+| `retryLoad()` / `acknowledgeDataLoss()` / `wipeForDeleteAll()` | Recovery and wipe hooks. |
+
+### `HeartDropPeerBundleCache.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `store(bundle:forFriendSigningKey:)` | Caches a gossiped bundle keyed by the sender's full signing key. |
+| `consumePrekey(forFriendSigningKey:)` | Consumes a one-time prekey, falling back to the signed prekey and then the static key. |
+| `returnPrekey(id:forFriendSigningKey:)` | Returns a prekey when the send that reserved it fails, so a failed send does not burn forward secrecy. |
+| `retryLoad()` / `wipeForDeleteAll()` | Recovery and wipe hooks. |
+
+### `ProtectedSidecar.swift`
+
+The durability primitive behind all of the above. Prefer this over `JSONSidecarFile` for any data of record.
+
+| Function | What It Does |
+| --- | --- |
+| `read()` | Returns the loaded value, or `nil` when the state is absent/deferred/corrupt — the caller must distinguish, not assume empty. |
+| `mutate(_:)` | Mutates and persists, returning a `MutateOutcome`; **on write failure memory stays the truth and re-persists** rather than re-reading, which would discard an unpersisted record name. |
+| `mutateIfPersisted(_:)` | Fail-closed variant for callers that must not proceed on an unpersisted store. |
+| `retryLoad()` / `acknowledgeDataLoss()` / `wipe()` | Recovery from a deferred (device-locked) or corrupt file, and the wipe path. |
+
+### `HeartDropSidecarKey.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `SidecarSeal.production()` / `make(keychainService:)` | The keychain-backed ChaChaPoly seal for the sidecars at rest — plaintext versions were a timestamped log of who the user sent affection to. Read-back verified; one-way plaintext→sealed migration; protection class stays `.completeFileProtection`. |
 
 ## UI Diagnostics
 

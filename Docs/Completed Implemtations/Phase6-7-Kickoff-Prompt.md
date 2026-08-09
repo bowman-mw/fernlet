@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — SPENT.** Kickoff prompt for Phases 6–7 of [Social-AppStore-Implementation-Plan-2026-07-11.md](Social-AppStore-Implementation-Plan-2026-07-11.md), which closed 2026-07-19 with all 6 phases shipped. Deferred by scope from that plan: cloud cascading-trust for large group activities (carried on the tracker). Live tracker: [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md).
+
 # Kickoff prompt — Fernlet friend-social Phases 6 & 7
 
 > Paste this into a fresh session (or just say: *"Read Docs/Phase6-7-Kickoff-Prompt.md and
@@ -12,7 +14,7 @@
   ~60 tests green.
 - **Read first:** [Social-AppStore-Implementation-Plan-2026-07-11.md](Social-AppStore-Implementation-Plan-2026-07-11.md)
   (phase breakdown, module placements, S3-wall rules, the §"Phase 6" seam list) and
-  [FernletSpecificationV3.md](FernletSpecificationV3.md) §9 (handshake), §10 (friend limits + trainer
+  [FernletSpecificationV3.md](../FernletSpecificationV3.md) §9 (handshake), §10 (friend limits + trainer
   export), §15 (Activities screen), §3 (cloud-minimal types).
 
 ## The pattern to copy (established in Phases 3b + 4)

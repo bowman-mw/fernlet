@@ -10,8 +10,8 @@ from the cap). Owner asked to pursue this as the architecturally-correct fix to 
 The entire day history is serialized into **one** Core Data record (`FernletDatabaseRecord.payloadData`,
 the whole `LocalFernletDatabase` blob) and synced as a single CloudKit record. To keep that blob under
 CloudKit's ~1 MB per-record limit it is capped at `FernletLimits.maxStoredDays = 370` and pruned
-oldest-first ([LocalFernletRepository.swift:378](../FernletKit/Sources/LocalPersistence/LocalFernletRepository.swift:378);
-prune at [CoreDataFernletRepository.swift:193](../FernletKit/Sources/CloudKitSync/CoreDataFernletRepository.swift:193)
+oldest-first ([LocalFernletRepository.swift:378](../../FernletKit/Sources/LocalPersistence/LocalFernletRepository.swift);
+prune at [CoreDataFernletRepository.swift:193](../../FernletKit/Sources/CloudKitSync/CoreDataFernletRepository.swift)
 and `LocalFernletDatabase.apply`). Consequences:
 
 - Hard ~1-year retention ceiling; older days are silently dropped.
