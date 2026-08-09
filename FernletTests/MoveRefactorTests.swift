@@ -403,4 +403,147 @@ struct MoveRefactorTests {
         let coachToday = FernletDay(date: "2026-07-26", plannedWorkouts: [coachPlan])
         #expect(MoveView.hasCoachSourcedPlans(in: [:], today: coachToday))
     }
+
+    // MARK: - Shared exercise draft (WorkoutSheet / WorkoutPlanSheet state machine)
+
+    private static func strengthTarget(_ name: String = "Bench press") -> ExerciseTarget {
+        ExerciseTarget(
+            name: name,
+            primaryMuscles: [.chest],
+            secondaryMuscles: [.triceps],
+            equipment: .barbell,
+            movementPattern: .push,
+            inputKind: .strength
+        )
+    }
+
+    private static func treadmillTarget() -> ExerciseTarget {
+        ExerciseTarget(
+            name: "Treadmill",
+            primaryMuscles: [.quads],
+            equipment: .machine,
+            movementPattern: .isolation,
+            inputKind: .treadmill
+        )
+    }
+
+    /// An empty draft commits nothing and reports it. Both sheets' save-time auto-commit is guarded on
+    /// this: WorkoutPlanSheet additionally re-folds its rows into the free-text plan and must not run
+    /// that fold when nothing was appended.
+    @Test func emptyDraftCommitsNothingAndReportsFalse() {
+        var draft = WorkoutExerciseDraft()
+        draft.sets = "3"     // typed inputs without a chosen exercise are still "nothing to add"
+        var rows: [WorkoutExerciseEntry] = []
+
+        #expect(draft.commit(into: &rows) == false)
+        #expect(rows.isEmpty)
+    }
+
+    /// The plan sheet's behaviour: sets/reps are kept as typed.
+    @Test func draftCommitKeepsSetsAndRepsByDefault() {
+        var draft = WorkoutExerciseDraft()
+        draft.exercise = Self.strengthTarget()
+        draft.sets = "3"
+        draft.reps = "8"
+        draft.weight = "95 lb"
+        draft.details = "paused"
+        var rows: [WorkoutExerciseEntry] = []
+
+        #expect(draft.commit(into: &rows))
+        #expect(rows.count == 1)
+        #expect(rows[0].sets == "3")
+        #expect(rows[0].reps == "8")
+        #expect(rows[0].weight == "95 lb")
+        #expect(rows[0].details == "paused")
+    }
+
+    /// The log sheet's belt-and-braces guard, preserved through the extraction: it passes
+    /// `includingSetsAndReps: logMode == .strengthTraining`, so an activity-mode commit blanks
+    /// sets/reps. Only strength mode auto-commits, but the guard stays explicit rather than assuming.
+    @Test func draftCommitBlanksSetsAndRepsWhenExcluded() {
+        var draft = WorkoutExerciseDraft()
+        draft.exercise = Self.strengthTarget()
+        draft.sets = "3"
+        draft.reps = "8"
+        draft.weight = "95 lb"
+        var rows: [WorkoutExerciseEntry] = []
+
+        #expect(draft.commit(into: &rows, includingSetsAndReps: false))
+        #expect(rows[0].sets.isEmpty)
+        #expect(rows[0].reps.isEmpty)
+        #expect(rows[0].weight == "95 lb", "weight is filtered by inputKind, not by the sets/reps flag")
+    }
+
+    /// Input-kind filtering: a strength exercise never carries treadmill fields and vice versa, so
+    /// switching exercises mid-draft cannot smuggle a stale speed onto a barbell row.
+    @Test func draftCommitFiltersInputsByExerciseKind() {
+        var strength = WorkoutExerciseDraft()
+        strength.exercise = Self.strengthTarget()
+        strength.weight = "95 lb"
+        strength.speed = "6.0"
+        strength.incline = "2"
+        var strengthRows: [WorkoutExerciseEntry] = []
+        strength.commit(into: &strengthRows)
+
+        #expect(strengthRows[0].weight == "95 lb")
+        #expect(strengthRows[0].speed.isEmpty)
+        #expect(strengthRows[0].incline.isEmpty)
+
+        var treadmill = WorkoutExerciseDraft()
+        treadmill.exercise = Self.treadmillTarget()
+        treadmill.weight = "95 lb"
+        treadmill.speed = "6.0"
+        treadmill.incline = "2"
+        var treadmillRows: [WorkoutExerciseEntry] = []
+        treadmill.commit(into: &treadmillRows)
+
+        #expect(treadmillRows[0].weight.isEmpty)
+        #expect(treadmillRows[0].speed == "6.0")
+        #expect(treadmillRows[0].incline == "2")
+    }
+
+    /// Committing clears the draft and bumps the reset token, so the builder drops its picker state and
+    /// the next Add cannot re-append the previous exercise.
+    @Test func draftClearsAndBumpsResetTokenOnCommit() {
+        var draft = WorkoutExerciseDraft()
+        draft.exercise = Self.strengthTarget()
+        draft.sets = "3"
+        draft.reps = "8"
+        draft.speed = "6.0"
+        draft.details = "paused"
+        let tokenBefore = draft.resetToken
+        var rows: [WorkoutExerciseEntry] = []
+
+        draft.commit(into: &rows)
+
+        #expect(!draft.hasExercise)
+        #expect(draft.sets.isEmpty && draft.reps.isEmpty && draft.weight.isEmpty)
+        #expect(draft.speed.isEmpty && draft.incline.isEmpty && draft.details.isEmpty)
+        #expect(draft.resetToken == tokenBefore + 1)
+
+        // A second commit on the now-empty draft adds nothing — the guard both sheets rely on.
+        #expect(draft.commit(into: &rows) == false)
+        #expect(rows.count == 1)
+    }
+
+    /// The mode-switch path (`onChange(of: logMode) { draft.clear() }`) in both sheets.
+    @Test func draftClearBlanksEveryFieldAndAdvancesTheToken() {
+        var draft = WorkoutExerciseDraft()
+        draft.exercise = Self.treadmillTarget()
+        draft.sets = "3"
+        draft.reps = "8"
+        draft.weight = "95 lb"
+        draft.speed = "6.0"
+        draft.incline = "2"
+        draft.details = "easy"
+        let tokenBefore = draft.resetToken
+
+        draft.clear()
+
+        #expect(draft.entry() == nil)
+        #expect(!draft.hasExercise)
+        #expect(draft.sets.isEmpty && draft.reps.isEmpty && draft.weight.isEmpty)
+        #expect(draft.speed.isEmpty && draft.incline.isEmpty && draft.details.isEmpty)
+        #expect(draft.resetToken == tokenBefore + 1)
+    }
 }

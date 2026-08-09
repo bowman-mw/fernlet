@@ -514,14 +514,8 @@ struct WorkoutSheet: View {
     var dateKey: String?
     @State private var name = ""
     @State private var exerciseRows: [WorkoutExerciseEntry] = []
-    @State private var draftExercise: ExerciseTarget?
-    @State private var draftSets = ""
-    @State private var draftReps = ""
-    @State private var draftWeight = ""
-    @State private var draftSpeed = ""
-    @State private var draftIncline = ""
-    @State private var draftDetails = ""
-    @State private var exerciseResetToken = 0
+    /// The in-progress exercise row (see ``WorkoutExerciseDraft``) — shared with ``WorkoutPlanSheet``.
+    @State private var draft = WorkoutExerciseDraft()
     @State private var rpe = ""
     @State private var duration = ""
     @State private var distance = ""
@@ -604,14 +598,14 @@ struct WorkoutSheet: View {
 
                     if logMode == .strengthTraining {
                         WorkoutExerciseBuilder(
-                            selectedExercise: $draftExercise,
-                            sets: $draftSets,
-                            reps: $draftReps,
-                            weight: $draftWeight,
-                            speed: $draftSpeed,
-                            incline: $draftIncline,
-                            details: $draftDetails,
-                            resetToken: $exerciseResetToken,
+                            selectedExercise: $draft.exercise,
+                            sets: $draft.sets,
+                            reps: $draft.reps,
+                            weight: $draft.weight,
+                            speed: $draft.speed,
+                            incline: $draft.incline,
+                            details: $draft.details,
+                            resetToken: $draft.resetToken,
                             pickerTitle: logMode.pickerTitle,
                             searchPlaceholder: logMode.searchPlaceholder,
                             mode: logMode,
@@ -668,7 +662,7 @@ struct WorkoutSheet: View {
             SheetSaveBar(disabled: saveDisabled) {
                 // A typed-but-not-yet-added exercise draft would otherwise be silently dropped on Save —
                 // fold it into the rows first (guarded by the same validity addDraftExercise uses).
-                if logMode == .strengthTraining, draftExercise != nil {
+                if logMode == .strengthTraining, draft.hasExercise {
                     addDraftExercise()
                 }
                 var workout = Workout(
@@ -697,7 +691,7 @@ struct WorkoutSheet: View {
         .interactiveDismissDisabled(isDirty)
         .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
         .onChange(of: logMode) { _, _ in
-            clearDraftExercise()
+            draft.clear()
         }
     }
 
@@ -706,7 +700,7 @@ struct WorkoutSheet: View {
     private var isDirty: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !exerciseRows.isEmpty
-            || draftExercise != nil
+            || draft.hasExercise
             || !rpe.isEmpty || !duration.isEmpty || !distance.isEmpty
             || !energyKcal.isEmpty || !effort.isEmpty || !notes.isEmpty
             || selectedActivityType != nil
@@ -735,7 +729,7 @@ struct WorkoutSheet: View {
             distance: distance,
             // A strength draft is "valid" exactly when an exercise is chosen — the same guard
             // `addDraftExercise` (the Save-closure auto-commit) enforces. Only strength mode auto-commits.
-            hasPendingValidDraft: logMode == .strengthTraining && draftExercise != nil
+            hasPendingValidDraft: logMode == .strengthTraining && draft.hasExercise
         )
     }
 
@@ -745,30 +739,15 @@ struct WorkoutSheet: View {
         return Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: date) ?? date
     }
 
+    /// Folds the current draft into the logged rows.
+    ///
+    /// `includingSetsAndReps: logMode == .strengthTraining` preserves this sheet's original guard: the
+    /// builder is only rendered in strength mode, so sets/reps can only be non-empty there — but the log
+    /// sheet blanked them defensively (activity logs carry no exercise rows), and dropping that would be
+    /// a silent behaviour change rather than a simplification. The plan sheet has no such guard, which is
+    /// exactly why the shared draft takes it as a parameter instead of assuming one side's answer.
     private func addDraftExercise() {
-        guard let draftExercise else { return }
-        let entry = WorkoutExerciseEntry(
-            exercise: draftExercise,
-            sets: logMode == .strengthTraining ? draftSets : "",
-            reps: logMode == .strengthTraining ? draftReps : "",
-            weight: draftExercise.inputKind == .strength ? draftWeight : "",
-            speed: draftExercise.inputKind == .treadmill ? draftSpeed : "",
-            incline: draftExercise.inputKind == .treadmill ? draftIncline : "",
-            details: draftDetails
-        )
-        exerciseRows.append(entry)
-        clearDraftExercise()
-    }
-
-    private func clearDraftExercise() {
-        self.draftExercise = nil
-        draftSets = ""
-        draftReps = ""
-        draftWeight = ""
-        draftSpeed = ""
-        draftIncline = ""
-        draftDetails = ""
-        exerciseResetToken += 1
+        draft.commit(into: &exerciseRows, includingSetsAndReps: logMode == .strengthTraining)
     }
 }
 
@@ -1865,6 +1844,96 @@ struct WorkoutExerciseEntry: Identifiable, Equatable {
     }
 }
 
+/// The "one exercise currently being typed" state machine shared by ``WorkoutSheet`` and
+/// ``WorkoutPlanSheet``.
+///
+/// Both sheets present the same ``WorkoutExerciseBuilder`` over a chosen exercise plus its free-text
+/// inputs, and both need the same three operations on it: bind the fields, commit the draft into a
+/// row list, and clear it. The row editor was already shared; only this state machine was
+/// copy-pasted, so the two `addDraftExercise`/`clearDraftExercise` pairs could (and did) drift.
+/// Holding the fields in one value type also means a new input (a future tempo, RPE-per-set, …) is
+/// added once and both sheets get it.
+///
+/// Used as `@State`, so `$draft.sets` and friends are ordinary bindings into the builder — the
+/// sheets keep owning the state exactly as before, they just stop re-declaring it.
+///
+/// Invariants:
+/// - `exercise == nil` means "nothing typed yet"; ``commit(into:includingSetsAndReps:)`` is then a
+///   no-op and reports `false`, which is the guard both sheets' save-time auto-commit relies on.
+/// - Committing always clears (via ``clear()``), and clearing always bumps ``resetToken`` — the
+///   builder watches that token to reset its own picker/search sub-state, so the token must never
+///   be advanced without also blanking the fields.
+/// - The `inputKind` filtering in ``entry(includingSetsAndReps:)`` is what stops a treadmill row
+///   from carrying a stale weight (or a strength row a stale incline) when the user switches
+///   exercises mid-draft without clearing.
+struct WorkoutExerciseDraft {
+    /// The catalog exercise the user picked, or `nil` while nothing is chosen.
+    var exercise: ExerciseTarget?
+    /// Free-text set count (strength inputs only).
+    var sets = ""
+    /// Free-text rep count (strength inputs only).
+    var reps = ""
+    /// Free-text working weight; kept only for `.strength` exercises.
+    var weight = ""
+    /// Free-text treadmill speed; kept only for `.treadmill` exercises.
+    var speed = ""
+    /// Free-text treadmill incline; kept only for `.treadmill` exercises.
+    var incline = ""
+    /// Free-text notes, kept for every input kind.
+    var details = ""
+    /// Bumped on every ``clear()`` so ``WorkoutExerciseBuilder`` resets its internal picker state.
+    var resetToken = 0
+
+    /// Whether an exercise has been chosen — the sheets' "is there something to auto-commit / is the
+    /// sheet dirty" question.
+    var hasExercise: Bool { exercise != nil }
+
+    /// The row this draft would produce, or `nil` when no exercise is chosen.
+    ///
+    /// - Parameter includingSetsAndReps: `false` blanks sets/reps. ``WorkoutSheet`` passes
+    ///   `logMode == .strengthTraining` here, matching its original behaviour; ``WorkoutPlanSheet``
+    ///   always kept them. In practice both sheets only show the builder in strength mode, so the
+    ///   two agree today — the parameter preserves the log sheet's explicit belt-and-braces guard
+    ///   rather than silently adopting the plan sheet's unconditional version.
+    func entry(includingSetsAndReps: Bool = true) -> WorkoutExerciseEntry? {
+        guard let exercise else { return nil }
+        return WorkoutExerciseEntry(
+            exercise: exercise,
+            sets: includingSetsAndReps ? sets : "",
+            reps: includingSetsAndReps ? reps : "",
+            weight: exercise.inputKind == .strength ? weight : "",
+            speed: exercise.inputKind == .treadmill ? speed : "",
+            incline: exercise.inputKind == .treadmill ? incline : "",
+            details: details
+        )
+    }
+
+    /// Appends the draft's row to `rows` and clears the draft.
+    ///
+    /// - Returns: `false` (and leaves `rows` untouched) when no exercise is chosen, so a caller with
+    ///   follow-up work — the plan sheet re-folds its rows into the free-text plan — can bail on the
+    ///   same condition the old `guard let draftExercise else { return }` used.
+    @discardableResult
+    mutating func commit(into rows: inout [WorkoutExerciseEntry], includingSetsAndReps: Bool = true) -> Bool {
+        guard let entry = entry(includingSetsAndReps: includingSetsAndReps) else { return false }
+        rows.append(entry)
+        clear()
+        return true
+    }
+
+    /// Blanks every field and advances ``resetToken`` so the builder drops its picker/search state.
+    mutating func clear() {
+        exercise = nil
+        sets = ""
+        reps = ""
+        weight = ""
+        speed = ""
+        incline = ""
+        details = ""
+        resetToken += 1
+    }
+}
+
 /// The shared exercise-entry form: catalog search picker plus the input fields for the selected
 /// exercise's kind (sets/reps/weight, or speed/incline), with an optional Add button.
 ///
@@ -2676,14 +2745,8 @@ struct WorkoutPlanSheet: View {
     @State private var name = ""
     @State private var exerciseRows: [WorkoutExerciseEntry] = []
     @State private var plannedExerciseText = ""
-    @State private var draftExercise: ExerciseTarget?
-    @State private var draftSets = ""
-    @State private var draftReps = ""
-    @State private var draftWeight = ""
-    @State private var draftSpeed = ""
-    @State private var draftIncline = ""
-    @State private var draftDetails = ""
-    @State private var exerciseResetToken = 0
+    /// The in-progress exercise row (see ``WorkoutExerciseDraft``) — shared with ``WorkoutSheet``.
+    @State private var draft = WorkoutExerciseDraft()
     @State private var duration = ""
     @State private var distance = ""
     @State private var energyKcal = ""
@@ -2741,7 +2804,7 @@ struct WorkoutPlanSheet: View {
     }
 
     private var isDirty: Bool {
-        if draftExercise != nil { return true }
+        if draft.hasExercise { return true }
         let current = Self.planSignature(
             name: name, planned: plannedExerciseText, duration: duration, distance: distance,
             energy: energyKcal, effort: effort, notes: notes,
@@ -2870,14 +2933,14 @@ struct WorkoutPlanSheet: View {
 
                     if logMode == .strengthTraining {
                         WorkoutExerciseBuilder(
-                            selectedExercise: $draftExercise,
-                            sets: $draftSets,
-                            reps: $draftReps,
-                            weight: $draftWeight,
-                            speed: $draftSpeed,
-                            incline: $draftIncline,
-                            details: $draftDetails,
-                            resetToken: $exerciseResetToken,
+                            selectedExercise: $draft.exercise,
+                            sets: $draft.sets,
+                            reps: $draft.reps,
+                            weight: $draft.weight,
+                            speed: $draft.speed,
+                            incline: $draft.incline,
+                            details: $draft.details,
+                            resetToken: $draft.resetToken,
                             pickerTitle: logMode.pickerTitle,
                             searchPlaceholder: logMode.searchPlaceholder,
                             mode: logMode,
@@ -2939,7 +3002,7 @@ struct WorkoutPlanSheet: View {
 
             SheetSaveBar(label: editingPlan == nil ? "Save plan" : "Update plan") {
                 // Fold a typed-but-not-yet-added exercise draft into the plan so Save doesn't drop it.
-                if logMode == .strengthTraining, draftExercise != nil {
+                if logMode == .strengthTraining, draft.hasExercise {
                     addDraftExercise()
                 }
                 store.planWorkout(
@@ -2969,26 +3032,25 @@ struct WorkoutPlanSheet: View {
         .interactiveDismissDisabled(isDirty)
         .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
         .onChange(of: logMode) { _, _ in
-            clearDraftExercise()
+            draft.clear()
         }
     }
 
+    /// Folds the current draft into the planned rows AND back into the free-text plan.
+    ///
+    /// Unlike ``WorkoutSheet``, this sheet keeps a free-text "Plan steps" field in sync with the
+    /// structured rows, so the commit is followed by a re-fold of the new row's summary into that text
+    /// — the one thing the two sheets genuinely do differently, and the reason `commit` reports whether
+    /// it appended anything (the fold must not run for an empty draft).
+    ///
+    /// Sets/reps are kept unconditionally (`includingSetsAndReps` defaults to `true`), matching this
+    /// sheet's original behaviour; the log sheet blanks them outside strength mode.
     private func addDraftExercise() {
-        guard let draftExercise else { return }
-        exerciseRows.append(WorkoutExerciseEntry(
-            exercise: draftExercise,
-            sets: draftSets,
-            reps: draftReps,
-            weight: draftExercise.inputKind == .strength ? draftWeight : "",
-            speed: draftExercise.inputKind == .treadmill ? draftSpeed : "",
-            incline: draftExercise.inputKind == .treadmill ? draftIncline : "",
-            details: draftDetails
-        ))
+        guard draft.commit(into: &exerciseRows) else { return }
         plannedExerciseText = (plannedExerciseText.components(separatedBy: .newlines) + [exerciseRows.last?.summary ?? ""])
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "\n")
-        clearDraftExercise()
     }
 
     private func copyPreviousWeekPlan(_ plan: PlannedWorkout) {
@@ -3000,17 +3062,6 @@ struct WorkoutPlanSheet: View {
         duration = plan.duration.map(String.init) ?? ""
         notes = plan.notes
         selectedActivityType = plan.activityType
-    }
-
-    private func clearDraftExercise() {
-        draftExercise = nil
-        draftSets = ""
-        draftReps = ""
-        draftWeight = ""
-        draftSpeed = ""
-        draftIncline = ""
-        draftDetails = ""
-        exerciseResetToken += 1
     }
 
     private static func exerciseEntries(from text: String) -> [WorkoutExerciseEntry] {

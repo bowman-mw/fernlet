@@ -59,7 +59,7 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | --- | --- |
 | `Fernlet/Fernlet/HomeView.swift` | Home dashboard with companion state, quick logging, signal trends, macro summaries, hygiene, and photo wall UI. |
 | `Fernlet/Fernlet/FoodView.swift` | Food logging, recipes, imported recipe review, ingredient editing, meal creation, macro display, saved recipe book, and Safari presentation. Also hosts the in-file `RecipeDetailView` (sealed photo, macros, edit/log/share actions, in-app Safari source link). |
-| `Fernlet/Fernlet/MoveView.swift` | Movement/workout screen with workout logging, suggestions, workout rows, and goal summaries. |
+| `Fernlet/Fernlet/MoveView.swift` | Movement/workout screen with workout logging, suggestions, workout rows, and goal summaries. Hosts `WorkoutExerciseDraft`, the exercise-draft state machine shared by `WorkoutSheet` and `WorkoutPlanSheet`. |
 | `Fernlet/Fernlet/ActivityPickerSection.swift` | Activity-mode workout picker, recent activity shortcuts, and activity-specific workout fields. |
 | `Fernlet/Fernlet/JournalView.swift` | Journal calendar, prompts, entry creation/editing, day detail, day nutrition breakdowns, and daily edit sheets. |
 | `Fernlet/Fernlet/PeriodTrackerView.swift` | Cycle tracking main view. |
@@ -466,7 +466,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | File | Purpose |
 | --- | --- |
 | `Fernlet/FernletShareExtension/ShareViewController.swift` | Share-extension entry `UIViewController` that extracts the shared URL and enqueues it via `SharedRecipeImportQueueWriter`. |
-| `Fernlet/FernletShareExtension/SharedRecipeImportQueueWriter.swift` | App-group JSON queue writer that records shared recipe URLs (`SharedRecipeImportRecord`) for the app to import later. |
+| `Fernlet/FernletShareExtension/SharedRecipeImportQueueWriter.swift` | App-group JSON queue writer that records shared recipe URLs (`SharedRecipeImportRecord`) for the app to import later. A deliberate hand-copied twin of `AppServices/SharedRecipeImportQueue.swift` (the extension links no FernletKit products); field list, coder config, container fallback chain, and `NSFileCoordinator` coordination must stay in sync — enforced by `SharedRecipeImportQueueMirrorTests`. |
 | `Fernlet/FernletKit/Sources/AppServices/SharedRecipeImportQueue.swift` | App-group-backed queue of shared recipe-URL import records (`SharedRecipeImportRecord` with attempt/error tracking) handed off from the share extension for later import. |
 
 ## Tests
@@ -587,6 +587,9 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletTests/RecentBitesTests.swift` | Home "Recent bites" 7-day photographed-meal window tests. |
 | `Fernlet/FernletTests/RecipeWebImporterTests.swift` | Recipe web-importer SSRF/URL-safety allow- and block-list tests. |
 | `Fernlet/FernletTests/ReplayCacheTests.swift` | Replay-cache oldest-eviction and envelope-replay-detection tests. |
+| `Fernlet/FernletTests/SharedRecipeImportQueueMirrorTests.swift` | Drift guard for the share extension's hand-copied `SharedRecipeImportRecord` mirror: parses both source files and requires identical field lists (the `budgetDeferredDayKey` stripping regression), plus wire-format round-trip, `NSFileCoordinator` coordination, and container-fallback-order parity. |
+| `Fernlet/FernletTests/CoreDataStagedBlobLoadTests.swift` | Parity coverage for `CoreDataFernletRepository`'s two aggregate-blob entry points: async/sync agreement, first-launch legacy migration, and read-only-recovery latching on fetch failure and corrupt payload via `loadSnapshotAsync`. |
+| `Fernlet/FernletTests/JournalAppendPathTests.swift` | Pins the single journal-append path (`addJournal` overloads + `logQuickMood`): today updates day/`previousJournals`/memories, a back-dated entry touches none of the today-scoped state but persists and hydrates on its own day. |
 | `Fernlet/FernletTests/NoTrackingBoundaryTests.swift` | No-tracking wall: banned advertising/analytics SDKs and symbols across every target, exact SPM dependency + hardcoded-destination allowlists, pinned HTTP-client files, and PrivacyInfo.xcprivacy/entitlements assertions. See [No-Tracking-Wall.md](No-Tracking-Wall.md). |
 | `Fernlet/FernletTests/S3BoundaryTests.swift` | S3 privacy-wall grep-based backstop tests scanning AI-facing sources for sealed-store access. |
 | `Fernlet/FernletTests/SavedRecipeMigrationTests.swift` | Legacy SavedRecipe-to-RecipeDefinition migration round-trip tests. |

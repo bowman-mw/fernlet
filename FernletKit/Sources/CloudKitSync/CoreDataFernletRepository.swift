@@ -102,55 +102,37 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// Async variant of `loadSnapshot(todayKey:)`: the cold-cache blob decode runs off the main
     /// actor, guarding against a concurrent `saveDatabase` installing a fresher cache mid-decode
     /// (the fresher cache wins). Failure paths latch read-only recovery just like the sync path.
+    ///
+    /// Everything except the decode itself is the SHARED pipeline (``beginStagedBlobLoad(todayKey:)``
+    /// → ``finishStagedBlobLoad(decoded:recordUpdatedAt:)`` / ``stagedBlobDecodeFailed(_:)``), so the
+    /// migration and corruption policies cannot drift between the two entry points. The two things
+    /// that are genuinely this path's own — the off-main decode and the fresher-cache-wins guard that
+    /// only an `await` can need — stay here.
     public func loadSnapshotAsync(todayKey: String) async -> FernletSnapshot {
         let signpostID = StartupTiming.begin("CoreDataFernletRepository.loadSnapshotAsync")
         defer { StartupTiming.end("CoreDataFernletRepository.loadSnapshotAsync", signpostID: signpostID) }
 
-        assert(!todayKey.isEmpty, "today key required")
-
-        if let cached = cachedDatabase {
-            let database = cached.daysMigratedToRows ? cached : migrateDaysToRowsIfNeeded(cached)
+        switch beginStagedBlobLoad(todayKey: todayKey) {
+        case .resolved(let database):
             return snapshot(from: database, todayKey: todayKey)
-        }
-
-        let record: NSManagedObject
-        switch fetchRecordResult() {
-        case .found(let fetchedRecord):
-            record = fetchedRecord
-        case .missing:
-            clearReadOnlyRecoveryFlags()
-            var migrated = migrateDatabase(todayKey: todayKey)
-            migrated = migrateDaysToRowsIfNeeded(migrated)
-            if cachedDatabase == nil { _ = saveDatabase(migrated) }
-            return snapshot(from: migrated, todayKey: todayKey)
-        case .failed(let error):
-            markPersistenceBlockedByFetchFailure(error)
-            return snapshot(from: LocalFernletDatabase(), todayKey: todayKey)
-        }
-        guard let payload = record.value(forKey: "payloadData") as? Data else {
-            print("[Fernlet] Core Data record exists but payloadData is nil; entering read-only recovery mode.")
-            markPersistenceBlockedByDecodeFailure()
-            return snapshot(from: LocalFernletDatabase(), todayKey: todayKey)
-        }
-
-        do {
-            let decodedAt = record.value(forKey: "updatedAt") as? Date
-            let decoded = try await Self.decodeDatabaseAsync(from: payload)
-            // A concurrent saveDatabase() may have installed a fresher cache while we decoded.
-            if let fresh = cachedDatabase {
-                return snapshot(from: fresh, todayKey: todayKey)
+        case .needsDecode(let payload, let recordUpdatedAt):
+            do {
+                let decoded = try await Self.decodeDatabaseAsync(from: payload)
+                // A concurrent saveDatabase() may have installed a fresher cache while we decoded.
+                // Deliberately returns `fresh` AS IS — no `migrateDaysToRowsIfNeeded` pass, unlike the
+                // warm-cache branch inside `beginStagedBlobLoad`. That cache came from a completed
+                // save, so it is both newer than what we just decoded and already whatever migration
+                // state that save left; re-running the backfill on it here would fan out (and re-save)
+                // a database this call never owned. A still-pending backfill is retried on the very
+                // next load, which is the permanent-lazy-backfill contract.
+                if let fresh = cachedDatabase {
+                    return snapshot(from: fresh, todayKey: todayKey)
+                }
+                let database = finishStagedBlobLoad(decoded: decoded, recordUpdatedAt: recordUpdatedAt)
+                return snapshot(from: database, todayKey: todayKey)
+            } catch {
+                return snapshot(from: stagedBlobDecodeFailed(error), todayKey: todayKey)
             }
-            clearReadOnlyRecoveryFlags()
-            let database = migrateDaysToRowsIfNeeded(decoded)
-            if cachedDatabase == nil {
-                cachedDatabase = database
-                cachedRecordUpdatedAt = decodedAt
-            }
-            return snapshot(from: database, todayKey: todayKey)
-        } catch {
-            print("[Fernlet] Core Data record decode failed; entering read-only recovery mode: \(error.localizedDescription)")
-            markPersistenceBlockedByDecodeFailure()
-            return snapshot(from: LocalFernletDatabase(), todayKey: todayKey)
         }
     }
 
@@ -466,13 +448,69 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// The synchronous blob load: serves the memo, or fetches/decodes the primary record —
     /// migrating from the legacy JSON store on first launch, retrying the blob→row backfill
     /// whenever it is incomplete, and latching read-only recovery on fetch/decode failure.
+    ///
+    /// Every stage except the decode is the shared pipeline it has in common with
+    /// ``loadSnapshotAsync(todayKey:)``; only the decode differs (synchronous, on the main actor,
+    /// under its own signpost).
     private func loadDatabase(todayKey: String) -> LocalFernletDatabase {
+        switch beginStagedBlobLoad(todayKey: todayKey) {
+        case .resolved(let database):
+            return database
+        case .needsDecode(let payload, let recordUpdatedAt):
+            do {
+                let decoded = try StartupTiming.timed("CoreDataFernletRepository.loadDatabase.decode") {
+                    try decoder.decode(LocalFernletDatabase.self, from: payload)
+                }
+                return finishStagedBlobLoad(decoded: decoded, recordUpdatedAt: recordUpdatedAt)
+            } catch {
+                // Record exists but is corrupt. Do NOT overwrite with legacy data.
+                return stagedBlobDecodeFailed(error)
+            }
+        }
+    }
+
+    /// What the pre-decode stages of an aggregate-blob load produced.
+    ///
+    /// The sync (`loadDatabase`) and async (`loadSnapshotAsync`) entry points differ ONLY in how they
+    /// decode the payload — off the main actor in the async case. Everything around that decode (the
+    /// cache check, the fetch three-way, first-launch legacy migration, the payload-nil guard, the
+    /// read-only-recovery latches) was previously written twice and drifted apart, so it is staged
+    /// here and this type is the seam the two decode strategies plug into.
+    private enum StagedBlobLoad {
+        /// A database is already in hand: the warm memo, a first-launch legacy migration, or the empty
+        /// read-only-recovery fallback. Nothing left to decode.
+        case resolved(LocalFernletDatabase)
+        /// The primary record was found and carries a payload the caller must decode, along with the
+        /// record's `updatedAt` read BEFORE any decode (see ``beginStagedBlobLoad(todayKey:)``).
+        case needsDecode(payload: Data, recordUpdatedAt: Date?)
+    }
+
+    /// Stages an aggregate-blob load up to (but not including) the payload decode.
+    ///
+    /// Resolves in one of four ways:
+    /// - **warm memo** — served straight back, retrying the blob→row backfill first when a prior
+    ///   migration attempt didn't finish (the permanent lazy backfill that makes retiring the blob's
+    ///   `days` safe);
+    /// - **no record** — first launch or fresh install: clear the recovery latches, migrate from the
+    ///   legacy JSON store, fan its days into rows, and persist (unless the migration's own save
+    ///   already installed a cache);
+    /// - **fetch failed** — latch read-only recovery and hand back the empty fallback, never the
+    ///   legacy store (a transient Core Data error must not be mistaken for a fresh install);
+    /// - **record found** — return its payload for the caller to decode.
+    ///
+    /// `recordUpdatedAt` is read here, before the decode, on purpose. The async path MUST capture it
+    /// before its `await` (the managed object may not be touched across a suspension the same way),
+    /// and reading it eagerly on the sync path too keeps the two identical: the value is only ever
+    /// consumed when the decode installs a fresh cache, and `migrateDaysToRowsIfNeeded`'s save either
+    /// succeeds (in which case the cache is already installed and this value goes unused) or rolls the
+    /// context back (restoring the stamp we read).
+    private func beginStagedBlobLoad(todayKey: String) -> StagedBlobLoad {
         assert(!todayKey.isEmpty, "today key required")
 
         if let cached = cachedDatabase {
             // Permanent lazy backfill: if a prior migration attempt didn't finish, retry on every load
             // until the rows are written (the flag flips true) — what makes retiring the blob safe.
-            return cached.daysMigratedToRows ? cached : migrateDaysToRowsIfNeeded(cached)
+            return .resolved(cached.daysMigratedToRows ? cached : migrateDaysToRowsIfNeeded(cached))
         }
 
         // Stage 1: Check if a record exists at all.
@@ -486,36 +524,44 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             var migrated = migrateDatabase(todayKey: todayKey)
             migrated = migrateDaysToRowsIfNeeded(migrated)
             if cachedDatabase == nil { _ = saveDatabase(migrated) }
-            return migrated
+            return .resolved(migrated)
         case .failed(let error):
             markPersistenceBlockedByFetchFailure(error)
-            return LocalFernletDatabase()
+            return .resolved(LocalFernletDatabase())
         }
 
-        // Stage 2: Record exists — attempt decode.
-        guard let data = record.value(forKey: "payloadData") as? Data else {
+        // Stage 2: Record exists — hand its payload to the caller's decode strategy.
+        guard let payload = record.value(forKey: "payloadData") as? Data else {
             print("[Fernlet] Core Data record exists but payloadData is nil; entering read-only recovery mode.")
             markPersistenceBlockedByDecodeFailure()
-            return LocalFernletDatabase()
+            return .resolved(LocalFernletDatabase())
         }
+        return .needsDecode(payload: payload, recordUpdatedAt: record.value(forKey: "updatedAt") as? Date)
+    }
 
-        do {
-            let decoded = try StartupTiming.timed("CoreDataFernletRepository.loadDatabase.decode") {
-                try decoder.decode(LocalFernletDatabase.self, from: data)
-            }
-            clearReadOnlyRecoveryFlags()
-            let database = migrateDaysToRowsIfNeeded(decoded)
-            if cachedDatabase == nil {
-                cachedDatabase = database
-                cachedRecordUpdatedAt = record.value(forKey: "updatedAt") as? Date
-            }
-            return database
-        } catch {
-            // Record exists but is corrupt. Do NOT overwrite with legacy data.
-            print("[Fernlet] Core Data record decode failed; entering read-only recovery mode: \(error.localizedDescription)")
-            markPersistenceBlockedByDecodeFailure()
-            return LocalFernletDatabase()
+    /// The post-decode stage shared by both entry points: a clean decode clears the read-only-recovery
+    /// latches, retries the blob→row backfill, and installs the memo — but only if nothing else already
+    /// did (the backfill's own `saveDatabase` installs a cache, and on the async path a concurrent save
+    /// may have raced us; in both cases the existing cache is the fresher one and must not be replaced).
+    private func finishStagedBlobLoad(decoded: LocalFernletDatabase, recordUpdatedAt: Date?) -> LocalFernletDatabase {
+        clearReadOnlyRecoveryFlags()
+        let database = migrateDaysToRowsIfNeeded(decoded)
+        if cachedDatabase == nil {
+            cachedDatabase = database
+            cachedRecordUpdatedAt = recordUpdatedAt
         }
+        return database
+    }
+
+    /// The one corruption policy for both entry points: a record that exists but will not decode
+    /// latches read-only recovery (dropping every memo, so nothing half-read is served) and yields the
+    /// empty fallback. It is NEVER overwritten with legacy data, and `saveDatabase` then refuses to
+    /// write until a later load succeeds — that latch is what stops a transient failure from being
+    /// persisted over real data.
+    private func stagedBlobDecodeFailed(_ error: Error) -> LocalFernletDatabase {
+        print("[Fernlet] Core Data record decode failed; entering read-only recovery mode: \(error.localizedDescription)")
+        markPersistenceBlockedByDecodeFailure()
+        return LocalFernletDatabase()
     }
 
     /// True while the aggregate store is in read-only recovery (a failed fetch/decode returned the empty

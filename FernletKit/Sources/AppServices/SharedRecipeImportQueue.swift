@@ -8,6 +8,18 @@ import AIProviders
 /// Written to the App-Group JSON file by the `FernletShareExtension` (which only ever sets `id`,
 /// `urlString`, and `queuedAt`) and mutated by the app-side drain through ``SharedRecipeImportQueue``.
 /// All optional fields must stay optional so extension-written records keep decoding.
+///
+/// **DELIBERATE TWIN — keep in sync with `SharedRecipeImportRecord` in
+/// `FernletShareExtension/SharedRecipeImportQueueWriter.swift`.** The share extension links NO
+/// FernletKit products (that is what keeps a share-sheet launch cheap), so it cannot import this
+/// type and hand-copies it instead. The copy is not a read-only view of the schema: every enqueue
+/// decodes the whole queue file and rewrites it with the extension's type, so a field declared HERE
+/// and missing THERE is silently stripped from every already-queued record on the next share.
+/// `budgetDeferredDayKey` was exactly that bug — one share wiped the deferral stamps and the drain
+/// re-fetched budget-deferred pages the same day.
+///
+/// - Important: Add any new field to BOTH definitions in the same commit.
+///   `FernletTests/SharedRecipeImportQueueMirrorTests` reads both source files and fails on drift.
 public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
     public var id: UUID
     public var urlString: String
@@ -63,6 +75,16 @@ public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
 /// coders), so instances are cheap and interchangeable; edits are last-writer-wins per coordinated
 /// write, and a corrupt file silently aborts mutations (but not ``clear()``) to avoid destroying
 /// records it cannot parse.
+///
+/// **DELIBERATE TWIN — keep in sync with `SharedRecipeImportQueueWriter` in
+/// `FernletShareExtension/SharedRecipeImportQueueWriter.swift`.** That type is the write half of
+/// the same file protocol, hand-copied because the extension links no FernletKit products. Four
+/// things must match on both sides or the hand-off breaks silently rather than loudly: the file
+/// path, the container fallback chain (App Group → Application Support → tmp — diverge and the two
+/// processes end up on different files), the JSON coder configuration, and the `NSFileCoordinator`
+/// coordination (without it a share racing a drain is last-writer-wins). The one intentional
+/// difference is the corrupt-file policy: this side aborts a mutation to preserve records it cannot
+/// parse; the extension replaces the file rather than failing the user's share.
 public struct SharedRecipeImportQueue {
     static let appGroupIdentifier = "group.MBO.Fernlet"
 

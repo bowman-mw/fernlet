@@ -126,8 +126,9 @@ struct FernletPersistenceTests {
         await Task.yield()  // drain any save Task from seedBundledFoodItems
         let savesBefore = spy.saveCount
 
-        // addJournal touches day.journals, previousJournals, and memories —
-        // all inside one batchSnapshotPersistence call.
+        // addJournal touches day.journals, previousJournals, and memories — all behind ONE debounced
+        // `scheduleSnapshotSave()` (today's append goes through `diary.mutateDay`, which schedules once;
+        // the coordinator builds the snapshot at fire time, so the later field updates still land).
         store.addJournal(text: "Testing batch persistence coalescing.", tag: .neutral)
         store.flushPendingSnapshotSave()
 

@@ -2287,18 +2287,10 @@ final class FernletStore {
         healthSyncCoordinator.stopWorkoutObservation()
     }
 
+    /// Adds a journal entry to today. Sugar over ``addJournal(text:tag:date:)`` — see it for the
+    /// bookkeeping, which is identical because today IS just the `date == todayKey` case.
     func addJournal(text: String, tag: FeelingTag) {
-        let entry = JournalEntry(text: text, tag: tag)
-        journalSealingCoordinator.seal(entry, dayKey: todayKey)
-        batchSnapshotPersistence {
-            day.journals.append(entry)
-            previousJournals.insert(entry, at: 0)
-            previousJournals = Array(previousJournals.prefix(30))
-            if let memory = MemoryNote.fromJournal(text: text, tag: tag) {
-                memories.append(memory)
-                memories = Array(memories.suffix(300))
-            }
-        }
+        addJournal(text: text, tag: tag, date: todayKey)
     }
 
     /// One-tap mood check-in: a tag-only journal entry (empty text, just a `FeelingTag`). It flows
@@ -2330,13 +2322,12 @@ final class FernletStore {
                 }
             }
         } else {
-            let entry = JournalEntry(text: "", tag: tag, isQuickMood: true)
-            journalSealingCoordinator.seal(entry, dayKey: todayKey)  // no-op for empty text
-            batchSnapshotPersistence {
-                day.journals.append(entry)
-                previousJournals.insert(entry, at: 0)
-                previousJournals = Array(previousJournals.prefix(30))
-            }
+            // The same append + seal + previousJournals bookkeeping as `addJournal`, so it goes through
+            // the same core. The only thing the core adds is the `MemoryNote.fromJournal` call, which
+            // returns nil below 20 characters — a tag-only check-in has empty text, so it can never mint
+            // a memory. Sealing is likewise a no-op for empty text, which is what lets a check-in work
+            // while the private lock is closed.
+            appendJournalEntry(JournalEntry(text: "", tag: tag, isQuickMood: true), date: todayKey)
         }
     }
 
@@ -2538,18 +2529,43 @@ final class FernletStore {
         diary.dailyHealthScore(for: dateKey, day: targetDay)
     }
 
+    /// Adds a journal entry to `date` — the ONE journal-append path, for today and for past days
+    /// alike. ``addJournal(text:tag:)`` and ``logQuickMood(_:)``'s new-entry branch both funnel
+    /// through ``appendJournalEntry(_:date:)`` below.
     func addJournal(text: String, tag: FeelingTag, date: String) {
+        appendJournalEntry(JournalEntry(text: text, tag: tag), date: date)
+    }
+
+    /// Seals `entry`, writes it into `date`'s journals, and runs the today-only side bookkeeping.
+    ///
+    /// The whole today-vs-past-date difference lives in `diary.mutateDay`, which is why this is one
+    /// function and not two:
+    /// - **today** — `mutateDay` mutates the live `day` in place and schedules ONE debounced snapshot
+    ///   save, exactly what the old today-only overload's `batchSnapshotPersistence` did (that wrapper
+    ///   is literally "run the closure, then `scheduleSnapshotSave()`"). Scheduling before rather than
+    ///   after the `previousJournals`/`memories` updates is immaterial: the coordinator debounces and
+    ///   calls `buildSnapshot()` at FIRE time, so the save serializes the final state either way.
+    /// - **past date** — `mutateDay` routes to `mutatePastDay`, which loads that day's repository row,
+    ///   applies the change, and writes it straight back through the `SanitizedDay` privacy barrier.
+    ///   No snapshot save is scheduled because past days do not live in the aggregate snapshot at all,
+    ///   and the write is synchronous rather than debounced. Collapsing the two paths onto
+    ///   `batchSnapshotPersistence` would have written a past-day journal into TODAY's record.
+    ///
+    /// The `previousJournals` / `memories` bookkeeping is deliberately today-only. Both are
+    /// today-scoped views (the "recent entries" strip and the memory pool feeding the companion), so
+    /// back-dating an entry must not push it to the front of "recent" or mint a memory as if it had
+    /// just been written. `MemoryNote.fromJournal` additionally rejects anything under 20 characters,
+    /// so a tag-only mood check-in never mints a memory even though it flows through here.
+    private func appendJournalEntry(_ entry: JournalEntry, date: String) {
         assert(!date.isEmpty, "journal date required")
-        let entry = JournalEntry(text: text, tag: tag)
         journalSealingCoordinator.seal(entry, dayKey: date)
         diary.mutateDay(date: date) { $0.journals.append(entry) }
-        if date == todayKey {
-            previousJournals.insert(entry, at: 0)
-            previousJournals = Array(previousJournals.prefix(30))
-            if let memory = MemoryNote.fromJournal(text: text, tag: tag) {
-                memories.append(memory)
-                memories = Array(memories.suffix(300))
-            }
+        guard date == todayKey else { return }
+        previousJournals.insert(entry, at: 0)
+        previousJournals = Array(previousJournals.prefix(30))
+        if let memory = MemoryNote.fromJournal(text: entry.text, tag: entry.tag) {
+            memories.append(memory)
+            memories = Array(memories.suffix(300))
         }
     }
 
