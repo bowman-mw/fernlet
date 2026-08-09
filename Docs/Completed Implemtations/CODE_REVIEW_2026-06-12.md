@@ -1,4 +1,4 @@
-> **CLOSED 2026-08-09 — TRIAGE COMPLETE.** All 195 findings are triaged: 185 fixed, 10 open. The counts were reconciled on 2026-08-09 after twelve findings that later rounds had quietly closed were re-verified in code and marked (the section headers had drifted from the per-finding markers — the High header claimed "1 open" while all 21 were individually fixed). The 10 survivors are listed in "Open findings" near the top and are carried on [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md) §9; the review itself is finished as a review. The only security item left is the deferred sealed-backup replay/rollback fix (needs versioned AAD + a CloudKit re-seal migration).
+> **CLOSED 2026-08-09 — TRIAGE COMPLETE.** All 195 findings are triaged: 186 fixed, 9 open. The counts were reconciled on 2026-08-09 after twelve findings that later rounds had quietly closed were re-verified in code and marked (the section headers had drifted from the per-finding markers — the High header claimed "1 open" while all 21 were individually fixed). The 10 survivors are listed in "Open findings" near the top and are carried on [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md) §9; the review itself is finished as a review. The sealed-backup replay/rollback finding — the last security item — was fixed on 2026-08-09; every remaining survivor is duplication or hygiene.
 
 # Fernlet — Code Review Report
 
@@ -20,7 +20,7 @@ _**157 / 193 confirmed findings fixed** (2 critical, 21 high, 82 medium, 52 low)
 > Medium-duplication header claimed "all 13 open" while one was marked fixed inside it). Twelve
 > findings were re-verified against current code and marked fixed — most were closed as side effects
 > of later rounds (the 2026-07-19 hygiene sweep, the 2026-08-02 `INFOPLIST_KEY` migration, the
-> 2026-08-05 duplication consolidation) without anyone updating this report. **10 findings remain
+> 2026-08-05 duplication consolidation) without anyone updating this report. **9 findings remain
 > open**; they are listed in §Open findings below and carried on the live tracker.
 
 | Severity | Count | Fixed | Open |  | Category | Count |
@@ -28,14 +28,13 @@ _**157 / 193 confirmed findings fixed** (2 critical, 21 high, 82 medium, 52 low)
 | critical | 2 | **2** ✅ | 0 |  | bug | 119 |
 | high | 21 | **21** ✅ | 0 |  | security | 33 |
 | medium | 95 | **88** | 6 |  | duplication | 25 |
-| low | 77 | **73** | 4 |  | redundancy | 6 |
+| low | 77 | **74** | 3 |  | redundancy | 6 |
 |  |  |  |  |  | hygiene | 10 |
 
 ## Open findings (as of 2026-08-09)
 
 | Finding | Severity | Note |
 |---|---|---|
-| Sealed backup records can be replayed/rolled back (`updatedAt`/versioning unauthenticated) | low · security (re-categorised High) | **The only security item left.** Explicitly deferred: the fix needs versioned AAD plus a CloudKit re-seal migration. |
 | `SharedRecipeImportRecord` + queue I/O duplicated across app and share-extension targets, with divergent fallback paths | medium · duplication (2 findings) | Now has a known consequence: the extension-side mirror omits `budgetDeferredDayKey` and rewrites the whole queue file, stripping the stamp from every queued record (`Doc-Pass-Anomalies-2026-08-04.md`). |
 | HTML fetch + JSON-LD/scraping helpers duplicated between `RecipeWebImporter` and `FoodProductWebImporter` | medium · duplication (2 findings) | `fetchHTML` is still defined in both. Blocked by the `AppServices`→`AIProviders` cycle noted in the carve-up plan §14. |
 | Draft-exercise state machine copy-pasted across `WorkoutSheet` and `WorkoutPlanSheet` | medium · duplication | `addDraftExercise`/`clearDraftExercise` still duplicated in `MoveView.swift` (748/763 and 2976/3005); the row editor is shared, the state machine is not. |
@@ -1126,7 +1125,7 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 
 ## 🟢 Low (77)
 
-### Low — security (14) — all 14 fixed ✅ (Issue 14 re-categorised as High)
+### Low — security (14) — all 14 fixed ✅ (Issue 14 re-categorised as High; fixed 2026-08-09)
 
 #### 1. Cloud-data deletion confirmation accepts ANY non-empty string, not just DELETE
 
@@ -1250,7 +1249,8 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 
 #### 14. Sealed backup records can be replayed/rolled back: updatedAt and versioning are not authenticated
 
-- **Severity / Category:** high · security — ✅ Verified (re-categorised 2026-06-14; fix deferred — requires versioned AAD + CloudKit re-seal migration)
+- **Severity / Category:** high · security — ✅ Fixed 2026-08-09
+- **Resolution:** `SealedBackupRecord` gained a monotonic per-payload-type `generation`, and the GCM AAD (now versioned `fernlet.sealed-backup.aad.v2`) binds both `generation` and `updatedAt`, so neither is attacker-editable metadata any more. Because a wholesale substitution of an older generation is authentic by construction, the AAD alone cannot detect rollback — the device-local `SealedBackupGenerationStore` remembers the highest generation written or accepted per payload type and `restoreChunks` rejects anything older with `SealedBackupError.staleGeneration`, surfaced as the terminal (non-retryable) `.rolledBack` outcome. `sealedBackupChunks` additionally requires every chunk in a set to share one generation, closing same-size chunk splicing. No re-seal migration was needed: the app had no users, so the field ships required and fail-closed. Tests: `SealedBackupRollbackTests` (10). **Owner action:** promote the `generation` field on the `SealedBackupRecord` record type to the CloudKit Production schema before shipping — see [CloudKit-Schema-Deploy.md](../CloudKit-Schema-Deploy.md).
 - **Location:** `Fernlet/SealedBackupService.swift:73`  ·  _found by: crypto-lock_
 - **Problem:** The AES-GCM AAD covers only payloadType and signingPublicKey; updatedAt and any notion of record version are unauthenticated. An actor able to modify the CloudKit container contents (account compromise, or any future multi-device write path) can substitute an older, validly sealed record for the current one and open() will accept it, silently rolling the user's restored sensitive notes/period data back to a stale snapshot. Cross-payload-type confusion is prevented, but freshness is not.
 - **Evidence:** `Data(payloadType.rawValue.utf8) + Data([0]) + signingPublicKey`

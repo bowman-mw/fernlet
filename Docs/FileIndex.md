@@ -218,6 +218,7 @@ The on-device source is carved into the `FernletKit` local SPM package (see [SPM
 | `Fernlet/FernletKit/Sources/PeriodContextBridge/PeriodContextBridge.swift` | Period-module egress bridge: raw→abstract cycle conversions (`PeriodPhaseBand`) exporting only coarse enums past the S3 wall. |
 | `Fernlet/FernletKit/Sources/PeriodContextBridge/PeriodPhaseTrendEngine.swift` | `PeriodHealthTrend` device-sealed per-phase wellbeing trend (coarse direction + confidence band) from the user's own history. |
 | `Fernlet/FernletKit/Sources/CloudKitSync/HeartDropCloudTransport.swift` | CloudKit **public**-database ferry for heart drops (the app's only public-DB use): upload one sealed drop per tag, fetch a friend's tag window with per-chunk anti-starvation budgeting. Sees tags and ciphertext only. |
+| `Fernlet/Fernlet/SealedBackupGenerationStore.swift` | Device-local, never-synced high-water mark of the highest sealed-backup generation this device has written or accepted, per payload type — the state half of the rollback defense. The crypto half is the generation binding in `SealedBackupCrypto.authenticatedData`. Cleared by the delete-all path. |
 | `Fernlet/FernletKit/Sources/CloudKitSync/CloudKitSchemaDeploy.swift` | The schema-deploy launch flag. `isRequested(arguments:)` is pure and testable; the caller that actually pushes the schema is `#if DEBUG`-gated so it cannot fire in Release. See [CloudKit-Schema-Deploy.md](CloudKit-Schema-Deploy.md). |
 
 ## Domain Models (FernletDomainModel)
@@ -616,6 +617,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletTests/SealedPayloadFramingTests.swift` | wire2 compress+pad framing round-trips and capability gating. |
 | `Fernlet/FernletTests/ProximityVerificationTests.swift` | QR ceremony: nonce binding, sign-after-check ordering, and wrong-peer drops that must not clear state. |
 | `Fernlet/FernletTests/CoachSessionHardeningTests.swift` | Coach-path hardening as an executable contract: the role split, coach-vs-friend trust policy, the freeze-default `.trainer` guard, and the pre-decrypt wire-size gate. |
+| `Fernlet/FernletTests/SealedBackupRollbackTests.swift` | Rollback defense: AAD binding (editing `generation`/`updatedAt` breaks authentication, sub-second timestamps still open) and the high-water mark (monotonic minting, per-payload independence, forward-only accept, wipe reset, and the authentic-older-generation rejection). |
 | `Fernlet/FernletTests/PrivacyWipeCoverageTests.swift` | The enforced delete-all coverage checklist — identity and sidecar keys must die with the wipe. See [PrivacyWipeCoverage.md](PrivacyWipeCoverage.md). |
 | `Fernlet/FernletTests/GroceryAggregationTests.swift` | Pure aggregation engine: unit merging, duplicate collapse, and unresolvable-line passthrough. |
 | `Fernlet/FernletTests/GroceryListComposerTests.swift` | App-side composition: catalog resolution, "cook for N" scaling, and web-import line unification. |

@@ -3713,6 +3713,13 @@ final class FernletStore {
         // either way. Clear it (observable + persisted) with the backup.
         recordSealedBackupPeriodReuploadDeferred(false)
 
+        // The rollback high-water mark dies with the backups it describes. Keeping it would strand
+        // the user: after a wipe the next backup mints generation 1, which is BELOW the pre-wipe
+        // mark, so the restore guard would reject the user's own new backup as a rollback attack.
+        // Safe to clear precisely because the records it protected are gone in the same breath.
+        var generationStore = SealedBackupGenerationStore()
+        generationStore.reset()
+
         // 2b. The "Stop syncing, keep cloud data" copy. Sync is OFF, so the per-row deletes below can't
         // reach the server by propagating over a live session — but a full copy of the day blob is still
         // sitting in the user's private CloudKit zone, ready to sync straight back the moment they turn

@@ -172,7 +172,8 @@ struct CloudKitDataServiceTests {
             nonce: Data(repeating: 1, count: 12),
             ciphertext: Data("encrypted".utf8),
             tag: Data(repeating: 2, count: 16),
-            updatedAt: Date(timeIntervalSince1970: 1_800_000_000)
+            updatedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            generation: 1
         )
 
         try await service.saveSealedBackup(backup)
@@ -304,7 +305,8 @@ struct CloudKitDataServiceTests {
             tag: Data(repeating: 2, count: 16),
             updatedAt: Date(timeIntervalSince1970: 1_800_000_000),
             chunkIndex: index,
-            chunkCount: count
+            chunkCount: count,
+            generation: 1
         )
     }
 

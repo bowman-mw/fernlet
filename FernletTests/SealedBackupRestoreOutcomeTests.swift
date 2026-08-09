@@ -19,7 +19,7 @@ struct SealedBackupRestoreOutcomeTests {
         #expect(SealedBackupRestoreOutcome.restored(3).didRestore)
         for outcome: SealedBackupRestoreOutcome in [
             .nothingToRestore, .skippedStoreNotEmpty, .deferredKeyNotSynced,
-            .deferredLocked, .deferredTransient, .notRecognized
+            .deferredLocked, .deferredTransient, .notRecognized, .rolledBack
         ] {
             #expect(outcome.didRestore == false)
         }
@@ -28,7 +28,7 @@ struct SealedBackupRestoreOutcomeTests {
     @Test func deferredAndUnrecognizedNeedAttention() {
         // The deferred/unrecognized outcomes are the ones the user must see (WS-4 "visible").
         for outcome: SealedBackupRestoreOutcome in [
-            .deferredKeyNotSynced, .deferredLocked, .deferredTransient, .notRecognized
+            .deferredKeyNotSynced, .deferredLocked, .deferredTransient, .notRecognized, .rolledBack
         ] {
             #expect(outcome.needsAttention)
         }
@@ -50,6 +50,10 @@ struct SealedBackupRestoreOutcomeTests {
         // notRecognized is terminal for the current backup (a different key won't appear by retrying).
         #expect(SealedBackupRestoreOutcome.notRecognized.isRetryable == false)
         #expect(SealedBackupRestoreOutcome.notRecognized.needsAttention)
+        // rolledBack is terminal for the same reason: retrying re-fetches the same substituted
+        // record. It must still be visible — a silent rollback is the whole failure mode.
+        #expect(SealedBackupRestoreOutcome.rolledBack.isRetryable == false)
+        #expect(SealedBackupRestoreOutcome.rolledBack.needsAttention)
         // Benign outcomes are not "retry" prompts.
         for outcome: SealedBackupRestoreOutcome in [.restored(1), .nothingToRestore, .skippedStoreNotEmpty] {
             #expect(outcome.isRetryable == false)

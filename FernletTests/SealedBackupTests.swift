@@ -30,7 +30,8 @@ struct SealedBackupTests {
         let record = try SealedBackupCrypto.seal(
             plaintext,
             payloadType: .sensitiveNotes,
-            identityService: identity
+            identityService: identity,
+            generation: 1
         )
 
         #expect(try SealedBackupCrypto.open(record, identityService: identity) == plaintext)
@@ -44,7 +45,8 @@ struct SealedBackupTests {
         var record = try SealedBackupCrypto.seal(
             Data("private archive".utf8),
             payloadType: .periodData,
-            identityService: identity
+            identityService: identity,
+            generation: 1
         )
         record.ciphertext[record.ciphertext.startIndex] ^= 0xff
 
@@ -67,7 +69,8 @@ struct SealedBackupTests {
         let record = try SealedBackupCrypto.seal(
             Data("private archive".utf8),
             payloadType: .periodData,
-            identityService: first
+            identityService: first,
+            generation: 1
         )
 
         #expect(throws: SealedBackupError.keyAgreementIdentityMismatch) {
@@ -107,7 +110,7 @@ struct SealedBackupTests {
         #expect(first.localKeyAgreementPublicKey != second.localKeyAgreementPublicKey)
 
         let plaintext = Data("private archive".utf8)
-        let record = try SealedBackupCrypto.seal(plaintext, payloadType: .periodData, identityService: first)
+        let record = try SealedBackupCrypto.seal(plaintext, payloadType: .periodData, identityService: first, generation: 1)
         #expect(try SealedBackupCrypto.open(record, identityService: second) == plaintext)
     }
 
@@ -120,7 +123,7 @@ struct SealedBackupTests {
         defer { KeychainItem.deleteAll(service: serviceID) }
         let identity = try makeSealingIdentity(serviceID)
         let plaintext = Data("private archive".utf8)
-        var record = try SealedBackupCrypto.seal(plaintext, payloadType: .sensitiveNotes, identityService: identity)
+        var record = try SealedBackupCrypto.seal(plaintext, payloadType: .sensitiveNotes, identityService: identity, generation: 1)
         // Simulate a pre-escrow-binding tag (unrelated bytes, not our escrow public key).
         record.keyAgreementPublicKey = Data(repeating: 0xAB, count: 32)
 
@@ -142,7 +145,7 @@ struct SealedBackupTests {
         let identity = try makeSealingIdentity(serviceID)
         let ownPub = identity.localBackupEscrowPublicKey
         let plaintext = Data("private archive".utf8)
-        let record = try SealedBackupCrypto.seal(plaintext, payloadType: .periodData, identityService: identity)
+        let record = try SealedBackupCrypto.seal(plaintext, payloadType: .periodData, identityService: identity, generation: 1)
 
         // A DIFFERENT device's escrow key syncs in at its own content-addressed slot → coexists with ours.
         let other = try makeSealingIdentity(otherID)
@@ -176,7 +179,7 @@ struct SealedBackupTests {
         #expect(identity.localBackupEscrowPublicKey == legacyKey.publicKey.rawRepresentation)
 
         let plaintext = Data("legacy archive".utf8)
-        let record = try SealedBackupCrypto.seal(plaintext, payloadType: .sensitiveNotes, identityService: identity)
+        let record = try SealedBackupCrypto.seal(plaintext, payloadType: .sensitiveNotes, identityService: identity, generation: 1)
         #expect(try SealedBackupCrypto.open(record, identityService: identity) == plaintext)
     }
 }

@@ -195,11 +195,15 @@ offline App Attest verify prototype, D11 `LPLinkMetadata` device test
 2026-08-09 after a code-verified reconciliation. Everything still genuinely open from them lives
 here now, so the archived docs are not load-bearing.
 
-**From the code review (10 of 195 findings open; 185 fixed):**
+**From the code review (9 of 195 findings open; 186 fixed):**
 
-1. **Sealed backup replay/rollback** — `updatedAt`/versioning are not authenticated, so a record can
-   be rolled back. *The only security item left.* Deferred by cost: needs versioned AAD plus a
-   CloudKit re-seal migration.
+- ✅ **Sealed backup replay/rollback — FIXED 2026-08-09.** Generation counter + `updatedAt` bound into
+  a versioned GCM AAD, plus the device-local `SealedBackupGenerationStore` high-water mark that
+  rejects an older-but-authentic generation as the terminal `.rolledBack` outcome. No migration was
+  needed (no users yet), so the field ships required and fail-closed. **OWNER ACTION:** promote the
+  `generation` field on `SealedBackupRecord` to the CloudKit **Production** schema before shipping —
+  a Production container without it cannot restore any backup. See
+  [CloudKit-Schema-Deploy.md](CloudKit-Schema-Deploy.md).
 2. **`SharedRecipeImportRecord` duplicated across the app and share-extension targets** with
    divergent App-Group fallback paths — and the extension-side mirror omits `budgetDeferredDayKey`
    while rewriting the whole queue file, so any share strips the budget-deferral stamp from every
@@ -216,8 +220,10 @@ here now, so the archived docs are not load-bearing.
    snapshot-assembly half was fixed by `FernletSnapshot.assembled`; the load pipeline was not.
 7. **`addJournal` overloads duplicate bookkeeping** — the today path uses `batchSnapshotPersistence`,
    the dated path uses `diary.mutateDay`.
-8. **`SUPPORTED_PLATFORMS` claims macOS/visionOS** on several targets while sources import UIKit
-   unconditionally.
+8. ✅ **`SUPPORTED_PLATFORMS` — FIXED 2026-08-09.** Narrowed to `"iphoneos iphonesimulator"` on all
+   ten configurations, matching the widget and extension targets. (Two inert
+   `LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]` conditionals remain; they are template leftovers that can
+   never apply now and were left alone.)
 
 **From the UI/UX brief (2 of 4 open questions; the other 2 were answered by shipped code):**
 

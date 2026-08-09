@@ -411,12 +411,14 @@ public final class CloudKitDataService {
         cloudRecord["updatedAt"] = record.updatedAt as CKRecordValue
         cloudRecord["chunkIndex"] = record.chunkIndex as CKRecordValue
         cloudRecord["chunkCount"] = record.chunkCount as CKRecordValue
+        cloudRecord["generation"] = record.generation as CKRecordValue
         cloudRecord["encryptedBlob"] = CKAsset(fileURL: fileURL)
         try await database.saveRecords([cloudRecord])
         FernletAuditLog.log("cloudkit.sealedBackup.saved", context: [
             "payloadType": record.payloadType.rawValue,
             "chunkIndex": String(record.chunkIndex),
-            "chunkCount": String(record.chunkCount)
+            "chunkCount": String(record.chunkCount),
+            "generation": String(record.generation)
         ])
     }
 
@@ -453,8 +455,17 @@ public final class CloudKitDataService {
 
         let isContiguous = records.count == head.chunkCount
             && records.enumerated().allSatisfy { $0.offset == $0.element.chunkIndex }
-        let sameGeneration = records.allSatisfy { $0.chunkCount == head.chunkCount }
-        guard isContiguous, sameGeneration else { throw SealedBackupError.malformedRecord }
+        // Two independent same-generation checks, both required. `chunkCount` catches a set left
+        // mixed by a resize (an old larger generation's tail surviving a smaller new write); the
+        // `generation` counter catches a same-sized substitution the chunk count cannot see — an
+        // attacker splicing chunk 3 of an older backup into the current set. Splicing is exactly
+        // what the per-chunk AAD binding cannot stop on its own, because the spliced chunk is
+        // itself validly sealed at the same index and count.
+        let sameChunkCount = records.allSatisfy { $0.chunkCount == head.chunkCount }
+        let sameGeneration = records.allSatisfy { $0.generation == head.generation }
+        guard isContiguous, sameChunkCount, sameGeneration else {
+            throw SealedBackupError.malformedRecord
+        }
         return records
     }
 
@@ -536,6 +547,15 @@ public final class CloudKitDataService {
         // single-record payload (chunk 0 of 1) so those still decode.
         let chunkIndex = (record["chunkIndex"] as? Int) ?? 0
         let chunkCount = (record["chunkCount"] as? Int) ?? 1
+        // `generation` is REQUIRED and deliberately has no default — unlike the chunk fields above.
+        // It is the rollback defense, so a record without one cannot be authenticated against a
+        // generation-bound AAD and must fail closed rather than silently decode as generation 0
+        // (which would let a pre-fix record be replayed forever). There is no compatibility cost:
+        // the field shipped before the app had users, so no record in the wild lacks it. A dev
+        // container holding pre-fix records will report `malformedRecord` — delete those records.
+        guard let generation = record["generation"] as? Int64 else {
+            throw SealedBackupError.malformedRecord
+        }
         return SealedBackupRecord(
             payloadType: payloadType,
             signingPublicKey: signingPublicKey,
@@ -545,7 +565,8 @@ public final class CloudKitDataService {
             tag: tag,
             updatedAt: updatedAt,
             chunkIndex: chunkIndex,
-            chunkCount: chunkCount
+            chunkCount: chunkCount,
+            generation: generation
         )
     }
 

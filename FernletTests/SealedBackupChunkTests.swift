@@ -100,7 +100,8 @@ struct SealedBackupChunkTests {
             payloadType: .periodData,
             identityService: identity,
             chunkIndex: 0,
-            chunkCount: 3
+            chunkCount: 3,
+            generation: 1
         )
 
         // Same slot still opens.
