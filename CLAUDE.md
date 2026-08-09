@@ -40,7 +40,10 @@ anywhere, and an **exact allowlist of outbound network destinations**. Unlike th
 compiler half* (a tracking SDK is an honest new dependency, so the DAG compiles clean), so
 `FernletTests/NoTrackingBoundaryTests` is the whole enforcement. Adding a network endpoint or an SPM
 dependency fails CI until it is deliberately allowlisted there **and** documented in
-[Docs/No-Tracking-Wall.md](Docs/No-Tracking-Wall.md), in the same commit.
+[Docs/No-Tracking-Wall.md](Docs/No-Tracking-Wall.md), in the same commit. All outbound fetching goes
+through `WebScrapingKit`'s `EphemeralWebSession` — a private-tab `URLSession` with no cookie jar,
+cache, or credential store — and `URLSession.shared` / `.default` are banned outright in shipping
+code (§2a).
 
 **Pre-merge ritual (enforce the wall):**
 - Once per clone, install the git hooks: `Scripts/install-git-hooks.sh` (points `core.hooksPath` at
@@ -61,7 +64,7 @@ in the codebase has a `///` doc comment** (load-bearing types document members, 
 concurrency too). **Before changing a module, read its landing page first** — it explains the
 module's purpose, key types, invariants, and its position relative to the S3 wall:
 
-- `FernletKit/Sources/<Module>/Documentation.docc/<Module>.md` — one per SPM module (23 modules:
+- `FernletKit/Sources/<Module>/Documentation.docc/<Module>.md` — one per SPM module (24 modules:
   the domain/persistence/crypto core, the sealed `Private*` stores, the walled `AIProviders` +
   `CloudKitSync`, `ProximityKit`, UI kits, and services).
 - [Fernlet/Documentation.docc/Fernlet.md](Fernlet/Documentation.docc/Fernlet.md) — the app target

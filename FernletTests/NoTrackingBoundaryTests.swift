@@ -31,11 +31,14 @@ import Testing
 /// the tree, no outbound network destination outside the reviewed allowlist, and privacy manifests
 /// that keep declaring zero tracking.
 ///
-/// Six enforcement tests plus four pure-matcher fixtures:
+/// Eight enforcement tests plus five pure-matcher fixtures:
 /// - ``noAdvertisingOrTrackingSDKIsReferencedAnywhere()`` — banned frameworks/symbols in any Swift file.
 /// - ``thirdPartyPackageDependenciesAreExactlyTheOneAllowedPackage()`` — the SPM/pbxproj dependency sets.
 /// - ``hardcodedNetworkDestinationsAreExactlyTheAllowlist()`` — every hardcoded host in shipping code.
 /// - ``onlyThePinnedWebImportersMayHoldAnHTTPClient()`` — where an HTTP client may exist at all.
+/// - ``everyOutboundFetchUsesTheEphemeralPrivateTabSession()`` — HOW those clients fetch: no shared
+///   cookie jar, cache, or credential store.
+/// - ``noPersistentWebViewExistsAndInAppBrowsersArePinned()`` — the WebKit/Safari surface.
 /// - ``privacyManifestsDeclareNoTrackingOrAdvertising()`` — the three `PrivacyInfo.xcprivacy` files.
 /// - ``plistFamilyFilesDeclareNoTrackingPermissionOrForeignContainer()`` — Info.plist + entitlements.
 ///
@@ -67,12 +70,12 @@ struct NoTrackingBoundaryTests {
         "FernletShareExtension"
     ]
 
-    /// Floor for the all-target Swift scan (529 files at the time of writing). Set well below the real
+    /// Floor for the all-target Swift scan (536 files at the time of writing). Set well below the real
     /// count so ordinary churn — including the ongoing SPM carve-up moving files BETWEEN these roots —
     /// never trips it, but a root that stops resolving does.
     private static let minimumSwiftFilesScanned = 400
 
-    /// Floor for the shipping-only Swift scan (342 files at the time of writing).
+    /// Floor for the shipping-only Swift scan (345 files at the time of writing).
     private static let minimumShippingFilesScanned = 250
 
     /// The three bundle roots that carry an Info.plist / entitlements / privacy manifest. A subset of
@@ -216,23 +219,101 @@ struct NoTrackingBoundaryTests {
         )
     ]
 
-    /// The only files in shipping code that may hold a raw HTTP client.
+    /// The two files in shipping code that may PERFORM an outbound fetch.
     ///
     /// This closes the gap the host allowlist cannot: a host assembled at runtime from string pieces
     /// (`"api." + "tracker.io"`) has no `https://` literal to find. Pinning WHERE an HTTP client may
     /// exist means such a call site has to live in one of these two reviewed files — both of which are
     /// user-initiated web importers whose destinations are either the allowlisted search endpoint or a
     /// URL the user supplied, and both of which are already SSRF-guarded and consent-gated.
-    private static let permittedHTTPClientFiles: Set<String> = [
+    private static let pinnedWebImporterFiles: Set<String> = [
         "FoodProductWebImporter.swift",  // product-page lookup (opt-in web nutrition lookup)
         "RecipeWebImporter.swift"        // recipe import from a URL the user pasted/shared
     ]
+
+    /// The one file that may CONSTRUCT a `URLSession` — `WebScrapingKit`'s private-browsing factory.
+    ///
+    /// Separated from ``pinnedWebImporterFiles`` because the two rules are different: the importers
+    /// may *fetch* but must not build their own session, and this file builds the session but never
+    /// fetches. Splitting them is what lets ``everyOutboundFetchUsesTheEphemeralPrivateTabSession()``
+    /// say "exactly one file constructs a session, and it is the ephemeral one".
+    private static let ephemeralSessionFactoryFile = "EphemeralWebSession.swift"
+
+    /// Every file allowed to name a raw HTTP-client API: the two importers plus the session factory.
+    private static let permittedHTTPClientFiles: Set<String> =
+        pinnedWebImporterFiles.union([ephemeralSessionFactoryFile])
 
     /// Markers naming a raw HTTP/socket client API. Matched at identifier boundaries with comment
     /// lines stripped, so a file that merely DISCUSSES `URLSession` in prose is not pinned.
     private static let httpClientMarkers = [
         "URLSession", "URLRequest", "NSURLConnection", "NWConnection", "NWBrowser",
         "CFURLRequest", "WKWebView"
+    ]
+
+    // MARK: - Private-tab session policy
+
+    /// Session/configuration APIs that carry PROCESS-WIDE, PERSISTENT state, and so may not appear in
+    /// shipping code at all.
+    ///
+    /// `URLSession.shared` is backed by `HTTPCookieStorage.shared`, `URLCache.shared`, and
+    /// `URLCredentialStorage.shared` — one jar for the whole process, persisted across launches. A
+    /// site could set a cookie during a recipe import and read it back weeks later during an unrelated
+    /// product import: cross-request tracking with no code that looks like tracking. The two web
+    /// importers used exactly this until the private-tab change; the ban is what stops it coming back.
+    ///
+    /// `.default` is the same storage under a different name. `.background(withIdentifier:)` is
+    /// necessarily persistent (the whole point is surviving app death) and has no place here.
+    private static let forbiddenSessionConfigurations = [
+        "URLSession.shared",
+        "URLSessionConfiguration.default",
+        "URLSessionConfiguration.background"
+    ]
+
+    /// Every privacy setting ``ephemeralSessionFactoryFile`` must still name in CODE (comment lines are
+    /// stripped before matching, so documenting a setting is not the same as setting it).
+    ///
+    /// Some of these are redundant under `.ephemeral` — that is precisely why they are asserted.
+    /// A privacy guarantee that relies on the reader knowing what `.ephemeral` implies is one line
+    /// away from silently regressing when someone swaps the base configuration; each knob is set
+    /// explicitly so the guarantee survives that edit, and this list is what makes deleting one a
+    /// failing test rather than a diff nobody questions.
+    private static let requiredEphemeralSessionSettings = [
+        "URLSessionConfiguration.ephemeral",             // the base: nothing on disk
+        "httpCookieAcceptPolicy",                        // .never — refuse Set-Cookie outright
+        "httpCookieStorage",                             // nil — not even an in-memory jar
+        "httpShouldSetCookies",                          // false — never attach a cookie outbound
+        "urlCache",                                      // nil — no ETag/Last-Modified replay
+        "requestCachePolicy",                            // reload-ignoring — belt to that brace
+        "reloadIgnoringLocalAndRemoteCacheData",
+        "urlCredentialStorage"                           // nil — no silent auth replay
+    ]
+
+    // MARK: - Web view / in-app browser surface
+
+    /// WebKit markers. A `WKWebView` carries its own cookie/localStorage/IndexedDB jar which, by
+    /// default, is `WKWebsiteDataStore.default()` — persistent on disk and shared between every web
+    /// view in the app. There are none today; the rule below is written so that the first one to
+    /// appear has to be non-persistent.
+    private static let webViewMarkers = [
+        "WKWebView", "WKWebViewConfiguration", "WKProcessPool", "WKHTTPCookieStore"
+    ]
+
+    /// The call that makes a web view's data store amnesiac — the WebKit equivalent of
+    /// `URLSessionConfiguration.ephemeral`.
+    private static let nonPersistentDataStoreMarker = "WKWebsiteDataStore.nonPersistent"
+
+    /// Out-of-process in-app browsers. These are NOT WebKit views the app configures: `SFSafariViewController`
+    /// runs in Safari's own process against Safari's own storage, which the app cannot read, cannot
+    /// write, and — importantly — cannot make ephemeral (there is no public API for it). So the rule
+    /// here is not "configure it privately", it is "there is exactly one of these and we know where".
+    private static let inAppBrowserMarkers = ["SFSafariViewController", "ASWebAuthenticationSession"]
+
+    /// The one shipping file that may present an out-of-process browser: the product-import review
+    /// sheet's "view source page" affordance, which opens the page the user is already looking at.
+    /// Pinned in BOTH directions — a second one is a review moment, and losing this one means the
+    /// scan broke rather than the code got cleaner.
+    private static let permittedInAppBrowserFiles: Set<String> = [
+        "FoodView.swift"  // FoodProductReviewSheet -> SafariView(url: preview.sourceURL)
     ]
 
     /// The privacy manifests that must exist and must keep declaring zero tracking. Pinned by path: a
@@ -387,12 +468,16 @@ struct NoTrackingBoundaryTests {
         )
     }
 
-    /// A raw HTTP client may exist only in the two pinned web importers, and the only hosts hardcoded
-    /// inside them are the DuckDuckGo search endpoint and its redirect base.
+    /// A raw HTTP client may exist only in the two pinned web importers and the session factory they
+    /// share, and the only hosts hardcoded inside them are the DuckDuckGo search endpoint and its
+    /// redirect base.
     ///
     /// The host allowlist alone can be evaded by assembling a hostname at runtime; this cannot. A new
     /// `URLSession` anywhere else in shipping code — a "telemetry uploader", a "config fetcher" — fails
     /// here regardless of how its URL is built.
+    ///
+    /// This test governs WHERE a client may live. ``everyOutboundFetchUsesTheEphemeralPrivateTabSession()``
+    /// governs HOW it must fetch; neither implies the other.
     @Test func onlyThePinnedWebImportersMayHoldAnHTTPClient() throws {
         let repoRoot = Self.repoRoot()
 
@@ -424,6 +509,167 @@ struct NoTrackingBoundaryTests {
         #expect(
             hostsInClients == ["duckduckgo.com", "html.duckduckgo.com"],
             "The hosts hardcoded inside the web importers are \(hostsInClients.sorted()), expected the DuckDuckGo search endpoint and its redirect base only."
+        )
+    }
+
+    /// Every outbound fetch in shipping code goes through the shared ephemeral "private tab" session:
+    /// no cookie jar, no URL cache, no credential store, nothing that survives one request to be read
+    /// back on the next.
+    ///
+    /// Four independent assertions, because each one alone has an obvious way around it:
+    /// 1. **No process-wide session anywhere.** `URLSession.shared`, `URLSessionConfiguration.default`,
+    ///    and `.background` are banned in ALL shipping code — not just the pinned files — because the
+    ///    ban has to hold for whatever file holds the *next* fetch.
+    /// 2. **Exactly one file constructs a session, and it uses `.ephemeral`.** Otherwise rule 1 is
+    ///    trivially satisfied by `URLSession(configuration: someConfigVariable)`.
+    /// 3. **The factory still sets every privacy knob.** Otherwise `.ephemeral` alone would pass while
+    ///    quietly keeping an in-memory cookie jar and credential store for the process lifetime.
+    /// 4. **Both importers actually reference the factory.** Otherwise deleting the call site and
+    ///    reverting to `URLSession.shared` would fail rule 1 — but deleting the fetch and reintroducing
+    ///    it as, say, an `NWConnection` would not, and coverage would silently drop to zero.
+    ///
+    /// What this deliberately does NOT check: timeouts, `User-Agent`, `Accept`, redirect delegates,
+    /// content-type checks, and body caps. Those differ between the two importers on purpose (see
+    /// Docs/No-Tracking-Wall.md §2a) and flattening them would be a behaviour change dressed as a
+    /// privacy rule.
+    @Test func everyOutboundFetchUsesTheEphemeralPrivateTabSession() throws {
+        let repoRoot = Self.repoRoot()
+
+        var scanned = 0
+        var offenders: [String: [String]] = [:]        // banned token -> files naming it
+        var sessionConstructors: Set<String> = []      // files calling URLSession(configuration:)
+        var ephemeralConstructors: Set<String> = []    // ...of which name .ephemeral
+        var factoryReferences: Set<String> = []        // files naming EphemeralWebSession
+
+        for root in Self.shippingSwiftRoots {
+            var scannedInRoot = 0
+            for url in Self.swiftFiles(under: root, repoRoot: repoRoot) {
+                let code = Self.codeOnly(try String(contentsOf: url, encoding: .utf8))
+                let name = url.lastPathComponent
+                scanned += 1
+                scannedInRoot += 1
+
+                for token in Self.forbiddenSessionConfigurations where Self.namesSymbol(code, token) {
+                    offenders[token, default: []].append(name)
+                }
+                if code.contains("URLSession(configuration:") {
+                    sessionConstructors.insert(name)
+                    if Self.namesSymbol(code, "URLSessionConfiguration.ephemeral") {
+                        ephemeralConstructors.insert(name)
+                    }
+                }
+                if Self.namesSymbol(code, "EphemeralWebSession") {
+                    factoryReferences.insert(name)
+                }
+            }
+            #expect(scannedInRoot > 0, "Scanned zero Swift files under '\(root)' — the private-tab scan is silently narrower.")
+        }
+        #expect(
+            scanned >= Self.minimumShippingFilesScanned,
+            "Scanned only \(scanned) shipping Swift files (floor \(Self.minimumShippingFilesScanned)) — discovery is broken; the private-tab rule would pass vacuously."
+        )
+
+        // 1) No shared/persistent session anywhere in shipping code.
+        let evidence = offenders
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key) (in \($0.value.sorted().joined(separator: ", ")))" }
+            .joined(separator: "; ")
+        #expect(
+            offenders.isEmpty,
+            "Persistent/shared URL session(s) in shipping code: \(evidence). Every fetch must go through WebScrapingKit's EphemeralWebSession — URLSession.shared carries the process-wide cookie jar, URL cache, and credential store, which is cross-request tracking by another name. See Docs/No-Tracking-Wall.md §2a."
+        )
+
+        // 2) Exactly one file builds a session, and it is the ephemeral factory.
+        #expect(
+            sessionConstructors == [Self.ephemeralSessionFactoryFile],
+            "Files constructing a URLSession are \(sessionConstructors.sorted()), expected exactly [\(Self.ephemeralSessionFactoryFile)]. A session built anywhere else is a session nobody has reviewed the storage policy of."
+        )
+        #expect(
+            ephemeralConstructors == sessionConstructors,
+            "\(sessionConstructors.subtracting(ephemeralConstructors).sorted()) construct a URLSession without naming URLSessionConfiguration.ephemeral — the private-tab guarantee starts with the ephemeral base configuration."
+        )
+
+        // 3) The factory still sets every knob, in code rather than only in prose.
+        let factoryURL = Self.locate(Self.ephemeralSessionFactoryFile, under: Self.shippingSwiftRoots, repoRoot: repoRoot)
+        if let factoryURL {
+            let factoryCode = Self.codeOnly(try String(contentsOf: factoryURL, encoding: .utf8))
+            let missingSettings = Self.requiredEphemeralSessionSettings.filter { !Self.namesSymbol(factoryCode, $0) }
+            #expect(
+                missingSettings.isEmpty,
+                "\(Self.ephemeralSessionFactoryFile) no longer sets \(missingSettings). Each of these is part of the private-tab guarantee — several are redundant under .ephemeral and are set anyway so the guarantee survives a change of base configuration. Removing one needs a deliberate edit here and in Docs/No-Tracking-Wall.md §2a."
+            )
+        } else {
+            Issue.record("Could not find \(Self.ephemeralSessionFactoryFile) under \(Self.shippingSwiftRoots) — the private-browsing session factory was renamed or deleted, and this whole rule is unenforced.")
+        }
+
+        // 4) Both importers actually route through it (coverage cannot silently drop to zero).
+        let importersMissingFactory = Self.pinnedWebImporterFiles.subtracting(factoryReferences).sorted()
+        #expect(
+            importersMissingFactory.isEmpty,
+            "Pinned web importer(s) \(importersMissingFactory) no longer reference EphemeralWebSession. They fetch the web; they must do it through the private-tab session."
+        )
+    }
+
+    /// No `WKWebView` exists in shipping code today — and if one ever appears it must use a
+    /// non-persistent data store. Out-of-process in-app browsers are pinned to the one file that has
+    /// one.
+    ///
+    /// A `WKWebView` is a second, entirely separate storage jar from `URLSession`'s: its default
+    /// `WKWebsiteDataStore.default()` persists cookies, localStorage, and IndexedDB to disk and is
+    /// shared by every web view in the app. Making the URL sessions ephemeral while leaving a web view
+    /// on the default store would move the tracking channel rather than close it, so the rule is
+    /// written now, while the answer is "there are none", instead of after the first one lands.
+    ///
+    /// `SFSafariViewController` is a different thing and is treated differently on purpose: it runs
+    /// out of process against Safari's own storage, which this app can neither read nor make
+    /// ephemeral — there is no API. It is the user's browser, opened on a page the user is already
+    /// looking at. So the rule for it is locational: exactly one file may present one.
+    @Test func noPersistentWebViewExistsAndInAppBrowsersArePinned() throws {
+        let repoRoot = Self.repoRoot()
+
+        var scanned = 0
+        var webViewFiles: [String: [String]] = [:]   // file -> markers found (failure evidence)
+        var browserFiles: Set<String> = []
+
+        for root in Self.shippingSwiftRoots {
+            for url in Self.swiftFiles(under: root, repoRoot: repoRoot) {
+                let code = Self.codeOnly(try String(contentsOf: url, encoding: .utf8))
+                let name = url.lastPathComponent
+                scanned += 1
+
+                let webViewHits = Self.webViewMarkers.filter { Self.namesSymbol(code, $0) }
+                if !webViewHits.isEmpty {
+                    webViewFiles[name] = webViewHits
+                    // The forward-compatible half: a web view that DOES opt into a non-persistent
+                    // store is not a wall breach, it is the correct way to add one.
+                    #expect(
+                        Self.namesSymbol(code, Self.nonPersistentDataStoreMarker),
+                        "\(name) creates a web view (\(webViewHits)) without \(Self.nonPersistentDataStoreMarker)(). A WKWebView defaults to WKWebsiteDataStore.default() — an on-disk cookie/localStorage jar shared across the app, which is exactly the cross-request state the ephemeral URLSession exists to prevent."
+                    )
+                }
+                if Self.inAppBrowserMarkers.contains(where: { Self.namesSymbol(code, $0) }) {
+                    browserFiles.insert(name)
+                }
+            }
+        }
+        #expect(
+            scanned >= Self.minimumShippingFilesScanned,
+            "Scanned only \(scanned) shipping Swift files (floor \(Self.minimumShippingFilesScanned)) — discovery is broken."
+        )
+
+        // Today the answer is zero. Asserting that (rather than only the conditional rule above) makes
+        // the FIRST web view a deliberate decision, since it must edit this expectation as well.
+        #expect(
+            webViewFiles.isEmpty,
+            "Shipping code now contains WebKit web view(s): \(webViewFiles.keys.sorted()). Fernlet renders no remote web content in-process. If that changes, the view needs \(Self.nonPersistentDataStoreMarker)() AND a row in Docs/No-Tracking-Wall.md §2a explaining what it loads."
+        )
+
+        // The out-of-process browser surface is pinned in both directions. The non-empty side is also
+        // this scan's floor: an empty result here means the matcher broke, not that the code got
+        // cleaner (unlike the web-view scan above, which is legitimately empty).
+        #expect(
+            browserFiles == Self.permittedInAppBrowserFiles,
+            "In-app browser presentation lives in \(browserFiles.sorted()), expected \(Self.permittedInAppBrowserFiles.sorted()). SFSafariViewController hands the user's browsing to Safari's own storage, which this app cannot make ephemeral — so a NEW presentation site is a decision, and a MISSING one means this scan stopped working."
         )
     }
 
@@ -598,6 +844,76 @@ struct NoTrackingBoundaryTests {
             == ["metrics.evil.test"])
     }
 
+    /// Fixture: the private-tab matchers catch a planted shared/persistent session, tolerate the
+    /// *documentation* of one (which both importers and the factory contain by the paragraph), and
+    /// recognise a correctly configured web view.
+    ///
+    /// Without this, the whole private-tab rule could rot into a matcher that returns nothing — the
+    /// classic way a grep wall dies quietly while still reporting green.
+    @Test func privateTabMatchersFlagPlantedSharedSessionsOnly() {
+        // Planted violations — caught.
+        let leaky = NoTrackingBoundaryTests.codeOnly("let (d, _) = try await URLSession.shared.data(for: request)")
+        #expect(NoTrackingBoundaryTests.namesSymbol(leaky, "URLSession.shared"))
+        let defaulted = NoTrackingBoundaryTests.codeOnly("let s = URLSession(configuration: .default)\nlet c = URLSessionConfiguration.default")
+        #expect(NoTrackingBoundaryTests.namesSymbol(defaulted, "URLSessionConfiguration.default"))
+        #expect(defaulted.contains("URLSession(configuration:"))
+        let backgrounded = NoTrackingBoundaryTests.codeOnly(#"URLSessionConfiguration.background(withIdentifier: "sync")"#)
+        #expect(NoTrackingBoundaryTests.namesSymbol(backgrounded, "URLSessionConfiguration.background"))
+
+        // Documentation of the very thing being banned — NOT a violation. Both importers and the
+        // factory explain at length why they do not use URLSession.shared; a matcher that indicted
+        // them for saying so would be disabled within a week.
+        let documented = NoTrackingBoundaryTests.codeOnly("""
+        /// Transport is EphemeralWebSession, never URLSession.shared: that one carries the
+        /// process-wide cookie jar.
+        // was: URLSessionConfiguration.default
+         * WKWebsiteDataStore.default() persists to disk.
+        """)
+        #expect(!NoTrackingBoundaryTests.namesSymbol(documented, "URLSession.shared"))
+        #expect(!NoTrackingBoundaryTests.namesSymbol(documented, "URLSessionConfiguration.default"))
+        #expect(!NoTrackingBoundaryTests.namesSymbol(documented, "WKWebsiteDataStore"))
+
+        // A trailing comment does not launder a real call.
+        let sneaky = NoTrackingBoundaryTests.codeOnly("let s = URLSession.shared // just for one metric")
+        #expect(NoTrackingBoundaryTests.namesSymbol(sneaky, "URLSession.shared"))
+
+        // The ephemeral factory's own shape passes every required-setting check.
+        let factory = NoTrackingBoundaryTests.codeOnly("""
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        configuration.urlCredentialStorage = nil
+        return URLSession(configuration: configuration)
+        """)
+        let missingFromFactory = NoTrackingBoundaryTests.requiredEphemeralSessionSettings
+            .filter { !NoTrackingBoundaryTests.namesSymbol(factory, $0) }
+        #expect(missingFromFactory.isEmpty, "required-setting matcher missed \(missingFromFactory)")
+        // Drop one knob and the check must notice.
+        let weakened = factory.replacingOccurrences(of: "configuration.urlCredentialStorage = nil", with: "")
+        #expect(!NoTrackingBoundaryTests.namesSymbol(weakened, "urlCredentialStorage"))
+
+        // Web views: the marker fires on a real one, and the non-persistent opt-in is detected.
+        let badWebView = NoTrackingBoundaryTests.codeOnly("let view = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())")
+        let badWebViewHits = NoTrackingBoundaryTests.webViewMarkers
+            .filter { NoTrackingBoundaryTests.namesSymbol(badWebView, $0) }
+        #expect(badWebViewHits.contains("WKWebView"))
+        #expect(badWebViewHits.contains("WKWebViewConfiguration"))
+        #expect(!NoTrackingBoundaryTests.namesSymbol(badWebView, NoTrackingBoundaryTests.nonPersistentDataStoreMarker))
+        let goodWebView = NoTrackingBoundaryTests.codeOnly("""
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = WKWebsiteDataStore.nonPersistent()
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        """)
+        #expect(NoTrackingBoundaryTests.namesSymbol(goodWebView, NoTrackingBoundaryTests.nonPersistentDataStoreMarker))
+
+        // Identifier-boundary discipline: a longer, unrelated identifier is not a hit.
+        #expect(!NoTrackingBoundaryTests.namesSymbol("struct URLSessionSharedFake {}", "URLSession.shared"))
+        #expect(!NoTrackingBoundaryTests.namesSymbol("let x = WKWebViewController()", "WKWebView"))
+    }
+
     /// Fixture: the HTTP-client marker sees a real API use and not a file that only discusses one, and
     /// the package-URL parser reads both manifest dialects.
     @Test func httpClientMarkerAndPackageURLParserSeeOnlyRealDeclarations() {
@@ -736,16 +1052,31 @@ struct NoTrackingBoundaryTests {
         character.isLetter || character.isNumber || character == "." || character == "-"
     }
 
-    /// Whether `source` uses a raw HTTP/socket client API in CODE (comment lines stripped first, so a
-    /// file that only documents `URLSession` is not treated as a client). Pure + testable.
-    static func namesHTTPClientAPI(in source: String) -> Bool {
-        let code = source
+    /// `source` with comment-only lines removed, so every network rule below matches what the file
+    /// DOES rather than what it says.
+    ///
+    /// This matters more here than anywhere else in the wall: these files document their own network
+    /// policy at length, naming `URLSession.shared` and `WKWebsiteDataStore` in prose precisely to
+    /// explain why they do not use them. A rule that could not tell code from commentary would either
+    /// hard-fail on its own documentation or have to be written so loosely it caught nothing.
+    ///
+    /// Line-based and deliberately simple (leading `//`, `*`, `/*`), matching the comment handling in
+    /// ``hardcodedHosts(in:)`` and ``declaredPackageURLs(in:)`` so all three agree. A trailing comment
+    /// on a code line is NOT stripped — a real call followed by `// harmless` is still a real call.
+    static func codeOnly(_ source: String) -> String {
+        source
             .components(separatedBy: "\n")
             .filter { line in
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 return !trimmed.hasPrefix("//") && !trimmed.hasPrefix("*") && !trimmed.hasPrefix("/*")
             }
             .joined(separator: "\n")
+    }
+
+    /// Whether `source` uses a raw HTTP/socket client API in CODE (comment lines stripped first, so a
+    /// file that only documents `URLSession` is not treated as a client). Pure + testable.
+    static func namesHTTPClientAPI(in source: String) -> Bool {
+        let code = codeOnly(source)
         return httpClientMarkers.contains { namesSymbol(code, $0) }
     }
 
@@ -789,5 +1120,16 @@ struct NoTrackingBoundaryTests {
             files.append(url)
         }
         return files.sorted { $0.path < $1.path }
+    }
+
+    /// The first file named `filename` under any of `roots`, or nil. Callers decide whether absence is
+    /// a hard failure — for a pinned file it always is.
+    private static func locate(_ filename: String, under roots: [String], repoRoot: URL) -> URL? {
+        for root in roots {
+            for url in swiftFiles(under: root, repoRoot: repoRoot) where url.lastPathComponent == filename {
+                return url
+            }
+        }
+        return nil
     }
 }

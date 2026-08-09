@@ -21,7 +21,7 @@ let package = Package(
         // and can then `import` ANY target listed here. Each later module is added
         // to this `targets:` list (and gets its own `.target` below) with NO further
         // Xcode project surgery — the pbxproj references this product by name only.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI"]),
     ],
     dependencies: [
         // CryptoSwift supplies the memory-hard Scrypt KDF used by FernletLock's passphrase
@@ -44,6 +44,25 @@ let package = Package(
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
+        ),
+        // Layer 0 — shared web-scraping substrate + the private-browsing URLSession.
+        // ZERO in-package dependencies, pure Foundation, and it must STAY that way:
+        // the walled `AIProviders` depends on this target, so every edge added here
+        // is inherited by walled AI code. That is precisely why this is its own
+        // module rather than helpers bolted onto FernletFoundation — routing
+        // AIProviders through FernletFoundation to reach two regex helpers would
+        // also have handed it KeychainHelpers/StoragePreferences. Nothing here can
+        // reach a Private* store because nothing here can reach anything at all.
+        //
+        // Also the single home of `EphemeralWebSession`, the no-cookie/no-cache/
+        // no-credential URLSession that BOTH web importers fetch through (the
+        // "private tab" guarantee, Docs/No-Tracking-Wall.md §2a).
+        //
+        // NO defaultIsolation(MainActor.self): pure nonisolated statics, called from
+        // the MainActor-default app target, from MainActor-default AIProviders, and
+        // from off-main parsing paths alike.
+        .target(
+            name: "WebScrapingKit"
         ),
         // Layer 1 — the portable domain value types (nutrition/workout/wellbeing/
         // companion + settings aggregate, WorkoutProgram, FoodItemSearch). Color
@@ -204,9 +223,14 @@ let package = Package(
         // FernletTests/S3BoundaryTests, which discovers every FoundationModels-using app file
         // dynamically and pins these three as a hard floor. Their move awaits helper extraction
         // (MealBuilder carve to FoodCatalog; a NutritionLabelScanning seam; a FernletStore launch seam).
+        //
+        // The `WebScrapingKit` edge (RecipeWebImporter's HTML/JSON-LD helpers + the
+        // private-browsing URLSession) is wall-safe BY CONSTRUCTION: that target has
+        // zero dependencies of its own, so it widens AIProviders' reachable surface by
+        // exactly three pure-Foundation types and nothing else.
         .target(
             name: "AIProviders",
-            dependencies: ["AIContext", "FernletDomainModel", "FernletScoring", "FoodCatalog"],
+            dependencies: ["AIContext", "FernletDomainModel", "FernletScoring", "FoodCatalog", "WebScrapingKit"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
