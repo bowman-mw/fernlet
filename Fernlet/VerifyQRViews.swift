@@ -33,7 +33,7 @@ enum QRCodeRenderer {
 
 /// "Show my code": the signed, 5-minute-fresh verify QR for the peer to scan.
 ///
-/// Presented from the slot row's Verify menu in ``NearbySlotRow``. The sheet auto-dismisses when
+/// Presented from the slot row's Verify menu in `NearbySlotRow`. The sheet auto-dismisses when
 /// the app leaves the foreground — the ceremony is an in-person, eyes-on-both-screens moment —
 /// and every dismissal path routes through the caller's `onDismiss` so the mesh manager stops
 /// honoring challenges for the displayed QR.

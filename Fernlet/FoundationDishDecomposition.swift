@@ -138,7 +138,7 @@ struct FoundationDishComponent {
 /// any dropped/weak components.
 enum MealDecompositionResolver {
     #if canImport(FoundationModels)
-    /// Resolves `decomposition` against `catalog` into a ``ResolvedMeal`` — the meal, a combined
+    /// Resolves `decomposition` against `catalog` into a `ResolvedMeal` — the meal, a combined
     /// confidence, and (for genuine multi-ingredient dishes) a review-offered recipe built from the
     /// same deduped, catalog-bound pairs.
     /// - Returns: `nil` when no component binds acceptably or the total fails a plausibility check,

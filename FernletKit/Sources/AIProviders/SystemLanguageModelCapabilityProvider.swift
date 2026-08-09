@@ -22,7 +22,7 @@ public struct SystemLanguageModelCapabilityProvider: AIDeviceCapabilityProviding
     public init() {}
 
     /// The device's current rung availability: the on-device Foundation model probed live via
-    /// ``isOnDeviceModelAvailable``; Private Cloud Compute and external providers pinned `false`
+    /// `isOnDeviceModelAvailable`; Private Cloud Compute and external providers pinned `false`
     /// until their iOS 27 APIs exist.
     public var capability: AIDeviceCapability {
         AIDeviceCapability(

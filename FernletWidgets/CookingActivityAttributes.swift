@@ -19,7 +19,7 @@ import Foundation
 /// plus the per-step ``ContentState`` snapshot.
 ///
 /// Compiled into BOTH targets: the app's `CookingLiveActivityController` requests and updates the
-/// activity with these values, and the widget's ``CookingLiveActivity`` renders them. A plain
+/// activity with these values, and the widget's `CookingLiveActivity` renders them. A plain
 /// Codable/Hashable value type with no app or domain-model imports (S3 wall), mirroring
 /// ``WorkoutActivityAttributes`` exactly. The per-step timer ticks natively via
 /// `Text(timerInterval:)`, so the content state only changes on discrete step transitions — never

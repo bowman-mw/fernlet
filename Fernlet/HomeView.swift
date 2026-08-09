@@ -22,7 +22,7 @@ import FernletUI
 /// log, macros, hygiene, ambient cards, milestones shelf, First Aid door, meal-photo strip, and
 /// plain action rows. The companion section owns the pet interaction (tap to pet, governed by
 /// `PetInteractionGovernor`'s anti-compulsion pacing; long-press opens
-/// ``CompanionCustomizationSheet``) and composes ``CompanionAmbienceLayer`` behind it.
+/// `CompanionCustomizationSheet`) and composes ``CompanionAmbienceLayer`` behind it.
 ///
 /// Privacy-relevant detail: `refreshRecentPeriodActivity` owns its own HealthKit client, so it
 /// re-checks `allowedHealthCapabilities` itself and drops its resident answer when cycle tracking
@@ -1538,7 +1538,7 @@ private extension Color {
 ///
 /// Generic over the slot's item type so one card serves body styles, accessories, clothing, and
 /// side items; selection and color flow back through the bindings
-/// ``CompanionCustomizationSheet`` builds onto the store.
+/// `CompanionCustomizationSheet` builds onto the store.
 private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelContent: View>: View {
     var title: String
     var items: [Item]

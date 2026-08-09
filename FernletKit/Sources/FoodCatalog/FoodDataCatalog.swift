@@ -51,7 +51,7 @@ struct USDAFoodItemRecord: Decodable {
     var zinc: Double?
     var omega3: Double?
 
-    /// JSON keys for both shapes ``USDAFoodItemRecord`` decodes: the curated catalog's compact keys
+    /// JSON keys for both shapes `USDAFoodItemRecord` decodes: the curated catalog's compact keys
     /// and the raw USDA FDC export's keys (`description`, `foodNutrients`, `labelNutrients`, …).
     ///
     /// Renaming a compact case breaks the shipped catalog resource; the FDC-side cases must track
@@ -398,7 +398,7 @@ private struct FDCMeasureUnit: Decodable {
 /// The app never touches the source JSON at runtime — `FoodCatalogDatabaseBuilder` (app target,
 /// invoked via the gated `FoodCatalogGenerationTests`) calls ``sourceJSONFoodItems(directory:)`` to
 /// produce the rows it writes into `FoodCatalog.sqlite`, and the decoder unit tests exercise
-/// ``foodItems(from:)`` directly. Decoding is delegated to ``USDAFoodItemRecord`` (compact bundled
+/// ``foodItems(from:)`` directly. Decoding is delegated to `USDAFoodItemRecord` (compact bundled
 /// schema or raw FDC envelope), and a small canonical-alias pass adds a friendlier name for the
 /// staple chicken-breast entry.
 public enum FoodDataCatalog {

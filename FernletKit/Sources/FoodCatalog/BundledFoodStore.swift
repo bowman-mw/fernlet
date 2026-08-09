@@ -172,6 +172,7 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     /// Opens the database file at `url` read-only; returns nil when it cannot be opened.
     ///
     /// - Parameters:
+    ///   - url: The SQLite catalog file to open read-only.
     ///   - skipPriorityOrder: Pass true for a single-`data_type` file (the branded/ODR catalog) to
     ///     skip the wasted priority sort in `candidates(forQuery:)`.
     ///   - candidateCap: Row cap for `candidates(forQuery:)`; defaults to the base catalog's tuned

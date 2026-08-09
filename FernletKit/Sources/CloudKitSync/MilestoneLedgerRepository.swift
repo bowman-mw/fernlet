@@ -21,7 +21,7 @@ import FernletPersistence
 /// Append-only per-row Core Data + iCloud store for `MilestoneLedgerEntry` rows — with no delete path.
 ///
 /// The `MilestoneLedgerRepositoring` conformer under Core Data storage: the shared
-/// ``AppendOnlyRowStore`` engine (JSON `payloadData` via ``RowPayloadCoders``, keyed by the
+/// `AppendOnlyRowStore` engine (JSON `payloadData` via `RowPayloadCoders`, keyed by the
 /// entry's deterministic `idString`) with no deletion added on top — milestone rows are lifetime
 /// memories of care that survive a full data reset by design, a guarantee the contract makes
 /// structural (the engine itself has no delete method, and this type adds none).

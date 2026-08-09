@@ -26,7 +26,7 @@ handshake, and mirrors the service's failure ladder — remaining-attempt warnin
 escalating-cooldown countdown card, and a reset-required card whose only exit is a
 destructive reset. ``FernletNumericPad`` is the shared 3×4 PIN keypad both flows (and the
 app's passcode-change settings) use instead of the system keyboard. Tying them together,
-``FernletLockGateModifier`` — applied through the public `fernletLockGate(active:shouldLockOnDisappear:)`
+`FernletLockGateModifier` — applied through the public `fernletLockGate(active:shouldLockOnDisappear:)`
 extension on `View` — overlays ``FernletLockView`` over gated content while the service is
 locked, offers ``FernletLockSetupView`` when no lock is configured yet, and re-locks with
 `lock(reason: .viewDisappeared)` when the gated screen genuinely departs.
@@ -64,7 +64,7 @@ internally — so a service-side policy change updates the counter automatically
 
 ### Gating content behind the lock
 
-- ``FernletLockGateModifier``
+- ``SwiftUICore/View/fernletLockGate(active:shouldLockOnDisappear:)``
 
 ### Setting up the lock
 

@@ -64,7 +64,6 @@
 		68187DC62FD0E119004E15E9 /* Meal-Estimation-Overhaul-Plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "Meal-Estimation-Overhaul-Plan.md"; sourceTree = "<group>"; };
 		68187DDB2FD20EB8004E15E9 /* ProximityFunctionIndex.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ProximityFunctionIndex.md; sourceTree = "<group>"; };
 		68187DDC2FD261F7004E15E9 /* StoreRepositoryFunctionIndex.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = StoreRepositoryFunctionIndex.md; sourceTree = "<group>"; };
-		68187F462FDD022D004E15E9 /* CODE_REVIEW_2026-06-12.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "CODE_REVIEW_2026-06-12.md"; sourceTree = "<group>"; };
 		681899F22FECB144004E15E9 /* RemainingWork-2026-06-23.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "RemainingWork-2026-06-23.md"; sourceTree = "<group>"; };
 		684018B92FBE8F4200EFC6D6 /* fernlet-period-intimacy-plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "fernlet-period-intimacy-plan.md"; sourceTree = "<group>"; };
 		684018E02FBFAC4500EFC6D6 /* FileIndex.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FileIndex.md; sourceTree = "<group>"; };
@@ -240,7 +239,6 @@
 		6869C37B2FBBF3450098A0F3 /* Docs */ = {
 			isa = PBXGroup;
 			children = (
-				68187F462FDD022D004E15E9 /* CODE_REVIEW_2026-06-12.md */,
 				68B9EC1F2FC67DE800AF8FB6 /* Completed Implemtations */,
 				6869C37C2FBBF4AF0098A0F3 /* FernletSpecificationV3.md */,
 				68187DC62FD0E119004E15E9 /* Meal-Estimation-Overhaul-Plan.md */,

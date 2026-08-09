@@ -28,7 +28,7 @@ follows the same shape:
    sleepy/resting budget, and charges exactly one call. A gate fallback returns `nil` (or, for recipe
    import, throws a typed error) so the caller runs its deterministic path — every stage has one.
 3. **Guided generation.** The prompt is answered into a private `@Generable` schema
-   (``FoundationMealSelection``-style shapes). Guided generation guarantees shape, never validity.
+   (`FoundationMealSelection`-style shapes). Guided generation guarantees shape, never validity.
 4. **Code-side binding.** The response carries candidate *numbers* or food *names*, which code
    re-binds to real catalog entries — unknown numbers dropped, duplicates deduped, quantities and
    sets clamped, results capped. The model contributes judgment and world knowledge only; it never

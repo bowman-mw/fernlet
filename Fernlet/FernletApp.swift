@@ -21,7 +21,7 @@ import FernletUI
 /// center (so a cold-launch tap is delivered), and baking the UIKit nav-bar appearance.
 ///
 /// The body swaps between `LaunchScreen` (preparing), onboarding or ``ContentView`` (ready), and
-/// ``LaunchFailureView`` (failed). Scene-phase changes relock the app and flush the pending
+/// `LaunchFailureView` (failed). Scene-phase changes relock the app and flush the pending
 /// snapshot save on background, and reconcile guided-workout/cooking runs made from the Live
 /// Activity on re-activation. Storage-preference changes reload `PersistenceController` (queueing
 /// a follow-up reload when one is already in flight) and re-apply the sealed store's backup

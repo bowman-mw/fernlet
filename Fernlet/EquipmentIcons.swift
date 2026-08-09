@@ -109,7 +109,7 @@ struct LocationGlyph: View {
 ///
 /// Stroke weight scales with the icon size to keep proportions consistent with the source design
 /// (≈1.9 units in the viewBox); the stroke color comes from the surrounding view's foreground
-/// style, which is how the glyph views tint. Wraps ``SVGShape`` in a `GeometryReader` so the line
+/// style, which is how the glyph views tint. Wraps `SVGShape` in a `GeometryReader` so the line
 /// width can track the rendered size.
 struct VectorIcon: View {
     let markup: String

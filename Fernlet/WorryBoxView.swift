@@ -19,7 +19,7 @@ import FernletUI
 ///
 /// The First Aid entry point (pushed from ``FirstAidView``), capped at 300 characters. The seal is
 /// real before the theater starts — ``WorryBoxService/addWorry(_:)`` writes the sealed row first,
-/// then the ~2.2s ``TuckIntoBoxView`` animation plays and settles onto the confirmation. A failed
+/// then the ~2.2s `TuckIntoBoxView` animation plays and settles onto the confirmation. A failed
 /// write keeps the text in the editor with a gentle retry message.
 struct WorryEntryView: View {
     var worryBox: WorryBoxService

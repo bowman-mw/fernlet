@@ -119,7 +119,7 @@ public enum RecipeWebImportError: LocalizedError {
 ///
 /// The pipeline (``importRecipe(from:catalog:aiEnabled:userInvoked:gate:)``):
 /// 1. SSRF guard — ``isSafePublicHTTPSURL(_:)`` rejects non-HTTPS URLs and loopback / private /
-///    link-local address literals, and the ``RedirectValidator`` delegate re-applies the same check
+///    link-local address literals, and the `RedirectValidator` delegate re-applies the same check
 ///    on every redirect hop.
 /// 2. Bounded fetch — HTML content types only, capped at 3 MB, over `WebScrapingKit`'s
 ///    `EphemeralWebSession`: no cookie jar, no URL cache, no credential store, so nothing a page sets

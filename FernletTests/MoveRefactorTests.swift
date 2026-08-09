@@ -449,7 +449,10 @@ struct MoveRefactorTests {
         draft.details = "paused"
         var rows: [WorkoutExerciseEntry] = []
 
-        #expect(draft.commit(into: &rows))
+        // Hoisted out of `#expect`: the macro rewrites its condition into a closure whose captured
+        // base is immutable, so a bare `mutating` call cannot appear inside it.
+        let committed = draft.commit(into: &rows)
+        #expect(committed)
         #expect(rows.count == 1)
         #expect(rows[0].sets == "3")
         #expect(rows[0].reps == "8")
@@ -468,7 +471,8 @@ struct MoveRefactorTests {
         draft.weight = "95 lb"
         var rows: [WorkoutExerciseEntry] = []
 
-        #expect(draft.commit(into: &rows, includingSetsAndReps: false))
+        let committed = draft.commit(into: &rows, includingSetsAndReps: false)
+        #expect(committed)
         #expect(rows[0].sets.isEmpty)
         #expect(rows[0].reps.isEmpty)
         #expect(rows[0].weight == "95 lb", "weight is filtered by inputKind, not by the sets/reps flag")

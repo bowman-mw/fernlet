@@ -2531,7 +2531,7 @@ final class FernletStore {
 
     /// Adds a journal entry to `date` — the ONE journal-append path, for today and for past days
     /// alike. ``addJournal(text:tag:)`` and ``logQuickMood(_:)``'s new-entry branch both funnel
-    /// through ``appendJournalEntry(_:date:)`` below.
+    /// through `appendJournalEntry(_:date:)` below.
     func addJournal(text: String, tag: FeelingTag, date: String) {
         appendJournalEntry(JournalEntry(text: text, tag: tag), date: date)
     }

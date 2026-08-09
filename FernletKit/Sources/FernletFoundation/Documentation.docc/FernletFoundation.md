@@ -90,10 +90,6 @@ escape hatch for off-main readers that need the live persisted value.
 
 - ``BackupExclusion``
 
-### Core Data Model Building
-
-- ``CoreDataModelBuilding``
-
 ### Persisted-JSON Coding
 
 - ``RowPayloadCoders``

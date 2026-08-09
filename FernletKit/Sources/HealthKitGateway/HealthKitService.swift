@@ -316,7 +316,7 @@ public enum HealthKitServiceError: LocalizedError {
 
 /// The thin `HKHealthStore` seam ``HealthKitService`` routes its store operations through.
 ///
-/// Exists so tests can substitute a fake store: ``SystemHealthKitStoreController`` is the
+/// Exists so tests can substitute a fake store: `SystemHealthKitStoreController` is the
 /// production conformer (a pure pass-through to `HKHealthStore`), and the disable/delete-all test
 /// suites inject recorders. Note the service still calls `healthStore` directly for some one-shot
 /// sample/statistics queries — only authorization, observation lifecycle, saves, and deletes are
@@ -396,7 +396,7 @@ final class SystemHealthKitStoreController: HealthKitStoreControlling {
 /// edge: the real conformer, the app-side `CoreDataHealthKitCacheCleaner`, needs both of those
 /// modules and is installed into ``HealthKitService/defaultCacheClearer`` at app launch.
 /// ``HealthKitService/disableIntegration()`` fails closed without a conformer — see
-/// ``NoopHealthKitCacheClearer`` for the explicit opt-out.
+/// `NoopHealthKitCacheClearer` for the explicit opt-out.
 public protocol HealthKitCacheClearing {
     /// Removes cached HealthKit-derived clinical values from local/synced storage; throwing aborts
     /// the disable so the opt-out never half-applies.
@@ -563,7 +563,9 @@ public final class HealthKitService: HealthKitServicing {
     /// Creates a service over the given (or a fresh) Health store.
     ///
     /// - Parameters:
-    ///   - storeController: Test seam; defaults to the pass-through ``SystemHealthKitStoreController``.
+    ///   - healthStore: The Health store to read and write through; defaults to a fresh
+    ///     `HKHealthStore`.
+    ///   - storeController: Test seam; defaults to the pass-through `SystemHealthKitStoreController`.
     ///   - cacheCleaner: Falls back to ``defaultCacheClearer`` *as of construction*; ``disableIntegration()``
     ///     re-checks the static at call time to close the construction-order window.
     ///   - preferencesStore: Keychain preferences access; defaults to a fresh store on the standard service.

@@ -20,7 +20,7 @@ import Foundation
 /// title) plus the per-set ``ContentState`` snapshot.
 ///
 /// Compiled into BOTH targets: the app's `WorkoutLiveActivityController` requests and updates the
-/// activity with these values, and the widget's ``WorkoutLiveActivity`` renders them. A plain
+/// activity with these values, and the widget's `WorkoutLiveActivity` renders them. A plain
 /// Codable/Hashable value type with no app or domain-model imports (S3 wall) —
 /// ``CookingActivityAttributes`` mirrors this shape for cooking mode. The rest timer ticks natively
 /// via `Text(timerInterval:)`, so the content state only changes on discrete set/exercise

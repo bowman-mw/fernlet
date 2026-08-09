@@ -9,7 +9,7 @@ import Foundation
 /// ("worry-box") in `PrivateMemoryStore`, plus `MenstrualNarrativeRepository`
 /// ("menstrual-narrative") and `IntimacyLogRepository` ("intimacy-log") in
 /// `PrivateHealthStore`. Every call derives a per-column subkey from the
-/// caller-supplied content key via HKDF-SHA256 (with ``label`` as the `info` input)
+/// caller-supplied content key via HKDF-SHA256 (with `label` as the `info` input)
 /// and seals or opens the value with ChaCha20-Poly1305, reading and writing the
 /// sealed box's `combined` representation (nonce ‖ ciphertext ‖ tag) as one `Data` blob.
 ///
@@ -126,7 +126,7 @@ public nonisolated struct ColumnCrypto {
     // MARK: - Private
 
     /// Derives this column's 32-byte ChaCha20 subkey from the content key via
-    /// ``deriveColumnKey(contentKey:info:outputByteCount:)``, using ``label``
+    /// ``deriveColumnKey(contentKey:info:outputByteCount:)``, using `label`
     /// as the domain-separating `info` input.
     private func columnKey(from contentKey: SymmetricKey) -> SymmetricKey {
         Self.deriveColumnKey(contentKey: contentKey, info: label, outputByteCount: 32)

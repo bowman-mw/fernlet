@@ -33,7 +33,7 @@ public enum FoodSelectionAvailability {
 /// `FoodSelectionPayload` (description + numbered `FoodSelectionCandidate` list built app-side).
 /// The model contributes judgment only — how to split the meal and which candidate numbers fit —
 /// and can never introduce a food: the `@Generable` response carries candidate NUMBERS, which
-/// ``FoundationMealSelection`` re-binds to real catalog foods, dropping unknown numbers,
+/// `FoundationMealSelection` re-binds to real catalog foods, dropping unknown numbers,
 /// normalizing units, clamping quantities, and capping items/ingredients before anything persists.
 ///
 /// Every model dispatch routes through `FernletAIGate` (standard tier, user-invoked) — capability
@@ -327,7 +327,7 @@ private struct FoundationMealSelection {
     }
 }
 
-/// One meal item in the model's ``FoundationMealSelection`` response — a display name plus its
+/// One meal item in the model's `FoundationMealSelection` response — a display name plus its
 /// candidate-number ingredient picks.
 ///
 /// Purely a guided-generation shape; binding to real catalog foods (and every clamp/cap) happens in

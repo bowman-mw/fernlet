@@ -11,7 +11,7 @@ import os.signpost
 /// reactivation) cannot emit unbalanced signposts.
 ///
 /// Concurrency: the module's `MainActor` default isolation applies to the app-launch pair and its
-/// state; the general-purpose ``begin(_:)``/``end(_:signpostID:)`` and both ``timed(_:_:)``
+/// state; the general-purpose ``begin(_:)``/``end(_:signpostID:)`` and both `timed(_:_:)`
 /// overloads are explicitly `nonisolated` so any executor can instrument its own interval. In
 /// DEBUG builds, `timed` additionally prints the elapsed milliseconds to the console.
 public enum StartupTiming {
@@ -77,7 +77,7 @@ public enum StartupTiming {
         return result
     }
 
-    /// Async variant of ``timed(_:_:)``: runs `work` inside a signpost interval — suspension time
+    /// Async variant of `timed(_:_:)`: runs `work` inside a signpost interval — suspension time
     /// counts toward the measured duration.
     @discardableResult
     nonisolated public static func timed<T>(_ label: StaticString, _ work: () async throws -> T) async rethrows -> T {

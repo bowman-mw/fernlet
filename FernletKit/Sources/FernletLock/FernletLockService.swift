@@ -278,10 +278,10 @@ enum FernletLockCrypto {
     }
 }
 
-/// Injection seam over ``FernletLockCrypto`` so tests can substitute deterministic
+/// Injection seam over `FernletLockCrypto` so tests can substitute deterministic
 /// salts, keys, and derivations.
 ///
-/// ``SystemFernletLockCryptoProvider`` is the production conformer; unit tests inject
+/// `SystemFernletLockCryptoProvider` is the production conformer; unit tests inject
 /// fakes through ``FernletLockService``'s initializer. `@MainActor` class-bound to
 /// match the service that owns it — the memory-hard scrypt derivation still hops
 /// off-main inside the implementation.
@@ -301,7 +301,7 @@ public protocol FernletLockCryptoProviding: AnyObject {
 
 /// The production ``FernletLockCryptoProviding`` conformer.
 ///
-/// A stateless pass-through to the ``FernletLockCrypto`` statics; ``FernletLockService``
+/// A stateless pass-through to the `FernletLockCrypto` statics; ``FernletLockService``
 /// creates one by default when no provider is injected.
 final class SystemFernletLockCryptoProvider: FernletLockCryptoProviding {
     func generateSalt() throws -> Data {
@@ -377,7 +377,7 @@ public enum LockKeychainKey: String {
 /// Injection seam for "now", letting tests drive cooldown-deadline arithmetic
 /// deterministically.
 ///
-/// ``SystemFernletDateProvider`` (wall-clock `Date()`) is the default;
+/// `SystemFernletDateProvider` (wall-clock `Date()`) is the default;
 /// ``FernletLockService`` consults it for every deadline computation.
 @MainActor
 public protocol FernletDateProviding: AnyObject {
@@ -395,7 +395,7 @@ final class SystemFernletDateProvider: FernletDateProviding {
 /// Injection seam for the monotonic system-uptime clock that makes brute-force
 /// cooldowns resistant to wall-clock tampering.
 ///
-/// ``SystemFernletUptimeProvider`` (`ProcessInfo.systemUptime`) is the default. Uptime
+/// `SystemFernletUptimeProvider` (`ProcessInfo.systemUptime`) is the default. Uptime
 /// resets on reboot, which ``FernletLockService`` detects and treats as a fallback to
 /// wall-clock-only cooldown accounting.
 @MainActor

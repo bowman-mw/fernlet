@@ -22,9 +22,9 @@ import FernletPersistence
 /// Upsert-only per-row Core Data + iCloud store for user-designed `CustomizationItem`s.
 ///
 /// The `CustomItemRepositoring` conformer under Core Data storage: each item is one
-/// `CustomItemRecord` row (a JSON `payloadData` blob via ``RowPayloadCoders``, keyed by the
+/// `CustomItemRecord` row (a JSON `payloadData` blob via `RowPayloadCoders`, keyed by the
 /// item's UUID) so a growing closet never bloats the snapshot blob and items sync row by row.
-/// Load and `upsert` delegate to the shared ``AppendOnlyRowStore`` engine: `upsert` touches only
+/// Load and `upsert` delegate to the shared `AppendOnlyRowStore` engine: `upsert` touches only
 /// the rows it is handed and `delete` removes only the listed ids — the discipline that stops a
 /// stale in-memory set on one device from clobbering rows synced in from another (the
 /// cross-device wipe the in-person clothing shop's buy would otherwise trigger). Both delete

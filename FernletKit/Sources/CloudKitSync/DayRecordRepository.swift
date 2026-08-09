@@ -26,7 +26,7 @@ import FernletPersistence
 ///
 /// The `DayRecordRepositoring` conformer that ``CoreDataFernletRepository`` writes through.
 /// Splitting each `FernletDay` into its own row (a JSON `payloadData` blob via
-/// ``RowPayloadCoders``, keyed by `dateKey`) keeps every record far under CloudKit's ~1 MB
+/// `RowPayloadCoders`, keyed by `dateKey`) keeps every record far under CloudKit's ~1 MB
 /// limit — the reason the old 370-day blob cap could be removed — and lets CloudKit merge
 /// different-day edits from different devices per record. Upsert-only: `upsert` touches only
 /// the days it is handed and never deletes rows it wasn't, so a stale in-memory set can't wipe

@@ -24,8 +24,16 @@ enum SealedBackupCrypto {
     ///
     /// - Parameters:
     ///   - plaintext: The chunk's serialized payload.
+    ///   - payloadType: Which sealed backup this chunk belongs to (bound into the GCM AAD, so a
+    ///     record cannot be replayed as a different payload).
+    ///   - identityService: Vends the backup-escrow key the chunk is sealed under and the signing
+    ///     public key stamped onto the record.
     ///   - chunkIndex: This record's position in its chunk set (bound into the GCM AAD).
     ///   - chunkCount: The set's total size (also bound, so mixed-generation sets fail closed).
+    ///   - updatedAt: The record's timestamp; also bound into the AAD (floored to whole seconds,
+    ///     matching what survives a CloudKit round trip).
+    ///   - generation: The minted rollback counter for this write, bound into the AAD so an older
+    ///     but validly-sealed generation cannot be substituted.
     /// - Returns: The sealed record, tagged with the escrow public key so another of the user's
     ///   devices recognizes it as theirs.
     @MainActor
@@ -173,16 +181,22 @@ final class SealedBackupService {
 
     /// Creates the service over its CloudKit transport and the sealing identity.
     ///
-    /// - Parameter generationStore: Injectable so tests can drive rollback scenarios against an
-    ///   isolated `UserDefaults` suite; production takes the `.standard`-backed default.
+    /// - Parameters:
+    ///   - cloudDataService: The private-database transport the sealed records are written to.
+    ///   - identityService: Vends the backup-escrow key every record is sealed under.
+    ///   - generationStore: Injectable so tests can drive rollback scenarios against an
+    ///     isolated `UserDefaults` suite; `nil` (the default) takes the `.standard`-backed store.
+    ///     It is defaulted to `nil` and resolved here rather than defaulted to
+    ///     `SealedBackupGenerationStore()` directly, because that type is `@MainActor` and default
+    ///     argument expressions are evaluated in a nonisolated context in the Swift 5 language mode.
     init(
         cloudDataService: CloudKitDataService,
         identityService: IdentityService,
-        generationStore: SealedBackupGenerationStore = SealedBackupGenerationStore()
+        generationStore: SealedBackupGenerationStore? = nil
     ) {
         self.cloudDataService = cloudDataService
         self.identityService = identityService
-        self.generationStore = generationStore
+        self.generationStore = generationStore ?? SealedBackupGenerationStore()
     }
 
     /// Single-record reconcile for payloads that fit one sealed blob (sensitive notes; period-disable).

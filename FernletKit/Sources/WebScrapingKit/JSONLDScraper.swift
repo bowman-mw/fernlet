@@ -57,9 +57,11 @@ public enum JSONLDScraper {
     /// Depth-first search for the first object whose `@type` is `schemaType` (compared
     /// case-insensitively), descending through `@graph`, `itemListElement`, and bare arrays.
     ///
-    /// - Parameter schemaType: the bare schema.org type name, e.g. `"Product"` or `"Recipe"`. Fully
-    ///   qualified `@type` URLs are **not** matched — neither original did, and adding that would
-    ///   change what both importers accept.
+    /// - Parameters:
+    ///   - schemaType: the bare schema.org type name, e.g. `"Product"` or `"Recipe"`. Fully
+    ///     qualified `@type` URLs are **not** matched — neither original did, and adding that would
+    ///     change what both importers accept.
+    ///   - json: The parsed JSON-LD value to search — a dictionary, an array, or any nesting of them.
     ///
     /// **One deliberate behaviour change, in the safe direction.** The recipe importer's version
     /// returned early out of the `@graph` branch: a page whose `@graph` held no recipe was abandoned

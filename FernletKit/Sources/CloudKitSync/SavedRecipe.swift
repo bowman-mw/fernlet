@@ -137,12 +137,12 @@ nonisolated enum SavedRecipeMapping {
 /// The `SavedRecipeRepositoring` conformer under Core Data storage. Each recipe is one
 /// `SavedRecipeRecord` row carrying BOTH representations: the legacy typed columns (free-text
 /// ingredient lines plus precomputed macros — all an un-updated paired device can read or
-/// write) and the additive `payloadData` blob (``SavedRecipePayload``, the full structured
+/// write) and the additive `payloadData` blob (`SavedRecipePayload`, the full structured
 /// `RecipeDefinition`). Writes always populate both ("write-both"); reads prefer the blob but
 /// fall back to the legacy columns whenever those have diverged from the blob's own legacy
 /// projection — divergence means a legacy-only writer edited the row after the blob was
 /// encoded, so the legacy columns are the fresher user intent (the STEP 0 staleness guard).
-/// Divergence comparison floors dates to whole seconds to match ``RowPayloadCoders``' ISO-8601
+/// Divergence comparison floors dates to whole seconds to match `RowPayloadCoders`' ISO-8601
 /// precision, or every runtime-created recipe would false-positive as diverged.
 ///
 /// Also owns the one-time migration from ``LegacySavedRecipeJSONRepository``'s JSON file
@@ -461,7 +461,7 @@ extension SavedRecipeRepository: SavedRecipeRepositoring {}
 /// Retained as the one-time migration source for ``SavedRecipeRepository`` so recipes saved by
 /// pre-Core-Data builds survive without loss: `load` tolerates a missing or undecodable file by
 /// returning `[]`, and `save` writes atomically with complete file protection, encoding through
-/// the shared ``RowPayloadCoders`` config with the pretty-printed opt-in.
+/// the shared `RowPayloadCoders` config with the pretty-printed opt-in.
 nonisolated public struct LegacySavedRecipeJSONRepository {
     private let fileURL: URL
     private let encoder: JSONEncoder

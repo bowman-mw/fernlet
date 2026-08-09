@@ -23,7 +23,7 @@ import FernletFoundation
 /// - Persistent-history tracking is on; sealed writers pair their saves with
 ///   ``PrivatePersistentHistoryPruner`` so edited rows do not leave prior ciphertext recoverable
 ///   from the history tables.
-/// - The model is built programmatically (``makeManagedObjectModel()``): plain `NSManagedObject`
+/// - The model is built programmatically (`makeManagedObjectModel()`): plain `NSManagedObject`
 ///   entities whose text content lives only in `*Ciphertext` binary columns; ids, day keys, and
 ///   timestamps are plaintext by accepted risk (NEW-4). The column sealing itself happens in the
 ///   layer-3 repositories under the lock's content key — this module never touches that key.

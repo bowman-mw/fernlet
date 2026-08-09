@@ -926,7 +926,7 @@ struct NoTrackingBoundaryTests {
 
         #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"        .package(url: "https://github.com/krzyzanowskim/CryptoSwift", .upToNextMinor(from: "1.10.0")),"#)
             == ["https://github.com/krzyzanowskim/CryptoSwift"])
-        #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";"#)
+        #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"\#t\#t\#trepositoryURL = "https://github.com/firebase/firebase-ios-sdk";"#)
             == ["https://github.com/firebase/firebase-ios-sdk"])
         #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"// .package(url: "https://example.com/commented-out"),"#).isEmpty)
         #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: "let x = 1").isEmpty)

@@ -133,16 +133,16 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
 ///   the file with `.completeFileProtection`. On this path the blob's `days` is the full,
 ///   uncapped history (no `maxStoredDays` bound is passed).
 /// - **Fail-closed corruption handling.** An unreadable or undecodable file flips the instance
-///   into read-only recovery mode (``State``'s `persistenceBlockedByDecodeFailure`): reads
+///   into read-only recovery mode (`State`'s `persistenceBlockedByDecodeFailure`): reads
 ///   return a fresh/migrated database, but every save is refused so a later write cannot
 ///   clobber data that might still be recoverable off disk. A subsequent successful decode or
 ///   ``purgeAllPersistedData()`` lifts the block.
-/// - **Legacy migration.** When no file exists, ``LegacyKeys`` UserDefaults data (the
+/// - **Legacy migration.** When no file exists, `LegacyKeys` UserDefaults data (the
 ///   pre-database persistence) seeds the first database, and the first successful save clears
 ///   those keys.
 ///
 /// Concurrency: nonisolated with a fully synchronous API. The struct is a value-type facade over
-/// a shared reference-type ``State`` box, so copies observe the same recovery/cleanup flags; the
+/// a shared reference-type `State` box, so copies observe the same recovery/cleanup flags; the
 /// box is unsynchronized and the type is not `Sendable`, so call sites are expected to confine
 /// an instance to a single actor (in practice the MainActor store/save coordinator).
 public struct LocalFernletRepository: FernletRepository {
@@ -362,7 +362,7 @@ public struct LocalFernletRepository: FernletRepository {
         }
     }
 
-    /// Builds a first database from the pre-database ``LegacyKeys`` UserDefaults data (or fresh
+    /// Builds a first database from the pre-database `LegacyKeys` UserDefaults data (or fresh
     /// defaults on a clean install) and flags the legacy keys for cleanup after the next
     /// successful save.
     private func migratedDatabase(todayKey: String) -> LocalFernletDatabase {

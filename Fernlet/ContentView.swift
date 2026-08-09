@@ -1073,7 +1073,7 @@ struct IntimacyScreenView: View {
 
 /// The payload behind the transient "meal logged" toast: a title plus the summed macros.
 ///
-/// Built by ``ContentView/showMealLogNotification`` from the meals a sheet just logged; the fresh
+/// Built by `ContentView.showMealLogNotification` from the meals a sheet just logged; the fresh
 /// `id` per instance is what lets a newer toast supersede an older one's auto-dismiss timer.
 struct MealLogNotification: Identifiable, Equatable {
     let id = UUID()

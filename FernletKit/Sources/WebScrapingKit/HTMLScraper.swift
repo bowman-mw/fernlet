@@ -68,9 +68,11 @@ public enum HTMLScraper {
 
     /// Decodes HTML entities in `text`.
     ///
-    /// - Parameter decodingNumericEntities: When `true`, decimal (`&#8217;`) and hexadecimal
-    ///   (`&#x2019;`) character references are decoded first, then the named entities. When `false`,
-    ///   only the named entities are decoded and a numeric reference is left as literal text.
+    /// - Parameters:
+    ///   - text: The string to decode entities in.
+    ///   - decodingNumericEntities: When `true`, decimal (`&#8217;`) and hexadecimal
+    ///     (`&#x2019;`) character references are decoded first, then the named entities. When `false`,
+    ///     only the named entities are decoded and a numeric reference is left as literal text.
     ///
     /// **This parameter is a real behavioural difference, not a style knob.** The recipe importer
     /// decoded numeric references; the product importer did not, and its callers include href
@@ -146,8 +148,11 @@ public enum HTMLScraper {
     /// remaining tags flattened to spaces, entities decoded, whitespace collapsed to single spaces,
     /// and the result truncated to `characterLimit`.
     ///
-    /// - Parameter decodingNumericEntities: forwarded to ``htmlDecoded(_:decodingNumericEntities:)`` —
-    ///   the one place the two importers' text pipelines differ. Product passes `false`, recipe `true`.
+    /// - Parameters:
+    ///   - html: The page source to reduce.
+    ///   - decodingNumericEntities: forwarded to ``htmlDecoded(_:decodingNumericEntities:)`` —
+    ///     the one place the two importers' text pipelines differ. Product passes `false`, recipe `true`.
+    ///   - characterLimit: Maximum length of the returned text; the result is truncated to it.
     /// - Returns: `nil` when the page reduces to nothing at all.
     ///
     /// **Returning `nil` rather than throwing is the point.** Both importers threw here, but each threw

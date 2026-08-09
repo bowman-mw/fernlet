@@ -103,8 +103,8 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// actor, guarding against a concurrent `saveDatabase` installing a fresher cache mid-decode
     /// (the fresher cache wins). Failure paths latch read-only recovery just like the sync path.
     ///
-    /// Everything except the decode itself is the SHARED pipeline (``beginStagedBlobLoad(todayKey:)``
-    /// → ``finishStagedBlobLoad(decoded:recordUpdatedAt:)`` / ``stagedBlobDecodeFailed(_:)``), so the
+    /// Everything except the decode itself is the SHARED pipeline (`beginStagedBlobLoad(todayKey:)`
+    /// → `finishStagedBlobLoad(decoded:recordUpdatedAt:)` / `stagedBlobDecodeFailed(_:)`), so the
     /// migration and corruption policies cannot drift between the two entry points. The two things
     /// that are genuinely this path's own — the off-main decode and the fresher-cache-wins guard that
     /// only an `await` can need — stay here.
@@ -481,7 +481,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         /// read-only-recovery fallback. Nothing left to decode.
         case resolved(LocalFernletDatabase)
         /// The primary record was found and carries a payload the caller must decode, along with the
-        /// record's `updatedAt` read BEFORE any decode (see ``beginStagedBlobLoad(todayKey:)``).
+        /// record's `updatedAt` read BEFORE any decode (see `beginStagedBlobLoad(todayKey:)`).
         case needsDecode(payload: Data, recordUpdatedAt: Date?)
     }
 

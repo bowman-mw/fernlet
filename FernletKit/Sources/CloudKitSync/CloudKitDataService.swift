@@ -135,7 +135,7 @@ public enum CloudKitDataServiceError: Error, LocalizedError, Equatable {
 
 /// Seam for querying the iCloud account status.
 ///
-/// ``SystemCloudKitAccountProvider`` is the production conformer (backed by `CKContainer`);
+/// `SystemCloudKitAccountProvider` is the production conformer (backed by `CKContainer`);
 /// tests inject fakes so the sign-in gate in ``CloudKitDataService`` can be exercised without
 /// an iCloud account.
 public protocol CloudKitAccountStatusProviding {
@@ -145,7 +145,7 @@ public protocol CloudKitAccountStatusProviding {
 
 /// Seam over the CloudKit private-database operations ``CloudKitDataService`` needs.
 ///
-/// ``SystemCloudKitRecordDatabase`` is the production conformer (cursor-following queries,
+/// `SystemCloudKitRecordDatabase` is the production conformer (cursor-following queries,
 /// batched deletes against a real `CKDatabase`); tests substitute in-memory fakes so detection,
 /// deletion, and sealed-backup logic run without a network or an iCloud account. Methods throw
 /// the underlying `CKError` unmapped — the service layers its own error mapping on top.

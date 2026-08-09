@@ -20,12 +20,12 @@ import FernletUI
 /// Walks the user through: lock-kind selection (4-digit PIN, 6-digit PIN, or 8–64 character
 /// password), passcode entry, confirmation, an optional biometric-unlock toggle, and a
 /// no-recovery disclosure sheet that must be acknowledged before anything is written. Only
-/// after the disclosure is accepted does ``finalizeSetup()`` call
+/// after the disclosure is accepted does `finalizeSetup()` call
 /// `FernletLockService.configure(credential:)` — which derives the Scrypt verifier and wraps
 /// the content key in the keychain — and, if requested, `setBiometricEnabled(_:passcode:)`.
 ///
 /// Presented as a sheet from the app's settings and privacy screens, the onboarding lock
-/// step, and ``FernletLockGateModifier``'s not-configured call-to-action overlay. Reads the
+/// step, and `FernletLockGateModifier`'s not-configured call-to-action overlay. Reads the
 /// environment-injected `FernletLockService` (from the `FernletLock` module) and dismisses
 /// itself after a brief success toast. If `configure` throws, the flow returns to the entry
 /// step with both passcode fields cleared and the error shown inline. Runs on the main actor
@@ -441,7 +441,7 @@ public struct FernletLockSetupView: View {
 /// the prompt fires once per lock session rather than on every recreation; a manual
 /// biometric button remains available. Biometric failures fall back to passcode entry.
 ///
-/// Used as ``FernletLockGateModifier``'s overlay and directly by the app's progress-photo
+/// Used as `FernletLockGateModifier`'s overlay and directly by the app's progress-photo
 /// timeline. Runs on the main actor (the module's default isolation); the lock service is
 /// environment-injected.
 public struct FernletLockView: View {

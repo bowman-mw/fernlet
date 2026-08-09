@@ -12,7 +12,7 @@ import FernletLockUI
 /// The slice of CloudKit the Privacy & Data screen needs: count what's in the account, and delete it.
 ///
 /// Conformers: `CloudKitDataService` (the real queries, via the retroactive conformance below) and
-/// ``MockPrivacyCloudDataService`` (canned answers for UI tests). ``PrivacyDataSettingsView`` uses
+/// `MockPrivacyCloudDataService` (canned answers for UI tests). ``PrivacyDataSettingsView`` uses
 /// detection to populate the "Cloud records" card and the multi-device warning, and the delete for
 /// the type-DELETE-to-confirm iCloud wipe. Main-actor-bound like the view that owns it.
 @MainActor
@@ -29,7 +29,7 @@ extension CloudKitDataService: PrivacyCloudDataManaging {}
 /// Abstraction over swapping the persistence stack when storage preferences change.
 ///
 /// Conformers: `PersistenceController` (the real Core Data reload) and
-/// ``MockPrivacyPersistenceReloader`` (a no-op with an optional UI-test delay).
+/// `MockPrivacyPersistenceReloader` (a no-op with an optional UI-test delay).
 /// ``PrivacyDataSettingsView`` calls it whenever the iCloud sync toggle flips so the store starts
 /// reading/writing the newly-selected home before the preference is persisted.
 @MainActor
@@ -43,7 +43,7 @@ extension PersistenceController: PrivacyPersistenceReloading {}
 /// jump to the system Health privacy settings.
 ///
 /// Conformers: `HealthKitService` (the real integration — disabling purges the locally cached
-/// HealthKit-derived values, fail-closed) and ``MockPrivacyHealthKitService`` (flips the preference
+/// HealthKit-derived values, fail-closed) and `MockPrivacyHealthKitService` (flips the preference
 /// only, for UI tests). Selected per call by `makeHealthKitService()` based on the UI-test
 /// environment.
 @MainActor
@@ -78,7 +78,7 @@ private struct SealedBackupAttention: Identifiable {
 /// destructive actions themselves.
 ///
 /// Key collaborators: ``PrivacyCloudDataManaging`` and ``PrivacyPersistenceReloading`` (injected, or
-/// chosen by ``PrivacyDataServiceFactory``), ``PrivacyHealthKitServicing`` (chosen per call),
+/// chosen by `PrivacyDataServiceFactory`), ``PrivacyHealthKitServicing`` (chosen per call),
 /// `StoragePreferencesStore` and `FernletLockService` from the environment, and an optional
 /// ``FernletStore`` — export, trainer share, sealed-backup status, and the delete-everything button
 /// render only when a store is present (the injected-nil case is previews and unit tests).
@@ -1248,7 +1248,7 @@ struct PrivacyDataSettingsView: View {
 /// counts); every normal launch gets `CloudKitDataService` and `PersistenceController.shared`.
 @MainActor
 private enum PrivacyDataServiceFactory {
-    /// - Returns: A ``MockPrivacyCloudDataService`` under the UI-test environment, else the live service.
+    /// - Returns: A `MockPrivacyCloudDataService` under the UI-test environment, else the live service.
     static func makeCloudDataService() -> any PrivacyCloudDataManaging {
         let environment = ProcessInfo.processInfo.environment
         if environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1" {
@@ -1264,7 +1264,7 @@ private enum PrivacyDataServiceFactory {
         return CloudKitDataService()
     }
 
-    /// - Returns: A ``MockPrivacyPersistenceReloader`` under the UI-test environment, else the shared controller.
+    /// - Returns: A `MockPrivacyPersistenceReloader` under the UI-test environment, else the shared controller.
     static func makePersistenceReloader() -> any PrivacyPersistenceReloading {
         if ProcessInfo.processInfo.environment["FERNLET_UI_TEST_PRIVACY_SERVICES"] == "1" {
             return MockPrivacyPersistenceReloader()
@@ -1276,7 +1276,7 @@ private enum PrivacyDataServiceFactory {
 /// Test double for ``PrivacyCloudDataManaging`` that returns a canned summary and simulates the
 /// type-DELETE-to-confirm contract without touching CloudKit.
 ///
-/// Built by ``PrivacyDataServiceFactory`` when the UI-test launch environment asks for mock privacy
+/// Built by `PrivacyDataServiceFactory` when the UI-test launch environment asks for mock privacy
 /// services; the delete still throws unless the confirmation text is exactly "DELETE", so the
 /// confirm gate stays exercised in tests.
 @MainActor

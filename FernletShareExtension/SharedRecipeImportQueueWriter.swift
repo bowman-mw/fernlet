@@ -80,7 +80,7 @@ struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
 ///
 /// Only `http`/`https` URLs are accepted; re-sharing a URL already in the queue replaces its old
 /// record with a fresh one (restarting its retry budget). Failure modes: a non-web URL throws
-/// ``QueueWriterError/invalidURL``; directory-creation, encoding, and coordination errors propagate
+/// `QueueWriterError.invalidURL`; directory-creation, encoding, and coordination errors propagate
 /// to the caller, which cancels the share.
 struct SharedRecipeImportQueueWriter {
     /// The shared container identifier; must match the extension and app entitlements and the
@@ -116,7 +116,7 @@ struct SharedRecipeImportQueueWriter {
     /// this call never touches are still decoded and re-encoded through the mirror type.
     ///
     /// - Parameter url: The shared page URL; only `http` and `https` schemes are accepted.
-    /// - Throws: ``QueueWriterError/invalidURL`` for a non-web scheme, any encoding / file-system
+    /// - Throws: `QueueWriterError.invalidURL` for a non-web scheme, any encoding / file-system
     ///   error from the rewrite, or the `NSFileCoordinator` failure when coordination itself fails.
     func enqueue(_ url: URL) throws {
         guard url.scheme == "http" || url.scheme == "https" else {

@@ -22,10 +22,10 @@ import FernletPersistence
 /// Append-only per-row Core Data + iCloud store for `CoinLedgerEntry` rows.
 ///
 /// The `CoinLedgerRepositoring` conformer used under Core Data storage. Each entry is one
-/// `CoinLedgerRecord` row — a JSON `payloadData` blob (encoded via ``RowPayloadCoders``) keyed
+/// `CoinLedgerRecord` row — a JSON `payloadData` blob (encoded via `RowPayloadCoders`) keyed
 /// by the entry's stable deterministic `idString` — so each device's earn/spend rows sync
 /// independently instead of last-writer-wins on the snapshot blob. Load and `append` delegate
-/// to the shared ``AppendOnlyRowStore`` engine: `append` upserts only the rows it is handed and
+/// to the shared `AppendOnlyRowStore` engine: `append` upserts only the rows it is handed and
 /// never deletes others, so a stale in-memory set on one device cannot wipe rows synced in from
 /// another. Duplicate-id rows minted by two devices are NOT collapsed here (CloudKit mirrors by
 /// record identity, not `idString`); the union-merge dedup lives in `CoinEconomy` aggregation.

@@ -16,7 +16,7 @@ import FernletUI
 /// The in-app Privacy Policy screen: the full policy text rendered in Fernlet's type system.
 ///
 /// Pushed from ``SettingsSheet`` via `SettingsRoute.privacyPolicy`. The copy is a static string
-/// parsed into ``PolicyBlock``s by ``PolicyMarkdown`` at render time — no web view, no network — and
+/// parsed into `PolicyBlock`s by `PolicyMarkdown` at render time — no web view, no network — and
 /// must stay in lockstep with `Docs/Privacy-Policy.md` and the publicly hosted copy entered in
 /// App Store Connect. Any material change updates the effective date in both places.
 struct PrivacyPolicyView: View {
@@ -154,7 +154,7 @@ private enum PolicyBlock {
 /// stay a readable markdown string shared verbatim with `Docs/Privacy-Policy.md` instead of
 /// hand-built views.
 private enum PolicyMarkdown {
-    /// Splits the markdown into ``PolicyBlock``s, one per non-empty line.
+    /// Splits the markdown into `PolicyBlock`s, one per non-empty line.
     static func parse(_ text: String) -> [PolicyBlock] {
         text.split(separator: "\n", omittingEmptySubsequences: false).compactMap { raw -> PolicyBlock? in
             let line = raw.trimmingCharacters(in: .whitespaces)

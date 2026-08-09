@@ -36,6 +36,12 @@ struct SealedBackupGenerationStore {
     private let defaults: UserDefaults
 
     /// Injectable for tests; production uses `.standard`.
+    ///
+    /// - Important: This type is main-actor isolated, so it cannot be used as a *default argument*
+    ///   value — in the Swift 5 language mode default-argument expressions are evaluated in a
+    ///   nonisolated context. Callers that want the production store take an optional and construct
+    ///   it inside their own isolated body; see
+    ///   `SealedBackupService.init(cloudDataService:identityService:generationStore:)`.
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }

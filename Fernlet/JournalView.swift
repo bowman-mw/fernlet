@@ -112,7 +112,7 @@ struct JournalView: View {
 /// The compose sheet for a new journal entry: a feeling chip row, a free-text editor capped at
 /// 800 characters, and the daily inspiration prompt.
 ///
-/// Saves through ``FernletStore/addJournal`` (sealing happens inside the store's mutation path).
+/// Saves through ``FernletStore/addJournal(text:tag:)`` (sealing happens inside the store's mutation path).
 /// The inspiration chip pulls the deterministic prompt of the day from ``JournalPromptLibrary``,
 /// and ``JournalContinuationDetector`` watches the text to surface a one-time-per-reason
 /// ``JournalPromptNotificationView`` banner suggesting the Moments app for long reflections.
@@ -421,9 +421,9 @@ struct JournalEntryEditTarget: Identifiable {
 /// The edit sheet for an existing journal entry: feeling tag, capped text, and a delete action.
 ///
 /// The editing counterpart of ``JournalSheet``, opened via ``JournalEntryEditTarget`` from today's
-/// list, the previous list, or ``DayDetailView``. Saves through ``FernletStore/updateJournal``
+/// list, the previous list, or ``DayDetailView``. Saves through ``FernletStore/updateJournal(_:text:tag:date:)``
 /// (which re-seals the narrative when the entry is sealed) and deletes through
-/// ``FernletStore/deleteJournal``; shares the ``JournalContinuationDetector`` long-entry banner
+/// ``FernletStore/deleteJournal(_:date:)``; shares the ``JournalContinuationDetector`` long-entry banner
 /// with the compose sheet.
 struct JournalEntryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -795,9 +795,9 @@ struct JournalRow: View {
 /// micronutrients, meals, movement, water, sleep, journal entries, and the care checklist.
 ///
 /// Pushed from the journal calendar. Loads its day via
-/// ``FernletStore/loadDayWithDecryptedJournals``, so sealed journal text is hydrated when a key is
+/// ``FernletStore/loadDayWithDecryptedJournals(for:)``, so sealed journal text is hydrated when a key is
 /// active, and refreshes after its ``DayEditSheet`` or ``JournalEntryEditorSheet`` dismisses. The
-/// score card recomputes ``FernletStore/dailyHealthScore`` for the day; the sugar limit row
+/// score card recomputes ``FernletStore/dailyHealthScore(for:day:)`` for the day; the sugar limit row
 /// knowingly applies the FDA added-sugars reference to total sugar (see the inline note).
 struct DayDetailView: View {
     var store: FernletStore

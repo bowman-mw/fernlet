@@ -123,7 +123,7 @@ struct StepTimerControl: View {
 /// window drive the walker, so an advance made from the Live Activity or Siri re-renders this view
 /// in step (reconciled from the app group on appear/foreground). Only the "timer fired" flag and its
 /// haptic task are local UI state. Keeps the screen awake while frontmost (the app's only
-/// `isIdleTimerDisabled` writer, via ``KeepScreenAwakeModifier``), and a timer expiry highlights
+/// `isIdleTimerDisabled` writer, via `KeepScreenAwakeModifier`), and a timer expiry highlights
 /// Next + fires a haptic but NEVER auto-advances.
 struct CookingModeView: View {
     let store: FernletStore

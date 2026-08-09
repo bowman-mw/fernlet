@@ -77,7 +77,7 @@ content-type checks, and body caps all stay in the importers, because they diffe
 wall: `EphemeralWebSession.swift` is one of the three files permitted to hold an HTTP client, and
 `FernletTests/NoTrackingBoundaryTests` asserts that no shipping file uses `URLSession.shared` or a
 `.default` configuration, that any `URLSession(configuration:)` is the ephemeral one, and that both
-importers route through this type. See [Docs/No-Tracking-Wall.md](doc:/) §2a.
+importers route through this type. See `Docs/No-Tracking-Wall.md` §2a.
 
 **Concurrency.** The target sets no `defaultIsolation(MainActor.self)`, so everything is nonisolated —
 these are pure statics called from a MainActor-default app target and a MainActor-default

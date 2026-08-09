@@ -26,7 +26,7 @@ import FernletUI
 /// Pushed from Home. Rows come from ``MilestoneRowModel`` over the store's append-only milestone
 /// ledger (plus the device-local worries-let-go count), so numbers only ever grow — no rates,
 /// streaks, or completion percentages, by design. A mostly-empty shelf swaps in a gentler header;
-/// otherwise a link opens the ``KeepsakeShelfView`` medallion view, and the coins summary uses
+/// otherwise a link opens the `KeepsakeShelfView` medallion view, and the coins summary uses
 /// the reset-aware `CoinEconomy.milestoneAwardCoins` so it can never disagree with the wallet.
 struct MilestonesView: View {
     var store: FernletStore

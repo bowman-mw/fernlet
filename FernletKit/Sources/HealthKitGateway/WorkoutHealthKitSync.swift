@@ -39,7 +39,7 @@ public protocol WorkoutSyncContext: AnyObject {
 ///
 /// A testability seam: `HKWorkout` is the production conformer (retroactively, below), and the unit
 /// tests conform lightweight fakes so ``WorkoutHealthKitSync/reconcileWorkouts(_:)`` and
-/// ``WorkoutHealthKitSync/makeWorkout(from:authoredFernletID:)`` can run without a real Health store.
+/// `WorkoutHealthKitSync.makeWorkout(from:authoredFernletID:)` can run without a real Health store.
 public protocol HealthWorkoutSample {
     var uuid: UUID { get }
     var workoutActivityType: HKWorkoutActivityType { get }

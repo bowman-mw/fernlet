@@ -37,10 +37,10 @@ enum PrivateHubSection: String, CaseIterable, Identifiable {
 ///
 /// The whole hub sits behind `fernletLockGate` (bypassable only via the DEBUG UI-test hook), so
 /// each child screen inherits the app-lock requirement instead of gating itself. Section
-/// visibility follows ``PrivateHubSection/visibleSections(visibility:)``; the ``clampedSection(_:)``
+/// visibility follows ``PrivateHubSection/visibleSections(visibility:)``; the `clampedSection(_:)`
 /// binding guarantees the paged `TabView` can never select a hidden page mid-transaction (a
 /// visibility flip from Settings, a HealthKit body-profile import, or an Age/Gender edit), while
-/// ``resetUnavailableSectionIfNeeded()`` converges the ancestor-owned `$section` onto a real page
+/// `resetUnavailableSectionIfNeeded()` converges the ancestor-owned `$section` onto a real page
 /// afterward.
 struct PrivateHubView: View {
     var store: FernletStore
