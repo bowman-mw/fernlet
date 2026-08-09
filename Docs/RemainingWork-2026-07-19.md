@@ -188,6 +188,54 @@ offline App Attest verify prototype, D11 `LPLinkMetadata` device test
 ([harness ready](D11-LinkMetadata-Prototype.md)), App Clip fragment survival, universal-link domain
 (D6). D5 licensing: ✅ resolved 2026-07-19 by the Apache-2.0 LICENSE.
 
+## 9. Survivors from the three closed review/brief docs (added 2026-08-09)
+
+`CODE_REVIEW_2026-06-12.md`, `UI-UX-Redesign-Brief-2026-07-08.md`, and
+`Design-Briefs-Report-Features-2026-07-05.md` were closed into `Completed Implemtations/` on
+2026-08-09 after a code-verified reconciliation. Everything still genuinely open from them lives
+here now, so the archived docs are not load-bearing.
+
+**From the code review (10 of 195 findings open; 185 fixed):**
+
+1. **Sealed backup replay/rollback** — `updatedAt`/versioning are not authenticated, so a record can
+   be rolled back. *The only security item left.* Deferred by cost: needs versioned AAD plus a
+   CloudKit re-seal migration.
+2. **`SharedRecipeImportRecord` duplicated across the app and share-extension targets** with
+   divergent App-Group fallback paths — and the extension-side mirror omits `budgetDeferredDayKey`
+   while rewriting the whole queue file, so any share strips the budget-deferral stamp from every
+   queued record. Also uncoordinated (no `NSFileCoordinator`) on the extension side. *This is now a
+   real bug, not just duplication.*
+3. **HTML fetch / JSON-LD helpers duplicated** between `RecipeWebImporter` and
+   `FoodProductWebImporter` (`fetchHTML` still defined in both). Blocked by the
+   `AppServices`→`AIProviders` cycle in [SPM-Module-Carveup-Plan.md](SPM-Module-Carveup-Plan.md) §14.
+4. **Draft-exercise state machine copy-pasted** across `WorkoutSheet` and `WorkoutPlanSheet`
+   (`MoveView.swift` 748/763 vs 2976/3005) — the row editor is shared, the state machine is not.
+5. **Two parallel proximity audit trails** (`ConnectionSessionLog` + `TrainerAuditLog`) record the
+   same events. Needs a keep-both-or-merge decision; may be intentional.
+6. **`loadSnapshotAsync` duplicates the `loadDatabase` pipeline** in `CoreDataFernletRepository`. The
+   snapshot-assembly half was fixed by `FernletSnapshot.assembled`; the load pipeline was not.
+7. **`addJournal` overloads duplicate bookkeeping** — the today path uses `batchSnapshotPersistence`,
+   the dated path uses `diary.mutateDay`.
+8. **`SUPPORTED_PLATFORMS` claims macOS/visionOS** on several targets while sources import UIKit
+   unconditionally.
+
+**From the UI/UX brief (2 of 4 open questions; the other 2 were answered by shipped code):**
+
+9. **Global IA (A1)** — flatten the Private tab to a NavigationStack list, or keep nested paging?
+   Still a paged `TabView`.
+10. **Settings (A2) + the placeholder `PersonalScreenView`** — decide whether Debug/Tier-2/Signals
+    compile out under `DEBUG`; and the legacy `PersonalScreenView` path is still reachable **and
+    still renders placeholder copy** ("Tap to view your cycle" on a non-tappable card; "Photo imports
+    can live here when the photo picker is added"). Shipped placeholder UI — treat as a defect.
+
+**From the design briefs (open *design* asks, not implementation work):**
+
+11. **Briefs 12–14** — adventure/rest energy loop, proud-dandelion cumulative growth, and the
+    cumulative history/insights view. Zero code exists for any of them; each brief is a question to a
+    designer, so these need design answers before they can be scoped.
+
+---
+
 ## 8. Reference docs status
 
 > **Doc-structure pass 2026-08-09.** Nine completed plans were closed into `Completed Implemtations/`
@@ -212,5 +260,7 @@ offline App Attest verify prototype, D11 `LPLinkMetadata` device test
   [FileIndex.md](FileIndex.md) — **refreshed 2026-08-09**; a coverage scan now confirms every source
   file in the repo has a row (75 were missing, mostly the July AI-ladder, heart-drop, coach, and
   cooking-mode rounds).
-- Ten completed plans were closed into `Completed Implemtations/` on 2026-07-19 and nine more on
-  2026-08-09, each with a status banner.
+- Ten completed plans were closed into `Completed Implemtations/` on 2026-07-19 and twelve more on
+  2026-08-09, each with a status banner. The last three (the 2026-06-12 code review, the UI/UX
+  redesign brief, and the report-feature design briefs) were closed after a code-verified
+  reconciliation; their survivors are §9 above.

@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — SHIPPED.** The parchment redesign was delivered through the three UX-Batch-Continuation rounds (2026-07-17, -17b, -18) and the TestFlight b19 feedback waves; the review that gated it was [UI-UX-Review-Prompt-2026-07-09.md](UI-UX-Review-Prompt-2026-07-09.md). Of the four questions left open at authoring time, two turned out to be answered by the shipped code (Dynamic Type is uncapped; the shop entry is hidden rather than ghosted) — recorded inline in "Still open". The two that remain (global IA for the Private tab, and the Settings debug surfaces plus the still-reachable placeholder `PersonalScreenView`) moved to [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md) §9.
+
 # Fernlet UI/UX Redesign Brief — 2026-07-08
 
 This brief organizes the UI/UX changes you asked for, plus additional issues found in a
@@ -459,9 +461,25 @@ unified selector, custom-items section, compact color control, Milestones' new h
   customization; recolor moves to the wardrobe; coins removed.
 - **Milestones** → **Home, compact card** (visible even when mostly-empty).
 
-### Still open
-1. **Global IA (A1)** — flatten the Private tab to a NavigationStack list (recommended), or keep nested paging?
-2. **Settings (A2)** — compile Debug/Tier-2/Signals out under `DEBUG`? Is the legacy `PersonalScreenView`
-   path (A3) still reachable, or superseded by the hub?
-3. **Dynamic Type range** — full AX5 or a bounded cap (e.g. XXL)?
-4. **Friends shop** — hide the shop entry entirely vs a ghosted/disabled affordance + caption when not connected?
+### Still open — reconciled against code 2026-08-09
+
+Two of the four now have de-facto answers in the shipped code; they were decided by implementation
+and never written down. Two are genuinely undecided and moved to the live tracker.
+
+3. **Dynamic Type range** — ✅ **Answered by default: full range, no cap.** There is not a single
+   `dynamicTypeSize` modifier anywhere in the app or `FernletUI`, so nothing is clamped. If a bounded
+   cap was ever wanted, that is new work, not an open question.
+4. **Friends shop** — ✅ **Answered: hidden, not ghosted.** `ConnectView.swift:233` renders the shop
+   card only inside `if let minutesLeft = manager.clothingShop.remainingWindowMinutes(...)`, so the
+   entry simply does not exist while the window is closed.
+
+Genuinely still open (carried to [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md)):
+
+1. **Global IA (A1)** — flatten the Private tab to a NavigationStack list (recommended), or keep
+   nested paging? Still a paged `TabView` today.
+2. **Settings (A2)** — compile Debug/Tier-2/Signals out under `DEBUG`? And the A3 sub-question is now
+   answered in the worst way: the legacy `PersonalScreenView` path **is** still reachable, and the
+   2026-08-04 doc pass found it still renders placeholder copy — a `cycleSummary` reading "Tap to
+   view your cycle" on a card that is not tappable, and a photos page saying "Photo imports can live
+   here when the photo picker is added". That is shipped placeholder UI in the Private hub, so this
+   is now a defect, not just an IA question.

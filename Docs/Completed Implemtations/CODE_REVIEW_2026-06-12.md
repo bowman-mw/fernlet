@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — TRIAGE COMPLETE.** All 195 findings are triaged: 185 fixed, 10 open. The counts were reconciled on 2026-08-09 after twelve findings that later rounds had quietly closed were re-verified in code and marked (the section headers had drifted from the per-finding markers — the High header claimed "1 open" while all 21 were individually fixed). The 10 survivors are listed in "Open findings" near the top and are carried on [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md) §9; the review itself is finished as a review. The only security item left is the deferred sealed-backup replay/rollback fix (needs versioned AAD + a CloudKit re-seal migration).
+
 # Fernlet — Code Review Report
 
 _Generated 2026-06-12 via a 21-reviewer multi-agent sweep. Adversarial verification completed in two passes (initial run + re-verification of the 155 findings deferred by a session limit). Last updated 2026-06-15._
@@ -13,13 +15,34 @@ _**157 / 193 confirmed findings fixed** (2 critical, 21 high, 82 medium, 52 low)
 
 ## Summary counts
 
-| Severity | Count | Fixed |  | Category | Count |
-|---|---|---|---|---|---|
-| critical | 2 | **2** ✅ |  | bug | 119 |
-| high | 21 | **21** ✅ |  | security | 33 |
-| medium | 93 | **80** |  | duplication | 25 |
-| low | 76 | **52** |  | redundancy | 6 |
-|  |  |  |  | hygiene | 10 |
+> **Counts reconciled 2026-08-09.** The per-section headers had drifted badly from the per-finding
+> markers (the High header claimed "1 open" while all 21 findings were individually marked fixed; the
+> Medium-duplication header claimed "all 13 open" while one was marked fixed inside it). Twelve
+> findings were re-verified against current code and marked fixed — most were closed as side effects
+> of later rounds (the 2026-07-19 hygiene sweep, the 2026-08-02 `INFOPLIST_KEY` migration, the
+> 2026-08-05 duplication consolidation) without anyone updating this report. **10 findings remain
+> open**; they are listed in §Open findings below and carried on the live tracker.
+
+| Severity | Count | Fixed | Open |  | Category | Count |
+|---|---|---|---|---|---|---|
+| critical | 2 | **2** ✅ | 0 |  | bug | 119 |
+| high | 21 | **21** ✅ | 0 |  | security | 33 |
+| medium | 95 | **88** | 6 |  | duplication | 25 |
+| low | 77 | **73** | 4 |  | redundancy | 6 |
+|  |  |  |  |  | hygiene | 10 |
+
+## Open findings (as of 2026-08-09)
+
+| Finding | Severity | Note |
+|---|---|---|
+| Sealed backup records can be replayed/rolled back (`updatedAt`/versioning unauthenticated) | low · security (re-categorised High) | **The only security item left.** Explicitly deferred: the fix needs versioned AAD plus a CloudKit re-seal migration. |
+| `SharedRecipeImportRecord` + queue I/O duplicated across app and share-extension targets, with divergent fallback paths | medium · duplication (2 findings) | Now has a known consequence: the extension-side mirror omits `budgetDeferredDayKey` and rewrites the whole queue file, stripping the stamp from every queued record (`Doc-Pass-Anomalies-2026-08-04.md`). |
+| HTML fetch + JSON-LD/scraping helpers duplicated between `RecipeWebImporter` and `FoodProductWebImporter` | medium · duplication (2 findings) | `fetchHTML` is still defined in both. Blocked by the `AppServices`→`AIProviders` cycle noted in the carve-up plan §14. |
+| Draft-exercise state machine copy-pasted across `WorkoutSheet` and `WorkoutPlanSheet` | medium · duplication | `addDraftExercise`/`clearDraftExercise` still duplicated in `MoveView.swift` (748/763 and 2976/3005); the row editor is shared, the state machine is not. |
+| Two parallel persistent audit trails record the same proximity events | medium · redundancy | `ConnectionSessionLog` and `TrainerAuditLog` both persist. May be intentional — needs a keep-or-merge decision. |
+| `CoreDataFernletRepository.loadSnapshotAsync` duplicates the `loadDatabase` pipeline | low · duplication | Still duplicated (cache check, fetch→migrate→save branch, decode). The *snapshot assembly* half was fixed via `FernletSnapshot.assembled`; the load pipeline was not. |
+| `addJournal(text:tag:)` duplicates the bookkeeping of `addJournal(text:tag:date:)` | low · duplication | Both still hand-roll it; the today path uses `batchSnapshotPersistence`, the dated path uses `diary.mutateDay`. |
+| `SUPPORTED_PLATFORMS` claims native macOS/visionOS but sources import UIKit unconditionally | low · hygiene | Still `"iphoneos iphonesimulator macosx xros xrsimulator"` on several targets. |
 
 ## Author decisions (2026-06-12)
 
@@ -52,7 +75,7 @@ Four design-intent forks were resolved by the author. These convert the correspo
 
 ---
 
-## 🟠 High (21) — 20 fixed ✅, 1 open
+## 🟠 High (21) — all 21 fixed ✅
 
 #### 1. Shutter tap crashes when camera permission is denied (capture on unconfigured session) — FIXED
 
@@ -242,7 +265,7 @@ Four design-intent forks were resolved by the author. These convert the correspo
 
 ---
 
-## 🟡 Medium (93) — 73 fixed ✅, 20 open
+## 🟡 Medium (93) — 87 fixed ✅, 6 open
 
 ### Medium — security (18) — all 18 fixed ✅
 
@@ -399,7 +422,7 @@ Four design-intent forks were resolved by the author. These convert the correspo
 - **Evidence:** `(data, response) = try await URLSession.shared.data(for: request)`
 - **Action:** Reject responses whose mimeType is not text/html or application/xhtml+xml, and stream via URLSession.shared.bytes(for:) accumulating at most a few MB (e.g., 3 MB) before aborting with fetchFailed. Also set an explicit timeoutInterval on the request.
 
-### Medium — bug (57) — 55 fixed ✅, 0 open
+### Medium — bug (57) — all 57 fixed ✅
 
 #### 1. Photo library save failure silently swallowed; session torn down as if save succeeded
 
@@ -915,11 +938,12 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 - **Action:** Gate reads on 'the user has completed the authorization request' (e.g., the persisted requestedCapabilities set, or HKHealthStore.getRequestStatusForAuthorization) rather than write status; attempt the query and treat empty results as the denied case. Keep the write-status check only for `saveIfAuthorized`.
 - **❓ Question for you:** Was requiring write permission for workout import a deliberate simplification, accepting that read-only grants disable import?
 
-### Medium — duplication (13) — all 13 open (deferred)
+### Medium — duplication (13) — 9 fixed ✅, 4 open
 
 #### 1. Month-calendar card triplicated across Period, Journal, and Intimacy views
 
-- **Severity / Category:** medium · duplication — ✅ Verified
+- **Severity / Category:** medium · duplication — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** `MonthGridModel` (calendar math + canonical day keys) and `MonthCalendarCard` (header, weekday row, 7-column grid, `@ViewBuilder` cell) were extracted into `Fernlet/MonthCalendarCard.swift`; `PeriodMonthModel`/`JournalMonthModel` now layer over the shared model and supply only cell rendering — exactly the suggested action.
 - **Location:** `Fernlet/ContentView.swift:944`  ·  _found by: dedup-functions_
 - **Problem:** Three nearly identical month-calendar implementations exist: PeriodMonthModel + grid card in Fernlet/PeriodTrackerView.swift:205-420 (model init 370-406, ymFormatter 380-383, header with chevron.left at 220 and disabled chevron.right, LazyVGrid 247-258), JournalMonthModel + card in Fernlet/JournalView.swift:446-635 (model init 588-631, ymFormatter 605-608, header at 461, LazyVGrid 488-499), and IntimacyMonthModel + card in Fernlet/ContentView.swift:833-980 (model init 944-979, ymFormatter 958-961, header at 848, LazyVGrid 875-882). The model inits share ~20 identical lines (month interval, firstWeekday, monthTitle via .dateTime.month(.wide).year(), veryShortWeekdaySymbols, 'yyyy-MM' formatter, leading-blank cells, per-day key construction) and the view bodies share ~35 identical lines (prev/next month buttons with isCurrentMonth disable logic, weekday-symbol header row, 7-column LazyVGrid). Only the per-day cell content differs.
 - **Evidence:** `let ymFormatter = DateFormatter()         ymFormatter.dateFormat = "yyyy-MM"`
@@ -979,7 +1003,8 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 
 #### 8. Journal prompt logic (4 methods) copy-pasted verbatim in three views
 
-- **Severity / Category:** medium · duplication — ✅ Verified
+- **Severity / Category:** medium · duplication — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** Extracted into `Fernlet/JournalPromptLibrary.swift`; the per-view copies are gone.
 - **Location:** `Fernlet/JournalView.swift:401`  ·  _found by: journal-camera_
 - **Problem:** updateText/updateJournalText, promptIfNeeded, showJournalPromptNotification, and openJournalApp are duplicated character-for-character in JournalSheet (lines 160-198), JournalEntryEditorSheet (lines 401-439), and DayEditSheet (lines 1307-1345), along with the duplicated @State pair (promptedReasons, journalPromptNotification) and the identical .overlay/.animation scaffolding. Any fix (e.g. the 6-second auto-dismiss race, the moments:// URL, or detector thresholds) must be applied three times and the copies will inevitably drift.
 - **Evidence:** `private func updateText(_ newValue: String) {         let cappedText = String(newValue.prefix(JournalContinuationDetector.maxCharacters))`
@@ -1027,11 +1052,12 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 - **Evidence:** `struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {     var id: UUID     var urlString: String`
 - **Action:** Move SharedRecipeImportRecord, the app-group identifier, the file URL resolution, and the encoder/decoder factories into one Swift file added to both the app and extension target memberships (or a small shared framework), so there is a single source of truth for the wire format and path.
 
-### Medium — redundancy (4) — 2 fixed, 2 open
+### Medium — redundancy (4) — 3 fixed ✅, 1 open
 
 #### 1. HealthKit purpose strings defined twice with different text — build settings vs Info.plist silently conflict
 
-- **Severity / Category:** medium · redundancy — ✅ Verified
+- **Severity / Category:** medium · redundancy — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** Resolved by the 2026-08-02 `INFOPLIST_KEY_*` migration: the usage strings now live only in build settings (`INFOPLIST_KEY_NSHealth*`), and `Fernlet/Info.plist` contains zero `NSHealth` keys — one source of truth.
 - **Location:** `Fernlet.xcodeproj/project.pbxproj:399`  ·  _found by: hygiene-config_
 - **Problem:** NSHealthShareUsageDescription and NSHealthUpdateUsageDescription are defined in two places with materially different wording: as INFOPLIST_KEY_* build settings in both Debug and Release configurations (pbxproj lines 399–400 and 447–448: 'Fernlet reads selected Health data only when you enable it, including body profile, cycle, recovery, sleep, and activity context…') and in Fernlet/Info.plist lines 37–40 ('Fernlet reads your workouts, body metrics, and (optionally) cycle data from Apple Health…'). Because GENERATE_INFOPLIST_FILE = YES merges the generated keys with INFOPLIST_FILE content, only one of these strings actually ships in the final Info.plist — the other is dead text. Whoever edits the losing copy will believe they changed the user-facing HealthKit consent prompt when nothing changed. For a privacy-sensitive health app, the consent wording shown to users (and reviewed by App Review) must be the one the developer thinks it is.
 - **Evidence:** `INFOPLIST_KEY_NSHealthShareUsageDescription = "Fernlet reads selected Health data only when you enable it, ...";  // vs Info.plist line 38: "Fernlet reads your workouts, body metrics, and (optionally) cycle data..."`
@@ -1067,11 +1093,12 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 - **Action:** Make one of them the single event recorder: either derive the user-facing trainer audit view from ConnectionSessionLog events (filtering to trust-relevant kinds), or have the inspector subscribe to TrainerAuditEvent emissions instead of receiving parallel recordCoordinatorEvent calls. At minimum route both through one record() call site so the two trails cannot diverge.
 - **❓ Question for you:** Is the split intentional because ConnectionSessionLog can be disabled via settings (connectionInspectorMode) while the trust audit must always run? If so, the duplicate per-event call sites in ProximityCoordinator could still be unified behind one helper.
 
-### Medium — hygiene (3) — 1 fixed, 2 deferred
+### Medium — hygiene (3) — all 3 fixed ✅
 
 #### 1. App source files DisposableCameraView.swift and CompanionVectorAssets.swift live at repo root, outside the synchronized Fernlet/ folder
 
-- **Severity / Category:** medium · hygiene — ✅ Verified
+- **Severity / Category:** medium · hygiene — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** Both relocated into `Fernlet/` on 2026-07-19 and their explicit pbxproj refs removed.
 - **Location:** `Fernlet.xcodeproj/project.pbxproj:138`  ·  _found by: hygiene-config_
 - **Problem:** Both stray root-level files ARE compiled into the Fernlet target — they are wired in via explicit PBXFileReference + PBXBuildFile entries (pbxproj lines 11, 16, 49, 54, 349–350) attached directly to the project main group, while every other source file is picked up automatically through the PBXFileSystemSynchronizedRootGroup for Fernlet/. No duplicate copies exist inside Fernlet/, and both are live code (DisposableCameraView is used by Fernlet/ConnectView.swift:24; CompanionView by HomeView.swift and OnboardingCoordinator.swift). The hazard is structural: these are the only two sources requiring manual target membership, they sit next to docs/.git at repo root where they're easy to miss in refactors and reviews, and any tooling or future target that assumes 'all app code is under Fernlet/' will silently skip them. DisposableCameraView.swift depends on FernletStore, MeshNetworkManager, and shared UI components — it is core app code in the wrong place.
 - **Evidence:** `children = (... 6861B7802FCA9EF000B26022 /* DisposableCameraView.swift */,   68187DDD2FD36861004E15E9 /* CompanionVectorAssets.swift */,) // project mainGroup, repo root`
@@ -1079,7 +1106,8 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 
 #### 2. 13 internal planning/spec markdown docs are bundled into the shipping app via the Resources build phase
 
-- **Severity / Category:** medium · hygiene — ✅ Verified
+- **Severity / Category:** medium · hygiene — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** Fixed 2026-07-19: 15 planning docs removed from the app target's Resources phase; the built bundle was verified `.md`-free. Standing rule recorded: never add `Docs/` files to target membership.
 - **Location:** `Fernlet.xcodeproj/project.pbxproj:312`  ·  _found by: hygiene-config_
 - **Problem:** The Fernlet app target's Resources build phase copies 13 internal development documents into the app bundle: codex-implementation-prompts.md (123 KB of AI implementation prompts), the full product spec lineage (FernletStore-Refactor-Plan-v2.md, Meal-Estimation-Overhaul-Plan.md, PeriodAlgorithimResearch.md, fernlet-period-intimacy-plan.md, MeshNetworkImplementationPlan.md, proximity-handshake-process-map.md, etc.). Anyone who downloads the app can unzip the IPA and read the entire internal design history, security/handshake design notes for the mesh protocol, and AI prompts. This leaks internal IP and protocol design details (useful to anyone probing the proximity mesh), and bloats the bundle. These files were presumably added to the project for reference and Xcode defaulted them into the Resources phase.
 - **Evidence:** `files = (   68B9EC1E2FC5DB8000AF8FB6 /* PR0-Incremental-Migration-Plan.md in Resources */,   68B9EC122FC4993F00AF8FB6 /* MeshNetworkImplementationPlan.md in Resources */, ... 68B9EBCE2FC296F200AF8FB6 /* codex-implementation-prompts.md in Re…`
@@ -1617,11 +1645,12 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 - **Evidence:** `var records = existingRecords()         let urlString = url.absoluteString         records.removeAll { $0.urlString == urlString }         records.append(SharedRecipeImportRecord(url: url))         try save(records)`
 - **Action:** Wrap all reads and writes of PendingRecipeURLs.json in NSFileCoordinator coordinate(writingItemAt:options:) blocks in both the app and the extension (the standard mechanism for app-group files), or switch the extension to writing one file per queued URL (unique filename) so enqueue never rewrites the shared array.
 
-### Low — duplication (12)
+### Low — duplication (12) — 10 fixed ✅, 2 open
 
 #### 1. Review-sheet save/discard wiring duplicated verbatim between ConnectView and DisposableCameraView
 
-- **Severity / Category:** low · duplication — ✅ Verified
+- **Severity / Category:** low · duplication — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** Both call sites now present the one shared `FriendPhotoReviewSheet` (since moved into `ProximityKit/UI/`).
 - **Location:** `Fernlet/ConnectView.swift:59`  ·  _found by: proximity-sharing-ui_
 - **Problem:** ConnectView's disconnect review sheet (lines 59-76) — filter sessionPhotos by selectedForSave, try? FriendPhotoLibrarySaver.save, finishSessionPhotos(keeping:), leaveSessionAfterNotifyingPeers, and the deleteAllSessionPhotos discard path — is a near-verbatim copy of DisposableCameraView.reviewSheet (DisposableCameraView.swift:546-565). The two copies have already drifted slightly (the camera version resumes the camera on dismiss) and any fix (e.g. the swallowed save error, the double-tap race) must be applied twice.
 - **Evidence:** `saveSelected: {     let toSave = manager.sessionPhotos.filter { selectedForSave.contains($0.id) }     try? await FriendPhotoLibrarySaver.save(toSave)     manager.finishSessionPhotos(keeping: selectedForSave)     await manager.leaveSessionAf…`
@@ -1637,7 +1666,8 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 
 #### 3. CoreDataFernletRepository duplicates LocalFernletRepository's save/snapshot logic verbatim
 
-- **Severity / Category:** low · duplication — ✅ Verified
+- **Severity / Category:** low · duplication — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** Both backends now assemble through the shared `FernletSnapshot.assembled(todayKey:day:from:)` (LocalPersistence); the CoreData `snapshot(from:todayKey:)` is a thin wrapper that adds only the row-vs-blob today fallback.
 - **Location:** `Fernlet/CoreDataFernletRepository.swift:82`  ·  _found by: persistence_
 - **Problem:** saveSnapshot and updateDay (lines 82-98) are line-for-line copies of LocalFernletRepository.saveSnapshot/updateDay (LocalFernletRepository.swift:192-208) including identical asserts; snapshot(from:todayKey:) (lines 213-232) duplicates the 15-field FernletSnapshot construction in LocalFernletRepository.loadSnapshot (lines 169-190) — any new snapshot field must be threaded through both by hand (and through FernletStore.apply); and makeEncoder/makeDecoder are duplicated with a subtle divergence (.prettyPrinted in the local repo vs .sortedKeys in Core Data, doubling local file size for no benefit).
 - **Evidence:** `var database = loadDatabase(todayKey: snapshot.todayKey) database.apply(snapshot) database.rebuildDerivedTables(todayKey: snapshot.todayKey) return saveDatabase(database)`
@@ -1662,7 +1692,8 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 
 #### 6. Recipe row + log menu + share button block copy-pasted four times
 
-- **Severity / Category:** low · duplication — ✅ Verified
+- **Severity / Category:** low · duplication — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** Consolidated into the single `RecipeRow` in `FoodView.swift`.
 - **Location:** `Fernlet/FoodView.swift:99`  ·  _found by: food-logging_
 - **Problem:** The HStack composed of a tappable RecipeRow/SavedRecipeRow, RecipeMealTypeMenu logging closure, and RecipeShareButton building a ProximityRecipeShareDraft appears four times nearly verbatim: FoodView body local recipes (lines 99-114), FoodView saved recipes (116-131), RecipeBookSheet manual recipes (2068-2084), and RecipeBookSheet saved recipes (2095-2111). Each copy repeats the ProximityRecipeShareDraft construction; a future change (e.g. share payload shape) must be edited in four places and the two sheets can drift (the book versions already add dismiss() calls the home versions lack).
 - **Evidence:** `recipeShareDraft = ProximityRecipeShareDraft(     title: recipe.name,     shareText: store.recipeShareText(for: recipe),     payload: store.proximityRecipeSharePayload(for: recipe) )`
@@ -1670,7 +1701,8 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 
 #### 7. webNutritionLookupDisabledMessage and auditWebNutritionLookup duplicated; MealSheet copy is dead code
 
-- **Severity / Category:** low · duplication — ✅ Verified
+- **Severity / Category:** low · duplication — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** The dead `MealSheet` copy is gone; one `webNutritionLookupDisabledMessage` remains (`FoodView.swift:2330`) and it is referenced. NOTE: `Doc-Pass-Anomalies-2026-08-04.md` still lists this as dead code — that scan predates the 2026-08-05 consolidation by one day and is stale on this point.
 - **Location:** `Fernlet/FoodView.swift:1152`  ·  _found by: food-logging_
 - **Problem:** MealSheet (lines 1152-1167) and FoodProductPageImportView (lines 1303-1318) contain byte-identical copies of the webNutritionLookupDisabledMessage computed property and the auditWebNutritionLookup(_:) function. Additionally, MealSheet never reads its webNutritionLookupDisabledMessage at all — when web lookup is disallowed the save path just falls through to local resolution — so that copy is dead code, and the audit helper exists twice for the same WebNutritionLookupPayload record.
 - **Evidence:** `private var webNutritionLookupDisabledMessage: String {     store.settings.aiStatus == .off         ? "Turn off Manual off mode before using web nutrition lookup."`
@@ -1678,7 +1710,8 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 
 #### 8. Duplicated web-lookup audit helpers cause double audit entries for a single lookup
 
-- **Severity / Category:** low · duplication — ✅ Verified
+- **Severity / Category:** low · duplication — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** `auditWebNutritionLookup` no longer exists; exactly one audit point remains (`FoodView.swift:2341`, inside the path that performs the lookup), so a single lookup records a single entry.
 - **Location:** `Fernlet/FoodView.swift:1309`  ·  _found by: ai-services_
 - **Problem:** auditWebNutritionLookup and webNutritionLookupDisabledMessage are copy-pasted verbatim in two views in the same file (meal sheet at lines 1152-1168 and FoodProductPageImportView at lines 1304-1321). Beyond the duplication, the meal-save path records the same lookup twice: the save bar audits at line 1124 then pushes .productSearch, whose destination view auto-runs loadPreview on appear and audits the identical query again at line 1343. The in-session privacy log therefore overstates web egress events, undermining its accuracy as an audit record.
 - **Evidence:** `private func auditWebNutritionLookup(_ mealDescription: String) {     let payload = WebNutritionLookupPayload(mealDescription: mealDescription)`
@@ -1695,7 +1728,8 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 
 #### 10. Identical makeEncoder/makeDecoder JSON factory pairs in five files
 
-- **Severity / Category:** low · duplication — ✅ Verified
+- **Severity / Category:** low · duplication — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** Consolidated into `RowPayloadCoders.makeEncoder/makeDecoder` (FernletFoundation), now used 27× across FernletKit. The remaining separate factories (`WidgetBridge`, `WidgetSharedModels`, `AppGroupRunStateStore`, `SharedRecipeImportQueueWriter`) are the deliberate S3-walled twins that must not link FernletKit.
 - **Location:** `Fernlet/LocalFernletRepository.swift:325`  ·  _found by: dedup-functions_
 - **Problem:** The same private static makeEncoder()/makeDecoder() pair ([.prettyPrinted, .sortedKeys] or [.sortedKeys] + .iso0601 dates) is copy-pasted in: Fernlet/LocalFernletRepository.swift:325-338, Fernlet/SavedRecipe.swift:220-232 (LegacySavedRecipeJSONRepository), Fernlet/SharedRecipeImportQueue.swift:95-107, FernletShareExtension/SharedRecipeImportQueueWriter.swift:72-84, and Fernlet/CoreDataFernletRepository.swift:242-253, plus the same configuration inline at Fernlet/HealthKitService.swift:223-229 (CoreDataHealthKitCacheCleaner). Because some persistence paths re-encode payloads written by others (e.g. CoreDataHealthKitCacheCleaner rewrites FernletDatabaseRecord payloads produced by CoreDataFernletRepository), a strategy change in one copy but not another would corrupt round-tripped data (date format mismatch).
 - **Evidence:** `encoder.outputFormatting = [.prettyPrinted, .sortedKeys]         encoder.dateEncodingStrategy = .iso8601`
@@ -1712,7 +1746,8 @@ _(Promoted to High section as Bug 21 due to architecture impact.)_
 
 #### 12. Root-level codex-implementation-prompts.md is a byte-identical orphan duplicate of the Docs copy
 
-- **Severity / Category:** low · duplication — ✅ Verified
+- **Severity / Category:** low · duplication — ✅ Fixed (verified in code 2026-08-09)
+- **Resolution:** Root copy deleted 2026-08-09; the archived `Docs/Completed Implemtations/` copy is the single one.
 - **Location:** `codex-implementation-prompts.md:1`  ·  _found by: hygiene-config_
 - **Problem:** There are two copies of the 123,528-byte codex-implementation-prompts.md: one at repo root and one at 'Docs/Completed Implemtations/codex-implementation-prompts.md'. diff confirms they are byte-identical. The pbxproj file reference (68B9EBCD, child of the 'Completed Implemtations' group) resolves to the Docs copy — that is the one currently being bundled into the app via the Resources phase; the root copy is an unreferenced orphan that will drift the moment either copy is edited.
 - **Evidence:** `diff -q codex-implementation-prompts.md "Docs/Completed Implemtations/codex-implementation-prompts.md" → identical (123,528 bytes each)`

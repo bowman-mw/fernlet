@@ -1,3 +1,5 @@
+> **CLOSED 2026-08-09 — BRIEFS 1–11 SHIPPED.** These are paste-ready mockup briefs, not an implementation plan; briefs 1–11 were mocked (outputs in [`design-refs/`](../design-refs/)) and their UI is live. Briefs 12–14 (adventure/energy loop, proud-dandelion growth, cumulative insights view) were never answered and have zero code — they are open *design* asks, now carried on [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md) §9 as a design backlog rather than kept alive here.
+
 # Fernlet — Design briefs for the new report features (2026-07-05)
 
 Paste-ready briefs for generating mockups (e.g. with Claude design). Each brief is self-contained.
@@ -224,6 +226,15 @@ photo instead). Macros shown as a small P/C/F trio — **no calorie number anywh
 
 These need a *concept*, not just styling — what they are and how they behave, then the look. Sketches or
 notes are enough to unblock implementation.
+
+> **Status reconciled 2026-08-09.** Briefs 1–11 were mocked and shipped — their design outputs are
+> the HTML files in [`design-refs/`](../design-refs/) and the corresponding UI is live (first aid,
+> breathing, grounding, worry box, companion states, weather/day-night ambiance, milestones, pet
+> cooldown, widget, hearts, barcode handoff). **Briefs 12–14 below were never answered and have zero
+> code** — a repo-wide search finds no adventure/energy-loop, dandelion/growth-stage, or cumulative
+> insights implementation. They are still open *design* asks (each says "what I need from you"), not
+> pending implementation work, and are carried on
+> [RemainingWork-2026-07-19.md](../RemainingWork-2026-07-19.md) as a design backlog.
 
 ## 12. Adventure / rest system (Finch-style energy loop)
 

@@ -58,5 +58,5 @@ Consult these before adding code so existing behavior is reused, not duplicated:
 | [Docs/ProximityFunctionIndex.md](Docs/ProximityFunctionIndex.md) | Proximity & mesh subsystem function index (identity, transport, trust, recipe-share, friend-photo) + duplication hotspots. |
 | [Docs/FernletSpecificationV3.md](Docs/FernletSpecificationV3.md) | Canonical product & architecture spec (privacy-first, module-enforced boundaries). The source of truth for intended behavior. |
 | [Docs/ImplementationPlan.md](Docs/ImplementationPlan.md) | Phased implementation plan and planning assumptions (iOS 26, AI fallbacks, privacy-before-features). |
-| [Docs/CODE_REVIEW_2026-06-12.md](Docs/CODE_REVIEW_2026-06-12.md) | Full multi-agent code review: 193 confirmed findings, resolutions, and author design decisions. |
+| [Docs/Completed Implemtations/CODE_REVIEW_2026-06-12.md](Docs/Completed%20Implemtations/CODE_REVIEW_2026-06-12.md) | Archived multi-agent code review: 195 findings, 185 fixed. The 10 survivors live on the tracker (RemainingWork §9), so read this for resolutions and author design decisions, not for open work. |
 | `Docs/Completed Implemtations/` | Per-feature implementation plans that have already shipped (HealthKit, mesh, period/intimacy, startup/biometric, etc.). |

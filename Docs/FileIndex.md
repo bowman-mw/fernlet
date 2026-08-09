@@ -690,15 +690,12 @@ layer and live in-source at `Documentation.docc/`; the tables below are the plan
 | `Docs/AI-Provider-Ladder-2026-07-23.md` | The routed provider ladder. Provider seam shipped; the cloud/PCC, BYOK, and iOS-27 tracks remain gated. |
 | `Docs/AI-Feature-Expansion-2026-07-23.md` | Seven features riding the ladder, and the canonical build order for both AI docs. F3/F4/F5 shipped; F6/F7 deferred by decision D-C. |
 | `Docs/SPM-Module-Carveup-Plan.md` | The `FernletKit` carve-up: the S3 compile-time privacy wall and cross-platform layering. One optional item remains (§14 AI-file inversions). |
-| `Docs/CODE_REVIEW_2026-06-12.md` | 2026-06-12 multi-agent review: 193 confirmed findings with resolutions and author decisions. **Still open: 1 High, 20 Medium.** |
 | `Docs/Doc-Pass-Anomalies-2026-08-04.md` | Bugs, dead code, and smells logged during the DocC pass. **Never triaged** — several entries are real defects, not smells. |
 | `Docs/Meal-Estimation-Overhaul-Plan.md` | Meal-estimation overhaul. Partially shipped; the chain-restaurant importer and dynamic product-image discovery were not re-audited item-by-item. |
 | `Docs/Multi-Device-Without-iCloud-Design-2026-06-29.md` | Multi-device without iCloud. Phase 1 shipped; Phases 2–3 (owned-device pairing, mesh backup transfer, offline escrow, live merge) unstarted. |
 | `Docs/Custom-Clothing-Plan-2026-06-29.md` | Custom clothing: Increment 1 shipped (grid editor / wardrobe); Increments 2 (coins) and 3 (in-person friend shop) pending. |
 | `Docs/Localization-Plan-2026-07-19.md` | es/fr/de localization. Nothing implemented; Phase 0 fixes are live locale bugs even in English. |
 | `Docs/Sealed-Backup-Escrow-Recovery-FollowUp-2026-06-28.md` | Sealed-backup escrow follow-ups, including BIP39 recovery codes. Not started. |
-| `Docs/UI-UX-Redesign-Brief-2026-07-08.md` | The parchment redesign brief. Largely delivered through the UX-Batch rounds; **4 questions remain open** (global IA, Settings debug surfaces, Dynamic Type range, shop affordance). |
-| `Docs/Design-Briefs-Report-Features-2026-07-05.md` | Paste-ready mockup briefs. Briefs 1–11 shipped; **12–14 (adventure/energy loop, proud-dandelion growth, cumulative insights) are unbuilt open design asks.** |
 | `Docs/Privacy-Policy.md` | The published privacy policy text, mirrored by the in-app view. |
 | `Docs/App-Privacy-Nutrition-Labels.md` | Draft answers for the App Store Connect App Privacy questionnaire (owner-entered). |
 | `Docs/PrivacyWipeCoverage.md` | The enforced delete-all coverage checklist, backed by `PrivacyWipeCoverageTests`. |
@@ -729,6 +726,9 @@ carried to the tracker.
 | `Docs/Completed Implemtations/UX-Batch-Continuation-2026-07-17b.md` | UX batch round 2, including the goal preset cards. |
 | `Docs/Completed Implemtations/UX-Batch-Continuation-2026-07-18.md` | UX batch round 3 plus the workout Live Activity. |
 | `Docs/Completed Implemtations/Plan-Goal-Presets-And-Workout-LiveActivity-2026-07-17.md` | Goal presets and the guided-workout Live Activity design. |
+| `Docs/Completed Implemtations/CODE_REVIEW_2026-06-12.md` | Multi-agent review, triage complete: 195 findings, 185 fixed. The 10 survivors are on the tracker (§9). |
+| `Docs/Completed Implemtations/UI-UX-Redesign-Brief-2026-07-08.md` | The parchment redesign brief, delivered via the UX-Batch rounds. Two of its four open questions turned out to be answered by shipped code; two moved to the tracker. |
+| `Docs/Completed Implemtations/Design-Briefs-Report-Features-2026-07-05.md` | Paste-ready mockup briefs; 1–11 shipped (outputs in `design-refs/`). Briefs 12–14 are unanswered design asks, now on the tracker. |
 | `Docs/Completed Implemtations/Fernlet-Review-and-Plan-Updates.md` | 2026-05-28 architecture review; its SEC findings were fixed by the later hardening work. Superseded as a live document. |
 | `Docs/Completed Implemtations/RemainingWork-2026-06-23.md` | The previous work tracker. |
 | `Docs/Completed Implemtations/Day-PerRow-Split-Plan-2026-06-29.md` | The per-row `DayRecord` split. |
