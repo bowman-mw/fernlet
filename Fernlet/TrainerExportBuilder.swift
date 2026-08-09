@@ -237,8 +237,12 @@ extension FernletStore {
     /// hand the summary to a coach (share sheet) until the dedicated in-person `fernlet-coach` transport
     /// ships. Writes through `writeProtectedExport` into `dataExportsDirectory` (atomic +
     /// `.completeFileProtection`, like the Phase-1 data export), so the file — injury notes, sickness
-    /// days, wellbeing scores in the clear — is covered by the launch sweep, the share-completion purge,
-    /// and "Delete everything" by construction instead of surviving in the tmp/ root.
+    /// days, wellbeing scores in the clear — is covered by the launch sweep, the pre-export sweep, and
+    /// "Delete everything" by construction instead of surviving in the tmp/ root.
+    ///
+    /// Those sweeps are the backstop, not the primary lifetime: `TrainerExportView` deletes this exact
+    /// file through ``discardExportedFile(at:)`` the moment the share sheet finishes (and if the user
+    /// changes the included options or leaves the screen without sharing).
     func writeTrainerExportFile(options: TrainerExportOptions) -> URL? {
         guard let data = encodeTrainerExport(buildTrainerExport(options: options)) else { return nil }
         return try? writeProtectedExport(data, kind: "training")

@@ -106,20 +106,3 @@ struct ConnectionInspectorHistoryView: View {
         let url: URL
     }
 }
-
-#if canImport(UIKit)
-/// Thin `UIViewControllerRepresentable` wrapper around `UIActivityViewController` for sharing the
-/// exported log file.
-///
-/// SwiftUI's `ShareLink` isn't used here because the file URL is produced on demand; this keeps
-/// the plain items-array presentation.
-private struct ActivityShareView: UIViewControllerRepresentable {
-    let items: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
-#endif

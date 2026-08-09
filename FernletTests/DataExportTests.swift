@@ -101,6 +101,46 @@ final class DataExportTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: staleURL.path), "a lingering older export survived the purge")
     }
 
+    /// The trainer share sheet's completion handler deletes the ONE file it prepared, not the whole
+    /// exports directory: a data export prepared in Privacy & Data may still be in flight. Asserts both
+    /// halves — the shared summary is gone, the unrelated export it must not touch survives.
+    func testDiscardExportedFileRemovesOnlyTheSharedFile() throws {
+        let (store, _, _) = makeTestStoreWithRepositories()
+        defer { store.purgeDataExports() }
+
+        // Data export first: its write path sweeps the directory, so preparing it second would take the
+        // trainer summary with it. Trainer-then-share is the real order a user hits anyway.
+        let dataURL = try store.writeDataExportFile()
+        let trainerURL = try XCTUnwrap(store.writeTrainerExportFile(options: .coreOnly))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: trainerURL.path), "precondition: no trainer summary")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dataURL.path), "precondition: no data export")
+
+        XCTAssertTrue(store.discardExportedFile(at: trainerURL), "discard reported failure")
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: trainerURL.path),
+                       "the shared trainer summary outlived the share")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dataURL.path),
+                      "discarding one export took an unrelated in-flight export with it")
+
+        // Idempotent: a second completion (or a purge that already ran) is success, not failure.
+        XCTAssertTrue(store.discardExportedFile(at: trainerURL), "an already-deleted file should report success")
+    }
+
+    /// The single-file discard is reachable from a share-sheet completion handler, so it refuses any URL
+    /// outside the exports directory rather than becoming an arbitrary-file delete.
+    func testDiscardExportedFileRefusesPathsOutsideTheExportsDirectory() throws {
+        let (store, _, _) = makeTestStoreWithRepositories()
+
+        let outsider = FileManager.default.temporaryDirectory
+            .appendingPathComponent("not-an-export-\(UUID().uuidString).json")
+        try Data("{}".utf8).write(to: outsider, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: outsider) }
+
+        XCTAssertFalse(store.discardExportedFile(at: outsider), "a file outside the exports directory was accepted")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outsider.path),
+                      "a file outside the exports directory was deleted")
+    }
+
     /// Belt-and-braces: a kill/crash/jettison while the share sheet was up leaves a previous plaintext
     /// dump on disk, so the completion-handler purge never fired. The NEXT export's write path must sweep
     /// that survivor before writing — no two plaintext dumps ever coexist.

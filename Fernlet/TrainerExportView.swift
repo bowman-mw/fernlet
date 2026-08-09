@@ -15,6 +15,7 @@ struct TrainerExportView: View {
 
     @State private var options = TrainerExportOptions.coreOnly
     @State private var preparedFile: URL?
+    @State private var sharePayload: SharePayload?
     @State private var prepareError = false
 
     private var preview: TrainerExportBundle { store.buildTrainerExport(options: options) }
@@ -35,12 +36,39 @@ struct TrainerExportView: View {
             .background(Color.parchment)
             .navigationTitle("Share with a trainer")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
-            .onChange(of: options) { _, _ in preparedFile = nil }   // options changed → re-prepare
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    // Leaving with a prepared-but-never-shared summary shouldn't strand the plaintext
+                    // file either. Swipe-to-dismiss still falls through to the purge backstops.
+                    Button("Done") { discardPreparedFile(); dismiss() }
+                }
+            }
+            // Options changed → the prepared file no longer matches what the screen describes, so it must
+            // not be shareable. Delete it rather than just forgetting it: a stale plaintext summary
+            // outliving the choice that produced it is the exact lifetime this screen is trying to shorten.
+            .onChange(of: options) { _, _ in discardPreparedFile() }
+            .sheet(item: $sharePayload) { payload in
+                ActivityShareView(items: [payload.url]) {
+                    // The summary is plaintext training + nutrition data (and, when opted in, sickness
+                    // days and wellbeing scores). Delete it here — after the chosen activity has finished
+                    // reading the file, on both the shared and cancelled paths — instead of letting it
+                    // linger until the next launch/pre-export/delete-everything sweep. Only THIS file:
+                    // a full data export may be prepared or in flight in Privacy & Data, and
+                    // `purgeDataExports()` would take that with it.
+                    store.discardExportedFile(at: payload.url)
+                    preparedFile = nil
+                }
+            }
             .alert("Couldn't prepare the summary", isPresented: $prepareError) {
                 Button("OK", role: .cancel) {}
             } message: { Text("Please try again.") }
         }
+    }
+
+    /// Removes the prepared plaintext summary and returns the screen to its "Prepare summary" state.
+    private func discardPreparedFile() {
+        if let url = preparedFile { store.discardExportedFile(at: url) }
+        preparedFile = nil
     }
 
     // MARK: - Sections
@@ -98,7 +126,12 @@ struct TrainerExportView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
 
             if let url = preparedFile {
-                ShareLink(item: url) {
+                // Deliberately NOT a `ShareLink`: that has no completion callback, so the plaintext
+                // summary would have no seam to be deleted at. `ActivityShareView`'s `onFinish` is that
+                // seam — see the `.sheet(item:)` above.
+                Button {
+                    sharePayload = SharePayload(url: url)
+                } label: {
                     Label("Share summary…", systemImage: "square.and.arrow.up")
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.parchment)
@@ -106,6 +139,7 @@ struct TrainerExportView: View {
                         .padding(.vertical, 13)
                         .background(Color.moss, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
                 }
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("trainer.share")
             } else {
                 Button {
@@ -148,6 +182,13 @@ struct TrainerExportView: View {
 
     private func cardTitle(_ text: String) -> some View {
         Text(text).font(.fernlet(.label)).foregroundStyle(Color.slate)
+    }
+
+    /// The prepared summary's URL, wrapped `Identifiable` so `.sheet(item:)` can present the share
+    /// sheet for it. A fresh `id` per tap means re-sharing the same file re-presents.
+    private struct SharePayload: Identifiable {
+        let id = UUID()
+        let url: URL
     }
 
     private func bullet(_ text: String, tint: Color = Color.moss) -> some View {

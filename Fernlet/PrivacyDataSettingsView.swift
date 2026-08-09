@@ -410,25 +410,6 @@ struct PrivacyDataSettingsView: View {
         let url: URL
     }
 
-    /// Wraps the system share sheet so the export file can be saved/shared.
-    ///
-    /// `onFinish` fires once the activity completes or is cancelled — the seam where the plaintext
-    /// export is cleaned up (`purgeDataExports`), safely after the chosen activity has finished
-    /// reading the file.
-    private struct ActivityShareView: UIViewControllerRepresentable {
-        let items: [Any]
-        var onFinish: () -> Void = {}
-        func makeUIViewController(context: Context) -> UIActivityViewController {
-            let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
-            // Fires for both the shared-successfully and cancelled paths, after the chosen activity has
-            // finished reading the file — so deleting here can't strand a half-shared export or race a
-            // still-in-flight copy.
-            controller.completionWithItemsHandler = { _, _, _, _ in onFinish() }
-            return controller
-        }
-        func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-    }
-
     private var iCloudCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel("iCloud")

@@ -414,6 +414,33 @@ extension FernletStore {
         return ok
     }
 
+    /// Deletes ONE prepared export file, and only if it lives in `dataExportsDirectory`.
+    ///
+    /// This is the share-sheet completion seam for a *single* export: the trainer/nutritionist summary
+    /// and the full data export are prepared independently, so finishing one share must not delete a file
+    /// the other share is still reading — which is exactly what the broad ``purgeDataExports()`` would do.
+    /// The directory guard keeps a completion handler from becoming an arbitrary-file delete.
+    ///
+    /// A file that is already gone counts as success: the property being asserted is "no plaintext export
+    /// left on disk", not "this call did the removing". Failure is non-fatal — the launch sweep, the
+    /// pre-export sweep, and "Delete everything" all still cover the file as a backstop.
+    /// - Parameter url: The export file URL returned by ``writeProtectedExport(_:kind:)``.
+    /// - Returns: `true` when the file is gone afterwards.
+    @discardableResult
+    func discardExportedFile(at url: URL) -> Bool {
+        let fileManager = FileManager.default
+        let target = url.standardizedFileURL
+        guard target.deletingLastPathComponent().standardizedFileURL.path
+                == Self.dataExportsDirectory.standardizedFileURL.path else { return false }
+        guard fileManager.fileExists(atPath: target.path) else { return true }
+        do {
+            try fileManager.removeItem(at: target)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     // MARK: - Projection helpers (static, pure)
 
     private static func projectDay(_ day: FernletDay, score: DailyHealthScore?, target: Int, recipeNameByID: [UUID: String] = [:]) -> FernletDataExport.DayExport {
