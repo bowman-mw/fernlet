@@ -16,6 +16,7 @@
 
 import SwiftUI
 import FernletDomainModel
+import FernletFoundation
 import FernletLock
 import FernletUI
 
@@ -72,6 +73,10 @@ struct FernletLockGateModifier: ViewModifier {
     @State private var showSetup = false
     /// Presents the destructive "Reset app lock" confirmation dialog.
     @State private var showReset = false
+    /// Presents the nothing-silent alert when ``FernletLockService/reset()`` destroyed the keys and
+    /// the rows but could not rebuild the sealed store file. Swallowing that (it used to be
+    /// `try?`) would have promised a clean store the app did not deliver.
+    @State private var showResetRebuildFailure = false
     /// Suppresses the viewDisappeared re-lock during scene inactive/active transitions
     /// so Face ID presenting its system dialog doesn't cause a spurious re-lock loop.
     @State private var suppressRelock = false
@@ -111,11 +116,25 @@ struct FernletLockGateModifier: ViewModifier {
             titleVisibility: .visible
         ) {
             Button("Reset app lock", role: .destructive) {
-                try? lockService.reset()
+                do {
+                    try lockService.reset()
+                } catch {
+                    // The keys and the rows are gone either way; what failed is re-creating the
+                    // store file, which is the part the user is told about rather than left to
+                    // discover.
+                    print("[Fernlet] App-lock reset could not rebuild the sealed store: \(error)")
+                    FernletAuditLog.log("lock.reset.rebuild.failed")
+                    showResetRebuildFailure = true
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Private journal, cycle, and intimacy notes will become permanently unreadable. HealthKit cycle and intimacy entries remain in Apple Health.")
+        }
+        .alert("App lock reset", isPresented: $showResetRebuildFailure) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet.")
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {

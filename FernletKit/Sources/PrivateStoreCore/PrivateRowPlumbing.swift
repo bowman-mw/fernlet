@@ -57,7 +57,7 @@ public enum PrivateRowPlumbing {
             let rows = try context.fetch(request)
             guard !rows.isEmpty else { return false }
             rows.forEach(context.delete)
-            try context.save()
+            try context.saveSealed()
             try PrivatePersistentHistoryPruner.prune(context: context)
             return true
         }

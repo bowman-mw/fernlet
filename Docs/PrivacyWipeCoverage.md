@@ -40,14 +40,19 @@ Deleting them is a **two-step contract**, both steps keyless so they work while 
    user-space code on iOS can guarantee otherwise) — those blocks stay under the
    `FileProtection.complete` class key, which is evicted while the device is locked.
 
-Order is row-delete → rebuild, deliberately: a rebuild that fails still leaves the rows gone.
+Order is row-delete → rebuild, deliberately: a rebuild that fails still leaves the rows gone. And a
+failed rebuild never leaves the app **storeless** — a failed detach leaves the old store attached and
+skips the file work, a failed destroy still re-adds, and a failed re-add retries once, logs, and is
+healed by `reloadStoreIfNeeded()` on the next foreground. That matters for privacy, not just
+reliability: with no sealed store every seal fails, and a failed journal seal deliberately keeps its
+plaintext in the days blob, which mirrors to iCloud when sync is on.
 
 **Only destroying the content key is an instant honest erase** of the logical content, whatever
 physical residue survives. Hence two tiers of promise, and the wording each one is allowed:
 
 | Path | Content key | Honest claim |
 | --- | --- | --- |
-| `FernletLockService.reset()` — Settings → "Reset app lock" (and the duress WIPE that reuses the same seam) | **Destroyed**: `KeychainItem.deleteAll(service:)` sweeps every generic password under `com.fernlet.lock`, `SecureEnclaveContentKeyWrap.deleteKey` removes the SE wrap outside that sweep | **Fully honest** — crypto-erased *and* the file rebuilt |
+| `FernletLockService.reset()` — Settings → "Reset app lock" (and the duress WIPE that reuses the same seam) | **Destroyed — all of them**: `KeychainItem.deleteAll(service:)` sweeps every generic password under `com.fernlet.lock`; `SecureEnclaveContentKeyWrap.deleteKey` removes the SE wrap outside that sweep; and the same `deleteAll` sweep runs over each of `sealedContentKeyServices` (`com.fernlet.journal`), taking the journal and Worry Box **device fallback keys** that seal those rows whenever the lock is closed. All three, because two of the four sealed entities are not always sealed under the content key — without the third sweep "crypto-erased" would be false for every row written while locked | **Fully honest** — crypto-erased *and* the file rebuilt. (One exception stays flagged, not fixed: the locked-note buffer key `com.fernlet.narrative-buffer` is not swept — owner call, see the deliberate-exceptions table) |
 | `FernletStore.deleteAllData` — "Delete everything" | **Kept by design** (see the deliberate-exceptions table: losing your data must not silently un-lock the app) | **Bounded-honest** — no live ciphertext; any residue is class-key-protected and key-bound. **Not** "crypto-erased"; do not upgrade this wording |
 
 ## Cleared by Delete everything

@@ -293,7 +293,11 @@ struct FernletLockCryptoTests {
 
     @MainActor
     private func freshService() -> FernletLockService {
-        let service = FernletLockService(keychainService: "com.fernlet.lock.test.\(UUID().uuidString)")
+        let service = FernletLockService(
+            keychainService: "com.fernlet.lock.test.\(UUID().uuidString)",
+            // reset() sweeps the sealed-content device keys too; keep that off the real service.
+            sealedContentKeyServices: ["com.fernlet.journal.test.\(UUID().uuidString)"]
+        )
         try? service.reset()
         return service
     }

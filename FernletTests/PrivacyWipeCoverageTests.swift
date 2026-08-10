@@ -293,6 +293,97 @@ struct PrivacyWipeCoverageTests {
         }
         // And it really did find a body — an empty string trivially contains no token.
         #expect(body.contains("destroyPersistentStore"), "rebuildStore() no longer destroys the store file — the scan above is scanning the wrong function.")
+
+        // The recovery half of the rebuild is on the same locked path, so it inherits the same
+        // invariant: healing a storeless coordinator must never need a key either.
+        let recovery = try Self.functionBody(matching: "public func reloadStoreIfNeeded() throws", in: source)
+        for token in ["contentKey", "decrypt", "ColumnCrypto", "unwrap", "SymmetricKey"] {
+            #expect(!recovery.contains(token), "reloadStoreIfNeeded() names '\(token)': the sealed-store recovery must stay keyless.")
+        }
+        #expect(recovery.contains("addStore"), "reloadStoreIfNeeded() no longer re-adds the store — the scan above is scanning the wrong function.")
+    }
+
+    /// No-storeless-app invariant, mechanically. A rebuild that leaves the coordinator with zero
+    /// persistent stores is worse than the residue it exists to remove: every sealed write fails for
+    /// the rest of the process, and `JournalSealingCoordinator` deliberately keeps a failed seal's
+    /// PLAINTEXT in the days blob, which mirrors to iCloud when sync is on. Three guards, all of
+    /// which have been missing at some point: the detach must not bail out mid-sequence, the re-add
+    /// must retry, and the app must call the self-heal on foreground.
+    @Test func theSealedStoreRebuildCannotLeaveTheAppStoreless() throws {
+        let root = try Self.repoRoot()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("FernletKit/Sources/PrivateStoreCore/PrivatePersistenceController.swift"),
+            encoding: .utf8
+        )
+        let body = try Self.functionBody(matching: "public func rebuildStore() throws", in: source)
+        #expect(
+            body.contains("removeFailure = error"),
+            "the detach is back to an unguarded `try`: a throw there exits before the re-add and leaves the coordinator with no store at all. Capture, continue, report."
+        )
+        #expect(
+            body.contains("guard coordinator.persistentStores.isEmpty"),
+            "rebuildStore() no longer checks that the store actually detached before destroying its file."
+        )
+        #expect(
+            body.contains("try addStore(at: storeURL, description: description)"),
+            "rebuildStore() no longer re-adds through the shared add path."
+        )
+        #expect(
+            source.contains("public func reloadStoreIfNeeded() throws"),
+            "the sealed-store self-heal is gone — a failed re-add would persist for the whole session with nothing to recover it."
+        )
+        #expect(
+            source.contains("public var isStoreLoaded: Bool"),
+            "the storeless state is undetectable again: nothing in the app reads PrivatePersistenceController.didFailToLoad."
+        )
+
+        let app = try String(contentsOf: root.appendingPathComponent("Fernlet/FernletApp.swift"), encoding: .utf8)
+        #expect(
+            app.contains("reloadStoreIfNeeded()"),
+            "FernletApp no longer heals the sealed store on foreground — the dominant failure (the device auto-locking mid-wipe) would never recover."
+        )
+
+        // The uncatchable-crash guard: a save against a storeless coordinator raises an ObjC
+        // exception no `catch` in the repositories can see. Every sealed writer must go through
+        // `saveSealed()`, which turns it into a Swift error.
+        for repository in [
+            "FernletKit/Sources/PrivateMemoryStore/JournalNarrativeRepository.swift",
+            "FernletKit/Sources/PrivateMemoryStore/WorryNarrativeRepository.swift",
+            "FernletKit/Sources/PrivateHealthStore/IntimacyLogRepository.swift",
+            "FernletKit/Sources/PrivateHealthStore/MenstrualNarrativeRepository.swift",
+            "FernletKit/Sources/PrivateStoreCore/PrivateRowPlumbing.swift"
+        ] {
+            let repositorySource = try String(contentsOf: root.appendingPathComponent(repository), encoding: .utf8)
+            #expect(
+                !repositorySource.contains("try context.save()"),
+                "\(repository) saves the sealed context with a bare save(): against a storeless coordinator that is an uncatchable SIGABRT, not a throw. Use saveSealed()."
+            )
+        }
+    }
+
+    /// `reset()`'s "fully honest — crypto-erased" tier is only true if EVERY key that seals a byte in
+    /// the private store dies with it. Two of the four sealed entities (journal, Worry Box) are
+    /// sealed under device fallback keys in a different keychain service whenever the lock is closed,
+    /// so the single lock-service sweep was not enough. Behavioral coverage lives in
+    /// `FernletLockServiceTests.resetDestroysEverySealedContentKeyNotJustTheLockService`; this pins
+    /// the shape so the sweep cannot be refactored out while the docs keep the claim.
+    @Test func resetSweepsTheSealedContentKeyServicesItsDocsClaim() throws {
+        let root = try Self.repoRoot()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("FernletKit/Sources/FernletLock/FernletLockService.swift"),
+            encoding: .utf8
+        )
+        let body = try Self.functionBody(matching: "public func reset() throws", in: source)
+        #expect(
+            body.contains("for service in sealedContentKeyServices"),
+            "reset() stopped sweeping the journal/Worry Box device keys, but Docs/PrivacyWipeCoverage.md still calls it crypto-erased."
+        )
+        #expect(
+            source.contains("public let sealedContentKeyServices: [String]"),
+            "the sweep is no longer injectable — a test's reset() would destroy the simulator's real sealed-content keys."
+        )
+        let doc = try String(contentsOf: root.appendingPathComponent("Docs/PrivacyWipeCoverage.md"), encoding: .utf8)
+        #expect(doc.contains("sealedContentKeyServices"), "the wipe-coverage doc no longer documents the sealed-content key sweep.")
     }
 
     /// The in-memory seam still has to exist: the emptied meal/progress/recipe stores drop their

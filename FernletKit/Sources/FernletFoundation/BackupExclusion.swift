@@ -32,14 +32,28 @@ public nonisolated enum BackupExclusion {
     ///   - excluded: The value to write to `isExcludedFromBackupKey`.
     ///   - includeSupportDir: Whether to also exclude the `.<StoreName>_SUPPORT` directory. Pass
     ///     `true` for stores whose attributes use `allowsExternalBinaryDataStorage`.
+    /// The sibling `.<StoreName>_SUPPORT` directory Core Data spills attributes flagged
+    /// `allowsExternalBinaryDataStorage` into once their value passes ~100 KB.
+    ///
+    /// The ONE spelling of that path in the codebase, deliberately: ``apply(storeURL:excluded:includeSupportDir:)``
+    /// flags it for backup exclusion and `PrivatePersistenceController.rebuildStore()` deletes it
+    /// during the sealed-store rebuild, and the two must never drift onto different directories —
+    /// a rebuild aimed at the wrong path would leave standalone ciphertext blob files on disk while
+    /// reporting a clean wipe. (It used to be two copies of the same expression; it is now one.)
+    ///
+    /// - Parameter storeURL: The `.sqlite` store file URL.
+    /// - Returns: The support directory URL. Pure path arithmetic — the directory need not exist.
+    public static func supportDirectory(for storeURL: URL) -> URL {
+        storeURL.deletingLastPathComponent()
+            .appendingPathComponent(".\(storeURL.deletingPathExtension().lastPathComponent)_SUPPORT", isDirectory: true)
+    }
+
     public static func apply(storeURL: URL, excluded: Bool, includeSupportDir: Bool) {
         var urls = [storeURL,
                     URL(fileURLWithPath: storeURL.path + "-wal"),
                     URL(fileURLWithPath: storeURL.path + "-shm")]
         if includeSupportDir {
-            let supportDir = storeURL.deletingLastPathComponent()
-                .appendingPathComponent(".\(storeURL.deletingPathExtension().lastPathComponent)_SUPPORT", isDirectory: true)
-            urls.append(supportDir)
+            urls.append(supportDirectory(for: storeURL))
         }
         for url in urls {
             do {

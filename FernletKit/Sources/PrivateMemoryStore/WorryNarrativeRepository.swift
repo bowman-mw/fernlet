@@ -106,7 +106,7 @@ public final class WorryNarrativeRepository: WorryStoring {
                 object.setValue(worry.id, forKey: "id")
                 object.setValue(worry.createdAt, forKey: "createdAt")
                 object.setValue(try crypto.sealString(worry.text, contentKey: contentKey), forKey: "textCiphertext")
-                try context.save()
+                try context.saveSealed()
             } catch {
                 context.delete(object)
                 throw error
@@ -142,7 +142,7 @@ public final class WorryNarrativeRepository: WorryStoring {
             let request = NSFetchRequest<NSManagedObject>(entityName: Self.entityName)
             request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
             try context.fetch(request).forEach(context.delete)
-            try context.save()
+            try context.saveSealed()
             try PrivatePersistentHistoryPruner.prune(context: context)
         }
     }
@@ -174,7 +174,7 @@ public final class WorryNarrativeRepository: WorryStoring {
             }
             guard mutated else { return }
             do {
-                try context.save()
+                try context.saveSealed()
             } catch {
                 context.rollback()
                 throw error

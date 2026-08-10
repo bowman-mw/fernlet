@@ -171,7 +171,7 @@ public nonisolated final class MenstrualNarrativeRepository {
                     let object = NSEntityDescription.insertNewObject(forEntityName: "MenstrualNarrative", into: context)
                     try apply(narrative, to: object, contentKey: contentKey, createdAt: narrative.createdAt)
                 }
-                try context.save()
+                try context.saveSealed()
             } catch {
                 context.rollback()
                 throw error
@@ -212,7 +212,7 @@ public nonisolated final class MenstrualNarrativeRepository {
             let rows = try context.fetch(request)
             guard !rows.isEmpty else { return }
             rows.forEach(context.delete)
-            try context.save()
+            try context.saveSealed()
             try PrivatePersistentHistoryPruner.prune(context: context)
             // The deletion itself is the proof this device diverged from the cloud snapshot: the row it
             // just removed may predate the latch (pre-upgrade data never latched on insert), and the

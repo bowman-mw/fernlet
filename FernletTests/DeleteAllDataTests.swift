@@ -5,6 +5,7 @@ import Testing
 // @testable for the internal `save`, which seeds the share-extension inbox the way the extension does.
 @testable import AppServices
 import FernletDomainModel
+import FernletFoundation
 import FernletLock
 import FernletPersistence
 import HealthKitGateway
@@ -591,6 +592,8 @@ struct DeleteAllDataTests {
 
         let lock = FernletLockService(
             keychainService: "com.fernlet.lock.test.p1a.\(UUID().uuidString)",
+            // reset() sweeps the sealed-content device keys too; keep that off the real service.
+            sealedContentKeyServices: ["com.fernlet.journal.test.p1a.\(UUID().uuidString)"],
             privatePersistenceController: controller
         )
         defer { try? lock.reset() }
@@ -628,6 +631,105 @@ struct DeleteAllDataTests {
         for named in ["your cycle notes", "your intimate logs", "your journal entries", "your Worry Box notes", "your sealed store"] {
             #expect(!outcome.incompleteStores.contains(named), "\(named) reported incomplete after a locked wipe")
         }
+    }
+
+    /// The `_SUPPORT` half of the rebuild, which `destroyPersistentStore` does not cover: sealed
+    /// columns over ~100 KB are spilled by Core Data into `.FernletPrivate_SUPPORT` as standalone
+    /// ciphertext files that would otherwise outlive the store that named them.
+    ///
+    /// The `fileExists` assertion before the rebuild is the load-bearing one: it is what pins the
+    /// SPELLING of that directory. The rebuild and `BackupExclusion` used to compute the path with
+    /// two separate copies of the same expression (with a doc comment claiming there was one), so
+    /// either could have drifted onto a directory the other never touched — and the removal was
+    /// `try?`, which makes a wrong path indistinguishable from "nothing to remove".
+    @Test func theRebuildRemovesTheExternalBlobDirectoryTheDestroyLeavesBehind() throws {
+        let directory = try Self.makeScratchStoreDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("FernletPrivate.sqlite")
+        let controller = PrivatePersistenceController(storeURL: storeURL)
+        let repository = JournalNarrativeRepository(controller: controller)
+        let marker = "P1A-BLOB-\(UUID().uuidString)"
+
+        // Big enough that `allowsExternalBinaryDataStorage` externalizes the sealed text column.
+        try repository.insert(
+            JournalNarrative(
+                id: UUID(),
+                dayKey: marker,
+                tag: .quiet,
+                entryDate: Date(),
+                text: String(repeating: "a very long sealed thought. ", count: 8_000),
+                emotions: ["tired"],
+                createdAt: Date(),
+                updatedAt: Date()
+            ),
+            contentKey: SymmetricKey(size: .bits256)
+        )
+        let supportDirectory = BackupExclusion.supportDirectory(for: storeURL)
+        #expect(
+            FileManager.default.fileExists(atPath: supportDirectory.path),
+            "precondition: no external-blob directory at the ONE shared spelling — either the payload stopped externalizing or the rebuild and BackupExclusion have drifted onto different paths"
+        )
+
+        try controller.purgeEncryptedEntities()
+        try controller.rebuildStore()
+
+        #expect(
+            !FileManager.default.fileExists(atPath: supportDirectory.path),
+            "the external-blob directory outlived the store rebuild — its standalone ciphertext files are still on disk"
+        )
+        #expect(!Self.storeFiles(in: directory).contains(marker), "the deleted row's bytes survived the store rebuild")
+    }
+
+    /// A rebuild whose re-add fails must never leave the process holding a coordinator with ZERO
+    /// stores, because that state is worse than the residue the rebuild exists to remove: every
+    /// sealed write fails for the rest of the session, and `JournalSealingCoordinator` deliberately
+    /// keeps a failed seal's PLAINTEXT in the days blob — which mirrors to iCloud when sync is on.
+    ///
+    /// Forced deterministically by making the store's directory unwritable, so both the destroy and
+    /// the re-add fail. Three things are asserted: the failure is reported (not silent), a sealed
+    /// save in that window throws a Swift error instead of tripping Core Data's uncatchable
+    /// "no persistent stores" exception (the test COMPLETING is that assertion), and the next
+    /// foreground's `reloadStoreIfNeeded()` heals it so sealing resumes.
+    @Test func aFailedRebuildIsReportedHealsAndNeverTrapsASealedSave() throws {
+        let directory = try Self.makeScratchStoreDirectory()
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let storeURL = directory.appendingPathComponent("FernletPrivate.sqlite")
+        let controller = PrivatePersistenceController(storeURL: storeURL)
+        let repository = JournalNarrativeRepository(controller: controller)
+        let key = SymmetricKey(size: .bits256)
+        try repository.insert(
+            JournalNarrative(id: UUID(), dayKey: "2026-08-10", tag: .quiet, entryDate: Date(), text: "before", emotions: [], createdAt: Date(), updatedAt: Date()),
+            contentKey: key
+        )
+        #expect(controller.isStoreLoaded, "precondition: the store never loaded")
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: directory.path)
+        #expect(throws: (any Error).self) { try controller.rebuildStore() }
+        #expect(controller.didFailToLoad, "a storeless controller must SAY so — nothing else can detect the state")
+        #expect(!controller.isStoreLoaded, "precondition: the re-add unexpectedly succeeded, so this test proves nothing")
+
+        // The uncatchable-crash guard. A bare `save()` here raises NSInternalInconsistencyException,
+        // which is not a Swift error and would abort the whole test runner rather than fail a test.
+        #expect(throws: PrivatePersistenceController.RebuildError.self) {
+            try controller.container.viewContext.saveSealed()
+        }
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        try controller.reloadStoreIfNeeded()
+        #expect(controller.isStoreLoaded, "the foreground self-heal did not re-add the sealed store")
+        #expect(!controller.didFailToLoad)
+        // And sealing works again — the custody consequence, not just the flag.
+        try repository.insert(
+            JournalNarrative(id: UUID(), dayKey: "2026-08-11", tag: .good, entryDate: Date(), text: "after", emotions: [], createdAt: Date(), updatedAt: Date()),
+            contentKey: key
+        )
+        #expect(try repository.narratives(forDayKey: "2026-08-11", contentKey: key).count == 1)
+        // Idempotent: the app calls it on EVERY foreground, so the common case must be a no-op.
+        try controller.reloadStoreIfNeeded()
+        #expect(controller.isStoreLoaded)
     }
 
     /// A scratch directory for an ON-DISK sealed store. In-memory (`/dev/null`) controllers cannot
