@@ -20,9 +20,13 @@ The module has three cooperating pieces. ``FernletLockSetupView`` is the five-st
 first-time configuration wizard (lock-kind picker, entry, confirmation, optional biometric
 toggle, and a mandatory no-recovery disclosure) that ends in
 `FernletLockService.configure(credential:grantingScope:)`. ``FernletLockView`` is the unlock screen: it
-renders the credential prompt for the configured kind, auto-triggers Face ID / Touch ID at
-most once per lock session via the service's `consumeAutoBiometricPromptOpportunity()`
-handshake, and mirrors the service's failure ladder — remaining-attempt warnings, an
+renders the credential prompt for the configured kind, offers Face ID / Touch ID only while
+the service's single policy `isBiometricUnlockAvailable` allows it — **PIN-before-biometrics:
+until one passcode success (unlock or initial configure) has happened in the current app
+process, a cold-launched locked app shows no biometric button and never auto-prompts**, with
+the service's own fail-closed `biometricNotAvailable` guard as the backstop beneath these UI
+conditions — auto-triggers the prompt at most once per lock session via the service's
+`consumeAutoBiometricPromptOpportunity()` handshake, and mirrors the service's failure ladder — remaining-attempt warnings, an
 escalating-cooldown countdown card, and a reset-required card whose only exit is a
 destructive reset. ``FernletNumericPad`` is the shared 3×4 PIN keypad both flows (and the
 app's passcode-change settings) use instead of the system keyboard. Tying them together,

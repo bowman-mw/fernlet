@@ -1,6 +1,7 @@
 import Foundation
 import FernletFoundation
 import CryptoKit
+import LocalAuthentication
 import Security
 import Testing
 import FernletDomainModel
@@ -536,6 +537,100 @@ struct FernletLockServiceTests {
         // The legacy verifier is untouched by a failed attempt.
         #expect(keychainData(account: LockKeychainKey.verifier.rawValue, service: harness.serviceID) == rawDerived)
         #expect(service.contentKey(for: .privateHub) == nil)
+    }
+
+    // MARK: - PIN-before-biometrics (first passcode success per process)
+
+    @Test func configureSetsPasscodeUnlockedThisProcess() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+
+        #expect(!service.passcodeUnlockedThisProcess)
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        #expect(service.passcodeUnlockedThisProcess)
+    }
+
+    @Test func passcodeUnlockedThisProcessIsFalseAfterRelaunch() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let serviceA = harness.makeService()
+        try await serviceA.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        serviceA.lock(reason: .manual)
+        #expect(serviceA.passcodeUnlockedThisProcess)
+
+        // Relaunch simulation: a fresh instance restored from the same keychain service.
+        // The flag is in-memory only, so a new process starts passcode-first again.
+        let serviceB = harness.makeService()
+        #expect(serviceB.state == .locked(cooldownDeadline: nil))
+        #expect(!serviceB.passcodeUnlockedThisProcess)
+    }
+
+    @Test func resetClearsPasscodeUnlockedThisProcess() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        #expect(service.passcodeUnlockedThisProcess)
+
+        try service.reset()
+        #expect(!service.passcodeUnlockedThisProcess)
+    }
+
+    @Test func biometricUnlockRefusedUntilFirstPasscodeSuccessInProcess() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        var biometricKey = Data()
+        let serviceA = harness.makeService { _, _ in biometricKey }
+        try await serviceA.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        biometricKey = try #require(serviceA.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
+        try await serviceA.setBiometricEnabled(true, passcode: "123456")
+        serviceA.lock(reason: .manual)
+
+        // Relaunch simulation: no passcode success has happened in serviceB's "process" yet,
+        // so the fail-closed service guard refuses before the bypass loader is ever consulted.
+        let serviceB = harness.makeService { _, _ in biometricKey }
+        do {
+            _ = try await serviceB.unlockWithBiometrics(for: .privateHub)
+            Issue.record("Biometric unlock succeeded before the process's first passcode success")
+        } catch FernletLockError.biometricNotAvailable {
+        }
+        #expect(serviceB.state == .locked(cooldownDeadline: nil))
+
+        // One passcode success satisfies the requirement for the rest of the process...
+        _ = try await serviceB.unlock(passcode: "123456", for: .privateHub)
+        #expect(serviceB.passcodeUnlockedThisProcess)
+        serviceB.lock(reason: .manual)
+
+        // ...after which the biometric path works again.
+        let result = try await serviceB.unlockWithBiometrics(for: .privateHub)
+        #expect(result.method == .biometric)
+        #expect(serviceB.state == .unlocked(scope: .privateHub))
+    }
+
+    @Test func isBiometricUnlockAvailableGatesOnFirstPasscodeSuccess() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let serviceA = harness.makeService()
+        try await serviceA.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        try await serviceA.setBiometricEnabled(true, passcode: "123456")
+        serviceA.lock(reason: .manual)
+
+        // Relaunch simulation: biometrics are enabled in the keychain, but no passcode success
+        // has happened in this "process", so the policy is false no matter what the device's
+        // biometry reports (the passcodeUnlockedThisProcess conjunct alone forces it).
+        let serviceB = harness.makeService()
+        #expect(serviceB.biometricEnabled)
+        #expect(!serviceB.passcodeUnlockedThisProcess)
+        #expect(!serviceB.isBiometricUnlockAvailable)
+
+        _ = try await serviceB.unlock(passcode: "123456", for: .privateHub)
+        serviceB.lock(reason: .manual)
+        // After the first passcode success the flag no longer suppresses the offer: only the
+        // device-capability conjuncts remain (biometricType is real LAContext state, so on
+        // hardware without enrolled biometry the policy legitimately stays false).
+        #expect(serviceB.passcodeUnlockedThisProcess)
+        #expect(serviceB.isBiometricUnlockAvailable == (serviceB.biometricEnabled && serviceB.biometricType != .none))
     }
 }
 

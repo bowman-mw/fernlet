@@ -656,6 +656,19 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// scene-phase re-lock handling) can tell the system Face ID sheet apart from a real
     /// backgrounding.
     public private(set) var isPerformingBiometricUnlock = false
+    /// True once a passcode entry has succeeded in THIS process: set at the end of a successful
+    /// ``unlock(passcode:for:)`` and by ``configure(credential:grantingScope:)`` (initial setup
+    /// counts as the process's passcode success), cleared only by ``reset()``. Deliberately NOT
+    /// set by ``unlockWithBiometrics(for:)`` — a biometric success must never satisfy the
+    /// passcode-first requirement it is gated on.
+    ///
+    /// Never persisted: the app creates one service per process, so the flag inherently resets
+    /// on relaunch/termination, giving biometric unlock an iOS-style
+    /// "first unlock after reboot requires the passcode" rule (see
+    /// ``isBiometricUnlockAvailable`` and the fail-closed guard in
+    /// ``unlockWithBiometrics(for:)``). Observable (not `@ObservationIgnored`) so the lock UI
+    /// re-evaluates its biometric offer when the flag flips.
+    public private(set) var passcodeUnlockedThisProcess = false
 
     /// Combine mirror of ``state`` for subscribers outside the Observation system.
     public var statePublisher: AnyPublisher<FernletLockState, Never> { stateSubject.eraseToAnyPublisher() }
@@ -732,6 +745,18 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         return context.biometryType
     }
 
+    /// The single "may biometrics be OFFERED?" policy: the user has enabled them, the device
+    /// can evaluate them right now, AND a passcode success (unlock or initial setup) has
+    /// already happened in this process (``passcodeUnlockedThisProcess``).
+    ///
+    /// Both `FernletLockView` sites — the manual biometric button and the `onAppear`
+    /// auto-prompt — reference this property rather than restating the conjunction, so the
+    /// rule lives in exactly one place. A later duress phase adds one conjunct here
+    /// (`&& !isDuressSessionActive`) and nowhere else; do not inline the rule at call sites.
+    public var isBiometricUnlockAvailable: Bool {
+        biometricEnabled && biometricType != .none && passcodeUnlockedThisProcess
+    }
+
     /// The configured credential kind read from the keychain, or `nil` before setup.
     public var credentialKind: FernletLockCredentialKind? {
         guard let data = keychainLoad(.kind, keychainService),
@@ -795,6 +820,8 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         retainContentKey(contentKeyData, for: grantingScope)
         state = .unlocked(scope: grantingScope)
         hasAutoPromptedBiometricForCurrentLockSession = false
+        // Initial setup counts as this process's passcode success (PIN-before-biometrics, P0b).
+        passcodeUnlockedThisProcess = true
         // Scope-independent: the SE wrap protects the key at rest, not the session, so it is
         // established for the freshly minted key whichever surface the setup happened on.
         maintainSecureEnclaveWrap(contentKeyData: contentKeyData)
@@ -900,11 +927,23 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         retainContentKey(contentKeyData, for: scope)
         state = .unlocked(scope: scope)
         hasAutoPromptedBiometricForCurrentLockSession = false
+        // The process's passcode-first requirement is satisfied only HERE, at the end of a
+        // fully successful passcode unlock — never on the biometric path (PIN-before-biometrics).
+        passcodeUnlockedThisProcess = true
         FernletAuditLog.log("lock.released", context: ["method": "passcode", "scope": scope.rawValue])
         return UnlockResult(method: .passcode)
     }
 
     /// Attempts a biometric unlock by reading the `.biometryCurrentSet`-gated bypass item.
+    ///
+    /// **PIN-before-biometrics (fail-closed).** Refused with
+    /// `FernletLockError.biometricNotAvailable` until ``passcodeUnlockedThisProcess`` is true —
+    /// i.e. until one passcode success (``unlock(passcode:for:)`` or initial
+    /// ``configure(credential:grantingScope:)``) has happened in the current app process, like
+    /// iOS's first unlock after reboot. This guard is the load-bearing enforcement; the
+    /// `FernletLockView` button/auto-prompt conditions on ``isBiometricUnlockAvailable`` are
+    /// defense-in-depth. Throwing `.biometricNotAvailable` makes the unlock view fall back
+    /// silently to passcode entry. A biometric success does NOT set the flag.
     ///
     /// The blocking LocalAuthentication + keychain read runs on a global user-initiated
     /// queue (or through the injected `biometricBypassLoader` in tests). Does not touch
@@ -917,6 +956,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// - Returns: An ``UnlockResult`` with method `.biometric`.
     public func unlockWithBiometrics(for scope: FernletLockScope) async throws -> UnlockResult {
         guard !requiresReset else { throw FernletLockError.resetRequired }
+        // PIN-before-biometrics (P0b): fail closed at the service, before any keychain or
+        // LocalAuthentication work. The UI gates are advisory; this guard is the guarantee.
+        guard passcodeUnlockedThisProcess else { throw FernletLockError.biometricNotAvailable }
         isPerformingBiometricUnlock = true
         defer { isPerformingBiometricUnlock = false }
 
@@ -1001,6 +1043,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         state = .notConfigured
         hasAutoPromptedBiometricForCurrentLockSession = false
         isPerformingBiometricUnlock = false
+        // Back to a fresh notConfigured process state: the next passcode success (a new
+        // configure) must re-earn the biometric offer (PIN-before-biometrics).
+        passcodeUnlockedThisProcess = false
         FernletAuditLog.log("lock.reset")
     }
 
