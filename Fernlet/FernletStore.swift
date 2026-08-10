@@ -336,6 +336,17 @@ final class FernletStore {
         // Recipe photos never had a plaintext generation — fail closed on unsealed on-disk bytes.
         allowsLegacyPlaintextUpgrade: false
     )
+    /// Backing store for ``RecipeWebImageAttemptMemory`` — the device-local "one automatic
+    /// web-image attempt per device" bookkeeping (the synced half of that contract is
+    /// `RecipeWebImport.webImageSuppressed`). Injectable so tests can isolate it from the shared
+    /// `.standard` suite, mirroring `pastDayJournalScrubDefaults`.
+    @ObservationIgnored var webImageAttemptDefaults: UserDefaults = .standard
+    /// Recipe ids whose web-image download is currently in flight. Guards the entry to
+    /// ``fetchRecipeWebImageIfNeeded(for:)`` so the paste-import fire-and-forget task and the
+    /// detail's first-open task — both of which can hold the same not-yet-attempted recipe copy —
+    /// never run the download twice concurrently. Memory-only: an in-flight fetch never outlives
+    /// the session.
+    @ObservationIgnored private var webImageFetchesInFlight: Set<UUID> = []
     /// Injected (or nil → default) journal narrative repository, captured so the lazily-built
     /// `journalSealingCoordinator` can own it.
     @ObservationIgnored private let providedJournalNarrativeRepository: (any JournalNarrativeStoring)?
@@ -2093,10 +2104,23 @@ final class FernletStore {
         savedRecipeService.update(recipe)
     }
 
+    /// Merges ONLY the notes field into the CURRENT saved row — the notes sheet's Done path.
+    /// Writing the sheet's whole at-open snapshot back would revert any store update that landed
+    /// while the sheet was up (a web-image suppression stamp, a CloudKit-refreshed row); merging
+    /// the one edited field into the live row cannot. No-op when the recipe was deleted meanwhile.
+    func updateSavedRecipeNotes(_ notes: String, forRecipeID recipeID: UUID) {
+        guard var live = savedRecipeService.savedRecipes.first(where: { $0.id == recipeID }) else { return }
+        live.notes = notes
+        updateSavedRecipe(live)
+    }
+
     func deleteSavedRecipe(_ recipe: RecipeDefinition) {
         savedRecipeService.delete(recipe)
         // The recipe's own photo is keyed by the recipe id, so it's cleaned up here rather than stranded.
         recipePhotoStore.delete(id: recipe.id)
+        // Prune the device-local web-image attempt bookkeeping too — a deleted recipe's id must
+        // not linger in the sidecar forever.
+        RecipeWebImageAttemptMemory.clearAttempt(for: recipe.id, defaults: webImageAttemptDefaults)
     }
 
     func addWorkout(_ workout: Workout) {
@@ -3417,12 +3441,13 @@ final class FernletStore {
         recipePhotoStore.imageData(for: recipeID)
     }
 
-    /// Deletes the recipe's sealed photo AND stamps the recipe's web-image fetch as attempted:
-    /// deleting the picture is the user's stated intent about this recipe's picture, so a
-    /// web-derived default must never resurrect behind it (a no-op for recipes with no `webImport`).
+    /// Deletes the recipe's sealed photo AND suppresses the recipe's web image (synced): deleting
+    /// the picture is the user's stated intent about this recipe's picture, so a web-derived
+    /// default must never resurrect behind it — on this device or, via the synced row, any other
+    /// (a no-op for recipes with no `webImport`).
     func deleteRecipePhoto(for recipeID: UUID) {
         recipePhotoStore.delete(id: recipeID)
-        markRecipeWebImageFetchAttempted(recipeID)
+        markRecipeWebImageSuppressed(recipeID)
     }
 
     #if canImport(UIKit)
@@ -3442,48 +3467,76 @@ final class FernletStore {
     }
 
     /// Downloads a web-imported recipe's page picture and seals it as the recipe's default photo —
-    /// the one automatic attempt, ever (owner decision 2026-08-09, reversing the 2026-07-16 "no
-    /// external image fetch" tester decision).
+    /// one automatic attempt PER DEVICE (owner decision 2026-08-09, reversing the 2026-07-16 "no
+    /// external image fetch" tester decision), with suppression synced: the photo bytes are
+    /// device-local, so each device gets its own single attempt (``RecipeWebImageAttemptMemory``),
+    /// while the user's intent that no web picture may ever be fetched
+    /// (`RecipeWebImport.webImageSuppressed`) rides the synced row and wins everywhere.
     ///
-    /// Called only from USER-PRESENT paths: the foreground paste-a-URL import and the first open of
-    /// a recipe's detail page — never from the share-extension background queue drain. Gated three
-    /// ways: no-op unless the recipe carries an `imageURLString`, unless `webImageFetchAttempted`
-    /// is still unset (one attempt total, success or failure — no automatic retry), and unless the
-    /// recipe has no photo yet (the user's own picked photo always wins). Downloaded bytes go
-    /// through ``saveRecipePhoto(data:for:)`` — the sealed store's normalize pipeline (bounded
-    /// downscale + JPEG re-encode, which strips EXIF) — and the attempted flag is persisted via the
-    /// saved-recipe update path whatever the outcome. A failed image can never fail an import.
+    /// Called only from USER-PRESENT paths: the foreground paste-a-URL import, the first open of a
+    /// recipe's detail page, and the post-"Re-import from source" refresh — never from the
+    /// share-extension background queue drain. Entry gates: the recipe must carry an
+    /// `imageURLString`, must not be suppressed (checked on the LIVE row, not just the caller's
+    /// copy), must not have spent this device's one attempt, must not already be downloading (the
+    /// paste-import task and the detail's first-open task can overlap), and must have no photo yet
+    /// (the user's own picked photo always wins — finding one suppresses, synced). After the
+    /// download the same conditions are RE-CHECKED before anything is written: the await suspends
+    /// up to 15 s while the UI stays live, so the user may have picked a photo, deleted the recipe,
+    /// or deleted its photo mid-download — their state always beats the late bytes. Cooperative
+    /// cancellation (the detail's `.task` dies when the view pops) is the user navigating, not a
+    /// failed fetch, so it does NOT consume the attempt; a genuine failure does. Downloaded bytes
+    /// go through ``saveRecipePhoto(data:for:)`` — the sealed store's normalize pipeline (bounded
+    /// downscale + JPEG re-encode, which strips EXIF). A failed image can never fail an import.
     /// - Returns: The sealed, stored photo bytes when the fetch landed, else `nil`.
     @discardableResult
     func fetchRecipeWebImageIfNeeded(for recipe: RecipeDefinition) async -> Data? {
         guard let webImport = recipe.webImport,
-              webImport.webImageFetchAttempted != true,
+              webImport.webImageSuppressed != true,
               let urlString = webImport.imageURLString,
               let url = URL(string: urlString) else { return nil }
+        // Gate on CURRENT state, not just the caller's copy: the passed value can predate a
+        // suppression stamped by another path, and two user-present paths can hold the same
+        // not-yet-attempted copy (the in-flight set makes the overlap a single download).
+        guard let live = savedRecipeService.savedRecipes.first(where: { $0.id == recipe.id }),
+              live.webImport?.webImageSuppressed != true,
+              !RecipeWebImageAttemptMemory.hasAttempted(recipe.id, defaults: webImageAttemptDefaults),
+              !webImageFetchesInFlight.contains(recipe.id) else { return nil }
         guard recipePhotoData(for: recipe.id) == nil else {
-            // The user already picked their own photo — never fetch behind it, and stamp the flag
-            // so this recipe stops re-checking (and never resurrects the web image if that photo
-            // is later deleted).
-            markRecipeWebImageFetchAttempted(recipe.id)
+            // The user already picked their own photo — never fetch behind it, and suppress
+            // (synced) so the web image never resurrects if that photo is later deleted.
+            markRecipeWebImageSuppressed(recipe.id)
             return nil
         }
+        webImageFetchesInFlight.insert(recipe.id)
+        defer { webImageFetchesInFlight.remove(recipe.id) }
         let downloaded = try? await RecipeWebImporter.downloadImage(from: url)
-        if let downloaded {
-            saveRecipePhoto(data: downloaded, for: recipe.id)
+        if downloaded == nil, Task.isCancelled {
+            // Cooperative cancellation — popping the detail mid-download — is navigation, not a
+            // failed fetch: leave the attempt un-spent so the next open retries.
+            return nil
         }
-        markRecipeWebImageFetchAttempted(recipe.id)
+        RecipeWebImageAttemptMemory.recordAttempt(recipe.id, defaults: webImageAttemptDefaults)
+        // Post-await re-validation: `FernletStore` is MainActor, so deletes, photo picks, and
+        // suppressions interleave exactly at the download suspension. Re-check every condition the
+        // entry checked — a recipe deleted mid-download must not get an orphaned sealed photo, and
+        // a photo the user picked mid-download must never be overwritten.
+        guard let downloaded,
+              let current = savedRecipeService.savedRecipes.first(where: { $0.id == recipe.id }),
+              current.webImport?.webImageSuppressed != true,
+              recipePhotoData(for: recipe.id) == nil else { return nil }
+        saveRecipePhoto(data: downloaded, for: recipe.id)
         return recipePhotoData(for: recipe.id)
     }
 
-    /// Persists `webImageFetchAttempted = true` on the SAVED recipe with `recipeID`, via the
-    /// saved-recipe update path (so the flag rides the per-row payload blob). Reads the service's
-    /// CURRENT row rather than any caller-held copy, so a concurrent edit is never clobbered.
-    /// No-op for unknown ids, recipes without a `webImport`, and already-stamped rows.
-    private func markRecipeWebImageFetchAttempted(_ recipeID: UUID) {
+    /// Persists `webImageSuppressed = true` on the SAVED recipe with `recipeID`, via the
+    /// saved-recipe update path (so the intent rides the per-row payload blob and syncs). Reads the
+    /// service's CURRENT row rather than any caller-held copy, so a concurrent edit is never
+    /// clobbered. No-op for unknown ids, recipes without a `webImport`, and already-suppressed rows.
+    private func markRecipeWebImageSuppressed(_ recipeID: UUID) {
         guard var current = savedRecipeService.savedRecipes.first(where: { $0.id == recipeID }),
               var webImport = current.webImport,
-              webImport.webImageFetchAttempted != true else { return }
-        webImport.webImageFetchAttempted = true
+              webImport.webImageSuppressed != true else { return }
+        webImport.webImageSuppressed = true
         current.webImport = webImport
         updateSavedRecipe(current)
     }
@@ -3496,12 +3549,13 @@ final class FernletStore {
     /// sealed photo is keyed by that id, so reusing it carries the photo across with no
     /// delete/migrate dance, and the same-id route through ``updateSavedRecipe(_:)`` never runs
     /// the supersede path (which deletes superseded rows' photos). The user's notes,
-    /// `createdAt`, fork provenance, and `webImageFetchAttempted` state are carried too — see
+    /// `createdAt`, fork provenance, and `webImageSuppressed` state are carried too — see
     /// `RecipeDefinition.init(reimported:preserving:)` for the exact merge. A thrown import
     /// (bad URL, network failure, no recipe on the page) mutates NOTHING: the merge+update runs
     /// only after the fetch succeeds.
-    /// - Returns: The refreshed definition now in the saved-recipe store.
-    func reimportSavedRecipeFromSource(_ recipe: RecipeDefinition) async throws -> RecipeDefinition {
+    /// - Returns: The refreshed definition now in the saved-recipe store, or `nil` when the
+    ///   recipe was deleted while the fetch was in flight (nothing was persisted).
+    func reimportSavedRecipeFromSource(_ recipe: RecipeDefinition) async throws -> RecipeDefinition? {
         guard let sourceURL = recipe.webImport?.sourceURL, sourceURL.isSafariPresentable else {
             throw RecipeWebImportError.invalidURL
         }
@@ -3517,11 +3571,22 @@ final class FernletStore {
 
     /// The no-network half of ``reimportSavedRecipeFromSource(_:)``, split out so tests can
     /// exercise the replace-and-preserve contract without a live fetch: merges the fresh import
-    /// over the existing row (same id → photo carried, notes preserved) and persists it through
-    /// the saved-recipe update path.
-    func applyReimportedRecipe(_ imported: ImportedRecipe, to existing: RecipeDefinition) -> RecipeDefinition {
-        let refreshed = RecipeDefinition(reimported: imported, preserving: existing)
+    /// over the CURRENT saved row — re-resolved by id at write time, the same live-row rule as
+    /// ``markRecipeWebImageSuppressed(_:)``, so notes edited or suppression stamped during the
+    /// multi-second fetch are preserved rather than reverted by the caller's stale snapshot — and
+    /// persists it through the saved-recipe update path. The explicit re-import also re-arms THIS
+    /// device's one automatic web-image attempt (the synced suppression, if any, still wins), so a
+    /// transiently failed picture download is recoverable through the documented refresh
+    /// affordance.
+    /// - Returns: The refreshed definition, or `nil` when the recipe no longer exists (deleted
+    ///   mid-flight) — nothing is persisted then, so the caller must not report success.
+    func applyReimportedRecipe(_ imported: ImportedRecipe, to existing: RecipeDefinition) -> RecipeDefinition? {
+        guard let live = savedRecipeService.savedRecipes.first(where: { $0.id == existing.id }) else {
+            return nil
+        }
+        let refreshed = RecipeDefinition(reimported: imported, preserving: live)
         updateSavedRecipe(refreshed)
+        RecipeWebImageAttemptMemory.clearAttempt(for: existing.id, defaults: webImageAttemptDefaults)
         return refreshed
     }
 
@@ -3554,8 +3619,26 @@ final class FernletStore {
         return payload
     }
 
+    /// What accepting a proximity recipe share did — surfaced by the review sheet so the user
+    /// learns whether a new recipe landed or their existing copy was kept.
+    enum ProximityRecipeImportOutcome: Equatable {
+        /// The share was imported as a new recipe with the given display name.
+        case imported(name: String)
+        /// The shared source page was already in the recipe book: the user's existing recipe —
+        /// photo, notes, and all — was kept untouched (the owner's duplicate decision, matching
+        /// the paste-import and queue-drain paths), and only the social signal was recorded.
+        case alreadySaved(name: String)
+
+        /// The display name of the recipe the outcome refers to, whichever case carries it.
+        var name: String {
+            switch self {
+            case .imported(let name), .alreadySaved(let name): name
+            }
+        }
+    }
+
     @discardableResult func importProximityRecipeShare(_ payload: ProximityRecipeSharePayload,
-                                                       fromFingerprint fingerprint: String? = nil) throws -> String {
+                                                       fromFingerprint fingerprint: String? = nil) throws -> ProximityRecipeImportOutcome {
         guard payload.format == "fernlet.proximity.recipe", payload.version == 1 else {
             throw RecipeImportError.unsupportedFormat
         }
@@ -3588,6 +3671,17 @@ final class FernletStore {
                       url.isSafariPresentable else { return "" }
                 return trimmed
             }()
+            // The owner's duplicate decision (2026-08-09) applies to the mesh path exactly as it
+            // does to the paste-import and queue-drain paths: a share whose source page is already
+            // in the book KEEPS the user's existing recipe. Without this, addSavedRecipe's
+            // supersede would permanently delete the user's own sealed photo and replace their
+            // edited notes with the sender's copy — an accept tap must never be destructive. The
+            // closeness signal still records: the friend did share, the user did accept.
+            if !sanitizedSourceURLString.isEmpty,
+               let existing = savedRecipeService.recipe(matchingSourceURL: sanitizedSourceURLString) {
+                if let fingerprint { closenessLedger.recordShareAccepted(fingerprint: fingerprint) }
+                return .alreadySaved(name: existing.name)
+            }
             let now = Date()
             let recipe = RecipeDefinition(
                 name: trimmedName,
@@ -3607,10 +3701,10 @@ final class FernletStore {
                     ),
                     micronutrients: savedPayload.micronutrients,
                     // A mesh-received recipe must never web-fetch: the wire carries no image URL
-                    // (imageURLString stays nil) AND the fetch is pre-stamped as attempted, so even
-                    // a future field addition can't quietly turn receivers into fetchers.
+                    // (imageURLString stays nil) AND the fetch is pre-suppressed, so even a
+                    // future field addition can't quietly turn receivers into fetchers.
                     imageURLString: nil,
-                    webImageFetchAttempted: true
+                    webImageSuppressed: true
                 ),
                 // F5: preserve ordered cooking steps a peer sent (nil on older peers that carry none).
                 steps: Self.sanitizedSharedSteps(savedPayload.steps)
@@ -3632,7 +3726,7 @@ final class FernletStore {
         }
         // Accepting a friend's shared recipe feeds the closeness "share accepted" signal (day-capped).
         if let fingerprint { closenessLedger.recordShareAccepted(fingerprint: fingerprint) }
-        return importedName
+        return .imported(name: importedName)
     }
 
     /// Normalizes cooking steps arriving over a share/mesh wire (F5) via the shared domain sanitizer:
@@ -4181,6 +4275,10 @@ final class FernletStore {
         // outlive a wipe. `deleteAllData` reaches this via its `resetAll()` call, so both wipe paths cover
         // it. A plain `UserDefaults` removal has no failure signal, so it reports no incomplete store.
         BarcodeServingMemory.clearAll()
+        // Which recipes this device already spent its one automatic web-image download on — the
+        // same class of device-local `UserDefaults` sidecar; clear it with the others so the
+        // bookkeeping doesn't outlive the recipes it described.
+        RecipeWebImageAttemptMemory.clearAll(defaults: webImageAttemptDefaults)
         // Group activities (hosted/joined rosters + join tokens) — device-local social data, never synced;
         // clear the sidecar too (the manager owns it, mirroring the clothing-shop clearAll seam).
         meshNetworkManager.activities.clearAll()

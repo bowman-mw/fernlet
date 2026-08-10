@@ -560,10 +560,13 @@ enum FoodProductWebImporter {
 
     /// Fetches one candidate label image through the recipe importer's guarded image downloader —
     /// upgraded (2026-08-09) from a bare https-scheme check to the full page-fetch guard rigor:
-    /// SSRF host validation, per-hop redirect re-validation, an `image/*` MIME requirement, the 15 s
-    /// timeout, and a streaming 12 MB cap that aborts oversize bodies instead of buffering them
-    /// whole. Transport stays `EphemeralWebSession.shared` (inside the downloader), and this
-    /// importer's Safari User-Agent spoof is preserved so retailer CDNs keep serving real images.
+    /// SSRF host validation, per-hop redirect re-validation, an image MIME requirement (`image/*`,
+    /// or a generic octet-stream declaration whose bytes pass the magic-number sniff — retailer
+    /// CDNs serving label images off S3-style origins with no content-type metadata keep working,
+    /// HTML error pages don't), the 15 s timeout, and a streaming 12 MB cap that aborts oversize
+    /// bodies instead of buffering them whole. Transport stays `EphemeralWebSession.shared`
+    /// (inside the downloader), and this importer's Safari User-Agent spoof is preserved so
+    /// retailer CDNs keep serving real images.
     private static func fetchImage(from url: URL) async -> UIImage? {
         guard let data = try? await RecipeWebImporter.downloadImage(
             from: url,

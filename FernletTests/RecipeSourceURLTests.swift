@@ -92,8 +92,10 @@ struct RecipeSourceURLMatcherTests {
 /// Store-level coverage for the zero-network duplicate skip and the explicit "Re-import from
 /// source" (owner decision 2026-08-09): repeat imports of an already-saved URL never fetch, the
 /// share-extension drain drops matching queue rows as success, and a re-import replaces the
-/// definition while preserving the sealed photo, the user's notes, and the web-image attempted
-/// state — with a failed re-import leaving the recipe untouched.
+/// definition while preserving the sealed photo, the user's notes, and the synced web-image
+/// suppression — merging over the LIVE row (mid-flight edits survive), reporting a deleted row as
+/// `nil` rather than success, re-arming the device-local image attempt, and leaving the recipe
+/// untouched when the fetch fails.
 @MainActor
 struct RecipeReimportTests {
 
@@ -102,7 +104,7 @@ struct RecipeReimportTests {
         url: String,
         name: String = "Web Oats",
         notes: String = "Import summary",
-        attempted: Bool? = nil
+        suppressed: Bool? = nil
     ) -> RecipeDefinition {
         let savedAt = Date(timeIntervalSince1970: 1_779_664_800)
         return RecipeDefinition(
@@ -118,7 +120,7 @@ struct RecipeReimportTests {
                 sourceURLString: url,
                 ingredientLines: ["1 cup oats"],
                 macros: Macros(protein: 10, carbs: 30, fat: 5),
-                webImageFetchAttempted: attempted
+                webImageSuppressed: suppressed
             )
         )
     }
@@ -198,14 +200,14 @@ struct RecipeReimportTests {
     // MARK: - Re-import from source (replace definition, preserve photo + notes)
 
     /// The replace-and-preserve contract: same id (so the sealed photo — keyed by id — survives
-    /// with no migration), user notes and attempted-flag carried, everything content-like
+    /// with no migration), user notes and suppression carried, everything content-like
     /// refreshed from the new import.
-    @Test func reimportReplacesDefinitionButPreservesPhotoNotesAndAttemptedFlag() throws {
+    @Test func reimportReplacesDefinitionButPreservesPhotoNotesAndSuppression() throws {
         let store = makeTestStore()
         let original = makeSavedWebRecipe(
             url: "https://example.com/recipes/oats",
             notes: "my own tweaks: use maple syrup",
-            attempted: true
+            suppressed: true
         )
         store.addSavedRecipe(original)
         #expect(store.saveRecipePhoto(data: tinyJPEGData(), for: original.id))
@@ -223,7 +225,7 @@ struct RecipeReimportTests {
             steps: [RecipeStep(text: "Boil the oats.")],
             imageURL: URL(string: "https://cdn.example.com/new-hero.jpg")
         )
-        let refreshed = store.applyReimportedRecipe(fresh, to: original)
+        let refreshed = try #require(store.applyReimportedRecipe(fresh, to: original))
 
         // Same identity, so the sealed photo is still reachable and untouched.
         #expect(refreshed.id == original.id)
@@ -231,7 +233,7 @@ struct RecipeReimportTests {
         // User-owned state preserved.
         #expect(refreshed.notes == "my own tweaks: use maple syrup")
         #expect(refreshed.createdAt == original.createdAt)
-        #expect(refreshed.webImport?.webImageFetchAttempted == true)
+        #expect(refreshed.webImport?.webImageSuppressed == true)
         // Content refreshed.
         #expect(refreshed.name == "Web Oats v2")
         #expect(refreshed.servings == 3)
@@ -244,6 +246,90 @@ struct RecipeReimportTests {
         #expect(store.savedRecipes.first?.name == "Web Oats v2")
 
         store.deleteSavedRecipe(refreshed) // removes the sealed photo file from the shared container
+    }
+
+    /// The merge reads the CURRENT row, not the caller's snapshot: notes edited (or suppression
+    /// stamped) while the re-import fetch was in flight survive the refresh instead of being
+    /// silently reverted to the pre-edit copy.
+    @Test func reimportMergesOverTheLiveRowNotTheCallersSnapshot() throws {
+        let store = makeTestStore()
+        let original = makeSavedWebRecipe(url: "https://example.com/recipes/oats", notes: "before")
+        store.addSavedRecipe(original)
+        // The detail view captured `original` at tap time; while the fetch runs, the user edits
+        // notes (live row updated) and the image fetch suppresses the web picture.
+        store.updateSavedRecipeNotes("edited DURING the re-import fetch", forRecipeID: original.id)
+        store.deleteRecipePhoto(for: original.id)
+
+        let fresh = ImportedRecipe(
+            sourceURL: URL(string: "https://example.com/recipes/oats")!,
+            name: "Web Oats v2",
+            ingredients: ["2 cups oats"],
+            summary: "Refreshed.",
+            servings: 2,
+            protein: 12,
+            carbs: 40,
+            fat: 6
+        )
+        let refreshed = try #require(store.applyReimportedRecipe(fresh, to: original))
+
+        #expect(refreshed.notes == "edited DURING the re-import fetch",
+                "the stale tap-time snapshot must not revert mid-flight edits")
+        #expect(refreshed.webImport?.webImageSuppressed == true,
+                "a suppression stamped mid-flight must survive the merge")
+        #expect(store.savedRecipes.first { $0.id == original.id }?.notes == "edited DURING the re-import fetch")
+        store.deleteSavedRecipe(refreshed)
+    }
+
+    /// A recipe deleted while the re-import fetch was in flight: nothing is persisted and the
+    /// caller gets `nil` — never a false "Refreshed" success over a silent no-op.
+    @Test func reimportOfADeletedRecipeReportsNilAndPersistsNothing() {
+        let store = makeTestStore()
+        let original = makeSavedWebRecipe(url: "https://example.com/recipes/oats")
+        store.addSavedRecipe(original)
+        store.deleteSavedRecipe(original)
+
+        let fresh = ImportedRecipe(
+            sourceURL: URL(string: "https://example.com/recipes/oats")!,
+            name: "Web Oats v2",
+            ingredients: ["2 cups oats"],
+            summary: "Refreshed.",
+            servings: 2,
+            protein: 12,
+            carbs: 40,
+            fat: 6
+        )
+        #expect(store.applyReimportedRecipe(fresh, to: original) == nil)
+        #expect(store.savedRecipes.isEmpty, "the deleted row must not resurrect")
+    }
+
+    /// The explicit re-import re-arms THIS device's one automatic web-image attempt (a transiently
+    /// failed download becomes recoverable through the documented refresh affordance), while a
+    /// synced suppression still wins at fetch time.
+    @Test func reimportRearmsTheDeviceLocalImageAttempt() throws {
+        let store = makeTestStore()
+        let suiteName = "fernlet-tests-rearm-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        store.webImageAttemptDefaults = defaults
+
+        let original = makeSavedWebRecipe(url: "https://example.com/recipes/oats")
+        store.addSavedRecipe(original)
+        RecipeWebImageAttemptMemory.recordAttempt(original.id, defaults: defaults)
+
+        let fresh = ImportedRecipe(
+            sourceURL: URL(string: "https://example.com/recipes/oats")!,
+            name: "Web Oats v2",
+            ingredients: ["2 cups oats"],
+            summary: "Refreshed.",
+            servings: 2,
+            protein: 12,
+            carbs: 40,
+            fat: 6
+        )
+        let refreshed = try #require(store.applyReimportedRecipe(fresh, to: original))
+        #expect(!RecipeWebImageAttemptMemory.hasAttempted(original.id, defaults: defaults),
+                "the refresh must re-arm the device's one automatic attempt")
+        store.deleteSavedRecipe(refreshed)
     }
 
     /// A failed re-import mutates NOTHING: the loopback source URL is refused by the importer's

@@ -41,6 +41,35 @@ struct RecipeWebImporterTests {
         }
     }
 
+    /// Non-dotted-quad IP-literal encodings must classify like their canonical spelling: the image
+    /// URL is page-controlled content (JSON-LD `image` / og:image), so a malicious page could
+    /// otherwise smuggle a loopback/private target past a dotted-quad-only check via decimal,
+    /// hex, octal, partial-form, or IPv4-mapped-IPv6 spellings.
+    @Test func rejectsEncodedLoopbackAndPrivateIPLiterals() {
+        let unsafe = [
+            "https://2130706433/x",             // decimal integer = 127.0.0.1
+            "https://0x7f.0.0.1/x",             // hex = 127.0.0.1
+            "https://0177.0.0.1/x",             // octal = 127.0.0.1
+            "https://0x7f000001/x",             // hex integer = 127.0.0.1
+            "https://127.1/x",                  // 2-part form = 127.0.0.1
+            "https://10.5/x",                   // 2-part form = 10.0.0.5
+            "https://[::ffff:127.0.0.1]/x",     // IPv4-mapped IPv6 loopback
+            "https://[::ffff:10.0.0.5]/x",      // IPv4-mapped IPv6 private
+            "https://[::127.0.0.1]/x",          // IPv4-compatible IPv6 loopback
+            "https://3232235777/x"              // decimal integer = 192.168.1.1
+        ]
+        for raw in unsafe {
+            #expect(!RecipeWebImporter.isSafePublicHTTPSURL(URL(string: raw)!), "must reject \(raw)")
+        }
+        // Public addresses in exotic spellings and real hostnames stay allowed — including
+        // hostnames starting with "fc"/"fd", which the old prefix check misread as IPv6 literals.
+        #expect(RecipeWebImporter.isSafePublicHTTPSURL(URL(string: "https://134744072/x")!))  // 8.8.8.8
+        #expect(RecipeWebImporter.isSafePublicHTTPSURL(URL(string: "https://fcbarcelona.com/x")!))
+        #expect(RecipeWebImporter.isSafePublicHTTPSURL(URL(string: "https://fda.gov/x")!))
+        // A hostname with an embedded private-looking dotted prefix is a hostname, not a literal.
+        #expect(RecipeWebImporter.isSafePublicHTTPSURL(URL(string: "https://10.0.0.5.example.com/x")!))
+    }
+
     // MARK: - Image extraction (owner decision 2026-08-09)
 
     private let pageURL = URL(string: "https://example.com/recipes/oats")!
@@ -151,6 +180,50 @@ struct RecipeWebImporterTests {
         #expect(!RecipeWebImporter.isImageMIMEType(nil))
     }
 
+    /// Generic binary declarations — the S3-style default for image CDNs with no content-type
+    /// metadata — are tolerated (paired with the byte sniff below); anything else stays refused.
+    @Test func genericBinaryMIMETypeCheck() {
+        #expect(RecipeWebImporter.isGenericBinaryMIMEType("application/octet-stream"))
+        #expect(RecipeWebImporter.isGenericBinaryMIMEType("APPLICATION/OCTET-STREAM"))
+        #expect(RecipeWebImporter.isGenericBinaryMIMEType("binary/octet-stream"))
+        #expect(!RecipeWebImporter.isGenericBinaryMIMEType("text/html"))
+        #expect(!RecipeWebImporter.isGenericBinaryMIMEType("application/json"))
+        #expect(!RecipeWebImporter.isGenericBinaryMIMEType(nil))
+    }
+
+    /// The magic-number sniff that gates the octet-stream tolerance: real image containers pass,
+    /// HTML error pages and arbitrary bytes do not.
+    @Test func imageByteSniffAcceptsRealContainersOnly() {
+        #expect(RecipeWebImporter.looksLikeImageBytes(Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00])))         // JPEG
+        #expect(RecipeWebImporter.looksLikeImageBytes(Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))) // PNG
+        #expect(RecipeWebImporter.looksLikeImageBytes(Data("GIF89a".utf8)))                          // GIF
+        var webp = Data("RIFF".utf8); webp.append(Data([0x10, 0x00, 0x00, 0x00])); webp.append(Data("WEBP".utf8))
+        #expect(RecipeWebImporter.looksLikeImageBytes(webp))                                         // WebP
+        var heic = Data([0x00, 0x00, 0x00, 0x18]); heic.append(Data("ftypheic".utf8))
+        #expect(RecipeWebImporter.looksLikeImageBytes(heic))                                         // HEIC (ftyp)
+        #expect(!RecipeWebImporter.looksLikeImageBytes(Data("<!DOCTYPE html><html>".utf8)))
+        #expect(!RecipeWebImporter.looksLikeImageBytes(Data("Access denied".utf8)))
+        #expect(!RecipeWebImporter.looksLikeImageBytes(Data()))
+        // RIFF that is NOT WebP (e.g. a WAV) must not pass.
+        var wav = Data("RIFF".utf8); wav.append(Data([0x10, 0x00, 0x00, 0x00])); wav.append(Data("WAVE".utf8))
+        #expect(!RecipeWebImporter.looksLikeImageBytes(wav))
+    }
+
+    /// The header validator tolerates a generic binary declaration (the bytes are then sniffed at
+    /// download time) — restoring the label images retailer CDNs serve as octet-stream — while
+    /// text/html and other explicit non-image declarations stay refused.
+    @Test func validateImageResponseToleratesGenericBinaryDeclarations() throws {
+        let octetStream = imageResponse(headers: ["Content-Type": "application/octet-stream", "Content-Length": "1024"])
+        try RecipeWebImporter.validateImageResponse(octetStream, maxBytes: 10 * 1024 * 1024)  // must not throw
+        let binaryStream = imageResponse(headers: ["Content-Type": "binary/octet-stream"])
+        try RecipeWebImporter.validateImageResponse(binaryStream, maxBytes: 10 * 1024 * 1024) // must not throw
+        // The oversize check still applies to tolerated declarations.
+        let oversize = imageResponse(headers: ["Content-Type": "application/octet-stream", "Content-Length": "\(11 * 1024 * 1024)"])
+        #expect(throws: RecipeWebImportError.fetchFailed) {
+            try RecipeWebImporter.validateImageResponse(oversize, maxBytes: 10 * 1024 * 1024)
+        }
+    }
+
     private func imageResponse(status: Int = 200, headers: [String: String]) -> HTTPURLResponse {
         HTTPURLResponse(
             url: URL(string: "https://cdn.example.com/hero.jpg")!,
@@ -223,8 +296,9 @@ struct RecipeWebImporterTests {
         )
         let recipe = RecipeDefinition(importedRecipe: imported)
         #expect(recipe.webImport?.imageURLString == "https://cdn.example.com/hero.jpg")
-        // The bridge must NOT pre-stamp the attempt — the one automatic download hasn't run yet.
-        #expect(recipe.webImport?.webImageFetchAttempted == nil)
+        // The bridge must NOT pre-suppress — no user intent exists yet, and the attempt
+        // bookkeeping is device-local, never a row field.
+        #expect(recipe.webImport?.webImageSuppressed == nil)
     }
 
     @MainActor

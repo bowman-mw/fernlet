@@ -6,10 +6,13 @@ import ProximityKit
 @testable import Fernlet
 
 /// Feature coverage for "the page's picture becomes a recipe's default photo" (owner decision
-/// 2026-08-09, reversing the 2026-07-16 "no external image fetch" tester decision): the additive
-/// `RecipeWebImport` image fields decode tolerantly, the store's one-attempt gate (including the
-/// photo-deletion stamp) holds, mesh-received recipes are neutralized so they can never web-fetch,
-/// and the proximity wire payload stays decodable in both old→new and new→old directions.
+/// 2026-08-09, reversing the 2026-07-16 "no external image fetch" tester decision) under the
+/// one-attempt-per-device / suppression-syncs split: the additive `RecipeWebImport` image fields
+/// decode tolerantly, the store's gates hold (device-local attempt bookkeeping, the synced
+/// photo-deletion suppression, cancellation not burning the attempt), mesh-received recipes are
+/// neutralized so they can never web-fetch, a mesh share of an already-imported URL keeps the
+/// user's copy, and the proximity wire payload stays decodable in both old→new and new→old
+/// directions.
 struct RecipeWebImageTests {
 
     // MARK: - Domain decode tolerance
@@ -21,7 +24,7 @@ struct RecipeWebImageTests {
         let decoded = try JSONDecoder().decode(RecipeWebImport.self, from: Data(json.utf8))
         #expect(decoded.sourceURLString == "https://example.com/r")
         #expect(decoded.imageURLString == nil)
-        #expect(decoded.webImageFetchAttempted == nil)
+        #expect(decoded.webImageSuppressed == nil)
     }
 
     @Test func webImportImageFieldsRoundTrip() throws {
@@ -29,18 +32,18 @@ struct RecipeWebImageTests {
             sourceURLString: "https://example.com/r",
             ingredientLines: ["1 cup oats"],
             imageURLString: "https://cdn.example.com/hero.jpg",
-            webImageFetchAttempted: true
+            webImageSuppressed: true
         )
         let data = try JSONEncoder().encode(webImport)
         let decoded = try JSONDecoder().decode(RecipeWebImport.self, from: data)
         #expect(decoded.imageURLString == "https://cdn.example.com/hero.jpg")
-        #expect(decoded.webImageFetchAttempted == true)
+        #expect(decoded.webImageSuppressed == true)
     }
 
     // MARK: - Attempted-flag gating (store)
 
     @MainActor
-    private func makeSavedWebRecipe(imageURLString: String?, attempted: Bool?) -> RecipeDefinition {
+    private func makeSavedWebRecipe(imageURLString: String?, suppressed: Bool?) -> RecipeDefinition {
         let now = Date()
         return RecipeDefinition(
             name: "Web Oats",
@@ -53,58 +56,150 @@ struct RecipeWebImageTests {
                 sourceURLString: "https://example.com/recipes/oats",
                 ingredientLines: ["1 cup oats"],
                 imageURLString: imageURLString,
-                webImageFetchAttempted: attempted
+                webImageSuppressed: suppressed
             )
         )
     }
 
-    /// An already-attempted recipe never re-fetches — the gate must short-circuit before any
-    /// network work (the URL here would fail the guard loudly if it were ever consulted).
+    /// A throwaway `UserDefaults` suite for the device-local attempt sidecar, so these tests never
+    /// touch `.standard`. Callers remove the persistent domain when done.
+    private func scratchAttemptDefaults() -> (defaults: UserDefaults, tearDown: () -> Void) {
+        let suiteName = "fernlet-tests-webimage-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        return (defaults, { defaults.removePersistentDomain(forName: suiteName) })
+    }
+
+    /// A suppressed recipe never fetches — the gate must short-circuit before any network work
+    /// (the URL here would fail the guard loudly if it were ever consulted).
     @MainActor
-    @Test func fetchSkipsWhenAlreadyAttempted() async {
+    @Test func fetchSkipsWhenSuppressed() async {
         let store = makeTestStore()
-        let recipe = makeSavedWebRecipe(imageURLString: "https://example.com/hero.jpg", attempted: true)
+        let recipe = makeSavedWebRecipe(imageURLString: "https://example.com/hero.jpg", suppressed: true)
         store.addSavedRecipe(recipe)
         #expect(await store.fetchRecipeWebImageIfNeeded(for: recipe) == nil)
-        // Still stamped, still photo-less.
-        #expect(store.savedRecipes.first { $0.id == recipe.id }?.webImport?.webImageFetchAttempted == true)
+        // Still suppressed, still photo-less.
+        #expect(store.savedRecipes.first { $0.id == recipe.id }?.webImport?.webImageSuppressed == true)
         #expect(store.recipePhotoData(for: recipe.id) == nil)
+    }
+
+    /// Suppression is read from the LIVE row, not just the caller's copy: a stale un-suppressed
+    /// snapshot must not dodge a suppression stamped after it was captured.
+    @MainActor
+    @Test func fetchHonorsSuppressionStampedAfterTheCallerCopiedTheRow() async {
+        let store = makeTestStore()
+        let staleCopy = makeSavedWebRecipe(imageURLString: "https://example.com/hero.jpg", suppressed: nil)
+        store.addSavedRecipe(staleCopy)
+        // Suppression lands on the live row (e.g. the user deleted the photo on the detail page).
+        store.deleteRecipePhoto(for: staleCopy.id)
+        #expect(await store.fetchRecipeWebImageIfNeeded(for: staleCopy) == nil)
+        #expect(store.recipePhotoData(for: staleCopy.id) == nil)
     }
 
     /// Recipes with no image URL (including every recipe imported before the feature) are no-ops.
     @MainActor
     @Test func fetchSkipsWhenNoImageURL() async {
         let store = makeTestStore()
-        let recipe = makeSavedWebRecipe(imageURLString: nil, attempted: nil)
+        let recipe = makeSavedWebRecipe(imageURLString: nil, suppressed: nil)
         store.addSavedRecipe(recipe)
         #expect(await store.fetchRecipeWebImageIfNeeded(for: recipe) == nil)
-        // No attempt was made, so the flag stays unset — nothing to gate yet.
-        #expect(store.savedRecipes.first { $0.id == recipe.id }?.webImport?.webImageFetchAttempted == nil)
+        // No attempt was made and nothing suppressed — nothing to gate yet.
+        #expect(store.savedRecipes.first { $0.id == recipe.id }?.webImport?.webImageSuppressed == nil)
+        #expect(!RecipeWebImageAttemptMemory.hasAttempted(recipe.id, defaults: store.webImageAttemptDefaults))
     }
 
-    /// One attempt total: a FAILED download (here: guard-refused http URL, so no network happens)
-    /// still persists the attempted flag via the saved-recipe update path — no automatic retry.
+    /// One attempt per DEVICE: a FAILED download (here: guard-refused http URL, so no network
+    /// happens) records the attempt in the device-local sidecar — no automatic retry here — while
+    /// the synced row stays UN-suppressed, so another device on the same iCloud account still gets
+    /// its own single attempt.
     @MainActor
-    @Test func failedAttemptIsPersistedSoItNeverRetries() async {
+    @Test func failedAttemptIsRecordedDeviceLocallyNotOnTheSyncedRow() async {
         let store = makeTestStore()
-        let recipe = makeSavedWebRecipe(imageURLString: "http://127.0.0.1/hero.jpg", attempted: nil)
+        let (defaults, tearDown) = scratchAttemptDefaults()
+        defer { tearDown() }
+        store.webImageAttemptDefaults = defaults
+        let recipe = makeSavedWebRecipe(imageURLString: "http://127.0.0.1/hero.jpg", suppressed: nil)
         store.addSavedRecipe(recipe)
         #expect(await store.fetchRecipeWebImageIfNeeded(for: recipe) == nil)
-        #expect(store.savedRecipes.first { $0.id == recipe.id }?.webImport?.webImageFetchAttempted == true)
-        // And the now-stamped row short-circuits a second call.
-        let stamped = store.savedRecipes.first { $0.id == recipe.id }!
-        #expect(await store.fetchRecipeWebImageIfNeeded(for: stamped) == nil)
+        // Device-local bookkeeping consumed; the synced row carries no suppression.
+        #expect(RecipeWebImageAttemptMemory.hasAttempted(recipe.id, defaults: defaults))
+        #expect(store.savedRecipes.first { $0.id == recipe.id }?.webImport?.webImageSuppressed == nil)
+        // The recorded attempt short-circuits a second call on this device.
+        #expect(await store.fetchRecipeWebImageIfNeeded(for: recipe) == nil)
+        // A "second device" (fresh sidecar) is NOT blocked by this device's attempt.
+        let (secondDeviceDefaults, tearDownSecond) = scratchAttemptDefaults()
+        defer { tearDownSecond() }
+        #expect(!RecipeWebImageAttemptMemory.hasAttempted(recipe.id, defaults: secondDeviceDefaults))
+    }
+
+    /// Cooperative cancellation — popping the detail mid-download — is the user navigating, not a
+    /// failed fetch: the device's one attempt must NOT be burned, so the next open can retry.
+    @MainActor
+    @Test func cancellationDoesNotBurnTheAttempt() async {
+        let store = makeTestStore()
+        let (defaults, tearDown) = scratchAttemptDefaults()
+        defer { tearDown() }
+        store.webImageAttemptDefaults = defaults
+        let recipe = makeSavedWebRecipe(imageURLString: "http://127.0.0.1/hero.jpg", suppressed: nil)
+        store.addSavedRecipe(recipe)
+        // Pre-cancelled task: the (guard-refused, zero-network) download fails inside a cancelled
+        // task — exactly what a popped detail view produces.
+        let task = Task { @MainActor in
+            await store.fetchRecipeWebImageIfNeeded(for: recipe)
+        }
+        task.cancel()
+        #expect(await task.value == nil)
+        #expect(!RecipeWebImageAttemptMemory.hasAttempted(recipe.id, defaults: defaults),
+                "a cancelled fetch must leave the attempt un-spent")
+        // An un-cancelled retry then spends it normally.
+        #expect(await store.fetchRecipeWebImageIfNeeded(for: recipe) == nil)
+        #expect(RecipeWebImageAttemptMemory.hasAttempted(recipe.id, defaults: defaults))
+    }
+
+    /// The user already picked their own photo: the fetch path never downloads behind it and
+    /// suppresses (synced) so the web image can never resurrect — on any device — if that photo is
+    /// later deleted.
+    @MainActor
+    @Test func existingUserPhotoSuppressesInsteadOfFetching() async {
+        let store = makeTestStore()
+        let recipe = makeSavedWebRecipe(imageURLString: "https://example.com/hero.jpg", suppressed: nil)
+        store.addSavedRecipe(recipe)
+        #expect(store.saveRecipePhoto(data: tinyJPEGData(), for: recipe.id))
+        let photoBefore = store.recipePhotoData(for: recipe.id)
+        #expect(await store.fetchRecipeWebImageIfNeeded(for: recipe) == nil)
+        #expect(store.savedRecipes.first { $0.id == recipe.id }?.webImport?.webImageSuppressed == true)
+        #expect(store.recipePhotoData(for: recipe.id) == photoBefore)
+        store.deleteSavedRecipe(store.savedRecipes.first { $0.id == recipe.id }!)
     }
 
     /// Deleting the recipe photo is the user's stated intent: the web image must never resurrect,
-    /// so the deletion path stamps the attempted flag too.
+    /// so the deletion path suppresses (synced) rather than just spending this device's attempt.
     @MainActor
-    @Test func deletingPhotoStampsAttemptedFlag() {
+    @Test func deletingPhotoSuppressesWebImage() {
         let store = makeTestStore()
-        let recipe = makeSavedWebRecipe(imageURLString: "https://example.com/hero.jpg", attempted: nil)
+        let recipe = makeSavedWebRecipe(imageURLString: "https://example.com/hero.jpg", suppressed: nil)
         store.addSavedRecipe(recipe)
         store.deleteRecipePhoto(for: recipe.id)
-        #expect(store.savedRecipes.first { $0.id == recipe.id }?.webImport?.webImageFetchAttempted == true)
+        #expect(store.savedRecipes.first { $0.id == recipe.id }?.webImport?.webImageSuppressed == true)
+    }
+
+    /// The notes sheet's Done path merges ONLY the edited notes into the live row: a suppression
+    /// (or any other store update) landing while the sheet was up survives Done.
+    @MainActor
+    @Test func updateSavedRecipeNotesMergesIntoTheLiveRow() {
+        let store = makeTestStore()
+        let recipe = makeSavedWebRecipe(imageURLString: "https://example.com/hero.jpg", suppressed: nil)
+        store.addSavedRecipe(recipe)
+        // The image fetch (or a photo deletion) stamps the live row while the sheet is open...
+        store.deleteRecipePhoto(for: recipe.id)
+        // ...then Done writes back the notes edited on the PRE-stamp snapshot.
+        store.updateSavedRecipeNotes("my tweaks", forRecipeID: recipe.id)
+        let current = store.savedRecipes.first { $0.id == recipe.id }
+        #expect(current?.notes == "my tweaks")
+        #expect(current?.webImport?.webImageSuppressed == true, "Done must not un-stamp the suppression")
+        // And for a deleted recipe it's a clean no-op.
+        store.deleteSavedRecipe(current!)
+        store.updateSavedRecipeNotes("ghost", forRecipeID: recipe.id)
+        #expect(store.savedRecipes.first { $0.id == recipe.id } == nil)
     }
 
     // MARK: - Mesh receive (no web fetch, sealed local photo)
@@ -138,16 +233,17 @@ struct RecipeWebImageTests {
         )
     }
 
-    /// A mesh-received saved recipe is neutralized on arrival: no image URL, fetch pre-stamped as
-    /// attempted, and the sender's downscaled picture sealed into THIS device's own photo store —
-    /// the receiver performs no web fetch, ever.
+    /// A mesh-received saved recipe is neutralized on arrival: no image URL, web image
+    /// pre-suppressed, and the sender's downscaled picture sealed into THIS device's own photo
+    /// store — the receiver performs no web fetch, ever.
     @MainActor
     @Test func receivedSavedRecipeStoresImageAndNeverWebFetches() async throws {
         let store = makeTestStore()
-        _ = try store.importProximityRecipeShare(savedSharePayload(imageJPEGData: tinyJPEGData()))
+        let outcome = try store.importProximityRecipeShare(savedSharePayload(imageJPEGData: tinyJPEGData()))
+        #expect(outcome == .imported(name: "Shared Oats"))
 
         let imported = try #require(store.savedRecipes.first { $0.name == "Shared Oats" })
-        #expect(imported.webImport?.webImageFetchAttempted == true)
+        #expect(imported.webImport?.webImageSuppressed == true)
         #expect(imported.webImport?.imageURLString == nil)
         #expect(store.recipePhotoData(for: imported.id) != nil)
         // And the lazy path stays inert for it.
@@ -167,8 +263,39 @@ struct RecipeWebImageTests {
 
         let imported = try #require(store.savedRecipes.first { $0.name == "Shared Oats" })
         #expect(store.recipePhotoData(for: imported.id) == nil)
-        #expect(imported.webImport?.webImageFetchAttempted == true)
+        #expect(imported.webImport?.webImageSuppressed == true)
         store.deleteSavedRecipe(imported)
+    }
+
+    /// Accepting a mesh share of an already-imported source URL KEEPS the user's existing recipe —
+    /// photo, notes, and all (the owner's duplicate decision, same as the paste and drain paths).
+    /// Before this rule the mesh path routed through addSavedRecipe's supersede, which permanently
+    /// deleted the user's sealed photo and replaced their notes on a single accept tap.
+    @MainActor
+    @Test func meshShareOfAlreadyImportedURLKeepsTheUsersRecipe() throws {
+        let store = makeTestStore()
+        // The user's own copy: cosmetically different URL spelling (host case + fragment), edited
+        // notes, and their own photo.
+        var mine = makeSavedWebRecipe(imageURLString: nil, suppressed: nil)
+        mine.notes = "my tweaks: extra cinnamon"
+        mine.webImport?.sourceURLString = "HTTPS://Example.com/recipes/oats#print"
+        store.addSavedRecipe(mine)
+        #expect(store.saveRecipePhoto(data: tinyJPEGData(), for: mine.id))
+        let photoBefore = try #require(store.recipePhotoData(for: mine.id))
+
+        // nil fingerprint keeps the test off the real closeness sidecar file; the closeness
+        // recording shares the exact code path either way.
+        let outcome = try store.importProximityRecipeShare(
+            savedSharePayload(imageJPEGData: tinyJPEGData()),
+            fromFingerprint: nil
+        )
+
+        #expect(outcome == .alreadySaved(name: mine.name))
+        #expect(store.savedRecipes.count == 1, "no new row, no supersede")
+        let kept = try #require(store.savedRecipes.first { $0.id == mine.id })
+        #expect(kept.notes == "my tweaks: extra cinnamon")
+        #expect(store.recipePhotoData(for: mine.id) == photoBefore, "the user's sealed photo must survive the accept")
+        store.deleteSavedRecipe(kept)
     }
 
     // MARK: - Wire compatibility (optional key, version stays 1)
@@ -215,6 +342,30 @@ struct RecipeWebImageTests {
         let image = Data([0xFF, 0xD8, 0xFF, 0xE0])
         let payload = savedSharePayload(imageJPEGData: image)
         #expect(payload.omittingShareNotes().imageJPEGData == image)
+    }
+
+    /// The "Include picture" strip is the mirror image: it clears ONLY the image, leaving the
+    /// notes (and everything else) untouched.
+    @Test func omittingImageKeepsTheNotes() {
+        let payload = savedSharePayload(imageJPEGData: Data([0xFF, 0xD8, 0xFF, 0xE0]))
+        let stripped = payload.omittingImage()
+        #expect(stripped.imageJPEGData == nil)
+        #expect(stripped.recipe.saved?.summary == "Cook the oats.")
+        #expect(stripped.recipe.saved?.name == "Shared Oats")
+    }
+
+    /// The receive-side door check: an image above the wire cap — bytes an honest sender never
+    /// produces — is dropped before the payload can sit in the pending queue, while a within-cap
+    /// image (and the recipe itself) rides through untouched.
+    @Test func droppingOversizeImageEnforcesTheWireCapAtTheDoor() {
+        let oversize = savedSharePayload(imageJPEGData: Data(count: ProximityRecipeSharePayload.maxImageBytes + 1))
+        let dropped = oversize.droppingOversizeImage()
+        #expect(dropped.imageJPEGData == nil)
+        #expect(dropped.recipe.saved?.name == "Shared Oats")
+
+        let fits = savedSharePayload(imageJPEGData: Data([0xFF, 0xD8, 0xFF, 0xE0]))
+        #expect(fits.droppingOversizeImage().imageJPEGData == fits.imageJPEGData)
+        #expect(savedSharePayload(imageJPEGData: nil).droppingOversizeImage().imageJPEGData == nil)
     }
 
     // MARK: - Sender-side downscale

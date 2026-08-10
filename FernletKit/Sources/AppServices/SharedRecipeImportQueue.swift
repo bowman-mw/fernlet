@@ -270,15 +270,17 @@ extension RecipeDefinition {
     /// deliberate, because the sealed recipe photo is keyed by it, so reusing the id carries the
     /// photo across the refresh with no migration — plus the user's `notes` verbatim (the import
     /// summary only seeds notes on FIRST import; a refresh never overwrites what the user may
-    /// have edited), `createdAt`, fork provenance, and `webImageFetchAttempted` (a user who
-    /// deleted the web picture, or already has one, must not get a surprise re-download from a
-    /// refresh).
+    /// have edited), `createdAt`, fork provenance, and `webImageSuppressed` (a user who deleted
+    /// the web picture, or already has one, must not get a surprise re-download from a refresh).
+    /// The caller passes the CURRENT saved row as `existing` — merging over a stale caller-held
+    /// snapshot would revert notes edited or suppression stamped while the re-import fetch was in
+    /// flight (see `FernletStore.applyReimportedRecipe`, which re-resolves the live row).
     public init(reimported: ImportedRecipe, preserving existing: RecipeDefinition, now: Date = Date()) {
         self.init(importedRecipe: reimported, now: now)
         id = existing.id
         notes = existing.notes
         createdAt = existing.createdAt
         parentRecipeID = existing.parentRecipeID
-        webImport?.webImageFetchAttempted = existing.webImport?.webImageFetchAttempted
+        webImport?.webImageSuppressed = existing.webImport?.webImageSuppressed
     }
 }

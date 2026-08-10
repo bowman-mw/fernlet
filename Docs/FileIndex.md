@@ -241,6 +241,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletKit/Sources/FernletDomainModel/NavigationEnums.swift` | Screen/widget/shortcut navigation enums (`FernletScreen`, `ConnectionInspectorMode`). |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/ScoringValueTypes.swift` | Pure scoring value types (`ScoringWeights`) carved out of the app-layer scoring logic. |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/FoodItemSearch.swift` | Pure relevance-search value logic over `FoodItem` plus a restaurant-chain brand lexicon (`FoodItemSearch`, `FoodBrandLexicon`). |
+| `Fernlet/FernletKit/Sources/FernletDomainModel/RecipeSourceURLMatcher.swift` | The one source-URL normalization rule (scheme/host case-insensitive, fragment stripped, query kept) behind the zero-network duplicate skip, the supersede-on-re-import match, the superseded-photo cleanup, and the mesh already-saved decision. |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/EnumDecodeCompat.swift` | Forward-compatible decode helpers (`EnumDecodeCompat`) for synced raw-value enums: park and re-adopt unknown tokens via side channels. |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/AIAnalysisRetryRecord.swift` | Codable retry-queue record (`AIAnalysisRetryRecord`) for pending AI-analysis payloads; element type of `FernletSnapshot.retryQueue`. |
 | `Fernlet/FernletKit/Sources/FernletDomainModel/AIDestination.swift` | `AIDestination` enum naming where an AI call is routed (on-device FoundationModels or web nutrition lookup). |
@@ -309,6 +310,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/Fernlet/CookingMode.swift` | `CookingModeAvailability` — the single rule deciding whether a recipe gets a "Cook" action (authored steps, structured ingredients, or a web import's free-text lines). UIKit-free. |
 | `Fernlet/Fernlet/CookingLiveActivityController.swift` | App-target-only requester of the cooking Live Activity (starting one is the only thing solely the app process can do). Updates/ends go through the shared `CookingActivityBridge`. |
 | `Fernlet/Fernlet/BarcodeServingStepView.swift` | The quick serving-count step after a barcode scan, plus its device-local last-serving memory keyed by normalized GTIN — a `UserDefaults` sidecar deliberately kept off the synced/sealed blob path. |
+| `Fernlet/Fernlet/RecipeWebImageAttemptMemory.swift` | Device-local `UserDefaults` sidecar recording which recipes' one automatic web-image download THIS device already attempted — the per-device half of the “one attempt per device, suppression syncs” contract (the synced half is `RecipeWebImport.webImageSuppressed`). |
 
 ## AI Context And Providers
 
@@ -412,7 +414,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletKit/Sources/ProximityKit/Wire/ActivityPayloads.swift` | Group Activities wire envelopes plus `schemaVersion`-gated join-token/roster-snapshot signing and verification and the `ActivityParamsHash` descriptor hash. |
 | `Fernlet/FernletKit/Sources/ProximityKit/Wire/CanonicalSignatureSerializer.swift` | Deterministic, cross-platform-stable positional length-prefixed binary canonical-byte serializer for Ed25519 signing, replacing JSON `.sortedKeys` to prevent cross-stack `signatureInvalid`. |
 | `Fernlet/FernletKit/Sources/ProximityKit/Wire/MessagePayloads.swift` | `TempMessagePayload` wire value type for a single sealed live-session chat message (id/text/sentAt); receiver sanitizes and length-caps before use. |
-| `Fernlet/FernletKit/Sources/ProximityKit/Wire/RecipeSharePayloads.swift` | `ProximityRecipeSharePayload` wire envelope wrapping a `ProximitySharedRecipe` for in-person recipe sharing, with a share-notes convenience check. |
+| `Fernlet/FernletKit/Sources/ProximityKit/Wire/RecipeSharePayloads.swift` | `ProximityRecipeSharePayload` wire envelope wrapping a `ProximitySharedRecipe` for in-person recipe sharing, plus the optional 512 KB `imageJPEGData` wire image (cap enforced at the receive door via `droppingOversizeImage()`) and the share-notes / include-picture strips. |
 | `Fernlet/FernletKit/Sources/ProximityKit/Wire/SealedIntroductionEnvelope.swift` | Transport wrapper carrying only the ciphertext of a KA-sealed identity intro/ack for presence-heart handshakes, so a tag-replay forger cannot deanonymize the sender's identity. |
 | `Fernlet/FernletKit/Sources/ProximityKit/Wire/TrainerPayloads.swift` | `TrainerExportPayload` wire envelope carrying the opaque, size-bounded curated Trainer/Nutritionist export bundle; sealing-required so an unsealed send fails closed at verify. |
 | `Fernlet/FernletKit/Sources/ProximityKit/Wire/SealedPayloadFraming.swift` | wire2 sealed-body framing (compress + pad inside the AEAD). Threaded through `IdentityService.seal/open` and envelope verify; derived from the peer's advertised capabilities, never from the bytes alone. |
@@ -595,7 +597,9 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/FernletTests/ProximityRecordDecodeCompatTests.swift` | Forward-compatibility tests for persisted proximity records (trust vault, audit, session logs). |
 | `Fernlet/FernletTests/ProximityWireOffMainDecodeTests.swift` | Proximity wire-type Sendable conformance and off-main decode/signature-verification tests. |
 | `Fernlet/FernletTests/RecentBitesTests.swift` | Home "Recent bites" 7-day photographed-meal window tests. |
-| `Fernlet/FernletTests/RecipeWebImporterTests.swift` | Recipe web-importer SSRF/URL-safety allow- and block-list tests. |
+| `Fernlet/FernletTests/RecipeWebImporterTests.swift` | Recipe web-importer SSRF/URL-safety allow- and block-list tests (including encoded IP-literal spellings), page-image extraction/normalization, and the image-download MIME/sniff/size guards. |
+| `Fernlet/FernletTests/RecipeWebImageTests.swift` | Recipe web-image feature tests: tolerant `RecipeWebImport` decode, the per-device attempt + synced suppression gates (cancellation, photo-wins, deletion), mesh receive neutralization and the already-saved keep decision, and wire image compatibility/strips. |
+| `Fernlet/FernletTests/RecipeSourceURLTests.swift` | `RecipeSourceURLMatcher` normalization table plus re-import contract tests (live-row merge, deleted-row nil, attempt re-arm, drain duplicate skip). |
 | `Fernlet/FernletTests/ReplayCacheTests.swift` | Replay-cache oldest-eviction and envelope-replay-detection tests. |
 | `Fernlet/FernletTests/SharedRecipeImportQueueMirrorTests.swift` | Drift guard for the share extension's hand-copied `SharedRecipeImportRecord` mirror: parses both source files and requires identical field lists (the `budgetDeferredDayKey` stripping regression), plus wire-format round-trip, `NSFileCoordinator` coordination, and container-fallback-order parity. |
 | `Fernlet/FernletTests/CoreDataStagedBlobLoadTests.swift` | Parity coverage for `CoreDataFernletRepository`'s two aggregate-blob entry points: async/sync agreement, first-launch legacy migration, and read-only-recovery latching on fetch failure and corrupt payload via `loadSnapshotAsync`. |

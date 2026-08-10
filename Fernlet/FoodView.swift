@@ -763,8 +763,10 @@ struct SavedRecipeNotesSheet: View {
     init(store: FernletStore, recipe: RecipeDefinition) {
         self.store = store
         // Re-resolve the LIVE row by id: the caller's copy can be stale (captured before a
-        // re-import replaced the definition, or before the web-image attempted flag was stamped),
-        // and Done writes this whole value back — editing notes must never clobber a refresh.
+        // re-import replaced the definition, or before a web-image suppression was stamped).
+        // Done then merges ONLY the edited notes back into the then-current row (see
+        // `FernletStore.updateSavedRecipeNotes`), so neither pre-open nor while-open store
+        // updates are ever clobbered by editing notes.
         _recipe = State(initialValue: store.savedRecipes.first(where: { $0.id == recipe.id }) ?? recipe)
     }
 
@@ -863,7 +865,10 @@ struct SavedRecipeNotesSheet: View {
                 .padding(.bottom, 10)
             }
             SheetSaveBar(label: "Done") {
-                store.updateSavedRecipe(recipe)
+                // Merge only the field this sheet edits into the LIVE row — writing the whole
+                // at-open snapshot back would revert store updates that landed while the sheet
+                // was up (e.g. the image fetch stamping a suppression, or a cloud refresh).
+                store.updateSavedRecipeNotes(recipe.notes, forRecipeID: recipe.id)
                 dismiss()
             }
         }
@@ -3593,10 +3598,14 @@ struct RecipeDetailView: View {
             } else if let fetched = await store.fetchRecipeWebImageIfNeeded(for: recipe) {
                 // Lazy web-image path (owner decision 2026-08-09): a share-extension-imported
                 // recipe stored only the page's image URL — download it on this first open (the
-                // user is present), sealed and one-attempt-only inside the store method. Recipes
-                // whose fetch was already attempted, whose photo was deleted, or that arrived over
-                // the mesh all no-op here.
-                photo = await UIImage(data: fetched)?.byPreparingForDisplay()
+                // user is present), sealed and one-attempt-per-device inside the store method.
+                // Recipes whose fetch this device already attempted, whose picture is suppressed
+                // (photo deleted), or that arrived over the mesh all no-op there.
+                let prepared = await UIImage(data: fetched)?.byPreparingForDisplay()
+                // Adopt the fetched bytes only while the user hasn't picked their own photo
+                // mid-download — the store re-validates the same race on disk; this mirrors it
+                // on screen so a pick during the fetch is never visually clobbered.
+                if photo == nil { photo = prepared }
             }
         }
         .destructiveConfirmation($pendingDestructiveAction)
@@ -3924,8 +3933,12 @@ struct RecipeDetailView: View {
     }
 
     /// Runs the explicit "Re-import from source" (owner decision 2026-08-09): re-fetches the source
-    /// page and replaces the definition in place, preserving the photo and notes. A failed fetch
-    /// leaves the recipe exactly as it was — only the notice line reports it.
+    /// page and replaces the definition in place, preserving the photo and notes (the store merges
+    /// over the LIVE row, so notes edited while the fetch was in flight survive too). A failed
+    /// fetch leaves the recipe exactly as it was — only the notice line reports it — and a recipe
+    /// deleted mid-flight reports that instead of a false success. A successful refresh also
+    /// re-arms this device's one automatic web-image attempt, so a recipe still missing its
+    /// picture gets a fresh download while the user is right here.
     private func reimportFromSource() {
         let current = recipe
         let host = current.webImport?.sourceURL?.host() ?? "the source page"
@@ -3933,9 +3946,18 @@ struct RecipeDetailView: View {
         reimportNotice = "Refreshing from \(host)..."
         Task {
             do {
-                let refreshed = try await store.reimportSavedRecipeFromSource(current)
-                reimportedRecipe = refreshed
-                reimportNotice = "Refreshed from \(host). Your photo and notes are kept."
+                if let refreshed = try await store.reimportSavedRecipeFromSource(current) {
+                    reimportedRecipe = refreshed
+                    reimportNotice = "Refreshed from \(host). Your photo and notes are kept."
+                    // The refresh re-armed the web-image attempt: if the recipe still has no
+                    // picture, fetch it now (same post-pick screen guard as the first-open path).
+                    if photo == nil, let fetched = await store.fetchRecipeWebImageIfNeeded(for: refreshed) {
+                        let prepared = await UIImage(data: fetched)?.byPreparingForDisplay()
+                        if photo == nil { photo = prepared }
+                    }
+                } else {
+                    reimportNotice = "This recipe was deleted, so there's nothing to refresh."
+                }
             } catch {
                 reimportNotice = (error as? LocalizedError)?.errorDescription ?? "Could not re-import this recipe."
             }
