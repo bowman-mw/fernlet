@@ -18,7 +18,10 @@ import FernletUI
 ///
 /// Data rules carried over unchanged from the two retired pages:
 /// - Period reads go through `PeriodTrackerStore` (fail-closed `isVisible` seam), reloaded via
-///   `.task(id: lockService.state)`; the view additionally skips the HealthKit *authorization
+///   `.task(id:)` keyed on ``LoadTrigger`` — the lock state PLUS both DERIVED visibility gates,
+///   so un-hiding a half mid-mount restarts the load by construction (pre-merge the hub
+///   re-created each page on un-hide; the merged page survives via the other half, so the flip
+///   itself must be a load trigger). The view additionally skips the HealthKit *authorization
 ///   request* while period is hidden, since that prompt is view-level and outside the seam.
 /// - Intimacy presence max-merges the sealed `IntimacyLogStore` funnel with HealthKit per-day
 ///   counts, and the view-level guard in `loadIntimacyCalendar` both SKIPS the HealthKit read
@@ -50,6 +53,16 @@ struct CycleTrackerView: View {
     @State private var intimacyEventsByDay: [String: Int] = [:]
     /// Decrypted intimacy logs resident for the day detail. Scrubbed with `intimacyEventsByDay`.
     @State private var intimacyLogs: [IntimacyLog] = []
+
+    /// Identity for the page's load task: any change restarts it. Folds the DERIVED
+    /// `sensitiveSurfaceVisibility` in alongside the lock state, so flipping either half visible
+    /// mid-mount reloads that half's data — no reliance on a page re-appearance, and every writer
+    /// of the derived value is a trigger by construction (the house rule: key off the derived
+    /// value, never the setter). Internal so the reload-on-flip identity is unit-testable.
+    struct LoadTrigger: Equatable {
+        var lockState: FernletLockState
+        var visibility: SensitiveSurfaceVisibility
+    }
 
     var body: some View {
         NavigationStack {
@@ -109,7 +122,13 @@ struct CycleTrackerView: View {
                     }
                 )
             }
-            .task(id: lockService.state) {
+            // Keyed on the DERIVED visibility gates alongside the lock state so un-hiding a half
+            // while the page stays mounted (it survives via the other half) restarts the load —
+            // every writer of the derived value (Settings toggle, profile edit, a multi-device
+            // settings sync) is covered by construction, never just the setter. Without this the
+            // just-un-hidden period half would render affirmatively wrong empty states over
+            // existing data until a re-appearance or lock cycle happened to restart the task.
+            .task(id: LoadTrigger(lockState: lockService.state, visibility: store.sensitiveSurfaceVisibility)) {
                 await loadPeriodIfUnlocked()
                 await loadIntimacyCalendar()
             }
@@ -287,8 +306,15 @@ struct CycleTrackerView: View {
             .fernletWrappingText()
     }
 
-    private var entriesByKey: [String: CycleDayEntry] {
-        Dictionary(uniqueKeysWithValues: periodStore.entries.map { ($0.dateKey, $0) })
+    /// Flow-tint inputs for the calendar card, keyed by day key. Empty while the period half is
+    /// hidden — a view-seam BACK-STOP mirroring the intimacy half's gated inputs in the day-detail
+    /// push. The authoritative enforcement stays `PeriodTrackerStore`'s fail-closed `isVisible`
+    /// seam plus ContentView's value-keyed scrub, but a non-setter writer can flip the derived
+    /// gate off with the store's entries still resident in the same update; this by-construction
+    /// empty map keeps flow tints from rendering in that window. Internal so the gate is testable.
+    var entriesByKey: [String: CycleDayEntry] {
+        guard store.isPeriodTrackingVisible else { return [:] }
+        return Dictionary(uniqueKeysWithValues: periodStore.entries.map { ($0.dateKey, $0) })
     }
 
     /// Days with at least one intimacy event, from the merged sealed + HealthKit counts. Empty
@@ -377,9 +403,15 @@ struct CycleTrackerView: View {
         periodContext?.refresh(unlocked: unlocked, wellbeingByDay: store.periodWellbeingByDay)
     }
 
-    private func entry(for date: Date) -> CycleDayEntry {
+    /// The day-detail entry for a tapped date. While the period half is hidden this returns the
+    /// blank placeholder even if `periodStore.entries` still holds a real entry mid-flip — the
+    /// same view-seam back-stop as `entriesByKey`, so a stale render can never carry period
+    /// plaintext into the detail push. Internal so the gate is testable.
+    func entry(for date: Date) -> CycleDayEntry {
         let key = FernletDate.dayKey(for: date)
-        return periodStore.entries.first { $0.dateKey == key } ?? CycleDayEntry(date: date, dateKey: key, samples: [], narrative: nil, phase: .unknown)
+        let placeholder = CycleDayEntry(date: date, dateKey: key, samples: [], narrative: nil, phase: .unknown)
+        guard store.isPeriodTrackingVisible else { return placeholder }
+        return periodStore.entries.first { $0.dateKey == key } ?? placeholder
     }
 }
 
