@@ -157,15 +157,15 @@ struct FoodView: View {
                                                         recipe: recipe,
                                                         onEdit: { editingRecipe = recipe },
                                                         onSaveFork: { store.addForkedRecipe($0) },
-                                                        onLog: { mealType in store.logRecipe(recipe, mealType: mealType) },
-                                                        onShare: {
+                                                        onLog: { current, mealType in store.logRecipe(current, mealType: mealType) },
+                                                        onShare: { current in
                                                             recipeShareDraft = ProximityRecipeShareDraft(
-                                                                title: recipe.name,
-                                                                shareText: store.recipeShareText(for: recipe),
-                                                                payload: store.proximityRecipeSharePayload(for: recipe)
+                                                                title: current.name,
+                                                                shareText: store.recipeShareText(for: current),
+                                                                payload: store.proximityRecipeSharePayload(for: current)
                                                             )
                                                         },
-                                                        onCookLog: { mealType, day in store.logRecipe(recipe, mealType: mealType, date: day) }
+                                                        onCookLog: { current, mealType, day in store.logRecipe(current, mealType: mealType, date: day) }
                                                     )
                                                 } label: {
                                                     RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
@@ -205,15 +205,15 @@ struct FoodView: View {
                                                         recipe: recipe,
                                                         onEdit: { editingSavedRecipe = recipe },
                                                         onSaveFork: { store.addForkedSavedRecipe($0) },
-                                                        onLog: { mealType in store.logSavedRecipe(recipe, mealType: mealType) },
-                                                        onShare: {
+                                                        onLog: { current, mealType in store.logSavedRecipe(current, mealType: mealType) },
+                                                        onShare: { current in
                                                             recipeShareDraft = ProximityRecipeShareDraft(
-                                                                title: recipe.name,
-                                                                shareText: store.savedRecipeShareText(for: recipe),
-                                                                payload: store.proximityRecipeSharePayload(for: recipe)
+                                                                title: current.name,
+                                                                shareText: store.savedRecipeShareText(for: current),
+                                                                payload: store.proximityRecipeSharePayload(for: current)
                                                             )
                                                         },
-                                                        onCookLog: { mealType, day in store.logSavedRecipe(recipe, mealType: mealType, date: day) }
+                                                        onCookLog: { current, mealType, day in store.logSavedRecipe(current, mealType: mealType, date: day) }
                                                     )
                                                 } label: {
                                                     SavedRecipeRow(recipe: recipe)
@@ -628,15 +628,15 @@ struct RecipeImportSheet: View {
             recipe: recipe,
             onEdit: { editingSavedRecipe = recipe },
             onSaveFork: { store.addForkedSavedRecipe($0) },
-            onLog: { mealType in store.logSavedRecipe(recipe, mealType: mealType) },
-            onShare: {
+            onLog: { current, mealType in store.logSavedRecipe(current, mealType: mealType) },
+            onShare: { current in
                 recipeShareDraft = ProximityRecipeShareDraft(
-                    title: recipe.name,
-                    shareText: store.savedRecipeShareText(for: recipe),
-                    payload: store.proximityRecipeSharePayload(for: recipe)
+                    title: current.name,
+                    shareText: store.savedRecipeShareText(for: current),
+                    payload: store.proximityRecipeSharePayload(for: current)
                 )
             },
-            onCookLog: { mealType, day in store.logSavedRecipe(recipe, mealType: mealType, date: day) }
+            onCookLog: { current, mealType, day in store.logSavedRecipe(current, mealType: mealType, date: day) }
         )
     }
     #endif
@@ -3383,13 +3383,20 @@ struct RecipeDetailView: View {
     /// Persists an F4 substitution FORK into the SAME store the source recipe lives in (blob vs saved).
     /// Wired per call site; a no-op default keeps non-substitutable call sites compiling unchanged.
     var onSaveFork: (RecipeDefinition) -> Void = { _ in }
-    var onLog: (MealType) -> Void
-    var onShare: () -> Void
+    /// Logs the recipe. Receives the definition CURRENTLY on screen (`reimportedRecipe ??
+    /// initialRecipe`) — not the copy the call site captured at push time — so logging right after
+    /// an in-place "Re-import from source" records the refreshed macros the user is looking at,
+    /// never the stale pre-refresh snapshot.
+    var onLog: (RecipeDefinition, MealType) -> Void
+    /// Opens the proximity share sheet for the definition CURRENTLY on screen (same currency rule
+    /// as `onLog`: a peer must receive the refreshed ingredients, not a pre-re-import copy).
+    var onShare: (RecipeDefinition) -> Void
     /// Logs the meal on cooking-mode COMPLETION, anchored to the day-key captured when the cook STARTED
     /// (F5, §6.4). Distinct from `onLog` (immediate, today): routed per call site to `logRecipe` (manual)
-    /// vs `logSavedRecipe` (saved/web), each with an explicit `date:`. A no-op default keeps any
-    /// non-updated call site compiling; the four real sites wire it.
-    var onCookLog: (MealType, String) -> Void = { _, _ in }
+    /// vs `logSavedRecipe` (saved/web), each with an explicit `date:`. Receives the on-screen
+    /// definition like `onLog`. A no-op default keeps any non-updated call site compiling; the
+    /// real sites wire it.
+    var onCookLog: (RecipeDefinition, MealType, String) -> Void = { _, _, _ in }
 
     /// Creates the detail. Mirrors the old memberwise init exactly (same labels, same defaults) —
     /// it exists only because `initialRecipe` is private, which hides the memberwise init.
@@ -3398,9 +3405,9 @@ struct RecipeDetailView: View {
         recipe: RecipeDefinition,
         onEdit: @escaping () -> Void,
         onSaveFork: @escaping (RecipeDefinition) -> Void = { _ in },
-        onLog: @escaping (MealType) -> Void,
-        onShare: @escaping () -> Void,
-        onCookLog: @escaping (MealType, String) -> Void = { _, _ in }
+        onLog: @escaping (RecipeDefinition, MealType) -> Void,
+        onShare: @escaping (RecipeDefinition) -> Void,
+        onCookLog: @escaping (RecipeDefinition, MealType, String) -> Void = { _, _, _ in }
     ) {
         self.store = store
         self.initialRecipe = recipe
@@ -3627,7 +3634,11 @@ struct RecipeDetailView: View {
         .fullScreenCover(isPresented: $showingCookingMode) {
             // Carry the detail page's ephemeral "Cook for N" into cooking mode so mise opens at that yield
             // instead of re-defaulting to the base (nil → base yield inside CookingModeView).
-            CookingModeView(store: store, recipe: recipe, initialYield: cookYield, onLogToDay: onCookLog)
+            // The completion log routes through onCookLog with the definition on screen at cook
+            // start, mirroring onLog's currency rule.
+            CookingModeView(store: store, recipe: recipe, initialYield: cookYield, onLogToDay: { mealType, day in
+                onCookLog(recipe, mealType, day)
+            })
         }
     }
 
@@ -3852,7 +3863,8 @@ struct RecipeDetailView: View {
         VStack(spacing: 10) {
             Menu {
                 ForEach(MealType.allCases) { mealType in
-                    Button(mealType.rawValue) { onLog(mealType) }
+                    // Pass the definition on screen — after a re-import this is the refreshed one.
+                    Button(mealType.rawValue) { onLog(recipe, mealType) }
                 }
             } label: {
                 Label("Log this recipe", systemImage: "fork.knife")
@@ -3881,7 +3893,7 @@ struct RecipeDetailView: View {
                     secondaryActionLabel("Edit", icon: "pencil")
                 }
                 .buttonStyle(.plain)
-                Button { onShare() } label: {
+                Button { onShare(recipe) } label: {
                     secondaryActionLabel("Share", icon: "square.and.arrow.up")
                 }
                 .buttonStyle(.plain)
@@ -4299,15 +4311,15 @@ struct RecipeBookSheet: View {
                                                 recipe: recipe,
                                                 onEdit: { editingRecipe = recipe; dismiss() },
                                                 onSaveFork: { store.addForkedRecipe($0) },
-                                                onLog: { mealType in store.logRecipe(recipe, mealType: mealType); dismiss() },
-                                                onShare: {
+                                                onLog: { current, mealType in store.logRecipe(current, mealType: mealType); dismiss() },
+                                                onShare: { current in
                                                     recipeShareDraft = ProximityRecipeShareDraft(
-                                                        title: recipe.name,
-                                                        shareText: store.recipeShareText(for: recipe),
-                                                        payload: store.proximityRecipeSharePayload(for: recipe)
+                                                        title: current.name,
+                                                        shareText: store.recipeShareText(for: current),
+                                                        payload: store.proximityRecipeSharePayload(for: current)
                                                     )
                                                 },
-                                                onCookLog: { mealType, day in store.logRecipe(recipe, mealType: mealType, date: day) }
+                                                onCookLog: { current, mealType, day in store.logRecipe(current, mealType: mealType, date: day) }
                                             )
                                         } label: {
                                             RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
@@ -4351,15 +4363,15 @@ struct RecipeBookSheet: View {
                                                 recipe: recipe,
                                                 onEdit: { editingSavedRecipe = recipe; dismiss() },
                                                 onSaveFork: { store.addForkedSavedRecipe($0) },
-                                                onLog: { mealType in store.logSavedRecipe(recipe, mealType: mealType); dismiss() },
-                                                onShare: {
+                                                onLog: { current, mealType in store.logSavedRecipe(current, mealType: mealType); dismiss() },
+                                                onShare: { current in
                                                     recipeShareDraft = ProximityRecipeShareDraft(
-                                                        title: recipe.name,
-                                                        shareText: store.savedRecipeShareText(for: recipe),
-                                                        payload: store.proximityRecipeSharePayload(for: recipe)
+                                                        title: current.name,
+                                                        shareText: store.savedRecipeShareText(for: current),
+                                                        payload: store.proximityRecipeSharePayload(for: current)
                                                     )
                                                 },
-                                                onCookLog: { mealType, day in store.logSavedRecipe(recipe, mealType: mealType, date: day) }
+                                                onCookLog: { current, mealType, day in store.logSavedRecipe(current, mealType: mealType, date: day) }
                                             )
                                         } label: {
                                             SavedRecipeRow(recipe: recipe)
