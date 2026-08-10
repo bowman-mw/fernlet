@@ -62,6 +62,7 @@ struct PrivacyWipeCoverageTests {
         "scrubStressLocalState",
         "worryBoxResetHook",
         "BarcodeServingMemory.clearAll",
+        "RecipeWebImageAttemptMemory.clearAll",
         "guidedRunStateStore.clear",
         "cookingRunStateStore.clear",
         "clearSensitiveVisibilityResolution",
@@ -356,6 +357,44 @@ struct PrivacyWipeMediaKeySurvivalTests {
         #expect(
             after == before,
             "the wipe destroyed the shared media key: every photo on the deliberately-kept friend photo wall now decrypts to garbage"
+        )
+    }
+}
+
+/// The behavioral half of the `RecipeWebImageAttemptMemory.clearAll` manifest row (security-hardening
+/// P0c): the device-local "one automatic web-image attempt per recipe" `UserDefaults` sidecar must be
+/// REMOVED by "delete everything" — the reverse direction of `PrivacyWipeMediaKeySurvivalTests`, which
+/// asserts survival of a deliberately-kept surface.
+///
+/// Separate suite for the same reason as the media-key one: it drives a real `FernletStore` through the
+/// real `deleteAllData` funnel (the source scans above are pure), and a live wipe touches process-wide
+/// keychain + preferences state, so it is serialized.
+@MainActor
+@Suite(.serialized)
+struct PrivacyWipeAttemptMemoryRemovalTests {
+
+    @Test func deleteAllClearsTheRecipeWebImageAttemptMemory() async {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("wipe-attempt-memory-\(UUID().uuidString).json")
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: url))
+        // Isolate the sidecar from the shared `.standard` suite (the injection seam exists for
+        // exactly this — see `webImageAttemptDefaults`); record + wipe still share ONE instance,
+        // which is the contract the manifest token documents.
+        let suiteName = "fernlet-tests-wipe-attempt-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        store.webImageAttemptDefaults = defaults
+
+        let recipeID = UUID()
+        RecipeWebImageAttemptMemory.recordAttempt(recipeID, defaults: store.webImageAttemptDefaults)
+        #expect(RecipeWebImageAttemptMemory.hasAttempted(recipeID, defaults: store.webImageAttemptDefaults),
+                "precondition: the attempt was not recorded")
+
+        await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(
+            !RecipeWebImageAttemptMemory.hasAttempted(recipeID, defaults: store.webImageAttemptDefaults),
+            "delete everything left the web-image attempt bookkeeping behind — the sidecar outlived the recipes it described"
         )
     }
 }
