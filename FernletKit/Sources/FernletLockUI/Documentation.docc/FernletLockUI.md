@@ -19,21 +19,39 @@ SwiftUI presentation code.
 The module has three cooperating pieces. ``FernletLockSetupView`` is the five-step
 first-time configuration wizard (lock-kind picker, entry, confirmation, optional biometric
 toggle, and a mandatory no-recovery disclosure) that ends in
-`FernletLockService.configure(credential:)`. ``FernletLockView`` is the unlock screen: it
+`FernletLockService.configure(credential:grantingScope:)`. ``FernletLockView`` is the unlock screen: it
 renders the credential prompt for the configured kind, auto-triggers Face ID / Touch ID at
 most once per lock session via the service's `consumeAutoBiometricPromptOpportunity()`
 handshake, and mirrors the service's failure ladder — remaining-attempt warnings, an
 escalating-cooldown countdown card, and a reset-required card whose only exit is a
 destructive reset. ``FernletNumericPad`` is the shared 3×4 PIN keypad both flows (and the
 app's passcode-change settings) use instead of the system keyboard. Tying them together,
-`FernletLockGateModifier` — applied through the public `fernletLockGate(active:shouldLockOnDisappear:)`
-extension on `View` — overlays ``FernletLockView`` over gated content while the service is
-locked, offers ``FernletLockSetupView`` when no lock is configured yet, and re-locks with
+`FernletLockGateModifier` — applied through the public
+`fernletLockGate(scope:active:shouldLockOnDisappear:)` extension on `View` — overlays
+``FernletLockView`` over gated content while the service is locked *for that gate's scope*,
+offers ``FernletLockSetupView`` when no lock is configured yet, and re-locks with
 `lock(reason: .viewDisappeared)` when the gated screen genuinely departs.
 
+**Every entry point in this module names a `FernletLockScope`, and none of them defaults it.**
+``FernletLockView(scope:onUnlocked:onResetRequested:)``, ``FernletLockSetupView(grantingScope:)``
+and `fernletLockGate(scope:…)` each take the surface they speak for, so a newly gated screen
+cannot silently inherit another screen's unlock by forgetting to identify itself. The gate's
+`isLocked` therefore asks `isUnlocked(for: scope)` — never "is anything unlocked" — and its
+`onAppear` calls `revokeUnlockOutside(scope)` so an *arriving* surface revokes a foreign
+unlock rather than inheriting it. That appear-side revoke is the load-bearing half: the
+departure-side `onDisappear` re-lock is legitimately suppressed by covering sheets, the
+camera's full-screen cover and scene transitions, so a gate must not depend on the surface it
+replaced having locked itself. Two gates sharing one scope (the progress-photo strip and its
+pushed detail) share one unlock session; different scopes never do, which costs a fresh
+authentication per hop between the Private tab, the photo strip and Settings → App lock.
+
 The gate encodes the module's central invariant: **one unlock session never outlives the
-screen it unlocked.** Re-locking scrubs the in-memory content key, so every re-entry
-re-prompts. Two lifecycle subtleties keep that invariant from misfiring. First, SwiftUI does
+screen it unlocked — and it covers exactly one screen while it lives.** Re-locking scrubs the
+in-memory content key, so every re-entry re-prompts. The service backs that up beneath the UI:
+the sealed-content key is released only to `.privateHub` (`contentKey(for:)`), and it is only
+kept resident at all for that scope — a progress-photo or App-lock-settings unlock recovers the
+key as the act of verifying the passcode and then drops it, so the gate's scope check is
+belt-and-braces rather than the only barrier. Two lifecycle subtleties keep that invariant from misfiring. First, SwiftUI does
 not fire `onDisappear` on a view covered by a `.sheet`, so child sheets can be presented
 over gated content without re-locking. Second, iOS bounces the scene through
 `.inactive`/`.active` while Face ID presents its system dialog, which can fire spurious
@@ -64,7 +82,7 @@ internally — so a service-side policy change updates the counter automatically
 
 ### Gating content behind the lock
 
-- ``SwiftUICore/View/fernletLockGate(active:shouldLockOnDisappear:)``
+- ``SwiftUICore/View/fernletLockGate(scope:active:shouldLockOnDisappear:)``
 
 ### Setting up the lock
 
