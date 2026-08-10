@@ -4,7 +4,8 @@
 //
 //  In-app Privacy Policy screen (App Store submission blocker A1). Renders the policy text — the
 //  same substance as Docs/Privacy-Policy.md — in the app's voice and type system. The identical
-//  text must also be hosted at a public URL and entered in App Store Connect; keep the two in sync.
+//  text must also be hosted at a public URL (Site/privacy/index.html) and entered in App Store
+//  Connect; keep all three in sync.
 //
 //  Copy finalized 2026-07-19; revised 2026-08-09 (perpetual no-retroactive-use commitments in
 //  "Changes"). Any material change to the policy must update the effective date below AND in
@@ -19,8 +20,9 @@ import FernletUI
 ///
 /// Pushed from ``SettingsSheet`` via `SettingsRoute.privacyPolicy`. The copy is a static string
 /// parsed into `PolicyBlock`s by `PolicyMarkdown` at render time — no web view, no network — and
-/// must stay in lockstep with `Docs/Privacy-Policy.md` and the publicly hosted copy entered in
-/// App Store Connect. Any material change updates the effective date in both places.
+/// must stay in lockstep with `Docs/Privacy-Policy.md` and the publicly hosted copy
+/// (`Site/privacy/index.html`) entered in App Store Connect. Any material change updates the
+/// effective date in all three places (`FernletTests/PrivacyPolicyParityTests` pins the sync).
 struct PrivacyPolicyView: View {
     // MARK: - Publication facts (keep in lockstep with Docs/Privacy-Policy.md)
     private static let developerName = "Michael Bowman Olay"
@@ -103,6 +105,8 @@ struct PrivacyPolicyView: View {
     - **The no-collection guarantee does not expire.** Fernlet is built so that the developer receives none of your health, journal, photo, memory, cycle, friend, or location data, and that guarantee binds every future version and owner — no future version may begin collecting from data you already entered.
     - **Weakening ever requires your fresh, affirmative consent.** Any future change that would send existing data somewhere new, or handle it less protectively, takes effect only for users who explicitly and separately agree to it after being clearly told what changes. Continued use, silence, or installing an update is *never* consent to such a change — and declining must either leave the app usable with your data handled under the old terms, or let you export and delete your data first.
     For everything else — clarifications, new features, stronger protections — continued use after an update means you accept the revised policy.
+
+    How these promises are backed technically (build-enforced boundaries, a published network-egress inventory, and a standing invitation to audit the app's traffic) is described in the project's verifiability statement, published alongside the source code as Docs/Verifiability.md.
 
     ## Contact
     For questions about this policy or your privacy, \(contactClause).

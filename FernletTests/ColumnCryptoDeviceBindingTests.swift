@@ -127,6 +127,48 @@ struct ColumnCryptoDeviceBindingTests {
         #expect(opened == "no binding available")
     }
 
+    // MARK: RESILIENCE: a transient keychain READ ERROR (row state unknown, nothing cached)
+    // must surface as the distinct, retryable DeviceBindingID.ReadError — not as an
+    // authentication failure that reads like corrupted data — and the same blob must open
+    // unchanged once the keychain recovers.
+    @Test func transientBindingReadErrorIsRetryableAndSelfHeals() throws {
+        let sealed = try seal("retry me", label: "journal-narrative", override: .identifier(installA))
+        #expect(throws: DeviceBindingID.ReadError.self) {
+            _ = try self.open(sealed, label: "journal-narrative", override: .readError)
+        }
+        let opened = try open(sealed, label: "journal-narrative", override: .identifier(installA))
+        #expect(opened == "retry me")
+    }
+
+    // MARK: RESILIENCE: during the same read error, legacy blobs — including the 1-in-256 blob
+    // whose first nonce byte collides with the version tag — keep opening; the outage affects
+    // only blobs that genuinely need the binding.
+    @Test func legacyBlobsStillOpenDuringABindingReadError() throws {
+        let legacy = try seal("still readable", label: "worry-box", override: .unavailable)
+        #expect(try open(legacy, label: "worry-box", override: .readError) == "still readable")
+
+        var collidingBlob: Data?
+        for _ in 0..<8192 {  // P(miss all) ≈ (255/256)^8192 ≈ 10^-14
+            let sealed = try seal("collision", label: "worry-box", override: .unavailable)
+            if sealed.first == ColumnCrypto.deviceBoundFormatVersion {
+                collidingBlob = sealed
+                break
+            }
+        }
+        let blob = try #require(collidingBlob, "could not produce a legacy blob starting with the version byte")
+        #expect(try open(blob, label: "worry-box", override: .readError) == "collision")
+    }
+
+    // MARK: FAIL-OPEN parity: a read error during SEAL degrades to the legacy format exactly
+    // like an absent binding — never blocks a save, never seals under an unreproducible AAD.
+    @Test func sealDuringABindingReadErrorFallsBackToLegacy() throws {
+        let sealed = try seal("saved during outage", label: "journal-narrative", override: .readError)
+        // Legacy combined layout: 12-byte nonce + ciphertext + 16-byte tag, no version prefix.
+        #expect(sealed.count == 12 + "saved during outage".utf8.count + 16)
+        let opened = try open(sealed, label: "journal-narrative", override: .identifier(installA))
+        #expect(opened == "saved during outage")
+    }
+
     // MARK: Proves the production install ID is durable and stable across calls (the real
     // keychain row, exercised without overrides), and correctly sized.
     @Test func realInstallBindingIDIsStableAndSixteenBytes() {

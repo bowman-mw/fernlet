@@ -42,8 +42,12 @@ import Foundation
 ///
 /// Failure modes: sealing rethrows CryptoKit errors; opening throws when the blob is
 /// truncated, tampered with, or sealed under a different content key or label
-/// (Poly1305 authentication failure). The `Codable` variants additionally rethrow
-/// JSON encoding/decoding errors.
+/// (Poly1305 authentication failure). One retryable exception: when a v2-tagged blob
+/// cannot be opened because the install-binding keychain read *errored* (as opposed
+/// to the row being absent), the open throws `DeviceBindingID.ReadError` instead of
+/// an authentication failure — a transient keychain outage means "try again", not
+/// "data corrupted". The `Codable` variants additionally rethrow JSON
+/// encoding/decoding errors.
 public nonisolated struct ColumnCrypto {
     /// HKDF `info` string that domain-separates this instance's derived column key
     /// from every other column sealed under the same content key.
@@ -145,16 +149,32 @@ public nonisolated struct ColumnCrypto {
     ///
     /// - Important: Throws on authentication failure in *both* paths — a truncated or
     ///   tampered blob, one sealed under a different content key or label, or a v2
-    ///   blob sealed by a different install (its AAD cannot be reproduced here).
+    ///   blob sealed by a different install (its AAD cannot be reproduced here). One
+    ///   distinct, retryable case: when the blob is version-tagged, the install-binding
+    ///   keychain read *errors* (`DeviceBindingID.ReadError` — the row's state is
+    ///   unknown, as opposed to authoritatively absent), and the legacy fallback cannot
+    ///   open the blob either, that read error is rethrown in place of the fallback's
+    ///   authentication error — so a transient keychain outage surfaces as "try again",
+    ///   never as corrupted data, matching the seal path's graceful degradation.
     private func openBlob(_ data: Data, contentKey: SymmetricKey) throws -> Data {
         let key = columnKey(from: contentKey)
-        if data.first == Self.deviceBoundFormatVersion,
-           let binding = DeviceBindingID.current(),
-           let box = try? ChaChaPoly.SealedBox(combined: data.dropFirst()),
-           let plaintext = try? ChaChaPoly.open(box, using: key, authenticating: binding) {
-            return plaintext
+        var bindingReadError: (any Error)?
+        if data.first == Self.deviceBoundFormatVersion {
+            do {
+                if let binding = try DeviceBindingID.currentForOpen(),
+                   let box = try? ChaChaPoly.SealedBox(combined: data.dropFirst()),
+                   let plaintext = try? ChaChaPoly.open(box, using: key, authenticating: binding) {
+                    return plaintext
+                }
+            } catch {
+                bindingReadError = error
+            }
         }
-        return try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: key)
+        do {
+            return try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: key)
+        } catch {
+            throw bindingReadError ?? error
+        }
     }
 
     // MARK: - Key derivation

@@ -13,10 +13,13 @@ On `main`, enable branch protection with:
 
 1. **Require status checks to pass before merging**, with
    [`s3-wall.yml`](../.github/workflows/s3-wall.yml) as a **required** check. That workflow runs
-   the S3 enforcement self-test plus the grep-wall; because `FernletTests` (which carries
-   `NoTrackingBoundaryTests` and `KeyCustodyBoundaryTests`) is part of the same CI run, a wall
-   regression cannot merge green. The workflow needs a macOS runner with Xcode 26.5 + an iOS 26
-   simulator — use a self-hosted runner if hosted ones lack them.
+   the S3 enforcement self-test plus exactly five wall suites — `S3BoundaryTests`,
+   `NoTrackingBoundaryTests`, `KeyCustodyBoundaryTests`, `ColumnCryptoDeviceBindingTests`, and
+   `SealedBackupFormatPinTests` — so a cross-wall import, tracking, key-custody, or at-rest-format
+   regression cannot merge green. (Everything else in `FernletTests`, `FernletLockCryptoTests`
+   included, is gated by the per-release full-suite run in §2, not per-merge.) The workflow needs
+   a macOS runner with Xcode 26.5 + an iOS 26 simulator — use a self-hosted runner if hosted ones
+   lack them.
 2. **Require review from Code Owners.** [`.github/CODEOWNERS`](../.github/CODEOWNERS) lists
    exactly the wall-load-bearing paths (the boundary tests, wall scripts and hooks, the CI
    workflow, the privacy documents, `FernletKit/Package.swift`, and the `PrivacyInfo.xcprivacy`

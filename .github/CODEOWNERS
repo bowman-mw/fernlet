@@ -16,6 +16,7 @@
 /FernletTests/KeyCustodyBoundaryTests.swift   @bowman-mw
 /FernletTests/ColumnCryptoDeviceBindingTests.swift @bowman-mw
 /FernletTests/SealedBackupFormatPinTests.swift @bowman-mw
+/FernletTests/SecureEnclaveWrapTests.swift    @bowman-mw
 /FernletTests/FernletLockCryptoTests.swift    @bowman-mw
 
 # Wall scripts, hooks, and CI

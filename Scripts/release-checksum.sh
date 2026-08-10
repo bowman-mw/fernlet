@@ -59,7 +59,7 @@ HEAD_SHA="$(git rev-parse HEAD)"
 # ── 1. Signed annotated tag ──────────────────────────────────────────────────────
 if [ "$SKIP_TAG" -eq 0 ]; then
   if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-    echo "tag $TAG already exists at $(git rev-parse "$TAG^{commit}") — skipping tag creation."
+    echo "tag $TAG already exists at $(git rev-parse "refs/tags/$TAG^{commit}") — skipping tag creation."
   else
     git tag -s "$TAG" -m "Fernlet $VERSION
 
@@ -69,8 +69,26 @@ built from this exact commit are published alongside the release.
 Commit: $HEAD_SHA"
     echo "created signed tag $TAG at $HEAD_SHA"
   fi
-  git tag -v "$TAG" || { echo "error: tag $TAG does not verify — aborting." >&2; exit 1; }
 fi
+
+# ── 1b. Tag ↔ HEAD attribution guard (runs on BOTH paths, --skip-tag included) ──
+# The checksum file below stamps "tag: $TAG  commit: $HEAD_SHA" as a provenance record, and the
+# archive is built from HEAD — so that pairing must be TRUE before anything is hashed. Without
+# this, a pre-existing tag at an older commit (HEAD moved on, or the wrong checkout under
+# --skip-tag) would publish a checksum file attributing the tag to a commit it does not point
+# at — silently corrupting the exact artifact the verifiability story rests on.
+TAG_SHA="$(git rev-parse -q --verify "refs/tags/$TAG^{commit}")" || {
+  echo "error: tag $TAG does not exist — cannot checksum a build attributed to it." >&2
+  echo "       (run without --skip-tag to create it, or check out the intended release)" >&2
+  exit 1
+}
+if [ "$TAG_SHA" != "$HEAD_SHA" ]; then
+  echo "error: tag $TAG points at $TAG_SHA but HEAD is $HEAD_SHA." >&2
+  echo "       Refusing to stamp a false tag/commit pairing into the checksum file." >&2
+  echo "       Check out the tagged commit first: git checkout $TAG" >&2
+  exit 1
+fi
+git tag -v "$TAG" || { echo "error: tag $TAG does not verify — aborting." >&2; exit 1; }
 
 # ── 2. Release archive ───────────────────────────────────────────────────────────
 if [ "$SKIP_ARCHIVE" -eq 0 ]; then
