@@ -301,7 +301,8 @@ struct PrivacyWipeCoverageTests {
     private static let knownKeychainServices: Set<String> = [
         "com.fernlet.lock", "com.fernlet.storage-preferences", "com.fernlet.journal",
         "com.fernlet.healthkit-anchors", "com.fernlet.private-media", "com.fernlet.narrative-buffer",
-        "com.fernlet.heartdrop", "com.fernlet.identity", "com.fernlet.moderation"
+        "com.fernlet.heartdrop", "com.fernlet.identity", "com.fernlet.moderation",
+        "com.fernlet.device-binding"
     ]
 
     /// `com.fernlet.*` keychain SERVICE literals in `source`, found by anchoring on the binding that
