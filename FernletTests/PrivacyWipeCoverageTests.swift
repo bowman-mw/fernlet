@@ -12,6 +12,14 @@
 // could be satisfied by the same call spelled in an unrelated function — deleting
 // `clothingShop.clearAll()` from the wipe kept the suite green because
 // `setAllowNearbyClothingShares` also calls it. Bounded, that deletion fails.
+//
+// VERIFY-BATCH NOTE: this file declares THREE top-level suites — `PrivacyWipeCoverageTests`
+// (the source scan above), `PrivacyWipeMediaKeySurvivalTests`, and
+// `PrivacyWipeAttemptMemoryRemovalTests` (both behavioral, real-funnel). xcodebuild's
+// `-only-testing:` matches suite identifiers EXACTLY (no prefix matching), so a run scoped to
+// `FernletTests/PrivacyWipeCoverageTests` alone silently skips the behavioral suites. Any verify
+// batch or CI wiring re-baselining this file must name all three, and must confirm the intended
+// `Test case` lines actually ran — never accept the success banner alone.
 
 import Foundation
 import Testing
