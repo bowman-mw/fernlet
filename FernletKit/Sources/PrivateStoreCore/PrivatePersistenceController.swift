@@ -23,6 +23,10 @@ import FernletFoundation
 /// - Persistent-history tracking is on; sealed writers pair their saves with
 ///   ``PrivatePersistentHistoryPruner`` so edited rows do not leave prior ciphertext recoverable
 ///   from the history tables.
+/// - Deletion is a TWO-step contract: ``purgeEncryptedEntities()`` (or the repositories' keyless
+///   `deleteAll()`) drops the rows, then ``rebuildStore()`` destroys and re-creates the store file
+///   so the `-wal`/freelist residue those rows leave behind goes with it. Both halves are keyless,
+///   so a wipe works while the app is locked.
 /// - The model is built programmatically (`makeManagedObjectModel()`): plain `NSManagedObject`
 ///   entities whose text content lives only in `*Ciphertext` binary columns; ids, day keys, and
 ///   timestamps are plaintext by accepted risk (NEW-4). The column sealing itself happens in the
@@ -53,8 +57,15 @@ public final class PrivatePersistenceController {
     /// history tracking, lightweight migration, and — for on-disk stores — the user's
     /// backup-exclusion preference applied.
     ///
-    /// - Parameter inMemory: When `true`, backs the store with `/dev/null` for previews and tests.
-    public init(inMemory: Bool = false) {
+    /// - Parameters:
+    ///   - inMemory: When `true`, backs the store with `/dev/null` for previews and tests. Wins
+    ///     over `storeURL` when both are supplied.
+    ///   - storeURL: An explicit on-disk location for the `.sqlite` file, overriding the default
+    ///     Application Support path. The test seam for the ON-DISK behaviours an in-memory store
+    ///     cannot express — chiefly ``rebuildStore()``, whose whole contract is about the sqlite
+    ///     file, its `-wal`/`-shm` sidecars, and the `_SUPPORT` blob directory really being
+    ///     destroyed and re-created. Production always passes `nil`.
+    public init(inMemory: Bool = false, storeURL: URL? = nil) {
         self.inMemory = inMemory
         container = NSPersistentContainer(
             name: "FernletPrivate",
@@ -69,6 +80,8 @@ public final class PrivatePersistenceController {
         storeDesc.cloudKitContainerOptions = nil
         if inMemory {
             storeDesc.url = URL(fileURLWithPath: "/dev/null")
+        } else if let storeURL {
+            storeDesc.url = storeURL
         }
         container.persistentStoreDescriptions = [storeDesc]
 
@@ -118,8 +131,22 @@ public final class PrivatePersistenceController {
 
     /// Deletes every row of all four sealed entities, saves, and prunes the persistent history.
     ///
-    /// The destructive half of the lock reset and delete-all-data flows. The ciphertext rows are
-    /// unrecoverable afterward — their content key is owned (and scrubbed) by `FernletLockService`.
+    /// The first destructive step of the lock reset and delete-all-data flows, and deliberately
+    /// **keyless** — no `contentKey`, no decrypt — so it works while the app is locked or a
+    /// sensitive surface is hidden (deleting data must never require the ability to read it).
+    ///
+    /// - Important: Row-delete alone is **not** an erasure. SQLite marks the pages free and the
+    ///   prune clears the history shadow tables, but neither checkpoints the WAL nor vacuums the
+    ///   freelist, so the prior ciphertext can linger in `-wal` frames and freed pages until those
+    ///   pages are reused. That residue is class-key-protected (`FileProtection.complete`) and
+    ///   key-bound (ChaChaPoly under the lock's content key, on a store that never leaves the
+    ///   device) — but it is residue. Callers must follow this with ``rebuildStore()``, which
+    ///   physically removes the file the residue lives in; only destroying the content key
+    ///   (`FernletLockService.reset()`, and the duress WIPE built on it) is an *instant* honest
+    ///   erase of the logical content. The old doc here claimed the rows were "unrecoverable
+    ///   afterward — content key owned (and scrubbed) by `FernletLockService`", which conflated
+    ///   the reset path (key destroyed) with the delete-everything path, where the lock keychain
+    ///   is a documented survivor and the key is only scrubbed from memory.
     public func purgeEncryptedEntities() throws {
         let context = container.viewContext
         try context.performAndWait {
@@ -132,6 +159,139 @@ public final class PrivatePersistenceController {
             }
             try PrivatePersistentHistoryPruner.prune(context: context)
         }
+    }
+
+    // MARK: - Crypto-erasure baseline
+
+    /// Errors thrown by ``rebuildStore()``.
+    public enum RebuildError: Error, CustomStringConvertible {
+        /// The store description carries no URL, so there is no file to destroy or re-add. Only
+        /// reachable if the container was mutated after `init`.
+        case noStoreURL
+
+        public var description: String {
+            switch self {
+            case .noStoreURL:
+                return "The sealed store has no file URL — nothing to destroy or re-create."
+            }
+        }
+    }
+
+    /// Destroys the sealed store file and re-creates it empty — the physical half of Fernlet's
+    /// crypto-erasure baseline ("Option B", Docs/Plan-Security-Hardening-OpusTrack-2026-08-10.md §6).
+    ///
+    /// ``purgeEncryptedEntities()`` (and the repositories' keyless `deleteAll()`) remove the ROWS,
+    /// but leave the pages they lived on in the `-wal` frames and the freelist until SQLite reuses
+    /// them. This removes the file those pages are in: the store is torn off the coordinator,
+    /// `destroyPersistentStore(at:ofType:options:)` takes the sqlite plus its `-wal`/`-shm`
+    /// sidecars, the `.FernletPrivate_SUPPORT` external-binary directory (where the sealed
+    /// `allowsExternalBinaryDataStorage` columns spill blobs over ~100 KB) is deleted outright, and
+    /// then an empty store is re-added under the same description — same `FileProtection.complete`,
+    /// same history tracking, with the user's backup-exclusion preference re-applied to the new
+    /// files.
+    ///
+    /// - Important: This is **keyless by absolute invariant**. It never calls `contentKey()`,
+    ///   never decrypts a column and never re-wraps a key, because every deletion path in Fernlet
+    ///   must run while the app is locked and a sensitive surface is hidden. (That is also why the
+    ///   rejected alternative — re-minting the content key after the purge — is not the baseline:
+    ///   re-wrapping needs the passcode-derived key, which a locked wipe does not have.) Do not
+    ///   introduce a decrypt here.
+    ///
+    /// - Important: Honest limits. This removes the *logical* residue. It cannot promise the
+    ///   underlying flash blocks are gone — APFS copy-on-write and wear-levelling may keep them
+    ///   until they are overwritten — though those blocks stay under the
+    ///   `FileProtection.complete` class key, which is evicted while the device is locked. Only
+    ///   destroying the content key is an *instant* honest erase of the logical content: the
+    ///   `FernletLockService.reset()` path (and the duress WIPE that reuses this seam) destroys the
+    ///   keychain rows AND rebuilds, so it is fully honest; the "delete everything" funnel keeps
+    ///   the app-lock key by design, so its honest claim is "no live ciphertext, and the residue is
+    ///   class-key-protected and key-bound" — never "crypto-erased".
+    ///
+    /// Live contexts survive the swap: `container.viewContext` is reset (dropping registered
+    /// objects and any unsaved changes) before the store is removed, and the context object itself
+    /// is unchanged — so the long-lived repositories that captured it keep working against the
+    /// fresh, empty store. In-memory (`/dev/null`) controllers skip the file work and simply
+    /// re-add, which is already an empty store.
+    ///
+    /// - Throws: ``RebuildError/noStoreURL``, the `destroyPersistentStore` error, or the
+    ///   re-add error. A throw is the caller's nothing-silent signal that the sealed store could
+    ///   not be rebuilt; the rows deleted before it are still gone either way, which is why
+    ///   row-delete runs first.
+    public func rebuildStore() throws {
+        let coordinator = container.persistentStoreCoordinator
+        guard let description = container.persistentStoreDescriptions.first,
+              let storeURL = description.url else {
+            throw RebuildError.noStoreURL
+        }
+
+        // Drop every live managed object first: after the store is removed they would be faults
+        // pointing at a store that no longer exists.
+        let context = container.viewContext
+        context.performAndWait { context.reset() }
+
+        for store in coordinator.persistentStores {
+            try coordinator.remove(store)
+        }
+
+        // The destroy failure is CAPTURED, not thrown from here: the store is already off the
+        // coordinator, so bailing now would leave the app with no sealed store at all until the
+        // next launch. Re-add first, report second.
+        var destroyFailure: (any Error)?
+        if !inMemory {
+            do {
+                try coordinator.destroyPersistentStore(at: storeURL, ofType: description.type, options: description.options)
+                // Belt and braces, on the success path only: `destroyPersistentStore` is documented
+                // to remove the store, but has been seen to leave a zero-byte sqlite (or a sidecar)
+                // behind. Anything still on disk here is the residue this method exists to remove.
+                // Best-effort — a stale sidecar the fresh store overwrites is not worth failing an
+                // otherwise-complete wipe over. (Skipped when the destroy FAILED: hand-deleting the
+                // file there would quietly succeed at the rebuild while still reporting failure.)
+                let fileManager = FileManager.default
+                for path in [storeURL.path, storeURL.path + "-wal", storeURL.path + "-shm"] {
+                    try? fileManager.removeItem(atPath: path)
+                }
+                // The external-blob directory is NOT covered by `destroyPersistentStore` — sealed
+                // columns over ~100 KB (a long journal entry, a big symptom payload) live in there
+                // as standalone ciphertext files that would otherwise outlive the store that named
+                // them.
+                try? fileManager.removeItem(at: Self.externalBlobDirectory(for: storeURL))
+            } catch {
+                destroyFailure = error
+            }
+        }
+
+        do {
+            var options: [String: Any] = description.options
+            options[NSMigratePersistentStoresAutomaticallyOption] = true
+            options[NSInferMappingModelAutomaticallyOption] = true
+            _ = try coordinator.addPersistentStore(
+                ofType: description.type,
+                configurationName: description.configuration,
+                at: storeURL,
+                options: options
+            )
+        } catch {
+            didFailToLoad = true
+            // The destroy failure, if there was one, is the root cause worth surfacing.
+            throw destroyFailure ?? error
+        }
+        didFailToLoad = false
+        Self.applyBackupExclusion(
+            storeURL: storeURL,
+            inMemory: inMemory,
+            excluded: StoragePreferencesStore.currentPreferences().localBackupExcludedFromiOSBackup
+        )
+        // Nothing-silent: the store is usable again, but the old file — and the residue in it —
+        // could not be destroyed, and the caller promised the user otherwise.
+        if let destroyFailure { throw destroyFailure }
+    }
+
+    /// The sibling `.<StoreName>_SUPPORT` directory Core Data spills
+    /// `allowsExternalBinaryDataStorage` blobs into — the same path `BackupExclusion` flags, kept
+    /// in one spelling so the exclusion and the rebuild cannot drift onto different directories.
+    static func externalBlobDirectory(for storeURL: URL) -> URL {
+        storeURL.deletingLastPathComponent()
+            .appendingPathComponent(".\(storeURL.deletingPathExtension().lastPathComponent)_SUPPORT", isDirectory: true)
     }
 
     // MARK: - Model
@@ -251,7 +411,11 @@ public enum PrivatePersistentHistoryPruner {
     /// checkpoint the WAL or vacuum freed pages, so prior ciphertext can linger in `-wal` frames or
     /// the freelist until those pages are reused. That residue is ChaChaPoly ciphertext under a
     /// ThisDeviceOnly key on a local-only `FileProtection.complete` store — never plaintext, never
-    /// cloud-synced.
+    /// cloud-synced — so it is class-key-protected and key-bound, but it is still residue: pruning
+    /// is write-hygiene, not erasure. The only thing that removes it is
+    /// ``PrivatePersistenceController/rebuildStore()``, which destroys the file it lives in (and,
+    /// on the paths that also destroy the content key, `FernletLockService.reset()`, which makes
+    /// the residue instantly meaningless as well).
     public static func prune(context: NSManagedObjectContext, before date: Date = Date()) throws {
         let request = NSPersistentHistoryChangeRequest.deleteHistory(before: date)
         try context.execute(request)

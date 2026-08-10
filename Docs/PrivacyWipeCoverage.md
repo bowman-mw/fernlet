@@ -18,6 +18,38 @@ over the sources and the two tables below return the same set.
 Pattern borrowed from bitchat's `privacy-assessment.md` panic-wipe checklist (bitchat adoptions
 Increment 1, Docs/Plan-Bitchat-Adoptions-2026-07-25.md).
 
+## What "cleared" honestly means for the sealed store
+
+The sealed narratives (cycle, journal, intimacy, Worry Box) are the only rows in the app where
+"deleted" needs qualifying, so the qualification lives here rather than in a comment nobody reads.
+
+Deleting them is a **two-step contract**, both steps keyless so they work while the app is locked:
+
+1. **Row-delete** (`periodDataDeleteHook`, `intimacyDataDeleteHook`, `journalDataDeleteHook`,
+   `worryBoxResetHook`, and `PrivatePersistenceController.purgeEncryptedEntities()` on the reset
+   path) drops the rows and prunes the persistent-history shadow tables. It does **not** checkpoint
+   the WAL or vacuum the freelist — so on its own it leaves **class-key-protected, key-bound
+   residue in `-wal` frames and freed pages until those pages are reused**. Ciphertext under a
+   ThisDeviceOnly key, on a `FileProtection.complete` store that never leaves the device, but
+   residue. Row-delete alone is not erasure and this doc will not call it that.
+2. **Store rebuild** (`sealedStoreRebuildHook` → `PrivatePersistenceController.rebuildStore()`)
+   destroys the store file itself — sqlite, `-wal`, `-shm`, plus the `.FernletPrivate_SUPPORT`
+   external-blob directory — and re-adds an empty store with the same file protection and backup
+   exclusion. **This is what removes the logical residue.** It cannot promise the physical flash
+   blocks are gone (APFS copy-on-write and wear-levelling may keep them until overwritten; no
+   user-space code on iOS can guarantee otherwise) — those blocks stay under the
+   `FileProtection.complete` class key, which is evicted while the device is locked.
+
+Order is row-delete → rebuild, deliberately: a rebuild that fails still leaves the rows gone.
+
+**Only destroying the content key is an instant honest erase** of the logical content, whatever
+physical residue survives. Hence two tiers of promise, and the wording each one is allowed:
+
+| Path | Content key | Honest claim |
+| --- | --- | --- |
+| `FernletLockService.reset()` — Settings → "Reset app lock" (and the duress WIPE that reuses the same seam) | **Destroyed**: `KeychainItem.deleteAll(service:)` sweeps every generic password under `com.fernlet.lock`, `SecureEnclaveContentKeyWrap.deleteKey` removes the SE wrap outside that sweep | **Fully honest** — crypto-erased *and* the file rebuilt |
+| `FernletStore.deleteAllData` — "Delete everything" | **Kept by design** (see the deliberate-exceptions table: losing your data must not silently un-lock the app) | **Bounded-honest** — no live ciphertext; any residue is class-key-protected and key-bound. **Not** "crypto-erased"; do not upgrade this wording |
+
 ## Cleared by Delete everything
 
 Ordering matters — pending saves are cancelled first and re-cancelled after `resetAll()`, the
@@ -32,6 +64,7 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Cycle narratives (sealed rows) | Private stores | `periodDataDeleteHook` |
 | Intimacy logs (sealed rows) | Private stores | `intimacyDataDeleteHook` |
 | Journal narratives (sealed rows) | Private stores | `journalDataDeleteHook` |
+| Sealed store FILE (sqlite + `-wal`/`-shm` + the `_SUPPORT` external-blob dir) — the residue the row deletes above leave behind | `FernletPrivate` store on disk | `sealedStoreRebuildHook` (runs LAST in `resetAll`, after every sealed-row delete; keyless, so it works while locked) |
 | Locked-note pending buffer | PendingNarrativeBuffer | `pendingNarrativeBufferPurgeHook` |
 | HealthKit samples (opt-in) | HealthKit | `deleteHealthSamples` |
 | Meal photos | PrivateMediaStore | `mealPhotoStore.deleteAll` |
@@ -88,7 +121,7 @@ repository purge takes it.)
 | ModerationBanStore self-ban — keychain `com.fernlet.moderation` | 2026-07-17 decision: a device ban must survive a wipe or a wipe is a ban-evasion tool | — |
 | Install-binding ID — keychain `com.fernlet.device-binding` | 16 cryptographically random bytes minted per install and used only as AEAD associated data on sealed-column writes (`ColumnCrypto` v2 / `DeviceBindingID`). It identifies the INSTALL, never the person, and every ciphertext bound with it was just purged — so the surviving row discloses nothing and protects nothing extra. Deleting it mid-wipe would recreate the exact hazard the durably-stored-before-trusted mint guards against: the in-memory cache could seal post-wipe rows under an AAD no longer in the keychain, making them unopenable after relaunch. Data logged after the wipe simply re-binds under the same install ID | — (ThisDeviceOnly, never synchronized; a device reset or keychain wipe replaces it and the next seal mints a fresh one) |
 | HealthKit anchor cursors — keychain `com.fernlet.healthkit-anchors` | Opaque `HKQueryAnchor` sync cursors, not health data: they record how far Fernlet has read, never what it read. Keeping them is what makes the wipe STICK — a reset cursor makes the next anchored query replay Fernlet's entire Health history back into the just-emptied day store | Turning HealthKit off (`HealthKitService.disableIntegration` → `HealthKitAnchorKeychain.deleteAll`) |
-| Locked-note buffer device key — keychain `com.fernlet.narrative-buffer` (plus the service-less legacy `com.fernlet.buffer.key` account) | The buffer FILE it decrypts is purged by `pendingNarrativeBufferPurgeHook`, so the surviving key opens nothing; it is re-used for the next note written while locked. Deleting it would be symmetric with the journal/worry device keys and is a fine follow-up, but nothing leaks while it stays | — |
+| Locked-note buffer device key — keychain `com.fernlet.narrative-buffer` (plus the service-less legacy `com.fernlet.buffer.key` account) | The buffer FILE it decrypts is purged by `pendingNarrativeBufferPurgeHook`, so the surviving key opens nothing live; it is re-used for the next note written while locked. **Asymmetry, flagged owner call (Opus track §12):** the journal and Worry Box device keys ARE deleted in the same funnel, and under the crypto-erasure baseline the difference now matters — the sealed store gets its file rebuilt, but the buffer is a plain file whose deleted bytes get no equivalent treatment, so the surviving key is what would keep any file-system residue of it openable. Deleting it in the funnel is the symmetric fix; it is deliberately NOT done here pending the owner's call | — |
 | ReplayCache | Memory-only, self-expiring (24 h); dies with the process | — |
 | Identity in OTHER devices' trust vaults | Friends' devices hold the OLD public key; nothing this device can delete remotely. The wipe breaks the pairing (new identity ≠ vault row), and friends see a stranger until re-friending in person | — |
 

@@ -1041,8 +1041,22 @@ public final class FernletLockService: @MainActor FernletLockServicing {
 
     /// The destructive escape hatch: deletes every lock keychain item (including the
     /// Secure-Enclave key and its wrap), purges the pending-narrative buffer AND the sealed
-    /// encrypted CoreData entities, scrubs the content key, and returns to `.notConfigured` —
-    /// which by construction is no scope's unlock.
+    /// encrypted CoreData entities, rebuilds the sealed store file, scrubs the content key, and
+    /// returns to `.notConfigured` — which by construction is no scope's unlock.
+    ///
+    /// This is Fernlet's one FULLY honest erase, and the seam the Phase-7 duress WIPE reuses: the
+    /// content key is destroyed (`KeychainItem.deleteAll(service:)` sweeps every generic password
+    /// under the lock service, and `SecureEnclaveContentKeyWrap.deleteKey` takes the SE wrap
+    /// outside it), which makes every surviving byte of ciphertext instantly meaningless, AND the
+    /// store file is destroyed and re-created, which removes the logical `-wal`/freelist residue
+    /// the row purge leaves behind. The "delete everything" funnel gets only the second half — the
+    /// app-lock keychain is a documented survivor there — so its honest claim is weaker (see
+    /// `PrivatePersistenceController.rebuildStore()`).
+    ///
+    /// Ordering: rows first, then the rebuild, so a rebuild failure still leaves the rows deleted.
+    /// A rebuild failure is rethrown, but only AFTER the in-memory state has been returned to
+    /// `.notConfigured` — the keychain rows are already gone by then, so bailing early would leave
+    /// the service claiming an unlock it can no longer honor.
     ///
     /// - Important: Sealed content is unrecoverable afterward — the content key is gone.
     public func reset() throws {
@@ -1051,6 +1065,14 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         SecureEnclaveContentKeyWrap.deleteKey(service: keychainService)
         try buffer.purge()
         try privatePersistenceController.purgeEncryptedEntities()
+        // Keyless by invariant (no contentKey, no decrypt): the rebuild must stay usable from every
+        // locked deletion path, and this one has just destroyed the key anyway.
+        var rebuildError: (any Error)?
+        do {
+            try privatePersistenceController.rebuildStore()
+        } catch {
+            rebuildError = error
+        }
         scrubContentKey()
         state = .notConfigured
         hasAutoPromptedBiometricForCurrentLockSession = false
@@ -1059,6 +1081,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // configure) must re-earn the biometric offer (PIN-before-biometrics).
         passcodeUnlockedThisProcess = false
         FernletAuditLog.log("lock.reset")
+        // Nothing-silent: the rows are gone, but the file they lived in could not be rebuilt, so
+        // the caller must be able to say so rather than promise a clean store.
+        if let rebuildError { throw rebuildError }
     }
 
     /// Enables or disables biometric unlock.

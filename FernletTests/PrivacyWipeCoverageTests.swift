@@ -44,6 +44,9 @@ struct PrivacyWipeCoverageTests {
         "intimacyDataDeleteHook",
         "journalDataDeleteHook",
         "pendingNarrativeBufferPurgeHook",
+        // The residue half of the sealed wipe (P1a): the row hooks above empty the store, this
+        // destroys and re-creates the FILE they lived in.
+        "sealedStoreRebuildHook",
         "deleteHealthSamples",
         // Media
         "mealPhotoStore.deleteAll",
@@ -256,6 +259,40 @@ struct PrivacyWipeCoverageTests {
             let source = try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)
             #expect(source.contains("func wipeIdentityForDeleteAll"), "\(file) owns a live IdentityService but lost its wipe seam.")
         }
+    }
+
+    /// The rebuild hook is nil-tolerant in the funnel (an unwired TEST store must not report a
+    /// failed wipe), so the PRODUCTION wiring is what needs a mechanical guard: without this, the
+    /// manifest row above stays green while the app never rebuilds anything.
+    @Test func theSealedStoreRebuildIsWiredInTheApp() throws {
+        let root = try Self.repoRoot()
+        let contentView = try String(contentsOf: root.appendingPathComponent("Fernlet/ContentView.swift"), encoding: .utf8)
+        #expect(
+            contentView.contains("store.sealedStoreRebuildHook ="),
+            "the sealed-store rebuild is no longer wired in ContentView — the funnel's hook is nil in production, so 'delete everything' leaves the store file (and its -wal residue) intact."
+        )
+        #expect(
+            contentView.contains("rebuildStore()"),
+            "the wired rebuild hook no longer calls PrivatePersistenceController.rebuildStore()."
+        )
+    }
+
+    /// The reversibility trap (Opus track §6): every deletion path must run while the app is
+    /// LOCKED, so the rebuild must never acquire, use, or re-wrap a content key. A grep, because
+    /// this is a property of the code's shape — a behavioral test can only show that today's
+    /// callers happen not to need a key.
+    @Test func theSealedStoreRebuildIsKeyless() throws {
+        let root = try Self.repoRoot()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("FernletKit/Sources/PrivateStoreCore/PrivatePersistenceController.swift"),
+            encoding: .utf8
+        )
+        let body = try Self.functionBody(matching: "public func rebuildStore() throws", in: source)
+        for token in ["contentKey", "decrypt", "ColumnCrypto", "unwrap", "SymmetricKey"] {
+            #expect(!body.contains(token), "rebuildStore() names '\(token)': the rebuild must stay keyless or deleting data starts requiring the ability to read it.")
+        }
+        // And it really did find a body — an empty string trivially contains no token.
+        #expect(body.contains("destroyPersistentStore"), "rebuildStore() no longer destroys the store file — the scan above is scanning the wrong function.")
     }
 
     /// The in-memory seam still has to exist: the emptied meal/progress/recipe stores drop their

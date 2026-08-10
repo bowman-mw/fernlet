@@ -1,11 +1,17 @@
+import CoreData
+import CryptoKit
 import Foundation
 import Testing
 // @testable for the internal `save`, which seeds the share-extension inbox the way the extension does.
 @testable import AppServices
 import FernletDomainModel
+import FernletLock
 import FernletPersistence
 import HealthKitGateway
 import LocalPersistence
+import PrivateHealthStore
+import PrivateMemoryStore
+import PrivateStoreCore
 @testable import Fernlet
 
 /// Covers "delete everything" actually deleting everything.
@@ -96,10 +102,11 @@ struct DeleteAllDataTests {
         store.journalDataDeleteHook = { called.insert("journal"); return true }
         store.worryBoxResetHook = { called.insert("worry"); worryCallCount += 1; return true }
         store.pendingNarrativeBufferPurgeHook = { called.insert("pendingBuffer"); return true }
+        store.sealedStoreRebuildHook = { called.insert("sealedRebuild"); return true }
 
         await store.deleteAllData(includingHealthKitSamples: false)
 
-        #expect(called == ["period", "intimacy", "journal", "worry", "pendingBuffer"])
+        #expect(called == ["period", "intimacy", "journal", "worry", "pendingBuffer", "sealedRebuild"])
         // Exactly once: the funnel used to invoke the worry hook itself AND again via `resetAll()`.
         // One purge per wipe — the `resetAll` one, so a standalone reset keeps it.
         #expect(worryCallCount == 1)
@@ -469,7 +476,203 @@ struct DeleteAllDataTests {
         store.journalDataDeleteHook = { true }
         store.pendingNarrativeBufferPurgeHook = { true }
         store.worryBoxResetHook = { true }
+        store.sealedStoreRebuildHook = { true }
         store.storagePreferencesResetHook = { _, _ in true }
+    }
+
+    // MARK: - Crypto-erasure normalization (P1a): the sealed store FILE, not just its rows
+
+    /// A failed store rebuild has to reach the user like any other leg. Reported as "your sealed
+    /// store" — the rows are gone, but the file they lived in could not be re-created, so the
+    /// residue promise is the one the wipe could not keep.
+    @Test func outcomeReportsASealedStoreRebuildThatFailed() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-rebuild-fail")))
+        wireSucceedingSealedHooks(store)
+        store.sealedStoreRebuildHook = { false }
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(!outcome.isComplete)
+        #expect(outcome.incompleteStores.contains("your sealed store"))
+    }
+
+    /// The rebuild lives in `resetAll()` so BOTH wipe legs get it — and so "delete everything",
+    /// which delegates to `resetAll()`, does not run it twice (the same one-invocation contract the
+    /// Worry Box purge has).
+    @Test func theSealedStoreIsRebuiltExactlyOncePerWipe() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-rebuild-once")))
+        var rebuildCount = 0
+        wireSucceedingSealedHooks(store)
+        store.sealedStoreRebuildHook = { rebuildCount += 1; return true }
+
+        await store.deleteAllData(includingHealthKitSamples: false)
+        #expect(rebuildCount == 1)
+
+        // The standalone "Reset everything" entry point keeps it too.
+        store.resetAll()
+        #expect(rebuildCount == 2)
+    }
+
+    /// THE residue regression (Opus track §6): deleting the rows is not erasing them.
+    ///
+    /// A row-delete + history prune frees the SQLite pages and clears the shadow tables, but never
+    /// checkpoints the WAL or vacuums the freelist — so the deleted record's bytes stay in the
+    /// `-wal` frames and freed pages until something reuses them. `rebuildStore()` destroys the
+    /// file those pages are in and re-creates it empty, which is what actually removes them.
+    ///
+    /// The marker is a journal `dayKey`, one of the deliberately PLAINTEXT columns (accepted risk
+    /// NEW-4). That is the point: a scan for the sealed text column would prove nothing (it is
+    /// ciphertext either way), whereas a plaintext column is a byte-exact witness for "these pages
+    /// are still on disk".
+    @Test func rebuildingTheSealedStoreRemovesTheResidueARowDeleteLeavesBehind() throws {
+        let directory = try Self.makeScratchStoreDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("FernletPrivate.sqlite")
+        let controller = PrivatePersistenceController(storeURL: storeURL)
+        let repository = JournalNarrativeRepository(controller: controller)
+        let marker = "P1A-RESIDUE-\(UUID().uuidString)"
+
+        try repository.insert(
+            JournalNarrative(
+                id: UUID(),
+                dayKey: marker,
+                tag: .quiet,
+                entryDate: Date(),
+                text: "a sealed thought",
+                emotions: ["tired"],
+                createdAt: Date(),
+                updatedAt: Date()
+            ),
+            contentKey: SymmetricKey(size: .bits256)
+        )
+        #expect(Self.storeFiles(in: directory).contains(marker), "precondition: the seeded row never reached the store files")
+        let identityBefore = Self.fileIdentity(of: storeURL)
+        #expect(identityBefore != nil, "precondition: no sqlite file on disk to rebuild")
+
+        try controller.purgeEncryptedEntities()
+        // The defect this phase exists to fix: the rows are gone from the store, the bytes are not
+        // gone from the disk. If this ever stops holding, the rebuild below is belt-and-braces
+        // rather than load-bearing — which is still fine, but the honesty language in
+        // Docs/PrivacyWipeCoverage.md is written on the assumption that it does hold.
+        #expect(Self.storeFiles(in: directory).contains(marker), "row-delete unexpectedly erased the pages — re-check the honesty language in Docs/PrivacyWipeCoverage.md")
+
+        try controller.rebuildStore()
+
+        #expect(!Self.storeFiles(in: directory).contains(marker), "the deleted row's bytes survived the store rebuild")
+        #expect(Self.fileIdentity(of: storeURL) != identityBefore, "the sqlite file was reused, not destroyed and re-created")
+
+        // And the store is still usable — the user keeps using the app after a wipe, and the
+        // long-lived repository captured the view context BEFORE the store was swapped underneath.
+        let key = SymmetricKey(size: .bits256)
+        #expect(try repository.narratives(forDayKey: marker, contentKey: key).isEmpty)
+        try repository.insert(
+            JournalNarrative(id: UUID(), dayKey: "2026-08-10", tag: .good, entryDate: Date(), text: "after", emotions: [], createdAt: Date(), updatedAt: Date()),
+            contentKey: key
+        )
+        #expect(try repository.narratives(forDayKey: "2026-08-10", contentKey: key).count == 1)
+    }
+
+    /// The reversibility trap, asserted end to end: every deletion path must stay reachable while
+    /// the app is LOCKED, so nothing in it — row-delete or rebuild — may need the content key.
+    ///
+    /// Seals one row in each of the four sealed entities under a real `FernletLockService` content
+    /// key, engages the lock (scrubbing that key), then drives the real funnel with the real
+    /// repositories wired to the hooks. The rows must be gone, the store file rebuilt, and the lock
+    /// must still hold no key on the way out — a wipe that had to decrypt to delete would have had
+    /// to unlock first.
+    @Test func aLockedWipeDropsEverySealedRowAndRebuildsWithoutAContentKey() async throws {
+        let directory = try Self.makeScratchStoreDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("FernletPrivate.sqlite")
+        let controller = PrivatePersistenceController(storeURL: storeURL)
+        let suiteName = "fernlet-tests-p1a-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let lock = FernletLockService(
+            keychainService: "com.fernlet.lock.test.p1a.\(UUID().uuidString)",
+            privatePersistenceController: controller
+        )
+        defer { try? lock.reset() }
+        try await lock.configure(credential: .pin6("135790"), grantingScope: .privateHub)
+        let key = try #require(lock.contentKey(for: .privateHub), "precondition: configure produced no content key")
+
+        try MenstrualNarrativeRepository(controller: controller, defaults: defaults)
+            .insert(MenstrualNarrative(hkExternalUUID: "hk-p1a", dateKey: "2026-08-10", note: "cycle note"), contentKey: key)
+        try IntimacyLogRepository(controller: controller)
+            .insert(IntimacyLog(eventDate: Date(), note: "intimate note"), contentKey: key)
+        try JournalNarrativeRepository(controller: controller)
+            .insert(
+                JournalNarrative(id: UUID(), dayKey: "2026-08-10", tag: .quiet, entryDate: Date(), text: "journal", emotions: [], createdAt: Date(), updatedAt: Date()),
+                contentKey: key
+            )
+        try WorryNarrativeRepository(controller: controller).insert(WorryNarrative(text: "a worry"), contentKey: key)
+        #expect(Self.sealedRowCount(in: controller) == 4, "precondition: the four sealed rows were not seeded")
+
+        lock.lock(reason: .manual)
+        #expect(lock.contentKey(for: .privateHub) == nil, "precondition: the wipe must run with the lock engaged")
+
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-locked")))
+        store.periodDataDeleteHook = { (try? MenstrualNarrativeRepository(controller: controller, defaults: defaults).deleteAll()) != nil }
+        store.intimacyDataDeleteHook = { (try? IntimacyLogRepository(controller: controller).deleteAll()) != nil }
+        store.journalDataDeleteHook = { (try? JournalNarrativeRepository(controller: controller).deleteAll()) != nil }
+        store.worryBoxResetHook = { (try? WorryNarrativeRepository(controller: controller).deleteAll()) != nil }
+        store.pendingNarrativeBufferPurgeHook = { (try? lock.purgePendingNarratives()) != nil }
+        store.sealedStoreRebuildHook = { (try? controller.rebuildStore()) != nil }
+        store.storagePreferencesResetHook = { _, _ in true }
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(Self.sealedRowCount(in: controller) == 0, "sealed rows survived a locked wipe")
+        #expect(lock.contentKey(for: .privateHub) == nil, "the wipe produced a content key — deletion must never require the ability to read")
+        for named in ["your cycle notes", "your intimate logs", "your journal entries", "your Worry Box notes", "your sealed store"] {
+            #expect(!outcome.incompleteStores.contains(named), "\(named) reported incomplete after a locked wipe")
+        }
+    }
+
+    /// A scratch directory for an ON-DISK sealed store. In-memory (`/dev/null`) controllers cannot
+    /// express the rebuild's contract, which is entirely about real files.
+    private static func makeScratchStoreDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fernlet-sealed-rebuild-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    /// Every byte currently on disk under the sealed store's directory — sqlite, `-wal`, `-shm`,
+    /// and the `_SUPPORT` external-blob tree — as one Latin-1 string. Latin-1 because it is the one
+    /// encoding that round-trips arbitrary bytes: a UTF-8 decode of binary pages substitutes
+    /// replacement characters, which is exactly how a residue scan quietly stops finding residue.
+    private static func storeFiles(in directory: URL) -> String {
+        guard let enumerator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil) else { return "" }
+        var combined = ""
+        for case let url as URL in enumerator {
+            guard let data = try? Data(contentsOf: url) else { continue }
+            combined += String(data: data, encoding: .isoLatin1) ?? ""
+        }
+        return combined
+    }
+
+    /// The file's inode number AND creation timestamp, so "destroyed and re-created" can be told
+    /// apart from "truncated in place" — a truncation leaves the freed pages allocated to the same
+    /// file. Both parts, because APFS can hand a freshly created file the inode it just freed.
+    /// `nil` when the file does not exist, which also counts as "not the same file".
+    private static func fileIdentity(of url: URL) -> String? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else { return nil }
+        let inode = (attributes[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0
+        let created = (attributes[.creationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        return "\(inode)@\(created)"
+    }
+
+    /// Rows across all four sealed entities.
+    private static func sealedRowCount(in controller: PrivatePersistenceController) -> Int {
+        let context = controller.container.viewContext
+        return context.performAndWait {
+            ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative"].reduce(0) { total, entityName in
+                let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
+                return total + ((try? context.fetch(request).count) ?? 0)
+            }
+        }
     }
 }
 
