@@ -354,6 +354,10 @@ public enum LockKeychainKey: String {
     case kind = "com.fernlet.lock.kind"
     /// The ChaChaPoly-sealed content key.
     case wrappedContentKey = "com.fernlet.lock.wrappedContentKey"
+    /// The content key ECIES-wrapped under the non-exportable Secure Enclave key — the ADDITIVE
+    /// second wrap (`SecureEnclaveContentKeyWrap`). Best-effort: absent on SE-less devices, and
+    /// ``wrappedContentKey`` always remains the authoritative fallback.
+    case seWrappedContentKey = "com.fernlet.lock.seWrappedContentKey"
     /// The raw content key behind a `.biometryCurrentSet` access control (Face ID/Touch ID path).
     case biometricBypass = "com.fernlet.lock.biometricBypass"
     /// Presence flag: biometric unlock is enabled.
@@ -567,6 +571,10 @@ private func constantTimeEqual(_ a: Data, _ b: Data) -> Bool {
 /// (`storeVerified`) so a silently failing keychain cannot masquerade as configured
 /// state. The biometric path keeps the raw content key in a separate
 /// `.biometryCurrentSet`-gated item that iOS invalidates when enrollment changes.
+/// Where a Secure Enclave exists, an ADDITIVE second wrap of the content key is
+/// maintained under a non-exportable enclave key (`SecureEnclaveContentKeyWrap`,
+/// round-trip-verified before ever preferred); the scrypt-wrapped item remains the
+/// authoritative fallback so no recovery path changes.
 ///
 /// **Brute force.** Every 4th failed passcode attempt escalates a cooldown
 /// (60s → 15min → 1h → 4h), tracked against BOTH the wall clock and monotonic uptime so
@@ -716,6 +724,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         try storeVerified(wrappedContentKey, for: .wrappedContentKey)
         var configuredN = Int32(FernletLockCrypto.scryptN)
         try storeVerified(Data(bytes: &configuredN, count: MemoryLayout<Int32>.size), for: .scryptN)
+        // A fresh content key was just minted: any surviving Secure-Enclave wrap protects the OLD
+        // key and must not linger (maintain below re-creates it for the new key when SE exists).
+        KeychainItem.delete(for: .seWrappedContentKey, service: keychainService)
         KeychainItem.delete(for: .biometricBypass, service: keychainService)
         KeychainItem.delete(for: .biometricEnabledFlag, service: keychainService)
         KeychainItem.delete(for: .cooldownDeadline, service: keychainService)
@@ -728,6 +739,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         _contentKey = SymmetricKey(data: contentKeyData)
         state = .unlocked
         hasAutoPromptedBiometricForCurrentLockSession = false
+        maintainSecureEnclaveWrap(contentKeyData: contentKeyData)
         FernletAuditLog.log("lock.configured", context: ["kind": credential.kind.rawValue])
     }
 
@@ -771,6 +783,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         if case .unlocked = state {
             _contentKey = SymmetricKey(data: contentKeyData)
         }
+        // The content key is unchanged by a re-key, so the SE wrap normally still verifies;
+        // this call is a self-heal in case it was missing or stale.
+        maintainSecureEnclaveWrap(contentKeyData: contentKeyData)
 
         FernletAuditLog.log("lock.kindChanged", context: ["newKind": new.kind.rawValue])
     }
@@ -803,7 +818,10 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             throw FernletLockError.invalidPasscode
         }
 
-        let contentKeyData = try cryptoProvider.unwrapContentKey(wrappedData, using: computedVerifier)
+        let scryptUnwrapped = try cryptoProvider.unwrapContentKey(wrappedData, using: computedVerifier)
+        // Prefer the Secure-Enclave wrap when it exists AND provably matches the scrypt-unwrapped
+        // key (the authoritative source while the legacy item is kept); otherwise repair it.
+        let contentKeyData = secureEnclavePreferredContentKey(scryptUnwrapped: scryptUnwrapped)
         // First successful unlock under a build that splits the verifier from the wrapping key:
         // rewrite the raw-key verifier to its digest in place (best-effort, legacy match only).
         migrateLegacyVerifierIfNeeded(match, computedVerifier: computedVerifier)
@@ -864,6 +882,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         _contentKey = SymmetricKey(data: contentKeyData)
         state = .unlocked
         hasAutoPromptedBiometricForCurrentLockSession = false
+        maintainSecureEnclaveWrap(contentKeyData: contentKeyData)
         FernletAuditLog.log("lock.released", context: ["method": "biometric"])
         return UnlockResult(method: .biometric)
     }
@@ -884,6 +903,8 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// - Important: Sealed content is unrecoverable afterward — the content key is gone.
     public func reset() throws {
         KeychainItem.deleteAll(service: keychainService)
+        // The Secure Enclave key is a kSecClassKey item outside the generic-password sweep above.
+        SecureEnclaveContentKeyWrap.deleteKey(service: keychainService)
         try buffer.purge()
         try privatePersistenceController.purgeEncryptedEntities()
         scrubContentKey()
@@ -947,6 +968,50 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Drops the in-memory content key reference.
     private func scrubContentKey() {
         _contentKey = nil
+    }
+
+    // MARK: - Secure Enclave second wrap (additive; scrypt item stays authoritative)
+
+    /// The content key a passcode unlock installs, preferring the Secure-Enclave wrap when it
+    /// exists AND its unwrap equals the (verifier-authenticated) scrypt-unwrapped key.
+    ///
+    /// While the legacy scrypt-wrapped item is retained, the two sources can only diverge via a
+    /// stale SE wrap, so equality is the correctness gate: on a match the SE bytes are installed
+    /// (exercising the enclave path end-to-end on every unlock); on a miss — missing blob,
+    /// SE unavailable, enclave key destroyed by a device erase, or a stale wrap — the scrypt
+    /// result is used unchanged and the wrap is repaired best-effort. Removing the scrypt
+    /// fallback (HARD binding) is an explicit owner decision (Docs/Verifiability.md §6.1).
+    private func secureEnclavePreferredContentKey(scryptUnwrapped: Data) -> Data {
+        guard SecureEnclaveContentKeyWrap.isAvailable else { return scryptUnwrapped }
+        if let blob = keychainLoad(.seWrappedContentKey, keychainService),
+           let seUnwrapped = SecureEnclaveContentKeyWrap.unwrap(blob, service: keychainService),
+           constantTimeEqual(seUnwrapped, scryptUnwrapped) {
+            return seUnwrapped
+        }
+        maintainSecureEnclaveWrap(contentKeyData: scryptUnwrapped)
+        return scryptUnwrapped
+    }
+
+    /// Ensures a healthy Secure-Enclave wrap of `contentKeyData` exists: verifies any stored
+    /// blob unwraps to exactly this key, otherwise re-wraps (round-trip-verified inside
+    /// `SecureEnclaveContentKeyWrap.wrapVerified`) and stores the new blob.
+    ///
+    /// Strictly best-effort and additive: every failure path leaves the legacy scrypt item and
+    /// today's behavior untouched, and nothing is ever deleted here — keep-old-until-verified.
+    private func maintainSecureEnclaveWrap(contentKeyData: Data) {
+        guard SecureEnclaveContentKeyWrap.isAvailable else { return }
+        if let blob = keychainLoad(.seWrappedContentKey, keychainService),
+           let unwrapped = SecureEnclaveContentKeyWrap.unwrap(blob, service: keychainService),
+           constantTimeEqual(unwrapped, contentKeyData) {
+            return
+        }
+        guard let blob = SecureEnclaveContentKeyWrap.wrapVerified(contentKeyData, service: keychainService) else { return }
+        do {
+            try storeVerified(blob, for: .seWrappedContentKey)
+            FernletAuditLog.log("lock.seWrapEstablished")
+        } catch {
+            // Best-effort: an unstorable wrap changes nothing; the next unlock retries.
+        }
     }
 
     /// Which verifier format a re-derived key matched: the digest form (`.current`), the
@@ -1152,6 +1217,7 @@ extension LockKeychainKey: CaseIterable {
             .verifier,
             .kind,
             .wrappedContentKey,
+            .seWrappedContentKey,
             .biometricBypass,
             .biometricEnabledFlag,
             .cooldownDeadline,
