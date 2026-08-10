@@ -682,6 +682,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Test seam replacing the LocalAuthentication + keychain biometric read
     /// (`(prompt, service) -> contentKeyData`); `nil` in production.
     @ObservationIgnored private let biometricBypassLoader: ((String, String) throws -> Data)?
+    /// Test seam pinning ``biometricType`` to a deterministic value so the
+    /// ``isBiometricUnlockAvailable`` policy is testable on biometry-less CI hosts;
+    /// `nil` in production, where the live `LAContext` probe is used. Init-injection
+    /// only (like `biometricBypassLoader`) — deliberately not on `FernletLockServicing`.
+    @ObservationIgnored private let biometricTypeOverride: (() -> LABiometryType)?
     @ObservationIgnored private let keychainStore: (Data, LockKeychainKey, String) -> OSStatus
     @ObservationIgnored private let keychainLoad: (LockKeychainKey, String) -> Data?
     /// The sealed CoreData stack whose encrypted entities ``reset()`` purges.
@@ -700,6 +705,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         uptimeProvider: FernletUptimeProviding? = nil,
         cryptoProvider: FernletLockCryptoProviding? = nil,
         biometricBypassLoader: ((String, String) throws -> Data)? = nil,
+        biometricTypeOverride: (() -> LABiometryType)? = nil,
         keychainStore: ((Data, LockKeychainKey, String) -> OSStatus)? = nil,
         keychainLoad: ((LockKeychainKey, String) -> Data?)? = nil,
         privatePersistenceController: PrivatePersistenceController? = nil
@@ -709,6 +715,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         self.uptimeProvider = uptimeProvider ?? SystemFernletUptimeProvider()
         self.cryptoProvider = cryptoProvider ?? SystemFernletLockCryptoProvider()
         self.biometricBypassLoader = biometricBypassLoader
+        self.biometricTypeOverride = biometricTypeOverride
         self.keychainStore = keychainStore ?? { data, key, service in
             KeychainItem.store(data, for: key, service: service)
         }
@@ -736,7 +743,12 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     }
 
     /// The device's usable biometry right now (`.none` when unavailable or not permitted).
+    /// Tests may pin the value via the init-only `biometricTypeOverride` seam; production
+    /// always asks the live `LAContext`.
     public var biometricType: LABiometryType {
+        if let biometricTypeOverride {
+            return biometricTypeOverride()
+        }
         let context = LAContext()
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {

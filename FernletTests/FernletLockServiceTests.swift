@@ -589,23 +589,31 @@ struct FernletLockServiceTests {
 
         // Relaunch simulation: no passcode success has happened in serviceB's "process" yet,
         // so the fail-closed service guard refuses before the bypass loader is ever consulted.
-        let serviceB = harness.makeService { _, _ in biometricKey }
+        // The recording loader pins the guard's ORDERING, not just the thrown error: if a
+        // refactor moved the keychain/loader consult above the guard, loaderConsulted flips.
+        var loaderConsulted = false
+        let serviceB = harness.makeService { _, _ in
+            loaderConsulted = true
+            return biometricKey
+        }
         do {
             _ = try await serviceB.unlockWithBiometrics(for: .privateHub)
             Issue.record("Biometric unlock succeeded before the process's first passcode success")
         } catch FernletLockError.biometricNotAvailable {
         }
         #expect(serviceB.state == .locked(cooldownDeadline: nil))
+        #expect(!loaderConsulted, "guard must refuse before any keychain/loader work")
 
         // One passcode success satisfies the requirement for the rest of the process...
         _ = try await serviceB.unlock(passcode: "123456", for: .privateHub)
         #expect(serviceB.passcodeUnlockedThisProcess)
         serviceB.lock(reason: .manual)
 
-        // ...after which the biometric path works again.
+        // ...after which the biometric path works again (and proves the recorder fires).
         let result = try await serviceB.unlockWithBiometrics(for: .privateHub)
         #expect(result.method == .biometric)
         #expect(serviceB.state == .unlocked(scope: .privateHub))
+        #expect(loaderConsulted)
     }
 
     @Test func isBiometricUnlockAvailableGatesOnFirstPasscodeSuccess() async throws {
@@ -616,21 +624,22 @@ struct FernletLockServiceTests {
         try await serviceA.setBiometricEnabled(true, passcode: "123456")
         serviceA.lock(reason: .manual)
 
-        // Relaunch simulation: biometrics are enabled in the keychain, but no passcode success
-        // has happened in this "process", so the policy is false no matter what the device's
-        // biometry reports (the passcodeUnlockedThisProcess conjunct alone forces it).
-        let serviceB = harness.makeService()
+        // Relaunch simulation with the biometry seam pinned to .faceID, so the other two
+        // conjuncts are both true and the passcodeUnlockedThisProcess flag ALONE decides the
+        // policy — this is what makes the test meaningful on biometry-less CI hosts (a mutant
+        // that drops the flag conjunct fails the pre-unlock assertion below).
+        let serviceB = harness.makeService(biometricTypeOverride: { .faceID })
         #expect(serviceB.biometricEnabled)
+        #expect(serviceB.biometricType == .faceID)
         #expect(!serviceB.passcodeUnlockedThisProcess)
         #expect(!serviceB.isBiometricUnlockAvailable)
 
         _ = try await serviceB.unlock(passcode: "123456", for: .privateHub)
         serviceB.lock(reason: .manual)
-        // After the first passcode success the flag no longer suppresses the offer: only the
-        // device-capability conjuncts remain (biometricType is real LAContext state, so on
-        // hardware without enrolled biometry the policy legitimately stays false).
+        // After the first passcode success the flag no longer suppresses the offer, and with
+        // enabled + capability both pinned true the policy must flip to true.
         #expect(serviceB.passcodeUnlockedThisProcess)
-        #expect(serviceB.isBiometricUnlockAvailable == (serviceB.biometricEnabled && serviceB.biometricType != .none))
+        #expect(serviceB.isBiometricUnlockAvailable)
     }
 }
 
@@ -641,13 +650,17 @@ final class LockTestHarness {
     let uptime = MockUptimeProvider(systemUptime: 100_000)
     let crypto = FakeLockCryptoProvider()
 
-    func makeService(biometricBypassLoader: ((String, String) throws -> Data)? = nil) -> FernletLockService {
+    func makeService(
+        biometricBypassLoader: ((String, String) throws -> Data)? = nil,
+        biometricTypeOverride: (() -> LABiometryType)? = nil
+    ) -> FernletLockService {
         FernletLockService(
             keychainService: serviceID,
             dateProvider: clock,
             uptimeProvider: uptime,
             cryptoProvider: crypto,
-            biometricBypassLoader: biometricBypassLoader
+            biometricBypassLoader: biometricBypassLoader,
+            biometricTypeOverride: biometricTypeOverride
         )
     }
 
