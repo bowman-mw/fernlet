@@ -28,14 +28,18 @@ struct CoreDataStagedBlobLoadTests {
             .appendingPathExtension("json")
     }
 
-    private func snapshot(bottleCount: Int, todayKey: String = "2026-05-16") -> FernletSnapshot {
+    private func snapshot(
+        bottleCount: Int,
+        todayKey: String = "2026-05-16",
+        memories: [MemoryNote] = []
+    ) -> FernletSnapshot {
         FernletSnapshot(
             todayKey: todayKey,
             day: FernletDay(date: todayKey, bottleCount: bottleCount),
             settings: FernletSettings(),
             recentMeals: [],
             previousJournals: [],
-            memories: [],
+            memories: memories,
             goals: [],
             workshop: WorkshopData()
         )
@@ -102,15 +106,23 @@ struct CoreDataStagedBlobLoadTests {
     }
 
     /// The corruption policy from the async side: an undecodable payload latches read-only recovery,
-    /// serves the empty fallback, refuses the next save, and leaves the corrupt record untouched — it
-    /// is never overwritten with legacy data.
+    /// serves the empty BLOB fallback, refuses the next save, and leaves the corrupt record
+    /// untouched — it is never overwritten with legacy data.
+    ///
+    /// "Empty fallback" is scoped to the aggregate blob: the per-row `DayRecord` store is a separate
+    /// store that decoded fine, and post-day-split it is the authoritative day source, so
+    /// `snapshot(from:)` still serves today's real day from its row. Blanking that healthy row would
+    /// misreport intact data as lost (and, if a caller ever applied the fallback despite the latch, an
+    /// in-memory empty day could later clobber the real row once the latch clears). The latch — not
+    /// the snapshot content — is what keeps every writer away while the blob is unreadable.
     @Test func asyncLoadRefusesToOverwriteACorruptRecord() async throws {
         let controller = PersistenceController(inMemory: true)
         let seeding = CoreDataFernletRepository(
             controller: controller,
             legacyRepository: LocalFernletRepository(fileURL: temporaryDatabaseURL("async-corrupt-seed-legacy"))
         )
-        #expect(seeding.saveSnapshot(snapshot(bottleCount: 2)))
+        let seededMemories = [MemoryNote(category: "quiet", text: "Blob-held aggregate that must vanish from the fallback.")]
+        #expect(seeding.saveSnapshot(snapshot(bottleCount: 2, memories: seededMemories)))
 
         let corruptData = Data("not-json".utf8)
         let context = controller.container.viewContext
@@ -126,11 +138,16 @@ struct CoreDataStagedBlobLoadTests {
         )
         let fallback = await repository.loadSnapshotAsync(todayKey: "2026-05-16")
 
-        #expect(fallback.day.bottleCount == 0, "a corrupt payload must yield the empty fallback")
+        #expect(fallback.memories.isEmpty, "a corrupt payload must yield the empty blob-aggregate fallback")
+        #expect(fallback.day.bottleCount == 2, "today's day is served from its intact row, not blanked")
         #expect(repository.isInReadOnlyRecovery, "a corrupt payload must latch read-only recovery")
         #expect(repository.saveSnapshot(snapshot(bottleCount: 9)) == false, "saves stay refused while latched")
 
         let persisted = try #require(try context.fetch(request).first)
         #expect(persisted.value(forKey: "payloadData") as? Data == corruptData)
+        // The refused save must leave the day row untouched too: writeDayRow is skipped while latched,
+        // so the row the fallback served cannot be overwritten by the refused bottleCount-9 save.
+        let dayRow = DayRecordRepository(controller: controller).load(dateKeys: ["2026-05-16"])["2026-05-16"]
+        #expect(dayRow?.bottleCount == 2)
     }
 }

@@ -25,8 +25,10 @@ import FernletPersistence
 /// - **No empty rows**: a day with no logged content writes no row (and deletes a stale one), so
 ///   a device that merely launched the app can't make other devices read "existing cloud data".
 /// - **Read-only recovery**: a failed record fetch or blob decode latches all saves off
-///   (`isInReadOnlyRecovery`) and serves an empty fallback, so a transient failure can't be
+///   (`isInReadOnlyRecovery`) and serves the empty blob fallback, so a transient failure can't be
 ///   persisted over real data; the latch clears on the next successful load or a full purge.
+///   Only the blob's aggregates blank — `snapshot(from:)` still serves today's day from its
+///   (separate, still-readable) row, which the latch protects from every writer.
 /// - **Row-write-first**: `saveSnapshot`/`updateDay` persist the day row before touching the
 ///   blob and return `false` (so `SnapshotSaveCoordinator` retries) when the row write fails.
 ///
@@ -571,11 +573,13 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     }
 
     /// Whether the snapshot most recently returned by `loadSnapshotAsync` / `loadSnapshot` is the
-    /// EMPTY read-only-recovery fallback (a transient Core Data / CloudKit fetch or a payload decode
-    /// failed), rather than real data. A remote-change reload MUST consult this before applying the
-    /// returned snapshot over live in-memory state — applying the empty fallback blanks every screen
-    /// until the next successful reload. The latch is cleared by the next successful load, so reading
-    /// it immediately after a load reflects that load's outcome.
+    /// read-only-recovery fallback (a transient Core Data / CloudKit fetch or a payload decode
+    /// failed), rather than real data. The fallback's blob-held aggregates are EMPTY; its `day` may
+    /// still be real — `snapshot(from:)` sources today from its per-row store, a separate store that
+    /// a corrupt blob does not take down. A remote-change reload MUST consult this before applying
+    /// the returned snapshot over live in-memory state — applying the fallback blanks every
+    /// aggregate-backed screen until the next successful reload. The latch is cleared by the next
+    /// successful load, so reading it immediately after a load reflects that load's outcome.
     public var isInReadOnlyRecovery: Bool { isPersistenceBlocked }
 
     private func markPersistenceBlockedByDecodeFailure() {
