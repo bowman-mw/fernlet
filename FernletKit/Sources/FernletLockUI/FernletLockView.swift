@@ -21,7 +21,7 @@ import FernletUI
 /// password), passcode entry, confirmation, an optional biometric-unlock toggle, and a
 /// no-recovery disclosure sheet that must be acknowledged before anything is written. Only
 /// after the disclosure is accepted does `finalizeSetup()` call
-/// `FernletLockService.configure(credential:)` — which derives the Scrypt verifier and wraps
+/// `FernletLockService.configure(credential:grantingScope:)` — which derives the Scrypt verifier and wraps
 /// the content key in the keychain — and, if requested, `setBiometricEnabled(_:passcode:)`.
 ///
 /// Presented as a sheet from the app's settings and privacy screens, the onboarding lock
@@ -34,6 +34,10 @@ import FernletUI
 /// - Important: The disclosure is not ceremonial — a forgotten passcode makes the sealed
 ///   journal, cycle, and intimacy notes permanently unreadable; there is no recovery path.
 public struct FernletLockSetupView: View {
+    /// The surface whose unlock the freshly-created passcode grants. The user is authenticated at
+    /// the moment they confirm it, so that one screen opens — but only that one, so setting a lock
+    /// up from Settings doesn't also hand over the Private Hub.
+    let grantingScope: FernletLockScope
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
 
@@ -46,7 +50,9 @@ public struct FernletLockSetupView: View {
     @State private var errorMessage: String?
     @State private var showSuccess = false
 
-    public init() {}
+    public init(grantingScope: FernletLockScope) {
+        self.grantingScope = grantingScope
+    }
 
     public var body: some View {
         NavigationStack {
@@ -347,7 +353,7 @@ public struct FernletLockSetupView: View {
                 case .pin6: credential = .pin6(passcode)
                 case .alphanumeric: credential = .alphanumeric(passcode)
                 }
-                try await lockService.configure(credential: credential)
+                try await lockService.configure(credential: credential, grantingScope: grantingScope)
 
                 if biometricEnabled {
                     try? await lockService.setBiometricEnabled(true, passcode: passcode)
@@ -424,7 +430,7 @@ public struct FernletLockSetupView: View {
 ///
 /// Renders the credential prompt matching the configured kind — a PIN-dot row plus
 /// ``FernletNumericPad`` for PINs, or a secure password field — and hands the entry to
-/// `FernletLockService.unlock(passcode:)`, which verifies it and unwraps the content key.
+/// `FernletLockService.unlock(passcode:for:)`, which verifies it and unwraps the content key.
 /// It mirrors the service's full failure-state machine:
 ///
 /// - An attempt counter warns how many tries remain before the service's lockout
@@ -446,6 +452,9 @@ public struct FernletLockSetupView: View {
 /// environment-injected.
 public struct FernletLockView: View {
     @Environment(FernletLockService.self) private var lockService
+    /// The surface being unlocked. A successful entry here opens THIS screen only — any unlock
+    /// another locked screen was holding is revoked by the same call.
+    var scope: FernletLockScope
     /// Called after any successful unlock (passcode or biometric); the gate overlay passes
     /// an empty closure because it disappears reactively, while sheet presenters use it
     /// to dismiss.
@@ -467,10 +476,13 @@ public struct FernletLockView: View {
     /// Creates the unlock screen.
     ///
     /// - Parameters:
+    ///   - scope: The surface this unlock grants. No default — an unlock belongs to exactly
+    ///     one screen.
     ///   - onUnlocked: Called after a successful passcode or biometric unlock.
     ///   - onResetRequested: Optional handler for the reset-required card's destructive
     ///     reset button; omit it to hide the button.
-    public init(onUnlocked: @escaping () -> Void, onResetRequested: (() -> Void)? = nil) {
+    public init(scope: FernletLockScope, onUnlocked: @escaping () -> Void, onResetRequested: (() -> Void)? = nil) {
+        self.scope = scope
         self.onUnlocked = onUnlocked
         self.onResetRequested = onResetRequested
     }
@@ -679,7 +691,7 @@ public struct FernletLockView: View {
 
     // MARK: Actions
 
-    /// Submits the entered passcode to `FernletLockService.unlock(passcode:)`, clearing the
+    /// Submits the entered passcode to `FernletLockService.unlock(passcode:for:)`, clearing the
     /// field on every outcome. A `cooldownActive` error silently switches to the countdown
     /// card; other errors surface inline. Re-entrant calls are ignored while a check is
     /// in flight.
@@ -690,7 +702,7 @@ public struct FernletLockView: View {
         Task { @MainActor in
             defer { isUnlocking = false }
             do {
-                _ = try await lockService.unlock(passcode: passcode)
+                _ = try await lockService.unlock(passcode: passcode, for: scope)
                 passcode = ""
                 onUnlocked()
             } catch FernletLockError.cooldownActive {
@@ -707,7 +719,7 @@ public struct FernletLockView: View {
         }
     }
 
-    /// Runs `FernletLockService.unlockWithBiometrics()`. Unavailable biometrics fall back
+    /// Runs `FernletLockService.unlockWithBiometrics(for:)`. Unavailable biometrics fall back
     /// silently to passcode entry; recognition failures and reset-required states surface
     /// as inline messages. Re-entrant calls are ignored while a check is in flight.
     private func triggerBiometric() {
@@ -717,7 +729,7 @@ public struct FernletLockView: View {
         Task { @MainActor in
             defer { isCheckingBiometric = false }
             do {
-                _ = try await lockService.unlockWithBiometrics()
+                _ = try await lockService.unlockWithBiometrics(for: scope)
                 onUnlocked()
             } catch FernletLockError.biometricNotAvailable {
                 // Quietly fall back to passcode entry.

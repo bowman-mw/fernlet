@@ -196,7 +196,7 @@ struct WorryBoxServiceTests {
         try service.addWorry("from before the lock existed")
 
         let userKey = SymmetricKey(size: .bits256)
-        service.updateActivation(lockState: .unlocked, contentKey: userKey)
+        service.updateActivation(lockState: .unlocked(scope: .privateHub), contentKey: userKey)
 
         #expect(service.worries.map(\.text) == ["from before the lock existed"])
         // The row is genuinely under the user key now (direct repository read).

@@ -217,10 +217,45 @@ final class SealedBackupCoordinator {
                 }
             }
             return true
+        } catch SealedBackupWiringError.locked where payloadType == .periodData && enabled {
+            // The narratives are sealed under the Private tab's content key, which is only live while
+            // THAT tab holds the unlock (`FernletLockScope.privateHub`) — and this toggle lives in
+            // Settings, which is reached from Home, by which point the hub has re-locked. Refusing
+            // here would make "turn on encrypted period backup" a silently-reverting toggle with no
+            // path that ever works.
+            //
+            // So honor the intent and DEFER: the preference sticks, the Privacy & Data banner already
+            // surfaces `sealedBackupPeriodReuploadDeferred` as a pending re-upload, and the seal runs
+            // the next time the Private tab unlocks (`retryDeferredPeriodReuploadIfNeeded`) or at the
+            // next launch (`restoreSealedBackupsIfNeeded`). Success clears the flag through the normal
+            // path above. Deliberately NOT extended to the disable case — disabling deletes the cloud
+            // chunk set and needs no content key, so it can never land here.
+            host.recordSealedBackupPeriodReuploadDeferred(true)
+            FernletAuditLog.log("sealedBackup.periodSealDeferredUntilUnlock")
+            return true
         } catch {
             FernletAuditLog.log("sealedBackup.reconcileFailed", context: ["payload": payloadType.rawValue])
             return false
         }
+    }
+
+    /// Runs a deferred period re-upload once the narratives are reachable again. Called when the
+    /// Private tab unlocks (the content key becomes available) and, with the same guards, from the
+    /// launch pass. Idempotent and a no-op unless a deferral is actually outstanding.
+    ///
+    /// The non-empty-store guard matches `restoreSealedBackupsIfNeeded`'s and is load-bearing:
+    /// re-sealing pages the LOCAL store and rewrites the whole chunk set, so re-uploading from an
+    /// empty one would overwrite the cloud backup with a single empty chunk — destroying the history
+    /// the deferral exists to preserve.
+    @discardableResult
+    func retryDeferredPeriodReuploadIfNeeded() async -> Bool {
+        let prefs = StoragePreferencesStore.currentPreferences()
+        guard prefs.iCloudSyncEnabled,
+              prefs.sealedBackupPeriodEnabled,
+              prefs.sealedBackupPeriodReuploadDeferred,
+              host.isPeriodTrackingVisible,
+              periodNarrativeCount() > 0 else { return false }
+        return await setSealedBackupEnabled(true, payloadType: .periodData)
     }
 
     /// Seals + uploads the period backup one bounded chunk at a time. The narrative count is read up
@@ -290,10 +325,7 @@ final class SealedBackupCoordinator {
         // above is fresh-install-only on the ambient path, so an empty store here means "not restored
         // yet", NOT "nothing to back up". The deferral flag stays set, so this self-heals on the launch
         // after the user actually restores (or re-uploads from a device that has the data).
-        if prefs.sealedBackupPeriodEnabled && prefs.sealedBackupPeriodReuploadDeferred && host.isPeriodTrackingVisible,
-           periodNarrativeCount() > 0 {
-            _ = await setSealedBackupEnabled(true, payloadType: .periodData)
-        }
+        await retryDeferredPeriodReuploadIfNeeded()
     }
 
     /// Reconciles the backup-escrow key across iCloud Keychain (WS-3) and records any conflict so the UI

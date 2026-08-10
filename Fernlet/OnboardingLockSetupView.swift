@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletDomainModel
 import FernletUI
+import FernletLock
 import FernletLockUI
 
 /// Onboarding step offering three ways through lock setup: set a passcode now, rely on biometrics,
@@ -57,7 +58,9 @@ struct OnboardingLockSetupView: View {
         }
         .accessibilityIdentifier("onboarding.lock")
         .sheet(isPresented: $isShowingPasscodeSetup, onDismiss: setPasscodeAction) {
-            FernletLockSetupView()
+            // No locked surface is on screen during onboarding; grant the Private Hub, which is what
+            // the user just agreed to protect and the first place they'll go looking for it.
+            FernletLockSetupView(grantingScope: .privateHub)
         }
     }
 

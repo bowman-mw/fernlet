@@ -162,7 +162,9 @@ struct PrivacyDataSettingsView: View {
         .navigationBarBackButtonHidden(deleteFlow.isDeleting)
         .interactiveDismissDisabled(deleteFlow.isDeleting)
         .sheet(isPresented: $showLockSetup) {
-            FernletLockSetupView()
+            // Set up from inside Settings → grants the settings scope only; the Private Hub still
+            // asks for the passcode the first time it's opened.
+            FernletLockSetupView(grantingScope: .appLockSettings)
                 .environment(lockService)
         }
         .sheet(isPresented: $isShowingDisableConfirmation) {

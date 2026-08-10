@@ -115,7 +115,7 @@ struct PeriodTrackerTests {
         let store = makePeriodStore(
             healthService: health,
             narrativeRepository: makeRepository(),
-            lockService: MockLockService(state: .unlocked)
+            lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
         let fiveDaysAgo = Calendar.current.date(byAdding: .day, value: -5, to: Date())!
 
@@ -158,7 +158,7 @@ struct PeriodTrackerTests {
     }
 
     @Test func loggingWithoutNarrativeDoesNotTouchRepositoryOrBuffer() async throws {
-        let lock = MockLockService(state: .unlocked)
+        let lock = MockLockService(state: .unlocked(scope: .privateHub))
         let repo = makeRepository()
         let key = SymmetricKey(data: Data(repeating: 3, count: 32))
         let store = makePeriodStore(
@@ -224,7 +224,7 @@ struct PeriodTrackerTests {
         let store = makePeriodStore(
             healthService: health,
             narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked)
+            lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
         store.isVisible = { false }
 
@@ -257,7 +257,7 @@ struct PeriodTrackerTests {
         let store = makePeriodStore(
             healthService: health,
             narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked)
+            lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
         store.isVisible = { visible }
 
@@ -291,7 +291,7 @@ struct PeriodTrackerTests {
         let store = makePeriodStore(
             healthService: health,
             narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked)
+            lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
         store.isVisible = { visible }
 
@@ -310,7 +310,7 @@ struct PeriodTrackerTests {
         let store = makePeriodStore(
             healthService: health,
             narrativeRepository: makeRepository(),
-            lockService: MockLockService(state: .unlocked)
+            lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
         store.isVisible = { false }
 
@@ -327,7 +327,7 @@ struct PeriodTrackerTests {
     /// key does nothing here — the gate must refuse explicitly. The buffer is left intact to drain
     /// later, because hiding is not deleting.
     @Test func hiddenDrainIsRefusedAndLeavesBufferIntact() async throws {
-        let lock = MockLockService(state: .unlocked)
+        let lock = MockLockService(state: .unlocked(scope: .privateHub))
         let key = SymmetricKey(data: Data(repeating: 13, count: 32))
         lock.pending = [PendingNarrativePayload(
             hkExternalUUID: UUID().uuidString,
@@ -369,7 +369,7 @@ struct PeriodTrackerTests {
         let store = makePeriodStore(
             healthService: health,
             narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked)
+            lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
         store.isVisible = { visible }
         await store.loadEntries(unlockedContentKey: key)
@@ -434,7 +434,7 @@ struct PeriodTrackerTests {
         let store = makePeriodStore(
             healthService: health,
             narrativeRepository: repo,
-            lockService: MockLockService(state: .unlocked)
+            lockService: MockLockService(state: .unlocked(scope: .privateHub))
         )
 
         await store.loadEntries(unlockedContentKey: key)
@@ -445,7 +445,7 @@ struct PeriodTrackerTests {
     }
 
     @Test func drainPendingBufferWritesNarrativeRows() async throws {
-        let lock = MockLockService(state: .unlocked)
+        let lock = MockLockService(state: .unlocked(scope: .privateHub))
         lock.pending = [PendingNarrativePayload(
             hkExternalUUID: "hk-drain",
             dateKey: "2026-05-20",
@@ -470,7 +470,7 @@ struct PeriodTrackerTests {
     /// never silently dropped. The first payload decodes and inserts fine; the second
     /// has undecodable symptom bytes, so the drain throws partway through.
     @Test func drainPendingBufferPreservesBufferOnPartialFailure() async throws {
-        let lock = MockLockService(state: .unlocked)
+        let lock = MockLockService(state: .unlocked(scope: .privateHub))
         lock.pending = [
             PendingNarrativePayload(
                 hkExternalUUID: "hk-good",
@@ -502,7 +502,7 @@ struct PeriodTrackerTests {
     @Test func currentPhaseUsesObservedFlowOnly() async throws {
         let health = MockPeriodHealthKitService()
         health.loadedSamples = try HealthKitService.periodSamples(for: UserLoggedCycleEvent(date: Date(), flowLevel: .light), externalUUID: UUID())
-        let periodStore = makePeriodStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .unlocked))
+        let periodStore = makePeriodStore(healthService: health, narrativeRepository: makeRepository(), lockService: MockLockService(state: .unlocked(scope: .privateHub)))
 
         await periodStore.loadEntries(unlockedContentKey: SymmetricKey(data: Data(repeating: 1, count: 32)))
         #expect(periodStore.currentPhaseFromObservations() == .menstrual)
@@ -528,7 +528,7 @@ struct PeriodTrackerTests {
         let periodStore = makePeriodStore(
             healthService: health,
             narrativeRepository: makeRepository(),
-            lockService: MockLockService(state: .unlocked),
+            lockService: MockLockService(state: .unlocked(scope: .privateHub)),
             calendar: calendar
         )
 
@@ -643,17 +643,30 @@ private final class MockLockService: FernletLockServicing {
 
     init(state: FernletLockState) {
         self.state = state
-        if state == .unlocked { key = SymmetricKey(data: Data(repeating: 3, count: 32)) }
+        if state.unlockedScope != nil { key = SymmetricKey(data: Data(repeating: 3, count: 32)) }
     }
 
-    func configure(credential: FernletLockCredential) async throws { state = .unlocked }
+    func configure(credential: FernletLockCredential, grantingScope: FernletLockScope) async throws {
+        state = .unlocked(scope: grantingScope)
+    }
     func changeCredential(current: String, new: FernletLockCredential) async throws { }
-    func unlock(passcode: String) async throws -> UnlockResult { state = .unlocked; return UnlockResult(method: .passcode) }
-    func unlockWithBiometrics() async throws -> UnlockResult { state = .unlocked; return UnlockResult(method: .biometric) }
+    func unlock(passcode: String, for scope: FernletLockScope) async throws -> UnlockResult {
+        state = .unlocked(scope: scope); return UnlockResult(method: .passcode)
+    }
+    func unlockWithBiometrics(for scope: FernletLockScope) async throws -> UnlockResult {
+        state = .unlocked(scope: scope); return UnlockResult(method: .biometric)
+    }
     func lock(reason: FernletLockReason) { state = .locked(cooldownDeadline: nil) }
+    func revokeUnlockOutside(_ scope: FernletLockScope) {
+        guard let current = state.unlockedScope, current != scope else { return }
+        lock(reason: .scopeChanged)
+    }
     func reset() throws { state = .notConfigured; pending = [] }
     func setBiometricEnabled(_ enabled: Bool, passcode: String) async throws { biometricEnabled = enabled }
-    func contentKey() -> SymmetricKey? { key }
+    func contentKey(for scope: FernletLockScope) -> SymmetricKey? {
+        guard scope == .privateHub, state.isUnlocked(for: scope) else { return nil }
+        return key
+    }
     func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws { pending.append(payload) }
     func drainPendingNarratives() throws -> [PendingNarrativePayload] { pending }
     func purgePendingNarratives() throws { pending = [] }

@@ -46,28 +46,62 @@ public protocol FernletLockServicing: PeriodLockContext {
     /// Failed passcode attempts recorded since the last success or cooldown escalation.
     var currentAttemptCount: Int { get }
 
-    /// First-time setup: derives the verifier, mints and wraps the content key, and unlocks.
-    func configure(credential: FernletLockCredential) async throws
+    /// First-time setup: derives the verifier, mints and wraps the content key, maintains the
+    /// additive Secure-Enclave wrap, and unlocks `grantingScope` — that surface only.
+    func configure(credential: FernletLockCredential, grantingScope: FernletLockScope) async throws
     /// Re-keys the credential in place, preserving the content key (no sealed-data loss).
     func changeCredential(current: String, new: FernletLockCredential) async throws
-    /// Verifies the passcode, unwraps the content key, and unlocks.
-    func unlock(passcode: String) async throws -> UnlockResult
-    /// Recovers the content key from the biometric-gated keychain item and unlocks.
-    func unlockWithBiometrics() async throws -> UnlockResult
+    /// Verifies the passcode, unwraps the content key, and unlocks FOR ONE SURFACE (`scope`).
+    func unlock(passcode: String, for scope: FernletLockScope) async throws -> UnlockResult
+    /// Recovers the content key from the biometric-gated keychain item and unlocks `scope` only.
+    func unlockWithBiometrics(for scope: FernletLockScope) async throws -> UnlockResult
     /// Engages the lock and scrubs the in-memory content key.
     func lock(reason: FernletLockReason)
+    /// Revokes an unlock belonging to any surface OTHER than `scope`, so an arriving gated screen
+    /// authenticates on its own instead of inheriting someone else's session.
+    func revokeUnlockOutside(_ scope: FernletLockScope)
     /// Destroys all lock keychain state AND purges the sealed narrative entities.
     func reset() throws
     /// Enables or disables biometric unlock; enabling requires the current passcode.
     func setBiometricEnabled(_ enabled: Bool, passcode: String) async throws
-    /// The unwrapped content key while unlocked, `nil` otherwise.
-    func contentKey() -> SymmetricKey?
+    /// The unwrapped content key, released only to `.privateHub` while that scope holds the
+    /// unlock; `nil` for every other scope and whenever locked.
+    func contentKey(for scope: FernletLockScope) -> SymmetricKey?
 }
 
 extension FernletLockServicing {
     /// Satisfies the narrow `PeriodLockContext.isLockConfigured` seam without each conformer
     /// reimplementing it: a lock is "configured" once it leaves the `.notConfigured` state.
     public var isLockConfigured: Bool { state != .notConfigured }
+
+    /// The one surface an in-force unlock covers, or nil when locked / not configured.
+    public var unlockedScope: FernletLockScope? { state.unlockedScope }
+
+    /// The only "am I revealed?" question a gated surface may ask. Deliberately NOT
+    /// `if case .unlocked = state`: an unlock belongs to exactly one surface, so every other
+    /// surface must read as locked while that one holds it.
+    public func isUnlocked(for scope: FernletLockScope) -> Bool { state.isUnlocked(for: scope) }
+}
+
+/// The lockable surfaces, each of which owns its own unlock session.
+///
+/// An unlock is granted to ONE scope at a time. Before this existed the lock was global: unlocking
+/// the progress-photo strip (or the App-lock settings page) left the Private Hub open too, so a user
+/// who unlocked one screen, wandered elsewhere in the app, and then opened another locked screen was
+/// let straight in — the re-lock only fired on a `.onDisappear` that a covering sheet, a full-screen
+/// capture cover or a scene transition could legitimately suppress. Scoping makes the leak
+/// structurally impossible: crossing to a different locked surface revokes the unlock (scrubbing the
+/// content key) rather than inheriting it.
+public enum FernletLockScope: String, CaseIterable, Sendable, Equatable {
+    /// The Private tab — journal, period, intimacy, Worry Box. The ONLY scope entitled to the
+    /// lock's content key (`contentKey(for:)`), because it is the only one whose data is sealed
+    /// under it: progress photos have their own `PrivateMediaKeyStore` key, and App-lock settings
+    /// re-derive from the entered passcode.
+    case privateHub
+    /// The gym progress-photo strip under Move, plus its full-screen photo detail.
+    case progressPhotos
+    /// Settings → App lock (change passcode, biometrics, reset).
+    case appLockSettings
 }
 
 /// The three-way lock lifecycle state published by ``FernletLockService``.
@@ -80,8 +114,20 @@ public enum FernletLockState: Equatable {
     case notConfigured
     /// Locked; `cooldownDeadline` is non-nil while a failed-attempt cooldown is active.
     case locked(cooldownDeadline: Date?)
-    /// Unlocked; the content key is available via ``FernletLockServicing/contentKey()``.
-    case unlocked
+    /// Unlocked FOR ONE SURFACE. The scope rides in the state (rather than sitting beside it) so it
+    /// can never drift out of step with the unlock, and so `.task(id: lockService.state)` re-runs
+    /// when the owning surface changes. The content key is available via
+    /// ``FernletLockServicing/contentKey(for:)`` — and only to `.privateHub`.
+    case unlocked(scope: FernletLockScope)
+
+    /// The surface an in-force unlock belongs to, or `nil` when locked / not configured.
+    public var unlockedScope: FernletLockScope? {
+        if case .unlocked(let scope) = self { return scope }
+        return nil
+    }
+
+    /// Whether the unlock in force is *this* surface's — never merely "some unlock exists".
+    public func isUnlocked(for scope: FernletLockScope) -> Bool { unlockedScope == scope }
 }
 
 /// The shape of the configured credential, persisted (as its raw string) in the keychain.
@@ -147,6 +193,10 @@ public enum FernletLockCredential {
 /// from failure-driven ones.
 public enum FernletLockReason {
     case viewDisappeared, background, protectedDataUnavailable, manual, failedAttempts
+    /// A different locked surface came forward while this unlock was in force. The appearing
+    /// surface revokes rather than inherits, so this is the load-bearing re-lock — it fires even
+    /// when the departing surface's `onDisappear` never did.
+    case scopeChanged
 
     /// The stable string written to `FernletAuditLog` for this reason.
     var auditLabel: String {
@@ -156,6 +206,7 @@ public enum FernletLockReason {
         case .protectedDataUnavailable: "protectedDataUnavailable"
         case .manual: "manual"
         case .failedAttempts: "failedAttempts"
+        case .scopeChanged: "scopeChanged"
         }
     }
 }
@@ -170,8 +221,8 @@ public enum UnlockMethod {
 
 /// The successful outcome of an unlock attempt.
 ///
-/// Returned by ``FernletLockServicing/unlock(passcode:)`` and
-/// ``FernletLockServicing/unlockWithBiometrics()``; currently records only the
+/// Returned by ``FernletLockServicing/unlock(passcode:for:)`` and
+/// ``FernletLockServicing/unlockWithBiometrics(for:)``; currently records only the
 /// ``UnlockMethod`` that succeeded.
 public struct UnlockResult {
     /// The method that performed this unlock.
@@ -488,7 +539,7 @@ extension KeychainItem {
     /// Synchronously authenticates with biometrics and reads the bypass item.
     ///
     /// Blocks the calling thread on the LocalAuthentication evaluation (semaphore), so it
-    /// must run off the main thread — ``FernletLockService/unlockWithBiometrics()`` calls
+    /// must run off the main thread — ``FernletLockService/unlockWithBiometrics(for:)`` calls
     /// it from a global queue. The pre-evaluated `LAContext` is handed to
     /// `SecItemCopyMatching`, so the user sees a single system prompt.
     /// - Returns: The stored content-key bytes.
@@ -601,7 +652,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Whether this lock session's single automatic biometric prompt has been consumed
     /// (see ``consumeAutoBiometricPromptOpportunity()``); re-armed on every unlock.
     private(set) var hasAutoPromptedBiometricForCurrentLockSession = false
-    /// True while ``unlockWithBiometrics()`` is in flight, so observers (the lock gate's
+    /// True while ``unlockWithBiometrics(for:)`` is in flight, so observers (the lock gate's
     /// scene-phase re-lock handling) can tell the system Face ID sheet apart from a real
     /// backgrounding.
     public private(set) var isPerformingBiometricUnlock = false
@@ -707,8 +758,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
 
     /// First-time setup: validates the credential, derives the wrapping key, mints and
     /// wraps a fresh content key, persists the lock records, clears any stale
-    /// biometric/cooldown state, and transitions straight to `.unlocked`.
-    public func configure(credential: FernletLockCredential) async throws {
+    /// biometric/cooldown state, establishes the additive Secure-Enclave second wrap, and
+    /// transitions to `.unlocked(scope: grantingScope)`.
+    ///
+    /// `grantingScope` is the surface the user was standing on when they created the passcode — they
+    /// are authenticated at that instant, so that one surface opens. It does NOT open the others:
+    /// setting a lock up from Settings → App lock leaves the Private Hub locked, as it should.
+    public func configure(credential: FernletLockCredential, grantingScope: FernletLockScope) async throws {
         try credential.validate()
 
         let saltData = try cryptoProvider.generateSalt()
@@ -736,11 +792,16 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         KeychainItem.delete(for: .cooldownLevel, service: keychainService)
         KeychainItem.delete(for: .requiresReset, service: keychainService)
 
-        _contentKey = SymmetricKey(data: contentKeyData)
-        state = .unlocked
+        retainContentKey(contentKeyData, for: grantingScope)
+        state = .unlocked(scope: grantingScope)
         hasAutoPromptedBiometricForCurrentLockSession = false
+        // Scope-independent: the SE wrap protects the key at rest, not the session, so it is
+        // established for the freshly minted key whichever surface the setup happened on.
         maintainSecureEnclaveWrap(contentKeyData: contentKeyData)
-        FernletAuditLog.log("lock.configured", context: ["kind": credential.kind.rawValue])
+        FernletAuditLog.log("lock.configured", context: [
+            "kind": credential.kind.rawValue,
+            "scope": grantingScope.rawValue
+        ])
     }
 
     /// Re-keys the lock under a new credential while preserving the content key.
@@ -780,8 +841,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         if KeychainItem.load(for: .biometricEnabledFlag, service: keychainService) != nil {
             try KeychainItem.storeBiometricBypass(contentKeyData, service: keychainService)
         }
-        if case .unlocked = state {
+        // Re-keying re-wraps the SAME content key, so refresh the in-memory copy — but only for the
+        // scope entitled to it. Changing the passcode from Settings → App lock must not leave the
+        // Private Hub's content key resident under a session that can never legitimately read it.
+        if state.isUnlocked(for: .privateHub) {
             _contentKey = SymmetricKey(data: contentKeyData)
+        } else {
+            scrubContentKey()
         }
         // The content key is unchanged by a re-key, so the SE wrap normally still verifies;
         // this call is a self-heal in case it was missing or stale.
@@ -796,8 +862,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// records the failed attempt (possibly escalating a cooldown) and throws
     /// `FernletLockError.invalidPasscode`; on success it migrates a legacy verifier if
     /// needed, clears attempt state, installs the content key, and unlocks.
+    ///
+    /// Unlocks FOR ONE SURFACE. `scope` is the caller's own surface — never a default, so a new
+    /// gated screen cannot inherit someone else's unlock by forgetting to say who it is. The
+    /// content key is only *retained* for `.privateHub` (see ``retainContentKey(_:for:)``); every
+    /// other scope recovers it purely as the act of verifying the passcode and then drops it.
     /// - Returns: An ``UnlockResult`` with method `.passcode`.
-    public func unlock(passcode: String) async throws -> UnlockResult {
+    public func unlock(passcode: String, for scope: FernletLockScope) async throws -> UnlockResult {
         guard !requiresReset else { throw FernletLockError.resetRequired }
         if let deadline = activeCooldownDeadline() {
             state = .locked(cooldownDeadline: deadline)
@@ -826,10 +897,10 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // rewrite the raw-key verifier to its digest in place (best-effort, legacy match only).
         migrateLegacyVerifierIfNeeded(match, computedVerifier: computedVerifier)
         clearAttemptState()
-        _contentKey = SymmetricKey(data: contentKeyData)
-        state = .unlocked
+        retainContentKey(contentKeyData, for: scope)
+        state = .unlocked(scope: scope)
         hasAutoPromptedBiometricForCurrentLockSession = false
-        FernletAuditLog.log("lock.released", context: ["method": "passcode"])
+        FernletAuditLog.log("lock.released", context: ["method": "passcode", "scope": scope.rawValue])
         return UnlockResult(method: .passcode)
     }
 
@@ -840,8 +911,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// the passcode attempt counter — biometric lockout is the OS's job. Throws
     /// `FernletLockError.biometricNotAvailable`/`.biometricFailed` (or the underlying
     /// LocalAuthentication error).
+    ///
+    /// Biometric counterpart of ``unlock(passcode:for:)`` — same one-surface grant, same
+    /// `.privateHub`-only key retention.
     /// - Returns: An ``UnlockResult`` with method `.biometric`.
-    public func unlockWithBiometrics() async throws -> UnlockResult {
+    public func unlockWithBiometrics(for scope: FernletLockScope) async throws -> UnlockResult {
         guard !requiresReset else { throw FernletLockError.resetRequired }
         isPerformingBiometricUnlock = true
         defer { isPerformingBiometricUnlock = false }
@@ -879,11 +953,13 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // (.biometryCurrentSet) ACL, so the un-migrated raw verifier is only a second, less-gated path
         // to the same key; and everything here is ThisDeviceOnly (no off-device/iCloud exposure). The
         // first subsequent passcode unlock (unlock/changeCredential) migrates the verifier to its digest.
-        _contentKey = SymmetricKey(data: contentKeyData)
-        state = .unlocked
+        retainContentKey(contentKeyData, for: scope)
+        state = .unlocked(scope: scope)
         hasAutoPromptedBiometricForCurrentLockSession = false
+        // Scope-independent, like configure(): the at-rest SE wrap is maintained on every
+        // successful unlock even when this scope does not keep the key resident.
         maintainSecureEnclaveWrap(contentKeyData: contentKeyData)
-        FernletAuditLog.log("lock.released", context: ["method": "biometric"])
+        FernletAuditLog.log("lock.released", context: ["method": "biometric", "scope": scope.rawValue])
         return UnlockResult(method: .biometric)
     }
 
@@ -896,9 +972,23 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         FernletAuditLog.log("lock.engaged", context: ["reason": reason.auditLabel])
     }
 
-    /// The destructive escape hatch: deletes every lock keychain item, purges the
-    /// pending-narrative buffer AND the sealed encrypted CoreData entities, scrubs the
-    /// content key, and returns to `.notConfigured`.
+    /// Called by a gated surface as it comes forward: if the unlock in force belongs to a DIFFERENT
+    /// surface, revoke it (scrubbing the content key) so the arriving screen must authenticate on
+    /// its own. A no-op when locked, not configured, or already unlocked for `scope`.
+    ///
+    /// This is the appear-side half of the guarantee, and it is the half that actually closes the
+    /// hole: the departure-side `lock(reason: .viewDisappeared)` is legitimately suppressed by
+    /// covering sheets, the camera's full-screen cover and scene transitions, so a surface must not
+    /// depend on the surface it replaced having locked itself.
+    public func revokeUnlockOutside(_ scope: FernletLockScope) {
+        guard let current = state.unlockedScope, current != scope else { return }
+        lock(reason: .scopeChanged)
+    }
+
+    /// The destructive escape hatch: deletes every lock keychain item (including the
+    /// Secure-Enclave key and its wrap), purges the pending-narrative buffer AND the sealed
+    /// encrypted CoreData entities, scrubs the content key, and returns to `.notConfigured` —
+    /// which by construction is no scope's unlock.
     ///
     /// - Important: Sealed content is unrecoverable afterward — the content key is gone.
     public func reset() throws {
@@ -944,11 +1034,22 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         }
     }
 
-    /// The unwrapped content key while `.unlocked`, else `nil`; sealed repositories pass
-    /// it into their per-operation crypto.
-    public func contentKey() -> SymmetricKey? {
-        _contentKey
+    /// The sealed-content key, released ONLY to the scope that owns it and only while that scope
+    /// holds the unlock. This is the decrypt seam, not a UI check: an unlock taken out on the
+    /// progress-photo strip or the App-lock settings page yields `nil` here, so journal / period /
+    /// intimacy / Worry Box plaintext is never even derived on those screens. Progress photos are
+    /// sealed under `PrivateMediaKeyStore`'s own key and App-lock settings re-derive from the
+    /// entered passcode, so neither has any business with this one.
+    public func contentKey(for scope: FernletLockScope) -> SymmetricKey? {
+        guard scope == .privateHub, state.isUnlocked(for: scope) else { return nil }
+        return _contentKey
     }
+
+    /// Whether the content key is resident in memory AT ALL, bypassing the scope guard in
+    /// `contentKey(for:)`. Exists purely so tests can tell "scrubbed" from "merely withheld" —
+    /// asserting through `contentKey(for:)` cannot, because its guard returns nil for a foreign
+    /// scope no matter what `_contentKey` holds. Never a reveal seam: it exposes a Bool, not a key.
+    public var hasResidentContentKey: Bool { _contentKey != nil }
 
     /// `PeriodLockContext`: appends a sealed pending narrative while the lock is engaged.
     public func bufferPendingNarrative(_ payload: PendingNarrativePayload) throws {
@@ -968,6 +1069,23 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Drops the in-memory content key reference.
     private func scrubContentKey() {
         _contentKey = nil
+    }
+
+    /// Least privilege for the in-memory key: only a `.privateHub` session keeps it resident at all.
+    /// A progress-photo or App-lock-settings unlock recovers the content key as a side effect of
+    /// verifying the passcode (unwrapping it IS the verification) and then drops it — those screens
+    /// have no sealed content to read, so the key should not outlive the check. `contentKey(for:)`
+    /// still gates every read; this makes that gate belt-and-braces rather than the only barrier.
+    ///
+    /// Independent of the at-rest Secure-Enclave wrap below: `maintainSecureEnclaveWrap` is called
+    /// on every configure/unlock regardless of scope, because the wrap protects the key at rest,
+    /// not the session.
+    private func retainContentKey(_ contentKeyData: Data, for scope: FernletLockScope) {
+        if scope == .privateHub {
+            _contentKey = SymmetricKey(data: contentKeyData)
+        } else {
+            scrubContentKey()
+        }
     }
 
     // MARK: - Secure Enclave second wrap (additive; scrypt item stays authoritative)

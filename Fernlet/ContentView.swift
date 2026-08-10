@@ -102,14 +102,18 @@ struct ContentView: View {
             .onChange(of: lockService.state) { _, newState in
                 store.lockState = newState
                 Task { await drainPendingPeriodNarrativesIfUnlocked(newState) }
-                if case .unlocked = newState, let contentKey = lockService.contentKey() {
-                    store.activateSealedJournals(contentKey: contentKey)
-                } else if case .locked = newState {
-                    store.deactivateSealedJournals()
-                } else if case .notConfigured = newState {
-                    store.activateNoLockJournals()
+                applySealedJournalActivation(for: newState)
+                worryBoxService.updateActivation(
+                    lockState: newState,
+                    contentKey: lockService.contentKey(for: .privateHub)
+                )
+                // The sealed period backup is sealed under the hub's content key, so turning it on
+                // from Settings (reached from Home, where the hub is always re-locked) can only ever
+                // DEFER the upload. This is the moment that debt can be paid: the hub just unlocked,
+                // so the narratives are readable. No-op unless a deferral is actually outstanding.
+                if newState.isUnlocked(for: .privateHub) {
+                    Task { await store.retryDeferredSealedPeriodBackupIfNeeded() }
                 }
-                worryBoxService.updateActivation(lockState: newState, contentKey: lockService.contentKey())
                 updateRecipeShareListener()
             }
             .overlay(alignment: .top) {
@@ -169,14 +173,11 @@ struct ContentView: View {
                 store.attachStressScoringContext(stressService)
                 let initialLockState = lockService.state
                 store.lockState = initialLockState
-                if case .unlocked = initialLockState, let contentKey = lockService.contentKey() {
-                    store.activateSealedJournals(contentKey: contentKey)
-                } else if case .locked = initialLockState {
-                    store.deactivateSealedJournals()
-                } else {
-                    store.activateNoLockJournals()
-                }
-                worryBoxService.updateActivation(lockState: initialLockState, contentKey: lockService.contentKey())
+                applySealedJournalActivation(for: initialLockState)
+                worryBoxService.updateActivation(
+                    lockState: initialLockState,
+                    contentKey: lockService.contentKey(for: .privateHub)
+                )
                 // Worry "let go" counts are DEVICE-LOCAL (WorryBoxService owns them, incremented at the
                 // "let it go" write) — never the synced milestone ledger, so worry metadata honors the
                 // box's "never sync anywhere" promise. The store reads the count through this provider
@@ -667,8 +668,35 @@ struct ContentView: View {
         }
     }
 
+    /// Journal plaintext follows the `.privateHub` scope and nothing else. Written as an exhaustive
+    /// switch (not a chain of `if case .unlocked`) so an unlock taken out on the progress-photo strip
+    /// or the App-lock settings page lands in the DEACTIVATE branch rather than silently falling
+    /// through and leaving journals decrypted from a previous hub session.
+    private func applySealedJournalActivation(for lockState: FernletLockState) {
+        switch lockState {
+        case .unlocked(.privateHub):
+            if let contentKey = lockService.contentKey(for: .privateHub) {
+                store.activateSealedJournals(contentKey: contentKey)
+            } else {
+                store.deactivateSealedJournals()
+            }
+        case .unlocked, .locked:
+            store.deactivateSealedJournals()
+        case .notConfigured:
+            store.activateNoLockJournals()
+        }
+    }
+
     private func drainPendingPeriodNarrativesIfUnlocked(_ lockState: FernletLockState) async {
-        guard case .unlocked = lockState, let contentKey = lockService.contentKey() else {
+        guard lockState.isUnlocked(for: .privateHub),
+              let contentKey = lockService.contentKey(for: .privateHub) else {
+            // Withholding the key is not enough: `periodStore.entries` still hold the DECRYPTED
+            // narratives from the last hub session, and `prediction` feeds the Home tab's ungated
+            // "cycle outlook" card. So a lock that isn't open for the hub — whether re-locked or
+            // held by the photo strip / App-lock settings — has to drop them, exactly as the
+            // visibility gate's `periodScrubHook` does. Skipped when no lock is configured, where
+            // a nil content key is normal and the entries are the user's ordinary, ungated data.
+            if lockState != .notConfigured { periodStore.scrubCycleState() }
             refreshPeriodContext()
             return
         }
@@ -763,8 +791,7 @@ struct ContentView: View {
     /// Loads period entries with whatever content key is currently available (nil when locked / no lock),
     /// so the bridge has cycle data for phase resolution and trends.
     private func loadPeriodEntriesIfPossible() async {
-        let contentKey = { if case .unlocked = lockService.state { return lockService.contentKey() } else { return nil } }()
-        await periodStore.loadEntries(unlockedContentKey: contentKey)
+        await periodStore.loadEntries(unlockedContentKey: lockService.contentKey(for: .privateHub))
     }
 
     /// Recomputes the bridge's per-phase trends from current period data + the store's wellbeing scores.
@@ -772,7 +799,8 @@ struct ContentView: View {
     /// softening gate — staleness can only *withhold* softening, never apply it incorrectly.
     private func refreshPeriodContext() {
         guard let periodContext else { return }
-        let unlocked = { if case .unlocked = lockService.state { return true } else { return false } }()
+        // Cycle narratives are Private Hub content: an unlock held by another surface is not one.
+        let unlocked = lockService.isUnlocked(for: .privateHub)
         periodContext.refresh(unlocked: unlocked, wellbeingByDay: store.periodWellbeingByDay)
     }
 

@@ -1675,7 +1675,9 @@ final class FernletStore {
         var allowed = capabilities
         if !isIntimacyTrackingVisible { allowed.remove(.intimateLogging) }
         if !isPeriodTrackingVisible { allowed.remove(.cycleTracking) }
-        if lockState != .unlocked {
+        // Scoped: cycle/intimacy are Private Hub data, so an unlock taken out on the progress-photo
+        // strip or the App-lock settings page does NOT re-open these HealthKit reads.
+        if !lockState.isUnlocked(for: .privateHub) {
             allowed.remove(.cycleTracking)
             // Previously only `.cycleTracking` was dropped on lock, so intimacy event counts were
             // read out of HealthKit and rendered while the app was locked — the lock is supposed to
@@ -2507,6 +2509,14 @@ final class FernletStore {
     @discardableResult
     func setSealedBackupEnabled(_ enabled: Bool, payloadType: SealedBackupPayloadType) async -> Bool {
         await sealedBackupCoordinator.setSealedBackupEnabled(enabled, payloadType: payloadType)
+    }
+
+    /// Discharges a period re-upload that was deferred because the sealed narratives weren't readable
+    /// at the time (typically: the user turned the backup on from Settings while the Private tab held
+    /// no unlock). Driven from the lock-state observer when `.privateHub` unlocks. Delegates to
+    /// `SealedBackupCoordinator`, which owns the guards and is a no-op when nothing is outstanding.
+    func retryDeferredSealedPeriodBackupIfNeeded() async {
+        await sealedBackupCoordinator.retryDeferredPeriodReuploadIfNeeded()
     }
 
     /// Pulls any sealed iCloud backups into the local stores at launch (and on the user's Retry, which
