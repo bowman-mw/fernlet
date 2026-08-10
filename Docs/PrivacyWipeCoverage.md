@@ -55,6 +55,7 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Friend fuzzy-state cache | Sidecar | `friendStateCache.clearAll` |
 | Closeness ledger | Sidecar | `closenessLedger.clearAll` |
 | Barcode serving memory | UserDefaults | `BarcodeServingMemory.clearAll` |
+| Recipe web-image one-attempt memory | UserDefaults | `RecipeWebImageAttemptMemory.clearAll` |
 | Group-activity rosters (persisted) | Sidecar | `activities.clearAll` |
 | Guided-workout run state + Live Activity | App group + ActivityKit | `guidedRunStateStore.clear` |
 | Cooking run state + Live Activity | App group + ActivityKit | `cookingRunStateStore.clear` |
