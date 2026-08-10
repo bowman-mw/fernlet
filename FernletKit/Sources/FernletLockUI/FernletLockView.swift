@@ -442,10 +442,16 @@ public struct FernletLockSetupView: View {
 ///   by a card explaining that only a destructive reset — invoked through `onResetRequested`,
 ///   since the confirmation dialog lives in the presenting context — can continue.
 ///
-/// If biometric unlock is enabled, `onAppear` asks the service's
-/// `consumeAutoBiometricPromptOpportunity()` before auto-triggering Face ID / Touch ID, so
-/// the prompt fires once per lock session rather than on every recreation; a manual
-/// biometric button remains available. Biometric failures fall back to passcode entry.
+/// Biometrics are offered only while the service's single policy,
+/// `FernletLockService.isBiometricUnlockAvailable`, is true — which requires one passcode
+/// success (unlock or initial configure) in the current app process, so a cold-launched
+/// locked app shows and auto-prompts no Face ID / Touch ID until the passcode has been
+/// entered once. When available, `onAppear` additionally asks the service's
+/// `consumeAutoBiometricPromptOpportunity()` before auto-triggering, so the prompt fires
+/// once per lock session rather than on every recreation; a manual biometric button remains
+/// available. Biometric failures fall back to passcode entry, and the service's own
+/// fail-closed guard (`biometricNotAvailable` before the process's first passcode success)
+/// lands in the same silent passcode fallback.
 ///
 /// Used as `FernletLockGateModifier`'s overlay and directly by the app's progress-photo
 /// timeline. Runs on the main actor (the module's default isolation); the lock service is
@@ -538,8 +544,10 @@ public struct FernletLockView: View {
                     inputSection
                 }
 
-                // Biometric button
-                if !lockService.requiresReset && !isInputDisabled && lockService.biometricEnabled && lockService.biometricType != .none {
+                // Biometric button — isBiometricUnlockAvailable is the service's single
+                // offer policy (enabled + usable biometry + one passcode success this
+                // process); never restate its conjunction here.
+                if !lockService.requiresReset && !isInputDisabled && lockService.isBiometricUnlockAvailable {
                     biometricButton
                 }
 
@@ -551,7 +559,10 @@ public struct FernletLockView: View {
             refreshCooldown()
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(80))
-                guard lockService.biometricEnabled,
+                // isBiometricUnlockAvailable includes passcodeUnlockedThisProcess, so a
+                // cold-launched locked app never auto-prompts Face ID before the process's
+                // first passcode success (the service guard is the fail-closed backstop).
+                guard lockService.isBiometricUnlockAvailable,
                       !lockService.requiresReset,
                       !isInputDisabled,
                       lockService.consumeAutoBiometricPromptOpportunity() else { return }
