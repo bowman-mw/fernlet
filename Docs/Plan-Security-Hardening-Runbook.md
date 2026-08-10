@@ -1,0 +1,80 @@
+# Security-Hardening Build Runbook (2026-08-10)
+
+Execution controller for the two-track security-hardening plan. A `/loop` run reads this file
+each iteration, executes **one eligible phase** end to end (implement → adversarial review → fix →
+verify green → commit → merge), updates the ledger below, and either advances or stops.
+
+- Plans (source of truth for each phase's design/steps/tests):
+  [`Plan-Security-Hardening-OpusTrack-2026-08-10.md`](Plan-Security-Hardening-OpusTrack-2026-08-10.md)
+  and [`Plan-Security-Hardening-FableTrack-2026-08-10.md`](Plan-Security-Hardening-FableTrack-2026-08-10.md).
+- The **fixed global phase order** governs execution across both tracks; never reorder it.
+
+## Phase ledger
+
+Status ∈ `TODO` / `IN_PROGRESS` / `DONE` / `BLOCKED`. The loop updates the row it works, recording
+the merge commit on `DONE` or the reason on `BLOCKED`.
+
+| # | Phase | Track / model | Depends on | Merge policy | Status | Commit / note |
+|---|-------|---------------|-----------|--------------|--------|---------------|
+| P0a | Rebase & land `claude/scoped-unlock-per-screen` onto main | Opus | — | auto after green | TODO | |
+| P0b | PIN-before-biometrics | Fable | P0a | auto | TODO | |
+| P0c | `RecipeWebImageAttemptMemory` wipe-coverage gap fix | Fable | — | auto | TODO | |
+| P1a | Crypto-erasure normalization | Opus | P0a | auto | TODO | |
+| P1b | Deletion-audit verification pass | Fable | — | auto | TODO | |
+| P2 | Hardening #4 — v2 per-generation-salt escrow format | Opus | P1a | auto | TODO | |
+| P3 | Backup coverage — Journal + Intimacy | Opus | P2 | auto | TODO | |
+| P4 | Hardening #1 — hard SE-binding (deletes scrypt fallback) | Opus | P3 | **OWNER GO/NO-GO** | TODO | |
+| P5 | Hardening #3 — media split + escrow photo route + bind | Opus | P0a | auto | TODO | |
+| P6 | Hardening #6 — default-on backup exclusion | Fable | P4 | auto | TODO | |
+| P7 | Duress PIN — decoy, silent-wipe, recovery-lock | Opus | P0a, P1a, P4 | auto | TODO | |
+
+## Per-iteration protocol
+
+1. **Select.** Read the ledger. Pick the first row (top-down) that is not `DONE`/`BLOCKED` and whose
+   `Depends on` phases are all `DONE`. If none is eligible but incomplete rows remain, stop and
+   report the dependency stall. If all rows are `DONE`, **stop the loop** — the build is complete.
+2. **Guard the go/no-go.** If the selected phase's merge policy is `OWNER GO/NO-GO`, and the owner
+   has not recorded approval for it in the ledger note, do the implement+review+verify+commit work
+   **on the feature branch only**, then set the row `BLOCKED` with note `awaiting owner go/no-go —
+   branch <name> is green+reviewed`, and stop the loop. Merge on a later invocation once approved.
+3. **Branch.** From current `main`: `git checkout -b claude/harden-<phaseid>`.
+4. **Implement (Workflow).** Read the phase's section in its track doc; implement its ordered steps
+   exactly. Pass `model: 'opus'` to implementer agents for **Opus-track** phases; default model for
+   **Fable-track** phases. Honor every same-commit obligation the section names (wall doc, DocC page,
+   custody-tripwire test, `PrivacyWipeCoverage.md` row). Every new type/member gets a `///` doc
+   comment. New files just drop into their synced folder — no pbxproj surgery.
+5. **Review (Workflow).** Multi-dimension adversarial review of the branch diff `main..HEAD`
+   (dimensions per phase: crypto/key-custody, data-loss/migration-reversibility, S3 + no-tracking
+   walls, silent regressions). Dedup → verify each finding refute-by-default (`effort: 'high'`,
+   `model: 'opus'` for Opus-track phases) → fix every CONFIRMED finding, add a regression test where
+   the seam allows.
+6. **Verify green.** CLEAN build first (`FernletDomainModel` structs change most phases). Then, at
+   **suite** level (method-level `-only-testing:` is vacuous here — confirm real `Test case` lines):
+   the phase's owning suites **plus** the standing tripwires `NoTrackingBoundaryTests`,
+   `S3BoundaryTests`, `KeyCustodyBoundaryTests`, `SealedBackupFormatPinTests`,
+   `ColumnCryptoDeviceBindingTests`, and `Scripts/spm-wall-check.sh` + `Scripts/doc-coverage-scan.py`.
+   Known pre-existing red (leave it unless the owner's chip has fixed it):
+   `CoreDataStagedBlobLoadTests/asyncLoadRefusesToOverwriteACorruptRecord` (reproduces on `main`).
+7. **Commit + merge.** Commit on the feature branch (message body explains the why; end
+   `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`). If merge policy is `auto`, `git merge
+   --no-ff` to `main`. **Never `git push`** — origin is the owner's call.
+8. **Record.** Set the ledger row `DONE` with the merge commit hash (or `BLOCKED`/go-no-go per step 2),
+   commit the runbook update, then schedule the next iteration.
+
+## Stop-and-surface conditions (end the loop, report to the owner)
+
+- A phase needs a decision the plans did not resolve (a section's "Open owner sub-decisions" item
+  that blocks a step, not merely a nice-to-have).
+- A red test is **caused by this phase** and cannot be fixed within the iteration.
+- A merge/rebase conflict needs human judgment (expected at P0a against the `d68ca9a` SE-wrap seams).
+- The `OWNER GO/NO-GO` guard on **P4** (deleting the scrypt fallback is irreversible — once gone,
+  any gap in P2/P3 backup coverage means permanent data loss; the owner confirms P3 coverage is
+  actually live before this merges).
+- An adversarial review surfaces a CONFIRMED critical that the fix pass could not close.
+
+The decisions already locked on 2026-08-10 (intimacy joins the backup; duress may destroy the lock
+key; Worry Box stays out) are **not** re-confirmation points — they are settled; proceed.
+
+## Progress log
+
+_(the loop appends one line per completed phase: `Pxx DONE <hash> — <one line>`)_
