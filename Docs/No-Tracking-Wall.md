@@ -323,6 +323,9 @@ plist.
 - [`FernletKit/Sources/WebScrapingKit/EphemeralWebSession.swift`](../FernletKit/Sources/WebScrapingKit/EphemeralWebSession.swift) — the private-tab session itself, with the per-setting rationale (§2a).
 - [`FernletTests/S3BoundaryTests.swift`](../FernletTests/S3BoundaryTests.swift) — the sibling wall, and the source of the matchers this one reuses so the two agree on what an `import` is.
 - [`Docs/Privacy-Policy.md`](Privacy-Policy.md) — the user-facing statement this wall backs up.
+- [`Docs/Verifiability.md`](Verifiability.md) — how anyone can verify this wall (and the rest of
+  the privacy claims) themselves: the per-claim verification table, the standing traffic-audit
+  invitation, the device-binding story, and the hardening items awaiting an owner decision.
 - [`Docs/App-Privacy-Nutrition-Labels.md`](App-Privacy-Nutrition-Labels.md) — the App Store declarations that must stay consistent with the manifests.
 - [`Docs/PrivacyWipeCoverage.md`](PrivacyWipeCoverage.md) — the same enforcement pattern applied to deletion.
 - [`Site/_headers`](../Site/_headers) — the marketing site's matching stance: `default-src 'none'`, no JS, no cookies, no third-party requests.
