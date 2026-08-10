@@ -2,9 +2,9 @@
 //  MonthCalendarCard.swift
 //  Fernlet
 //
-//  The shared month-grid calendar chrome used by the journal, period, and intimacy
-//  calendars: one layout model (canonical day keys) plus one card view (paging
-//  chevrons, weekday row, 7-column grid) that each feature fills with its own cells.
+//  The shared month-grid calendar chrome used by the journal and cycle calendars:
+//  one layout model (canonical day keys) plus one card view (paging chevrons,
+//  weekday row, 7-column grid) that each feature fills with its own cells.
 //
 
 import SwiftUI
@@ -33,7 +33,7 @@ struct MonthGridDay {
     let isFuture: Bool
 }
 
-/// Pure month-layout math shared by the journal, period, and intimacy calendars: localized title,
+/// Pure month-layout math shared by the journal and cycle calendars: localized title,
 /// weekday symbols, the leading-blank pad count, and one ``MonthGridDay`` per day of the month.
 ///
 /// Day keys are canonicalized through `FernletDate.dayKey` (with a plain `%04d-%02d-%02d`
@@ -82,7 +82,7 @@ struct MonthGridModel {
 /// The shared month-calendar card chrome: paging chevrons (future months disabled) over a
 /// 7-column `LazyVGrid` of weekday symbols and caller-rendered day cells, inside a `FernletCard`.
 ///
-/// Owns only layout and paging; each calendar (journal, period, intimacy) supplies its own
+/// Owns only layout and paging; each calendar (journal, cycle) supplies its own
 /// `cell` builder — called with `nil` for each leading blank pad and with a ``MonthGridDay`` per
 /// real day — plus an optional `footer` (legends) rendered below the grid.
 struct MonthCalendarCard<Cell: View, Footer: View>: View {

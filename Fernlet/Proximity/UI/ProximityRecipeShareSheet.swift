@@ -24,7 +24,10 @@ struct ProximityRecipeShareDraft: Identifiable, Equatable {
 /// on disappear) and renders its observable state: the recipient list (with the hard 2-device cap
 /// — every other row disables while one is engaged), a searching pulse that gives way to a
 /// "no nearby Fernlets" hint after ~6 s, the connect/send/sent status line, and a collapsible
-/// diagnostics card. An "Include notes" toggle strips the payload's share notes before sending.
+/// diagnostics card. An "Include notes" toggle strips the payload's share notes before sending,
+/// and an "Include picture" toggle (default ON, shown only when the draft carries one) strips the
+/// attached recipe photo — the picture can be the sender's own kitchen shot, so it gets the same
+/// per-share control as their notes.
 /// On disappear it also restarts passive listening behind the same opt-in + active-scene + lock
 /// gates ContentView enforces — the go-dark-after-share fix, since `stop()` would otherwise leave
 /// the device undiscoverable for inbound recipes until the next scene/tab/lock event.
@@ -37,6 +40,10 @@ struct ProximityRecipeShareSheet: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(FernletLockService.self) private var lockService
     @State private var includeNotes = true
+    /// Whether the recipe's attached picture rides the share. Default ON (owner decision: the
+    /// image rides the share); the toggle exists because the picture can be the sender's own
+    /// personal photo, deserving the same per-share consent as their notes.
+    @State private var includePhoto = true
     @State private var hasFinishedInitialSearch = false
     @State private var searchDelayTask: Task<Void, Never>?
     @State private var dismissAfterSendTask: Task<Void, Never>?
@@ -61,6 +68,16 @@ struct ProximityRecipeShareSheet: View {
                                 if draft.payload.hasShareNotes {
                                     Toggle(isOn: $includeNotes) {
                                         Text("Include notes")
+                                            .font(.fernlet(.label))
+                                            .foregroundStyle(Color.bark)
+                                    }
+                                    .toggleStyle(.switch)
+                                    .tint(Color.moss)
+                                }
+
+                                if draft.payload.imageJPEGData != nil {
+                                    Toggle(isOn: $includePhoto) {
+                                        Text("Include picture")
                                             .font(.fernlet(.label))
                                             .foregroundStyle(Color.bark)
                                     }
@@ -282,7 +299,9 @@ struct ProximityRecipeShareSheet: View {
     }
 
     private var outgoingPayload: ProximityRecipeSharePayload {
-        includeNotes ? draft.payload : draft.payload.omittingShareNotes()
+        var payload = includeNotes ? draft.payload : draft.payload.omittingShareNotes()
+        if !includePhoto { payload = payload.omittingImage() }
+        return payload
     }
 
     private var statusText: String? {

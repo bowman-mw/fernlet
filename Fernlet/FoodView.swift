@@ -157,15 +157,15 @@ struct FoodView: View {
                                                         recipe: recipe,
                                                         onEdit: { editingRecipe = recipe },
                                                         onSaveFork: { store.addForkedRecipe($0) },
-                                                        onLog: { mealType in store.logRecipe(recipe, mealType: mealType) },
-                                                        onShare: {
+                                                        onLog: { current, mealType in store.logRecipe(current, mealType: mealType) },
+                                                        onShare: { current in
                                                             recipeShareDraft = ProximityRecipeShareDraft(
-                                                                title: recipe.name,
-                                                                shareText: store.recipeShareText(for: recipe),
-                                                                payload: store.proximityRecipeSharePayload(for: recipe)
+                                                                title: current.name,
+                                                                shareText: store.recipeShareText(for: current),
+                                                                payload: store.proximityRecipeSharePayload(for: current)
                                                             )
                                                         },
-                                                        onCookLog: { mealType, day in store.logRecipe(recipe, mealType: mealType, date: day) }
+                                                        onCookLog: { current, mealType, day in store.logRecipe(current, mealType: mealType, date: day) }
                                                     )
                                                 } label: {
                                                     RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
@@ -205,15 +205,15 @@ struct FoodView: View {
                                                         recipe: recipe,
                                                         onEdit: { editingSavedRecipe = recipe },
                                                         onSaveFork: { store.addForkedSavedRecipe($0) },
-                                                        onLog: { mealType in store.logSavedRecipe(recipe, mealType: mealType) },
-                                                        onShare: {
+                                                        onLog: { current, mealType in store.logSavedRecipe(current, mealType: mealType) },
+                                                        onShare: { current in
                                                             recipeShareDraft = ProximityRecipeShareDraft(
-                                                                title: recipe.name,
-                                                                shareText: store.savedRecipeShareText(for: recipe),
-                                                                payload: store.proximityRecipeSharePayload(for: recipe)
+                                                                title: current.name,
+                                                                shareText: store.savedRecipeShareText(for: current),
+                                                                payload: store.proximityRecipeSharePayload(for: current)
                                                             )
                                                         },
-                                                        onCookLog: { mealType, day in store.logSavedRecipe(recipe, mealType: mealType, date: day) }
+                                                        onCookLog: { current, mealType, day in store.logSavedRecipe(current, mealType: mealType, date: day) }
                                                     )
                                                 } label: {
                                                     SavedRecipeRow(recipe: recipe)
@@ -496,6 +496,19 @@ struct RecipeImportSheet: View {
     @State private var importText = ""
     @State private var notice: String?
     @State private var isImportingURL = false
+    /// The already-saved recipe a pasted URL matched (normalized source-URL match) — the
+    /// zero-network duplicate skip (owner decision 2026-08-09). Non-nil drives the
+    /// "Already in your book — Open" card instead of any fetch.
+    @State private var existingRecipe: RecipeDefinition?
+    /// Pushes the matched recipe's read-only detail (this sheet lives inside the recipe book's
+    /// `NavigationStack`, so "Open" is an ordinary push).
+    @State private var showingExistingRecipe = false
+    /// Backs the pushed detail's Edit button — presents the saved-recipe notes sheet locally,
+    /// since this sheet has no access to `FoodView`'s editing bindings.
+    @State private var editingSavedRecipe: RecipeDefinition?
+    /// Backs the pushed detail's Share button — the proximity recipe-share sheet, wired the same
+    /// way ``RecipeBookSheet`` does it.
+    @State private var recipeShareDraft: ProximityRecipeShareDraft?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -533,6 +546,12 @@ struct RecipeImportSheet: View {
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
+
+                    #if canImport(UIKit)
+                    if let existingRecipe {
+                        alreadySavedCard(for: existingRecipe)
+                    }
+                    #endif
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -550,7 +569,77 @@ struct RecipeImportSheet: View {
             }
         }
         .background(Color.parchment)
+        #if canImport(UIKit)
+        .navigationDestination(isPresented: $showingExistingRecipe) {
+            if let existingRecipe {
+                existingRecipeDetail(existingRecipe)
+            }
+        }
+        .sheet(item: $editingSavedRecipe) { recipe in
+            SavedRecipeNotesSheet(store: store, recipe: recipe)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $recipeShareDraft) { draft in
+            ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
+        #endif
     }
+
+    #if canImport(UIKit)
+    /// The zero-network duplicate state: names the matched recipe and offers to open its detail —
+    /// no fetch happened and none will (refreshing is the detail's own "Re-import from source").
+    private func alreadySavedCard(for recipe: RecipeDefinition) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Already in your recipe book", systemImage: "checkmark.circle")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+            Text(recipe.name)
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+            Button {
+                showingExistingRecipe = true
+            } label: {
+                Label("Open saved recipe", systemImage: "book")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.cream)
+                    .frame(maxWidth: .infinity)
+                    .padding(12)
+                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("recipeImport.openExisting")
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.moss.opacity(0.35), lineWidth: 1.5))
+    }
+
+    /// The matched recipe's read-only detail, wired with local closures (edit → local notes sheet,
+    /// share → local proximity draft) because this sheet has no access to `FoodView`'s bindings.
+    private func existingRecipeDetail(_ recipe: RecipeDefinition) -> some View {
+        RecipeDetailView(
+            store: store,
+            recipe: recipe,
+            onEdit: { editingSavedRecipe = recipe },
+            onSaveFork: { store.addForkedSavedRecipe($0) },
+            onLog: { current, mealType in store.logSavedRecipe(current, mealType: mealType) },
+            onShare: { current in
+                recipeShareDraft = ProximityRecipeShareDraft(
+                    title: current.name,
+                    shareText: store.savedRecipeShareText(for: current),
+                    payload: store.proximityRecipeSharePayload(for: current)
+                )
+            },
+            onCookLog: { current, mealType, day in store.logSavedRecipe(current, mealType: mealType, date: day) }
+        )
+    }
+    #endif
 
     private func importFromPasteboardURL() {
         #if canImport(UIKit)
@@ -560,13 +649,29 @@ struct RecipeImportSheet: View {
             return
         }
 
+        // Zero-network duplicate skip (owner decision 2026-08-09): a URL already in the book does
+        // no fetching at all — surface the saved recipe instead. Refreshing it is the detail
+        // page's explicit "Re-import from source" affordance.
+        if let existing = store.savedRecipe(matchingSourceURL: url) {
+            existingRecipe = existing
+            notice = "\u{201C}\(existing.name)\u{201D} was already imported from this page."
+            return
+        }
+        existingRecipe = nil
+
         isImportingURL = true
         notice = "Fetching recipe..."
 
         Task {
             do {
                 let importedRecipe = try await RecipeWebImporter.importRecipe(from: url, catalog: store.foodCatalog, aiEnabled: store.settings.aiStatus != .off, userInvoked: true, gate: store.aiGate)
-                store.addSavedRecipe(RecipeDefinition(importedRecipe: importedRecipe))
+                let recipe = RecipeDefinition(importedRecipe: importedRecipe)
+                store.addSavedRecipe(recipe)
+                // Foreground import path (owner decision 2026-08-09): the user is present, so fetch
+                // the page's main picture now as the recipe's default photo. Runs as its own task so
+                // a slow image host never delays the import feedback — and an image failure never
+                // fails the import (the store marks the one attempt either way).
+                Task { await store.fetchRecipeWebImageIfNeeded(for: recipe) }
                 notice = "\(importedRecipe.name) added to your recipes."
                 isImportingURL = false
                 try? await Task.sleep(for: .seconds(1.2))
@@ -657,7 +762,12 @@ struct SavedRecipeNotesSheet: View {
 
     init(store: FernletStore, recipe: RecipeDefinition) {
         self.store = store
-        _recipe = State(initialValue: recipe)
+        // Re-resolve the LIVE row by id: the caller's copy can be stale (captured before a
+        // re-import replaced the definition, or before a web-image suppression was stamped).
+        // Done then merges ONLY the edited notes back into the then-current row (see
+        // `FernletStore.updateSavedRecipeNotes`), so neither pre-open nor while-open store
+        // updates are ever clobbered by editing notes.
+        _recipe = State(initialValue: store.savedRecipes.first(where: { $0.id == recipe.id }) ?? recipe)
     }
 
     private var webImport: RecipeWebImport? { recipe.webImport }
@@ -755,11 +865,18 @@ struct SavedRecipeNotesSheet: View {
                 .padding(.bottom, 10)
             }
             SheetSaveBar(label: "Done") {
-                store.updateSavedRecipe(recipe)
+                // Merge only the field this sheet edits into the LIVE row — writing the whole
+                // at-open snapshot back would revert store updates that landed while the sheet
+                // was up (e.g. the image fetch stamping a suppression, or a cloud refresh).
+                store.updateSavedRecipeNotes(recipe.notes, forRecipeID: recipe.id)
                 dismiss()
             }
         }
         .background(Color.parchment)
+        // Warm the DNS/TLS connection to the source host while the sheet is up, so tapping the
+        // link opens near-instantly (owner decision 2026-08-09; documented in
+        // Docs/No-Tracking-Wall.md §4b).
+        .prewarmsSourceLinkConnection(to: webImport?.sourceURL)
         .sheet(isPresented: $showingSafari) {
             if let sourceURL = webImport?.sourceURL, sourceURL.isSafariPresentable {
                 SafariView(url: sourceURL)
@@ -3252,23 +3369,67 @@ struct RecipeRow: View {
 /// ingredient list, and notes — plus log / edit / share.
 ///
 /// Reached by tapping a recipe in the book (which used to jump straight into the editor). Recipe photos
-/// are the user's own pick — never an external fetch — sealed and keyed by the recipe id. Also hosts the
-/// ephemeral F4 "cook for N" view-only scaling, the per-ingredient Swap flow
-/// (``IngredientSubstitutionSheet``), and the F5 ``CookingModeView`` full-screen cover.
+/// are the user's own pick or the page's one-attempt web default, sealed and keyed by the recipe id.
+/// Also hosts the ephemeral F4 "cook for N" view-only scaling, the per-ingredient Swap flow
+/// (``IngredientSubstitutionSheet``), the F5 ``CookingModeView`` full-screen cover, and — for web
+/// imports — the source-link connection pre-warm plus the explicit "Re-import from source" toolbar
+/// refresh (photo and notes preserved; owner decision 2026-08-09).
 struct RecipeDetailView: View {
     var store: FernletStore
-    let recipe: RecipeDefinition
+    /// The recipe as the call site pushed it. Display goes through the computed ``recipe`` so an
+    /// in-place "Re-import from source" can swap in the refreshed definition without re-pushing.
+    private let initialRecipe: RecipeDefinition
     var onEdit: () -> Void
     /// Persists an F4 substitution FORK into the SAME store the source recipe lives in (blob vs saved).
     /// Wired per call site; a no-op default keeps non-substitutable call sites compiling unchanged.
     var onSaveFork: (RecipeDefinition) -> Void = { _ in }
-    var onLog: (MealType) -> Void
-    var onShare: () -> Void
+    /// Logs the recipe. Receives the definition CURRENTLY on screen (`reimportedRecipe ??
+    /// initialRecipe`) — not the copy the call site captured at push time — so logging right after
+    /// an in-place "Re-import from source" records the refreshed macros the user is looking at,
+    /// never the stale pre-refresh snapshot.
+    var onLog: (RecipeDefinition, MealType) -> Void
+    /// Opens the proximity share sheet for the definition CURRENTLY on screen (same currency rule
+    /// as `onLog`: a peer must receive the refreshed ingredients, not a pre-re-import copy).
+    var onShare: (RecipeDefinition) -> Void
     /// Logs the meal on cooking-mode COMPLETION, anchored to the day-key captured when the cook STARTED
     /// (F5, §6.4). Distinct from `onLog` (immediate, today): routed per call site to `logRecipe` (manual)
-    /// vs `logSavedRecipe` (saved/web), each with an explicit `date:`. A no-op default keeps any
-    /// non-updated call site compiling; the four real sites wire it.
-    var onCookLog: (MealType, String) -> Void = { _, _ in }
+    /// vs `logSavedRecipe` (saved/web), each with an explicit `date:`. Receives the on-screen
+    /// definition like `onLog`. A no-op default keeps any non-updated call site compiling; the
+    /// real sites wire it.
+    var onCookLog: (RecipeDefinition, MealType, String) -> Void = { _, _, _ in }
+
+    /// Creates the detail. Mirrors the old memberwise init exactly (same labels, same defaults) —
+    /// it exists only because `initialRecipe` is private, which hides the memberwise init.
+    init(
+        store: FernletStore,
+        recipe: RecipeDefinition,
+        onEdit: @escaping () -> Void,
+        onSaveFork: @escaping (RecipeDefinition) -> Void = { _ in },
+        onLog: @escaping (RecipeDefinition, MealType) -> Void,
+        onShare: @escaping (RecipeDefinition) -> Void,
+        onCookLog: @escaping (RecipeDefinition, MealType, String) -> Void = { _, _, _ in }
+    ) {
+        self.store = store
+        self.initialRecipe = recipe
+        self.onEdit = onEdit
+        self.onSaveFork = onSaveFork
+        self.onLog = onLog
+        self.onShare = onShare
+        self.onCookLog = onCookLog
+    }
+
+    /// The definition currently on screen: the re-imported refresh when one landed this
+    /// presentation, else the recipe the call site pushed. Every read in this view goes through
+    /// this, so a successful "Re-import from source" updates the visible page immediately.
+    private var recipe: RecipeDefinition { reimportedRecipe ?? initialRecipe }
+
+    /// The refreshed definition after a successful "Re-import from source" — view-local, because
+    /// the pushed detail was constructed with a value copy that the store update can't reach.
+    @State private var reimportedRecipe: RecipeDefinition?
+    /// True while the explicit re-import fetch is in flight; disables the toolbar affordance.
+    @State private var isReimporting = false
+    /// Calm inline outcome line for the re-import (success or failure copy).
+    @State private var reimportNotice: String?
 
     /// Presents the F5 full-screen cooking-mode flow (mise-en-place → step walker → finish/log).
     @State private var showingCookingMode = false
@@ -3371,6 +3532,13 @@ struct RecipeDetailView: View {
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
+                if let reimportNotice {
+                    Text(reimportNotice)
+                        .font(.fernlet(.bodySmall))
+                        .italic()
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(recipe.name)
                         .font(.fernlet(.displayMedium))
@@ -3391,6 +3559,27 @@ struct RecipeDetailView: View {
         .background(Color.parchment)
         .navigationTitle("Recipe")
         .navigationBarTitleDisplayMode(.inline)
+        // Warm the DNS/TLS connection to the source host while the detail is up, so the source
+        // link opens near-instantly (owner decision 2026-08-09; documented in
+        // Docs/No-Tracking-Wall.md §4b).
+        .prewarmsSourceLinkConnection(to: recipe.webImport?.sourceURL)
+        .toolbar {
+            // Explicit refresh for a web-imported recipe (owner decision 2026-08-09): repeat
+            // imports of the same URL now skip the network and surface the saved recipe, so THIS
+            // is the one way to re-fetch the page. Photo and notes are preserved (same-id
+            // replace — see FernletStore.reimportSavedRecipeFromSource).
+            if recipe.webImport?.sourceURL?.isSafariPresentable == true {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        reimportFromSource()
+                    } label: {
+                        Label("Re-import from source", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(isReimporting)
+                    .accessibilityIdentifier("recipeDetail.reimport")
+                }
+            }
+        }
         // Resolve the manual recipe's structured ingredients (a FoodCatalog SQLite read) into a cached
         // dictionary, keyed on the ingredient ids so an edit-and-save under this detail (the editor
         // presents over a pushed detail) re-resolves — a once-guard here left added/swapped ingredients
@@ -3413,6 +3602,17 @@ struct RecipeDetailView: View {
             didLoadPhoto = true
             if let data = store.recipePhotoData(for: recipe.id) {
                 photo = await UIImage(data: data)?.byPreparingForDisplay()
+            } else if let fetched = await store.fetchRecipeWebImageIfNeeded(for: recipe) {
+                // Lazy web-image path (owner decision 2026-08-09): a share-extension-imported
+                // recipe stored only the page's image URL — download it on this first open (the
+                // user is present), sealed and one-attempt-per-device inside the store method.
+                // Recipes whose fetch this device already attempted, whose picture is suppressed
+                // (photo deleted), or that arrived over the mesh all no-op there.
+                let prepared = await UIImage(data: fetched)?.byPreparingForDisplay()
+                // Adopt the fetched bytes only while the user hasn't picked their own photo
+                // mid-download — the store re-validates the same race on disk; this mirrors it
+                // on screen so a pick during the fetch is never visually clobbered.
+                if photo == nil { photo = prepared }
             }
         }
         .destructiveConfirmation($pendingDestructiveAction)
@@ -3434,7 +3634,11 @@ struct RecipeDetailView: View {
         .fullScreenCover(isPresented: $showingCookingMode) {
             // Carry the detail page's ephemeral "Cook for N" into cooking mode so mise opens at that yield
             // instead of re-defaulting to the base (nil → base yield inside CookingModeView).
-            CookingModeView(store: store, recipe: recipe, initialYield: cookYield, onLogToDay: onCookLog)
+            // The completion log routes through onCookLog with the definition on screen at cook
+            // start, mirroring onLog's currency rule.
+            CookingModeView(store: store, recipe: recipe, initialYield: cookYield, onLogToDay: { mealType, day in
+                onCookLog(recipe, mealType, day)
+            })
         }
     }
 
@@ -3659,7 +3863,8 @@ struct RecipeDetailView: View {
         VStack(spacing: 10) {
             Menu {
                 ForEach(MealType.allCases) { mealType in
-                    Button(mealType.rawValue) { onLog(mealType) }
+                    // Pass the definition on screen — after a re-import this is the refreshed one.
+                    Button(mealType.rawValue) { onLog(recipe, mealType) }
                 }
             } label: {
                 Label("Log this recipe", systemImage: "fork.knife")
@@ -3688,7 +3893,7 @@ struct RecipeDetailView: View {
                     secondaryActionLabel("Edit", icon: "pencil")
                 }
                 .buttonStyle(.plain)
-                Button { onShare() } label: {
+                Button { onShare(recipe) } label: {
                     secondaryActionLabel("Share", icon: "square.and.arrow.up")
                 }
                 .buttonStyle(.plain)
@@ -3736,6 +3941,39 @@ struct RecipeDetailView: View {
             if let stored = store.recipePhotoData(for: recipe.id) {
                 photo = await UIImage(data: stored)?.byPreparingForDisplay()
             }
+        }
+    }
+
+    /// Runs the explicit "Re-import from source" (owner decision 2026-08-09): re-fetches the source
+    /// page and replaces the definition in place, preserving the photo and notes (the store merges
+    /// over the LIVE row, so notes edited while the fetch was in flight survive too). A failed
+    /// fetch leaves the recipe exactly as it was — only the notice line reports it — and a recipe
+    /// deleted mid-flight reports that instead of a false success. A successful refresh also
+    /// re-arms this device's one automatic web-image attempt, so a recipe still missing its
+    /// picture gets a fresh download while the user is right here.
+    private func reimportFromSource() {
+        let current = recipe
+        let host = current.webImport?.sourceURL?.host() ?? "the source page"
+        isReimporting = true
+        reimportNotice = "Refreshing from \(host)..."
+        Task {
+            do {
+                if let refreshed = try await store.reimportSavedRecipeFromSource(current) {
+                    reimportedRecipe = refreshed
+                    reimportNotice = "Refreshed from \(host). Your photo and notes are kept."
+                    // The refresh re-armed the web-image attempt: if the recipe still has no
+                    // picture, fetch it now (same post-pick screen guard as the first-open path).
+                    if photo == nil, let fetched = await store.fetchRecipeWebImageIfNeeded(for: refreshed) {
+                        let prepared = await UIImage(data: fetched)?.byPreparingForDisplay()
+                        if photo == nil { photo = prepared }
+                    }
+                } else {
+                    reimportNotice = "This recipe was deleted, so there's nothing to refresh."
+                }
+            } catch {
+                reimportNotice = (error as? LocalizedError)?.errorDescription ?? "Could not re-import this recipe."
+            }
+            isReimporting = false
         }
     }
 
@@ -4073,15 +4311,15 @@ struct RecipeBookSheet: View {
                                                 recipe: recipe,
                                                 onEdit: { editingRecipe = recipe; dismiss() },
                                                 onSaveFork: { store.addForkedRecipe($0) },
-                                                onLog: { mealType in store.logRecipe(recipe, mealType: mealType); dismiss() },
-                                                onShare: {
+                                                onLog: { current, mealType in store.logRecipe(current, mealType: mealType); dismiss() },
+                                                onShare: { current in
                                                     recipeShareDraft = ProximityRecipeShareDraft(
-                                                        title: recipe.name,
-                                                        shareText: store.recipeShareText(for: recipe),
-                                                        payload: store.proximityRecipeSharePayload(for: recipe)
+                                                        title: current.name,
+                                                        shareText: store.recipeShareText(for: current),
+                                                        payload: store.proximityRecipeSharePayload(for: current)
                                                     )
                                                 },
-                                                onCookLog: { mealType, day in store.logRecipe(recipe, mealType: mealType, date: day) }
+                                                onCookLog: { current, mealType, day in store.logRecipe(current, mealType: mealType, date: day) }
                                             )
                                         } label: {
                                             RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
@@ -4125,15 +4363,15 @@ struct RecipeBookSheet: View {
                                                 recipe: recipe,
                                                 onEdit: { editingSavedRecipe = recipe; dismiss() },
                                                 onSaveFork: { store.addForkedSavedRecipe($0) },
-                                                onLog: { mealType in store.logSavedRecipe(recipe, mealType: mealType); dismiss() },
-                                                onShare: {
+                                                onLog: { current, mealType in store.logSavedRecipe(current, mealType: mealType); dismiss() },
+                                                onShare: { current in
                                                     recipeShareDraft = ProximityRecipeShareDraft(
-                                                        title: recipe.name,
-                                                        shareText: store.savedRecipeShareText(for: recipe),
-                                                        payload: store.proximityRecipeSharePayload(for: recipe)
+                                                        title: current.name,
+                                                        shareText: store.savedRecipeShareText(for: current),
+                                                        payload: store.proximityRecipeSharePayload(for: current)
                                                     )
                                                 },
-                                                onCookLog: { mealType, day in store.logSavedRecipe(recipe, mealType: mealType, date: day) }
+                                                onCookLog: { current, mealType, day in store.logSavedRecipe(current, mealType: mealType, date: day) }
                                             )
                                         } label: {
                                             SavedRecipeRow(recipe: recipe)
@@ -4245,6 +4483,48 @@ struct SafariView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
+
+/// Pre-warms the connection to a recipe's source link while its page is on screen, so tapping the
+/// link opens near-instantly (owner decision 2026-08-09: connection PRE-WARM only — no page
+/// snapshot, no `WKWebView`; ``SafariView`` stays the opening surface).
+///
+/// `SFSafariViewController.prewarmConnections(to:)` performs the DNS lookup and TLS handshake for
+/// the eventual Safari presentation — no HTTP request is issued and nothing is rendered. Egress
+/// note (Docs/No-Tracking-Wall.md §4b): this contacts the recipe's own source host on
+/// detail-appear, before any tap. HTTPS-only (pre-warming plaintext HTTP buys nothing), gated on
+/// ``URL/isSafariPresentable``, and the token is invalidated on disappear so warmed connections
+/// don't outlive the page that justified them.
+private struct SourceLinkPrewarmModifier: ViewModifier {
+    /// The source link to warm; `nil` and non-https URLs make the modifier inert.
+    let url: URL?
+    /// The live pre-warm token. Non-nil exactly while this view is on screen with a warmable URL;
+    /// `invalidate()` on disappear releases the warmed connections.
+    @State private var token: SFSafariViewController.PrewarmingToken?
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                guard token == nil,
+                      let url,
+                      url.isSafariPresentable,
+                      url.scheme?.lowercased() == "https" else { return }
+                token = SFSafariViewController.prewarmConnections(to: [url])
+            }
+            .onDisappear {
+                token?.invalidate()
+                token = nil
+            }
+    }
+}
+
+extension View {
+    /// Applies ``SourceLinkPrewarmModifier``: warms the DNS/TLS connection to `url` (https only)
+    /// while this view is on screen, releasing it on disappear. A no-op for `nil`, non-presentable,
+    /// or non-https URLs.
+    func prewarmsSourceLinkConnection(to url: URL?) -> some View {
+        modifier(SourceLinkPrewarmModifier(url: url))
+    }
 }
 #endif
 

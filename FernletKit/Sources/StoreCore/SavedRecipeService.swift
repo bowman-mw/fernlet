@@ -67,8 +67,9 @@ public final class SavedRecipeService {
     }
 
     /// Inserts a recipe at the top of the list, routing to ``update(_:)`` when its id already exists.
-    /// A web-imported recipe replaces any prior recipe from the same source URL — the superseded rows
-    /// are explicitly enqueue-deleted so the append-only store drops them too.
+    /// A web-imported recipe replaces any prior recipe from the same source URL (matched under
+    /// `RecipeSourceURLMatcher` normalization, the same rule ``recipe(matchingSourceURL:)`` uses) —
+    /// the superseded rows are explicitly enqueue-deleted so the append-only store drops them too.
     public func add(_ recipe: RecipeDefinition) {
         // Id-guard: re-adding an already-present recipe (e.g. a double-tapped save routing the same fixed-id
         // fork through here) must not create a duplicate-identity row in this append-only store — route it
@@ -79,15 +80,35 @@ public final class SavedRecipeService {
         }
         if let sourceURLString = recipe.webImport?.sourceURLString, !sourceURLString.isEmpty {
             // Replacing a same-source recipe means its old row must be explicitly deleted from the
-            // append-only store (a full-replace save used to drop it implicitly).
+            // append-only store (a full-replace save used to drop it implicitly). "Same source" is the
+            // normalized match — a re-import whose URL differs only in host case or a fragment still
+            // supersedes. FernletStore.addSavedRecipe mirrors this match for the sealed-photo cleanup;
+            // the two must stay in agreement or re-imports strand photos.
             let supersededIDs = savedRecipes
-                .filter { $0.webImport?.sourceURLString == sourceURLString && $0.id != recipe.id }
+                .filter { supersedes($0, sourceURLString: sourceURLString) && $0.id != recipe.id }
                 .map { $0.id }
-            savedRecipes.removeAll { $0.webImport?.sourceURLString == sourceURLString }
+            savedRecipes.removeAll { supersedes($0, sourceURLString: sourceURLString) }
             for id in supersededIDs { buffer.enqueueDelete(id) }
         }
         savedRecipes.insert(recipe, at: 0)
         buffer.enqueueUpsert(recipe)
+    }
+
+    /// Whether `candidate` is an existing row that a new import from `sourceURLString` replaces.
+    private func supersedes(_ candidate: RecipeDefinition, sourceURLString: String) -> Bool {
+        guard let existing = candidate.webImport?.sourceURLString else { return false }
+        return RecipeSourceURLMatcher.urlsMatch(existing, sourceURLString)
+    }
+
+    /// The saved recipe whose web-import source matches `urlString` under `RecipeSourceURLMatcher`
+    /// normalization, or `nil`. This is the zero-network duplicate check: import paths call it BEFORE
+    /// fetching, and on a hit they surface the existing recipe instead of touching the network
+    /// (owner decision 2026-08-09).
+    public func recipe(matchingSourceURL urlString: String) -> RecipeDefinition? {
+        savedRecipes.first { candidate in
+            guard let source = candidate.webImport?.sourceURLString else { return false }
+            return RecipeSourceURLMatcher.urlsMatch(source, urlString)
+        }
     }
 
     /// Replaces the stored recipe with the same id in place; unknown ids are ignored.

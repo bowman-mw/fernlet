@@ -1417,6 +1417,23 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
     public var ingredientLines: [String]
     public var macros: Macros
     public var micronutrients: Micronutrients
+    /// The page's main food-picture URL, extracted at import time (owner decision 2026-08-09,
+    /// reversing the 2026-07-16 "no external image fetch" tester decision). Additive and
+    /// tolerant-decoded: absent on every recipe imported before this field existed. The bytes are
+    /// downloaded only by user-present paths (foreground import, first open of the detail) — never
+    /// by the background queue drain — and a recipe received over the proximity mesh carries `nil`
+    /// here so it can never web-fetch. `nil` or empty = no known page image.
+    public var imageURLString: String?
+    /// The user's synced intent that NO web-derived picture may ever be auto-fetched for this
+    /// recipe, on any device. Set `true` when the user deletes the recipe's photo (the page image
+    /// must never resurrect against that intent), when a fetch finds the user already picked their
+    /// own photo (their photo always wins), and on every mesh-received recipe (a received recipe
+    /// must never turn its receiver into a web fetcher). Deliberately SPLIT from the per-device
+    /// attempt bookkeeping (`RecipeWebImageAttemptMemory`, app target): this intent field rides the
+    /// synced row, while "this device already spent its one automatic attempt" stays device-local —
+    /// one attempt per device, suppression syncs. Additive and tolerant-decoded; `nil` (legacy
+    /// blobs) means "no suppression".
+    public var webImageSuppressed: Bool?
 
     /// The parsed source link, or `nil` when there's no usable one. An absent or unparseable
     /// `sourceURLString` (e.g. the decode default of `""`) returns `nil` rather than fabricating a
@@ -1432,12 +1449,16 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
         sourceURLString: String,
         ingredientLines: [String],
         macros: Macros = Macros(protein: 0, carbs: 0, fat: 0),
-        micronutrients: Micronutrients = Micronutrients()
+        micronutrients: Micronutrients = Micronutrients(),
+        imageURLString: String? = nil,
+        webImageSuppressed: Bool? = nil
     ) {
         self.sourceURLString = sourceURLString
         self.ingredientLines = ingredientLines
         self.macros = macros
         self.micronutrients = micronutrients
+        self.imageURLString = imageURLString
+        self.webImageSuppressed = webImageSuppressed
     }
 
     public init(from decoder: Decoder) throws {
@@ -1446,6 +1467,10 @@ public nonisolated struct RecipeWebImport: Codable, Equatable {
         ingredientLines = try container.decodeIfPresent([String].self, forKey: .ingredientLines) ?? []
         macros = try container.decodeIfPresent(Macros.self, forKey: .macros) ?? Macros(protein: 0, carbs: 0, fat: 0)
         micronutrients = try container.decodeIfPresent(Micronutrients.self, forKey: .micronutrients) ?? Micronutrients()
+        // Additive + tolerant (2026-08-09): absent on every payload blob written before the web-image
+        // fields existed. Missing key -> nil, never a decode failure.
+        imageURLString = try container.decodeIfPresent(String.self, forKey: .imageURLString)
+        webImageSuppressed = try container.decodeIfPresent(Bool.self, forKey: .webImageSuppressed)
     }
 }
 

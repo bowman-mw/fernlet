@@ -139,6 +139,7 @@ non-exhaustive switches and ship corrupted binaries.
 - ``RecipeStepSanitizer``
 - ``RecipeUnit``
 - ``RecipeWebImport``
+- ``RecipeSourceURLMatcher``
 - ``RecipeScaling``
 - ``RecipeSubstitution``
 - ``IngredientSubstitutionSuggestion``

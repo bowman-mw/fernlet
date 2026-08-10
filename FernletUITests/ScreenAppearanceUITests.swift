@@ -73,27 +73,50 @@ final class ScreenAppearanceUITests: XCTestCase {
             .capture()
     }
 
+    // The merged Cycle page replaces the separate Period and Intimacy pages: one layered
+    // calendar whose halves gate independently. All three visibility combinations that render
+    // the page are covered (both halves, period-only, intimacy-only); the both-hidden case has
+    // no page to review. The hide flags are consumed by the demo seed on every launch.
+
     @MainActor
-    func testPrivateHubPeriodAppearance() {
+    func testPrivateHubCycleAppearance() {
         let app = UXTestApp.launch(bypassPrivateLock: true)
         app.buttons["Private"].firstMatch.tap()
-        let period = app.buttons["Period"].firstMatch
-        XCTAssertTrue(period.waitForExistence(timeout: 6))
-        period.tap()
-        UXScreenProbe(app, "Private · Period", in: self)
-            .assertOnScreen("screen.period")
+        let cycle = app.buttons["Cycle"].firstMatch
+        XCTAssertTrue(cycle.waitForExistence(timeout: 6))
+        cycle.tap()
+        UXScreenProbe(app, "Private · Cycle (both halves)", in: self)
+            .assertOnScreen("screen.cycle")
             .capture()
     }
 
     @MainActor
-    func testPrivateHubIntimacyAppearance() {
-        let app = UXTestApp.launch(bypassPrivateLock: true)
+    func testPrivateHubCyclePeriodOnlyAppearance() {
+        let app = UXTestApp.launch(
+            bypassPrivateLock: true,
+            extraEnvironment: ["FERNLET_UI_TEST_HIDE_INTIMACY": "1"]
+        )
         app.buttons["Private"].firstMatch.tap()
-        let intimacy = app.buttons["Intimacy"].firstMatch
-        XCTAssertTrue(intimacy.waitForExistence(timeout: 6))
-        intimacy.tap()
-        UXScreenProbe(app, "Private · Intimacy", in: self)
-            .assertOnScreen("screen.intimacy")
+        let cycle = app.buttons["Cycle"].firstMatch
+        XCTAssertTrue(cycle.waitForExistence(timeout: 6))
+        cycle.tap()
+        UXScreenProbe(app, "Private · Cycle (period only)", in: self)
+            .assertOnScreen("screen.cycle")
+            .capture()
+    }
+
+    @MainActor
+    func testPrivateHubCycleIntimacyOnlyAppearance() {
+        let app = UXTestApp.launch(
+            bypassPrivateLock: true,
+            extraEnvironment: ["FERNLET_UI_TEST_HIDE_PERIOD": "1"]
+        )
+        app.buttons["Private"].firstMatch.tap()
+        let cycle = app.buttons["Cycle"].firstMatch
+        XCTAssertTrue(cycle.waitForExistence(timeout: 6))
+        cycle.tap()
+        UXScreenProbe(app, "Private · Cycle (intimacy only)", in: self)
+            .assertOnScreen("screen.cycle")
             .capture()
     }
 

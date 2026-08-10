@@ -10,24 +10,39 @@ import FernletDomainModel
 /// into ``PendingProximityRecipeShare``. The share-notes members implement the "Include notes"
 /// privacy toggle — sender-authored free text can be withheld before the payload leaves.
 public nonisolated struct ProximityRecipeSharePayload: Codable, Equatable, Identifiable, Sendable {
+    /// Wire cap for ``imageJPEGData``: the sender downscales/re-encodes until the JPEG fits (or
+    /// omits it), and the receiver drops any image above it before decoding a single pixel. Well
+    /// under the friend channel's 10 MB envelope bound, so a recipe-with-picture always fits.
+    public static let maxImageBytes = 512 * 1024
+
     public var format = "fernlet.proximity.recipe"
     public var version = 1
     public var id = UUID()
     public var sentAt = Date()
     public var recipe: ProximitySharedRecipe
+    /// A downscaled JPEG of the recipe's picture (the sender's stored recipe photo — their own pick
+    /// or a web-derived default), at most ``maxImageBytes``, so the receiving device gets the
+    /// picture without ever fetching the web. Optional key, `version` STAYS 1 — the same wire-compat
+    /// rule as `SharedSavedRecipePayload.steps`: an older peer's synthesized `Codable` ignores the
+    /// extra key and decodes minus the image; a newer peer decoding an older payload sees `nil`.
+    /// The app-side receiver seals accepted bytes into its own private recipe-photo store and marks
+    /// the recipe's web-image fetch as already attempted, so a received recipe never web-fetches.
+    public var imageJPEGData: Data?
 
     public init(
         format: String = "fernlet.proximity.recipe",
         version: Int = 1,
         id: UUID = UUID(),
         sentAt: Date = Date(),
-        recipe: ProximitySharedRecipe
+        recipe: ProximitySharedRecipe,
+        imageJPEGData: Data? = nil
     ) {
         self.format = format
         self.version = version
         self.id = id
         self.sentAt = sentAt
         self.recipe = recipe
+        self.imageJPEGData = imageJPEGData
     }
 
     /// True when this payload carries sender-authored free text the "Include notes" toggle can withhold.
@@ -44,6 +59,30 @@ public nonisolated struct ProximityRecipeSharePayload: Codable, Equatable, Ident
         case .saved:
             return !(recipe.saved?.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         }
+    }
+
+    /// Returns a copy with the attached picture removed — the sender-side "Include picture"
+    /// toggle. The recipe's stored photo can be the user's own kitchen/home shot, which can carry
+    /// more identifying content than the notes the notes-toggle withholds, so the sender gets the
+    /// same per-share control over it (default ON, preserving the image-rides-the-share decision).
+    /// Independent of ``omittingShareNotes()``: picture and notes are separate decisions.
+    public func omittingImage() -> ProximityRecipeSharePayload {
+        var copy = self
+        copy.imageJPEGData = nil
+        return copy
+    }
+
+    /// Returns a copy safe to RETAIN on the receive side: an image above ``maxImageBytes`` —
+    /// bytes an honest sender can never produce, since senders downscale to fit or omit — is
+    /// dropped at the door, before the payload enters the pending queue, so a hostile-but-verified
+    /// peer cannot park multi-megabyte blobs in a receiver's memory while the share awaits review.
+    /// The recipe itself is kept (a bad image never fails an import; the app-side importer applies
+    /// the same cap again as defense in depth).
+    public func droppingOversizeImage() -> ProximityRecipeSharePayload {
+        guard let imageJPEGData, imageJPEGData.count > Self.maxImageBytes else { return self }
+        var copy = self
+        copy.imageJPEGData = nil
+        return copy
     }
 
     /// Returns a copy with the sender's free text removed. For a LOCAL recipe this clears BOTH `notes`

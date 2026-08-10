@@ -989,11 +989,11 @@ struct HomeView: View {
         case .logPeriod:
             activeSheet = .logPeriod(targetDate: nil, editingEntry: nil)
         case .periodTracking:
-            privateHubSection = .period
+            privateHubSection = .cycle
             selectedTab = .personal
         case .intimacyTracking:
             guard store.isIntimateLoggingAllowed else { return }
-            privateHubSection = .intimacy
+            privateHubSection = .cycle
             selectedTab = .personal
         case .friends:
             selectedTab = .social

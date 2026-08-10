@@ -1,5 +1,6 @@
 import Foundation
 import FernletFoundation
+import FernletLock
 import HealthKit
 import Testing
 import SwiftUI
@@ -19,9 +20,10 @@ struct PeriodPredictionUITests {
         var isTabBarCompact = false
         var tabResetToken = 0
 
-        let view = PeriodTrackerView(
+        let view = CycleTrackerView(
             store: store,
             periodStore: periodStore,
+            intimacyStore: IntimacyLogStore(),
             activeSheet: Binding(get: { activeSheet }, set: { activeSheet = $0 }),
             isTabBarCompact: Binding(get: { isTabBarCompact }, set: { isTabBarCompact = $0 }),
             tabResetToken: Binding(get: { tabResetToken }, set: { tabResetToken = $0 })
@@ -47,9 +49,10 @@ struct PeriodPredictionUITests {
             phase: .menstrual
         )
 
-        let model = PeriodMonthModel(
+        let model = CycleMonthModel(
             date: month,
             entriesByKey: [loggedEntry.dateKey: loggedEntry],
+            intimacyDayKeys: ["2026-06-10", loggedEntry.dateKey],
             todayKey: "2026-06-01",
             prediction: prediction,
             calendar: calendar
@@ -63,6 +66,117 @@ struct PeriodPredictionUITests {
         #expect(cellsByDay[15]?.entry?.flowLevel == .medium)
         #expect(cellsByDay[16]?.projectedLevel == .medium)
         #expect(cellsByDay[17]?.projectedLevel == .light)
+
+        // The intimacy layer rides the same grid as its own flag: marked days carry it, a marked
+        // day can coexist with a logged flow entry, and unmarked days stay clean.
+        #expect(cellsByDay[10]?.hasIntimacyEvent == true)
+        #expect(cellsByDay[15]?.hasIntimacyEvent == true)
+        #expect(cellsByDay[16]?.hasIntimacyEvent == false)
+    }
+
+    /// The merge dropped the hub's structural gate (pre-merge, `if isPeriodTrackingVisible`
+    /// removed the whole period page in the same render transaction as a flip). This pins the
+    /// replacement view-seam BACK-STOP: with the derived gate off, the calendar's flow-tint map
+    /// must be empty even while `periodStore.entries` is still populated — a non-setter writer
+    /// (profile edit, HealthKit body-profile import) can flip the gate before ContentView's
+    /// value-keyed scrub runs. The seam gate in `PeriodTrackerStore` remains the enforcement.
+    @Test func calendarFlowInputsAreEmptyAtTheViewSeamWhilePeriodHidden() throws {
+        let calendar = gregorianCalendar()
+        let store = makeTestStore()
+        let periodStore = PeriodTrackerStore(healthService: HealthKitService())
+        let entry = try loggedEntry(on: testDate(2026, 6, 15, calendar: calendar))
+        periodStore.entries = [entry]
+        let view = makeCycleView(store: store, periodStore: periodStore)
+
+        store.settings.periodTrackingVisible = false
+        #expect(view.entriesByKey.isEmpty)
+
+        // Hiding never deletes: the same resident entries come straight back on un-hide.
+        store.settings.periodTrackingVisible = true
+        #expect(view.entriesByKey[entry.dateKey]?.flowLevel == .medium)
+    }
+
+    /// Same back-stop for the day-detail push: while the period half is hidden, `entry(for:)`
+    /// must synthesize the blank placeholder instead of looking up the resident entry, so a
+    /// stale render can never carry period plaintext into `CycleDayDetailView`.
+    @Test func dayDetailEntryIsBlankAtTheViewSeamWhilePeriodHidden() throws {
+        let calendar = gregorianCalendar()
+        let date = try testDate(2026, 6, 15, calendar: calendar)
+        let store = makeTestStore()
+        let periodStore = PeriodTrackerStore(healthService: HealthKitService())
+        periodStore.entries = [try loggedEntry(on: date)]
+        let view = makeCycleView(store: store, periodStore: periodStore)
+
+        store.settings.periodTrackingVisible = false
+        let hidden = view.entry(for: date)
+        #expect(hidden.samples.isEmpty)
+        #expect(hidden.narrative == nil)
+        #expect(hidden.phase == .unknown)
+
+        store.settings.periodTrackingVisible = true
+        #expect(view.entry(for: date).flowLevel == .medium)
+    }
+
+    /// Un-hiding the period half never reloaded while the merged page stayed mounted (it
+    /// survives via the intimacy half, so no re-appearance restarts the `.task`). The load task
+    /// is keyed on ``CycleTrackerView/LoadTrigger`` — lock state PLUS the DERIVED
+    /// `sensitiveSurfaceVisibility` — so any writer's flip changes the task identity and SwiftUI
+    /// restarts the load by construction. This pins that identity.
+    @Test func loadTaskIdentityChangesWhenADerivedVisibilityGateFlips() {
+        let mounted = CycleTrackerView.LoadTrigger(
+            lockState: .unlocked,
+            visibility: SensitiveSurfaceVisibility(intimacy: true, period: false)
+        )
+
+        // Same lock state + same visibility: no spurious restart.
+        #expect(mounted == CycleTrackerView.LoadTrigger(
+            lockState: .unlocked,
+            visibility: SensitiveSurfaceVisibility(intimacy: true, period: false)
+        ))
+        // Un-hiding the period half restarts the load (the finding's exact scenario).
+        #expect(mounted != CycleTrackerView.LoadTrigger(
+            lockState: .unlocked,
+            visibility: SensitiveSurfaceVisibility(intimacy: true, period: true)
+        ))
+        // Symmetric for the intimacy half.
+        #expect(mounted != CycleTrackerView.LoadTrigger(
+            lockState: .unlocked,
+            visibility: SensitiveSurfaceVisibility(intimacy: false, period: false)
+        ))
+        // Lock transitions keep their pre-existing trigger role.
+        #expect(mounted != CycleTrackerView.LoadTrigger(
+            lockState: .locked(cooldownDeadline: nil),
+            visibility: SensitiveSurfaceVisibility(intimacy: true, period: false)
+        ))
+    }
+
+    /// Builds the merged Cycle page over the given stores with inert bindings — enough view to
+    /// exercise its internal gating seams without a hosted hierarchy.
+    private func makeCycleView(store: FernletStore, periodStore: PeriodTrackerStore) -> CycleTrackerView {
+        CycleTrackerView(
+            store: store,
+            periodStore: periodStore,
+            intimacyStore: IntimacyLogStore(),
+            activeSheet: .constant(nil),
+            isTabBarCompact: .constant(false),
+            tabResetToken: .constant(0)
+        )
+    }
+
+    /// A real logged medium-flow entry for the given day, built the same way production does
+    /// (HealthKit samples from a user-logged event).
+    private func loggedEntry(on date: Date) throws -> CycleDayEntry {
+        let samples = try HealthKitService.periodSamples(
+            for: UserLoggedCycleEvent(date: date, flowLevel: .medium),
+            externalUUID: UUID()
+        )
+        return CycleDayEntry(
+            date: date,
+            dateKey: FernletDate.dayKey(for: date),
+            samples: samples,
+            narrative: nil,
+            phase: .menstrual
+        )
     }
 
     @Test func predictionPathDoesNotReferenceAICode() throws {
@@ -105,7 +219,7 @@ struct PeriodPredictionUITests {
         let paths = [
             "FernletKit/Sources/PrivateHealthStore/CyclePredictionEngine.swift",
             "FernletKit/Sources/PrivateHealthStore/PeriodTrackerStore.swift",
-            "Fernlet/PeriodTrackerView.swift"
+            "Fernlet/CycleTrackerView.swift"
         ]
         let regex = try NSRegularExpression(pattern: pattern)
         var matches: [String] = []

@@ -5,15 +5,16 @@ import PeriodContextBridge
 import FernletUI
 import FernletLockUI
 
-/// The pages of the Private hub, in display order: Journal, Period, Intimacy, Worry Box.
+/// The pages of the Private hub, in display order: Journal, Cycle, Worry Box.
 ///
-/// Raw values double as the section-picker labels. Period and Intimacy are conditional on the
-/// store's derived `SensitiveSurfaceVisibility`; ``visibleSections(visibility:)`` is the single
-/// filter both the UI and tests use to decide which pages exist.
+/// Raw values double as the section-picker labels. Cycle is the merged period + intimacy page and
+/// is conditional on the store's derived `SensitiveSurfaceVisibility` — it exists while EITHER
+/// half is visible and vanishes only when both gates hide; ``visibleSections(visibility:)`` is the
+/// single filter both the UI and tests use to decide which pages exist.
 enum PrivateHubSection: String, CaseIterable, Identifiable {
     case journal = "Journal"
-    case period = "Period"
-    case intimacy = "Intimacy"
+    /// The merged period + intimacy page (``CycleTrackerView``); each half gates itself inside.
+    case cycle = "Cycle"
     // Worry Box + Journal: always visible (no per-user gating), so they pick up via `allCases`.
     case worryBox = "Worry Box"
     var id: String { rawValue }
@@ -24,8 +25,8 @@ enum PrivateHubSection: String, CaseIterable, Identifiable {
     static func visibleSections(visibility: SensitiveSurfaceVisibility) -> [PrivateHubSection] {
         allCases.filter { section in
             switch section {
-            case .intimacy: visibility.intimacy
-            case .period: visibility.period
+            // The merged page survives while either half is visible; only both-hidden removes it.
+            case .cycle: visibility.period || visibility.intimacy
             case .journal, .worryBox: true
             }
         }
@@ -33,7 +34,7 @@ enum PrivateHubSection: String, CaseIterable, Identifiable {
 }
 
 /// The Personal tab's paged container for every sensitive surface: ``JournalView``,
-/// ``PeriodTrackerView``, ``IntimacyScreenView``, and ``WorryBoxView``, all behind one lock gate.
+/// ``CycleTrackerView``, and ``WorryBoxView``, all behind one lock gate.
 ///
 /// The whole hub sits behind `fernletLockGate` (bypassable only via the DEBUG UI-test hook), so
 /// each child screen inherits the app-lock requirement instead of gating itself. Section
@@ -59,13 +60,9 @@ struct PrivateHubView: View {
         TabView(selection: clampedSection(visibleSections)) {
             JournalView(store: store, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
                 .tag(PrivateHubSection.journal)
-            if store.isPeriodTrackingVisible {
-                PeriodTrackerView(store: store, periodStore: periodStore, periodContext: periodContext, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
-                    .tag(PrivateHubSection.period)
-            }
-            if store.isIntimacyTrackingVisible {
-                IntimacyScreenView(store: store, intimacyStore: intimacyStore, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
-                    .tag(PrivateHubSection.intimacy)
+            if visibleSections.contains(.cycle) {
+                CycleTrackerView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, periodContext: periodContext, activeSheet: $activeSheet, isInHub: true, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
+                    .tag(PrivateHubSection.cycle)
             }
             WorryBoxView(worryBox: worryBox)
                 .tag(PrivateHubSection.worryBox)
@@ -78,8 +75,8 @@ struct PrivateHubView: View {
             ) { $0.rawValue }
         }
         .background(Color.parchment)
-        // UX appearance tests can bypass the gate overlay to review the Journal/Period/
-        // Intimacy screens without configuring a passcode. Release builds: always gated.
+        // UX appearance tests can bypass the gate overlay to review the Journal/Cycle screens
+        // without configuring a passcode. Release builds: always gated.
         .fernletLockGate(active: !UITestSupport.bypassPrivateLockGate)
         .onAppear { resetUnavailableSectionIfNeeded() }
         .onChange(of: store.sensitiveSurfaceVisibility) { _, _ in

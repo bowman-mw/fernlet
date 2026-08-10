@@ -1,11 +1,13 @@
 # Fernlet Privacy Policy
 
-<!-- Maintainer note (not published prose): this text is finalized as of 2026-07-19. Before
+<!-- Maintainer note (not published prose): this text was finalized 2026-07-19 and revised
+     2026-08-09 (Section 13 rewritten: perpetual no-retroactive-use commitments). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in Fernlet/PrivacyPolicyView.swift (Settings →
-     Privacy Policy). Any material change: update the effective date here AND in the view. -->
+     Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
+     the effective date in all three. -->
 
-**Effective date:** July 19, 2026
+**Effective date:** August 9, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -171,10 +173,35 @@ Data is retained on your device until you delete it or delete the app. iCloud co
 your iCloud account until you delete them in the app or in your Apple ID storage settings. We hold no
 copy to retain or delete.
 
-## 13. Changes to this policy
+## 13. Changes to this policy — and the promises that cannot change
 
 If we make material changes, we will update the effective date above and surface the change in the
-app. Continued use after an update means you accept the revised policy.
+app.
+
+Some of this policy is **permanent**. The following commitments are perpetual: they bind this
+version of Fernlet, every future version, and any future owner or maintainer of the app:
+
+- **Data you logged under this policy is never retroactively repurposed.** Anything Fernlet stored
+  while this policy was in force stays governed by the promises that were in force when you logged
+  it. No future update may reach back and use, upload, analyze, sell, or share that data under
+  weaker terms.
+- **The no-collection guarantee does not expire.** Fernlet is built so that the developer receives
+  none of your health, journal, photo, memory, cycle, friend, or location data (Sections 1 and 8),
+  and that guarantee binds every future version and owner — no future version may begin collecting
+  from data you already entered.
+- **Weakening ever requires your fresh, affirmative consent.** Any future change that would send
+  existing data somewhere new, or handle it less protectively, takes effect only for users who
+  explicitly and separately agree to it after being clearly told what changes. Continued use,
+  silence, or installing an update is **never** consent to such a change — and declining must
+  either leave the app usable with your data handled under the old terms, or let you export and
+  delete your data first.
+
+For everything else — clarifications, new features, stronger protections — continued use after an
+update means you accept the revised policy.
+
+How these promises are backed technically (build-enforced boundaries, a published network-egress
+inventory, and a standing invitation to audit the app's traffic) is described in the project's
+verifiability statement, `Docs/Verifiability.md`, alongside the source code.
 
 ## 14. Contact
 

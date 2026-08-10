@@ -9,9 +9,13 @@ import FernletUI
 /// `PendingProximityRecipeShare`. Shows the recipe's kind (local Fernlet recipe vs. saved web
 /// recipe), servings/ingredient counts, macros, notes, and the ingredient list, plus a duplicate
 /// warning when a same-named (or same-source) recipe already exists — import then becomes
-/// "Import anyway". Import goes through `FernletStore.importProximityRecipeShare` (which
-/// sanitizes and records provenance by sender fingerprint); both outcomes consume the pending
-/// share via `dismissRecipeShare`, and an import failure keeps the sheet up with an inline notice.
+/// "Import anyway". The source-URL duplicate check uses `RecipeSourceURLMatcher`, the SAME
+/// normalized match the import path decides with, so the warning fires for exactly the shares the
+/// store will treat as already saved (and importing such a share KEEPS the user's existing copy —
+/// see `FernletStore.ProximityRecipeImportOutcome.alreadySaved`). Import goes through
+/// `FernletStore.importProximityRecipeShare` (which sanitizes and records provenance by sender
+/// fingerprint); both outcomes consume the pending share via `dismissRecipeShare`, and an import
+/// failure keeps the sheet up with an inline notice.
 struct ProximityRecipeShareReviewSheet: View {
     var share: PendingProximityRecipeShare
     var store: FernletStore
@@ -160,8 +164,13 @@ struct ProximityRecipeShareReviewSheet: View {
             return "You already have a recipe with this name."
         case .saved:
             guard let saved = share.payload.recipe.saved else { return nil }
-            if store.savedRecipes.contains(where: { $0.webImport?.sourceURLString == saved.sourceURLString }) {
-                return "You already saved this source recipe."
+            // NORMALIZED source match — must agree with the store's duplicate decision, or a URL
+            // differing only in host case or a #fragment would dodge this warning while the import
+            // still treats it as already saved.
+            if store.savedRecipes.contains(where: {
+                RecipeSourceURLMatcher.urlsMatch($0.webImport?.sourceURLString ?? "", saved.sourceURLString)
+            }) {
+                return "You already saved this recipe from the same page — importing keeps your saved copy, photo, and notes."
             }
             if store.savedRecipes.contains(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == title }) {
                 return "You already have a saved recipe with this name."
@@ -172,9 +181,14 @@ struct ProximityRecipeShareReviewSheet: View {
 
     private func importShare() {
         do {
-            let importedName = try store.importProximityRecipeShare(share.payload, fromFingerprint: share.senderFingerprint)
+            let outcome = try store.importProximityRecipeShare(share.payload, fromFingerprint: share.senderFingerprint)
             manager.dismissRecipeShare(share)
-            notice = "\(importedName) imported."
+            switch outcome {
+            case .imported(let name):
+                notice = "\(name) imported."
+            case .alreadySaved(let name):
+                notice = "\(name) is already in your recipe book — your saved copy was kept."
+            }
             dismiss()
         } catch let error as RecipeImportError {
             notice = error.message

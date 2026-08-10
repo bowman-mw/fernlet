@@ -207,6 +207,25 @@ struct FernletLockCryptoTests {
         #expect(derived.hexString == "e525a75bfcc621ea814161b685f4c637fbde3a8d1f88e5e1fce715aba7f95732")
     }
 
+    // MARK: Pins the production column-key derivation for ALL FOUR sealed-column labels in use
+    // (journal-narrative, worry-box, menstrual-narrative, intimacy-log — the ColumnCrypto
+    // instances in PrivateMemoryStore/PrivateHealthStore). The labels + derivation ARE the
+    // at-rest format: a drift in any one silently orphans that column's entire sealed corpus,
+    // so each label gets its own known-answer vector (Docs/Verifiability.md §2).
+    @Test func hkdfKnownAnswerVectorsArePinnedForAllFourColumnLabels() {
+        let contentKey = Data((0..<32).map { UInt8($0) })
+        let pinned: [(label: String, hex: String)] = [
+            ("journal-narrative", "7ea257bf471a6fe1bd379bd4ae37bf69d8c2c82e27f686d4733da9f8652ecccd"),
+            ("worry-box", "7f5b879410951d67685cf4b6a1f97617b831c708ac40acf15a48bb4d84d1ac2f"),
+            ("menstrual-narrative", "e525a75bfcc621ea814161b685f4c637fbde3a8d1f88e5e1fce715aba7f95732"),
+            ("intimacy-log", "e33e6039dbb78b152d763c7d4e3b3d22752dda9d7d59779e2fea2d12f1225fb8")
+        ]
+        for vector in pinned {
+            let derived = derivedColumnKeyData(contentKey: contentKey, info: vector.label, outputByteCount: 32)
+            #expect(derived.hexString == vector.hex, "column-key derivation drifted for label '\(vector.label)'")
+        }
+    }
+
     // MARK: Proves verifier comparison does not use plain Data equality.
     @Test func verifierComparisonIsConstantTime() throws {
         let source = try String(contentsOf: lockServiceSourceURL(), encoding: .utf8)

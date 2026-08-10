@@ -20,6 +20,20 @@ import Foundation
 /// the label is part of the at-rest format: changing a repository's label orphans
 /// every ciphertext already sealed under the old label.
 ///
+/// **At-rest format (two coexisting generations).** *Legacy:* the sealed box's raw
+/// `combined` bytes, no AAD. *Device-bound v2* (all new writes when a binding ID is
+/// available): a ``deviceBoundFormatVersion`` prefix byte followed by `combined`,
+/// sealed with this install's ``DeviceBindingID`` as ChaChaPoly additional
+/// authenticated data — so the ciphertext itself refuses to authenticate on any
+/// other install, not just under a different key. Opens are dual-path: a
+/// v2-prefixed blob is tried with the AAD first, then every blob falls back to the
+/// legacy no-AAD open (which also disambiguates the 1-in-256 legacy blob whose
+/// first ciphertext byte happens to equal the version tag). Legacy rows are
+/// progressively rebound because every routine re-seal — edits, the
+/// device-key→user-key migration at lock setup, period restore-on-unhide — writes
+/// v2. When no binding ID is available, sealing falls back to the legacy format
+/// (fail-open: binding is defense-in-depth, never a gate).
+///
 /// Explicitly `nonisolated` (overriding this module's MainActor default isolation):
 /// it is a pure, stateless crypto value type called synchronously from the
 /// `NSManagedObjectContext.performAndWait` closures of the (nonisolated) sealed-store
@@ -28,12 +42,21 @@ import Foundation
 ///
 /// Failure modes: sealing rethrows CryptoKit errors; opening throws when the blob is
 /// truncated, tampered with, or sealed under a different content key or label
-/// (Poly1305 authentication failure). The `Codable` variants additionally rethrow
-/// JSON encoding/decoding errors.
+/// (Poly1305 authentication failure). One retryable exception: when a v2-tagged blob
+/// cannot be opened because the install-binding keychain read *errored* (as opposed
+/// to the row being absent), the open throws `DeviceBindingID.ReadError` instead of
+/// an authentication failure — a transient keychain outage means "try again", not
+/// "data corrupted". The `Codable` variants additionally rethrow JSON
+/// encoding/decoding errors.
 public nonisolated struct ColumnCrypto {
     /// HKDF `info` string that domain-separates this instance's derived column key
     /// from every other column sealed under the same content key.
     let label: String
+
+    /// Version tag prefixed to device-bound (v2) sealed blobs. Part of the at-rest
+    /// format: changing it orphans every v2 ciphertext already written (the open path
+    /// would stop recognizing the prefix and misparse the blob as legacy).
+    static let deviceBoundFormatVersion: UInt8 = 0x02
 
     /// Creates a helper bound to one column label.
     ///
@@ -51,10 +74,12 @@ public nonisolated struct ColumnCrypto {
     /// - Parameters:
     ///   - value: The plaintext to encrypt (UTF-8 encoded before sealing).
     ///   - contentKey: The unlocked content key the column subkey is derived from.
-    /// - Returns: The sealed box's combined representation (nonce ‖ ciphertext ‖ tag),
-    ///   suitable for storage in a single binary Core Data attribute.
+    /// - Returns: One opaque blob suitable for a single binary Core Data attribute:
+    ///   the device-bound v2 form (version byte ‖ nonce ‖ ciphertext ‖ tag, sealed
+    ///   with the install's binding ID as AAD) when a binding ID exists, else the
+    ///   legacy combined form (nonce ‖ ciphertext ‖ tag).
     public func sealString(_ value: String, contentKey: SymmetricKey) throws -> Data {
-        try ChaChaPoly.seal(Data(value.utf8), using: columnKey(from: contentKey)).combined
+        try sealPlaintext(Data(value.utf8), contentKey: contentKey)
     }
 
     /// Seals an optional string column, skipping values with nothing to protect.
@@ -73,7 +98,7 @@ public nonisolated struct ColumnCrypto {
     ///   or one sealed under a different content key or label.
     public func openString(_ data: Data?, contentKey: SymmetricKey) throws -> String? {
         guard let data else { return nil }
-        let plaintext = try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: columnKey(from: contentKey))
+        let plaintext = try openBlob(data, contentKey: contentKey)
         return String(data: plaintext, encoding: .utf8)
     }
 
@@ -87,7 +112,7 @@ public nonisolated struct ColumnCrypto {
     /// be opened with the matching ``open(_:contentKey:)``.
     public func seal<T: Encodable>(_ value: T, contentKey: SymmetricKey) throws -> Data {
         let plaintext = try JSONEncoder().encode(value)
-        return try ChaChaPoly.seal(plaintext, using: columnKey(from: contentKey)).combined
+        return try sealPlaintext(plaintext, contentKey: contentKey)
     }
 
     /// Opens a sealed `Codable` column: decrypts, then JSON-decodes the plaintext.
@@ -98,8 +123,58 @@ public nonisolated struct ColumnCrypto {
     ///   does not decode as `T`.
     public func open<T: Decodable>(_ data: Data?, contentKey: SymmetricKey) throws -> T? {
         guard let data else { return nil }
-        let plaintext = try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: columnKey(from: contentKey))
+        let plaintext = try openBlob(data, contentKey: contentKey)
         return try JSONDecoder().decode(T.self, from: plaintext)
+    }
+
+    // MARK: - Device-bound format core
+
+    /// Seals plaintext in the newest format this install supports: device-bound v2
+    /// (version byte + `combined`, with this install's ``DeviceBindingID`` as AAD)
+    /// when a durable binding ID exists, else the legacy unbound `combined` blob.
+    private func sealPlaintext(_ plaintext: Data, contentKey: SymmetricKey) throws -> Data {
+        let key = columnKey(from: contentKey)
+        guard let binding = DeviceBindingID.current() else {
+            return try ChaChaPoly.seal(plaintext, using: key).combined
+        }
+        let combined = try ChaChaPoly.seal(plaintext, using: key, authenticating: binding).combined
+        return Data([Self.deviceBoundFormatVersion]) + combined
+    }
+
+    /// Opens a sealed blob of either at-rest generation: tries the device-bound v2
+    /// parse (version byte + AAD) first when the blob carries the version tag, then
+    /// falls back to the legacy no-AAD open of the whole blob — which keeps every
+    /// pre-binding row readable AND resolves the rare legacy blob whose first
+    /// ciphertext byte happens to equal the version tag.
+    ///
+    /// - Important: Throws on authentication failure in *both* paths — a truncated or
+    ///   tampered blob, one sealed under a different content key or label, or a v2
+    ///   blob sealed by a different install (its AAD cannot be reproduced here). One
+    ///   distinct, retryable case: when the blob is version-tagged, the install-binding
+    ///   keychain read *errors* (`DeviceBindingID.ReadError` — the row's state is
+    ///   unknown, as opposed to authoritatively absent), and the legacy fallback cannot
+    ///   open the blob either, that read error is rethrown in place of the fallback's
+    ///   authentication error — so a transient keychain outage surfaces as "try again",
+    ///   never as corrupted data, matching the seal path's graceful degradation.
+    private func openBlob(_ data: Data, contentKey: SymmetricKey) throws -> Data {
+        let key = columnKey(from: contentKey)
+        var bindingReadError: (any Error)?
+        if data.first == Self.deviceBoundFormatVersion {
+            do {
+                if let binding = try DeviceBindingID.currentForOpen(),
+                   let box = try? ChaChaPoly.SealedBox(combined: data.dropFirst()),
+                   let plaintext = try? ChaChaPoly.open(box, using: key, authenticating: binding) {
+                    return plaintext
+                }
+            } catch {
+                bindingReadError = error
+            }
+        }
+        do {
+            return try ChaChaPoly.open(ChaChaPoly.SealedBox(combined: data), using: key)
+        } catch {
+            throw bindingReadError ?? error
+        }
     }
 
     // MARK: - Key derivation

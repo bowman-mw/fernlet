@@ -251,11 +251,36 @@ extension RecipeDefinition {
                     carbs: max(importedRecipe.carbs, 0),
                     fat: max(importedRecipe.fat, 0)
                 ),
-                micronutrients: importedRecipe.micronutrients
+                micronutrients: importedRecipe.micronutrients,
+                // The page's main-picture URL rides along so user-present paths can download it
+                // later (owner decision 2026-08-09); the background drain itself never fetches it.
+                imageURLString: importedRecipe.imageURL?.absoluteString
             ),
             // F5: preserve JSON-LD-parsed ordered cooking steps. Persisted per-row via the
             // `SavedRecipeRecord.payloadData` blob (STEP 0), so they survive on this path.
             steps: importedRecipe.steps
         )
+    }
+
+    /// Builds the refreshed definition for an explicit "Re-import from source" (owner decision
+    /// 2026-08-09): the fresh import's content over the existing row's user-owned state.
+    ///
+    /// **Fresh** (from `reimported`): name, servings, ingredient lines, macros, micronutrients,
+    /// steps, source URL, and the page's image URL. **Preserved** (from `existing`): the `id` —
+    /// deliberate, because the sealed recipe photo is keyed by it, so reusing the id carries the
+    /// photo across the refresh with no migration — plus the user's `notes` verbatim (the import
+    /// summary only seeds notes on FIRST import; a refresh never overwrites what the user may
+    /// have edited), `createdAt`, fork provenance, and `webImageSuppressed` (a user who deleted
+    /// the web picture, or already has one, must not get a surprise re-download from a refresh).
+    /// The caller passes the CURRENT saved row as `existing` — merging over a stale caller-held
+    /// snapshot would revert notes edited or suppression stamped while the re-import fetch was in
+    /// flight (see `FernletStore.applyReimportedRecipe`, which re-resolves the live row).
+    public init(reimported: ImportedRecipe, preserving existing: RecipeDefinition, now: Date = Date()) {
+        self.init(importedRecipe: reimported, now: now)
+        id = existing.id
+        notes = existing.notes
+        createdAt = existing.createdAt
+        parentRecipeID = existing.parentRecipeID
+        webImport?.webImageSuppressed = existing.webImport?.webImageSuppressed
     }
 }

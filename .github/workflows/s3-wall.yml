@@ -68,3 +68,20 @@ jobs:
             -scheme Fernlet \
             -destination "$FERNLET_DESTINATION" \
             -only-testing:FernletTests/NoTrackingBoundaryTests
+
+      - name: Key-custody + at-rest-format tripwires
+        # Same shape as the no-tracking wall: no compiler half, so these suites ARE the
+        # enforcement (Docs/Verifiability.md §2, §4) and must run here for the "cannot merge
+        # green" claim in Docs/Release-Process.md §1 to be true. Simulator-safe by design:
+        # KeyCustodyBoundaryTests drives the production key stores against per-test UUID
+        # keychain services (plus the simulator's own data-protection keychain for the two
+        # well-known rows) and pins the one passcode-gated class in source, so no device
+        # passcode is needed. The remaining suites are pure crypto format pins.
+        run: |
+          set -euo pipefail
+          xcodebuild test-without-building \
+            -scheme Fernlet \
+            -destination "$FERNLET_DESTINATION" \
+            -only-testing:FernletTests/KeyCustodyBoundaryTests \
+            -only-testing:FernletTests/ColumnCryptoDeviceBindingTests \
+            -only-testing:FernletTests/SealedBackupFormatPinTests

@@ -128,7 +128,7 @@ struct RecipeShareCodecTests {
         let store = makeTestStore()
         let payload = RecipeShareCodec.proximityPayload(for: fixture.recipe, foodItems: fixture.foodItems)
 
-        let importedName = try store.importProximityRecipeShare(payload)
+        let importedName = try store.importProximityRecipeShare(payload).name
         let imported = try #require(store.recipes.first)
 
         #expect(importedName == "Training Bowl")
@@ -145,7 +145,7 @@ struct RecipeShareCodecTests {
         let webImport = try #require(recipe.webImport)
         let payload = RecipeShareCodec.proximityPayload(for: recipe, foodItems: [])
 
-        let importedName = try store.importProximityRecipeShare(payload)
+        let importedName = try store.importProximityRecipeShare(payload).name
         let imported = try #require(store.savedRecipes.first)
         let importedWebImport = try #require(imported.webImport)
 
@@ -208,7 +208,7 @@ struct RecipeShareCodecTests {
         )
         let payload = RecipeShareCodec.proximityPayload(for: malicious, foodItems: [])
 
-        let importedName = try store.importProximityRecipeShare(payload)
+        let importedName = try store.importProximityRecipeShare(payload).name
         let imported = try #require(store.savedRecipes.first)
         let importedWebImport = try #require(imported.webImport)
 

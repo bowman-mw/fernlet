@@ -1,0 +1,49 @@
+# CODEOWNERS — review gate on the privacy walls.
+#
+# Every path here is load-bearing for a privacy guarantee (Docs/Verifiability.md): the wall
+# tests, the wall scripts and hooks, the CI workflow that enforces them, the documents that
+# state them, the package manifest whose dependency DAG *is* the S3 wall, and the privacy
+# manifests the App Store shows users. With branch protection's "Require review from Code
+# Owners" enabled (Docs/Release-Process.md), no change to these files can merge without the
+# owner's explicit approval — a wall cannot be weakened in a drive-by commit.
+#
+# Deliberately narrow: ordinary feature code is NOT listed, so this gate cannot rot into a
+# rubber stamp. If a path is added here, say in the PR why it is wall-load-bearing.
+
+# The mechanical enforcement (grep-walls + custody tripwires)
+/FernletTests/NoTrackingBoundaryTests.swift   @bowman-mw
+/FernletTests/S3BoundaryTests.swift           @bowman-mw
+/FernletTests/KeyCustodyBoundaryTests.swift   @bowman-mw
+/FernletTests/ColumnCryptoDeviceBindingTests.swift @bowman-mw
+/FernletTests/SealedBackupFormatPinTests.swift @bowman-mw
+/FernletTests/SecureEnclaveWrapTests.swift    @bowman-mw
+/FernletTests/FernletLockCryptoTests.swift    @bowman-mw
+
+# Wall scripts, hooks, and CI
+/Scripts/spm-wall-check.sh                    @bowman-mw
+/Scripts/spm-wall-selftest.sh                 @bowman-mw
+/Scripts/install-git-hooks.sh                 @bowman-mw
+/Scripts/git-hooks/                           @bowman-mw
+/Scripts/release-checksum.sh                  @bowman-mw
+/.github/workflows/s3-wall.yml                @bowman-mw
+/.github/CODEOWNERS                           @bowman-mw
+
+# The stated guarantees
+/Docs/No-Tracking-Wall.md                     @bowman-mw
+/Docs/Verifiability.md                        @bowman-mw
+/Docs/Privacy-Policy.md                       @bowman-mw
+/Docs/Release-Process.md                      @bowman-mw
+/Site/privacy/                                @bowman-mw
+/Fernlet/PrivacyPolicyView.swift              @bowman-mw
+
+# The dependency DAG is the S3 wall's compiler half
+/FernletKit/Package.swift                     @bowman-mw
+
+# App Store privacy manifests (the NoTracking tests pin their contents)
+/Fernlet/PrivacyInfo.xcprivacy                @bowman-mw
+/FernletWidgets/PrivacyInfo.xcprivacy         @bowman-mw
+/FernletShareExtension/PrivacyInfo.xcprivacy  @bowman-mw
+
+# Key custody and at-rest formats (what the tripwire/format tests protect)
+/FernletKit/Sources/FernletCrypto/            @bowman-mw
+/FernletKit/Sources/FernletLock/              @bowman-mw

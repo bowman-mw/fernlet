@@ -549,7 +549,7 @@ struct PeriodTrackerTests {
             "HealthKitService.swift",
             "WellbeingModels.swift",
             "PeriodTrackerStore.swift",
-            "PeriodTrackerView.swift",
+            "CycleTrackerView.swift",
             "LogPeriodSheet.swift"
         ]
         let files = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)

@@ -40,6 +40,13 @@ public nonisolated struct ImportedRecipe: Equatable {
     /// Ordered cooking steps parsed from JSON-LD `recipeInstructions` (F5). `nil` when the source had no
     /// structured instructions. `summary` stays the short blurb; steps are a separate, ordered list.
     public var steps: [RecipeStep]?
+    /// The page's main food-picture URL (JSON-LD `image` first, `og:image`/`twitter:image` meta
+    /// fallback — see ``RecipeWebImporter/extractedImageURL(from:sourceURL:)``), or `nil` when the
+    /// page offered none. Only the URL is extracted here; the bytes are downloaded separately by
+    /// user-present paths (owner decision 2026-08-09) via
+    /// ``RecipeWebImporter/downloadImage(from:userAgent:maxBytes:)`` — never during the
+    /// share-extension background drain.
+    public var imageURL: URL?
 
     public init(
         sourceURL: URL,
@@ -51,7 +58,8 @@ public nonisolated struct ImportedRecipe: Equatable {
         carbs: Int,
         fat: Int,
         micronutrients: Micronutrients = Micronutrients(),
-        steps: [RecipeStep]? = nil
+        steps: [RecipeStep]? = nil,
+        imageURL: URL? = nil
     ) {
         self.sourceURL = sourceURL
         self.name = name
@@ -63,6 +71,7 @@ public nonisolated struct ImportedRecipe: Equatable {
         self.fat = fat
         self.micronutrients = micronutrients
         self.steps = steps
+        self.imageURL = imageURL
     }
 }
 
@@ -138,6 +147,12 @@ public enum RecipeWebImportError: LocalizedError {
 /// (user-invoked) and the share-extension queue drain (`userInvoked: false`, which defers on budget
 /// exhaustion rather than burning a retry attempt). MainActor by the module's default isolation;
 /// the parsing and SSRF helpers are `nonisolated` pure functions, and the module persists nothing.
+///
+/// The importer also owns the app's only recipe-image HTTP path (owner decision 2026-08-09):
+/// ``extractedImageURL(from:sourceURL:)`` pulls the page's main food-picture URL out of the already
+/// fetched HTML (no extra request), and ``downloadImage(from:userAgent:maxBytes:)`` downloads image
+/// bytes under the same SSRF/redirect/MIME/size guard rigor as the page fetch. Import never
+/// downloads the image itself — user-present callers do, so the background drain stays image-free.
 public enum RecipeWebImporter {
     /// Fetch cap: HTML accumulation stops at 3 MB so a hostile or bloated page cannot exhaust memory.
     private static let maxFetchBytes = 3 * 1024 * 1024  // 3 MB
@@ -162,7 +177,11 @@ public enum RecipeWebImporter {
         }
 
         let html = try await fetchHTML(from: url)
-        if let recipe = try jsonLDRecipe(from: html, sourceURL: url, catalog: catalog) {
+        // The page's main food picture, as a URL only — no second fetch happens here, so the
+        // background queue drain stays image-free; user-present callers download it later.
+        let imageURL = extractedImageURL(from: html, sourceURL: url)
+        if var recipe = try jsonLDRecipe(from: html, sourceURL: url, catalog: catalog) {
+            recipe.imageURL = imageURL
             return recipe
         }
 
@@ -171,7 +190,9 @@ public enum RecipeWebImporter {
         }
 
         let cleanedText = try cleanedBodyText(from: html)
-        return try await extractWithFoundationModel(from: cleanedText, sourceURL: url, catalog: catalog, userInvoked: userInvoked, gate: gate)
+        var recipe = try await extractWithFoundationModel(from: cleanedText, sourceURL: url, catalog: catalog, userInvoked: userInvoked, gate: gate)
+        recipe.imageURL = imageURL
+        return recipe
     }
 
     /// Streams the page with a 15 s timeout, redirect re-validation, an HTML-only MIME check, and the
@@ -239,15 +260,46 @@ public enum RecipeWebImporter {
         return !isPrivateOrLoopbackIPLiteral(host)
     }
 
+    /// Classifies `host` as a loopback / private / link-local IP literal in ANY of its spellings.
+    ///
+    /// IPv4 literals are canonicalized through `inet_aton`, which accepts every classic form the
+    /// system connector does — dotted quad, hexadecimal (`0x7f.0.0.1`), octal (`0177.0.0.1`),
+    /// bare 32-bit integer (`2130706433` = 127.0.0.1), and 2/3-part forms — so an encoding trick
+    /// can't smuggle a loopback/private target past a dotted-quad-only check. That matters most
+    /// for the image download: its URL comes verbatim from page-controlled content (JSON-LD
+    /// `image` / `og:image`), not from anything the user typed. IPv6 literals go through
+    /// `inet_pton` (URL.host strips the surrounding brackets), covering loopback, link-local,
+    /// unique-local, and the IPv4-mapped/compatible forms (`::ffff:127.0.0.1`) whose embedded
+    /// IPv4 is classified by the same rules. Non-literal hostnames are never classified here —
+    /// and, unlike the old prefix check, a REAL hostname starting with "fc"/"fd" is no longer
+    /// misread as a unique-local IPv6 literal.
     nonisolated static func isPrivateOrLoopbackIPLiteral(_ host: String) -> Bool {
-        // IPv6 literals (URL.host strips the surrounding brackets).
-        if host == "::1" { return true }                                  // loopback
-        if host.hasPrefix("fe80:") { return true }                        // link-local
-        if host.hasPrefix("fc") || host.hasPrefix("fd") { return true }   // unique-local fc00::/7
-        // IPv4 literals.
-        let octets = host.split(separator: ".").compactMap { Int($0) }
-        guard octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else { return false }
-        let (a, b) = (octets[0], octets[1])
+        if host.contains(":") {
+            // IPv6 literal in any spelling.
+            var address = in6_addr()
+            guard inet_pton(AF_INET6, host, &address) == 1 else { return false }
+            let bytes = withUnsafeBytes(of: address) { Array($0) }
+            if bytes == Array(repeating: 0, count: 15) + [1] { return true }        // ::1 loopback
+            if bytes[0] == 0xFE, bytes[1] & 0xC0 == 0x80 { return true }            // fe80::/10 link-local
+            if bytes[0] & 0xFE == 0xFC { return true }                              // fc00::/7 unique-local
+            if bytes[0..<10].allSatisfy({ $0 == 0 }),
+               (bytes[10] == 0xFF && bytes[11] == 0xFF) || (bytes[10] == 0 && bytes[11] == 0) {
+                // ::ffff:a.b.c.d (v4-mapped) / ::a.b.c.d (v4-compatible): judge the embedded IPv4.
+                return isPrivateOrLoopbackIPv4(a: Int(bytes[12]), b: Int(bytes[13]))
+            }
+            return false
+        }
+        // IPv4 literal in any classic spelling; real hostnames fail inet_aton and pass through.
+        var address = in_addr()
+        guard inet_aton(host, &address) == 1 else { return false }
+        let value = UInt32(bigEndian: address.s_addr)
+        return isPrivateOrLoopbackIPv4(a: Int(value >> 24), b: Int((value >> 16) & 0xFF))
+    }
+
+    /// The IPv4 range classification shared by the plain and IPv6-embedded paths: loopback
+    /// (127/8), this-network (0/8), RFC 1918 private (10/8, 172.16/12, 192.168/16), and
+    /// link-local (169.254/16). Takes the two leading octets of the CANONICAL address.
+    private nonisolated static func isPrivateOrLoopbackIPv4(a: Int, b: Int) -> Bool {
         if a == 127 || a == 10 || a == 0 { return true }                  // loopback / private / this-network
         if a == 192 && b == 168 { return true }                           // private
         if a == 172 && (16...31).contains(b) { return true }              // private
@@ -276,6 +328,221 @@ public enum RecipeWebImporter {
                 completionHandler(nil)   // refuse the redirect; the 3xx becomes the final response
             }
         }
+    }
+
+    // MARK: - Recipe image (owner decision 2026-08-09, reversing the 2026-07-16 "no external
+    // image fetch" tester decision — see Docs/No-Tracking-Wall.md §4b)
+
+    /// Hard byte cap for a recipe-image download (10 MB). An image stream that exceeds it is
+    /// ABORTED (the download throws), never truncated — a truncated JPEG is corrupt, not smaller.
+    public static let maxImageFetchBytes = 10 * 1024 * 1024
+
+    /// The page's best "main food picture" URL, or `nil` when the page offers none.
+    ///
+    /// Precedence: the JSON-LD `Recipe` object's `image` value first (handling a bare string, a
+    /// string array, an `ImageObject` dictionary, and an array of `ImageObject`s), then the
+    /// `og:image` / `og:image:url` / `twitter:image` / `twitter:image:src` meta tags. Values are
+    /// entity-decoded per this importer's policy, resolved against `sourceURL` when relative, and
+    /// an `http` scheme is upgraded to `https` (the download guard would refuse plain http anyway,
+    /// and virtually every image host serves both). `data:` URIs and non-web schemes yield `nil`.
+    /// Pure and `nonisolated` so tests can drive it with literal HTML.
+    public nonisolated static func extractedImageURL(from html: String, sourceURL: URL) -> URL? {
+        for rawJSON in JSONLDScraper.scriptContents(from: html) {
+            guard let jsonData = htmlDecoded(rawJSON).data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: jsonData),
+                  let recipe = JSONLDScraper.object(ofType: "Recipe", in: object),
+                  let url = imageURLValue(recipe["image"], relativeTo: sourceURL) else { continue }
+            return url
+        }
+        for name in ["og:image", "og:image:url", "twitter:image", "twitter:image:src"] {
+            if let content = HTMLScraper.metaContent(named: name, in: html),
+               let url = normalizedImageURL(from: htmlDecoded(content), relativeTo: sourceURL) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    /// Resolves a JSON-LD `image` value of any of its four schema.org shapes — string, `[string]`,
+    /// `ImageObject`, `[ImageObject]` — to the first usable URL. `ImageObject` reads `url` first,
+    /// then `contentUrl` (both appear in the wild).
+    nonisolated static func imageURLValue(_ value: Any?, relativeTo sourceURL: URL) -> URL? {
+        if let string = stringValue(value) {
+            return normalizedImageURL(from: string, relativeTo: sourceURL)
+        }
+        if let array = value as? [Any] {
+            for element in array {
+                if let url = imageURLValue(element, relativeTo: sourceURL) { return url }
+            }
+            return nil
+        }
+        if let dictionary = value as? [String: Any] {
+            return imageURLValue(dictionary["url"], relativeTo: sourceURL)
+                ?? imageURLValue(dictionary["contentUrl"], relativeTo: sourceURL)
+        }
+        return nil
+    }
+
+    /// Trims, resolves against the page URL, upgrades `http` to `https`, and refuses anything that
+    /// is not a web URL (`data:` and exotic schemes yield `nil`). The full SSRF guard runs again at
+    /// download time; this only normalizes what extraction hands over.
+    nonisolated static func normalizedImageURL(from source: String, relativeTo sourceURL: URL) -> URL? {
+        let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.lowercased().hasPrefix("data:"),
+              let resolved = URL(string: trimmed, relativeTo: sourceURL)?.absoluteURL else { return nil }
+        switch resolved.scheme?.lowercased() {
+        case "https":
+            return resolved
+        case "http":
+            var components = URLComponents(url: resolved, resolvingAgainstBaseURL: false)
+            components?.scheme = "https"
+            return components?.url
+        default:
+            return nil
+        }
+    }
+
+    /// Downloads image bytes with the SAME guard rigor as the page fetch: ``isSafePublicHTTPSURL(_:)``
+    /// on the initial URL, `RedirectValidator` re-validation on every redirect hop, a 2xx +
+    /// image MIME requirement (an `image/*` declaration, or a generic binary one whose bytes then
+    /// must pass the ``looksLikeImageBytes(_:)`` magic-number sniff — mislabeled S3-style image
+    /// CDNs stay importable, HTML error pages do not), a 15 s timeout, and a hard byte cap that
+    /// aborts (never truncates) an oversize stream — all over `EphemeralWebSession.shared`.
+    ///
+    /// - Parameter url: The image URL (typically from ``extractedImageURL(from:sourceURL:)``).
+    /// - Parameter userAgent: Sent as `User-Agent`. This importer's honest default; the product
+    ///   importer passes its Safari spoof so retailer CDNs keep serving its label images.
+    /// - Parameter maxBytes: The abort cap; defaults to ``maxImageFetchBytes``.
+    /// - Throws: ``RecipeWebImportError/invalidURL`` on a guard-refused URL,
+    ///   ``RecipeWebImportError/fetchFailed`` on any transport, status, MIME, or size failure.
+    /// - Returns: The raw image bytes. Callers own decoding/normalizing them (the app seals recipe
+    ///   pictures through its private media store, which downscales and strips EXIF).
+    public static func downloadImage(
+        from url: URL,
+        userAgent: String = "Fernlet/1.0",
+        maxBytes: Int = maxImageFetchBytes
+    ) async throws -> Data {
+        guard isSafePublicHTTPSURL(url) else {
+            throw RecipeWebImportError.invalidURL
+        }
+        var request = URLRequest(url: url, timeoutInterval: 15)
+        request.setValue("image/*", forHTTPHeaderField: "Accept")
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+
+        let (asyncBytes, response): (URLSession.AsyncBytes, URLResponse)
+        do {
+            // Same per-hop SSRF re-validation as the page fetch — an image URL can 30x to an
+            // internal/link-local address exactly like a page URL can.
+            (asyncBytes, response) = try await EphemeralWebSession.shared.bytes(for: request, delegate: RedirectValidator())
+        } catch {
+            throw RecipeWebImportError.fetchFailed
+        }
+
+        try validateImageResponse(response, maxBytes: maxBytes)
+
+        let data: Data
+        do {
+            data = try await accumulateImageBytes(asyncBytes, maxBytes: maxBytes)
+        } catch {
+            throw RecipeWebImportError.fetchFailed
+        }
+        guard !data.isEmpty else { throw RecipeWebImportError.fetchFailed }
+        // A response tolerated under a generic binary declaration must actually LOOK like an
+        // image: the header check alone would let an octet-stream HTML error page through, and
+        // the sniff closes that without refusing the (common) mislabeled image CDNs.
+        if !isImageMIMEType(response.mimeType), !looksLikeImageBytes(data) {
+            throw RecipeWebImportError.fetchFailed
+        }
+        return data
+    }
+
+    /// Response-header half of the image-download guard: 2xx status, an `image/*` MIME type — or a
+    /// generic binary one (``isGenericBinaryMIMEType(_:)``), which ``downloadImage(from:userAgent:maxBytes:)``
+    /// then re-checks against the received bytes' magic numbers — and a declared `Content-Length`
+    /// (when present) within `maxBytes`. Factored out `nonisolated` — and public, matching
+    /// ``orderedSteps(from:)``'s plain-`import` test precedent — so tests can drive it with
+    /// constructed `HTTPURLResponse`s, no network required.
+    /// - Throws: ``RecipeWebImportError/fetchFailed`` on any violation.
+    public nonisolated static func validateImageResponse(_ response: URLResponse, maxBytes: Int) throws {
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            throw RecipeWebImportError.fetchFailed
+        }
+        guard isImageMIMEType(httpResponse.mimeType) || isGenericBinaryMIMEType(httpResponse.mimeType) else {
+            throw RecipeWebImportError.fetchFailed
+        }
+        if httpResponse.expectedContentLength > Int64(maxBytes) {
+            throw RecipeWebImportError.fetchFailed
+        }
+    }
+
+    /// Whether a response MIME type is an image (`image/*` prefix, case-insensitive). `nil` fails.
+    /// Public for plain-`import` tests, like the response validator above.
+    public nonisolated static func isImageMIMEType(_ mimeType: String?) -> Bool {
+        mimeType?.lowercased().hasPrefix("image/") == true
+    }
+
+    /// Whether a response MIME type is a generic binary declaration (`application/octet-stream` /
+    /// `binary/octet-stream`) — the S3-style default when an image host sets no content-type
+    /// metadata. Real label and hero images ship under these in the wild (browsers sniff `<img>`
+    /// sources, so the mislabel persists), so the download guard tolerates them — but ONLY paired
+    /// with the ``looksLikeImageBytes(_:)`` sniff of the received bytes, which keeps text/HTML
+    /// error pages out. `nil` fails. Public for plain-`import` tests.
+    public nonisolated static func isGenericBinaryMIMEType(_ mimeType: String?) -> Bool {
+        guard let mimeType = mimeType?.lowercased() else { return false }
+        let bare = mimeType.split(separator: ";").first.map(String.init) ?? mimeType
+        let trimmed = bare.trimmingCharacters(in: .whitespaces)
+        return trimmed == "application/octet-stream" || trimmed == "binary/octet-stream"
+    }
+
+    /// Magic-number sniff for the image containers the downstream decoders accept: JPEG, PNG, GIF,
+    /// WebP (RIFF), the ISO BMFF family (HEIC/HEIF/AVIF via `ftyp`), TIFF, and BMP. Consulted only
+    /// for responses tolerated under a generic binary MIME type — a correctly-declared `image/*`
+    /// response skips it, and every other declaration was already refused at the header check.
+    /// `UIImage(data:)`/ImageIO remain the final arbiters; this only keeps obvious non-images from
+    /// riding the octet-stream tolerance. Public for plain-`import` tests.
+    public nonisolated static func looksLikeImageBytes(_ data: Data) -> Bool {
+        func hasPrefix(_ magic: [UInt8]) -> Bool {
+            data.count >= magic.count && data.prefix(magic.count).elementsEqual(magic)
+        }
+        if hasPrefix([0xFF, 0xD8, 0xFF]) { return true }                                // JPEG
+        if hasPrefix([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) { return true }  // PNG
+        if hasPrefix([0x47, 0x49, 0x46, 0x38]) { return true }                          // GIF
+        if hasPrefix([0x52, 0x49, 0x46, 0x46]),                                         // RIFF…
+           data.dropFirst(8).prefix(4).elementsEqual([0x57, 0x45, 0x42, 0x50]) {        // …WEBP
+            return true
+        }
+        if data.count >= 12,
+           data.dropFirst(4).prefix(4).elementsEqual([0x66, 0x74, 0x79, 0x70]) {        // ISO BMFF ftyp
+            return true
+        }
+        if hasPrefix([0x49, 0x49, 0x2A, 0x00]) || hasPrefix([0x4D, 0x4D, 0x00, 0x2A]) { return true } // TIFF
+        if hasPrefix([0x42, 0x4D]) { return true }                                      // BMP
+        return false
+    }
+
+    /// Streaming-accumulation half of the image-download guard: collects `bytes` and ABORTS (throws)
+    /// the moment the count exceeds `maxBytes` — an undeclared-length oversize stream must fail,
+    /// not silently truncate into a corrupt image. Generic over the byte sequence so tests can feed
+    /// an `AsyncStream` instead of a live `URLSession.AsyncBytes`. Explicitly `nonisolated` with a
+    /// `sending` sequence: accumulating up to megabytes of a live byte stream (the product path
+    /// tries as many as 8 label images) must not run its buffered synchronous bursts on the main
+    /// actor during a user-visible import — the stream is handed off whole, iterated off-main, and
+    /// only the finished `Data` returns to the caller.
+    /// - Throws: ``RecipeWebImportError/fetchFailed`` when the cap is exceeded; rethrows transport errors.
+    /// Public for plain-`import` tests, like the response validator above.
+    public nonisolated static func accumulateImageBytes<S: AsyncSequence>(
+        _ bytes: sending S, maxBytes: Int
+    ) async throws -> Data where S.Element == UInt8 {
+        var accumulated = Data()
+        accumulated.reserveCapacity(min(256 * 1024, maxBytes))
+        for try await byte in bytes {
+            accumulated.append(byte)
+            if accumulated.count > maxBytes {
+                throw RecipeWebImportError.fetchFailed
+            }
+        }
+        return accumulated
     }
 
     /// Scans every `application/ld+json` script block for a schema.org `Recipe` object and converts
@@ -715,7 +982,8 @@ public enum RecipeWebImporter {
     /// decodes named entities only, and the difference is real (it changes what an href or a JSON-LD
     /// blob looks like after decoding), so `WebScrapingKit` takes it as a required parameter rather
     /// than guessing. Kept as a one-line shim so this file states its policy in exactly one place.
-    private static func htmlDecoded(_ text: String) -> String {
+    /// `nonisolated` (pure) so the nonisolated image-extraction helpers can apply the same policy.
+    nonisolated private static func htmlDecoded(_ text: String) -> String {
         HTMLScraper.htmlDecoded(text, decodingNumericEntities: true)
     }
 }
