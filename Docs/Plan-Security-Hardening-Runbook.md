@@ -33,7 +33,7 @@ the merge commit on `DONE` or the reason on `BLOCKED`.
 | P0c | `RecipeWebImageAttemptMemory` wipe-coverage gap fix | Fable | — | auto | DONE | 2759af9 |
 | P1a | Crypto-erasure normalization | Opus | P0a | auto | DONE | aaa4aac |
 | P1b | Deletion-audit verification pass | Fable | — | auto | DONE | 500cf5d |
-| P2 | Hardening #4 — v2 per-generation-salt escrow format | Opus | P1a | auto | TODO | |
+| P2 | Hardening #4 — v2 per-generation-salt escrow format | Opus | P1a | auto | DONE | 2faf53e — OWNER: deploy formatVersion/keySalt to production CloudKit schema before shipping (CloudKit-Schema-Deploy.md) |
 | P3 | Backup coverage — Journal + Intimacy | Opus | P2 | auto | TODO | |
 | P4 | Hardening #1 — hard SE-binding (deletes scrypt fallback) | Opus | P3 | **OWNER GO/NO-GO** | TODO | |
 | P5 | Hardening #3 — media split + escrow photo route + bind | Opus | P0a | auto | TODO | |
@@ -100,6 +100,7 @@ key; Worry Box stays out) are **not** re-confirmation points — they are settle
 
 _(the loop appends one line per completed phase: `Pxx DONE <hash> — <one line>`)_
 
+- P2 DONE 2faf53e — v2 per-generation-salt escrow format; v1 KAT byte-identical (independently recomputed); fail-closed decode + mixed-set rejection; all new writes v2; review confirmed the downgrade-stranding hazard (fixed: v1 fallback in open(), stale-salt-ignoring decode, explicit field clear); verify green. OWNER ACTION: production CloudKit schema deploy before ship.
 - P1b DONE 500cf5d — bidirectional funnel audit signed off; THREE token gaps closed (generationStore.reset, healthKitSampleDeleteHook, + the reverse-direction doc-sync check that makes documented-but-unenforced rows visible); parser hardened; .serialized comments honest; verify green.
 - P1a DONE aaa4aac — keyless Option-B rebuild in both delete legs; honesty docs (bounded-honest vs fully-honest); review confirmed 5 (all fixed: reset() sweeps sealed device keys so "crypto-erased" is true; structurally no-storeless rebuild + saveSealed() conversion; one _SUPPORT spelling); 274-test verify green. Owner's P8 brief (c6b4977) + runbook queue commit (fcc7a73) landed alongside.
 - P0c DONE 2759af9 — RecipeWebImageAttemptMemory manifest token + doc row + behavioral removal test; review fixed the verify-batch selector gap; two advisories carried to P1b (SealedBackupGenerationStore.reset has a doc row but no manifest token — doc-sync test checks manifest→doc only; `.serialized` is inert cross-suite on the live-wipe suites); verify green.
