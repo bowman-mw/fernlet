@@ -35,7 +35,7 @@ the merge commit on `DONE` or the reason on `BLOCKED`.
 | P1b | Deletion-audit verification pass | Fable | — | auto | DONE | 500cf5d |
 | P2 | Hardening #4 — v2 per-generation-salt escrow format | Opus | P1a | auto | DONE | 2faf53e — OWNER: deploy formatVersion/keySalt to production CloudKit schema before shipping (CloudKit-Schema-Deploy.md) |
 | P3 | Backup coverage — Journal + Intimacy | Opus | P2 | auto | DONE | 4ed7437 |
-| P4 | Hardening #1 — hard SE-binding (deletes scrypt fallback) | Opus | P3 | **OWNER GO/NO-GO** | TODO | |
+| P4 | Hardening #1 — hard SE-binding (deletes scrypt fallback) | Opus | P3 | **OWNER GO/NO-GO** | BLOCKED | awaiting owner go/no-go — branch `claude/harden-p4` (ab32363) is green+reviewed; two-state custody + keep-old-until-verified; review closed 10 findings incl. the unreachable-reset critical; SE branches genuinely exercised on the M5 host. §14 residuals for the owner: SE wraps the RAW key (PIN-weakening trade), unrecoverable-state copy. |
 | P5 | Hardening #3 — media split + escrow photo route + bind | Opus | P0a | auto | TODO | |
 | P6 | Hardening #6 — default-on backup exclusion | Fable | P4 | auto | TODO | |
 | P7 | Duress PIN — decoy, silent-wipe, recovery-lock | Opus | P0a, P1a, P4 | auto | TODO | |
@@ -100,6 +100,7 @@ key; Worry Box stays out) are **not** re-confirmation points — they are settle
 
 _(the loop appends one line per completed phase: `Pxx DONE <hash> — <one line>`)_
 
+- P4 BLOCKED (branch claude/harden-p4 @ ab32363, NOT merged) — hard SE-binding built + reviewed + verified green (218 tests, SE branches proven live); review confirmed 10 findings, all fixed: reachable non-destructive reset card, terminal-vs-transient error split (contentKeyTemporarilyUnavailable), fail-closed custody detection (loadDistinguishingAbsence + .undeterminable), non-hub scopes tolerate a dead enclave key, biometric self-heal reachable (passcodeVerifiedThisProcess), no-overwrite wrap repair, honest disclosure copy + migration notice, doc reconciliation. Loop stopped here per the go/no-go gate; owner records the decision in this row's note, then re-runs /loop.
 - P3 DONE 4ed7437 — journal + intimacy sealed-backup payloads on v2 (insert-into-empty + one-way latches, gated intimacy seam, journal self-sufficiency); seam audit FAILED first (enable-path clobber critical) then review confirmed 11 findings, all fixed (per-payload locked-enable deferrals, exportability-proving guards, targeted restores + unlock/un-hide settles, pinned freshness, keepSealedBackupFlags coverage); 315-test verify green. Intimacy-in-backup reversal recorded in the spec.
 - P2 DONE 2faf53e — v2 per-generation-salt escrow format; v1 KAT byte-identical (independently recomputed); fail-closed decode + mixed-set rejection; all new writes v2; review confirmed the downgrade-stranding hazard (fixed: v1 fallback in open(), stale-salt-ignoring decode, explicit field clear); verify green. OWNER ACTION: production CloudKit schema deploy before ship.
 - P1b DONE 500cf5d — bidirectional funnel audit signed off; THREE token gaps closed (generationStore.reset, healthKitSampleDeleteHook, + the reverse-direction doc-sync check that makes documented-but-unenforced rows visible); parser hardened; .serialized comments honest; verify green.
