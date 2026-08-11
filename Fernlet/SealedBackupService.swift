@@ -17,7 +17,10 @@ import CloudKitSync
 /// identity tag only to classify failures (someone else's record versus a tampered/corrupt one of
 /// ours). New writes are record format v2 (a per-generation HKDF salt, so one escrow-key compromise
 /// no longer opens every generation); v1 records already in CloudKit keep opening unchanged, which is
-/// why the salt/version travel on the record rather than being assumed. Records are bound to the
+/// why the salt/version travel on the record rather than being assumed. Because those two fields are
+/// unauthenticated CloudKit metadata that an older writer can leave stale (CloudKit merges fields, it
+/// does not replace records), `open` retries the v1 derivation once when a v2-labelled record fails —
+/// AES-GCM, not the label, decides. Records are bound to the
 /// backup-escrow public key
 /// (which syncs via iCloud Keychain) rather than the per-device proximity key, so a backup sealed
 /// on one device is recognized and restorable on another. Stateless namespace; the methods are
@@ -98,6 +101,10 @@ enum SealedBackupCrypto {
 
     /// Opens a sealed record, trying every backup-escrow key this device holds.
     ///
+    /// Candidates are derived under the record's own `formatVersion`/`keySalt` first; if none of them
+    /// authenticate and the record claims v2, the v1 (static, empty-salt) candidates are retried once.
+    /// See the inline note on why that retry is security-neutral.
+    ///
     /// - Returns: The decrypted plaintext when any candidate key authenticates the record.
     /// - Throws: `SealedBackupError.keyAgreementIdentityMismatch` when the record is not tagged
     ///   with any of our escrow identities (someone else's, or unrelated), or
@@ -135,16 +142,47 @@ enum SealedBackupCrypto {
                 generation: record.generation,
                 updatedAt: record.updatedAt
             )
-            for candidate in candidates {
-                if let plaintext = try? AES.GCM.open(sealedBox, using: candidate.key, authenticating: aad) {
-                    return plaintext
-                }
+            if let plaintext = firstOpening(sealedBox, aad: aad, candidates: candidates) { return plaintext }
+
+            // STALE-METADATA FALLBACK. `formatVersion`/`keySalt` are unauthenticated CloudKit fields,
+            // and CloudKit's `.allKeys` save is a per-FIELD update, not a record replace: a writer that
+            // never sets those keys (any build from before v2 shipped) overwrites the ciphertext while
+            // the server KEEPS the previous v2 write's version + salt. The resulting record is v1
+            // ciphertext wearing v2 metadata, and deriving only under the stamped version would strand
+            // a perfectly recoverable backup forever. So when a v2-labelled record fails, retry the v1
+            // derivation once before declaring corruption.
+            //
+            // Security-neutral by construction: the version field is a HINT about which key to try,
+            // never an authorization decision. AES-GCM remains the sole authority — a genuine v2
+            // ciphertext cannot open under a v1 key, a tampered record still fails both passes, the AAD
+            // is untouched, and the generation high-water check in `SealedBackupService.restoreChunks`
+            // still catches rollback. Cost is one extra derivation pass on the already-failing path.
+            if record.formatVersion >= 2 {
+                let legacy = identityService.sealedBackupKeyCandidates(formatVersion: 1, salt: Data())
+                if let plaintext = firstOpening(sealedBox, aad: aad, candidates: legacy) { return plaintext }
             }
         }
         if !candidates.contains(where: { $0.publicKey == record.keyAgreementPublicKey }) {
             throw SealedBackupError.keyAgreementIdentityMismatch
         }
         throw SealedBackupError.malformedRecord
+    }
+
+    /// The plaintext from the first candidate key that authenticates `sealedBox` under `aad`, or `nil`
+    /// when none does. Factored out so ``open(_:identityService:)`` can run the same decrypt-first
+    /// sweep twice — once under the record's stamped format, once under v1 as the stale-metadata
+    /// fallback — without duplicating the loop.
+    private static func firstOpening(
+        _ sealedBox: AES.GCM.SealedBox,
+        aad: Data,
+        candidates: [(publicKey: Data, key: SymmetricKey)]
+    ) -> Data? {
+        for candidate in candidates {
+            if let plaintext = try? AES.GCM.open(sealedBox, using: candidate.key, authenticating: aad) {
+                return plaintext
+            }
+        }
+        return nil
     }
 
     /// Binds the payload type, signing identity, the record's position within its chunk set, and the
@@ -314,9 +352,9 @@ final class SealedBackupService {
 
     /// Fetches and opens every chunk of a payload, returning each chunk's plaintext in chunk order, or
     /// `nil` when no backup exists. Works for both single-record and multi-record payloads (a single
-    /// blob is just `chunkCount == 1`). Throws if the chunk set is incomplete, mixed-generation, or
-    /// mixes record formats / per-generation salts (`CloudKitDataService.sealedBackupChunks` validates
-    /// contiguity), so callers restore all-or-nothing.
+    /// blob is just `chunkCount == 1`). Throws if the chunk set is incomplete or mixed-generation
+    /// (`CloudKitDataService.sealedBackupChunks` validates contiguity), and if any chunk fails to open,
+    /// so callers restore all-or-nothing.
     func restoreChunks(payloadType: SealedBackupPayloadType) async throws -> [Data]? {
         let records = try await cloudDataService.sealedBackupChunks(payloadType: payloadType)
         guard !records.isEmpty else { return nil }

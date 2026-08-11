@@ -238,14 +238,18 @@ struct SealedBackupFormatPinTests {
         #expect(try SealedBackupCrypto.open(legacy, identityService: identity) == legacyPlaintext)
         #expect(try SealedBackupCrypto.open(modern, identityService: identity) == modernPlaintext)
 
-        // Mislabeling a record's format is fatal in both directions — proof the version, not a guess,
-        // selects the derivation.
+        // The version SELECTS the derivation to try first; v1 is the last-resort retry. A v1-sealed
+        // record wearing a v2 label + salt is exactly what a downlevel writer leaves behind (CloudKit
+        // merges fields, so an old build's write cannot clear the previous v2 write's metadata), and it
+        // must still open — the ciphertext is intact and only the unauthenticated label is wrong.
         var mislabeled = legacy
         mislabeled.formatVersion = 2
         mislabeled.keySalt = knownKeySalt
-        #expect(throws: SealedBackupError.malformedRecord) {
-            _ = try SealedBackupCrypto.open(mislabeled, identityService: identity)
-        }
+        #expect(try SealedBackupCrypto.open(mislabeled, identityService: identity) == legacyPlaintext,
+                "a v1 record carrying stale v2 metadata must fall back to the v1 derivation")
+
+        // The other direction stays fatal: no fallback can recover a salt that was dropped, so a v2
+        // record relabelled v1 is unopenable. That is what keeps the label from being a downgrade lever.
         var stripped = modern
         stripped.formatVersion = 1
         stripped.keySalt = Data()
