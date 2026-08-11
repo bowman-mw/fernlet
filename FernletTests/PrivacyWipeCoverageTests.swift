@@ -52,7 +52,11 @@ struct PrivacyWipeCoverageTests {
         // The residue half of the sealed wipe (P1a): the row hooks above empty the store, this
         // destroys and re-creates the FILE they lived in.
         "sealedStoreRebuildHook",
-        "deleteHealthSamples",
+        // The opt-in HealthKit leg. The token is the HOOK's spelling, not the
+        // `includingHealthKitSamples` parameter name — the parameter appears on the funnel's own
+        // signature line (which the bounded scan includes by construction), so a parameter-named
+        // token could never fail (security-hardening P1b, third gap of the generationStore class).
+        "healthKitSampleDeleteHook",
         // Media
         "mealPhotoStore.deleteAll",
         "progressPhotoStore.deleteAll",
@@ -449,10 +453,23 @@ struct PrivacyWipeCoverageTests {
         var tokens: [String] = []
         for line in section.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("|") else { continue }
-            // The header row and its `---` separator are structure, not rows.
-            if trimmed.contains("Wiped by") || trimmed.contains("---") { continue }
+            // Prose is any line with no pipe at all. GFM makes the LEADING pipe optional, so a
+            // pipe-bearing line without one still renders as a table row — skipping it silently
+            // would hide that row from this check, so it throws instead.
+            guard trimmed.contains("|") else { continue }
+            guard trimmed.hasPrefix("|") else {
+                throw BoundingError.malformedCoverageDoc("a pipe-containing line in the cleared-by section lacks its leading pipe (GFM renders it as a row, this parser would skip it): \(trimmed)")
+            }
             let columns = trimmed.components(separatedBy: "|")
+            // The header row and its `---` separator are structure, not rows — detected by SHAPE
+            // (exact header cell / dash-only cells), never by substring, so a data row whose prose
+            // happens to contain "---" or the header words can't be silently dropped.
+            if columns.count >= 2, columns[1].trimmingCharacters(in: .whitespaces) == "Surface" { continue }
+            let interior = columns.dropFirst().dropLast()
+            if !interior.isEmpty, interior.allSatisfy({ cell in
+                let content = cell.trimmingCharacters(in: .whitespaces)
+                return content.contains("-") && content.allSatisfy { $0 == "-" || $0 == ":" }
+            }) { continue }
             // "| a | b | c |" splits into ["", " a ", " b ", " c ", ""] — the wiped-by cell is [3].
             guard columns.count == 5 else {
                 throw BoundingError.malformedCoverageDoc("a cleared-by row does not have exactly three columns: \(trimmed)")

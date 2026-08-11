@@ -73,7 +73,7 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Journal narratives (sealed rows) | Private stores | `journalDataDeleteHook` |
 | Sealed store FILE (sqlite + `-wal`/`-shm` + the `_SUPPORT` external-blob dir) — the residue the row deletes above leave behind | `FernletPrivate` store on disk | `sealedStoreRebuildHook` (runs LAST in `resetAll`, after every sealed-row delete; keyless, so it works while locked) |
 | Locked-note pending buffer | PendingNarrativeBuffer | `pendingNarrativeBufferPurgeHook` |
-| HealthKit samples (opt-in) | HealthKit | `deleteHealthSamples` |
+| HealthKit samples (opt-in) | HealthKit | `healthKitSampleDeleteHook` (the leg is opt-in behind the `includingHealthKitSamples` parameter — but the parameter name appears on the funnel's own signature line, so it never worked as a token; the hook's spelling appears only at the real call site) |
 | Meal photos | PrivateMediaStore | `mealPhotoStore.deleteAll` |
 | Progress photos | PrivateMediaStore | `progressPhotoStore.deleteAll` |
 | Recipe photos | PrivateMediaStore | `recipePhotoStore.deleteAll` |
@@ -163,10 +163,15 @@ repository purge takes it.)
   (`com.fernlet.lock`, `com.fernlet.private-media`, `com.fernlet.moderation`,
   `com.fernlet.device-binding`, `com.fernlet.healthkit-anchors`, `com.fernlet.narrative-buffer`,
   MilestoneLedger, the friend photo wall) is present, justified, and genuinely untouched by the
-  funnel bodies. Two gaps found and closed in the same commit: (1) the `SealedBackupGenerationStore`
-  row's token had no manifest entry and could never have matched the two-line call site — re-tokened
-  `generationStore.reset` and enforced; (2) the doc-sync test checked manifest→doc only, so a
-  documented-but-unenforced row was invisible — the reverse direction is now enforced by
-  `everyDocumentedWipeRowIsEnforcedByTheManifest`. Scope of this sign-off: doc ↔ funnel
+  funnel bodies. Three gaps found and closed (the first two in the audit commit, the third — the
+  same defect class, caught by a same-day review pass over the sign-off — in the review-fix commit):
+  (1) the `SealedBackupGenerationStore` row's token had no manifest entry and could never have
+  matched the two-line call site — re-tokened `generationStore.reset` and enforced; (2) the doc-sync
+  test checked manifest→doc only, so a documented-but-unenforced row was invisible — the reverse
+  direction is now enforced by `everyDocumentedWipeRowIsEnforcedByTheManifest`; (3) the HealthKit
+  row's token `deleteHealthSamples` matched only the funnel's own signature/condition/audit-log
+  lines — never the actual `healthKitSampleDeleteHook?()` call — so the row was unfalsifiable (no
+  edit short of renaming the parameter could fail it); re-tokened `healthKitSampleDeleteHook`, whose
+  spelling appears in the bounded bodies only at the real call site. Scope of this sign-off: doc ↔ funnel
   correspondence ONLY. What "cleared" means — and the tier of promise each path may claim — stays
   defined by the sections above; nothing here upgrades those claims.
