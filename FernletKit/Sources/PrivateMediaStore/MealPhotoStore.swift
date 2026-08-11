@@ -9,8 +9,9 @@ import FernletDomainModel
 /// this store had to be sealed before they were added).
 ///
 /// Every photo is normalized (downscaled + re-encoded to a bounded JPEG) and then AES-256-GCM-sealed
-/// under the shared `PrivateMediaKeyProviding` key before it touches disk — the same at-rest scheme as
-/// `PrivateMediaStore`. It used to write the raw, full-resolution JPEG in the clear (relying only on
+/// under the injected `PrivateMediaKeyProviding` key — since the Phase-5 key split, the OWN-photos key
+/// (`KeychainPrivateMediaKeyProvider.Role.ownPhotos`), never the friend wall's — before it touches
+/// disk; the same at-rest scheme as `PrivateMediaStore`. It used to write the raw, full-resolution JPEG in the clear (relying only on
 /// iOS `.completeFileProtection`); that was fine for a lunch snapshot but not for a body photo, and it
 /// stored multi-megabyte originals. Normalizing on the way in also means a 48 MP phone photo is bounded
 /// rather than rejected the way the peer decompression-bomb gate would reject it.
@@ -27,6 +28,16 @@ import FernletDomainModel
 public struct MealPhotoStore {
     private let directory: URL
     private let keyProvider: PrivateMediaKeyProviding
+    /// Optional PRE-SPLIT key, tried on read when the own key can't open a file — the dual-open
+    /// safety net for the window in which `OwnPhotoKeyMigrator`'s eager pass has not yet re-sealed
+    /// everything (a crash, a locked keychain, a corpus larger than one launch's work).
+    ///
+    /// Bytes it opens are authentic ciphertext under a key this app owns, so — unlike the
+    /// legacy-PLAINTEXT branch — trusting them launders nothing: they are re-sealed under the own
+    /// key in place and the file leaves the legacy generation on first access. Nil disables the
+    /// fallback entirely; step 5c passes nil once the migration latch proves it is unnecessary,
+    /// which is what makes the own key's device binding meaningful.
+    private let legacyKeyProvider: PrivateMediaKeyProviding?
     /// Whether an unsealed on-disk file that parses as a safe-bounds image is trusted as pre-sealing
     /// "legacy plaintext", re-sealed in place, and returned. TRUE only for the original meal-photo store,
     /// which legitimately has such files from the pre-sealing build. Body (progress) photos and recipe
@@ -47,18 +58,24 @@ public struct MealPhotoStore {
     ///
     /// - Parameters:
     ///   - directory: Where the sealed `<uuid>.jpg` files live; each logical store gets its own.
-    ///   - keyProvider: Source of the shared at-rest key; defaults to the keychain-backed provider.
+    ///   - keyProvider: Source of the at-rest key; defaults to the keychain-backed OWN-photos
+    ///     provider, because every instance of this store holds the user's own pictures. (The
+    ///     friend wall uses `PrivateMediaStore`, whose default is the friend-wall role.)
     ///   - allowsLegacyPlaintextUpgrade: Pass true ONLY for a store that really has a pre-sealing
     ///     plaintext generation on disk (the original meal-photo store); pass false for stores that
     ///     were born sealed (recipe/body photos) so unsealed bytes are refused, not laundered.
+    ///   - legacyKeyProvider: Optional pre-split key for the dual-open safety net (see
+    ///     ``legacyKeyProvider``). Nil — the default — means no fallback.
     public init(
         directory: URL,
-        keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(),
-        allowsLegacyPlaintextUpgrade: Bool = true
+        keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(role: .ownPhotos),
+        allowsLegacyPlaintextUpgrade: Bool = true,
+        legacyKeyProvider: PrivateMediaKeyProviding? = nil
     ) {
         self.directory = directory
         self.keyProvider = keyProvider
         self.allowsLegacyPlaintextUpgrade = allowsLegacyPlaintextUpgrade
+        self.legacyKeyProvider = legacyKeyProvider
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
@@ -90,12 +107,28 @@ public struct MealPhotoStore {
     /// Returns the decrypted photo bytes for `id`, or nil when there is no file, no key, or the
     /// bytes won't open (never ciphertext/garbage).
     ///
-    /// When `allowsLegacyPlaintextUpgrade` is true, a pre-sealing plaintext JPEG at this id is
-    /// returned and re-sealed in place on this first access; otherwise unsealed bytes are refused.
+    /// Two upgrade-on-read paths can fire here, in this order and no other:
+    /// 1. **Dual-open** — bytes still sealed under the PRE-SPLIT shared key open via
+    ///    `legacyKeyProvider` (when one is injected) and are re-sealed under the own key in place.
+    ///    Must precede the plaintext branch: those bytes are ciphertext, and the plaintext branch
+    ///    would (correctly) refuse them.
+    /// 2. **Legacy plaintext** — when `allowsLegacyPlaintextUpgrade` is true, a pre-sealing
+    ///    plaintext JPEG at this id is returned and re-sealed in place; otherwise unsealed bytes
+    ///    are refused.
     public func imageData(for id: UUID) -> Data? {
         guard let stored = try? Data(contentsOf: url(for: id)) else { return nil }
         // Sealed bytes (the normal case).
         if let opened = keyProvider.gcmOpen(stored) {
+            return opened
+        }
+        // Dual-open safety net: a file the eager migration pass has not reached yet is still sealed
+        // under the pre-split shared key. Open it, hand back the bytes, and re-seal under the own
+        // key so this file leaves the legacy generation now rather than waiting for the next pass.
+        // A failed re-seal is deliberately non-fatal: the user still sees their photo, and the file
+        // stays legacy (so the migration latch stays closed — which is exactly the fail-closed
+        // signal that binding must not proceed yet).
+        if let legacyKeyProvider, let opened = legacyKeyProvider.gcmOpen(stored) {
+            keyProvider.sealAndWrite(opened, to: url(for: id))
             return opened
         }
         // A file written by the pre-sealing build is plaintext JPEG. GCM-open fails for it AND for
@@ -109,6 +142,116 @@ public struct MealPhotoStore {
             return stored
         }
         return nil
+    }
+
+    /// Writes ALREADY-NORMALIZED photo bytes under `id`, sealing them as-is — the escrow-restore
+    /// seam (security-hardening Phase 5, step 5b).
+    ///
+    /// Deliberately skips ``normalizedJPEG(from:)``, unlike ``save(_:forID:)``: the bytes being
+    /// restored were normalized once before they were uploaded, so re-encoding them here would be a
+    /// second lossy JPEG pass AND would change their SHA-256 — which is the hash the sealed manifest
+    /// committed, so every subsequent backup would see the whole restored corpus as "changed" and
+    /// re-upload it forever.
+    ///
+    /// - Important: bytes reaching this method must already have been authenticated — in production
+    ///   that means opened from an escrow-sealed record whose manifest entry's content hash matched.
+    ///   It is NOT a general write path and must never be handed unauthenticated input; the
+    ///   image-bounds check below is a cheap backstop, not the authorization.
+    /// - Returns: whether the sealed bytes reached disk (false on non-image input, absurd
+    ///   dimensions, no key, or a write failure — fail-closed, nothing written).
+    @discardableResult public func restoreSealedPhoto(_ normalizedJPEG: Data, forID id: UUID) -> Bool {
+        guard PrivateMediaStore.isWithinSafePixelBounds(normalizedJPEG) else { return false }
+        return keyProvider.sealAndWrite(normalizedJPEG, to: url(for: id))
+    }
+
+    /// The ids this store currently holds files for, parsed from the flat `<uuid>.jpg` file names.
+    ///
+    /// The corpus has no index of its own (ownership lives in `Meal.photoID` / the recipe id), so
+    /// the directory IS the id set — which is exactly what an own-photo escrow upload has to
+    /// enumerate. Non-recursive; unparseable names are skipped rather than guessed at.
+    public func storedPhotoIDs() -> [UUID] {
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        )) ?? []
+        return contents.compactMap { url in
+            guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { return nil }
+            return UUID(uuidString: url.deletingPathExtension().lastPathComponent)
+        }
+    }
+
+    /// Whether this corpus holds **no file at all** — the FILE-PRESENCE half of the escrow restore's
+    /// per-corpus no-clobber gate.
+    ///
+    /// Deliberately not "no parseable id": any regular file counts, so a corpus holding bytes this
+    /// build cannot name still reads as non-empty and is never restored over. A missing directory is
+    /// empty; an unlistable one is NOT (fails closed → no restore), because an unknown number of
+    /// files is not the same as none.
+    public func isEmptyForRestore() -> Bool {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return true }
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        ) else { return false }
+        return !contents.contains { url in
+            (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
+        }
+    }
+
+    /// Whether this corpus holds files but **not one of them can be opened by this install** — the
+    /// second half of the escrow restore's no-clobber gate.
+    ///
+    /// ``isEmptyForRestore()`` alone cannot distinguish "in use" from "full of bytes that are dead
+    /// to this install", and the difference is exactly the phone-swap case the escrow backup exists
+    /// for: a device backup restored onto a NEW phone brings the sealed photo files back but not the
+    /// device-bound own-photos key, so every file is permanently unopenable — and a pure
+    /// file-presence gate reads that as "this corpus is in use" and declines the one restore that
+    /// would bring the photos back.
+    ///
+    /// **Answered by probing, not by a persisted verdict, and that is deliberate.** A verdict
+    /// written by the migration sweep lives in `UserDefaults`, which rides the device backup — so on
+    /// the new phone it would arrive already saying "openable" about files whose key did not come
+    /// with it, i.e. it would be confidently wrong in precisely the scenario it was meant to
+    /// answer. The probe cannot go stale. It is also cheap where it runs often: it **stops at the
+    /// first file that opens**, so a healthy corpus costs one GCM open per pass. Only a corpus that
+    /// really is entirely dead reads all of it — once, and immediately before a restore that
+    /// downloads the whole corpus anyway.
+    ///
+    /// Fails **closed** in every uncertain direction (returns false ⇒ no restore): an empty corpus,
+    /// an unlistable directory, an unavailable key, or a file whose bytes cannot be READ (a locked
+    /// container answers "I cannot see it", never "it is dead"). A zero-byte file is skipped rather
+    /// than counted either way — it holds nothing a restore could clobber.
+    ///
+    /// "Openable" means openable by any path this store's READ actually uses: the own key, the
+    /// dual-open legacy key, and — only where the corpus legitimately has one
+    /// (``allowsLegacyPlaintextUpgrade``) — a pre-sealing plaintext JPEG. That last clause is why
+    /// this is not simply the migration pass's `unopenable` tally: legacy plaintext scores
+    /// unopenable there and is still returned to the user here.
+    public func holdsOnlyUnopenableFiles() -> Bool {
+        guard keyProvider.mediaKey() != nil else { return false }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return false }
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        ) else { return false }
+        var sawFile = false
+        for url in contents {
+            guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { continue }
+            sawFile = true
+            guard let stored = try? Data(contentsOf: url) else { return false }
+            guard !stored.isEmpty else { continue }
+            if keyProvider.gcmOpen(stored) != nil { return false }
+            if let legacyKeyProvider, legacyKeyProvider.gcmOpen(stored) != nil { return false }
+            if allowsLegacyPlaintextUpgrade, PrivateMediaStore.isWithinSafePixelBounds(stored) { return false }
+        }
+        return sawFile
     }
 
     /// Whether a sealed file exists on disk for `id` — an existence check ONLY: no read, no decrypt, no

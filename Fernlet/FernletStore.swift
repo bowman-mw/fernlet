@@ -306,6 +306,13 @@ final class FernletStore {
     @ObservationIgnored private lazy var workoutPlanningService = WorkoutPlanningService(host: self)
     @ObservationIgnored private lazy var mealResolutionService = MealResolutionService(host: self)
     @ObservationIgnored private lazy var sealedBackupCoordinator = SealedBackupCoordinator(host: self)
+    /// The opt-in own-photo escrow backup (security-hardening Phase 5, step 5b) — the sanctioned
+    /// cross-device route for meal / recipe / progress photos once their key is device-bound.
+    /// Owns its own store instances over `photoDocumentsDirectory`; see `OwnPhotoBackupCoordinator`.
+    @ObservationIgnored private lazy var ownPhotoBackupCoordinator = OwnPhotoBackupCoordinator(
+        host: self,
+        documentsDirectory: Self.photoDocumentsDirectory
+    )
     @ObservationIgnored private lazy var snapshotSaveCoordinator = SnapshotSaveCoordinator(
         repository: diary.repository,
         buildSnapshot: { [unowned self] in self.currentSnapshot() },
@@ -318,25 +325,70 @@ final class FernletStore {
     /// held so its ODR access isn't reclaimed for the app session. See BrandedCatalogResourceLoader.
     @ObservationIgnored private let brandedCatalogLoader = BrandedCatalogResourceLoader()
     @ObservationIgnored private var isReloadingFromRepository = false
+    /// The app container's Documents directory — the root of every own-photo corpus below and the
+    /// input to the own-photo key migration. Falls back to the temporary directory only if the
+    /// container is unreachable (the historical behavior of each store's inline expression).
+    nonisolated static let photoDocumentsDirectory: URL =
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        ?? URL(fileURLWithPath: NSTemporaryDirectory())
+    /// The user's OWN at-rest media key (security-hardening Phase 5), used by all three own-photo
+    /// stores below. Separate keychain row from the friend photo wall's, which stays on the
+    /// original backup-restorable key inside `MeshNetworkManager`.
+    ///
+    /// Not `Sendable`: each store constructs its own instance of the same role (they read one
+    /// keychain row, so they share the key material and differ only in their private cache), and
+    /// every one of them stays on this main-actor store — see `PrivateMediaKeyProviding`.
+    /// `ownPhotoLegacyKeyProvider` is the PRE-SPLIT key, injected as the read-path dual-open
+    /// fallback for files `OwnPhotoKeyMigrator`'s eager pass has not re-sealed yet — and dropped
+    /// (nil) the moment the own key is device-bound, which is what makes that binding mean
+    /// anything (step 5c).
+    nonisolated private static func ownPhotoKeyProvider() -> KeychainPrivateMediaKeyProvider {
+        KeychainPrivateMediaKeyProvider(role: .ownPhotos)
+    }
+    /// The pre-split (now friend-wall) key, read-only: `mintsIfAbsent: false` so a fallback probe
+    /// can never CREATE the wall's row — a fresh random key would open nothing and would install a
+    /// row that later looks authoritative.
+    ///
+    /// Nil once the own-photos row is device-bound. The question is asked of the KEYCHAIN, not of a
+    /// persisted flag, so a device restored from a backup taken before the flip (bound row absent,
+    /// loose row restored) correctly keeps its fallback. Safe by construction: the row can only be
+    /// bound after `OwnPhotoMigrationLatch` proved there is nothing left for the fallback to open.
+    ///
+    /// Internal rather than private purely so `OwnPhotoKeyBindingTests` can pin that biconditional
+    /// — "fallback present exactly when the key is not bound" is the property, and asserting it on
+    /// the real wiring beats re-deriving it in a test.
+    ///
+    /// Resolved once per store construction, so a binding that happens mid-session (the launch pass,
+    /// or the user's consent tap) leaves the fallback in place until the next launch. Deliberately
+    /// not re-resolved: the fallback can only ever open bytes sealed under a key this app owns, the
+    /// latch already proved there are none left, and rebuilding live store instances to shed a
+    /// no-op code path would be the riskier change.
+    nonisolated static func ownPhotoLegacyKeyProvider() -> KeychainPrivateMediaKeyProvider? {
+        guard !OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound() else { return nil }
+        return KeychainPrivateMediaKeyProvider(role: .friendWall, mintsIfAbsent: false)
+    }
     @ObservationIgnored private let mealPhotoStore = MealPhotoStore(
-        directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
-            .appendingPathComponent("MealPhotos", isDirectory: true)
+        directory: OwnPhotoCorpusLayout.mealPhotosDirectory(in: FernletStore.photoDocumentsDirectory),
+        keyProvider: FernletStore.ownPhotoKeyProvider(),
+        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider()
     )
     /// The user's gym progress-photo timeline (#11). Body photos, so it seals the bytes AND the dated
     /// index; reuses the same hardened media path as meal photos, in its own directory.
     @ObservationIgnored private let progressPhotoStore = ProgressPhotoStore(
-        directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
-            .appendingPathComponent("ProgressPhotos", isDirectory: true)
+        directory: OwnPhotoCorpusLayout.progressPhotosDirectory(in: FernletStore.photoDocumentsDirectory),
+        keyProvider: FernletStore.ownPhotoKeyProvider(),
+        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider()
     )
     /// The recipe's picture (#1), sealed and keyed by the recipe id. Holds the user's own photo —
     /// which always wins — or, since the 2026-08-09 owner decision (reversing the 2026-07-16
     /// "no external image fetch" tester decision), a web-imported recipe's page picture, downloaded
     /// once by a user-present path and sealed through the same normalize-and-encrypt pipeline.
     @ObservationIgnored private let recipePhotoStore = MealPhotoStore(
-        directory: (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory()))
-            .appendingPathComponent("RecipePhotos", isDirectory: true),
+        directory: OwnPhotoCorpusLayout.recipePhotosDirectory(in: FernletStore.photoDocumentsDirectory),
+        keyProvider: FernletStore.ownPhotoKeyProvider(),
         // Recipe photos never had a plaintext generation — fail closed on unsealed on-disk bytes.
-        allowsLegacyPlaintextUpgrade: false
+        allowsLegacyPlaintextUpgrade: false,
+        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider()
     )
     /// Backing store for ``RecipeWebImageAttemptMemory`` — the device-local "one automatic
     /// web-image attempt per device" bookkeeping (the synced half of that contract is
@@ -2582,9 +2634,81 @@ final class FernletStore {
 
     /// Pulls any sealed iCloud backups into the local stores at launch (and on the user's Retry, which
     /// passes `userInitiated: true` so the period half can use the targeted restore).
-    /// Delegates to `SealedBackupCoordinator`.
+    /// Delegates to `SealedBackupCoordinator`, then to `OwnPhotoBackupCoordinator` for the own-photo
+    /// escrow route — one launch/adopt seam for both, so the photo route is retried by the same
+    /// banner button and the same launch pass as everything else. Both are no-ops unless their own
+    /// preference is on.
+    ///
+    /// `userInitiated` also makes the photo pass a FULL one (every photo's bytes read and hashed);
+    /// the ambient launch pass compares id sets only, so launching never decrypts a whole photo
+    /// library on the main actor.
     func restoreSealedBackupsIfNeeded(userInitiated: Bool = false) async {
         await sealedBackupCoordinator.restoreSealedBackupsIfNeeded(userInitiated: userInitiated)
+        // The photo route runs on its own opt-in and is deliberately NOT gated on `iCloudSyncEnabled`
+        // — see `OwnPhotoBackupCoordinator.synchronize`. Gating only the ambient pass gave a
+        // sync-off user exactly one upload attempt ever, with no retry from here and none from the
+        // banner's Retry button, while the key was device-bound on the strength of it.
+        await ownPhotoBackupCoordinator.synchronize(fullVerification: userInitiated)
+    }
+
+    /// Whether the own-photo escrow backup is on, and its last pass's outcome — observable so the
+    /// Privacy & Data banner can surface a deferred/failed photo restore instead of swallowing it
+    /// (WS-4). Nil until a pass has run in this session.
+    private(set) var ownPhotoBackupStatus: SealedBackupRestoreOutcome?
+
+    /// Whether the last own-photo pass's UPLOAD leg failed — observable for the same WS-4 reason,
+    /// and separate from `ownPhotoBackupStatus` because that vocabulary is restore-phrased.
+    ///
+    /// A device that HAS photos never enters the restore branch, so without this an upload that
+    /// reached nothing publishes `.nothingToRestore` (`needsAttention == false`) and the banner
+    /// renders nothing at all — for the life of the install.
+    private(set) var ownPhotoBackupUploadFailed = false
+
+    /// Records an own-photo backup pass's outcome (``OwnPhotoBackupContext``).
+    func recordOwnPhotoBackupOutcome(_ outcome: SealedBackupRestoreOutcome) {
+        ownPhotoBackupStatus = outcome
+    }
+
+    /// Records whether the own-photo backup's upload leg failed (``OwnPhotoBackupContext``).
+    func recordOwnPhotoBackupUploadFailed(_ failed: Bool) {
+        ownPhotoBackupUploadFailed = failed
+    }
+
+    /// Turns the own-photo escrow backup on or off; returns whether it succeeded, so the caller only
+    /// persists the preference on success. Delegates to `OwnPhotoBackupCoordinator`.
+    ///
+    /// Switching it ON can newly satisfy the step-5c binding gate (it is the sanctioned cross-device
+    /// route), so the gate is re-evaluated here rather than left until the next launch — the photos
+    /// are covered from the moment the first pass commits. Turning it OFF never un-binds: consent to
+    /// device-binding is one-way, and a bound row whose backup was removed is still the custody the
+    /// user asked for.
+    ///
+    /// The gate is asked with the pass's COMMIT PROOF, never with the preference. "The switch is on"
+    /// is intent; "a manifest reached iCloud" is a route. Binding is irreversible, so it may only
+    /// follow the second — see `OwnPhotoEscrowCommitLedger`.
+    @discardableResult
+    func setOwnPhotoBackupEnabled(_ enabled: Bool) async -> Bool {
+        let succeeded = await ownPhotoBackupCoordinator.setEnabled(enabled)
+        if succeeded && enabled {
+            let outcome = OwnPhotoKeyBinder(
+                escrowRouteCommitted: OwnPhotoEscrowCommitLedger().isCommitted
+            ).bindIfEligible()
+            recordOwnPhotoKeyBindingOutcome(outcome)
+        }
+        if succeeded && !enabled {
+            // The route is gone, so a stale upload-failure banner would be reporting a problem the
+            // user has just resolved by removing the thing that had it.
+            recordOwnPhotoBackupUploadFailed(false)
+        }
+        return succeeded
+    }
+
+    /// Deletes every own-photo escrow record (all three corpora, bodies + manifests) and clears the
+    /// photo generation namespace — the "delete everything" leg for the photo route
+    /// (Docs/PrivacyWipeCoverage.md). Returns whether every corpus cleared.
+    @discardableResult
+    func deleteOwnPhotoEscrowBackups() async -> Bool {
+        await ownPhotoBackupCoordinator.tearDownForDeleteAll()
     }
 
     /// WS-3 user-confirmed conflict resolution: adopt the synced (other-device) escrow key and re-upload
@@ -4101,6 +4225,22 @@ final class FernletStore {
                 }
             }
         }
+        // 2a. The own-photo escrow backup (Phase 5, step 5b) — a SEPARATE record namespace from the
+        // chunked payloads above, deliberately: it is not a `SealedBackupPayloadType`, so the
+        // `allCases` loop cannot reach it and it needs its own leg here. Like that loop this runs
+        // BEFORE the preference reset that would gate it off, and before the local photo stores are
+        // emptied further down — the records are addressed by corpus name, but the ENABLE flag is
+        // what tells this funnel there is anything in iCloud to delete. Deletion is by record name,
+        // so it needs no escrow key and works while the app is locked.
+        if preferences.sealedBackupOwnPhotosEnabled {
+            if await !deleteOwnPhotoEscrowBackups() {
+                sealedBackupDeleteFailed = true
+                if !outcome.incompleteStores.contains("your encrypted iCloud backup") {
+                    outcome.incompleteStores.append("your encrypted iCloud backup")
+                }
+            }
+        }
+
         // Every re-upload deferral points at a backup this wipe just deleted — and the local data
         // behind it is about to go too, so the promised re-upload can never happen again either way.
         // Clear them all (observable + persisted) with the backups. Driven off `allCases` so a payload
@@ -4325,15 +4465,21 @@ final class FernletStore {
         // so they carry no incomplete-store signal.
         KeychainItem.delete(for: .deviceJournalKey, service: KeychainItem.journalService)
         KeychainItem.delete(for: .deviceWorryKey, service: KeychainItem.journalService)
-        // The shared private-media content key (`com.fernlet.private-media`) is deliberately NOT
-        // deleted, and must not be re-added here. It is ONE keychain row behind EVERY
-        // `PrivateMediaStore` — including `MeshNetworkManager.photoCacheStore`, which holds the
-        // friend photo wall this funnel keeps by design (see the survivors list above). Deleting it
-        // would not orphan a key, it would shred the wall: the next `mediaKey()` finds no row, mints
-        // a fresh random one, and every retained photo decrypts to garbage — permanently, with no
-        // failure signal anywhere. A key whose OTHER stores were just emptied protects nothing extra,
-        // so keeping it discloses nothing. The cache invalidations below stay: they are still correct
-        // hygiene for the emptied stores (next read re-fetches the surviving row).
+        // NEITHER private-media content key (service `com.fernlet.private-media`) is deleted, and
+        // neither must be re-added here.
+        //   • `…contentKey` (friend wall) backs `MeshNetworkManager.photoCacheStore`, which holds
+        //     the friend photo wall this funnel keeps by design (see the survivors list above).
+        //     Deleting it would not orphan a key, it would shred the wall: the next `mediaKey()`
+        //     finds no row, mints a fresh random one, and every retained photo decrypts to garbage —
+        //     permanently, with no failure signal anywhere.
+        //   • `…ownContentKey` (the Phase-5 own-photos key) backs the meal/recipe/progress stores,
+        //     whose FILES this funnel does delete just above. The row is kept anyway (owner
+        //     decision): the stores are empty, so the key protects nothing and discloses nothing,
+        //     while deleting it would re-introduce the same stale-cache hazard for anything captured
+        //     between the wipe and relaunch.
+        // A key whose stores were just emptied protects nothing extra, so keeping it discloses
+        // nothing. The cache invalidations below stay: they are still correct hygiene for the
+        // emptied stores (next read re-fetches the surviving row).
         mealPhotoStore.invalidateEncryptionKeyCache()
         progressPhotoStore.invalidateEncryptionKeyCache()
         recipePhotoStore.invalidateEncryptionKeyCache()
@@ -4586,6 +4732,103 @@ final class FernletStore {
         // until (and if) this attaches; a missing/purged asset just leaves us on base coverage.
         let catalog = foodCatalog
         Task { [brandedCatalogLoader] in await brandedCatalogLoader.loadBrandedCatalog(into: catalog) }
+        migrateAndBindOwnPhotoKey()
+    }
+
+    /// Security-hardening Phase 5 (5a-3): re-seal every own photo from the pre-split shared media
+    /// key onto the own-photos key, eagerly, once per launch until it is proven complete.
+    ///
+    /// Eager on purpose. A lazy, read-triggered migration would leave every photo the user never
+    /// reopens sealed under the backup-restorable key indefinitely — and "own photos stop being
+    /// readable off this device" is the whole point of the split, so the corpus has to be swept,
+    /// not sampled. The read-path dual-open fallback covers only the window until this finishes.
+    ///
+    /// Off the main path in two senses: it runs from `deferredPostLaunchTasks` (after the UI is
+    /// up), and on a detached utility task so the file I/O never touches the main actor. The
+    /// migrator builds its OWN key providers inside that task — `PrivateMediaKeyProviding` is not
+    /// `Sendable`, so the store's providers must not travel with it — and only `URL` values cross
+    /// the boundary. Fully idempotent and cheap after completion: the latch short-circuits it, and
+    /// even without the latch a migrated corpus costs one GCM open per file.
+    ///
+    /// Step 5c hangs the binding evaluation off the same task, in this order and no other: the
+    /// re-seal pass must report completion BEFORE the gate is even consulted, because the latch it
+    /// sets is the proof that no own file is still readable only under the pre-split key. The gate
+    /// then refuses unless the user also has a cross-device route (escrow backup on, or recorded
+    /// consent), so a launch never silently trades away their phone-swap recovery.
+    private func migrateAndBindOwnPhotoKey() {
+        let documentsDirectory = Self.photoDocumentsDirectory
+        // The COMMIT PROOF, not the preference. A launch that bound on the stored flag alone would
+        // re-decide, on every boot, that a switch someone once flipped is a cross-device route —
+        // including for a user whose every upload has failed since. Read on the main actor and
+        // carried in as a Bool, because only `Sendable` values may cross into the detached task.
+        let escrowRouteCommitted = OwnPhotoEscrowCommitLedger().isCommitted
+        Task.detached(priority: .utility) { [weak self] in
+            let complete = OwnPhotoKeyMigrator.standard(documentsDirectory: documentsDirectory).run()
+            let outcome = complete
+                ? OwnPhotoKeyBinder(escrowRouteCommitted: escrowRouteCommitted).bindIfEligible()
+                : OwnPhotoKeyBindingOutcome.refusedMigrationIncomplete
+            await MainActor.run { self?.recordOwnPhotoKeyBindingOutcome(outcome) }
+        }
+    }
+
+    /// Whether the user's own-photo key is bound to this device — read from the keychain row itself,
+    /// then held as observable state so Privacy & Data can reflect it without polling.
+    ///
+    /// Initialized at construction (one `SecItemCopyMatching`) rather than defaulted to false, so a
+    /// device that is already bound never renders the "lock them to this device" offer for the
+    /// instant before the launch pass runs.
+    private(set) var ownPhotoKeyDeviceBound = OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound()
+
+    /// Whether the eager own-photo re-seal pass has proven completion — the half of the binding gate
+    /// the user cannot influence. Observable so the settings screen can say "still preparing"
+    /// instead of offering a button that would refuse.
+    private(set) var ownPhotoKeyMigrationComplete = OwnPhotoKeyMigrator.latch().isComplete
+
+    /// Folds a binding evaluation back into the observable custody state.
+    ///
+    /// Both flags are re-read from their sources rather than inferred from `outcome`: the outcome
+    /// says what this evaluation did, the keychain and the latch say what is true.
+    private func recordOwnPhotoKeyBindingOutcome(_ outcome: OwnPhotoKeyBindingOutcome) {
+        ownPhotoKeyMigrationComplete = OwnPhotoKeyMigrator.latch().isComplete
+        ownPhotoKeyDeviceBound = OwnPhotoKeyBinder.isOwnPhotoKeyDeviceBound()
+        switch outcome {
+        case .bound:
+            FernletAuditLog.log("privateMedia.ownKeyDeviceBound")
+        case .rebindFailed(let status):
+            FernletAuditLog.log("privateMedia.ownKeyBindFailed", context: ["status": String(status)])
+        case .refusedMigrationIncomplete, .refusedNoRecoveryRoute, .deferredKeyUnavailable:
+            break
+        }
+    }
+
+    /// Re-evaluates the own-photo key binding gate — the seam for events that can newly satisfy it
+    /// (the escrow photo backup being switched on, a completed migration).
+    ///
+    /// A no-op unless both halves hold, and it never *widens* custody: an already-bound row stays
+    /// bound, and there is deliberately no un-bind path (see `OwnPhotoDeviceBindingConsent`).
+    @discardableResult
+    func bindOwnPhotoKeyIfEligible() -> OwnPhotoKeyBindingOutcome {
+        let outcome = OwnPhotoKeyBinder(
+            escrowRouteCommitted: OwnPhotoEscrowCommitLedger().isCommitted
+        ).bindIfEligible()
+        recordOwnPhotoKeyBindingOutcome(outcome)
+        return outcome
+    }
+
+    /// The user-initiated "lock my photos to this device" ceremony: records explicit consent that
+    /// own photos will not restore to a new phone without the escrow backup, then binds.
+    ///
+    /// Irreversible by design, which is why its only caller puts a WS-5 destructive confirmation in
+    /// front of it. Consent is recorded even if the bind then defers on a transient keychain
+    /// failure — the user's decision is durable; re-asking would be the wrong remedy.
+    @discardableResult
+    func lockOwnPhotosToThisDevice() -> OwnPhotoKeyBindingOutcome {
+        FernletAuditLog.log("privateMedia.ownKeyBindingConsentRecorded")
+        let outcome = OwnPhotoKeyBinder(
+            escrowRouteCommitted: OwnPhotoEscrowCommitLedger().isCommitted
+        ).recordConsentAndBind()
+        recordOwnPhotoKeyBindingOutcome(outcome)
+        return outcome
     }
 
     func flushPendingSnapshotSave() {
@@ -4936,6 +5179,11 @@ extension FernletStore: ProximityTrustPolicy {}
 extension FernletStore: WorkoutPlanningContext {}
 
 extension FernletStore: MealResolutionContext {}
+
+/// The own-photo escrow route's callback seam. The single member
+/// (`recordOwnPhotoBackupOutcome(_:)`) lives beside the sealed-backup status writers above, so both
+/// routes publish their non-silent status through the same store.
+extension FernletStore: OwnPhotoBackupContext {}
 
 extension FernletStore: SealedBackupContext {
     /// Narrow read of the (private) journal content key for sealed period-data backup. This is the

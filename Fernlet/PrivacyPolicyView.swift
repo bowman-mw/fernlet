@@ -8,7 +8,9 @@
 //  Connect; keep all three in sync.
 //
 //  Copy finalized 2026-07-19; revised 2026-08-09 (perpetual no-retroactive-use commitments in
-//  "Changes"). Any material change to the policy must update the effective date below AND in
+//  "Changes"); revised 2026-08-11 (the opt-in encrypted backup for your own meal / recipe /
+//  progress photos, which qualifies the previously unconditional "photos are never uploaded to
+//  CloudKit"). Any material change to the policy must update the effective date below AND in
 //  Docs/Privacy-Policy.md AND Site/privacy/index.html, and be surfaced in the app per the
 //  policy's own terms.
 //
@@ -27,7 +29,7 @@ struct PrivacyPolicyView: View {
     // MARK: - Publication facts (keep in lockstep with Docs/Privacy-Policy.md)
     private static let developerName = "Michael Bowman Olay"
     private static let supportEmail: String? = "fernletapp@gmail.com"
-    private static let effectiveDate = "August 9, 2026"
+    private static let effectiveDate = "August 11, 2026"
 
     private static var contactClause: String {
         if let supportEmail { return "contact \(supportEmail)" }
@@ -71,10 +73,10 @@ struct PrivacyPolicyView: View {
     With your permission, Fernlet reads heart rate, active energy, sleep analysis, step count, and workouts to reflect your day. Fernlet writes only the workouts you log, so they count toward your Apple activity rings. Fernlet never writes period, mood, journal, hydration, or hygiene data to Apple Health. Health data is used only on your device and is never sold or used for advertising. Deleting Fernlet does not delete samples it wrote to Apple Health — remove those in the Health app if you wish.
 
     ## iCloud sync and encrypted backup (optional, you choose)
-    During setup you choose whether to keep your data only on this device or sync it to iCloud. If you enable iCloud sync, your core app data is synced to your own iCloud private database using Apple's CloudKit, associated with your Apple ID under Apple's standard privacy model — we cannot see it, and you can turn it off or delete the cloud copy any time. You may separately opt in to an encrypted backup of sensitive memories and/or period data; before that data leaves your device it is encrypted (AES-256-GCM) so Apple stores only unreadable ciphertext. Because the key lives in your iCloud Keychain, if you permanently lose access to it on all your devices, that encrypted data cannot be recovered — you are told this when you enable it. Period-data backup is a deliberate, clearly-warned opt-in.
+    During setup you choose whether to keep your data only on this device or sync it to iCloud. If you enable iCloud sync, your core app data is synced to your own iCloud private database using Apple's CloudKit, associated with your Apple ID under Apple's standard privacy model — we cannot see it, and you can turn it off or delete the cloud copy any time. You may separately opt in to an encrypted backup of sensitive memories, period data, journal entries, intimate logs, and/or your own photos (see Photos below); before that data leaves your device it is encrypted (AES-256-GCM) so Apple stores only unreadable ciphertext. Because the key lives in your iCloud Keychain, if you permanently lose access to it on all your devices, that encrypted data cannot be recovered — you are told this when you enable it. Period-data backup is a deliberate, clearly-warned opt-in.
 
     ## Photos
-    Photos in your Fernlet album are stored encrypted in the app's private storage and are never uploaded to CloudKit or sent to any AI or server. They are included in your standard iCloud device backup through the app container. You may explicitly export an individual photo to your system Photos library with a "Save to Photos" action — a one-time export you initiate, not automatic sync. Fernlet does no face recognition.
+    Photos are stored encrypted in the app's private storage and are never sent to any AI or server, and never analyzed. By default they are also never uploaded to CloudKit: they leave your phone only inside your standard iCloud device backup, through the app container. There is exactly one exception, and it is off unless you turn it on. If you switch on "Sealed backup for your photos" in Privacy & Data, your own meal, recipe and gym-progress photos are backed up to your own iCloud private database — encrypted on your device first (AES-256-GCM), so Apple stores only unreadable ciphertext, and still never sent to us or to any AI. Photos friends have shared with you are never part of that backup. Once that backup has actually stored your photos, Fernlet locks their encryption key to this device so a copy of your device backup cannot open them; that is permanent, and from then on the encrypted backup is how those photos come back on a new phone. You may explicitly export an individual photo to your system Photos library with a "Save to Photos" action — a one-time export you initiate, not automatic sync. Fernlet does no face recognition.
 
     ## Friend features (in-person only)
     To support optional in-person friend features, Fernlet generates a cryptographic identity for your device. Your public key is the only persistent identifier shared with friends; your private keys never leave your device. Friend features work only when two people are physically near each other, over a short-range encrypted connection — there is no friend server and no remote friend activity. When you add a friend in person, your devices exchange display names, public keys, avatar appearances, and a *fuzzy* wellbeing vibe (e.g. "thriving," "okay," "struggling"). Friends never see your numeric score, goals, cycle information, or any raw health data. Optional approximate location may be used only for gentle weather prompts and, if you choose, to tag an in-person activity; location is never tracked over time.

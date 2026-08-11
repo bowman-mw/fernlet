@@ -207,6 +207,10 @@ public final class CloudKitDataService {
         "HydrationLogRecord",
         "SleepRecord",
         "SealedBackupRecord",
+        // The own-photo escrow route (Phase 5, step 5b). Listed here so "delete my iCloud data"
+        // sweeps sealed photo records too — they are the user's own media, not a survivor like the
+        // friend wall.
+        "SealedPhotoRecord",
         "CD_SavedRecipeRecord",
         "SavedRecipeRecord",
         "CD_CustomItemRecord",
@@ -531,6 +535,180 @@ public final class CloudKitDataService {
             guard name.hasPrefix(chunkPrefix), let index = Int(name.dropFirst(chunkPrefix.count)) else { return false }
             return index >= minChunkIndex
         }
+    }
+
+    // MARK: - Own-photo escrow route (Phase 5, step 5b)
+
+    /// Uploads one sealed photo record — a photo body or a corpus manifest — writing its ciphertext
+    /// as a `CKAsset` under the deterministic name `sealed-photo.<corpus>.<slot>`. Overwrites any
+    /// prior record of the same name (all-keys save).
+    ///
+    /// The manifest goes through this same path, and therefore the same `CKAsset`, on purpose: a
+    /// manifest listing thousands of UUID + hash entries would otherwise hit CloudKit's ~1 MB
+    /// inline-field limit exactly when a user has the most to lose.
+    public func saveSealedPhoto(_ record: SealedPhotoRecord) async throws {
+        try await ensureSignedIn()
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("fernlet-sealed-photo")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        try record.ciphertext.write(to: fileURL, options: .atomic)
+
+        let cloudRecord = CKRecord(
+            recordType: "SealedPhotoRecord",
+            recordID: sealedPhotoRecordID(corpus: record.corpus, slot: record.slot)
+        )
+        cloudRecord["corpus"] = record.corpus.rawValue as CKRecordValue
+        cloudRecord["slot"] = record.slot.recordNameSuffix as CKRecordValue
+        cloudRecord["signingPublicKey"] = record.signingPublicKey as CKRecordValue
+        cloudRecord["keyAgreementPublicKey"] = record.keyAgreementPublicKey as CKRecordValue
+        cloudRecord["nonce"] = record.nonce as CKRecordValue
+        cloudRecord["tag"] = record.tag as CKRecordValue
+        cloudRecord["updatedAt"] = record.updatedAt as CKRecordValue
+        cloudRecord["generation"] = record.generation as CKRecordValue
+        cloudRecord["formatVersion"] = record.formatVersion as CKRecordValue
+        cloudRecord["keySalt"] = record.keySalt as CKRecordValue
+        cloudRecord["encryptedBlob"] = CKAsset(fileURL: fileURL)
+        try await database.saveRecords([cloudRecord])
+        FernletAuditLog.log("cloudkit.sealedPhoto.saved", context: [
+            "corpus": record.corpus.rawValue,
+            "slot": record.slot.recordNameSuffix,
+            "generation": String(record.generation)
+        ])
+    }
+
+    /// Fetches one sealed photo record (a body or the manifest), or nil when it does not exist.
+    public func sealedPhoto(corpus: SealedPhotoCorpus, slot: SealedPhotoSlot) async throws -> SealedPhotoRecord? {
+        try await ensureSignedIn()
+        let recordID = sealedPhotoRecordID(corpus: corpus, slot: slot)
+        let records: [CKRecord]
+        do {
+            records = try await database.records(for: [recordID])
+        } catch let error as CKError where error.code == .unknownItem {
+            return nil
+        }
+        guard let record = records.first else { return nil }
+        return try decodeSealedPhoto(record)
+    }
+
+    /// The photo ids a corpus currently has records for, found by enumerating `SealedPhotoRecord`
+    /// IDs and matching the deterministic name scheme (the manifest slot is excluded).
+    ///
+    /// Used by the upload path to tell "already in the cloud, unchanged" from "listed in a stale
+    /// manifest but the body was never written", and by the teardown to find everything to delete.
+    public func existingSealedPhotoIDs(corpus: SealedPhotoCorpus) async throws -> Set<UUID> {
+        try await ensureSignedIn()
+        let ids = try await sealedPhotoRecordIDs(corpus: corpus)
+        return Set(ids.compactMap { sealedPhotoSlot(ofRecordNamed: $0.recordName, corpus: corpus)?.photoID })
+    }
+
+    /// Deletes one photo's record (best-effort; a missing record is a no-op). The manifest is the
+    /// authority on membership, so callers drop the entry from the manifest FIRST — an orphaned
+    /// record left by a failed delete is ignored on restore.
+    public func deleteSealedPhoto(corpus: SealedPhotoCorpus, id: UUID) async throws {
+        try await ensureSignedIn()
+        let recordID = sealedPhotoRecordID(corpus: corpus, slot: .photo(id))
+        do {
+            try await database.deleteRecords(with: [recordID])
+        } catch let error as CKError where error.code == .unknownItem {
+            return
+        }
+    }
+
+    /// Tears a whole corpus down — every photo record AND the manifest — found by record-name
+    /// prefix, since the id set is not known up front (and must not be trusted to a manifest that
+    /// may itself be gone). The delete-all funnel's own-photo escrow leg.
+    public func deleteSealedPhotoCorpus(_ corpus: SealedPhotoCorpus) async throws {
+        try await ensureSignedIn()
+        let ids = try await sealedPhotoRecordIDs(corpus: corpus, includingManifest: true)
+        guard !ids.isEmpty else { return }
+        do {
+            try await database.deleteRecords(with: ids)
+        } catch let error as CKError where error.code == .unknownItem {
+            return
+        }
+        FernletAuditLog.log("cloudkit.sealedPhoto.corpusDeleted", context: [
+            "corpus": corpus.rawValue,
+            "recordCount": String(ids.count)
+        ])
+    }
+
+    /// Record IDs belonging to a corpus, by the deterministic name scheme. The manifest is included
+    /// only when asked for, so the "which bodies exist" query cannot accidentally count it.
+    private func sealedPhotoRecordIDs(
+        corpus: SealedPhotoCorpus,
+        includingManifest: Bool = false
+    ) async throws -> [CKRecord.ID] {
+        let zoneIDs = try await appZoneIDs()
+        let all = try await recordIDsForExistingType("SealedPhotoRecord", in: zoneIDs)
+        return all.filter { id in
+            guard let slot = sealedPhotoSlot(ofRecordNamed: id.recordName, corpus: corpus) else { return false }
+            return slot == .manifest ? includingManifest : true
+        }
+    }
+
+    private func sealedPhotoRecordBaseName(corpus: SealedPhotoCorpus) -> String {
+        "sealed-photo.\(corpus.rawValue)"
+    }
+
+    /// Deterministic record name for a slot: `sealed-photo.<corpus>.<uuid|manifest>`.
+    private func sealedPhotoRecordID(corpus: SealedPhotoCorpus, slot: SealedPhotoSlot) -> CKRecord.ID {
+        let name = "\(sealedPhotoRecordBaseName(corpus: corpus)).\(slot.recordNameSuffix)"
+        return CKRecord.ID(recordName: name, zoneID: zoneIDOverride ?? Self.appZoneID)
+    }
+
+    /// The slot a record name denotes within `corpus`, or nil when the name belongs to another
+    /// corpus or is not a recognizable slot at all (unrecognized names are ignored, never guessed).
+    private func sealedPhotoSlot(ofRecordNamed name: String, corpus: SealedPhotoCorpus) -> SealedPhotoSlot? {
+        let prefix = "\(sealedPhotoRecordBaseName(corpus: corpus))."
+        guard name.hasPrefix(prefix) else { return nil }
+        return SealedPhotoSlot(recordNameSuffix: String(name.dropFirst(prefix.count)))
+    }
+
+    /// Decodes a `SealedPhotoRecord` CKRecord, failing closed on anything missing or malformed.
+    ///
+    /// Stricter than `decodeSealedBackup` in one deliberate way: this record type was born at format
+    /// 2, so there is no legacy shape to tolerate — an absent or short salt, or a version below 2,
+    /// is a malformed record rather than a v1 record. Also cross-checks the stored `corpus`/`slot`
+    /// fields against the record's NAME: those fields are what the AAD binds, so a record renamed on the
+    /// server must not decode as if it belonged where it now sits.
+    private func decodeSealedPhoto(_ record: CKRecord) throws -> SealedPhotoRecord {
+        guard let rawCorpus = record["corpus"] as? String,
+              let corpus = SealedPhotoCorpus(rawValue: rawCorpus),
+              let rawSlot = record["slot"] as? String,
+              let slot = SealedPhotoSlot(recordNameSuffix: rawSlot),
+              let signingPublicKey = record["signingPublicKey"] as? Data,
+              let keyAgreementPublicKey = record["keyAgreementPublicKey"] as? Data,
+              let nonce = record["nonce"] as? Data,
+              let tag = record["tag"] as? Data,
+              let updatedAt = record["updatedAt"] as? Date,
+              let generation = record["generation"] as? Int64,
+              let asset = record["encryptedBlob"] as? CKAsset,
+              let fileURL = asset.fileURL,
+              let ciphertext = try? Data(contentsOf: fileURL) else {
+            throw SealedBackupError.malformedRecord
+        }
+        guard sealedPhotoSlot(ofRecordNamed: record.recordID.recordName, corpus: corpus) == slot else {
+            throw SealedBackupError.malformedRecord
+        }
+        let formatVersion = (record["formatVersion"] as? Int) ?? 0
+        let keySalt = (record["keySalt"] as? Data) ?? Data()
+        guard formatVersion >= 2, keySalt.count == 32 else {
+            throw SealedBackupError.malformedRecord
+        }
+        return SealedPhotoRecord(
+            corpus: corpus,
+            slot: slot,
+            signingPublicKey: signingPublicKey,
+            keyAgreementPublicKey: keyAgreementPublicKey,
+            nonce: nonce,
+            ciphertext: ciphertext,
+            tag: tag,
+            updatedAt: updatedAt,
+            generation: generation,
+            formatVersion: formatVersion,
+            keySalt: keySalt
+        )
     }
 
     /// Gate on every operation: throws ``CloudKitDataServiceError/notSignedIn`` unless the

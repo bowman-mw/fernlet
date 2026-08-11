@@ -142,6 +142,62 @@ struct KeyCustodyBoundaryTests {
         #expect(attrs?.synchronizable == false, "media key must never reach iCloud Keychain")
     }
 
+    // MARK: Phase-5 media-key split. The user's OWN photos moved to a SECOND row
+    // (`…ownContentKey`), distinct from the friend wall's above. Pinned here: the two rows really
+    // are two independent keys (a split that vended the same bytes twice would be theatre), and the
+    // own row is non-synchronizable like everything else. Its accessibility class is the subject of
+    // the next test.
+    @MainActor
+    @Test func ownPhotoKeyIsASecondRowDistinctFromTheFriendWallKey() {
+        let friend = KeychainPrivateMediaKeyProvider(role: .friendWall)
+        let own = KeychainPrivateMediaKeyProvider(role: .ownPhotos)
+        let friendBytes = friend.mediaKey().map { $0.withUnsafeBytes { Data($0) } }
+        let ownBytes = own.mediaKey().map { $0.withUnsafeBytes { Data($0) } }
+        #expect(friendBytes != nil, "friend media key could not be minted/read")
+        #expect(ownBytes != nil, "own-photo media key could not be minted/read")
+        #expect(friendBytes != ownBytes, "the media-key split vends ONE key under two names")
+
+        let attrs = rowAttributes(account: "com.fernlet.private-media.ownContentKey",
+                                  service: "com.fernlet.private-media")
+        #expect(attrs != nil, "the own-photo row does not exist")
+        #expect(attrs?.synchronizable == false, "own-photo media key must never reach iCloud Keychain")
+    }
+
+    // MARK: The step-5c custody flip, asserted on the REAL row through the REAL gate: once the
+    // migration latch is set and a cross-device route exists, `…ownContentKey` is
+    // AfterFirstUnlockThisDeviceOnly and still non-synchronizable. That is the whole point of the
+    // media-key split — the user's own meal, recipe and body photos stop being readable from a
+    // restored device backup, while the friend wall above deliberately stays backup-restorable.
+    //
+    // The gate inputs come from an ISOLATED defaults suite (never the device's real latch/consent),
+    // and the binder is idempotent, so this drives the shipping mechanism rather than re-deriving
+    // it. If someone weakens the binding — a delete-then-add re-store, a wrong class, an accidental
+    // synchronizable — it fails here, in the same commit, on a CODEOWNERS-protected tripwire.
+    @MainActor
+    @Test func ownPhotoKeyBindsToThisDeviceOnceItsGateIsSatisfied() throws {
+        let suiteName = "KeyCustodyBoundaryTests-ownPhotoBinding-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        OwnPhotoMigrationLatch(defaults: defaults).markComplete()
+
+        let before = KeychainPrivateMediaKeyProvider(role: .ownPhotos).mediaKey()
+            .map { $0.withUnsafeBytes { Data($0) } }
+        let outcome = OwnPhotoKeyBinder(escrowRouteCommitted: true, defaults: defaults).bindIfEligible()
+        #expect(outcome == .bound, "the own-photo key refused to bind with its gate satisfied: \(outcome)")
+
+        let attrs = rowAttributes(account: "com.fernlet.private-media.ownContentKey",
+                                  service: "com.fernlet.private-media")
+        #expect(attrs?.accessible == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String,
+                "the own-photo media key must be device-bound (Docs/Verifiability.md §6.3 item 3)")
+        #expect(attrs?.synchronizable == false, "own-photo media key must never reach iCloud Keychain")
+
+        // The flip changes custody, never key material: a re-mint here would silently orphan every
+        // meal, recipe and progress photo already sealed under this key.
+        let after = KeychainPrivateMediaKeyProvider(role: .ownPhotos).mediaKey()
+            .map { $0.withUnsafeBytes { Data($0) } }
+        #expect(after == before, "binding rotated the own-photo key instead of re-binding the row")
+    }
+
     // MARK: Proves the proximity identity private keys provision as ThisDeviceOnly and that a
     // freshly minted escrow key is WITHHELD from sync (WS-2: ThisDeviceOnly until a later launch
     // promotes it) — sanctioned exception 2 of 2 is the *promotion*, pinned by the grep-wall.

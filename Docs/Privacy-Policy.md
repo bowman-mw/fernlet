@@ -7,7 +7,7 @@
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** August 9, 2026
+**Effective date:** August 11, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -79,7 +79,8 @@ During setup you choose whether to keep your data **only on this device** or **s
   copy at any time in Settings → Privacy & Data. Deleting the cloud copy never deletes your local
   copy or your Apple Health history.
 - **Encrypted sealed backup (separate, off by default):** You may separately opt in to back up
-  **sensitive memories** and/or **period data**. Before this data leaves your device it is encrypted
+  **sensitive memories**, **period data**, **journal entries**, **intimate logs** and/or **your own
+  photos** (see §5). Before this data leaves your device it is encrypted
   with a key derived from your device identity key (AES-256-GCM). Apple stores only unreadable
   ciphertext. Because the key lives in your iCloud Keychain, **if you permanently lose access to your
   iCloud Keychain on all your devices, this encrypted data cannot be recovered.** You are told this
@@ -88,12 +89,27 @@ During setup you choose whether to keep your data **only on this device** or **s
 
 ## 5. Photos
 
-Photos in your Fernlet album are stored **encrypted in the app's private storage** and are **never**
-uploaded to CloudKit or sent to any AI or server. They are included in your standard iCloud **device
-backup** through the app container (the same way other app files are), unless you exclude Fernlet
-from device backup. You may explicitly export an individual photo to your system Photos library with
-a "Save to Photos" action — that is a one-time export you initiate, not automatic sync. Fernlet does
-**no face recognition** and no automated photo analysis of your private album.
+Photos are stored **encrypted in the app's private storage** and are **never** sent to any AI or
+server, and never analyzed. **By default they are also never uploaded to CloudKit** — they leave
+your phone only inside your standard iCloud **device backup**, through the app container (the same
+way other app files are), unless you exclude Fernlet from device backup.
+
+There is exactly **one exception, and it is off unless you turn it on.** If you switch on
+"Sealed backup for your photos" in Settings → Privacy & Data, your **own** meal, recipe and
+gym-progress photos are backed up to **your own iCloud private database**. Each photo is encrypted
+on your device before it leaves (AES-256-GCM, under a key derived from your device identity key), so
+Apple stores only unreadable ciphertext — and it is still never sent to us and never sent to any AI.
+Photos **friends have shared with you** are never part of that backup.
+
+Once that backup has actually stored your photos, Fernlet **locks their encryption key to this
+device**, so a copy of your device backup can no longer open them. That is permanent, and from then
+on the encrypted photo backup is the route by which those photos come back on a new phone. You are
+told this before you turn the backup on, and there is a separate, clearly-warned way to lock them to
+this device *without* the backup if you prefer the protection to the recovery.
+
+You may explicitly export an individual photo to your system Photos library with a "Save to Photos"
+action — that is a one-time export you initiate, not automatic sync. Fernlet does **no face
+recognition** and no automated photo analysis of your photos.
 
 ## 6. Identity keys and friend features (in-person only)
 

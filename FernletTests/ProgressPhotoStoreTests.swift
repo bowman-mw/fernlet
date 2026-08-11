@@ -198,6 +198,66 @@ struct ProgressPhotoStoreTests {
         let photos = (try? FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("Photos").path)) ?? []
         #expect(photos.filter { $0.hasSuffix(".jpg") }.isEmpty, "add left an orphan photo after refusing to write the index")
     }
+
+    // MARK: - Phase-5 key split: dual-open safety net
+
+    /// The timeline is TWO sealed things — the bytes and the index — under the same key, so the
+    /// dual-open fallback has to cover both. An index left under the pre-split key while the photos
+    /// migrated would render an empty timeline over a full photo directory: the user's body-photo
+    /// history would look deleted.
+    @Test func dualOpenRecoversAPreSplitTimelineAndReSealsTheIndex() throws {
+        let legacyKey = SymmetricKey(size: .bits256)
+        let ownKey = SymmetricKey(size: .bits256)
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ProgressPhotoStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // A timeline written entirely by the pre-split build.
+        let legacyStore = ProgressPhotoStore(directory: dir, keyProvider: InMemoryPrivateMediaKeyProvider(key: legacyKey))
+        let record = try #require(legacyStore.add(jpeg(width: 160, height: 160), caption: "8 weeks in", capturedAt: Date()))
+
+        // The own key alone sees neither the index nor the bytes.
+        let ownOnly = ProgressPhotoStore(directory: dir, keyProvider: InMemoryPrivateMediaKeyProvider(key: ownKey))
+        #expect(ownOnly.records().isEmpty)
+        #expect(ownOnly.imageData(for: record.id) == nil)
+
+        // With the fallback both come back, and both are re-sealed under the own key in place.
+        let dualOpen = ProgressPhotoStore(
+            directory: dir,
+            keyProvider: InMemoryPrivateMediaKeyProvider(key: ownKey),
+            legacyKeyProvider: InMemoryPrivateMediaKeyProvider(key: legacyKey)
+        )
+        #expect(dualOpen.records().map(\.id) == [record.id])
+        #expect(dualOpen.records().first?.caption == "8 weeks in")
+        #expect(dualOpen.imageData(for: record.id) != nil)
+
+        #expect(ownOnly.records().map(\.id) == [record.id], "the index was not re-sealed under the own key")
+        #expect(ownOnly.imageData(for: record.id) != nil, "the photo bytes were not re-sealed under the own key")
+    }
+
+    /// The fallback must not become a plaintext-index injection sink: it accepts only bytes that
+    /// GCM-open under the app's own pre-split key, so a bare-JSON `index.bin` dropped into the
+    /// container is still `.undecodable` — and therefore still refuses to be clobbered by a write.
+    @Test func dualOpenStillRefusesAPlaintextIndex() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ProgressPhotoStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let planted = [ProgressPhotoRecord(id: UUID(), capturedAt: Date(), caption: "planted")]
+        try encoder.encode(planted).write(to: indexURL(dir))
+
+        let store = ProgressPhotoStore(
+            directory: dir,
+            keyProvider: InMemoryPrivateMediaKeyProvider(),
+            legacyKeyProvider: InMemoryPrivateMediaKeyProvider()
+        )
+        #expect(store.records().isEmpty, "a plaintext index was trusted through the dual-open fallback")
+        #expect(store.add(jpeg(width: 100, height: 100), caption: "x", capturedAt: Date()) == nil,
+                "the plaintext index was treated as writable rather than undecodable")
+    }
 }
 
 /// A key provider that never yields a key — exercises the fail-closed write path.
