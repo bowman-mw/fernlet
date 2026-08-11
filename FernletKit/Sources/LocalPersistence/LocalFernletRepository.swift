@@ -143,11 +143,14 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
 /// - **Backup exclusion (security-hardening Phase 6).** When
 ///   `StoragePreferences.localBackupExcludedFromiOSBackup` is set, the day-blob file itself is
 ///   flagged `isExcludedFromBackup` — at `init` (covering launch) and again after every
-///   successful save, because the atomic rewrite replaces the inode the flag lives on. Without
-///   this the Privacy & Data toggle's "your local Fernlet data is excluded" copy was false for
-///   exactly the sync-off users whose whole history sits in this one file. The explicit
-///   ``applyBackupExclusion(excluded:)`` seam is how a runtime preference change (either
-///   direction) reaches the file immediately, mirroring
+///   successful save, because the atomic rewrite replaces the inode the flag lives on. The file
+///   this protects is the LEGACY one: production always runs `CoreDataFernletRepository` over
+///   `Fernlet.sqlite` (excluded under the same preference at store load, in `CloudKitSync`'s
+///   `PersistenceController`), and this repository is only the one-time legacy-migration source —
+///   but the JSON blob can still hold a user's pre-migration history in plaintext, and it was
+///   the last local Fernlet-data file the Privacy & Data toggle's "your local Fernlet data is
+///   excluded" copy did not reach. The explicit ``applyBackupExclusion(excluded:)`` seam is how
+///   a runtime preference change (either direction) reaches the file immediately, mirroring
 ///   `PrivatePersistenceController.applyBackupExclusion`.
 ///
 /// Concurrency: nonisolated with a fully synchronous API. The struct is a value-type facade over

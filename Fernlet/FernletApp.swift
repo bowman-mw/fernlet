@@ -29,8 +29,10 @@ import FernletUI
 /// local day blob's backup exclusion; a delayed post-startup task activates CloudKit sync so
 /// launch never waits on it. The ready phase also runs the one-shot Phase-6
 /// `BackupExclusionLaunchGate` (fresh installs default to backup-excluded; existing installs get
-/// a one-time honest trade-off alert). DEBUG launch arguments (`-resetOnboarding`,
-/// `-completeOnboarding`, `FERNLET_UI_TEST_OPEN_PRIVACY_DATA`) support the UI-test harness.
+/// a one-time honest trade-off alert); a launch whose preferences keychain was unreadable defers
+/// the gate and retries it on each foreground activation. DEBUG launch arguments
+/// (`-resetOnboarding`, `-completeOnboarding`, `FERNLET_UI_TEST_OPEN_PRIVACY_DATA`) support the
+/// UI-test harness.
 @main
 struct FernletApp: App {
     @State private var lockService = FernletLockService()
@@ -39,8 +41,11 @@ struct FernletApp: App {
     @AppStorage(OnboardingDefaults.hasCompletedOnboardingKey) private var hasCompletedOnboarding = false
     @State private var didScheduleStartupCloudSync = false
     @State private var pendingPreferenceReload: StoragePreferences?
-    /// One-shot guard for the Phase-6 backup-exclusion launch gate — once per process, like
-    /// `didScheduleStartupCloudSync`, so a re-fired `.task` can't re-run the resolution.
+    /// One-shot guard for the Phase-6 backup-exclusion launch gate — set once the gate actually
+    /// RESOLVES (like `didScheduleStartupCloudSync`), so a re-fired `.task` can't re-run the
+    /// resolution. Deliberately left false when the gate defers on an unreadable keychain
+    /// (pre-first-unlock prewarm / background relaunch): the scene-activation hook retries until
+    /// a launch can read the blob and resolve for real.
     @State private var didResolveBackupExclusionDefault = false
     /// Presents the one-time existing-install backup-exclusion prompt (see
     /// `BackupExclusionLaunchGate`); only ever set when the gate classifies this launch as an
@@ -162,6 +167,12 @@ struct FernletApp: App {
                         // backgrounded — reconcile even if the Food tab isn't the one on screen, so an
                         // orphan cooking activity is retired and the walker/card stay in step.
                         store.reconcileCookingRunFromAppGroup()
+                        // Phase-6 gate retry: a launch that reached readyContent while the
+                        // preferences keychain was unreadable (pre-first-unlock prewarm /
+                        // background relaunch) DEFERRED the backup-exclusion resolution; every
+                        // foreground activation retries until it resolves. A no-op once
+                        // `didResolveBackupExclusionDefault` is set.
+                        resolveBackupExclusionDefaultIfNeeded()
                     }
                 }
             }
@@ -313,22 +324,34 @@ struct FernletApp: App {
         await reloadPersistenceForPreferenceChange(current)
     }
 
-    /// Runs the Phase-6 backup-exclusion launch gate exactly once per process: fresh installs
-    /// silently adopt the excluded default, existing installs with no recorded choice get the
-    /// one-time honest trade-off alert above. Suppressed entirely under any test harness — an
+    /// Runs the Phase-6 backup-exclusion launch gate — once per process once it actually
+    /// resolves: fresh installs silently adopt the excluded default, existing installs with no
+    /// recorded choice get the one-time honest trade-off alert above. When the gate defers
+    /// because the preferences keychain is unreadable (a pre-first-unlock prewarmed or
+    /// background-relaunched process), the one-shot flag stays unset and the scene-activation
+    /// hook retries on the next foreground. Suppressed entirely under any test harness — an
     /// unanswered launch alert would deadlock every UI test, and a unit-test host would mutate
     /// the real preference blob (`UITestSupport.isTestHarnessActive`; release builds always run).
     @MainActor
     private func resolveBackupExclusionDefaultIfNeeded() {
         guard !didResolveBackupExclusionDefault else { return }
-        didResolveBackupExclusionDefault = true
-        guard !UITestSupport.isTestHarnessActive else { return }
-        let needsPrompt = BackupExclusionLaunchGate().resolveAtLaunch(
+        guard !UITestSupport.isTestHarnessActive else {
+            didResolveBackupExclusionDefault = true
+            return
+        }
+        switch BackupExclusionLaunchGate().resolveAtLaunch(
             store: storagePreferencesStore,
             applyExclusionNow: applyLocalBackupExclusionNow
-        )
-        if needsPrompt {
-            backupExclusionPromptPresented = true
+        ) {
+        case .resolved(let needsPrompt):
+            didResolveBackupExclusionDefault = true
+            if needsPrompt {
+                backupExclusionPromptPresented = true
+            }
+        case .deferredKeychainUnreadable:
+            // Nothing happened (no classification, no write, no marker latch); the next
+            // foreground activation retries via the scenePhase hook.
+            break
         }
     }
 

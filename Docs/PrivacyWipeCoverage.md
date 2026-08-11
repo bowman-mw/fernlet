@@ -133,6 +133,7 @@ repository purge takes it.)
 | HealthKit anchor cursors — keychain `com.fernlet.healthkit-anchors` | Opaque `HKQueryAnchor` sync cursors, not health data: they record how far Fernlet has read, never what it read. Keeping them is what makes the wipe STICK — a reset cursor makes the next anchored query replay Fernlet's entire Health history back into the just-emptied day store | Turning HealthKit off (`HealthKitService.disableIntegration` → `HealthKitAnchorKeychain.deleteAll`) |
 | Locked-note buffer device key — keychain `com.fernlet.narrative-buffer` (plus the service-less legacy `com.fernlet.buffer.key` account) | The buffer FILE it decrypts is purged by `pendingNarrativeBufferPurgeHook`, so the surviving key opens nothing live; it is re-used for the next note written while locked. **Asymmetry, flagged owner call (Opus track §12):** the journal and Worry Box device keys ARE deleted in the same funnel, and under the crypto-erasure baseline the difference now matters — the sealed store gets its file rebuilt, but the buffer is a plain file whose deleted bytes get no equivalent treatment, so the surviving key is what would keep any file-system residue of it openable. Deleting it in the funnel is the symmetric fix; it is deliberately NOT done here pending the owner's call | — |
 | **Sealed-store divergence latches** — `UserDefaults` (device-local, non-synced): `fernlet.menstrualNarrative.everStored`, `fernlet.journalNarrative.everStored`, `fernlet.intimacyLog.everStored` | One bit each: "this install held cycle / journal / intimacy rows at some point". They must OUTLIVE the wipe — that is the whole mechanism. Every sealed repository's `deleteAll()` SETS its latch, so after "delete everything" the store reads empty-**and**-diverged; a sealed-backup chunk that survived a failed delete then cannot be restored back onto the device at the next launch. Clearing them here would make the wipe undoable by a stale cloud copy. They hold no user content — one boolean, no timestamps, no counts — and a genuine reinstall clears them for free when iOS drops the app container, which is exactly the "never populated" state a real new device should have | Dies with the app container on uninstall / device reset |
+| **Phase-6 prior-use marker** — `UserDefaults` `com.fernlet.launch.priorUseRecorded` (device-local, non-synced) | One bit: "Fernlet has run on this install before" — `FernletPriorUseMarker`, the fresh-vs-existing input to the backup-exclusion launch gate (`BackupExclusionLaunchGate`). It must OUTLIVE the wipe for the same reason the divergence latches above do: the wipe's preference reset clears `backupExclusionChoiceMade`, so the next launch re-runs the gate — and with the marker cleared, that launch would classify a wiped-but-reused device as FRESH and silently adopt the excluded default over it, the exact silent flip the gate exists to prevent. Kept, the post-wipe launch shows the honest one-time prompt again (pinned by `BackupExclusionLaunchGateTests/priorUseMarkerSurvivesPreferenceResetSoPostWipeLaunchPromptsInsteadOfSilentlyFlipping`). It is a trace-of-use bit — one boolean, no timestamps, no counts — in the same class as the divergence latches, and it discloses nothing the surviving `hasCompletedOnboarding` key (which the gate ORs in as its legacy evidence) does not already | Dies with the app container on uninstall / device reset |
 | ReplayCache | Memory-only, self-expiring (24 h); dies with the process | — |
 | Identity in OTHER devices' trust vaults | Friends' devices hold the OLD public key; nothing this device can delete remotely. The wipe breaks the pairing (new identity ≠ vault row), and friends see a stranger until re-friending in person | — |
 
@@ -156,6 +157,22 @@ repository purge takes it.)
   non-silently on next enable, so nothing is stranded.
 
 ## Audit trail
+
+- **2026-08-11 — security-hardening P6 (backup-exclusion launch gate).** One new device-local
+  `UserDefaults` bit is added — `com.fernlet.launch.priorUseRecorded` (`FernletPriorUseMarker`) —
+  and it joins the deliberate-exceptions table rather than the cleared table: it must survive
+  "delete everything" so the next launch re-runs the gate as an EXISTING install and shows the
+  honest one-time prompt, instead of silently re-adopting the excluded default over a
+  wiped-but-reused device. No new wipe call, no new token, no manifest change, and no new keychain
+  service (the gate reads the existing `com.fernlet.storage-preferences` blob — whose PRESENCE it
+  also treats as prior-use evidence, so a keychain-surviving reinstall classifies as existing too).
+  The delete dialog's "Kept on purpose" copy is deliberately unchanged: like the divergence
+  latches and the binding-consent bit before it, the marker records no user data — this doc row is
+  the disclosure. Enforcement note: the funnel-bounded token scan structurally cannot catch a KEPT
+  key (a kept key never appears in the wipe bodies), and there is no discovery floor for
+  UserDefaults keys the way there is for keychain services — so
+  `PrivacyWipeCoverageTests/theWipeSurvivingPriorUseMarkerIsDocumentedAsADeliberateException` pins
+  this row per-key.
 
 - **2026-08-11 — security-hardening P5 (own-photo device binding, step 5c).** The own-photos key row
   is now re-bound to `AfterFirstUnlockThisDeviceOnly` once its gate holds. **No new wipe token, and

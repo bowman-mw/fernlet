@@ -392,12 +392,20 @@ shipped; the rest are still open.
    backups; existing installs are never silently flipped — they get a ONE-TIME honest trade-off
    prompt at launch (either answer is recorded and the prompt never returns), and an install that
    had already opted into exclusion just has its choice recorded. The mechanism is a new
-   `StoragePreferences.backupExclusionChoiceMade` tri-state plus a device-local first-run marker
-   (`FernletPriorUseMarker`, UserDefaults — deliberately not the lazily-minted install-binding
-   row, which would misclassify genuinely-fresh installs): the flip NEVER rides the tolerant
-   decode — both `localBackupExcludedFromiOSBackup` and the new field keep `false` as their
-   absent-key default, so a pre-Phase-6 blob decodes with its exclusion value byte-for-byte
-   unchanged (pinned in `FernletTests/StoragePreferencesTests`).
+   `StoragePreferences.backupExclusionChoiceMade` tri-state plus THREE prior-use signals OR'd
+   together — a device-local first-run marker (`FernletPriorUseMarker`, UserDefaults —
+   deliberately not the lazily-minted install-binding row, which would misclassify
+   genuinely-fresh installs), the legacy onboarding-completed key, and the PRESENCE of the
+   persisted preferences keychain blob itself, the one signal that survives delete + reinstall
+   (so a reinstall over a surviving recorded preference classifies as an existing install and
+   gets the prompt, never the silent fresh-install default). The gate classifies over the LIVE
+   keychain blob, not the store's launch-frozen in-memory copy, and fails closed — deferring to
+   the next foreground activation, touching nothing — when the keychain is unreadable (a
+   pre-first-unlock prewarmed process), so an already-decided user can never be re-prompted and
+   no gate write can clobber the real blob with launch-fallback defaults. The flip NEVER rides
+   the tolerant decode — both `localBackupExcludedFromiOSBackup` and the new field keep `false`
+   as their absent-key default, so a pre-Phase-6 blob decodes with its exclusion value
+   byte-for-byte unchanged (pinned in `FernletTests/StoragePreferencesTests`).
    Post-#1 justification, which is why this sequenced after the hard SE binding: an *included*
    `FernletPrivate` file is ciphertext-unreadable off-device even with the passcode (the SE key
    never restores to another device and the scrypt fallback is gone), so its only marginal backup
@@ -406,12 +414,22 @@ shipped; the rest are still open.
    `id`/`dayKey`/`eventDate`/`healthKitExternalUUID`/dates (IntimacyLog), `id`/`createdAt`
    (WorryNarrative) — which days have entries and their HealthKit linkage, never content.
    Default-on exclusion removes even that at near-zero recovery cost: the ciphertext already
-   cannot be opened off-device, and escrow-backed payloads (period, journal, intimacy, sensitive
-   notes, own photos) restore via the encrypted iCloud backup regardless. The same preference now
-   also flags the `LocalFernletRepository` JSON day blob (re-applied after every atomic rewrite),
-   so the Privacy & Data toggle's "your local Fernlet data is excluded" copy is finally true for
-   sync-off users; the manual toggle remains for later changes. Gate logic pinned by
-   `FernletTests/BackupExclusionLaunchGateTests`, the day-blob flag by
+   cannot be opened off-device, and each escrow-backed payload type (period, journal, intimacy,
+   sensitive notes, own photos) restores via its encrypted iCloud backup — for the users who
+   switched that backup on. All five `sealedBackup*Enabled` toggles default OFF, so the escrow
+   restore path exists exactly for the opted-in; for everyone else the flip trades away only a
+   device-backup copy that was already unreadable off-device, which is the near-zero part. The
+   same preference now also flags the `LocalFernletRepository` JSON day blob (re-applied after
+   every atomic rewrite). To be precise about that file's role: it is NOT the live history —
+   production always runs `CoreDataFernletRepository` over `Fernlet.sqlite` regardless of the
+   iCloud preference, and the store-load path has excluded `Fernlet.sqlite` (with sidecars)
+   under this same preference since before Phase 6 (`CloudKitSync/Persistence.swift`), which is
+   what actually covers a sync-off user's live history. The JSON blob is the one-time
+   legacy-migration source: never rewritten in production, but it can still hold a user's
+   pre-migration history in plaintext, and it was the last local Fernlet-data file the
+   preference did not reach — flagging it closes that gap in the Privacy & Data toggle's "your
+   local Fernlet data is excluded" copy. The manual toggle remains for later changes. Gate logic
+   pinned by `FernletTests/BackupExclusionLaunchGateTests`, the day-blob flag by
    `FernletTests/LocalDayBlobBackupExclusionTests`.
 
 ## 7. What publishing unlocks

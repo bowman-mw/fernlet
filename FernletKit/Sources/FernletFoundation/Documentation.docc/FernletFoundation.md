@@ -37,7 +37,15 @@ A few invariants in this module are load-bearing for the rest of the app:
   existing user's stored choice decodes unchanged.
 - **Privacy choices live in the keychain, not the synced blob.** ``StoragePreferencesStore``
   persists the preferences JSON via ``KeychainItem``; resetting deletes the keychain row outright
-  so "delete everything" leaves no trace of use.
+  so "delete everything" leaves no trace of use. The blob is `AfterFirstUnlockThisDeviceOnly`,
+  and the store's one-shot `init` load tolerantly collapses ANY read failure to fresh defaults —
+  so a pre-first-unlock (prewarmed) process holds defaults for its whole lifetime. Launch-time
+  consumers that must not act on that fallback use the fail-closed pair added for the Phase-6
+  backup-exclusion gate: ``StoragePreferencesBlobState`` /
+  ``StoragePreferencesStore/persistedBlobState(service:)`` (a four-way read distinguishing
+  decoded / absent / undecodable / unreadable) and
+  ``StoragePreferencesStore/refreshFromPersistedBlob()`` (re-syncs the in-memory copy so a
+  launch-time write cannot persist the frozen defaults over the real blob).
 - **Keychain sync scope is part of the primary key.** ``KeychainItem`` exposes
   ``KeychainItem/SynchronizableScope`` because an iCloud-synced item and a `ThisDeviceOnly` item
   coexist as distinct rows under one service + account; the backup-escrow reconciliation depends
@@ -87,6 +95,7 @@ escape hatch for off-main readers that need the live persisted value.
 
 - ``StoragePreferences``
 - ``StoragePreferencesStore``
+- ``StoragePreferencesBlobState``
 
 ### Keychain Access
 

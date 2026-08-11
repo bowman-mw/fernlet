@@ -144,7 +144,9 @@ public nonisolated enum KeychainItem {
     /// ``ReadResult/found(_:)`` with the item's data, ``ReadResult/absent`` when no item exists,
     /// and ``ReadResult/unreadable(_:)`` carrying the failing `OSStatus`. Used by stores whose
     /// mint-fresh-on-absent path must fail closed on a transient read error (the heart-drop
-    /// prekey blob and the sidecar seal key).
+    /// prekey blob and the sidecar seal key) and by
+    /// `StoragePreferencesStore.persistedBlobState`, the backup-exclusion launch gate's read —
+    /// which must not treat a pre-first-unlock `errSecInteractionNotAllowed` as "never stored".
     public static func loadDistinguishingAbsence(
         account: String,
         service: String,

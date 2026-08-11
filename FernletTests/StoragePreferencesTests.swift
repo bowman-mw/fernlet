@@ -268,6 +268,64 @@ struct StoragePreferencesTests {
         #expect((attributes[kSecAttrSynchronizable as String] as? Bool) != true)
     }
 
+    /// `persistedBlobState` distinguishes the three keychain-reachable outcomes the tolerant
+    /// `currentPreferences` collapses: absent (never stored), decoded (a live blob), and
+    /// undecodable (a row whose JSON rotted). The fourth case, `.unreadable`, cannot be produced
+    /// against a real simulator keychain (it needs a pre-first-unlock read failure), so its
+    /// fail-closed handling is pinned at the consumer instead —
+    /// `BackupExclusionLaunchGateTests/unreadableKeychainDefersResolutionWithoutLatchingOrWriting`.
+    @Test func persistedBlobStateDistinguishesAbsentDecodedAndUndecodable() throws {
+        let service = testServiceID()
+        defer { KeychainItem.delete(for: .storagePreferences, service: service) }
+
+        // Absent: nothing stored yet.
+        guard case .absent = StoragePreferencesStore.persistedBlobState(service: service) else {
+            Issue.record("an empty service must read .absent")
+            return
+        }
+
+        // Decoded: a real blob round-trips with its values.
+        let store = StoragePreferencesStore(keychainService: service)
+        store.update { $0.iCloudSyncEnabled = true }
+        guard case .decoded(let decoded) = StoragePreferencesStore.persistedBlobState(service: service) else {
+            Issue.record("a stored blob must read .decoded")
+            return
+        }
+        #expect(decoded.iCloudSyncEnabled == true)
+
+        // Undecodable: a present row that is not the blob's JSON — present, but values unknown.
+        KeychainItem.store(Data("not json".utf8), for: .storagePreferences, service: service)
+        guard case .undecodable = StoragePreferencesStore.persistedBlobState(service: service) else {
+            Issue.record("a corrupt row must read .undecodable, never .absent — its presence is prior-use evidence")
+            return
+        }
+    }
+
+    /// `refreshFromPersistedBlob` replaces a stale in-memory copy with the live keychain value —
+    /// the seam that lets a launch-time writer (the Phase-6 gate) mutate the user's REAL
+    /// preferences instead of persisting the launch-frozen fallback copy over them.
+    @Test func refreshFromPersistedBlobReplacesAStaleInMemoryCopy() {
+        let service = testServiceID()
+        defer { KeychainItem.delete(for: .storagePreferences, service: service) }
+
+        // `stale` loads while nothing is stored: its copy is frozen defaults.
+        let stale = StoragePreferencesStore(keychainService: service)
+        #expect(stale.preferences.iCloudSyncEnabled == false)
+
+        // Another writer persists the real blob afterwards.
+        let writer = StoragePreferencesStore(keychainService: service)
+        writer.update {
+            $0.iCloudSyncEnabled = true
+            $0.sealedBackupPeriodEnabled = true
+        }
+
+        stale.refreshFromPersistedBlob()
+
+        #expect(stale.preferences == writer.preferences)
+        // A refresh is a read, never a write: the persisted blob is byte-identical afterwards.
+        #expect(StoragePreferencesStore.currentPreferences(service: service) == writer.preferences)
+    }
+
     private func testServiceID() -> String {
         "com.fernlet.storage-preferences.tests.\(UUID().uuidString)"
     }
