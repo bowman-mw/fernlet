@@ -3,9 +3,11 @@
 **Contract:** every persistence surface in the app appears in exactly one of the two tables below —
 either it is cleared by "Delete everything" (`FernletStore.deleteAllData`), or it is a documented
 deliberate exception. `FernletTests/PrivacyWipeCoverageTests.swift` enforces the first table
-mechanically: it scans the wipe path for one token per row, so removing a wipe call (or adding a
-store without wiring + documenting it) fails the suite. **Adding a store = add its wipe call, a row
-here, and its token in the test — in the same commit.**
+mechanically, in both directions: it scans the wipe path for one token per row, so removing a wipe
+call (or adding a store without wiring + documenting it) fails the suite — and every row's token
+must appear in the test's manifest (`everyDocumentedWipeRowIsEnforcedByTheManifest`), so a
+documented-but-unenforced row fails too. **Adding a store = add its wipe call, a row here, and its
+token in the test — in the same commit.**
 
 The scan is bounded to the BODIES of `deleteAllData` and `resetAll` (the wipe's one delegated leg),
 with comments stripped. A whole-file scan used to satisfy a row from an unrelated function — the
@@ -64,7 +66,7 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | --- | --- | --- |
 | Pending debounced snapshot saves | SnapshotSaveCoordinator | `snapshotSaveCoordinator.cancelPending` (start AND after purge) |
 | Sealed iCloud backups (all payload types) | CloudKit private DB | `setSealedBackupEnabled` |
-| Sealed-backup rollback high-water mark | `UserDefaults` (device-local) | `SealedBackupGenerationStore.reset` |
+| Sealed-backup rollback high-water mark | `SealedBackupGenerationStore` (UserDefaults, device-local) | `generationStore.reset` (the call site is two lines — construct, then `.reset()` — so the token is the variable's spelling; the type name never appears on the calling line) |
 | Kept cloud copy | CloudKit | `cloudCopyDeleteHook` |
 | Cycle narratives (sealed rows) | Private stores | `periodDataDeleteHook` |
 | Intimacy logs (sealed rows) | Private stores | `intimacyDataDeleteHook` |
@@ -148,3 +150,23 @@ repository purge takes it.)
 - iCloud keychain sync propagates the escrow-row deletion to the user's other devices; their sealed
   backups were already deleted account-wide in step 2, and the escrow reconcile flow (WS-3) re-mints
   non-silently on next enable, so nothing is stranded.
+
+## Audit trail
+
+- **2026-08-10 — security-hardening P1b, against the post-P1a tree (merge `aaa4aac`).** Full walk of
+  the comment-stripped `deleteAllData` + `resetAll` bodies — including the hooks they invoke and the
+  P1a additions: `sealedStoreRebuildHook`, and `FernletLockService.reset()`'s
+  `sealedContentKeyServices` sweep on its own path — against this doc's cleared-by table and the
+  test's `wipeManifest`, in BOTH directions. Result: every funnel call that clears a user-data
+  surface has a doc row and an enforced token; every row's token resolves to a real, reachable,
+  production-wired call; and the deliberate-exceptions table cross-checks clean — each survivor
+  (`com.fernlet.lock`, `com.fernlet.private-media`, `com.fernlet.moderation`,
+  `com.fernlet.device-binding`, `com.fernlet.healthkit-anchors`, `com.fernlet.narrative-buffer`,
+  MilestoneLedger, the friend photo wall) is present, justified, and genuinely untouched by the
+  funnel bodies. Two gaps found and closed in the same commit: (1) the `SealedBackupGenerationStore`
+  row's token had no manifest entry and could never have matched the two-line call site — re-tokened
+  `generationStore.reset` and enforced; (2) the doc-sync test checked manifest→doc only, so a
+  documented-but-unenforced row was invisible — the reverse direction is now enforced by
+  `everyDocumentedWipeRowIsEnforcedByTheManifest`. Scope of this sign-off: doc ↔ funnel
+  correspondence ONLY. What "cleared" means — and the tier of promise each path may claim — stays
+  defined by the sections above; nothing here upgrades those claims.

@@ -38,6 +38,11 @@ struct PrivacyWipeCoverageTests {
         // Pending work & cloud
         "snapshotSaveCoordinator.cancelPending",
         "setSealedBackupEnabled",
+        // The sealed-backup rollback high-water mark. The call site is two lines (`var
+        // generationStore = SealedBackupGenerationStore()`, then `generationStore.reset()`), so the
+        // token is the variable's spelling — the TYPE name never appears on the calling line and
+        // could never work as a substring token (security-hardening P1b).
+        "generationStore.reset",
         "cloudCopyDeleteHook",
         // Sealed narratives + buffers
         "periodDataDeleteHook",
@@ -168,6 +173,7 @@ struct PrivacyWipeCoverageTests {
     enum BoundingError: Error, CustomStringConvertible {
         case functionNotFound(String)
         case closingBraceNotFound(String)
+        case malformedCoverageDoc(String)
 
         var description: String {
             switch self {
@@ -175,6 +181,8 @@ struct PrivacyWipeCoverageTests {
                 return "Could not find '\(signature)' in FernletStore.swift — renamed? The wipe-coverage scan is bounded to it."
             case .closingBraceNotFound(let signature):
                 return "Could not find the method-level closing brace after '\(signature)' — indentation changed?"
+            case .malformedCoverageDoc(let detail):
+                return "Docs/PrivacyWipeCoverage.md no longer parses as the reverse-direction check expects: \(detail)"
             }
         }
     }
@@ -407,6 +415,59 @@ struct PrivacyWipeCoverageTests {
         #expect(undocumented.isEmpty, "Tokens enforced here but not documented in PrivacyWipeCoverage.md: \(undocumented)")
     }
 
+    /// The reverse direction of `coverageDocExistsWithExceptionsTable`, which checks manifest → doc
+    /// only. Without this half, a documented-but-unenforced row is invisible: a "Wiped by" entry
+    /// whose call was deleted — or whose spelling never worked as a token, like the two-line
+    /// `SealedBackupGenerationStore` call site the P1b audit found — leaves the doc promising a
+    /// wipe nothing checks. Every row of the cleared-by table must name a token this file's
+    /// manifest enforces; the deliberate-exceptions table is skipped by construction, because
+    /// parsing is bounded to the cleared-by section (it stops at the next `##` heading).
+    @Test func everyDocumentedWipeRowIsEnforcedByTheManifest() throws {
+        let root = try Self.repoRoot()
+        let doc = try String(contentsOf: root.appendingPathComponent("Docs/PrivacyWipeCoverage.md"), encoding: .utf8)
+        let tokens = try Self.clearedByTableTokens(in: doc)
+        // A parse that finds almost nothing is a broken parse, not a small table.
+        #expect(tokens.count >= 40, "only \(tokens.count) rows parsed from the cleared-by table — the doc's layout changed and this check is no longer reading it.")
+        let unenforced = tokens.filter { !Self.wipeManifest.contains($0) }
+        #expect(unenforced.isEmpty, "Documented in the cleared-by table but not enforced by wipeManifest: \(unenforced) — add each token to the manifest (with its call really in the funnel), or move the surface to the deliberate-exceptions table.")
+    }
+
+    /// The first backticked span of each row's "Wiped by" column in the doc's "Cleared by Delete
+    /// everything" table — the token, by the table's own convention. First span only, because rows
+    /// decorate their token with prose that may itself carry code spans ("runs LAST in
+    /// `resetAll`…"). Bounded to that one section so the deliberate-exceptions and honesty-tier
+    /// tables are never parsed as wipe promises, and strict about shape: a row that stops splitting
+    /// into exactly three columns, or loses its backticked token, throws rather than being silently
+    /// skipped.
+    static func clearedByTableTokens(in doc: String) throws -> [String] {
+        guard let sectionStart = doc.range(of: "## Cleared by Delete everything") else {
+            throw BoundingError.malformedCoverageDoc("the '## Cleared by Delete everything' heading is gone")
+        }
+        let tail = doc[sectionStart.upperBound...]
+        let section = tail.range(of: "\n## ").map { tail[..<$0.lowerBound] } ?? tail
+
+        var tokens: [String] = []
+        for line in section.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("|") else { continue }
+            // The header row and its `---` separator are structure, not rows.
+            if trimmed.contains("Wiped by") || trimmed.contains("---") { continue }
+            let columns = trimmed.components(separatedBy: "|")
+            // "| a | b | c |" splits into ["", " a ", " b ", " c ", ""] — the wiped-by cell is [3].
+            guard columns.count == 5 else {
+                throw BoundingError.malformedCoverageDoc("a cleared-by row does not have exactly three columns: \(trimmed)")
+            }
+            let wipedBy = columns[3]
+            guard let open = wipedBy.firstIndex(of: "`"),
+                  case let afterOpen = wipedBy.index(after: open),
+                  let close = wipedBy[afterOpen...].firstIndex(of: "`") else {
+                throw BoundingError.malformedCoverageDoc("a cleared-by row has no backticked token in its 'Wiped by' column: \(trimmed)")
+            }
+            tokens.append(String(wipedBy[afterOpen..<close]))
+        }
+        return tokens
+    }
+
     /// Every `com.fernlet.*` keychain service the app uses must be named in one of the two tables —
     /// that is the doc's stated contract, and two services (the HealthKit anchors and the
     /// locked-note buffer key) used to be in neither.
@@ -467,8 +528,13 @@ struct PrivacyWipeCoverageTests {
 /// the friend photo wall the dialog promises to keep becomes unreadable noise on the next launch.
 ///
 /// Separate suite because it drives a real `FernletStore` through the real funnel (the source scans
-/// above are pure). Serialized for the same reason `DeleteAllDataTests` is: a live wipe touches
-/// process-wide keychain + preferences state.
+/// above are pure). The `.serialized` trait is declared for symmetry with `DeleteAllDataTests`, but
+/// be honest about what it buys: it serializes tests WITHIN a suite only, so on this one-test suite
+/// it is inert, and it provides no cross-SUITE exclusion in any case — a live wipe here CAN
+/// interleave at its await points with wipes running in the other suites. That is a latent hazard,
+/// accepted for now (P1b, comment-only): the wipes touch process-wide keychain + preferences state,
+/// and what actually keeps these suites from corrupting each other today is per-test fixtures
+/// (fresh repository files, injected defaults), not scheduling.
 @MainActor
 @Suite(.serialized)
 struct PrivacyWipeMediaKeySurvivalTests {
@@ -503,8 +569,10 @@ struct PrivacyWipeMediaKeySurvivalTests {
 /// asserts survival of a deliberately-kept surface.
 ///
 /// Separate suite for the same reason as the media-key one: it drives a real `FernletStore` through the
-/// real `deleteAllData` funnel (the source scans above are pure), and a live wipe touches process-wide
-/// keychain + preferences state, so it is serialized.
+/// real `deleteAllData` funnel (the source scans above are pure). The `.serialized` trait is inert here
+/// too — one test, and no cross-suite exclusion either way (see the note on
+/// `PrivacyWipeMediaKeySurvivalTests`); what actually isolates this test is its own injected
+/// `UserDefaults` suite (`webImageAttemptDefaults`), not scheduling.
 @MainActor
 @Suite(.serialized)
 struct PrivacyWipeAttemptMemoryRemovalTests {
