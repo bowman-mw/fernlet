@@ -31,7 +31,7 @@ the merge commit on `DONE` or the reason on `BLOCKED`.
 | P0a | Rebase & land `claude/scoped-unlock-per-screen` onto main | Opus | — | auto after green | DONE | 801a3e4 |
 | P0b | PIN-before-biometrics | Fable | P0a | auto | DONE | f5c1f13 |
 | P0c | `RecipeWebImageAttemptMemory` wipe-coverage gap fix | Fable | — | auto | DONE | 2759af9 |
-| P1a | Crypto-erasure normalization | Opus | P0a | auto | TODO | |
+| P1a | Crypto-erasure normalization | Opus | P0a | auto | DONE | aaa4aac |
 | P1b | Deletion-audit verification pass | Fable | — | auto | TODO | |
 | P2 | Hardening #4 — v2 per-generation-salt escrow format | Opus | P1a | auto | TODO | |
 | P3 | Backup coverage — Journal + Intimacy | Opus | P2 | auto | TODO | |
@@ -100,6 +100,7 @@ key; Worry Box stays out) are **not** re-confirmation points — they are settle
 
 _(the loop appends one line per completed phase: `Pxx DONE <hash> — <one line>`)_
 
+- P1a DONE aaa4aac — keyless Option-B rebuild in both delete legs; honesty docs (bounded-honest vs fully-honest); review confirmed 5 (all fixed: reset() sweeps sealed device keys so "crypto-erased" is true; structurally no-storeless rebuild + saveSealed() conversion; one _SUPPORT spelling); 274-test verify green. Owner's P8 brief (c6b4977) + runbook queue commit (fcc7a73) landed alongside.
 - P0c DONE 2759af9 — RecipeWebImageAttemptMemory manifest token + doc row + behavioral removal test; review fixed the verify-batch selector gap; two advisories carried to P1b (SealedBackupGenerationStore.reset has a doc row but no manifest token — doc-sync test checks manifest→doc only; `.serialized` is inert cross-suite on the live-wipe suites); verify green.
 - P0b DONE f5c1f13 — PIN-before-biometrics fail-closed at the service guard + single isBiometricUnlockAvailable policy at both UI sites; review confirmed 3 test-strength findings (fixed: loader-consult ordering pin + test-only biometricTypeOverride seam); refuted 1 (unlock-screen copy = open owner sub-decision §10); verify green.
 - P0a DONE 801a3e4 — scoped-unlock landed over the d68ca9a SE seams as the documented union; seam audit pass; 12 review findings all refuted (pre-existing/original-branch design, several noted for P1a/P1b); verify green (clean build, 424 cases across owning suites + tripwires, wall check, doc coverage 0). Gotcha: `-only-testing:FernletTests/WorryBoxTests` is vacuous — the file declares suites `WorryBoxRepositoryTests` + `WorryBoxServiceTests`; use those names.
