@@ -32,6 +32,13 @@ public enum FernletLockError: Error, LocalizedError {
     case internalError(String)
     /// The lock is currently closed; the operation requires the unlocked state.
     case locked
+    /// The passcode was CORRECT but the content key can no longer be recovered: the lock is
+    /// hard-bound to this device's Secure Enclave and that enclave key is gone (an "Erase All
+    /// Content and Settings", a Secure-Enclave reset, or a restore onto different hardware).
+    /// The sealed corpus is cryptographically unopenable — only a destructive app-lock reset
+    /// moves the app forward. Distinct from ``invalidPasscode`` on purpose: nothing about the
+    /// entry was wrong, so the user must not be told to try again (the nothing-silent principle).
+    case contentKeyUnrecoverable
 
     /// User-facing description for each case, suitable for direct display in the lock UI.
     public var errorDescription: String? {
@@ -69,6 +76,8 @@ public enum FernletLockError: Error, LocalizedError {
             return "Internal error: \(message)"
         case .locked:
             return "App lock is locked."
+        case .contentKeyUnrecoverable:
+            return "Sealed data can no longer be opened on this device. Reset app lock to continue."
         }
     }
 }

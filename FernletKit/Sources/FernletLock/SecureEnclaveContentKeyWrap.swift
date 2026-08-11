@@ -1,11 +1,12 @@
 // SecureEnclaveContentKeyWrap.swift
 // Fernlet
 //
-// Additive Secure-Enclave second wrap of the lock content key (Docs/Verifiability.md §4).
-// The legacy scrypt-wrapped item remains authoritative and untouched; this wrap exists so
-// that HARD device-binding (deleting the scrypt item, making the sealed corpus unopenable
-// off-device even with the passcode) becomes a one-line policy flip instead of a flag-day
-// migration — that flip is an explicit owner decision (Verifiability.md §6.1), not this code.
+// Secure-Enclave wrap of the lock content key (Docs/Verifiability.md §4, §6.1).
+// HARD device-binding: on hardware with an enclave this wrap becomes the AUTHORITATIVE — and
+// only — recoverable copy of the content key once `FernletLockService` has proven a full
+// unwrap round-trip and deleted the scrypt-wrapped item, so the sealed corpus plus a full
+// keychain dump is useless off-device even with the passcode. Where no enclave exists the
+// scrypt item is never deleted and this file is inert.
 
 import CryptoKit
 import Foundation
@@ -13,12 +14,20 @@ import Security
 
 /// ECIES wrap/unwrap of the lock content key under a non-exportable Secure Enclave P-256 key.
 ///
-/// Purely additive plumbing driven by `FernletLockService`: after every successful unlock the
-/// service verifies (or creates, with a full round-trip check) a second copy of the content key
-/// wrapped under a Secure-Enclave-resident key, stored beside the legacy scrypt-wrapped item.
-/// Every operation is best-effort and fails soft to `nil` — on a device or simulator without a
-/// Secure Enclave, under any keychain error, or on a stale wrap, behavior degrades to exactly
-/// the pre-existing scrypt path. Nothing here may ever *block* an unlock or delete legacy state.
+/// Driven entirely by `FernletLockService`, which maintains the wrap (creating it with a full
+/// round-trip check) on every successful configure and unlock. The wrap's standing depends on the
+/// service's two custody states — this type is deliberately unaware of which one is in force:
+/// - **LEGACY** (scrypt item present, or no enclave at all): additive. Every operation fails soft
+///   to `nil`, and behavior degrades to exactly the pre-existing scrypt path — nothing here may
+///   block an unlock.
+/// - **HARD-BOUND** (scrypt item deleted after this wrap proved a round-trip): authoritative.
+///   ``unwrap(_:service:)`` returning `nil` then means the content key is gone for good, which
+///   the service surfaces as `FernletLockError.contentKeyUnrecoverable` rather than as a
+///   fallback. Deleting the scrypt item is the service's decision, made only against a freshly
+///   re-read blob that this type demonstrably opens.
+///
+/// Nothing here ever deletes lock state; ``deleteKey(service:)`` destroys only the enclave key
+/// itself, and only from `FernletLockService.reset()`.
 ///
 /// The SE private key is a `kSecClassKey` item (token `kSecAttrTokenIDSecureEnclave`,
 /// `WhenUnlockedThisDeviceOnly` + `.privateKeyUsage`, permanent, tagged per keychain-service so
@@ -56,7 +65,8 @@ nonisolated enum SecureEnclaveContentKeyWrap {
             return nil
         }
         // Keep-old-until-verified: only hand back a blob the enclave demonstrably opens to the
-        // exact input. If verification fails, the caller keeps relying on the scrypt path.
+        // exact input. If verification fails, the caller keeps relying on the scrypt path — and,
+        // crucially, never reaches the point where it would delete that path.
         guard let roundTripped = unwrap(wrapped, service: service), roundTripped == contentKey else { return nil }
         return wrapped
     }

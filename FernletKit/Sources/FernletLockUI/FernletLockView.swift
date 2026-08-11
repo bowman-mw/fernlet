@@ -723,6 +723,11 @@ public struct FernletLockView: View {
             } catch FernletLockError.resetRequired {
                 passcode = ""
                 errorMessage = "Reset required."
+            } catch FernletLockError.contentKeyUnrecoverable {
+                // The passcode was RIGHT; this device's Secure Enclave key is gone, so the sealed
+                // data is unopenable. Say so instead of inviting another attempt (nothing-silent).
+                passcode = ""
+                errorMessage = "Sealed data can no longer be opened on this device. Reset app lock to continue."
             } catch {
                 passcode = ""
                 errorMessage = error.localizedDescription

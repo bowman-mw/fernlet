@@ -261,8 +261,15 @@ struct FernletLockCryptoTests {
 
         #expect(service.contentKey(for: .privateHub) == nil)
         #expect(loadKeychainData(account: "com.fernlet.lock.biometricBypass", service: service.keychainService) == nil)
-        let wrappedContentKey = try #require(loadKeychainData(account: "com.fernlet.lock.wrappedContentKey", service: service.keychainService))
-        #expect(wrappedContentKey != originalContentKey)
+        // Whichever custody state this hardware lands in, the stored wrap must not BE the key:
+        // hard-bound (SE hardware) leaves only the enclave blob, legacy leaves the scrypt item.
+        if let wrappedContentKey = loadKeychainData(account: "com.fernlet.lock.wrappedContentKey", service: service.keychainService) {
+            #expect(wrappedContentKey != originalContentKey)
+        } else {
+            let seWrapped = try #require(loadKeychainData(account: "com.fernlet.lock.seWrappedContentKey", service: service.keychainService),
+                                         "hard-bound (no scrypt item) requires the enclave wrap to exist")
+            #expect(seWrapped != originalContentKey)
+        }
         try? service.reset()
     }
 
@@ -280,14 +287,22 @@ struct FernletLockCryptoTests {
         #expect(storedVerifier == Data(SHA256.hash(data: derivedKey)))
         #expect(storedVerifier != derivedKey)
 
-        // The stored verifier must NOT unwrap the content key — that requires the raw derived key.
-        let wrapped = try #require(loadKeychainData(account: "com.fernlet.lock.wrappedContentKey", service: service.keychainService))
-        #expect(throws: (any Error).self) {
-            _ = try FernletLockCrypto.unwrapContentKey(wrapped, using: storedVerifier)
+        // The scrypt-wrap half of this claim only exists in the LEGACY custody state; on SE
+        // hardware configure() is born hard-bound and deletes the item (Verifiability.md §6.1).
+        if let wrapped = loadKeychainData(account: "com.fernlet.lock.wrappedContentKey", service: service.keychainService) {
+            // The stored verifier must NOT unwrap the content key — that requires the raw derived key.
+            #expect(throws: (any Error).self) {
+                _ = try FernletLockCrypto.unwrapContentKey(wrapped, using: storedVerifier)
+            }
+            // ...whereas the raw derived key DOES unwrap it (proving the digest is the only thing persisted).
+            let unwrapped = try FernletLockCrypto.unwrapContentKey(wrapped, using: derivedKey)
+            #expect(unwrapped.count == FernletLockCrypto.keyLength)
+        } else {
+            // Hard-bound: the stronger property holds — NO passcode-derived material in the
+            // keychain opens the content key at all; only the enclave does.
+            #expect(loadKeychainData(account: "com.fernlet.lock.seWrappedContentKey", service: service.keychainService) != nil,
+                    "hard-bound (no scrypt item) requires the enclave wrap to exist")
         }
-        // ...whereas the raw derived key DOES unwrap it (proving the digest is the only thing persisted).
-        let unwrapped = try FernletLockCrypto.unwrapContentKey(wrapped, using: derivedKey)
-        #expect(unwrapped.count == FernletLockCrypto.keyLength)
         try? service.reset()
     }
 
