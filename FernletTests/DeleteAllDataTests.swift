@@ -4,6 +4,7 @@ import Foundation
 import Testing
 // @testable for the internal `save`, which seeds the share-extension inbox the way the extension does.
 @testable import AppServices
+import CloudKitSync
 import FernletDomainModel
 import FernletFoundation
 import FernletLock
@@ -467,6 +468,42 @@ struct DeleteAllDataTests {
         await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(inFlight.isCancelled, "the wipe left the period-backup settle running")
+    }
+
+    /// The intimacy un-hide settle is the same class of live writer as the period one, added with the
+    /// intimacy backup payload: suspended in its CloudKit fetch it would resume after the wipe and
+    /// re-insert intimate logs into the just-emptied store.
+    @Test func deleteAllCancelsTheInFlightIntimacyBackupSettle() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-intimacy-settle")))
+        let inFlight = Task { while !Task.isCancelled { await Task.yield() } }
+        store.intimacyBackupSettleTask = inFlight
+
+        await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(inFlight.isCancelled, "the wipe left the intimacy-backup settle running")
+    }
+
+    /// EVERY payload's re-upload deferral points at a backup the wipe just deleted (and at local data
+    /// that is going with it), so none may survive as an obligation the app will keep surfacing — and
+    /// keep retrying — against records that no longer exist.
+    @Test func deleteAllClearsEveryPayloadsReuploadDeferral() async {
+        let store = FernletStore(repository: LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-deferrals")))
+        wireSucceedingSealedHooks(store)
+        var persisted: [SealedBackupPayloadType: Bool] = [:]
+        store.sealedBackupDeferralPersistHook = { deferred, payload in persisted[payload] = deferred }
+        for payload in SealedBackupPayloadType.allCases {
+            store.recordSealedBackupReuploadDeferred(true, payloadType: payload)
+        }
+
+        await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(store.sealedBackupPeriodReuploadDeferred == false)
+        #expect(store.sealedBackupJournalReuploadDeferred == false)
+        #expect(store.sealedBackupIntimacyReuploadDeferred == false)
+        // …and the persisted copies too, or the obligation comes back at the next launch.
+        #expect(persisted[.periodData] == false)
+        #expect(persisted[.journalNarratives] == false)
+        #expect(persisted[.intimacyLogs] == false)
     }
 
     /// Wires every sealed/reset hook to succeed, for tests that need an otherwise-complete wipe.

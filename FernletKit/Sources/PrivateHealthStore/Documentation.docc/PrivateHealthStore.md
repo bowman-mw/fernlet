@@ -55,9 +55,25 @@ promise. When a narrative is logged *while locked*, it detours through the devic
 `PendingNarrativeBuffer` (via ``PeriodLockContext``) and is re-sealed on
 the next unlock by ``PeriodTrackerStore/drainPendingBuffer(contentKey:)`` — which is itself
 visibility-gated, because the buffer's device key is invisible to content-key withholding.
-``MenstrualNarrativeRepository`` additionally owns the one-way "ever stored" divergence latch and
-the paged/atomic fetch-and-restore surface the app-side `SealedBackupCoordinator` uses, so a
-sealed-backup restore can never resurrect narratives the user deliberately deleted.
+``MenstrualNarrativeRepository`` and — since the 2026-08-10 backup-coverage work —
+``IntimacyLogRepository`` each own a one-way "ever stored" divergence latch (device-local,
+non-synced `UserDefaults`, injected so tests get isolation) plus the paged/atomic
+fetch-and-restore surface the app-side `SealedBackupCoordinator` uses: a keyless row count, a
+paged reader in a *total* order (`dateKey`/`eventDate` then the unique id, so successive export
+chunks never overlap or skip), and an all-or-nothing `insertAtomically`. Every mutation — deletes
+included — sets the latch, so a sealed-backup restore can never resurrect rows the user
+deliberately deleted, and the latch deliberately survives "delete everything" so the wipe cannot
+be undone by a stale cloud copy.
+
+The intimacy backup still goes through ``IntimacyLogStore``, never the raw repository — the app
+target is grep-walled against constructing ``IntimacyLogRepository`` so no call site can read or
+write around the hard gate. The funnel's sealed-backup seam splits gating per member: the row count
+and the latch are UNGATED (they decrypt nothing, and a hidden store reading as "empty" would let a
+restore write in behind the gate), while the paged export and the restore insert are GATED and
+throw rather than degrading to `[]` — a silently-empty export would replace the user's cloud backup
+with nothing. Above that, the coordinator skips the payload entirely while hidden: a hidden
+reconcile is a silent no-op, never a preference flip, because turning the preference off would
+delete the iCloud backup and make hiding destructive.
 
 Prediction is pure computation layered on top: ``CyclePredictionEngine`` is a stateless,
 `nonisolated` fitter that detects periods from observed flow days, rejects implausible or

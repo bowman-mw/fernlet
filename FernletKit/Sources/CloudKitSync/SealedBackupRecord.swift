@@ -13,13 +13,30 @@
 
 import Foundation
 
-/// Which sealed dataset a backup record carries: sensitive notes or period data.
+/// Which sealed dataset a backup record carries: sensitive notes, period data, journal narratives,
+/// or intimacy logs.
 ///
 /// The raw value keys the deterministic CloudKit record name (`sealed-backup.<type>`), so each
-/// payload type has exactly one backup — a head record plus optional chunks — per account.
+/// payload type has exactly one backup — a head record plus optional chunks — per account. It is
+/// ALSO bound into the GCM additional-authenticated-data (`SealedBackupCrypto.authenticatedData`),
+/// which is what stops a chunk being replayed as a different payload.
+///
+/// - Important: These raw values are **at-rest format**. Renaming one orphans every backup already
+///   in users' CloudKit databases (the record name no longer resolves) *and* breaks the AAD of any
+///   record that is still fetched, so they must never change once shipped.
+///
+/// - Note: The Worry Box is deliberately absent. "Let it go" notes are device-only by design (see
+///   `PrivatePersistenceController.makeWorryNarrativeEntity`), so they are not backed up and do not
+///   survive a device reset — an accepted property, not an oversight.
 public enum SealedBackupPayloadType: String, Codable, CaseIterable {
     case sensitiveNotes
     case periodData
+    /// Sealed journal narratives (`JournalNarrative` rows). Added 2026-08-10 so journal text survives
+    /// a fresh install — the precondition for hard-binding the lock content key.
+    case journalNarratives
+    /// Sealed intimacy logs (`IntimacyLog` rows). Added 2026-08-10; this **reverses** the earlier
+    /// "intimacy is not part of any sealed backup" decision (see `Docs/Verifiability.md` §6.1).
+    case intimacyLogs
 }
 
 /// Opaque encrypted envelope for one chunk of a sealed backup, as stored in CloudKit.

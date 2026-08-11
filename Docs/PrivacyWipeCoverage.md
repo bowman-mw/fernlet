@@ -65,7 +65,7 @@ repository purge runs late, widget files last. See the numbered commentary insid
 | Surface | Where it lives | Wiped by (token) |
 | --- | --- | --- |
 | Pending debounced snapshot saves | SnapshotSaveCoordinator | `snapshotSaveCoordinator.cancelPending` (start AND after purge) |
-| Sealed iCloud backups (all payload types) | CloudKit private DB | `setSealedBackupEnabled` |
+| Sealed iCloud backups (all payload types — sensitive notes, period, **journal narratives**, **intimacy logs**) | CloudKit private DB | `setSealedBackupEnabled` |
 | Sealed-backup rollback high-water mark | `SealedBackupGenerationStore` (UserDefaults, device-local) | `generationStore.reset` (the call site is two lines — construct, then `.reset()` — so the token is the variable's spelling; the type name never appears on the calling line) |
 | Kept cloud copy | CloudKit | `cloudCopyDeleteHook` |
 | Cycle narratives (sealed rows) | Private stores | `periodDataDeleteHook` |
@@ -129,6 +129,7 @@ repository purge takes it.)
 | Install-binding ID — keychain `com.fernlet.device-binding` | 16 cryptographically random bytes minted per install and used only as AEAD associated data on sealed-column writes (`ColumnCrypto` v2 / `DeviceBindingID`). It identifies the INSTALL, never the person, and every ciphertext bound with it was just purged — so the surviving row discloses nothing and protects nothing extra. Deleting it mid-wipe would recreate the exact hazard the durably-stored-before-trusted mint guards against: the in-memory cache could seal post-wipe rows under an AAD no longer in the keychain, making them unopenable after relaunch. Data logged after the wipe simply re-binds under the same install ID | — (ThisDeviceOnly, never synchronized; a device reset or keychain wipe replaces it and the next seal mints a fresh one) |
 | HealthKit anchor cursors — keychain `com.fernlet.healthkit-anchors` | Opaque `HKQueryAnchor` sync cursors, not health data: they record how far Fernlet has read, never what it read. Keeping them is what makes the wipe STICK — a reset cursor makes the next anchored query replay Fernlet's entire Health history back into the just-emptied day store | Turning HealthKit off (`HealthKitService.disableIntegration` → `HealthKitAnchorKeychain.deleteAll`) |
 | Locked-note buffer device key — keychain `com.fernlet.narrative-buffer` (plus the service-less legacy `com.fernlet.buffer.key` account) | The buffer FILE it decrypts is purged by `pendingNarrativeBufferPurgeHook`, so the surviving key opens nothing live; it is re-used for the next note written while locked. **Asymmetry, flagged owner call (Opus track §12):** the journal and Worry Box device keys ARE deleted in the same funnel, and under the crypto-erasure baseline the difference now matters — the sealed store gets its file rebuilt, but the buffer is a plain file whose deleted bytes get no equivalent treatment, so the surviving key is what would keep any file-system residue of it openable. Deleting it in the funnel is the symmetric fix; it is deliberately NOT done here pending the owner's call | — |
+| **Sealed-store divergence latches** — `UserDefaults` (device-local, non-synced): `fernlet.menstrualNarrative.everStored`, `fernlet.journalNarrative.everStored`, `fernlet.intimacyLog.everStored` | One bit each: "this install held cycle / journal / intimacy rows at some point". They must OUTLIVE the wipe — that is the whole mechanism. Every sealed repository's `deleteAll()` SETS its latch, so after "delete everything" the store reads empty-**and**-diverged; a sealed-backup chunk that survived a failed delete then cannot be restored back onto the device at the next launch. Clearing them here would make the wipe undoable by a stale cloud copy. They hold no user content — one boolean, no timestamps, no counts — and a genuine reinstall clears them for free when iOS drops the app container, which is exactly the "never populated" state a real new device should have | Dies with the app container on uninstall / device reset |
 | ReplayCache | Memory-only, self-expiring (24 h); dies with the process | — |
 | Identity in OTHER devices' trust vaults | Friends' devices hold the OLD public key; nothing this device can delete remotely. The wipe breaks the pairing (new identity ≠ vault row), and friends see a stranger until re-friending in person | — |
 
@@ -152,6 +153,26 @@ repository purge takes it.)
   non-silently on next enable, so nothing is stranded.
 
 ## Audit trail
+
+- **2026-08-10 — security-hardening P3 (backup coverage).** Two sealed-backup payload types were
+  added (`journalNarratives`, `intimacyLogs`). The cleared-by table's "Sealed iCloud backups" row
+  covers them without a new token: the wipe loops `SealedBackupPayloadType.allCases`, so
+  `setSealedBackupEnabled(false, …)` reaches every payload the user enabled, and
+  `SealedBackupGenerationStore.reset()` (row above it) clears every payload's high-water mark the same
+  way — both verified by `SealedBackupRollbackTests` walking `allCases`. Two device-local
+  `UserDefaults` divergence latches were added beside the existing menstrual one and are recorded in
+  the deliberate-exceptions table: they must survive the wipe, and the reason is spelled out there.
+  No new wipe call, no new token, no manifest change.
+
+  **P3 review fixes (same day).** Two additions the wipe now makes, neither of which needs a manifest
+  token: (a) the per-payload re-upload deferrals are cleared over `allCases` rather than period-only,
+  so no payload keeps an obligation pointing at a backup the wipe deleted; (b) the intimacy un-hide
+  settle joins the period one in the cancel-the-live-writers step, so a settle suspended in its
+  CloudKit fetch cannot resume after the wipe and re-insert logs. Both covered by
+  `DeleteAllDataTests`. Separately, the preference reset's `keepSealedBackupFlags` branch now copies
+  every payload flag through `StoragePreferences.copySealedBackupFlags(from:)` — the open-coded copy
+  in `ContentView` had silently dropped the two new flags, which would have abandoned their CKRecords
+  after a failed delete (`hasSealedBackup` false → no retry, and no later wipe, ever finds them).
 
 - **2026-08-10 — security-hardening P1b, against the post-P1a tree (merge `aaa4aac`).** Full walk of
   the comment-stripped `deleteAllData` + `resetAll` bodies — including the hooks they invoke and the

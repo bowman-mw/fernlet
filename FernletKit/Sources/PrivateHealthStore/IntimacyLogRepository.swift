@@ -13,7 +13,12 @@ import PrivateStoreCore
 /// while ``note`` exists only as ChaChaPoly ciphertext and is decrypted by ``IntimacyLogRepository``
 /// on read. The clinical fact of the activity itself lives in HealthKit as a sexual-activity sample
 /// (linked via ``healthKitExternalUUID``); this type carries only Fernlet's note about it.
-public nonisolated struct IntimacyLog: Identifiable, Equatable {
+///
+/// `Codable` so the app-side sealed-backup export can serialize decrypted rows into its re-encrypted
+/// chunks (payload type `intimacyLogs`) and the restore can decode them back. The type is
+/// self-contained — nothing outside this row is needed to render a restored log — which is why
+/// intimacy restore, unlike journal restore, needs no day-skeleton reconstruction step.
+public nonisolated struct IntimacyLog: Identifiable, Codable, Equatable {
     public var id: UUID
     /// Canonical `yyyy-MM-dd` day key derived from ``eventDate`` (see `FernletDate`).
     public var dayKey: String
@@ -80,7 +85,16 @@ public nonisolated struct IntimacyLog: Identifiable, Equatable {
 /// skipped rather than failing the whole fetch), and deletes never need the key — they drop rows
 /// without decrypting, which is what keeps the full wipe available while locked or hidden. Every
 /// mutation prunes Core Data persistent history afterward (best-effort) so superseded ciphertext
-/// does not linger in the transaction log.
+/// does not linger in the transaction log — and every mutation (deletes included) sets the one-way
+/// divergence latch.
+///
+/// The app's `SealedBackupCoordinator` is the second client (payload type `intimacyLogs`, added
+/// 2026-08-10) — but it too goes through ``IntimacyLogStore``, never here directly: the app target is
+/// grep-walled against constructing this repository so no call site can read or write around the hard
+/// gate. The backup surface it uses is the paged ``logs(offset:limit:contentKey:)`` / ``logCount()``
+/// pair, ``insertAtomically(_:contentKey:)``, and ``hasEverStoredLog`` (so a restore can never
+/// resurrect logs the user deliberately deleted), each exposed through the funnel's sealed-backup
+/// seam with its own gating decision.
 ///
 /// A `nonisolated` final class: all Core Data access is serialized through the view context's
 /// `performAndWait`, so it is callable from any executor.
@@ -88,18 +102,71 @@ public nonisolated final class IntimacyLogRepository {
     private let context: NSManagedObjectContext
     private let crypto = ColumnCrypto(label: "intimacy-log")
 
+    /// Device-local marker for "this install has written intimacy logs at some point", used by the
+    /// sealed-backup restore to tell TWO very different empty stores apart:
+    ///
+    /// - **never populated** (a genuine reinstall / new device) — restoring the sealed backup is the
+    ///   whole point, and there is nothing local to lose.
+    /// - **emptied by the user** (they deleted their logs) — the cloud backup is stale by construction,
+    ///   because deletes do not reconcile the sealed backup. Restoring there would silently resurrect
+    ///   intimacy notes the user deliberately deleted, which is precisely the harm the sealed store
+    ///   exists to prevent.
+    ///
+    /// Mirrors `MenstrualNarrativeRepository.hasEverStoredNarrative` exactly, including living in
+    /// **standard (device-local, non-synced) defaults**: iOS drops the app container on uninstall, so a
+    /// real reinstall clears it for free, while a delete-all on a live install leaves it SET so the
+    /// wipe cannot be undone by a stale cloud copy. Never cleared once set — a one-way latch.
+    ///
+    /// - Important: The key string is device-local state a shipped build already writes; changing it
+    ///   would silently reset every existing install's latch back to "never populated".
+    private static let everStoredDefaultsKey = "fernlet.intimacyLog.everStored"
+
+    /// Injected so tests get an isolated suite — the latch is process-global otherwise, and one test
+    /// writing a log would leak "this device has diverged" into every later test in the run.
+    private let defaults: UserDefaults
+
+    /// Reads the latch, BACKFILLING it from the row count first: installs whose logs predate the latch
+    /// (it ships later than the store) have rows but no defaults bit, and without the backfill an
+    /// upgrading user who then deleted their logs would read as "never populated" — re-opening the
+    /// resurrection this latch exists to close. A count error leaves the latch unread and un-backfilled
+    /// (return the raw bit): claiming divergence on an error would wrongly block a genuine reinstall's
+    /// restore forever, and the restore path's own no-clobber count check still refuses a populated store.
+    ///
+    /// Deliberately NOT gated on intimacy visibility: it counts rows without decrypting anything, and a
+    /// hidden store must never read as "never populated" (that would let a restore run behind the gate).
+    public var hasEverStoredLog: Bool {
+        if defaults.bool(forKey: Self.everStoredDefaultsKey) { return true }
+        guard let count = try? logCount(), count > 0 else { return false }
+        markLogStored()
+        return true
+    }
+
+    /// Sets the one-way divergence latch. Called by every mutation — deletes included — AFTER the
+    /// write actually commits, so a failed write never claims this device has diverged.
+    private func markLogStored() {
+        defaults.set(true, forKey: Self.everStoredDefaultsKey)
+    }
+
     /// Creates a repository on a sealed-store stack.
     ///
-    /// - Parameter controller: The private persistence stack to use; `nil` selects the shared
-    ///   `PrivatePersistenceController`.
-    public init(controller: PrivatePersistenceController? = nil) {
+    /// - Parameters:
+    ///   - controller: The private persistence stack to use; `nil` selects the shared
+    ///     `PrivatePersistenceController`.
+    ///   - defaults: Suite holding the divergence latch; tests inject an isolated suite.
+    public init(controller: PrivatePersistenceController? = nil, defaults: UserDefaults = .standard) {
         self.context = (controller ?? .shared).container.viewContext
+        self.defaults = defaults
     }
 
     /// Creates a repository on an explicit managed-object context — the seam tests use to run
     /// against an in-memory store.
-    public init(context: NSManagedObjectContext) {
+    ///
+    /// - Parameters:
+    ///   - context: The managed-object context every operation is funneled through.
+    ///   - defaults: Suite holding the divergence latch; tests inject an isolated suite.
+    public init(context: NSManagedObjectContext, defaults: UserDefaults = .standard) {
         self.context = context
+        self.defaults = defaults
     }
 
     /// Seals and stores a new log, then prunes persistent history (best-effort).
@@ -110,15 +177,83 @@ public nonisolated final class IntimacyLogRepository {
         guard let contentKey else { throw FernletLockError.locked }
         try context.performAndWait {
             let object = NSEntityDescription.insertNewObject(forEntityName: "IntimacyLog", into: context)
-            object.setValue(log.id, forKey: "id")
-            object.setValue(log.dayKey, forKey: "dayKey")
-            object.setValue(log.eventDate, forKey: "eventDate")
-            object.setValue(try crypto.sealString(log.note, contentKey: contentKey), forKey: "noteCiphertext")
-            object.setValue(log.healthKitExternalUUID, forKey: "healthKitExternalUUID")
-            object.setValue(log.createdAt, forKey: "createdAt")
-            object.setValue(log.updatedAt, forKey: "updatedAt")
+            try apply(log, to: object, contentKey: contentKey)
             // Save, then prune history so no prior ciphertext transaction lingers for this sealed row (best-effort).
             try PrivatePersistentHistoryPruner.saveAndPrune(context)
+            // Latch AFTER a successful save, so a failed write never claims this device has diverged.
+            markLogStored()
+        }
+    }
+
+    /// Inserts many logs in a SINGLE transaction: either all commit or none do. Used by the
+    /// sealed-backup RESTORE so a mid-batch failure cannot leave a partially-populated store — a
+    /// partial store would trip the restore no-clobber gate (`logCount() != 0`) on the next launch and
+    /// never retry, silently dropping the un-inserted sealed records.
+    ///
+    /// A plain insert into a store the caller has already proven empty; no upsert, no per-row fetch.
+    ///
+    /// - Important: Throws `FernletLockError.locked` when `contentKey` is `nil`. On any per-record
+    ///   failure the whole batch is rolled back and the error rethrown, leaving the store empty so the
+    ///   next launch re-pulls the full backup.
+    public func insertAtomically(_ logs: [IntimacyLog], contentKey: SymmetricKey?) throws {
+        guard let contentKey else { throw FernletLockError.locked }
+        guard !logs.isEmpty else { return }
+        try context.performAndWait {
+            do {
+                for log in logs {
+                    let object = NSEntityDescription.insertNewObject(forEntityName: "IntimacyLog", into: context)
+                    try apply(log, to: object, contentKey: contentKey)
+                }
+                try context.saveSealed()
+            } catch {
+                context.rollback()
+                throw error
+            }
+            // Prune history after the atomic restore so no per-record transaction lingers in the
+            // persistent-history transaction log (best-effort).
+            try? PrivatePersistentHistoryPruner.prune(context: context)
+            // Latch AFTER the transaction commits. A restore that populates the store also counts as
+            // "this device has intimacy logs", so a later delete-everything cannot re-pull them.
+            markLogStored()
+        }
+    }
+
+    /// Total number of stored logs, counted without decrypting (or even faulting in) any rows. Lets the
+    /// sealed-backup export size its chunks up front, and lets the restore's no-clobber gate run
+    /// without a content key.
+    public func logCount() throws -> Int {
+        try context.performAndWait {
+            try context.count(for: NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog"))
+        }
+    }
+
+    /// A single page of logs, decrypted, in a stable TOTAL order (`eventDate` ASCENDING, then the
+    /// unique `id` tiebreaker). Backs the chunked sealed-backup export: paging by `offset`/`limit`
+    /// keeps each chunk bounded regardless of how long the history is.
+    ///
+    /// Note the direction differs from ``logs(contentKey:)``, which is newest-first for display. Export
+    /// order only has to be *total* and *stable*; ascending matches the other sealed repositories, and
+    /// the `id` tiebreaker is what stops two logs sharing an `eventDate` from sorting
+    /// non-deterministically and making successive pages overlap or skip rows.
+    ///
+    /// Returns `[]` without a key; rows that fail to decrypt are skipped rather than failing the page.
+    public func logs(offset: Int, limit: Int, contentKey: SymmetricKey?) throws -> [IntimacyLog] {
+        guard let contentKey, limit > 0 else { return [] }
+        return try context.performAndWait {
+            let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "eventDate", ascending: true),
+                NSSortDescriptor(key: "id", ascending: true)
+            ]
+            request.fetchOffset = max(0, offset)
+            request.fetchLimit = limit
+            return try context.fetch(request).compactMap { object in
+                do {
+                    return try decryptLog(object, contentKey: contentKey)
+                } catch {
+                    return nil
+                }
+            }
         }
     }
 
@@ -143,22 +278,35 @@ public nonisolated final class IntimacyLogRepository {
 
     /// Deletes one log by `id` without decrypting it, then prunes persistent history. A missing row
     /// is a silent no-op.
+    ///
+    /// Sets the divergence latch when a row was actually removed: the deletion itself is the proof this
+    /// device diverged from the cloud snapshot (the sealed backup is NOT reconciled by deletes), so
+    /// without it, deleting the last log would leave an empty, unlatched store that a later restore
+    /// would happily re-populate from the stale cloud copy.
     public func delete(id: UUID) throws {
         try context.performAndWait {
             let request = NSFetchRequest<NSManagedObject>(entityName: "IntimacyLog")
             request.fetchLimit = 1
             request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
-            try context.fetch(request).forEach(context.delete)
+            let rows = try context.fetch(request)
+            rows.forEach(context.delete)
             try context.saveSealed()
             try PrivatePersistentHistoryPruner.prune(context: context)
+            if !rows.isEmpty { markLogStored() }
         }
     }
 
     /// Drops every stored log. Deletes rows WITHOUT decrypting them, so it works while the app is locked
     /// and while intimacy tracking is hidden. Routes through the shared `PrivateRowPlumbing.deleteRows`
     /// sequence, like every sealed repository's `deleteAll()`.
+    ///
+    /// Sets the divergence latch iff rows were actually removed — same reasoning as ``delete(id:)``,
+    /// and what keeps "delete everything" from being undone by a stale cloud backup that survived a
+    /// failed chunk delete.
     public func deleteAll() throws {
-        try PrivateRowPlumbing.deleteRows(entityName: "IntimacyLog", in: context)
+        if try PrivateRowPlumbing.deleteRows(entityName: "IntimacyLog", in: context) {
+            markLogStored()
+        }
     }
 
     /// Records the HealthKit external UUID on an already-saved row — plaintext metadata only; the
@@ -173,7 +321,22 @@ public nonisolated final class IntimacyLogRepository {
             object.setValue(Date(), forKey: "updatedAt")
             // Save, then prune history so the prior transaction for this sealed row is not retained (best-effort).
             try PrivatePersistentHistoryPruner.saveAndPrune(context)
+            // An update proves a row existed — latch even when the ORIGINAL insert predates the latch
+            // (an upgrading install), so a later empty store still reads as "diverged", not "fresh".
+            markLogStored()
         }
+    }
+
+    /// Writes one log onto a managed object, sealing the note column. Shared by ``insert(_:contentKey:)``
+    /// and the atomic restore so both write exactly the same columns.
+    private func apply(_ log: IntimacyLog, to object: NSManagedObject, contentKey: SymmetricKey) throws {
+        object.setValue(log.id, forKey: "id")
+        object.setValue(log.dayKey, forKey: "dayKey")
+        object.setValue(log.eventDate, forKey: "eventDate")
+        object.setValue(try crypto.sealString(log.note, contentKey: contentKey), forKey: "noteCiphertext")
+        object.setValue(log.healthKitExternalUUID, forKey: "healthKitExternalUUID")
+        object.setValue(log.createdAt, forKey: "createdAt")
+        object.setValue(log.updatedAt, forKey: "updatedAt")
     }
 
     /// Rehydrates one managed object into an ``IntimacyLog``, decrypting the note column; returns

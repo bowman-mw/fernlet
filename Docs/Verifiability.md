@@ -55,7 +55,7 @@ xcodebuild build-for-testing -scheme Fernlet -destination 'platform=iOS Simulato
 | AI/sync modules structurally cannot reach sealed stores | `Scripts/spm-wall-check.sh` (the enforcement build), and `Scripts/spm-wall-selftest.sh` — the negative test: it *plants* a forbidden `import PrivateHealthStore` inside the walled `AIProviders`, asserts the build fails, reverts, and re-confirms the clean tree passes. Plus the grep half: `-only-testing:FernletTests/S3BoundaryTests`. |
 | The complete egress inventory is accurate | Read [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3 (hardcoded-host allowlist — the test fails on both an unlisted host AND a stale listed one) and §4 (Apple services, user-supplied URLs, link-local mesh). Then grep the tree yourself: every HTTP client must live in one of the three pinned files, so there is very little to read. |
 | Key custody: every sealed-data key is device-bound; only the two sanctioned exceptions exist | `-only-testing:FernletTests/KeyCustodyBoundaryTests` — writes through each production key store and reads the keychain row's actual `kSecAttrAccessible` / `kSecAttrSynchronizable` attributes back, then greps shipping code so `synchronizable: true` and any non-`ThisDeviceOnly` accessibility class appear only at the sanctioned sites. |
-| The at-rest crypto formats cannot drift silently | `-only-testing:FernletTests/FernletLockCryptoTests` (scrypt/verifier/wrap primitives + known-answer vectors pinning all four sealed-column HKDF labels), `-only-testing:FernletTests/ColumnCryptoDeviceBindingTests` (device-bound format v2 + legacy compatibility), `-only-testing:FernletTests/SealedBackupFormatPinTests` (pins record format **v1 and v2**: both escrow HKDF derivations — the legacy static one and the per-generation-salted one — plus the sealed-backup AAD v2 byte layout, which v2 leaves unchanged, all pinned end-to-end, including that a v1 and a v2 record both open on one identity). |
+| The at-rest crypto formats cannot drift silently | `-only-testing:FernletTests/FernletLockCryptoTests` (scrypt/verifier/wrap primitives + known-answer vectors pinning all four sealed-column HKDF labels), `-only-testing:FernletTests/ColumnCryptoDeviceBindingTests` (device-bound format v2 + legacy compatibility), `-only-testing:FernletTests/SealedBackupFormatPinTests` (pins record format **v1 and v2**: both escrow HKDF derivations — the legacy static one and the per-generation-salted one — plus the sealed-backup AAD v2 byte layout, which v2 leaves unchanged, all pinned end-to-end, including that a v1 and a v2 record both open on one identity. It also pins **every payload type's raw value** and round-trips all four on v2 — the raw value keys the CloudKit record name *and* is bound into the AAD, so a rename would orphan existing backups; a relabelled chunk is proved unopenable as another payload). |
 | Observe the app's actual traffic (no source trust required) | Run the app in a simulator behind an intercepting proxy (e.g. mitmproxy: `mitmproxy --mode local`, or set the Mac's system proxy and trust the mitm CA in the simulator). You should see: nothing at install, nothing at launch, nothing during normal logging. Traffic appears **only** when you invoke a feature that names its egress: the off-by-default packaged-food lookup (one request to `html.duckduckgo.com`), a recipe/product URL you pasted, the one-time GET for a saved recipe's own picture on first open of its detail page (to the image host the recipe page itself named via JSON-LD/`og:image` — often a third-party CDN, not the pasted URL's host), the `SFSafariViewController` connection pre-warm to a saved recipe's source host when its detail or notes sheet appears (a DNS lookup + TLS handshake only, no HTTP request), or Apple's own CloudKit/WeatherKit endpoints when you enabled those features. The complete expected-traffic inventory is [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3–§4 — judge any capture against that list, not this summary. Note Apple system services (APNs, App Store, CloudKit) use certificate pinning and will not decrypt — but their *hosts* are visible and are Apple's, not ours. |
 | Release binaries correspond to the source | Byte-exact reproduction of an App Store build is not possible on iOS (Apple re-signs, re-encrypts, and may recompile bitcode-free binaries server-side; see §5). The honest substitute: every release is an annotated **signed git tag**, `Scripts/release-checksum.sh` publishes SHA-256 checksums of the exact archived products for that tag, and anyone can build the same tag themselves and diff behavior — plus sideload their own build; nothing in the app depends on being the App Store copy. |
 
@@ -156,9 +156,26 @@ documented product decision. Recorded so the trade is decided consciously, not b
    decrypt-and-re-export migration. Cost: "Erase All Content and Settings" or any Secure Enclave
    reset destroys the SE key, so a same-device restore from an encrypted backup could no longer
    unlock sealed data with the passcode (today it can — `ThisDeviceOnly` items restore to the
-   *same* device). Escrow-backed payloads would survive; journal/worry/intimacy narratives not
-   covered by the sealed backup would be lost. Consider extending sealed-backup payload coverage
-   to all sealed types before flipping this.
+   *same* device). Escrow-backed payloads would survive; sealed types not covered by the backup
+   would be lost.
+   **Precondition partly satisfied (2026-08-10, security-hardening Phase 3):** journal narratives
+   and intimacy logs are now first-class sealed-backup payload types (`journalNarratives`,
+   `intimacyLogs`, launched directly on record format v2), each behind its own opt-in toggle, so
+   they survive a device reset for any user who enables them. **This REVERSES the earlier
+   "intimacy is not part of any sealed backup" decision** — recorded here and in
+   `Docs/FernletSpecificationV3.md` § "Encrypted Sealed Backup" rather than left to drift.
+   Two gaps remain, both deliberate and both narrowing what #1 may promise:
+   the **Worry Box stays out by design** ("let it go" notes are device-only and are accepted to die
+   on a device reset), and **no-lock installs are uncovered** — the backup pages the lock content
+   key, which is nil when no lock is configured, so a no-lock user's device-key-sealed journals are
+   not backed up (§6.2 is the same trade for the same users).
+   A third, narrower gap found in the P3 review and now surfaced rather than silent: a
+   lock-CONFIGURED device can still hold journal rows sealed under the **device journal key** —
+   entries written before the lock existed, outside the window
+   `JournalSealingCoordinator.migrateDeviceKeyEntriesToUserKey` re-keys. The export refuses rather
+   than shipping a chunk set that silently omits them, and audits any residual shortfall
+   (`sealedBackup.journalPartialExport`), but those rows are still uncovered until a full-store
+   re-key pass exists. That pass is what makes them readable at all and is tracked separately.
 2. **The same hard-binding decision for the no-lock device journal/worry keys.** SE-wrapping them
    removes the erase-and-restore-same-device recovery those users currently have — and no-lock
    users are the least likely to have sealed backup enabled.

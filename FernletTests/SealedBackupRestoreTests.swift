@@ -584,4 +584,113 @@ struct SealedBackupRestoreTests {
         #expect(count == 2)
         #expect(try narrativeRepository.narrativeCount() == 2)
     }
+
+    // MARK: - Journal self-sufficiency (P3): restored entries must actually be VISIBLE
+
+    /// The hazard the `reinstateJournalEntries` hook exists for. `JournalNarrative` carries the whole
+    /// entry, but the journal UI renders `FernletDay.journals` SKELETONS and hydrates the text by id —
+    /// and on a sync-OFF device reset the days blob is gone too. Restoring narrative rows alone would
+    /// leave entries that exist, decrypt, and are rendered by nothing: a silent recovery failure for
+    /// exactly the users the sealed backup exists to protect.
+    ///
+    /// Here the device has NO day rows at all. After the restore, the day must carry the entry (right
+    /// id, tag, date) and reading it back must hydrate the sealed text.
+    @MainActor
+    @Test func journalRestoreReconstructsDaySkeletonsSoEntriesAreVisibleAndHydrate() throws {
+        let (store, _, narratives) = makeTestStoreWithRepositories(
+            date: try #require(FernletDate.date(fromDayKey: "2026-06-10"))
+        )
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        // No days blob whatsoever — the post-reset state.
+        #expect(store.loadDay(for: "2026-06-01").journals.isEmpty)
+
+        let entryDate = try #require(FernletDate.date(fromDayKey: "2026-06-01"))
+        let restored = JournalNarrative(
+            id: UUID(), dayKey: "2026-06-01", tag: .hard, entryDate: entryDate,
+            text: "The words that only live in the sealed store.", emotions: ["tired"],
+            createdAt: entryDate, updatedAt: entryDate
+        )
+        let count = try store.applyRestoredPayload(
+            try JSONEncoder().encode([restored]),
+            payloadType: .journalNarratives,
+            journalRepository: narratives,
+            scope: .payloadStoreOnly
+        )
+        #expect(count == 1)
+
+        // The skeleton landed in the day blob…
+        let skeletons = store.loadDay(for: "2026-06-01").journals
+        #expect(skeletons.count == 1)
+        #expect(skeletons.first?.id == restored.id)
+        #expect(skeletons.first?.tag == .hard)
+        // …carrying NO sealed content (text and emotions are sealed columns; putting them back in the
+        // iCloud-mirrored blob would undo the sealing).
+        #expect(skeletons.first?.text.isEmpty == true)
+        #expect(skeletons.first?.emotions.isEmpty == true)
+
+        // …and the read path hydrates the text and emotions by id from the sealed store.
+        let hydrated = store.loadDayWithDecryptedJournals(for: "2026-06-01").journals
+        #expect(hydrated.first?.text == "The words that only live in the sealed store.")
+        #expect(hydrated.first?.emotions == ["tired"])
+    }
+
+    /// The same reconstruction for TODAY, which the in-memory `day` owns rather than the repository —
+    /// the sealed-journal refresh has to fill it in without a reload.
+    @MainActor
+    @Test func journalRestoreReconstructsTodaysEntriesAndHydratesThemInMemory() throws {
+        let today = try #require(FernletDate.date(fromDayKey: "2026-06-10"))
+        let (store, _, narratives) = makeTestStoreWithRepositories(date: today)
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        let restored = JournalNarrative(
+            id: UUID(), dayKey: "2026-06-10", tag: .good, entryDate: today,
+            text: "Today, recovered.", emotions: [], createdAt: today, updatedAt: today
+        )
+        _ = try store.applyRestoredPayload(
+            try JSONEncoder().encode([restored]),
+            payloadType: .journalNarratives,
+            journalRepository: narratives,
+            scope: .payloadStoreOnly
+        )
+
+        #expect(store.day.journals.map(\.id) == [restored.id])
+        #expect(store.day.journals.first?.text == "Today, recovered.",
+                "the sealed-journal refresh did not hydrate the reconstructed skeleton")
+    }
+
+    /// Reconstruction must be idempotent and additive: an entry the day already holds is never
+    /// duplicated, and an unrelated entry already on the day survives.
+    @MainActor
+    @Test func journalRestoreDoesNotDuplicateEntriesTheDayAlreadyHolds() throws {
+        let today = try #require(FernletDate.date(fromDayKey: "2026-06-10"))
+        let (store, _, narratives) = makeTestStoreWithRepositories(date: today)
+        let key = SymmetricKey(size: .bits256)
+        store.activateSealedJournals(contentKey: key)
+
+        // An entry this device already has (skeleton + sealed row), as a mid-restore race would leave it.
+        let existing = JournalNarrative(
+            id: UUID(), dayKey: "2026-06-10", tag: .good, entryDate: today,
+            text: "Already here.", emotions: [], createdAt: today, updatedAt: today
+        )
+        store.day.journals = [
+            JournalEntry(id: existing.id, text: "", tag: .good, date: today, emotions: [])
+        ]
+
+        let alsoRestored = JournalNarrative(
+            id: UUID(), dayKey: "2026-06-10", tag: .hard, entryDate: today.addingTimeInterval(60),
+            text: "New from the backup.", emotions: [], createdAt: today, updatedAt: today
+        )
+        _ = try store.applyRestoredPayload(
+            try JSONEncoder().encode([existing, alsoRestored]),
+            payloadType: .journalNarratives,
+            journalRepository: narratives,
+            scope: .payloadStoreOnly
+        )
+
+        #expect(store.day.journals.count == 2, "reconstruction duplicated an entry the day already had")
+        #expect(Set(store.day.journals.map(\.id)) == [existing.id, alsoRestored.id])
+    }
 }

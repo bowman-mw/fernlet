@@ -209,4 +209,52 @@ struct SealedBackupRollbackTests {
         // Only the remembered high-water mark catches it.
         #expect(old.generation < store.lastSeen(for: .periodData))
     }
+
+    // MARK: - Every payload type, including the two added in Phase 3
+
+    /// The rollback defense is per-payload-type, and a payload added later inherits it only through
+    /// `allCases`. This walks every case so a new payload cannot ship with an un-exercised counter:
+    /// each one mints monotonically and keeps its own independent high-water mark.
+    @Test func generationsAreMonotonicAndIndependentForEveryPayloadType() {
+        let (defaults, name) = makeSuite()
+        defer { UserDefaults.standard.removePersistentDomain(forName: name) }
+        var store = SealedBackupGenerationStore(defaults: defaults)
+
+        for payloadType in SealedBackupPayloadType.allCases {
+            #expect(store.lastSeen(for: payloadType) == 0, "\(payloadType.rawValue) did not start at zero")
+            #expect(store.mintNext(for: payloadType) == 1)
+            #expect(store.mintNext(for: payloadType) == 2)
+            #expect(store.lastSeen(for: payloadType) == 2)
+        }
+        // Independent, not shared: minting on one payload never moved another's mark.
+        for payloadType in SealedBackupPayloadType.allCases {
+            #expect(store.lastSeen(for: payloadType) == 2)
+        }
+    }
+
+    /// The substitution attack, run against the two new payloads: an authentic but OLDER generation
+    /// opens cleanly (rollback is invisible to the AEAD) and is caught only by the high-water mark.
+    @Test func authenticOlderGenerationIsRejectedForTheNewPayloadTypes() throws {
+        let serviceID = "com.fernlet.sealed-backup.rollback.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let identity = try makeSealingIdentity(serviceID)
+        let (defaults, name) = makeSuite()
+        defer { UserDefaults.standard.removePersistentDomain(forName: name) }
+        var store = SealedBackupGenerationStore(defaults: defaults)
+
+        for payloadType in [SealedBackupPayloadType.journalNarratives, .intimacyLogs] {
+            let old = try SealedBackupCrypto.seal(
+                Data("superseded \(payloadType.rawValue)".utf8),
+                payloadType: payloadType,
+                identityService: identity,
+                generation: 2
+            )
+            store.recordAccepted(5, for: payloadType)
+            #expect(throws: Never.self) {
+                try SealedBackupCrypto.open(old, identityService: identity)
+            }
+            #expect(old.generation < store.lastSeen(for: payloadType),
+                    "\(payloadType.rawValue) would have accepted a rolled-back backup")
+        }
+    }
 }
