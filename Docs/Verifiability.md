@@ -387,10 +387,32 @@ shipped; the rest are still open.
    user's Apple account. If that is not acceptable, the alternative is a user-held recovery
    secret or a device-to-device QR ceremony instead of iCloud Keychain — and zero-config
    new-device restore stops being zero-config. A trade to decide, not a code fix.
-6. **Default-on backup exclusion for the sealed `FernletPrivate` store file** (currently
-   user-preference-driven). Tightens at-rest exposure in backups, but the ciphertext is already
-   unreadable off-device (`ThisDeviceOnly` keys), and the settings UI already warns about the
-   no-cloud-recovery consequence — changing the default changes user recovery expectations.
+6. **Default-on backup exclusion for the sealed `FernletPrivate` store file — DONE (2026-08-11,
+   security-hardening Phase 6).** Fresh installs now default to excluded from iOS/iCloud device
+   backups; existing installs are never silently flipped — they get a ONE-TIME honest trade-off
+   prompt at launch (either answer is recorded and the prompt never returns), and an install that
+   had already opted into exclusion just has its choice recorded. The mechanism is a new
+   `StoragePreferences.backupExclusionChoiceMade` tri-state plus a device-local first-run marker
+   (`FernletPriorUseMarker`, UserDefaults — deliberately not the lazily-minted install-binding
+   row, which would misclassify genuinely-fresh installs): the flip NEVER rides the tolerant
+   decode — both `localBackupExcludedFromiOSBackup` and the new field keep `false` as their
+   absent-key default, so a pre-Phase-6 blob decodes with its exclusion value byte-for-byte
+   unchanged (pinned in `FernletTests/StoragePreferencesTests`).
+   Post-#1 justification, which is why this sequenced after the hard SE binding: an *included*
+   `FernletPrivate` file is ciphertext-unreadable off-device even with the passcode (the SE key
+   never restores to another device and the scrypt fallback is gone), so its only marginal backup
+   exposure was the plaintext metadata columns — `id`/`dayKey`/`tag`/`entryDate`/`createdAt`/
+   `updatedAt` (JournalNarrative), `id`/`hkExternalUUID`/`dateKey`/dates (MenstrualNarrative),
+   `id`/`dayKey`/`eventDate`/`healthKitExternalUUID`/dates (IntimacyLog), `id`/`createdAt`
+   (WorryNarrative) — which days have entries and their HealthKit linkage, never content.
+   Default-on exclusion removes even that at near-zero recovery cost: the ciphertext already
+   cannot be opened off-device, and escrow-backed payloads (period, journal, intimacy, sensitive
+   notes, own photos) restore via the encrypted iCloud backup regardless. The same preference now
+   also flags the `LocalFernletRepository` JSON day blob (re-applied after every atomic rewrite),
+   so the Privacy & Data toggle's "your local Fernlet data is excluded" copy is finally true for
+   sync-off users; the manual toggle remains for later changes. Gate logic pinned by
+   `FernletTests/BackupExclusionLaunchGateTests`, the day-blob flag by
+   `FernletTests/LocalDayBlobBackupExclusionTests`.
 
 ## 7. What publishing unlocks
 

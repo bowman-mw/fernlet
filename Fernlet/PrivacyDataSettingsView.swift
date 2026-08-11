@@ -1360,9 +1360,14 @@ struct PrivacyDataSettingsView: View {
             set: { newValue in
                 if newValue {
                     // Re-including local data in device backups is non-destructive (it restores a
-                    // recovery path) — commit directly.
+                    // recovery path) — commit directly. Any explicit toggle IS a decision, so record
+                    // `backupExclusionChoiceMade` too: without it, an existing install that re-includes
+                    // here would be re-asked by the Phase-6 one-time launch prompt on the next launch.
                     FernletAuditLog.log("privacy.localBackup.included")
-                    storagePreferencesStore.update { $0.localBackupExcludedFromiOSBackup = false }
+                    storagePreferencesStore.update {
+                        $0.localBackupExcludedFromiOSBackup = false
+                        $0.backupExclusionChoiceMade = true
+                    }
                 } else {
                     // EXCLUDING drops the sealed store (journals, intimate logs, cycle notes — encrypted
                     // with a ThisDeviceOnly key, so NO cloud recovery) from every device backup. Warn
@@ -1376,7 +1381,12 @@ struct PrivacyDataSettingsView: View {
                         confirmLabel: "Exclude",
                         auditEvent: "privacy.localBackup.excludeConfirmed"
                     ) {
-                        storagePreferencesStore.update { $0.localBackupExcludedFromiOSBackup = true }
+                        // Same decision-recording as the include branch: a confirmed exclude settles
+                        // the Phase-6 launch question too.
+                        storagePreferencesStore.update {
+                            $0.localBackupExcludedFromiOSBackup = true
+                            $0.backupExclusionChoiceMade = true
+                        }
                     }
                 }
             }

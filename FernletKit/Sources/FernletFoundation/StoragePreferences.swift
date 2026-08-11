@@ -22,7 +22,24 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     public var iCloudSyncEnabled: Bool
     /// Whether the local store files are excluded from iOS device backups. Defaults to false so
     /// the sealed store — which has no cloud recovery — stays recoverable via encrypted backups.
+    ///
+    /// - Important: The TYPE default (and the absent-key decode default) must stay `false` forever:
+    ///   `StoragePreferencesStore.loadPreferences` maps any decode fallback to this default, so a
+    ///   `true` here would silently flip every EXISTING user to excluded — a surprise loss of their
+    ///   sealed-store recovery. The security-hardening Phase-6 default flip for FRESH installs rides
+    ///   the app's launch gate (`BackupExclusionLaunchGate`) plus ``backupExclusionChoiceMade``,
+    ///   never this default.
     public var localBackupExcludedFromiOSBackup: Bool
+    /// Whether ``localBackupExcludedFromiOSBackup`` has actually been DECIDED — by the user (the
+    /// Privacy & Data toggle or the one-time launch prompt) or by the fresh-install default path.
+    ///
+    /// The tri-state that fixes "a stored default and a chosen false are indistinguishable": with
+    /// only the bool, an existing user who deliberately stays included looks identical to one who
+    /// was never asked, so no default flip could ever be applied safely. `false` means "never
+    /// decided" (the app's launch gate may run); `true` means the question is settled and the
+    /// launch gate must never prompt again. Additive and tolerantly decoded (`?? false`) like every
+    /// other field, so pre-Phase-6 blobs decode with their exclusion value byte-for-byte unchanged.
+    public var backupExclusionChoiceMade: Bool
     /// The master HealthKit switch; when false, every capability is off regardless of the
     /// per-capability map.
     public var healthKitMasterEnabled: Bool
@@ -102,6 +119,11 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupJournalReuploadDeferred: Bool = false,
         sealedBackupIntimacyReuploadDeferred: Bool = false,
         cloudCopyKept: Bool = false,
+        // Default false = "never decided", NOT "keep included": the launch gate reads false as
+        // permission to run (fresh installs adopt excluded; existing installs get the one-time
+        // prompt). A true default would mark every fresh install as already-decided and the gate
+        // would never set the excluded default it exists to set.
+        backupExclusionChoiceMade: Bool = false,
         lastModifiedAt: Date = Date()
     ) {
         self.iCloudSyncEnabled = iCloudSyncEnabled
@@ -117,6 +139,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         self.sealedBackupJournalReuploadDeferred = sealedBackupJournalReuploadDeferred
         self.sealedBackupIntimacyReuploadDeferred = sealedBackupIntimacyReuploadDeferred
         self.cloudCopyKept = cloudCopyKept
+        self.backupExclusionChoiceMade = backupExclusionChoiceMade
         self.lastModifiedAt = lastModifiedAt
     }
 
@@ -144,6 +167,11 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupJournalReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupJournalReuploadDeferred) ?? false
         sealedBackupIntimacyReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupIntimacyReuploadDeferred) ?? false
         cloudCopyKept = try container.decodeIfPresent(Bool.self, forKey: .cloudCopyKept) ?? false
+        // Phase-6 pin: the DEFAULT FLIP MUST NOT RIDE THIS DECODE. Both this `?? false` and the
+        // `localBackupExcludedFromiOSBackup` decode above stay false-for-absent forever, so an
+        // existing user's blob decodes with their exclusion value unchanged; only the launch gate —
+        // fresh-install detection or an explicit prompt answer — may set either field.
+        backupExclusionChoiceMade = try container.decodeIfPresent(Bool.self, forKey: .backupExclusionChoiceMade) ?? false
         lastModifiedAt = try container.decodeIfPresent(Date.self, forKey: .lastModifiedAt) ?? Date()
     }
 

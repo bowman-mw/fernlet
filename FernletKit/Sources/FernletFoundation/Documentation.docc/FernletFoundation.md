@@ -30,7 +30,11 @@ A few invariants in this module are load-bearing for the rest of the app:
 - **Preference decoding is tolerant by design.** ``StoragePreferences`` decodes every field
   `IfPresent` with a default; a synthesized decode would throw on the first field an update adds,
   and the loader maps a throw to fresh defaults — silently resetting the user's iCloud, HealthKit,
-  and sealed-backup choices. New fields must stay additive.
+  and sealed-backup choices. New fields must stay additive. The Phase-6 corollary: a behavior
+  flip must never ride those decode defaults either — the fresh-install backup-exclusion default
+  is carried by the additive `backupExclusionChoiceMade` tri-state plus the app's launch gate,
+  while `localBackupExcludedFromiOSBackup` keeps `false` as its absent-key default forever so an
+  existing user's stored choice decodes unchanged.
 - **Privacy choices live in the keychain, not the synced blob.** ``StoragePreferencesStore``
   persists the preferences JSON via ``KeychainItem``; resetting deletes the keychain row outright
   so "delete everything" leaves no trace of use.
@@ -46,7 +50,9 @@ A few invariants in this module are load-bearing for the rest of the app:
 - **Backup exclusion is applied in one place.** ``BackupExclusion`` toggles
   `isExcludedFromBackupKey` across a store file, its `-wal`/`-shm` sidecars, and the external
   binary `_SUPPORT` directory, shared by the sealed and synced persistence controllers so the
-  two loops cannot drift. The same two controllers share the package-scope
+  two loops cannot drift; the single-file variant (`apply(fileURL:excluded:)`) covers sidecar-less
+  stores — today `LocalPersistence`'s JSON day blob — without logging permanent failures for
+  sidecars that can never exist. The same two controllers share the package-scope
   `CoreDataModelBuilding` attribute factory for their programmatic managed-object models, for
   the same reason.
 - **Persisted JSON has one coder configuration.** ``RowPayloadCoders`` vends the canonical
