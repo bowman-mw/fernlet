@@ -169,6 +169,13 @@ documented product decision. Recorded so the trade is decided consciously, not b
    on a device reset), and **no-lock installs are uncovered** — the backup pages the lock content
    key, which is nil when no lock is configured, so a no-lock user's device-key-sealed journals are
    not backed up (§6.2 is the same trade for the same users).
+   A third, narrower gap found in the P3 review and now surfaced rather than silent: a
+   lock-CONFIGURED device can still hold journal rows sealed under the **device journal key** —
+   entries written before the lock existed, outside the window
+   `JournalSealingCoordinator.migrateDeviceKeyEntriesToUserKey` re-keys. The export refuses rather
+   than shipping a chunk set that silently omits them, and audits any residual shortfall
+   (`sealedBackup.journalPartialExport`), but those rows are still uncovered until a full-store
+   re-key pass exists. That pass is what makes them readable at all and is tracked separately.
 2. **The same hard-binding decision for the no-lock device journal/worry keys.** SE-wrapping them
    removes the erase-and-restore-same-device recovery those users currently have — and no-lock
    users are the least likely to have sealed backup enabled.

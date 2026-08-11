@@ -164,6 +164,16 @@ repository purge takes it.)
   the deliberate-exceptions table: they must survive the wipe, and the reason is spelled out there.
   No new wipe call, no new token, no manifest change.
 
+  **P3 review fixes (same day).** Two additions the wipe now makes, neither of which needs a manifest
+  token: (a) the per-payload re-upload deferrals are cleared over `allCases` rather than period-only,
+  so no payload keeps an obligation pointing at a backup the wipe deleted; (b) the intimacy un-hide
+  settle joins the period one in the cancel-the-live-writers step, so a settle suspended in its
+  CloudKit fetch cannot resume after the wipe and re-insert logs. Both covered by
+  `DeleteAllDataTests`. Separately, the preference reset's `keepSealedBackupFlags` branch now copies
+  every payload flag through `StoragePreferences.copySealedBackupFlags(from:)` — the open-coded copy
+  in `ContentView` had silently dropped the two new flags, which would have abandoned their CKRecords
+  after a failed delete (`hasSealedBackup` false → no retry, and no later wipe, ever finds them).
+
 - **2026-08-10 — security-hardening P1b, against the post-P1a tree (merge `aaa4aac`).** Full walk of
   the comment-stripped `deleteAllData` + `resetAll` bodies — including the hooks they invoke and the
   P1a additions: `sealedStoreRebuildHook`, and `FernletLockService.reset()`'s

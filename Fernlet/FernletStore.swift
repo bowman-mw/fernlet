@@ -784,6 +784,44 @@ final class FernletStore {
         recordSensitiveVisibilityResolution()
         if !visible {
             diary.scrubHiddenHealthContext(periodVisible: isPeriodTrackingVisible, intimacyVisible: false)
+        } else {
+            settleIntimacyBackupAfterUnhide()
+        }
+    }
+
+    /// The in-flight intimacy un-hide settle, held so the delete-all funnel can cancel it — the exact
+    /// twin of `periodBackupSettleTask` and for the same reason (a settle suspended in the CloudKit
+    /// fetch would otherwise resume after the wipe and re-insert logs into the just-emptied store).
+    @ObservationIgnored var intimacyBackupSettleTask: Task<Void, Never>?
+
+    /// Settles both halves of the sealed intimacy backup at the moment the gated log store becomes
+    /// reachable again — the intimacy twin of `settlePeriodBackupAfterUnhide()`, and what makes the
+    /// launch arm's "hidden only DEFERS; it restores when the user un-hides" claim true.
+    ///
+    /// Order is load-bearing and identical to period's:
+    ///
+    /// 1. **Restore first**, via the targeted `.payloadStoreOnly` path. The launch pass only restores
+    ///    into a fresh install, and by the time someone un-hides, the day blob has synced down and the
+    ///    device is permanently "not fresh" — so without this the sealed logs are unrestorable forever.
+    ///    The targeted restore still refuses a non-empty store and still honors the one-way divergence
+    ///    latch, so it can add data back but never overwrite or resurrect deleted logs.
+    /// 2. **Re-upload second**, and only when the restore left nothing retryable AND a deferral is
+    ///    actually outstanding. The retry re-checks `mayReuploadFromLocalStore(.intimacyLogs)`, so an
+    ///    un-restored (empty) store can never replace the cloud copy with the single head record
+    ///    `reconcileChunked` writes for a count of 0.
+    private func settleIntimacyBackupAfterUnhide() {
+        let preferences = StoragePreferencesStore.currentPreferences()
+        guard preferences.sealedBackupIntimacyEnabled else { return }
+        // A re-toggle while a settle is in flight replaces it — two concurrent settles could interleave
+        // their restore/re-upload halves.
+        intimacyBackupSettleTask?.cancel()
+        intimacyBackupSettleTask = Task {
+            if preferences.iCloudSyncEnabled {
+                let outcome = await restoreIntimacyBackupTargeted()
+                guard !outcome.isRetryable else { return }
+            }
+            guard !Task.isCancelled else { return }
+            await retryDeferredSealedBackupIfNeeded(payloadType: .intimacyLogs)
         }
     }
 
@@ -2506,6 +2544,20 @@ final class FernletStore {
     private(set) var sealedBackupPeriodReuploadDeferred =
         StoragePreferencesStore.currentPreferences().sealedBackupPeriodReuploadDeferred
 
+    /// Whether the sealed JOURNAL backup still owes an upload — turned on from Settings while the
+    /// Private tab held no unlock, skipped by an escrow adopt, or waiting on a store this device has not
+    /// restored into yet. Same persistence and surfacing contract as
+    /// ``sealedBackupPeriodReuploadDeferred``; discharged by the launch pass or the next `.privateHub`
+    /// unlock, both of which re-check the empty-store guard first.
+    private(set) var sealedBackupJournalReuploadDeferred =
+        StoragePreferencesStore.currentPreferences().sealedBackupJournalReuploadDeferred
+
+    /// Whether the sealed INTIMACY backup still owes an upload. Same contract as the journal flag, plus
+    /// the hidden-surface case: while intimacy is hidden the export cannot page the gated store, so the
+    /// obligation is recorded and discharged by the un-hide settle.
+    private(set) var sealedBackupIntimacyReuploadDeferred =
+        StoragePreferencesStore.currentPreferences().sealedBackupIntimacyReuploadDeferred
+
     /// Seals + uploads (or deletes) the encrypted CloudKit backup for a payload; returns whether it
     /// succeeded. Delegates to `SealedBackupCoordinator`.
     @discardableResult
@@ -2519,6 +2571,13 @@ final class FernletStore {
     /// `SealedBackupCoordinator`, which owns the guards and is a no-op when nothing is outstanding.
     func retryDeferredSealedPeriodBackupIfNeeded() async {
         await sealedBackupCoordinator.retryDeferredPeriodReuploadIfNeeded()
+    }
+
+    /// Discharges a deferred re-upload of any paged payload. Same contract as
+    /// `retryDeferredSealedPeriodBackupIfNeeded()`: the coordinator owns the guards (sync on, pref on,
+    /// deferral outstanding, and the local store actually exportable) and it is a no-op otherwise.
+    func retryDeferredSealedBackupIfNeeded(payloadType: SealedBackupPayloadType) async {
+        await sealedBackupCoordinator.retryDeferredReuploadIfNeeded(payloadType: payloadType)
     }
 
     /// Pulls any sealed iCloud backups into the local stores at launch (and on the user's Retry, which
@@ -2558,6 +2617,25 @@ final class FernletStore {
         narrativeRepository: MenstrualNarrativeRepository? = nil
     ) async -> SealedBackupRestoreOutcome {
         await sealedBackupCoordinator.restorePeriodBackupTargeted(narrativeRepository: narrativeRepository)
+    }
+
+    /// Targeted journal-only restore (the `.privateHub` unlock + explicit Retry) — the compensating
+    /// restore path for the fresh-install-only launch pass. Delegates to `SealedBackupCoordinator`.
+    @discardableResult
+    func restoreJournalBackupTargeted(
+        journalRepository: JournalNarrativeRepository? = nil
+    ) async -> SealedBackupRestoreOutcome {
+        await sealedBackupCoordinator.restoreJournalBackupTargeted(journalRepository: journalRepository)
+    }
+
+    /// Targeted intimacy-only restore (un-hide, `.privateHub` unlock, explicit Retry) — the
+    /// compensating restore path for the fresh-install-only launch pass. Delegates to
+    /// `SealedBackupCoordinator`.
+    @discardableResult
+    func restoreIntimacyBackupTargeted(
+        intimacyStore: IntimacyLogStore? = nil
+    ) async -> SealedBackupRestoreOutcome {
+        await sealedBackupCoordinator.restoreIntimacyBackupTargeted(intimacyStore: intimacyStore)
     }
 
     /// Decodes a decrypted sealed-backup payload into the local stores, returning records written.
@@ -3929,11 +4007,12 @@ final class FernletStore {
     /// flags) as they were.
     @ObservationIgnored var storagePreferencesResetHook: ((_ keepSealedBackupFlags: Bool, _ keepCloudCopyFlag: Bool) -> Bool)?
 
-    /// Persists the period re-upload deferral into `StoragePreferences` so it survives relaunch. A hook
-    /// (like `storagePreferencesResetHook`) because the preferences store is app-scoped: writing through
-    /// a second `StoragePreferencesStore` instance would leave the app's observable copy stale, and its
-    /// next `update` would clobber the flag. Unwired (tests) the deferral stays session-only, as before.
-    @ObservationIgnored var sealedBackupDeferralPersistHook: ((Bool) -> Void)?
+    /// Persists a per-payload re-upload deferral into `StoragePreferences` so the obligation survives
+    /// relaunch. A hook (like `storagePreferencesResetHook`) because the preferences store is
+    /// app-scoped: writing through a second `StoragePreferencesStore` instance would leave the app's
+    /// observable copy stale, and its next `update` would clobber the flag. Unwired (tests) the deferral
+    /// stays session-only, as before.
+    @ObservationIgnored var sealedBackupDeferralPersistHook: ((Bool, SealedBackupPayloadType) -> Void)?
 
     /// Whether a sealed backup of this payload may be uploaded — i.e. whether "delete everything" has
     /// anything to remove. Lives here rather than on `StoragePreferences` because that type is Layer 0
@@ -4000,6 +4079,8 @@ final class FernletStore {
         // just-emptied store. `applyRestoredChunks` honors the cancellation at its write point, and the
         // diverged-device latch backstops any restore this cancel arrives too late for.
         periodBackupSettleTask?.cancel()
+        // The intimacy un-hide settle is the same class of writer, added with the intimacy payload.
+        intimacyBackupSettleTask?.cancel()
 
         // 2. Sealed iCloud backups, BEFORE the preference reset that would gate them off. Turning the
         // pref off only stops the restore while it stays off; the CKRecords survive and re-appear the
@@ -4020,10 +4101,13 @@ final class FernletStore {
                 }
             }
         }
-        // The period re-upload deferral points at a backup this wipe just deleted — and the local
-        // period data behind it is about to go too, so the promised re-upload can never happen again
-        // either way. Clear it (observable + persisted) with the backup.
-        recordSealedBackupPeriodReuploadDeferred(false)
+        // Every re-upload deferral points at a backup this wipe just deleted — and the local data
+        // behind it is about to go too, so the promised re-upload can never happen again either way.
+        // Clear them all (observable + persisted) with the backups. Driven off `allCases` so a payload
+        // added later cannot leave a stale obligation pointing at a deleted backup.
+        for payloadType in SealedBackupPayloadType.allCases {
+            recordSealedBackupReuploadDeferred(false, payloadType: payloadType)
+        }
 
         // The rollback high-water mark dies with the backups it describes. Keeping it would strand
         // the user: after a wipe the next backup mints generation 1, which is BELOW the pre-wipe
@@ -4870,9 +4954,16 @@ extension FernletStore: SealedBackupContext {
     func recordSealedBackupEscrowConflict(_ inConflict: Bool) {
         sealedBackupEscrowConflict = inConflict
     }
-    func recordSealedBackupPeriodReuploadDeferred(_ deferred: Bool) {
-        sealedBackupPeriodReuploadDeferred = deferred
-        sealedBackupDeferralPersistHook?(deferred)
+    func recordSealedBackupReuploadDeferred(_ deferred: Bool, payloadType: SealedBackupPayloadType) {
+        switch payloadType {
+        case .periodData: sealedBackupPeriodReuploadDeferred = deferred
+        case .journalNarratives: sealedBackupJournalReuploadDeferred = deferred
+        case .intimacyLogs: sealedBackupIntimacyReuploadDeferred = deferred
+        // The whole-store overwrite payload needs neither a content key nor a visible surface, so its
+        // reconcile can never be postponed and there is no obligation to record.
+        case .sensitiveNotes: return
+        }
+        sealedBackupDeferralPersistHook?(deferred, payloadType)
     }
 
     /// Rebuilds day-blob journal skeletons for restored journal narratives (P3 journal

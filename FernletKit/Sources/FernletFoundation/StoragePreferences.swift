@@ -53,6 +53,17 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     /// when a period re-seal actually succeeds, when the backup is turned off/deleted, and by
     /// "delete everything".
     public var sealedBackupPeriodReuploadDeferred: Bool
+    /// Set when the sealed JOURNAL backup still owes an upload: the user turned it on from Settings
+    /// while the Private tab held no unlock (so the content key that pages the narratives was nil), an
+    /// escrow adopt could not re-seal it, or the local store was still empty because this device has
+    /// not restored yet. Same contract as ``sealedBackupPeriodReuploadDeferred`` — persisted so the
+    /// obligation survives a relaunch, cleared only by a re-seal that actually reached the cloud, by
+    /// turning the backup off, and by "delete everything".
+    public var sealedBackupJournalReuploadDeferred: Bool
+    /// Set when the sealed INTIMACY backup still owes an upload, for the same three reasons as
+    /// ``sealedBackupJournalReuploadDeferred`` plus one more: intimacy tracking was hidden, so the
+    /// reconcile could not page the (gated) log store. Un-hiding discharges it.
+    public var sealedBackupIntimacyReuploadDeferred: Bool
     /// Set when the user chose "Stop syncing, keep cloud data": sync is off, but a full copy of the day
     /// blob is deliberately left in the user's private CloudKit zone. Nothing else records that choice,
     /// so without this flag `hasAnyCloudCopy` reads false for exactly that user — the delete dialog then
@@ -77,6 +88,8 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupJournalEnabled: Bool = false,
         sealedBackupIntimacyEnabled: Bool = false,
         sealedBackupPeriodReuploadDeferred: Bool = false,
+        sealedBackupJournalReuploadDeferred: Bool = false,
+        sealedBackupIntimacyReuploadDeferred: Bool = false,
         cloudCopyKept: Bool = false,
         lastModifiedAt: Date = Date()
     ) {
@@ -89,6 +102,8 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         self.sealedBackupJournalEnabled = sealedBackupJournalEnabled
         self.sealedBackupIntimacyEnabled = sealedBackupIntimacyEnabled
         self.sealedBackupPeriodReuploadDeferred = sealedBackupPeriodReuploadDeferred
+        self.sealedBackupJournalReuploadDeferred = sealedBackupJournalReuploadDeferred
+        self.sealedBackupIntimacyReuploadDeferred = sealedBackupIntimacyReuploadDeferred
         self.cloudCopyKept = cloudCopyKept
         self.lastModifiedAt = lastModifiedAt
     }
@@ -113,6 +128,8 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupJournalEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupJournalEnabled) ?? false
         sealedBackupIntimacyEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupIntimacyEnabled) ?? false
         sealedBackupPeriodReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPeriodReuploadDeferred) ?? false
+        sealedBackupJournalReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupJournalReuploadDeferred) ?? false
+        sealedBackupIntimacyReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupIntimacyReuploadDeferred) ?? false
         cloudCopyKept = try container.decodeIfPresent(Bool.self, forKey: .cloudCopyKept) ?? false
         lastModifiedAt = try container.decodeIfPresent(Date.self, forKey: .lastModifiedAt) ?? Date()
     }
@@ -145,6 +162,25 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
             || sealedBackupPeriodEnabled
             || sealedBackupJournalEnabled
             || sealedBackupIntimacyEnabled
+    }
+
+    /// Copies every sealed-backup ENABLE flag from `other`, leaving everything else untouched.
+    ///
+    /// Exists so "delete everything" can carry the flags across its preference reset when a backup
+    /// delete FAILED — they are how a retry (or the next wipe) finds the surviving CKRecords again, and
+    /// clearing them would make a transient network failure permanent by making `hasSealedBackup` read
+    /// false. Deliberately assigned HERE, adjacent to `hasSealedBackup`, so the two enumerations of the
+    /// payload flags sit together: a new payload that is added to one and forgotten in the other is the
+    /// exact regression this method exists to prevent (the journal/intimacy flags were dropped from the
+    /// open-coded copy in `ContentView` when Phase 3 added them).
+    ///
+    /// The re-upload DEFERRAL flags are deliberately not copied: a wipe deletes the backup those
+    /// obligations point at, and the local data behind them, so the promised re-upload can never happen.
+    public mutating func copySealedBackupFlags(from other: StoragePreferences) {
+        sealedBackupSensitiveNotesEnabled = other.sealedBackupSensitiveNotesEnabled
+        sealedBackupPeriodEnabled = other.sealedBackupPeriodEnabled
+        sealedBackupJournalEnabled = other.sealedBackupJournalEnabled
+        sealedBackupIntimacyEnabled = other.sealedBackupIntimacyEnabled
     }
 
     /// Default per-capability map: every HealthKit capability disabled.

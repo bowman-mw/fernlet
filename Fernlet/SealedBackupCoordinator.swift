@@ -50,10 +50,17 @@ protocol SealedBackupContext: AnyObject {
     var recentMeals: [Meal] { get }
     func replaceTierTwoMemories(_ records: [TierTwoMemoryRecord])
     func loadAllDaysFromRepository() -> [String: FernletDay]
-    /// Records whether a sealed PERIOD backup still needs re-uploading under a newly-adopted escrow key
-    /// because period tracking is currently hidden (G5). Surfaced non-silently so the user can trigger the
-    /// re-upload after un-hiding, instead of the cloud chunk silently staying sealed to the old identity.
-    func recordSealedBackupPeriodReuploadDeferred(_ deferred: Bool)
+    /// Records whether a sealed backup of `payloadType` still owes an upload — the surface was hidden
+    /// when the escrow key was adopted (G5), the content key was locked when the user turned the backup
+    /// on, or the local store was still empty because this device has not restored yet.
+    ///
+    /// Per-payload rather than period-only since Phase 3: journal and intimacy are sealed under the very
+    /// same `.privateHub` content key, so they hit the identical "enabled from Settings while the hub is
+    /// re-locked" state, and a skip nobody records is a skip nobody ever retries. Surfaced non-silently
+    /// so the user sees the pending upload instead of the cloud chunk quietly staying sealed to a key
+    /// this device no longer holds. `.sensitiveNotes` has no deferral (it needs no content key and no
+    /// visibility, so it can never defer); implementations ignore it.
+    func recordSealedBackupReuploadDeferred(_ deferred: Bool, payloadType: SealedBackupPayloadType)
     /// Records the outcome of a sealed-backup restore attempt so the UI can show an honest, retryable
     /// status (WS-4) instead of a silently-swallowed failure.
     func recordSealedBackupRestoreOutcome(_ outcome: SealedBackupRestoreOutcome, payloadType: SealedBackupPayloadType)
@@ -141,9 +148,25 @@ final class SealedBackupCoordinator {
     /// ``SealedBackupRestoreOutcome`` by `classifyRestoreFailure`.
     enum SealedBackupWiringError: Error, Equatable {
         /// Period-data sealing/restore attempted while the content key is locked.
+        ///
+        /// Also raised by the journal/intimacy EXPORT when the store holds rows that the current
+        /// content key cannot open: those rows exist but this key cannot page them, which is
+        /// operationally the same state as "no usable key" — and, crucially, must not be exported as an
+        /// empty chunk set over a good cloud backup.
         case locked
         /// Restore attempted into a store that already holds user data — refused to avoid clobbering.
         case storeNotEmpty
+        /// Export refused because the local store holds nothing this device could seal — either a
+        /// first-ever enable with no entries yet, or (the dangerous case) a device that has not
+        /// restored yet. `reconcileChunked` writes a head record even for a count of 0, so exporting
+        /// here would REPLACE the cloud copy with a single empty chunk. Recorded as a per-payload
+        /// deferral and retried once the store has something to seal.
+        case emptyLocalStore
+        /// Export refused because the payload's surface is hidden, so its store cannot be paged
+        /// (the gated funnel throws rather than paging empty). Recorded as a per-payload deferral and
+        /// discharged on un-hide — never a pref flip, which would DELETE the cloud backup and make
+        /// hiding destructive.
+        case surfaceHidden
     }
 
     /// Records per sealed chunk on every paged export (period, journal, intimacy). Bounds the
@@ -155,8 +178,25 @@ final class SealedBackupCoordinator {
 
     private unowned let host: any SealedBackupContext
 
-    init(host: any SealedBackupContext) {
+    /// Builds the identity the sealed records are sealed/opened under. Injectable ONLY so tests can
+    /// point it at a throwaway keychain service instead of the device's real one; production leaves it
+    /// nil and gets `IdentityService()`.
+    private let identityFactory: (() -> IdentityService)?
+
+    /// Builds the CloudKit-backed sealing service. Injectable ONLY so tests can drive the real
+    /// `SealedBackupService` over a mock record database and assert what the EXPORT half actually
+    /// writes — the half that decides what reaches iCloud, and therefore the half the empty-store
+    /// clobber guard has to be proven on. Production leaves it nil.
+    private let serviceFactory: ((IdentityService) -> SealedBackupService)?
+
+    init(
+        host: any SealedBackupContext,
+        identityFactory: (() -> IdentityService)? = nil,
+        serviceFactory: ((IdentityService) -> SealedBackupService)? = nil
+    ) {
         self.host = host
+        self.identityFactory = identityFactory
+        self.serviceFactory = serviceFactory
     }
 
     /// How the backup-escrow key should be prepared on the identity before a sealed-backup operation.
@@ -194,7 +234,7 @@ final class SealedBackupCoordinator {
     /// failed. For `.forOpening`, `escrowReady` reports whether a usable escrow key is present so the
     /// caller can short-circuit to a retryable "not synced yet" state without any network work.
     private func makeIdentity(escrowMode: EscrowMode) -> (identity: IdentityService, escrowReady: Bool)? {
-        let identity = IdentityService()
+        let identity = identityFactory?() ?? IdentityService()
         do { try identity.ensureProvisioned() } catch { return nil }
         switch escrowMode {
         case .none:
@@ -215,15 +255,18 @@ final class SealedBackupCoordinator {
     }
 
     /// How many journal narratives this device holds, counted without decrypting anything. Fails CLOSED
-    /// at 0 for the same reason as ``periodNarrativeCount()``: callers use it to refuse a destructive
-    /// empty-store re-upload, so "unknown" must read as "do not re-upload".
+    /// at 0, like ``periodNarrativeCount()``.
+    ///
+    /// A row count is what the export SIZES its chunk set from — it is deliberately NOT the re-upload
+    /// guard, because a count cannot see whether the current content key can actually open those rows
+    /// (see ``mayReuploadFromLocalStore(_:journalRepository:intimacyStore:)``).
     func journalNarrativeCount(repository: JournalNarrativeRepository? = nil) -> Int {
         ((try? (repository ?? JournalNarrativeRepository()).narrativeCount())) ?? 0
     }
 
     /// How many intimacy logs this device holds, counted without decrypting anything. Fails CLOSED at 0,
-    /// like the other two counts. Ungated by visibility on purpose — it decrypts nothing, and a hidden
-    /// store must never read as "empty" to the re-upload guards.
+    /// like the other two counts, and sizes the export's chunk set. Ungated by visibility on purpose —
+    /// it decrypts nothing, and a hidden store must never read as "empty" anywhere downstream.
     func intimacyLogCount(store: IntimacyLogStore? = nil) -> Int {
         ((try? resolvedIntimacyStore(store).backupLogCount())) ?? 0
     }
@@ -253,8 +296,21 @@ final class SealedBackupCoordinator {
     /// and this returns false. Skipping is recoverable (re-upload from a device that still holds the
     /// data, or after this one restores); an empty overwrite is not.
     ///
+    /// It proves **exportability**, not row existence: it opens ONE row under the key the export would
+    /// page with. A row count alone would be a false guarantee, because the pagers `compactMap` away
+    /// every row they cannot decrypt — so a store full of rows sealed under a key this device no longer
+    /// holds counts as "has data" and then exports as nothing. Journal is where that is real rather
+    /// than theoretical: entries written before a lock was configured are sealed under the DEVICE
+    /// journal key, and only the recent window is re-keyed when a lock is set up, so a lock-configured
+    /// device can genuinely hold journal rows this content key cannot open. A nil content key therefore
+    /// also answers false (nothing is exportable while locked), which routes the caller into the
+    /// per-payload deferral rather than into a destructive empty write.
+    ///
     /// Intimacy additionally requires visibility: while hidden the reconcile is a silent no-op, so
-    /// calling it would log a false "reconciled" while the cloud chunk stayed sealed to the old key.
+    /// calling it would log a false "reconciled" while the cloud chunk stayed sealed to the old key —
+    /// and the gated pager throws rather than paging empty, which this check must not provoke.
+    ///
+    /// Fails CLOSED on any throw: "unknown" reads as "do not re-upload".
     ///
     /// - Note: Deliberately scoped to the two new payloads. `.sensitiveNotes` is a whole-store
     ///   overwrite payload with its own semantics, and `.periodData` keeps its pre-existing, subtly
@@ -269,14 +325,19 @@ final class SealedBackupCoordinator {
         case .sensitiveNotes, .periodData:
             return true
         case .journalNarratives:
-            return journalNarrativeCount(repository: journalRepository) > 0
+            guard let key = host.sealedBackupContentKey else { return false }
+            let repository = journalRepository ?? JournalNarrativeRepository()
+            return ((try? repository.narratives(offset: 0, limit: 1, contentKey: key))?.isEmpty == false)
         case .intimacyLogs:
-            return host.isIntimacyTrackingVisible && intimacyLogCount(store: intimacyStore) > 0
+            guard host.isIntimacyTrackingVisible, let key = host.sealedBackupContentKey else { return false }
+            let store = resolvedIntimacyStore(intimacyStore)
+            return ((try? store.backupPage(offset: 0, limit: 1, contentKey: key))?.isEmpty == false)
         }
     }
 
     private func makeSealedBackupService(identity: IdentityService) -> SealedBackupService {
-        SealedBackupService(cloudDataService: CloudKitDataService(), identityService: identity)
+        serviceFactory?(identity)
+            ?? SealedBackupService(cloudDataService: CloudKitDataService(), identityService: identity)
     }
 
     /// Serializes the sensitive-notes payload (the Tier-2 behavioral memories). Period data is sealed
@@ -287,8 +348,24 @@ final class SealedBackupCoordinator {
 
     /// Seals + uploads (or deletes) the encrypted CloudKit backup for a payload. Returns whether it
     /// succeeded; callers should only persist the "on" preference when this returns `true`.
+    ///
+    /// An enable that cannot seal RIGHT NOW — locked content key, hidden surface, or a local store this
+    /// device has not restored into yet — is a **deferral, not a failure**: it returns `true` (so the
+    /// preference sticks and the intent is honored), records a per-payload re-upload deferral the
+    /// Privacy & Data banner surfaces, and is retried at the next `.privateHub` unlock / un-hide /
+    /// launch. Returning false there would make every one of these toggles a silently-reverting switch
+    /// with no path that ever works, because they all live in Settings — reached from Home, where the
+    /// hub is always re-locked.
+    ///
+    /// The injected repository/store are for tests only: they let the EXPORT half be driven against an
+    /// isolated sealed store, which is the half that decides what actually reaches iCloud.
     @discardableResult
-    func setSealedBackupEnabled(_ enabled: Bool, payloadType: SealedBackupPayloadType) async -> Bool {
+    func setSealedBackupEnabled(
+        _ enabled: Bool,
+        payloadType: SealedBackupPayloadType,
+        journalRepository: JournalNarrativeRepository? = nil,
+        intimacyStore: IntimacyLogStore? = nil
+    ) async -> Bool {
         // Enabling SEALS (needs an escrow key — minted lazily here if absent, WS-1); disabling only
         // DELETES the chunk set (no escrow key needed).
         guard let prepared = makeIdentity(escrowMode: enabled ? .forSealing : .none) else {
@@ -303,9 +380,9 @@ final class SealedBackupCoordinator {
             case (.periodData, true):
                 try await reconcilePeriodBackup(using: service)
             case (.journalNarratives, true):
-                try await reconcileJournalBackup(using: service)
+                try await reconcileJournalBackup(using: service, repository: journalRepository)
             case (.intimacyLogs, true):
-                try await reconcileIntimacyBackup(using: service)
+                try await reconcileIntimacyBackup(using: service, store: intimacyStore)
             // Disabling any paged payload is the same operation: delete the whole chunk set. It needs
             // no content key and no visibility, which is what keeps "turn it off" available while
             // locked and while the surface is hidden.
@@ -315,33 +392,42 @@ final class SealedBackupCoordinator {
             FernletAuditLog.log("sealedBackup.reconciled", context: [
                 "payload": payloadType.rawValue, "enabled": enabled ? "true" : "false"
             ])
-            if payloadType == .periodData {
-                // A pending period re-upload deferral (G5) is discharged by ANY successful period
-                // reconcile that actually touched the cloud chunk: an enable that really paged the
-                // narratives (visible — the hidden path above is a silent no-op, which must NOT clear),
-                // or a disable that deleted the backup outright. Cleared here, at the one seam every
-                // caller funnels through (the Privacy & Data toggle, the adopt flow, the un-hide
-                // trigger, delete-all), rather than per-caller.
-                if !enabled || host.isPeriodTrackingVisible {
-                    host.recordSealedBackupPeriodReuploadDeferred(false)
-                }
+            // A pending re-upload deferral is discharged by ANY successful reconcile of that payload
+            // that actually touched the cloud chunk: an enable that really paged the store, or a
+            // disable that deleted the backup outright. Cleared here, at the one seam every caller
+            // funnels through (the Privacy & Data toggle, the adopt flow, the un-hide trigger,
+            // delete-all), rather than per-caller.
+            //
+            // The visibility term is the exception that makes it honest: a HIDDEN period reconcile is a
+            // silent no-op, so it must NOT clear an obligation it did not discharge. (The hidden
+            // intimacy enable throws `.surfaceHidden` rather than returning silently, so it never
+            // reaches here at all.)
+            if !enabled || payloadType != .periodData || host.isPeriodTrackingVisible {
+                host.recordSealedBackupReuploadDeferred(false, payloadType: payloadType)
             }
             return true
-        } catch SealedBackupWiringError.locked where payloadType == .periodData && enabled {
-            // The narratives are sealed under the Private tab's content key, which is only live while
-            // THAT tab holds the unlock (`FernletLockScope.privateHub`) — and this toggle lives in
-            // Settings, which is reached from Home, by which point the hub has re-locked. Refusing
-            // here would make "turn on encrypted period backup" a silently-reverting toggle with no
-            // path that ever works.
+        } catch let wiring as SealedBackupWiringError where enabled && wiring != .storeNotEmpty {
+            // The paged payloads are all sealed under the Private tab's content key, which is only live
+            // while THAT tab holds the unlock (`FernletLockScope.privateHub`) — and these toggles live
+            // in Settings, which is reached from Home, by which point the hub has re-locked. Refusing
+            // here would make "turn on encrypted <payload> backup" a silently-reverting toggle with no
+            // path that ever works. The same is true of the other two refusals the export can raise:
+            // a store whose rows this key cannot open (`.locked`), and a store that is empty because
+            // this device has not restored yet (`.emptyLocalStore`, where exporting would REPLACE the
+            // cloud copy with an empty chunk set).
             //
-            // So honor the intent and DEFER: the preference sticks, the Privacy & Data banner already
-            // surfaces `sealedBackupPeriodReuploadDeferred` as a pending re-upload, and the seal runs
-            // the next time the Private tab unlocks (`retryDeferredPeriodReuploadIfNeeded`) or at the
-            // next launch (`restoreSealedBackupsIfNeeded`). Success clears the flag through the normal
-            // path above. Deliberately NOT extended to the disable case — disabling deletes the cloud
-            // chunk set and needs no content key, so it can never land here.
-            host.recordSealedBackupPeriodReuploadDeferred(true)
-            FernletAuditLog.log("sealedBackup.periodSealDeferredUntilUnlock")
+            // So honor the intent and DEFER: the preference sticks, the Privacy & Data banner surfaces
+            // the pending re-upload, and the seal runs at the next `.privateHub` unlock, the next
+            // un-hide, or the next launch — each of which re-checks `mayReuploadFromLocalStore`, so a
+            // deferral never discharges into a destructive empty write. Success clears the flag through
+            // the normal path above. Deliberately NOT extended to the disable case — disabling deletes
+            // the cloud chunk set and needs neither content key nor visibility, so it can never land
+            // here.
+            host.recordSealedBackupReuploadDeferred(true, payloadType: payloadType)
+            FernletAuditLog.log("sealedBackup.sealDeferred", context: [
+                "payload": payloadType.rawValue,
+                "reason": String(describing: wiring)
+            ])
             return true
         } catch {
             FernletAuditLog.log("sealedBackup.reconcileFailed", context: ["payload": payloadType.rawValue])
@@ -349,23 +435,56 @@ final class SealedBackupCoordinator {
         }
     }
 
-    /// Runs a deferred period re-upload once the narratives are reachable again. Called when the
-    /// Private tab unlocks (the content key becomes available) and, with the same guards, from the
-    /// launch pass. Idempotent and a no-op unless a deferral is actually outstanding.
+    /// Runs a deferred re-upload of `payloadType` once its store is reachable and exportable again.
+    /// Called when the Private tab unlocks (the content key becomes available), when intimacy is
+    /// un-hidden, and — with the same guards — from the launch pass. Idempotent and a no-op unless a
+    /// deferral is actually outstanding.
     ///
-    /// The non-empty-store guard matches `restoreSealedBackupsIfNeeded`'s and is load-bearing:
-    /// re-sealing pages the LOCAL store and rewrites the whole chunk set, so re-uploading from an
-    /// empty one would overwrite the cloud backup with a single empty chunk — destroying the history
-    /// the deferral exists to preserve.
+    /// The non-empty/exportable-store guard is load-bearing: re-sealing pages the LOCAL store and
+    /// rewrites the whole chunk set, so re-uploading from an empty one would overwrite the cloud backup
+    /// with a single empty chunk — destroying the history the deferral exists to preserve. When the
+    /// guard skips, the deferral flag is deliberately LEFT SET so it self-heals on the launch after a
+    /// real restore.
+    @discardableResult
+    func retryDeferredReuploadIfNeeded(
+        payloadType: SealedBackupPayloadType,
+        journalRepository: JournalNarrativeRepository? = nil,
+        intimacyStore: IntimacyLogStore? = nil
+    ) async -> Bool {
+        let prefs = StoragePreferencesStore.currentPreferences()
+        guard prefs.iCloudSyncEnabled else { return false }
+        switch payloadType {
+        case .sensitiveNotes:
+            // No deferral exists for the whole-store overwrite payload: it needs neither a content key
+            // nor a visible surface, so its reconcile can never be postponed.
+            return false
+        case .periodData:
+            guard prefs.sealedBackupPeriodEnabled,
+                  prefs.sealedBackupPeriodReuploadDeferred,
+                  host.isPeriodTrackingVisible,
+                  periodNarrativeCount() > 0 else { return false }
+        case .journalNarratives:
+            guard prefs.sealedBackupJournalEnabled,
+                  prefs.sealedBackupJournalReuploadDeferred,
+                  mayReuploadFromLocalStore(.journalNarratives, journalRepository: journalRepository) else { return false }
+        case .intimacyLogs:
+            guard prefs.sealedBackupIntimacyEnabled,
+                  prefs.sealedBackupIntimacyReuploadDeferred,
+                  mayReuploadFromLocalStore(.intimacyLogs, intimacyStore: intimacyStore) else { return false }
+        }
+        return await setSealedBackupEnabled(
+            true,
+            payloadType: payloadType,
+            journalRepository: journalRepository,
+            intimacyStore: intimacyStore
+        )
+    }
+
+    /// The period-specific spelling of ``retryDeferredReuploadIfNeeded(payloadType:journalRepository:intimacyStore:)``,
+    /// kept because the lock-state observer and the `FernletStore` wrapper name it directly.
     @discardableResult
     func retryDeferredPeriodReuploadIfNeeded() async -> Bool {
-        let prefs = StoragePreferencesStore.currentPreferences()
-        guard prefs.iCloudSyncEnabled,
-              prefs.sealedBackupPeriodEnabled,
-              prefs.sealedBackupPeriodReuploadDeferred,
-              host.isPeriodTrackingVisible,
-              periodNarrativeCount() > 0 else { return false }
-        return await setSealedBackupEnabled(true, payloadType: .periodData)
+        await retryDeferredReuploadIfNeeded(payloadType: .periodData)
     }
 
     /// Seals + uploads the period backup one bounded chunk at a time. The narrative count is read up
@@ -401,16 +520,58 @@ final class SealedBackupCoordinator {
     /// sealed under while a lock is configured; a no-lock install seals under the device journal key
     /// instead, which this coordinator deliberately cannot see, so no-lock users cannot enable the
     /// journal backup at all (an honest, documented limit — see `Docs/Verifiability.md` §6.2).
-    private func reconcileJournalBackup(using service: SealedBackupService) async throws {
+    ///
+    /// A lock-CONFIGURED device can still hold journal rows this key cannot open: entries written
+    /// before the lock existed were sealed under the device journal key, and only the recent window is
+    /// re-keyed when the lock is configured. Those rows are counted by `narrativeCount()` but dropped
+    /// by the pager, so the export refuses outright (`.locked`) rather than shipping a chunk set that
+    /// silently omits them — and audits any residual shortfall it does export.
+    private func reconcileJournalBackup(
+        using service: SealedBackupService,
+        repository: JournalNarrativeRepository? = nil
+    ) async throws {
         guard let key = host.sealedBackupContentKey else { throw SealedBackupWiringError.locked }
-        let repository = JournalNarrativeRepository()
+        let repository = repository ?? JournalNarrativeRepository()
         let pageSize = Self.periodBackupChunkSize
         let total = try repository.narrativeCount()
+        // EMPTY-STORE CLOBBER guard, at the seam so no caller can bypass it. `reconcileChunked` writes
+        // a head record even for a count of 0, so an export from a store this device has not restored
+        // into yet REPLACES the good cloud copy with a single empty chunk. Probing one row also proves
+        // the rows are OPENABLE under this key — a count alone does not, because the pager skips rows
+        // it cannot decrypt, so a device-key-sealed history would size a chunk set it then fills with
+        // nothing. Both refusals are deferrals: the caller keeps the preference on and retries.
+        //
+        // Deliberately NOT conditioned on whether a cloud chunk set already exists: an empty local
+        // store cannot tell "first-ever enable, nothing to back up" from "not restored yet", and asking
+        // the transport would only distinguish them when the cloud copy is already there — which is
+        // exactly the case where writing is unrecoverable. So the empty store ALWAYS skips. The cost is
+        // that a genuinely empty journal defers until the user writes something (a pending banner line,
+        // then a normal upload); the alternative cost is a destroyed backup.
+        if try repository.narratives(offset: 0, limit: 1, contentKey: key).isEmpty {
+            guard total == 0 else {
+                FernletAuditLog.log("sealedBackup.journalExportRefusedUnopenableRows", context: [
+                    "counted": String(total)
+                ])
+                throw SealedBackupWiringError.locked
+            }
+            FernletAuditLog.log("sealedBackup.journalExportDeferredEmptyStore")
+            throw SealedBackupWiringError.emptyLocalStore
+        }
         // Always at least one chunk so an empty (but enabled) backup still writes a head record.
         let chunkCount = max(1, (total + pageSize - 1) / pageSize)
+        var exported = 0
         try await service.reconcileChunked(payloadType: .journalNarratives, chunkCount: chunkCount) { index in
             let page = try repository.narratives(offset: index * pageSize, limit: pageSize, contentKey: key)
+            exported += page.count
             return try JSONEncoder().encode(page)
+        }
+        // The chunk set was sized from a count that never decrypts, so a row the key cannot open is
+        // paged away silently. Say so on the audit trail rather than letting a partial backup read as a
+        // clean `sealedBackup.reconciled`.
+        if exported < total {
+            FernletAuditLog.log("sealedBackup.journalPartialExport", context: [
+                "counted": String(total), "exported": String(exported)
+            ])
         }
     }
 
@@ -418,26 +579,54 @@ final class SealedBackupCoordinator {
     /// ``reconcilePeriodBackup(using:)`` — including its hidden-surface behavior.
     ///
     /// Pages the ENTIRE log store through plaintext, so it honors the hard visibility gate. While
-    /// hidden this is a **silent no-op**, deliberately NOT a pref flip: turning
+    /// hidden it uploads NOTHING and deliberately does not flip the pref: turning
     /// `sealedBackupIntimacyEnabled` off DELETES the encrypted backup from iCloud, which would make
     /// *hiding* destructive. The pref and the cloud record are left exactly as they are, and hidden
     /// must never be allowed to read as "empty" anywhere downstream.
-    private func reconcileIntimacyBackup(using service: SealedBackupService) async throws {
+    ///
+    /// Unlike period's silent hidden no-op it raises `.surfaceHidden`, so the caller records a
+    /// re-upload deferral instead of logging a "reconciled" that never happened — the obligation is
+    /// then discharged by the un-hide settle.
+    private func reconcileIntimacyBackup(
+        using service: SealedBackupService,
+        store: IntimacyLogStore? = nil
+    ) async throws {
         guard host.isIntimacyTrackingVisible else {
             FernletAuditLog.log("sealedBackup.intimacyReconcileSkippedHidden")
-            return
+            throw SealedBackupWiringError.surfaceHidden
         }
         guard let key = host.sealedBackupContentKey else { throw SealedBackupWiringError.locked }
-        let store = resolvedIntimacyStore(nil)
+        let store = resolvedIntimacyStore(store)
         let pageSize = Self.periodBackupChunkSize
         let total = try store.backupLogCount()
+        // Same two-part refusal as the journal export, and for the same reason: a head record is
+        // written even for a count of 0, so exporting an empty or unopenable store would replace the
+        // cloud copy with nothing. Only corruption can make an intimacy row unopenable (these rows only
+        // ever carry one key), but the invariant holds uniformly rather than per-payload.
+        if try store.backupPage(offset: 0, limit: 1, contentKey: key).isEmpty {
+            guard total == 0 else {
+                FernletAuditLog.log("sealedBackup.intimacyExportRefusedUnopenableRows", context: [
+                    "counted": String(total)
+                ])
+                throw SealedBackupWiringError.locked
+            }
+            FernletAuditLog.log("sealedBackup.intimacyExportDeferredEmptyStore")
+            throw SealedBackupWiringError.emptyLocalStore
+        }
         // Always at least one chunk so an empty (but enabled) backup still writes a head record.
         let chunkCount = max(1, (total + pageSize - 1) / pageSize)
+        var exported = 0
         try await service.reconcileChunked(payloadType: .intimacyLogs, chunkCount: chunkCount) { index in
             // `backupPage` re-checks the gate and THROWS if it flipped mid-export, rather than paging
             // empty — which would replace the cloud backup with nothing.
             let page = try store.backupPage(offset: index * pageSize, limit: pageSize, contentKey: key)
+            exported += page.count
             return try JSONEncoder().encode(page)
+        }
+        if exported < total {
+            FernletAuditLog.log("sealedBackup.intimacyPartialExport", context: [
+                "counted": String(total), "exported": String(exported)
+            ])
         }
     }
 
@@ -447,7 +636,7 @@ final class SealedBackupCoordinator {
     /// audited, and retried next launch. Gated by `FERNLET_SKIP_SEALED_RESTORE` so UI tests can opt out.
     ///
     /// `userInitiated` marks the user's explicit Retry (as opposed to the ambient launch pass) and lets
-    /// the period half fall back to the targeted, payload-scoped restore — see below.
+    /// every paged payload fall back to its targeted, payload-scoped restore — see below.
     func restoreSealedBackupsIfNeeded(userInitiated: Bool = false) async {
         guard ProcessInfo.processInfo.environment["FERNLET_SKIP_SEALED_RESTORE"] != "1" else { return }
         let prefs = StoragePreferencesStore.currentPreferences()
@@ -455,14 +644,25 @@ final class SealedBackupCoordinator {
         // Reconcile the escrow key BEFORE restoring so any open() runs under the authoritative key and a
         // cross-device key conflict is surfaced non-silently (WS-3).
         reconcileEscrowKey()
+        // PIN the whole-device freshness verdict for the whole pass, BEFORE any arm writes.
+        //
+        // The arms are not independent: the journal arm's `reinstateJournalEntries` writes day
+        // SKELETONS through to the day repository, and a day carrying journals satisfies
+        // `hasLoggedContent` — so re-deriving the verdict per payload would let the journal restore's
+        // own writeback classify the device as "already in use" microseconds later and turn the
+        // intimacy arm into a silent, terminal `.skippedStoreNotEmpty`. Reordering the arms would only
+        // move the poison onto whichever payload is added last. The per-payload store-empty +
+        // divergence-latch checks stay LIVE and unconditional below; they are the real no-clobber
+        // invariant, and pinning this verdict weakens none of them.
+        let deviceWasFresh = isFreshInstallForRestore()
         if prefs.sealedBackupSensitiveNotesEnabled {
-            _ = await restoreSealedBackupOutcome(payloadType: .sensitiveNotes)
+            _ = await restoreSealedBackupOutcome(payloadType: .sensitiveNotes, freshInstallOverride: deviceWasFresh)
         }
         // G5 (restore half). This decrypts cycle history off CloudKit and WRITES it into the local
         // narrative store, so a read-side gate alone would miss it. Skipping only defers: the backup
         // stays in iCloud and restores if the user un-hides.
         if prefs.sealedBackupPeriodEnabled && host.isPeriodTrackingVisible {
-            let outcome = await restoreSealedBackupOutcome(payloadType: .periodData)
+            let outcome = await restoreSealedBackupOutcome(payloadType: .periodData, freshInstallOverride: deviceWasFresh)
             // The pass above is fresh-install-only, so on a device that is already in use it can ONLY
             // ever answer `.skippedStoreNotEmpty` — including when the sealed narrative store is empty and
             // there really is a cycle history to pull down. That would make the restore banner's "tap
@@ -476,14 +676,28 @@ final class SealedBackupCoordinator {
             }
         }
         // Journal has no visibility gate (journaling is always visible), so the pref alone decides.
+        // Same targeted fallback as period on an explicit Retry: without it, an in-use device can only
+        // ever answer `.skippedStoreNotEmpty`, which is neither `needsAttention` nor `isRetryable`, so
+        // the journal backup would be permanently unrestorable with no user-visible signal.
         if prefs.sealedBackupJournalEnabled {
-            _ = await restoreSealedBackupOutcome(payloadType: .journalNarratives)
+            let outcome = await restoreSealedBackupOutcome(
+                payloadType: .journalNarratives, freshInstallOverride: deviceWasFresh
+            )
+            if userInitiated, outcome == .skippedStoreNotEmpty {
+                _ = await restoreJournalBackupTargeted()
+            }
         }
         // Intimacy mirrors the period half's G5 gate: this decrypts intimate notes off CloudKit and
         // WRITES them into the local sealed store, so a read-side gate alone would miss it. Skipping
-        // only DEFERS — the backup stays in iCloud and restores if the user un-hides.
+        // only DEFERS — the backup stays in iCloud and restores if the user un-hides (the un-hide
+        // settle in `FernletStore.setIntimacyTrackingVisible` is what makes that true).
         if prefs.sealedBackupIntimacyEnabled && host.isIntimacyTrackingVisible {
-            _ = await restoreSealedBackupOutcome(payloadType: .intimacyLogs)
+            let outcome = await restoreSealedBackupOutcome(
+                payloadType: .intimacyLogs, freshInstallOverride: deviceWasFresh
+            )
+            if userInitiated, outcome == .skippedStoreNotEmpty {
+                _ = await restoreIntimacyBackupTargeted()
+            }
         }
         // RESTORE-BEFORE-REUPLOAD: every payload above is pulled down BEFORE the re-upload
         // follow-through below runs, so a device that has not restored yet can never overwrite a good
@@ -500,14 +714,20 @@ final class SealedBackupCoordinator {
         // above is fresh-install-only on the ambient path, so an empty store here means "not restored
         // yet", NOT "nothing to back up". The deferral flag stays set, so this self-heals on the launch
         // after the user actually restores (or re-uploads from a device that has the data).
-        await retryDeferredPeriodReuploadIfNeeded()
+        await retryDeferredReuploadIfNeeded(payloadType: .periodData)
+        // The same follow-through for the two Phase-3 payloads, whose deferrals are recorded by the
+        // locked/hidden/empty-store enable and by the escrow adopt. Each re-checks
+        // `mayReuploadFromLocalStore`, so a not-yet-restored store leaves the flag set rather than
+        // exporting an empty chunk set over the cloud copy.
+        await retryDeferredReuploadIfNeeded(payloadType: .journalNarratives)
+        await retryDeferredReuploadIfNeeded(payloadType: .intimacyLogs)
     }
 
     /// Reconciles the backup-escrow key across iCloud Keychain (WS-3) and records any conflict so the UI
     /// can surface a non-silent choice. Adoption of a synced key and promotion of a local key are
     /// non-destructive and proceed; only a divergent synced-vs-local key is held back for user resolution.
     private func reconcileEscrowKey() {
-        let identity = IdentityService()
+        let identity = identityFactory?() ?? IdentityService()
         do { try identity.ensureProvisioned() } catch {
             FernletAuditLog.log("sealedBackup.escrowReconcileNotProvisioned")
             return
@@ -527,7 +747,7 @@ final class SealedBackupCoordinator {
     /// adopted; the conflict status is cleared on success.
     @discardableResult
     func adoptSyncedEscrowAndReupload() async -> Bool {
-        let identity = IdentityService()
+        let identity = identityFactory?() ?? IdentityService()
         do { try identity.ensureProvisioned() } catch {
             FernletAuditLog.log("sealedBackup.escrowAdoptNotProvisioned")
             return false
@@ -549,7 +769,7 @@ final class SealedBackupCoordinator {
                 // cloud chunk sealed to the key we just replaced, so record it as still-deferred (the
                 // banner surfaces it; retried at next launch) instead of silently claiming it done.
                 if await !setSealedBackupEnabled(true, payloadType: .periodData) {
-                    host.recordSealedBackupPeriodReuploadDeferred(true)
+                    host.recordSealedBackupReuploadDeferred(true, payloadType: .periodData)
                 }
             } else {
                 // G5: period is hidden, so reconcilePeriodBackup is a silent no-op. Routing through
@@ -558,7 +778,7 @@ final class SealedBackupCoordinator {
                 // backup then fails terminally with keyAgreementIdentityMismatch. Re-sealing requires
                 // paging the (gated) narrative store, which we won't do while hidden. Record the deferral
                 // honestly so it's surfaced (re-upload after un-hiding) rather than silently claimed done.
-                host.recordSealedBackupPeriodReuploadDeferred(true)
+                host.recordSealedBackupReuploadDeferred(true, payloadType: .periodData)
                 FernletAuditLog.log("sealedBackup.escrowAdoptPeriodDeferredHidden")
             }
         }
@@ -569,10 +789,17 @@ final class SealedBackupCoordinator {
         // fresh-install-only. Skipping leaves the cloud chunk sealed to the key we just replaced; that
         // is recoverable (re-upload from a device that has the data, or after this one restores),
         // whereas an empty overwrite is not.
+        //
+        // "Recoverable" is only true if something REMEMBERS the skip, so each one records a persisted
+        // per-payload deferral (surfaced by the Privacy & Data banner, retried at the next launch /
+        // unlock / un-hide) rather than an audit line nothing reads. Without it the surviving cloud
+        // chunks stay sealed to the escrow key this adopt just replaced, and a later restore fails
+        // TERMINALLY with `keyAgreementIdentityMismatch` → `.notRecognized`.
         if prefs.sealedBackupJournalEnabled {
             if mayReuploadFromLocalStore(.journalNarratives) {
                 _ = await setSealedBackupEnabled(true, payloadType: .journalNarratives)
             } else {
+                host.recordSealedBackupReuploadDeferred(true, payloadType: .journalNarratives)
                 FernletAuditLog.log("sealedBackup.escrowAdoptJournalSkippedEmptyStore")
             }
         }
@@ -580,7 +807,12 @@ final class SealedBackupCoordinator {
             if mayReuploadFromLocalStore(.intimacyLogs) {
                 _ = await setSealedBackupEnabled(true, payloadType: .intimacyLogs)
             } else {
-                FernletAuditLog.log("sealedBackup.escrowAdoptIntimacySkipped")
+                host.recordSealedBackupReuploadDeferred(true, payloadType: .intimacyLogs)
+                FernletAuditLog.log("sealedBackup.escrowAdoptIntimacySkipped", context: [
+                    // The two skips are different states and the log has to say which: hidden is
+                    // discharged by an un-hide, an empty store by a restore.
+                    "reason": host.isIntimacyTrackingVisible ? "emptyStore" : "hidden"
+                ])
             }
         }
         return true
@@ -588,9 +820,15 @@ final class SealedBackupCoordinator {
 
     /// Fetches/decrypts/writes a single sealed-backup payload into the local stores, returning a rich
     /// outcome AND recording it on the host so the UI can show a non-silent, retryable status (WS-4).
+    ///
+    /// `freshInstallOverride` pins the whole-device freshness verdict the launch pass computed before
+    /// any arm ran; `nil` (the default) evaluates it live, which is what a standalone caller wants.
     @discardableResult
-    func restoreSealedBackupOutcome(payloadType: SealedBackupPayloadType) async -> SealedBackupRestoreOutcome {
-        let outcome = await performRestore(payloadType: payloadType)
+    func restoreSealedBackupOutcome(
+        payloadType: SealedBackupPayloadType,
+        freshInstallOverride: Bool? = nil
+    ) async -> SealedBackupRestoreOutcome {
+        let outcome = await performRestore(payloadType: payloadType, freshInstallOverride: freshInstallOverride)
         host.recordSealedBackupRestoreOutcome(outcome, payloadType: payloadType)
         return outcome
     }
@@ -650,6 +888,70 @@ final class SealedBackupCoordinator {
         return outcome
     }
 
+    /// Targeted journal-only restore — the compensating path for the fresh-install-only launch pass,
+    /// exactly as ``restorePeriodBackupTargeted(narrativeRepository:)`` is for period.
+    ///
+    /// Without it the journal backup is unrestorable the moment the day blob syncs down (which, with
+    /// iCloud sync on, is within minutes of the first launch): `isFreshInstallForRestore` is then
+    /// permanently false, so the launch arm can only answer `.skippedStoreNotEmpty` — an outcome that is
+    /// neither `needsAttention` nor `isRetryable`, i.e. silent AND terminal. Driven by the explicit user
+    /// actions: tapping Retry on the restore banner, and the `.privateHub` unlock (the one moment the
+    /// content key that decrypts the restored rows is actually live).
+    ///
+    /// `.payloadStoreOnly` drops ONLY the whole-device freshness gate. The per-payload store-empty check
+    /// and the one-way divergence latch below still run, and they are what make it no-clobber: a user
+    /// who DELETED their journal is never re-populated from the stale-by-construction cloud copy.
+    @discardableResult
+    func restoreJournalBackupTargeted(
+        journalRepository: JournalNarrativeRepository? = nil
+    ) async -> SealedBackupRestoreOutcome {
+        // Resolved once so the latch check and the write consult the SAME store.
+        let repository = journalRepository ?? JournalNarrativeRepository()
+        guard !repository.hasEverStoredNarrative else {
+            FernletAuditLog.log("sealedBackup.targetedJournalRestoreSkippedDeviceDiverged")
+            return .skippedStoreNotEmpty
+        }
+        let outcome = await performRestore(
+            payloadType: .journalNarratives,
+            scope: .payloadStoreOnly,
+            journalRepository: repository
+        )
+        FernletAuditLog.log("sealedBackup.targetedJournalRestoreAttempted")
+        host.recordSealedBackupRestoreOutcome(outcome, payloadType: .journalNarratives)
+        return outcome
+    }
+
+    /// Targeted intimacy-only restore — the compensating path for the fresh-install-only launch pass,
+    /// and the thing that makes the launch arm's "hidden only DEFERS, it restores when you un-hide"
+    /// comment true. Driven by the un-hide settle, the `.privateHub` unlock, and the Retry button.
+    ///
+    /// Fail-closed at the decrypt seam first: while hidden this writes nothing and reports
+    /// `.deferredTransient` (retryable — un-hiding IS the retry), which also stops a caller from
+    /// treating a gated, unpageable store as restored and re-uploading over the cloud copy. Then the
+    /// one-way divergence latch, so logs the user deliberately DELETED are never resurrected.
+    @discardableResult
+    func restoreIntimacyBackupTargeted(
+        intimacyStore: IntimacyLogStore? = nil
+    ) async -> SealedBackupRestoreOutcome {
+        guard host.isIntimacyTrackingVisible else {
+            FernletAuditLog.log("sealedBackup.targetedIntimacyRestoreSkippedHidden")
+            return .deferredTransient
+        }
+        let store = resolvedIntimacyStore(intimacyStore)
+        guard !store.hasEverStoredLog else {
+            FernletAuditLog.log("sealedBackup.targetedIntimacyRestoreSkippedDeviceDiverged")
+            return .skippedStoreNotEmpty
+        }
+        let outcome = await performRestore(
+            payloadType: .intimacyLogs,
+            scope: .payloadStoreOnly,
+            intimacyStore: store
+        )
+        FernletAuditLog.log("sealedBackup.targetedIntimacyRestoreAttempted")
+        host.recordSealedBackupRestoreOutcome(outcome, payloadType: .intimacyLogs)
+        return outcome
+    }
+
     /// Bool-returning restore kept for the restore tests and the `FernletStore` wrapper. Does NOT record
     /// a UI status (the launch/retry path uses `restoreSealedBackupOutcome` for that); returns whether
     /// records were actually written.
@@ -666,7 +968,8 @@ final class SealedBackupCoordinator {
         scope: RestoreScope = .freshInstall,
         narrativeRepository: MenstrualNarrativeRepository? = nil,
         journalRepository: JournalNarrativeRepository? = nil,
-        intimacyStore: IntimacyLogStore? = nil
+        intimacyStore: IntimacyLogStore? = nil,
+        freshInstallOverride: Bool? = nil
     ) async -> SealedBackupRestoreOutcome {
         FernletAuditLog.log("sealedBackup.restoreAttempt", context: ["payload": payloadType.rawValue])
         // Resolved once and passed to BOTH the pre-network gate and the write, so they consult the same
@@ -683,7 +986,8 @@ final class SealedBackupCoordinator {
             narrativeRepository: narrativeRepository,
             journalRepository: journalRepository,
             intimacyStore: intimacyStore,
-            scope: scope
+            scope: scope,
+            freshInstallOverride: freshInstallOverride
         ) else {
             FernletAuditLog.log("sealedBackup.restoreSkippedNonEmpty", context: ["payload": payloadType.rawValue])
             return .skippedStoreNotEmpty
@@ -710,7 +1014,10 @@ final class SealedBackupCoordinator {
                 narrativeRepository: narrativeRepository,
                 journalRepository: journalRepository,
                 intimacyStore: intimacyStore,
-                scope: scope
+                scope: scope,
+                // The inner authoritative gate must re-check against the SAME verdict this call was
+                // made under, or it would re-derive a freshness value the pass deliberately pinned.
+                freshInstallOverride: freshInstallOverride
             )
             guard restored > 0 else {
                 FernletAuditLog.log("sealedBackup.restoreNothingToRestore", context: ["payload": payloadType.rawValue])
@@ -768,7 +1075,8 @@ final class SealedBackupCoordinator {
         narrativeRepository: MenstrualNarrativeRepository? = nil,
         journalRepository: JournalNarrativeRepository? = nil,
         intimacyStore: IntimacyLogStore? = nil,
-        scope: RestoreScope = .freshInstall
+        scope: RestoreScope = .freshInstall,
+        freshInstallOverride: Bool? = nil
     ) throws -> Int {
         try applyRestoredChunks(
             [plaintext],
@@ -776,7 +1084,8 @@ final class SealedBackupCoordinator {
             narrativeRepository: narrativeRepository,
             journalRepository: journalRepository,
             intimacyStore: intimacyStore,
-            scope: scope
+            scope: scope,
+            freshInstallOverride: freshInstallOverride
         )
     }
 
@@ -801,7 +1110,8 @@ final class SealedBackupCoordinator {
         narrativeRepository: MenstrualNarrativeRepository? = nil,
         journalRepository: JournalNarrativeRepository? = nil,
         intimacyStore: IntimacyLogStore? = nil,
-        scope: RestoreScope = .freshInstall
+        scope: RestoreScope = .freshInstall,
+        freshInstallOverride: Bool? = nil
     ) throws -> Int {
         // A restore whose surrounding Task was cancelled must not write. The concrete race: the un-hide
         // settle Task is suspended in the CloudKit chunk fetch when "delete everything" runs; the funnel
@@ -824,7 +1134,8 @@ final class SealedBackupCoordinator {
             narrativeRepository: narrativeRepository,
             journalRepository: journalRepository,
             intimacyStore: intimacyStore,
-            scope: scope
+            scope: scope,
+            freshInstallOverride: freshInstallOverride
         ) else {
             FernletAuditLog.log("sealedBackup.applySkippedNonEmpty", context: ["payload": payloadType.rawValue])
             throw SealedBackupWiringError.storeNotEmpty
@@ -867,6 +1178,13 @@ final class SealedBackupCoordinator {
             // device reset the day blob is gone too, so rows alone would restore INVISIBLE entries.
             // Rebuild the skeletons from what we just wrote. Runs after the transaction commits, so a
             // rolled-back restore never leaves orphan skeletons pointing at rows that do not exist.
+            //
+            // NOTE (pass-level freshness): this arm deliberately WRITES DAY ROWS, and a day carrying
+            // journals satisfies `FernletDay.hasLoggedContent` — so from here on the device no longer
+            // looks like a fresh install. That is precisely why `restoreSealedBackupsIfNeeded` pins the
+            // whole-device freshness verdict once, before any arm runs, and threads it through as
+            // `freshInstallOverride`: without the pin, this write would silently and permanently
+            // sabotage the gate of every payload restored after journal.
             host.reinstateJournalEntries(from: narratives)
             return narratives.count
         case .intimacyLogs:
@@ -890,14 +1208,20 @@ final class SealedBackupCoordinator {
     /// payloads; sensitive-notes additionally requires the (overwrite-style) Tier-2 store to be empty,
     /// and period-data the sealed narrative store to be empty. At `.payloadStoreOnly` scope only the
     /// per-payload store check runs — see `RestoreScope` for why that is still no-clobber for period data.
+    ///
+    /// `freshInstallOverride` is the launch pass's pinned whole-device verdict, computed once BEFORE any
+    /// arm ran. It exists because the arms are not independent: the journal arm writes day skeletons
+    /// (`host.reinstateJournalEntries`) that make the device look "in use" to every arm evaluated after
+    /// it. `nil` re-derives the verdict live, which is right for standalone callers.
     private func isEmptyStoreForRestore(
         payloadType: SealedBackupPayloadType,
         narrativeRepository: MenstrualNarrativeRepository,
         journalRepository: JournalNarrativeRepository,
         intimacyStore: IntimacyLogStore,
-        scope: RestoreScope
+        scope: RestoreScope,
+        freshInstallOverride: Bool? = nil
     ) -> Bool {
-        if scope == .freshInstall, !isFreshInstallForRestore() { return false }
+        if scope == .freshInstall, !(freshInstallOverride ?? isFreshInstallForRestore()) { return false }
         switch payloadType {
         case .sensitiveNotes:
             return host.tierTwoMemories.isEmpty

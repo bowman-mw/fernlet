@@ -542,6 +542,7 @@ struct PrivacyDataSettingsView: View {
                     return SealedBackupAttention(payload: payload, outcome: outcome)
                 }
             if store.sealedBackupEscrowConflict || store.sealedBackupPeriodReuploadDeferred
+                || store.sealedBackupJournalReuploadDeferred || store.sealedBackupIntimacyReuploadDeferred
                 || !attentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     SectionLabel("Encrypted backup status")
@@ -571,6 +572,30 @@ struct PrivacyDataSettingsView: View {
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
+                    }
+
+                    // The journal/intimacy equivalents. Their payloads are sealed under the Private
+                    // tab's key, so turning the backup on from here (Home → Settings, hub re-locked)
+                    // always defers. The copy names the ONE remedy that always works and deliberately
+                    // does not promise an unconditional automatic upload: the retry only runs from a
+                    // store that actually holds entries this device can seal, because exporting an
+                    // empty one would replace the cloud backup with nothing.
+                    if store.sealedBackupJournalReuploadDeferred {
+                        Text("Your journal backup hasn't finished uploading yet. Open the Private tab to unlock, and this device will finish it as soon as your journal entries are on it.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                            .accessibilityIdentifier("privacy.sealedBackup.journalDeferred")
+                    }
+
+                    if store.sealedBackupIntimacyReuploadDeferred {
+                        Text(store.isIntimacyTrackingVisible
+                             ? "Your intimate log backup hasn't finished uploading yet. Open the Private tab to unlock, and this device will finish it as soon as your logs are on it."
+                             : "Your intimate log backup hasn't finished uploading yet. It's hidden right now — un-hide intimacy tracking, then this device will finish it.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                            .accessibilityIdentifier("privacy.sealedBackup.intimacyDeferred")
                     }
 
                     if store.sealedBackupEscrowConflict {
@@ -604,7 +629,13 @@ struct PrivacyDataSettingsView: View {
                     // records nothing), yet the remedy IS a retry — `userInitiated` takes the targeted
                     // restore, and the same pass's follow-through then re-uploads and clears the deferral.
                     if attentionItems.contains(where: { $0.outcome.isRetryable })
-                        || (store.sealedBackupPeriodReuploadDeferred && store.isPeriodTrackingVisible) {
+                        || (store.sealedBackupPeriodReuploadDeferred && store.isPeriodTrackingVisible)
+                        // Same reasoning for the two Phase-3 payloads: a deferral with an empty local
+                        // store records no retryable attention item, yet Retry IS the remedy —
+                        // `userInitiated` takes their targeted restores, and the same pass's
+                        // follow-through then re-uploads and clears the deferral.
+                        || store.sealedBackupJournalReuploadDeferred
+                        || (store.sealedBackupIntimacyReuploadDeferred && store.isIntimacyTrackingVisible) {
                         Button { retrySealedRestore() } label: {
                             Label("Retry restore", systemImage: "arrow.clockwise")
                                 .frame(maxWidth: .infinity)

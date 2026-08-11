@@ -108,12 +108,17 @@ struct ContentView: View {
                     lockState: newState,
                     contentKey: lockService.contentKey(for: .privateHub)
                 )
-                // The sealed period backup is sealed under the hub's content key, so turning it on
+                // Every paged sealed backup is sealed under the hub's content key, so turning one on
                 // from Settings (reached from Home, where the hub is always re-locked) can only ever
                 // DEFER the upload. This is the moment that debt can be paid: the hub just unlocked,
-                // so the narratives are readable. No-op unless a deferral is actually outstanding.
+                // so the sealed stores are readable. No-op unless a deferral is actually outstanding.
+                //
+                // It is also the only moment a journal/intimacy RESTORE can decrypt what it pulls down,
+                // so the targeted restores run here too — and strictly BEFORE the re-uploads, because a
+                // re-upload from a not-yet-restored store would replace the good cloud backup with an
+                // empty chunk set. The re-uploads re-check `mayReuploadFromLocalStore` regardless.
                 if newState.isUnlocked(for: .privateHub) {
-                    Task { await store.retryDeferredSealedPeriodBackupIfNeeded() }
+                    Task { await settleSealedBackupsAfterHubUnlock() }
                 }
                 updateRecipeShareListener()
             }
@@ -706,6 +711,36 @@ struct ContentView: View {
         refreshPeriodContext()
     }
 
+    /// Settles the sealed backups whose payloads are sealed under the `.privateHub` content key, at the
+    /// one moment that key is live.
+    ///
+    /// Both halves are needed and the ORDER is the invariant. The Privacy & Data toggles are reached
+    /// from Home, where the hub is always re-locked, so turning journal/intimacy backup on can only
+    /// ever DEFER — and the launch restore pass runs while locked, so its journal/intimacy arms defer
+    /// too. This unlock is the only production seam where both debts can actually be paid.
+    ///
+    /// **Restore before re-upload.** Each targeted restore is `.payloadStoreOnly` (it keeps the
+    /// per-payload store-empty check and the one-way divergence latch, so it can only ADD data back),
+    /// and each re-upload runs afterwards behind `mayReuploadFromLocalStore`, so a store this device
+    /// has not restored into yet can never replace the cloud backup with the single empty head record
+    /// `reconcileChunked` writes for a count of 0.
+    private func settleSealedBackupsAfterHubUnlock() async {
+        let preferences = storagePreferencesStore.preferences
+        if preferences.iCloudSyncEnabled {
+            if preferences.sealedBackupJournalEnabled {
+                _ = await store.restoreJournalBackupTargeted()
+            }
+            // The intimacy gate is re-checked inside the targeted restore too (fail-closed at the
+            // decrypt seam); this is the cheap pre-check that avoids the CloudKit fetch entirely.
+            if preferences.sealedBackupIntimacyEnabled, store.isIntimacyTrackingVisible {
+                _ = await store.restoreIntimacyBackupTargeted()
+            }
+        }
+        await store.retryDeferredSealedPeriodBackupIfNeeded()
+        await store.retryDeferredSealedBackupIfNeeded(payloadType: .journalNarratives)
+        await store.retryDeferredSealedBackupIfNeeded(payloadType: .intimacyLogs)
+    }
+
     /// Wires the "delete everything" seams for the sealed stores `FernletStore` doesn't own. Each drops
     /// rows WITHOUT decrypting them, so deletion stays available even while the app is locked and the
     /// data itself is unreadable.
@@ -755,9 +790,23 @@ struct ContentView: View {
         // app's SINGLE StoragePreferencesStore instance — a second writer would leave its in-memory copy
         // stale and the next `update` would clobber the flag. The no-change guard keeps a launch-time
         // re-record from bumping `lastModifiedAt` (or minting a keychain row) for nothing.
-        store.sealedBackupDeferralPersistHook = { [storagePreferencesStore] deferred in
-            guard storagePreferencesStore.preferences.sealedBackupPeriodReuploadDeferred != deferred else { return }
-            storagePreferencesStore.update { $0.sealedBackupPeriodReuploadDeferred = deferred }
+        store.sealedBackupDeferralPersistHook = { [storagePreferencesStore] deferred, payloadType in
+            let current = storagePreferencesStore.preferences
+            switch payloadType {
+            case .periodData:
+                guard current.sealedBackupPeriodReuploadDeferred != deferred else { return }
+                storagePreferencesStore.update { $0.sealedBackupPeriodReuploadDeferred = deferred }
+            case .journalNarratives:
+                guard current.sealedBackupJournalReuploadDeferred != deferred else { return }
+                storagePreferencesStore.update { $0.sealedBackupJournalReuploadDeferred = deferred }
+            case .intimacyLogs:
+                guard current.sealedBackupIntimacyReuploadDeferred != deferred else { return }
+                storagePreferencesStore.update { $0.sealedBackupIntimacyReuploadDeferred = deferred }
+            case .sensitiveNotes:
+                // No deferral exists for the whole-store overwrite payload — the store never records
+                // one, so this arm is unreachable and deliberately writes nothing.
+                return
+            }
         }
         store.storagePreferencesResetHook = { [storagePreferencesStore] keepSealedBackupFlags, keepCloudCopyFlag in
             // Two preferences survive the reset, both because erasing them would BREAK the delete rather
@@ -773,9 +822,12 @@ struct ContentView: View {
             // first-launch defaults.
             let current = storagePreferencesStore.preferences
             var reset = StoragePreferences(iCloudSyncEnabled: current.iCloudSyncEnabled)
+            // Every payload flag, assigned in ONE place next to `hasSealedBackup` rather than
+            // open-coded here: the open-coded version silently dropped the journal and intimacy flags
+            // when Phase 3 added them, which would have abandoned those CKRecords after a failed
+            // delete (`hasSealedBackup` false → no retry, no later wipe, ever finds them again).
             if keepSealedBackupFlags {
-                reset.sealedBackupSensitiveNotesEnabled = current.sealedBackupSensitiveNotesEnabled
-                reset.sealedBackupPeriodEnabled = current.sealedBackupPeriodEnabled
+                reset.copySealedBackupFlags(from: current)
             }
             // Same reasoning as the sealed-backup flags: keep `cloudCopyKept` only when the kept-copy
             // delete FAILED, so the retry the alert invites still knows there is a copy in iCloud to
